@@ -276,4 +276,5 @@ npm run lint  # eslint
 - Public API uses dynamic CORS with origin echo; rate limits and server‑side validation still apply.
 
 ## License
-No explicit license is provided in this repository. If you plan to use, modify, or distribute this code, clarify licensing with the maintainers.
+Licensed under the MIT License. See the `LICENSE` file at the project root for details.
+
