@@ -1,0 +1,106 @@
+"use client";
+
+import React from 'react';
+import SmartWalletTransaction from './smart-wallet-transaction';
+import { useAccount } from 'wagmi';
+import { ShopItem, GardenItem, Plant } from '@/lib/types';
+import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+
+const PIXOTCHI_NFT_ABI = [
+  {
+    inputs: [
+      { name: 'plantId', type: 'uint256' },
+      { name: 'itemId', type: 'uint256' }
+    ],
+    name: 'shopBuyItem',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'plantId', type: 'uint256' },
+      { name: 'itemId', type: 'uint256' }
+    ],
+    name: 'buyAccessory',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
+
+interface BundleBuyTransactionProps {
+  item: ShopItem | GardenItem;
+  plant: Plant;
+  itemType: 'shop' | 'garden';
+  quantity: number;
+  onSuccess?: (tx: any) => void;
+  onError?: (error: any) => void;
+  disabled?: boolean;
+}
+
+export default function BundleBuyTransaction({
+  item,
+  plant,
+  itemType,
+  quantity,
+  onSuccess,
+  onError,
+  disabled = false
+}: BundleBuyTransactionProps) {
+  const { address } = useAccount();
+
+  // Generate multiple calls for bundle transaction
+  const generateBundleCalls = () => {
+    const calls = [];
+    const functionName = itemType === 'shop' ? 'shopBuyItem' : 'buyAccessory';
+    
+    for (let i = 0; i < quantity; i++) {
+      calls.push({
+        address: PIXOTCHI_NFT_ADDRESS,
+        abi: PIXOTCHI_NFT_ABI,
+        functionName,
+        args: [BigInt(plant.id), BigInt(item.id)],
+      });
+    }
+    
+    // console.log('🎯 Bundle Transaction Calls Generated:', {
+    //   quantity,
+    //   callsCount: calls.length,
+    //   functionName,
+    //   plantId: plant.id,
+    //   itemId: item.id,
+    //   itemType,
+    //   calls: calls.map((call, i) => ({ index: i, fn: call.functionName, args: call.args }))
+    // });
+    
+    return calls;
+  };
+
+  return (
+    <SmartWalletTransaction
+      calls={generateBundleCalls()}
+      onSuccess={(tx) => {
+        try {
+          if (address && itemType === 'garden') {
+            fetch('/api/gamification/missions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ address, taskId: 's1_buy5_elements', count: quantity })
+            });
+          }
+        } catch {}
+        onSuccess?.(tx);
+      }}
+      onError={onError}
+      buttonText={
+        quantity === 1 
+          ? `Buy ${item.name}` 
+          : `Buy ${quantity}x ${item.name} (Bundle)`
+      }
+      buttonClassName="w-full"
+      disabled={disabled}
+      showToast={true}
+    />
+  );
+} 
