@@ -1,0 +1,783 @@
+@import "tailwindcss";
+/* Ensure Tailwind v4 sees all class usage across our project on Vercel */
+@source "../components/**/*.{ts,tsx}";
+@source "../app/**/*.{ts,tsx}";
+@source "../pages/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";
+@source "../**/*.mdx";
+@plugin "tailwindcss-animate";
+
+@theme {
+  /* Colors mapped to existing CSS variables so classes like bg-card, text-muted-foreground, ring-ring continue to work */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Radius: keep rounded-* behavior aligned to your design token */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Fonts */
+  --font-sans: 'Coinbase Sans', system-ui, sans-serif;
+  --font-coinbase: 'Coinbase Sans', system-ui, sans-serif;
+  --font-pixel: 'pixelmix', sans-serif;
+
+  /* Explicit breakpoints so md/lg variants work in Tailwind v4 when using @theme */
+  --breakpoint-sm: 40rem; /* 640px */
+  --breakpoint-md: 48rem; /* 768px */
+  --breakpoint-lg: 64rem; /* 1024px */
+  --breakpoint-xl: 80rem; /* 1280px */
+  --breakpoint-2xl: 96rem; /* 1536px */
+}
+
+@layer base {
+  @font-face {
+    font-family: "pixelmix";
+    src: url("/PixotchiKit/pixelmix.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+  }
+
+  /* Coinbase Sans Font Family */
+  @font-face {
+    font-family: 'Coinbase Sans';
+    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Regular-web-1.32.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Coinbase Sans';
+    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Medium-web-1.32.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Coinbase Sans';
+    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Bold-web-1.32.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Coinbase Sans';
+    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Light-web-1.32.woff2') format('woff2');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Coinbase Sans';
+    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Extra_Light-web-1.32.woff2') format('woff2');
+    font-weight: 200;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root {
+    --background: 212 56% 81%; /* #a7c7e7 */
+    --foreground: 224 71.4% 4.1%;
+    --card: 212 56% 75%; /* Lighter shade of #a7c7e7 for cards */
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 212 56% 75%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 212 86.2% 36.3%; /* A stronger blue for primary actions */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 212 56% 88%; /* A lighter secondary tone */
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 212 56% 88%;
+    --muted-foreground: 225 8% 35%; /* Increased contrast */
+    --accent: 212 56% 92%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 212 56% 70%;
+    --input: 212 56% 70%;
+    --ring: 212 86.2% 36.3%;
+    --radius: 0.5rem;
+    
+    /* Safe area variables for in-app browsers */
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  }
+
+  .dark {
+    --background: 218 28% 25%; /* #2d3c53 */
+    --foreground: 210 40% 98%;
+    --card: 218 28% 20%; /* Darker shade for cards */
+    --card-foreground: 210 40% 98%;
+    --popover: 218 28% 20%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 212 86.2% 50%; /* Brighter blue for dark mode primary */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 218 28% 30%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 218 28% 30%;
+    --muted-foreground: 215 16% 65%; /* Increased contrast */
+    --accent: 218 28% 35%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 218 28% 30%;
+    --input: 218 28% 30%;
+    --ring: 212 86.2% 50%;
+  }
+
+  /* Additional color themes (light variants) */
+  .green {
+    --background: 142 40% 88%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 142 40% 82%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 142 40% 82%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 142 55% 38%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 142 30% 90%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 142 30% 90%;
+    --muted-foreground: 225 8% 35%;
+    --accent: 142 35% 92%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 142 30% 76%;
+    --input: 142 30% 76%;
+    --ring: 142 55% 38%;
+  }
+
+  .yellow {
+    --background: 48 92% 88%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 48 92% 82%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 48 92% 82%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 48 96% 40%;
+    --primary-foreground: 0 0% 10%;
+    --secondary: 48 70% 90%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 48 70% 90%;
+    --muted-foreground: 32 20% 30%;
+    --accent: 48 75% 92%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 48 50% 76%;
+    --input: 48 50% 76%;
+    --ring: 48 96% 40%;
+  }
+
+  .red {
+    --background: 0 56% 88%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 56% 82%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 56% 82%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 0 72% 45%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 35% 92%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 0 35% 92%;
+    --muted-foreground: 0 20% 35%;
+    --accent: 0 40% 94%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 35% 76%;
+    --input: 0 35% 76%;
+    --ring: 0 72% 45%;
+  }
+
+  .pink {
+    --background: 330 50% 90%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 330 50% 84%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 330 50% 84%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 330 70% 50%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 330 35% 92%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 330 35% 92%;
+    --muted-foreground: 330 20% 35%;
+    --accent: 330 40% 94%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 330 30% 76%;
+    --input: 330 30% 76%;
+    --ring: 330 70% 50%;
+  }
+
+  .blue {
+    /* Distinct blue theme (not equal to light) */
+    --background: 217 90% 75%;
+    --foreground: 217 100% 10%;
+    --card: 217 90% 70%;
+    --card-foreground: 217 100% 10%;
+    --popover: 217 90% 70%;
+    --popover-foreground: 217 100% 10%;
+    --primary: 217 100% 62%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 217 95% 80%;
+    --secondary-foreground: 217 100% 10%;
+    --muted: 217 80% 80%;
+    --muted-foreground: 217 40% 35%;
+    --accent: 217 95% 85%;
+    --accent-foreground: 217 100% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 217 95% 65%;
+    --input: 217 95% 80%;
+    --ring: 217 100% 62%;
+  }
+
+  .violet {
+    --background: 265 45% 90%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 265 45% 84%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 265 45% 84%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 265 70% 50%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 265 35% 92%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 265 35% 92%;
+    --muted-foreground: 265 20% 35%;
+    --accent: 265 40% 94%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 265 30% 76%;
+    --input: 265 30% 76%;
+    --ring: 265 70% 50%;
+  }
+  
+  /* Tailwind v4 theme variable fallback (ensures bg-*, text-*, ring-* custom tokens resolve even if @theme is not processed) */
+  :root, .dark, .green, .yellow, .red, .pink, .blue, .violet {
+    --color-background: hsl(var(--background));
+    --color-foreground: hsl(var(--foreground));
+    --color-card: hsl(var(--card));
+    --color-card-foreground: hsl(var(--card-foreground));
+    --color-popover: hsl(var(--popover));
+    --color-popover-foreground: hsl(var(--popover-foreground));
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-secondary: hsl(var(--secondary));
+    --color-secondary-foreground: hsl(var(--secondary-foreground));
+    --color-muted: hsl(var(--muted));
+    --color-muted-foreground: hsl(var(--muted-foreground));
+    --color-accent: hsl(var(--accent));
+    --color-accent-foreground: hsl(var(--accent-foreground));
+    --color-destructive: hsl(var(--destructive));
+    --color-destructive-foreground: hsl(var(--destructive-foreground));
+    --color-border: hsl(var(--border));
+    --color-input: hsl(var(--input));
+    --color-ring: hsl(var(--ring));
+  }
+}
+
+/* Theme-specific styles will be loaded dynamically */
+
+
+@layer base {
+  * {
+    /* Use CSS variable directly for upgradability */
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Coinbase Sans', system-ui, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    /* Limit global transitions to reduce repaint/reflow cost */
+    transition-property: color, background-color;
+    transition-timing-function: ease-in-out;
+    transition-duration: 180ms;
+  }
+  
+  /* Respect user preference to reduce motion */
+  @media (prefers-reduced-motion: reduce) {
+    body {
+      transition: none !important;
+    }
+  }
+
+  /* Disable all animations/transitions when motion-off is set (mobile) */
+  .motion-off *, .motion-off *::before, .motion-off *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Global scroll lock for native-app feel */
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Dynamic viewport height for mobile browsers */
+  .h-dvh {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+  }
+
+  /* Keyboard-aware adjustments */
+  .keyboard-visible .fixed-bottom {
+    transform: translateY(-1rem);
+    transition: transform 0.25s ease-out;
+  }
+
+  .keyboard-hidden .fixed-bottom {
+    transform: translateY(0);
+    transition: transform 0.25s ease-out;
+  }
+
+  /* Improve Coinbase Sans rendering for headers */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  /* Proper font weight mapping */
+  .font-normal {
+    font-weight: 400;
+  }
+
+  .font-medium {
+    font-weight: 500;
+  }
+
+  .font-semibold {
+    font-weight: 600;
+  }
+
+  .font-bold {
+    font-weight: 700;
+  }
+}
+
+@layer components {
+  /* (removed legacy spacing/padding helpers; use Tailwind utilities directly) */
+  
+  
+  
+  /* Theme-aware status colors */
+  .status-great { @apply text-green-600 dark:text-green-400; }
+  .status-okay { @apply text-yellow-600 dark:text-yellow-400; }
+  .status-dry { @apply text-orange-600 dark:text-orange-400; }
+  .status-dying { @apply text-red-600 dark:text-red-400; }
+  .status-dead { @apply text-gray-600 dark:text-gray-400; }
+  .status-unknown { @apply text-gray-400 dark:text-gray-500; }
+
+  /* Base Loader Animations - Sequential Box Appearance */
+  .base-box-1 {
+    fill: hsl(var(--primary));
+    opacity: 0;
+    animation: base-load 1.2s ease-in-out infinite;
+    animation-delay: 0s;
+  }
+  
+  .base-box-2 {
+    fill: hsl(var(--primary));
+    opacity: 0;
+    animation: base-load 1.2s ease-in-out infinite;
+    animation-delay: 0.3s;
+  }
+  
+  .base-box-3 {
+    fill: hsl(var(--primary));
+    opacity: 0;
+    animation: base-load 1.2s ease-in-out infinite;
+    animation-delay: 0.6s;
+  }
+  
+  .base-box-4 {
+    fill: hsl(var(--primary));
+    opacity: 0;
+    animation: base-load 1.2s ease-in-out infinite;
+    animation-delay: 0.9s;
+  }
+
+  /* Base Loading Logo - Simple static primary color */
+  .base-loading-box-1,
+  .base-loading-box-2,
+  .base-loading-box-3,
+  .base-loading-box-4 {
+    fill: hsl(var(--primary));
+  }
+
+  /* Interactive Base Logo - Initial colors for individual box interactions */
+  .interactive-base-box-1,
+  .interactive-base-box-2,
+  .interactive-base-box-3,
+  .interactive-base-box-4 {
+    fill: hsl(var(--primary));
+    transition: fill 0.3s ease;
+    cursor: pointer;
+  }
+
+  /* Touch devices - faster tap feedback */
+  .interactive-base-box-1:active,
+  .interactive-base-box-2:active,
+  .interactive-base-box-3:active,
+  .interactive-base-box-4:active {
+    transition: fill 0.1s ease;
+  }
+
+  
+}
+
+/* In-app browser touch optimizations */
+@layer utilities {
+  /* Safe area support for mobile devices and mini apps */
+  .safe-area-inset {
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  /* Header safe area helper */
+  .safe-area-top {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+
+  /* Bottom nav safe area helper */
+  .safe-area-bottom {
+    padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+  }
+  
+  /* Touch optimizations for buttons and interactive elements */
+  button,
+  [role="button"],
+  .interactive {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Enhanced keyboard focus indicators */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px hsl(var(--ring) / 0.2);
+  }
+
+  /* Keyboard navigation mode adjustments */
+  .keyboard-navigation button,
+  .keyboard-navigation [role="button"],
+  .keyboard-navigation .interactive {
+    /* Ensure minimum focusable size for keyboard navigation */
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Compact buttons (override global min-size for small inline controls) */
+  .btn-compact {
+    min-height: 0 !important;
+    min-width: 0 !important;
+  }
+  
+  /* Removed compact and width/height overrides to rely on standard Button sizes */
+  
+  /* Header specific optimizations for in-app browsers */
+  header {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    position: relative;
+    z-index: 1000;
+  }
+}
+
+/* Mobile scrolling performance optimizations */
+@layer utilities {
+  /* Optimize mobile scrolling performance */
+  @media (max-width: 768px) {
+    /* Improve mobile scroll performance */
+    * {
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    /* (removed pixel-corner containment) */
+  }
+}
+
+/* OnchainKit and Toast z-index fixes (global CSS, not Tailwind utilities) */
+  /* Scoped overlay stacking contexts */
+  .ock-transaction-toast,
+  .ock-toast-container {
+    z-index: 4000 !important;
+    position: relative !important;
+  }
+  
+  /* OnchainKit modal and popup overlays (scoped classes only) */
+  .ock-modal,
+  .ock-modal-overlay,
+  .ock-popup,
+  .ock-wallet-modal {
+    z-index: 4000 !important;
+  }
+  
+  /* React Hot Toast containers */
+  .react-hot-toast,
+  .__react-hot-toast {
+    z-index: 3900 !important;
+  }
+  
+  /* Radix poppers/dialogs */
+  [data-radix-popper-content-wrapper],
+  [data-radix-dialog-overlay],
+  [data-radix-dialog-content] {
+    z-index: 4000 !important;
+  }
+ 
+
+/* Tutorial art subtle float */
+@keyframes float-soft {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+
+.tutorial-art {
+  animation: float-soft 4s ease-in-out infinite;
+}
+
+/* Port custom keyframes/utilities used by components to ensure v4 support */
+@keyframes accordion-down { from { height: 0 } to { height: var(--radix-accordion-content-height) } }
+@keyframes accordion-up { from { height: var(--radix-accordion-content-height) } to { height: 0 } }
+@keyframes fade-in { 0% { opacity: 0 } 100% { opacity: 1 } }
+@keyframes base-load { 0% { opacity: 0 } 25% { opacity: 1 } 75% { opacity: 1 } 100% { opacity: 0 } }
+@keyframes base-loading-colors {
+  0% { fill: hsl(var(--primary)) }
+  12% { fill: hsl(var(--secondary)) }
+  25% { fill: hsl(var(--accent)) }
+  37% { fill: hsl(var(--primary)) }
+  50% { fill: hsl(var(--muted)) }
+  62% { fill: hsl(var(--secondary)) }
+  75% { fill: hsl(var(--accent)) }
+  87% { fill: hsl(var(--primary)) }
+  100% { fill: hsl(var(--primary)) }
+}
+/* Theme-independent vibrant color cycle for streak indicator */
+@keyframes streak-colors {
+  0% { fill: #2563eb; }     /* blue-600 */
+  12% { fill: #10b981; }    /* emerald-500 */
+  25% { fill: #f59e0b; }    /* amber-500 */
+  37% { fill: #ef4444; }    /* red-500 */
+  50% { fill: #8b5cf6; }    /* violet-500 */
+  62% { fill: #06b6d4; }    /* cyan-500 */
+  75% { fill: #f43f5e; }    /* rose-500 */
+  87% { fill: #22c55e; }    /* green-500 */
+  100% { fill: #2563eb; }   /* blue-600 */
+}
+@keyframes theme-transition { 0% { opacity: 1; transform: scale(1) } 50% { opacity: .8; transform: scale(1.02) } 100% { opacity: 1; transform: scale(1) } }
+@keyframes spin-slow { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+
+@utility animate-accordion-down { animation: accordion-down .2s ease-out; }
+@utility animate-accordion-up { animation: accordion-up .2s ease-out; }
+@utility animate-fade-in { animation: fade-in .3s ease-in-out; }
+@utility animate-base-load { animation: base-load 1.2s ease-in-out infinite; }
+@utility animate-base-loading-colors { animation: base-loading-colors 1.2s linear infinite; }
+@utility animate-theme-transition { animation: theme-transition .3s ease-in-out; }
+@utility animate-streak-colors { animation: streak-colors 1.2s linear infinite; }
+@utility animate-spin-slow { animation: spin-slow 5s linear infinite; }
+
+/* Ensure semantic color utilities exist even if Tailwind doesn't generate them */
+@utility bg-primary { background-color: var(--color-primary); }
+@utility bg-background { background-color: var(--color-background); }
+@utility text-primary-foreground { color: var(--color-primary-foreground); }
+@utility text-foreground { color: var(--color-foreground); }
+@utility bg-secondary { background-color: var(--color-secondary); }
+@utility text-secondary-foreground { color: var(--color-secondary-foreground); }
+@utility bg-accent { background-color: var(--color-accent); }
+@utility text-accent-foreground { color: var(--color-accent-foreground); }
+@utility text-muted-foreground { color: var(--color-muted-foreground); }
+@utility bg-muted { background-color: var(--color-muted); }
+@utility bg-card { background-color: var(--color-card); }
+@utility text-card-foreground { color: var(--color-card-foreground); }
+@utility bg-popover { background-color: var(--color-popover); }
+@utility text-popover-foreground { color: var(--color-popover-foreground); }
+@utility border-input { border-color: var(--color-input); }
+@utility border-border { border-color: var(--color-border); }
+@utility ring-ring { --tw-ring-color: var(--color-ring); }
+@utility ring-offset-background { --tw-ring-offset-color: var(--color-background); }
+
+/* OnchainKit theme bridge: make OCK use Pixotchi theme tokens */
+[data-ock-theme='pixotchi'] {
+  /* Core surfaces & text */
+  --ock-background: hsl(var(--background));
+  --ock-text-foreground: hsl(var(--foreground));
+  --ock-border: hsl(var(--border));
+
+  /* Brand colors */
+  --ock-primary: hsl(var(--primary));
+  --ock-primary-foreground: hsl(var(--primary-foreground));
+  --ock-secondary: hsl(var(--secondary));
+  --ock-secondary-foreground: hsl(var(--secondary-foreground));
+  --ock-accent: hsl(var(--accent));
+  --ock-accent-foreground: hsl(var(--accent-foreground));
+  --ock-muted: hsl(var(--muted));
+  --ock-muted-foreground: hsl(var(--muted-foreground));
+
+  /* Focus ring */
+  --ock-ring: hsl(var(--ring));
+
+  /* Additional OCK tokens used by lists/rows */
+  --ock-background-inverse: hsl(var(--card));
+  --ock-background-hover: hsl(var(--accent));
+  --ock-background-active: hsl(var(--secondary));
+  --ock-foreground-muted: hsl(var(--muted-foreground));
+
+  /* Toggle button (alternate) palette */
+  --ock-background-alternate: hsl(var(--card));
+  --ock-background-alternate-hover: hsl(var(--accent));
+  --ock-background-alternate-active: hsl(var(--secondary));
+}
+
+/* Fine-tune token label color in OCK Swap (ETH/SEED text) */
+[data-ock-theme='pixotchi'] .ock-swap-token-button {
+  color: hsl(var(--foreground));
+}
+[data-ock-theme='pixotchi'] .ock-swap-token-button * {
+  color: inherit;
+}
+
+/* Override OCK utility color used by token symbol span */
+[data-ock-theme='pixotchi'] .ock\:text-ock-foreground {
+  color: hsl(var(--foreground)) !important;
+}
+[data-ock-theme='pixotchi'] .ock\:text-ock-foreground-muted {
+  color: var(--ock-foreground-muted) !important;
+}
+
+/* Ensure icons (caret/arrow) inside token button inherit text color */
+[data-ock-theme='pixotchi'] .ock-swap-token-button svg,
+[data-ock-theme='pixotchi'] .ock-swap-token-button svg * {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* Dropdown/listbox theming (token selector menu) */
+[data-ock-theme='pixotchi'] [role='menu'],
+[data-ock-theme='pixotchi'] [role='listbox'] {
+  background-color: var(--ock-background) !important;
+  color: var(--ock-text-foreground) !important;
+  border-color: var(--ock-border) !important;
+}
+[data-ock-theme='pixotchi'] [role='menu'] *,
+[data-ock-theme='pixotchi'] [role='listbox'] * {
+  color: inherit !important;
+}
+
+/* Fallback for list items/titles rendered without explicit color utility */
+[data-ock-theme='pixotchi'] .ock\:font-ock {
+  color: hsl(var(--foreground));
+}
+
+/* Map utility classes referenced by rows to our tokens */
+[data-ock-theme='pixotchi'] .ock\:bg-ock-background-inverse {
+  background-color: var(--ock-background-inverse) !important;
+}
+[data-ock-theme='pixotchi'] .ock\:hover\:bg-ock-background-hover:hover {
+  background-color: var(--ock-background-hover) !important;
+}
+[data-ock-theme='pixotchi'] .ock\:active\:bg-ock-background-active:active,
+[data-ock-theme='pixotchi'] .ock\:focus\:bg-ock-background-active:focus {
+  background-color: var(--ock-background-active) !important;
+}
+
+/* Map toggle button background tokens */
+[data-ock-theme='pixotchi'] .ock\:bg-ock-background-alternate {
+  background-color: var(--ock-background-alternate) !important;
+}
+[data-ock-theme='pixotchi'] .ock\:hover\:bg-ock-background-alternate-hover:hover {
+  background-color: var(--ock-background-alternate-hover) !important;
+}
+[data-ock-theme='pixotchi'] .ock\:active\:bg-ock-background-alternate-active:active,
+[data-ock-theme='pixotchi'] .ock\:focus\:bg-ock-background-alternate-active:focus {
+  background-color: var(--ock-background-alternate-active) !important;
+}
+
+/* Ensure toggle icon inherits theme foreground */
+[data-ock-theme='pixotchi'] .ock\:fill-ock-foreground {
+  fill: hsl(var(--foreground)) !important;
+  stroke: hsl(var(--foreground)) !important;
+}
+
+/* Reduce toggle button size and negative margins to avoid balance overlap */
+[data-ock-theme='pixotchi'] [data-testid='SwapTokensButton'] {
+  height: 2.25rem !important; /* h-9 */
+  width: 2.25rem !important;  /* w-9 */
+  margin-top: -0.5rem !important;  /* was -my-6 ~= -1.5rem */
+  margin-bottom: -0.5rem !important;
+}
+[data-ock-theme='pixotchi'] [data-testid='SwapTokensButton'] svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Fallback hover utilities used by Button variants */
+@media (hover: hover) {
+  .hover\:bg-primary\/90:hover { background-color: hsl(var(--primary) / 0.9) !important; }
+  .hover\:bg-destructive\/90:hover { background-color: hsl(var(--destructive) / 0.9) !important; }
+  .hover\:bg-secondary\/80:hover { background-color: hsl(var(--secondary) / 0.8) !important; }
+  .hover\:bg-accent:hover { background-color: var(--color-accent) !important; }
+  .hover\:text-accent-foreground:hover { color: var(--color-accent-foreground) !important; }
+}
+
+/* Opacity variants for token-based colors used in toggles and highlights */
+.bg-primary\/5 { background-color: hsl(var(--primary) / 0.05) !important; }
+.bg-primary\/10 { background-color: hsl(var(--primary) / 0.1) !important; }
+.bg-red-500\/10 { background-color: hsl(0 84% 60% / 0.1) !important; }
+.bg-green-500\/10 { background-color: hsl(142 72% 29% / 0.1) !important; }
+.divide-border > :not([hidden]) ~ :not([hidden]) { border-top-width: 1px; border-color: var(--color-border); }
+.border-primary\/20 { border-color: hsl(var(--primary) / 0.2) !important; }
+.border-primary\/30 { border-color: hsl(var(--primary) / 0.3) !important; }
+
+/* Fallback responsive helpers when md: classes are not emitted */
+@media (min-width: 48rem) {
+  .mq-md-grid { display: grid !important; }
+  .mq-md-hidden { display: none !important; }
+  .mq-md-grid-cols-3 { grid-template-columns: 1fr 1.2fr 1fr !important; }
+  .mq-md-col-span-1 { grid-column: span 1 / span 1 !important; }
+  .mq-md-overflow-auto { overflow: auto !important; }
+  .mq-md-max-h-22rem { max-height: 22rem !important; }
+}

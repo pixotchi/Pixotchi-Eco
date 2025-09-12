@@ -1,0 +1,1242 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { 
+  Shield, 
+  Users, 
+  Code, 
+  Trash2, 
+  Plus, 
+  BarChart3, 
+  Download,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  UserX,
+  MessageCircle,
+  Bot,
+  Search,
+  FileText,
+  TrendingUp,
+  DollarSign
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStats } from '@/lib/types';
+import { formatDistanceToNow } from 'date-fns';
+import { ThemeSelector } from '@/components/theme-selector';
+
+interface AdminStats {
+  codes: {
+    total: number;
+    used: number;
+    active: number;
+    expired: number;
+    byDate: Record<string, number>;
+  };
+  users: {
+    totalUsers: number;
+    validatedUsers: number;
+    topGenerators: Array<{
+      address: string;
+      generated: number;
+      used: number;
+    }>;
+  };
+  recentCodes: Array<{
+    code: string;
+    createdAt: number;
+    isUsed: boolean;
+    createdBy: string;
+    usedBy?: string;
+  }>;
+}
+
+export default function AdminInviteDashboard() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminKey, setAdminKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification'>('overview');
+  
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<AdminChatMessage[]>([]);
+  const [chatStats, setChatStats] = useState<ChatStats | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  // AI Chat state
+  const [aiConversations, setAIConversations] = useState<AIConversation[]>([]);
+  const [aiStats, setAIStats] = useState<AIUsageStats | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [conversationMessages, setConversationMessages] = useState<AIChatMessage[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [aiChatLoading, setAIChatLoading] = useState(false);
+  // Gamification leaderboards
+  const [gmLb, setGmLb] = useState<{ streakTop: Array<{ address: string; value: number }>; missionTop: Array<{ address: string; value: number }> } | null>(null);
+
+  const authenticate = async () => {
+    if (!adminKey.trim()) {
+      toast.error('Please enter admin key');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/invite/admin/stats', {
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Extract the stats from the API response structure
+        setStats({
+          codes: data.codes,
+          users: data.users,
+          recentCodes: data.recentCodes,
+        });
+        setIsAuthenticated(true);
+        toast.success('Admin access granted');
+      } else {
+        toast.error('Invalid admin key');
+      }
+    } catch (error) {
+      toast.error('Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshStats = async () => {
+    if (!isAuthenticated) return;
+    
+    setLoading(true);
+    try {
+      const response = await fetch('/api/invite/admin/stats', {
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Extract the stats from the API response structure
+        setStats({
+          codes: data.codes,
+          users: data.users,
+          recentCodes: data.recentCodes,
+        });
+      }
+    } catch (error) {
+      toast.error('Failed to refresh stats');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateAdminCodes = async (count: number) => {
+    setGenerating(true);
+    try {
+      const response = await fetch('/api/invite/admin/generate', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({ count }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`Generated ${data.codes.length} codes`);
+        // Copy codes to clipboard
+        navigator.clipboard.writeText(data.codes.join('\n'));
+        toast.success('Codes copied to clipboard');
+        refreshStats();
+      } else {
+        toast.error(data.error || 'Failed to generate codes');
+      }
+    } catch (error) {
+      toast.error('Generation failed');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const performCleanup = async (action: string, target?: string) => {
+    const actionNames = {
+      delete_all_codes: 'delete ALL codes',
+      delete_expired_codes: 'delete expired codes',
+      delete_used_codes: 'delete used codes',
+      reset_user_data: 'reset ALL user data',
+      reset_daily_limits: 'reset daily limits',
+      delete_specific_user: `delete user ${target}`,
+      delete_everything: 'DELETE EVERYTHING from the database',
+    };
+
+    const confirmMessage = `Are you sure you want to ${actionNames[action as keyof typeof actionNames]}? This cannot be undone.`;
+    
+    if (!confirm(confirmMessage)) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/invite/admin/cleanup', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({ action, target }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success(data.message);
+        refreshStats();
+      } else {
+        toast.error(data.error || 'Cleanup failed');
+      }
+    } catch (error) {
+      toast.error('Cleanup operation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportRewardData = () => {
+    if (!stats) return;
+    
+    const rewardData = stats.users.topGenerators.map(user => ({
+      address: user.address,
+      generated: user.generated,
+      successful: user.used,
+      tokens: user.used * 100, // 100 tokens per successful invite
+    }));
+
+    const csv = [
+      'Address,Generated,Successful,Tokens',
+      ...rewardData.map(r => `${r.address},${r.generated},${r.successful},${r.tokens}`)
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invite-rewards-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast.success('Reward data exported');
+  };
+
+  // Chat management functions
+  const fetchChatData = async () => {
+    if (!adminKey.trim()) return;
+    
+    setChatLoading(true);
+    try {
+      const response = await fetch('/api/chat/admin/messages', {
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch chat data');
+      }
+
+      const data = await response.json();
+      setChatMessages(data.messages || []);
+      setChatStats(data.stats || null);
+    } catch (error) {
+      console.error('Error fetching chat data:', error);
+      toast.error('Failed to fetch chat data');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const deleteMessage = async (messageId: string, timestamp: number) => {
+    if (!adminKey.trim()) return;
+    
+    try {
+      const response = await fetch('/api/chat/admin/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({ messageId, timestamp }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete message');
+      }
+
+      toast.success('Message deleted');
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error('Failed to delete message');
+    }
+  };
+
+  const deleteAllMessages = async () => {
+    if (!adminKey.trim()) return;
+    
+    if (!confirm('Are you sure you want to delete ALL chat messages? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/chat/admin/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({ deleteAll: true }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete all messages');
+      }
+
+      const data = await response.json();
+      toast.success(`Deleted ${data.deletedCount} messages`);
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error deleting all messages:', error);
+      toast.error('Failed to delete all messages');
+    }
+  };
+
+  // AI Chat management functions
+  const fetchAIChatData = async () => {
+    if (!adminKey.trim()) return;
+    
+    setAIChatLoading(true);
+    try {
+      const response = await fetch('/api/chat/ai/admin/conversations?includeStats=true', {
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch AI chat data');
+      }
+
+      const data = await response.json();
+      setAIConversations(data.conversations || []);
+      setAIStats(data.stats || null);
+    } catch (error) {
+      console.error('Error fetching AI chat data:', error);
+      toast.error('Failed to fetch AI chat data');
+    } finally {
+      setAIChatLoading(false);
+    }
+  };
+
+  const loadConversationMessages = async (conversationId: string) => {
+    try {
+      const response = await fetch(`/api/chat/ai/admin/messages?conversationId=${conversationId}`, {
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load conversation messages');
+      }
+
+      const result = await response.json();
+      setConversationMessages(result.messages);
+      setSelectedConversation(conversationId);
+    } catch (error) {
+      console.error('Error loading conversation messages:', error);
+      toast.error('Failed to load conversation');
+    }
+  };
+
+  const deleteConversation = async (conversationId: string) => {
+    if (!confirm('Are you sure you want to delete this conversation?')) return;
+
+    try {
+      const response = await fetch(`/api/chat/ai/admin/conversations?conversationId=${conversationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete conversation');
+      }
+
+      toast.success('Conversation deleted');
+      fetchAIChatData();
+      
+      if (selectedConversation === conversationId) {
+        setSelectedConversation(null);
+        setConversationMessages([]);
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast.error('Failed to delete conversation');
+    }
+  };
+
+  // Filter conversations by search term
+  const filteredConversations = aiConversations.filter(conv => 
+    conv.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    conv.address.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Fetch chat data when switching to chat tab
+  useEffect(() => {
+    if (activeTab === 'chat' && isAuthenticated) {
+      fetchChatData();
+    }
+    if (activeTab === 'ai-chat' && isAuthenticated) {
+      fetchAIChatData();
+    }
+    if (activeTab === 'gamification' && isAuthenticated) {
+      (async () => {
+        try {
+          const res = await fetch('/api/gamification/leaderboards', { headers: { 'Authorization': `Bearer ${adminKey}` } });
+          if (!res.ok) return;
+          const data = await res.json();
+          setGmLb({ streakTop: data.streakTop || [], missionTop: data.missionTop || [] });
+        } catch {}
+      })();
+    }
+  }, [activeTab, isAuthenticated]);
+
+  // Gamification helpers
+  const resetGamification = async (scope: 'streaks' | 'missions' | 'all') => {
+    if (!confirm(`Are you sure you want to reset ${scope}?`)) return;
+    try {
+      const res = await fetch('/api/gamification/admin/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminKey}` }, body: JSON.stringify({ scope }) });
+      const data = await res.json();
+      if (res.ok) { toast.success(`Reset ${scope} (${data.deleted} keys deleted)`); }
+      else { toast.error(data?.error || 'Reset failed'); }
+    } catch { toast.error('Reset failed'); }
+  };
+
+  // Authentication screen
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mb-4">
+              <Shield className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <CardTitle className="text-xl">Admin Access Required</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Enter your admin key to access the invite management dashboard
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <Input
+                type={showKey ? 'text' : 'password'}
+                placeholder="Admin key"
+                value={adminKey}
+                onChange={(e) => setAdminKey(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && authenticate()}
+                className="pr-10"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                onClick={() => setShowKey(!showKey)}
+              >
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </Button>
+            </div>
+            <Button
+              onClick={authenticate}
+              disabled={loading || !adminKey.trim()}
+              className="w-full"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4 mr-2" />
+                  Access Dashboard
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Main dashboard
+  return (
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-800 border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <Shield className="w-6 h-6 text-blue-600" />
+              <h1 className="text-xl font-bold">Dashboard</h1>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button variant="outline" size="sm" onClick={refreshStats} disabled={loading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <ThemeSelector />
+              <Button variant="outline" size="sm" onClick={() => setIsAuthenticated(false)}>
+                Logout
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 mb-8">
+          {[
+            { id: 'overview', label: 'Overview', icon: BarChart3 },
+            { id: 'codes', label: 'Codes', icon: Code },
+            { id: 'users', label: 'Users', icon: Users },
+            { id: 'chat', label: 'Chat', icon: MessageCircle },
+            { id: 'ai-chat', label: 'AI Chat', icon: Bot },
+            { id: 'cleanup', label: 'Cleanup', icon: Trash2 },
+            { id: 'gamification', label: 'Gamification', icon: TrendingUp },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <Button
+                key={tab.id}
+                variant={activeTab === tab.id ? 'default' : 'ghost'}
+                onClick={() => setActiveTab(tab.id as any)}
+                className="flex items-center space-x-2"
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+              </Button>
+            );
+          })}
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && stats && (
+          <div className="space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Codes</p>
+                      <p className="text-2xl font-bold">{stats.codes.total}</p>
+                    </div>
+                    <Code className="w-8 h-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Used Codes</p>
+                      <p className="text-2xl font-bold">{stats.codes.used}</p>
+                    </div>
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Active Users</p>
+                      <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
+                    </div>
+                    <Users className="w-8 h-8 text-purple-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Success Rate</p>
+                      <p className="text-2xl font-bold">
+                        {stats.codes.total > 0 ? Math.round((stats.codes.used / stats.codes.total) * 100) : 0}%
+                      </p>
+                    </div>
+                    <BarChart3 className="w-8 h-8 text-orange-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Top Generators */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Top Referrers</span>
+                  <Button size="sm" onClick={exportRewardData}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Rewards
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {stats.users.topGenerators.slice(0, 10).map((user, index) => (
+                    <div key={user.address} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-sm font-bold">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-mono text-sm">{user.address.slice(0, 10)}...{user.address.slice(-4)}</p>
+                          <p className="text-xs text-muted-foreground">{user.used} successful • {user.generated} generated</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{user.used * 100} tokens</p>
+                        <p className="text-xs text-muted-foreground">reward estimate</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Codes Tab */}
+        {activeTab === 'codes' && stats && (
+          <div className="space-y-6">
+            {/* Generate Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Generate Admin Codes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center space-x-3">
+                  <Button onClick={() => generateAdminCodes(1)} disabled={generating}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Generate 1
+                  </Button>
+                  <Button onClick={() => generateAdminCodes(5)} disabled={generating}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Generate 5
+                  </Button>
+                  <Button onClick={() => generateAdminCodes(10)} disabled={generating}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Generate 10
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Generated codes will be copied to clipboard automatically
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Recent Codes */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Codes ({stats.recentCodes.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {stats.recentCodes.map((code) => (
+                    <div key={code.code} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-green-500' : 'bg-blue-500'}`} />
+                        <span className="font-mono">{code.code}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm">{code.isUsed ? 'Used' : 'Active'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(code.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === 'users' && stats && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>User Statistics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Users</p>
+                    <p className="text-2xl font-bold">{stats.users.totalUsers}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Validated Users</p>
+                    <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  {stats.users.topGenerators.map((user) => (
+                    <div key={user.address} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                      <div>
+                        <p className="font-mono text-sm">{user.address}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Generated: {user.generated} • Successful: {user.used}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => performCleanup('delete_specific_user', user.address)}
+                      >
+                        <UserX className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Cleanup Tab */}
+        {activeTab === 'cleanup' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
+                  Cleanup Operations
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  These operations cannot be undone. Use with caution.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => performCleanup('delete_expired_codes')}
+                    disabled={loading}
+                  >
+                    <Clock className="w-4 h-4 mr-2" />
+                    Delete Expired Codes
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => performCleanup('delete_used_codes')}
+                    disabled={loading}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Delete Used Codes
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => performCleanup('reset_daily_limits')}
+                    disabled={loading}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reset Daily Limits
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => performCleanup('reset_user_data')}
+                    disabled={loading}
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Reset User Data
+                  </Button>
+                </div>
+                
+                <div className="border-t border-border pt-4 space-y-4">
+                  <Button
+                    variant="destructive"
+                    onClick={() => performCleanup('delete_all_codes')}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete ALL Codes
+                  </Button>
+                  
+                  <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                    <div className="flex items-center mb-2">
+                      <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
+                      <h4 className="font-semibold text-red-800 dark:text-red-200">DANGER ZONE</h4>
+                    </div>
+                    <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                      This will delete <strong>EVERYTHING</strong> from the database including all codes, users, audit logs, and system data. This action cannot be undone!
+                    </p>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (confirm('⚠️ WARNING: This will delete EVERYTHING from the database!\n\nThis includes:\n- All invite codes\n- All user data\n- All audit logs\n- All system data\n\nThis CANNOT be undone!\n\nType "DELETE EVERYTHING" in the next prompt to confirm.')) {
+                          const confirmation = prompt('Type "DELETE EVERYTHING" to confirm this destructive action:');
+                          if (confirmation === 'DELETE EVERYTHING') {
+                            performCleanup('delete_everything');
+                          } else {
+                            toast.error('Confirmation text did not match. Operation cancelled.');
+                          }
+                        }
+                      }}
+                      disabled={loading}
+                      className="w-full bg-red-600 hover:bg-red-700"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      🚨 DELETE EVERYTHING 🚨
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Chat Tab */}
+        {activeTab === 'chat' && (
+          <div className="space-y-6">
+            {/* Chat Stats */}
+            {chatStats && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Messages</p>
+                        <p className="text-2xl font-bold">{chatStats.totalMessages}</p>
+                      </div>
+                      <MessageCircle className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Active Users</p>
+                        <p className="text-2xl font-bold">{chatStats.activeUsers}</p>
+                      </div>
+                      <Users className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Last 24h</p>
+                        <p className="text-2xl font-bold">{chatStats.messagesLast24h}</p>
+                      </div>
+                      <Clock className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Chat Management */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Chat Messages</CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={fetchChatData}
+                    disabled={chatLoading}
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${chatLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={deleteAllMessages}
+                    disabled={chatLoading}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete All
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {chatLoading ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <p className="mt-2 text-muted-foreground">Loading chat messages...</p>
+                  </div>
+                ) : chatMessages.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No chat messages found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {chatMessages.map((message) => (
+                      <div
+                        key={`${message.id}-${message.timestamp}`}
+                        className={`p-4 rounded-lg border ${
+                          message.isSpam
+                            ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                            : 'bg-card'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-sm">
+                                {message.displayName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(message.timestamp).toLocaleString()}
+                              </span>
+                              {message.isSpam && (
+                                <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full dark:bg-red-900 dark:text-red-200">
+                                  Potential Spam
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm">{message.message}</p>
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              Address: {message.address}
+                              {message.similarCount && message.similarCount > 1 && (
+                                <span className="ml-2">
+                                  Similar messages: {message.similarCount}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => deleteMessage(message.id, message.timestamp)}
+                            disabled={chatLoading}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* AI Chat Tab */}
+        {activeTab === 'ai-chat' && (
+          <div className="space-y-6">
+            {/* AI Chat Stats */}
+            {aiStats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <Card>
+                  <CardContent className="flex items-center p-4">
+                    <MessageCircle className="w-8 h-8 text-blue-500 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Total Conversations</p>
+                      <p className="text-2xl font-bold">{aiStats.totalConversations}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="flex items-center p-4">
+                    <Bot className="w-8 h-8 text-green-500 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Total Messages</p>
+                      <p className="text-2xl font-bold">{aiStats.totalMessages}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="flex items-center p-4">
+                    <TrendingUp className="w-8 h-8 text-orange-500 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Total Tokens</p>
+                      <p className="text-2xl font-bold">{aiStats.totalTokens.toLocaleString()}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="flex items-center p-4">
+                    <Clock className="w-8 h-8 text-purple-500 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Daily Usage</p>
+                      <p className="text-2xl font-bold">{aiStats.dailyUsage}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="flex items-center p-4">
+                    <DollarSign className="w-8 h-8 text-red-500 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Est. Cost</p>
+                      <p className="text-2xl font-bold">${aiStats.costEstimate.toFixed(4)}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Conversations List */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Bot className="w-5 h-5" />
+                      AI Conversations ({filteredConversations.length})
+                    </CardTitle>
+                    <Button
+                      variant="outline"
+                      onClick={fetchAIChatData}
+                      disabled={aiChatLoading}
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${aiChatLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                      <Input
+                        placeholder="Search conversations..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+                  {aiChatLoading ? (
+                    <div className="text-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      <p className="mt-2 text-muted-foreground">Loading conversations...</p>
+                    </div>
+                  ) : filteredConversations.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Bot className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>No AI conversations found</p>
+                    </div>
+                  ) : (
+                    filteredConversations.map((conversation) => (
+                      <div
+                        key={conversation.id}
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedConversation === conversation.id
+                            ? 'bg-primary/10 border-primary'
+                            : 'hover:bg-muted/50'
+                        }`}
+                        onClick={() => loadConversationMessages(conversation.id)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium truncate">{conversation.title}</p>
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                {conversation.model}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {conversation.address.slice(0, 6)}...{conversation.address.slice(-4)}
+                            </p>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <span>{conversation.messageCount} messages</span>
+                              <span>{conversation.totalTokens} tokens</span>
+                              <span>{formatDistanceToNow(new Date(conversation.lastMessageAt), { addSuffix: true })}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                loadConversationMessages(conversation.id);
+                              }}
+                            >
+                              <Eye className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteConversation(conversation.id);
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Conversation Messages */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Conversation Messages
+                    {selectedConversation && (
+                      <span className="text-sm font-normal text-muted-foreground">
+                        ({conversationMessages.length} messages)
+                      </span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-96 overflow-y-auto">
+                  {!selectedConversation ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Select a conversation to view messages</p>
+                    </div>
+                  ) : conversationMessages.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>No messages in this conversation</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {conversationMessages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`p-3 rounded-lg border ${
+                            message.type === 'assistant'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 border-l-4 border-blue-500 dark:border-blue-400'
+                              : 'bg-gray-50 dark:bg-gray-800/30 border-l-4 border-gray-500 dark:border-gray-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {message.type === 'assistant' ? (
+                                <Bot className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                              ) : (
+                                <Users className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              )}
+                              <span className="font-medium text-sm text-foreground">
+                                {message.type === 'assistant' ? 'Neural Seed' : 'User'}
+                              </span>
+                              {message.tokensUsed && (
+                                <span className="text-xs bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-200 px-2 py-1 rounded">
+                                  {message.tokensUsed} tokens
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap text-foreground">{message.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* Gamification Tab */}
+        {activeTab === 'gamification' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Leaderboards (Current Month)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!gmLb ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading…</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="font-medium mb-2">Streaks</h4>
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {gmLb.streakTop.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No data</div>
+                        ) : gmLb.streakTop.map((e, i) => (
+                          <div key={`s-${e.address}-${i}`} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                            <div className="font-mono text-xs">{e.address}</div>
+                            <div className="text-sm font-semibold">{e.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Missions (Points)</h4>
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {gmLb.missionTop.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No data</div>
+                        ) : gmLb.missionTop.map((e, i) => (
+                          <div key={`m-${e.address}-${i}`} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                            <div className="font-mono text-xs">{e.address}</div>
+                            <div className="text-sm font-semibold">{e.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Admin Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Button variant="outline" onClick={() => resetGamification('streaks')}><RefreshCw className="w-4 h-4 mr-2" />Reset Streaks</Button>
+                <Button variant="outline" onClick={() => resetGamification('missions')}><RefreshCw className="w-4 h-4 mr-2" />Reset Missions</Button>
+                <Button variant="destructive" onClick={() => resetGamification('all')}><Trash2 className="w-4 h-4 mr-2" />Reset All</Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+} 
