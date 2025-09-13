@@ -278,3 +278,7 @@ npm run lint  # eslint
 ## License
 Licensed under the MIT License. See the `LICENSE` file at the project root for details.
 
+---
+
+**Built with ❤️ for the Pixotchi community**
+
