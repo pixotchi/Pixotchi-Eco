@@ -270,10 +270,6 @@ npm run lint  # eslint
 - Prefer private Base RPCs with multiple endpoints for automatic failover.
 - If using the paymaster, ensure `NEXT_PUBLIC_CDP_*` are set; the app runs without it if omitted.
 
-## Known Limitations
-- Agent Mode currently supports minting the ZEST strain only (id 4, 10 SEED each, up to 5 at once).
-- Destructive admin operations (e.g., “delete everything”) are gated by confirmations but should only be used in secure environments.
-- Public API uses dynamic CORS with origin echo; rate limits and server‑side validation still apply.
 
 ## License
 Licensed under the MIT License. See the `LICENSE` file at the project root for details.
