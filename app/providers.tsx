@@ -12,6 +12,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 // Privy wagmi will be scoped locally where needed (login UI) to avoid intercepting OnchainKit
 import { WagmiProvider as CoreWagmiProvider } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
+import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { FrameProvider } from "@/lib/frame-context";
@@ -43,13 +44,25 @@ export function Providers(props: { children: ReactNode }) {
     },
   });
 
-  // Debug log to ensure API key is available (remove in production)
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    console.log('🔑 MiniKit API Key configured:', !!apiKey);
-  }
+  // MiniKit API key validation handled internally
 
-  // Privy App ID may be undefined at build time; provide a safe default to satisfy types.
-  const privyAppId: string = (process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '') as string;
+  // Environment variable validation with fallback
+  const privyAppId: string = (() => {
+    const envAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+    const fallbackAppId = 'clsjenoh000mhigrekjgcpjpd';
+    
+    if (!envAppId) {
+      console.warn('NEXT_PUBLIC_PRIVY_APP_ID not configured, using fallback');
+      return fallbackAppId;
+    }
+    
+    if (envAppId.trim() === '') {
+      console.warn('NEXT_PUBLIC_PRIVY_APP_ID is empty, using fallback');
+      return fallbackAppId;
+    }
+    
+    return envAppId;
+  })();
 
   // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
   useEffect(() => {
@@ -94,23 +107,78 @@ export function Providers(props: { children: ReactNode }) {
 
   function WagmiRouter({ children }: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
+    const [surface, setSurface] = useState<'privy' | 'coinbase'>('privy'); // Default to privy instead of null
+    const [isInitialized, setIsInitialized] = useState(false);
+    
     useEffect(() => {
       let mounted = true;
-      (async () => {
+      
+      const initializeRouter = async () => {
         try {
+          // Check if we're in a MiniApp
           const flag = await sdk.isInMiniApp();
           if (mounted) setIsMiniApp(Boolean(flag));
         } catch {
           if (mounted) setIsMiniApp(false);
         }
-      })();
+        
+        // Determine selected auth surface (persisted or via URL)
+        try {
+          if (!mounted) return;
+          if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const urlSurface = params.get('surface');
+            const key = 'pixotchi:authSurface';
+            
+            if (urlSurface === 'privy' || urlSurface === 'coinbase') {
+              // Store the surface preference
+              try {
+                sessionStorage.setItem(key, urlSurface);
+              } catch (e) {
+                console.warn('Failed to store surface preference:', e);
+              }
+              setSurface(urlSurface as 'privy' | 'coinbase');
+            } else {
+              // Try to get stored preference, fallback to 'privy'
+              try {
+                const stored = sessionStorage.getItem(key) as 'privy' | 'coinbase' | null;
+                setSurface(stored || 'privy');
+              } catch (e) {
+                console.warn('Failed to read surface preference:', e);
+                setSurface('privy');
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to initialize surface:', error);
+          setSurface('privy'); // Fallback to privy on any error
+        }
+        
+        if (mounted) {
+          setIsInitialized(true);
+        }
+      };
+      
+      initializeRouter();
       return () => { mounted = false; };
     }, []);
 
-    // Mini App: use Farcaster connector. Web: use Privy wagmi as the single app-level wagmi (includes CB + injected + embedded wallet support)
+    // Show loading state until initialization is complete
+    if (!isInitialized) {
+      return <div>Loading...</div>;
+    }
+
+    // Mini App: use Farcaster connector.
     if (isMiniApp) {
       return <CoreWagmiProvider config={wagmiMiniAppConfig}>{children}</CoreWagmiProvider>;
     }
+    
+    // Web: choose a single provider per session based on selected surface
+    if (surface === 'coinbase') {
+      return <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>{children}</CoreWagmiProvider>;
+    }
+    
+    // default & 'privy'
     return <PrivyWagmiProvider config={wagmiPrivyConfig}>{children}</PrivyWagmiProvider>;
   }
 
@@ -128,13 +196,15 @@ export function Providers(props: { children: ReactNode }) {
             // Keep config minimal and safe; can be extended via env flags later
             appearance: {
               theme: 'light',
-              walletList: ['detected_ethereum_wallets', 'base_account', 'universal_profile'],
+              walletList: ['detected_ethereum_wallets', 'base_account'],
             },
             defaultChain: base,
             supportedChains: [base],
             loginMethods: ['wallet', 'email'],
             // Avoid session race conditions by not auto-connecting until hooks report ready
-            embeddedWallets: { createOnLogin: 'users-without-wallets' },
+            embeddedWallets: { 
+              createOnLogin: 'off' // Prevent automatic embedded wallet creation
+            },
           }}
         >
           <QueryClientProvider client={queryClient}>

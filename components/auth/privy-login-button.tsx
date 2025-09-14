@@ -2,7 +2,7 @@
 
 import { usePrivy, useLogin } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 interface PrivyLoginButtonProps {
   className?: string;
@@ -15,47 +15,94 @@ export default function PrivyLoginButton({
 }: PrivyLoginButtonProps) {
   const { ready: isPrivyReady } = usePrivy();
   const { login } = useLogin();
-  const [forceEnabled, setForceEnabled] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
   
-  // If Privy isn't ready after a timeout, force the button to be enabled
-  // This handles cases where the provider state gets stuck
+  // Cleanup timeouts on unmount
   useEffect(() => {
-    if (!isPrivyReady) {
-      const timer = setTimeout(() => {
-        setForceEnabled(true);
-      }, 2000);
-      
-      return () => clearTimeout(timer);
-    } else {
-      setForceEnabled(false);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Clear any existing timeouts when Privy becomes ready
+  useEffect(() => {
+    if (isPrivyReady && timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [isPrivyReady]);
   
-  // Safely handle login attempt even if Privy reports not ready
-  const handleLogin = () => {
+  // Handle login with proper error handling and cleanup
+  const handleLogin = useCallback(async () => {
+    if (!mountedRef.current) return;
+    
+    // Don't allow multiple simultaneous login attempts
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    
     try {
-      login();
+      await login();
     } catch (error) {
-      console.warn("Privy login attempt failed, trying again after delay");
-      // Try again after a small delay if the first attempt failed
-      setTimeout(() => {
+      console.warn("Privy login attempt failed:", error);
+      
+      if (!mountedRef.current) return;
+      
+      // Only retry if we're still mounted and it's a recoverable error
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      
+      retryTimeoutRef.current = setTimeout(async () => {
+        if (!mountedRef.current) return;
+        
         try {
-          login();
-        } catch (e) {
-          console.error("Repeated Privy login attempt failed", e);
+          await login();
+        } catch (retryError) {
+          console.error("Privy login retry failed:", retryError);
+        } finally {
+          if (mountedRef.current) {
+            setIsLoading(false);
+          }
         }
-      }, 500);
+      }, 1000); // Increased retry delay for better UX
+      
+      return; // Don't set loading to false immediately on first failure
     }
-  };
+    
+    if (mountedRef.current) {
+      setIsLoading(false);
+    }
+  }, [login, isLoading]);
+
+  // Determine if button should be disabled
+  const isButtonDisabled = disabled || (!isPrivyReady && !isLoading) || isLoading;
 
   return (
     <Button
       className={className}
       variant="default"
-      disabled={disabled && !forceEnabled && !isPrivyReady}
+      disabled={isButtonDisabled}
       onClick={handleLogin}
+      aria-busy={isLoading}
+      aria-live="polite"
     >
-      Continue with Privy
+      {isLoading ? "Connecting..." : isPrivyReady ? "Continue with Privy" : "Loading Privy..."}
     </Button>
   );
 }

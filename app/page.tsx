@@ -20,8 +20,6 @@ import { ChatButton } from "@/components/chat";
 import StatusBar from "@/components/status-bar";
 import { usePrivy, useWallets, useLogin } from "@privy-io/react-auth";
 import { useSetActiveWallet } from "@privy-io/wagmi";
-// Removed local Privy Wagmi wrapper; using app-level Privy Wagmi for web
-// Using the app-level wagmi provider; no local provider scoping
 import { clearAppCaches } from "@/lib/cache-utils";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
@@ -127,6 +125,17 @@ export default function App() {
   const { login } = useLogin();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
+  const { connect, connectors } = useConnect();
+  const [surface, setSurface] = useState<'privy' | 'coinbase' | null>(null);
+
+  // Read selected surface once on mount
+  useEffect(() => {
+    try {
+      const key = 'pixotchi:authSurface';
+      const stored = (typeof window !== 'undefined') ? (sessionStorage.getItem(key) as any) : null;
+      if (stored === 'privy' || stored === 'coinbase') setSurface(stored);
+    } catch {}
+  }, []);
   
   // Farcaster splash-screen: call ready() once UI is stable
   const readyCalledRef = (typeof window !== 'undefined') ? (window as any).__pixotchi_ready_called_ref ?? ((window as any).__pixotchi_ready_called_ref = { current: false }) : { current: false };
@@ -160,15 +169,28 @@ export default function App() {
     })();
   }, []);
   
-  // Ensure Privy embedded wallet becomes the active wagmi wallet when present (web-only)
+  // One-shot autologin after surface switch
   useEffect(() => {
-    if (!fc?.isInMiniApp && wallets && wallets.length > 0) {
-      const embeddedWallet = wallets.find((w: any) => (w as any).walletClientType === 'privy');
-      if (embeddedWallet) {
-        setActiveWallet(embeddedWallet as any);
+    if (isConnected) return;
+    try {
+      const auto = (typeof window !== 'undefined') ? sessionStorage.getItem('pixotchi:autologin') : null;
+      if (!auto) return;
+      if (auto === 'privy' && surface === 'privy' && privyReady) {
+        sessionStorage.removeItem('pixotchi:autologin');
+        login();
+      } else if (auto === 'coinbase' && surface === 'coinbase') {
+        const cb = (connectors || []).find((c: any) => `${c.name}`.toLowerCase().includes('coinbase')) || (connectors || [])[0];
+        if (cb) {
+          sessionStorage.removeItem('pixotchi:autologin');
+          connect({ connector: cb as any });
+        }
       }
-    }
-  }, [wallets, fc?.isInMiniApp, setActiveWallet]);
+    } catch {}
+  }, [isConnected, privyReady, surface, connectors, connect, login]);
+
+  // Respect user's wallet choice - don't automatically switch to embedded wallets
+  // This prevents the issue where external wallets get switched to Privy embedded wallets
+  // after signing auth messages
   
 
   const addFrame = useAddFrame();
@@ -213,7 +235,33 @@ export default function App() {
     );
 
     const label = isPending ? 'Connecting…' : 'Coinbase Wallet';
-    const disabled = !cbConnector || isPending;
+    // Keep the option available unless no connector exists; some environments may mark
+    // a generic connect as pending due to other providers. We still allow user action.
+    const disabled = !cbConnector;
+
+    // Button state is managed by the component logic above
+
+    const handleClick = async () => {
+      try {
+        // Set preferences first
+        sessionStorage.setItem('pixotchi:authSurface', 'coinbase');
+        sessionStorage.setItem('pixotchi:autologin', 'coinbase');
+        
+        // Wait a tick to ensure storage operations complete
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
+        // Update URL and reload
+        const url = new URL(window.location.href);
+        url.searchParams.set('surface', 'coinbase');
+        window.location.replace(url.toString());
+      } catch (error) {
+        console.error('Failed to switch to Coinbase surface:', error);
+        // Fallback: try direct connection without reload
+        if (cbConnector) {
+          connect({ connector: cbConnector as any });
+        }
+      }
+    };
 
     return (
       <Button
@@ -222,8 +270,8 @@ export default function App() {
         variant="default"
         aria-busy={isPending}
         aria-live="polite"
-        disabled={disabled}
-        onClick={() => { if (cbConnector) connect({ connector: cbConnector as any }); }}
+        disabled={false}
+        onClick={handleClick}
       >
         <span className="flex items-center justify-center gap-2">
           {isPending && (
@@ -396,7 +444,31 @@ export default function App() {
                   <Button
                     className="w-full rounded-md text-base font-semibold text-white h-11 bg-[#ff8170] hover:bg-[#ff6b56] active:bg-[#ff8170] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ff8170] disabled:opacity-60 disabled:cursor-not-allowed"
                     variant="default"
-                    onClick={() => { login(); }}
+                    onClick={async () => {
+                      try {
+                        // Set preferences first
+                        sessionStorage.setItem('pixotchi:authSurface', 'privy');
+                        sessionStorage.setItem('pixotchi:autologin', 'privy');
+                        
+                        // Wait a tick to ensure storage operations complete
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                        
+                        // Update URL and reload
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('surface', 'privy');
+                        window.location.replace(url.toString());
+                      } catch (error) {
+                        console.error('Failed to switch to Privy surface:', error);
+                        // Fallback: try direct login without reload if Privy is ready
+                        if (privyReady && login) {
+                          try {
+                            login();
+                          } catch (loginError) {
+                            console.error('Fallback Privy login failed:', loginError);
+                          }
+                        }
+                      }
+                    }}
                     disabled={!privyReady}
                   >
                     {privyReady ? 'Continue with Privy' : 'Loading Privy…'}

@@ -73,6 +73,7 @@ export async function generateMetadata(): Promise<Metadata> {
       "Base blockchain",
       "NFT game",
       "virtual pet",
+      "p2e",
       "plant simulation",
       "crypto game",
       "Web3 gaming",
@@ -138,7 +139,7 @@ export async function generateMetadata(): Promise<Metadata> {
         {
           rel: "mask-icon",
           url: "/safari-pinned-tab.svg",
-          color: "#a7c7e7",
+          color: "#2d3c53",
         },
       ],
     },
@@ -188,7 +189,7 @@ export default function RootLayout({
         />
         {/* Theme color */}
         <meta name="theme-color" content="#a7c7e7" />
-        <meta name="msapplication-TileColor" content="#a7c7e7" />
+        <meta name="msapplication-TileColor" content="#2d3c53" />
         {/* Preconnect to external domains */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
