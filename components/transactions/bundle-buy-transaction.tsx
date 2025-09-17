@@ -83,11 +83,22 @@ export default function BundleBuyTransaction({
       onSuccess={(tx) => {
         try {
           if (address && itemType === 'garden') {
-            fetch('/api/gamification/missions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ address, taskId: 's1_buy5_elements', count: quantity })
-            });
+            const post = async (attempt = 0) => {
+              try {
+                const res = await fetch('/api/gamification/missions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ address, taskId: 's1_buy5_elements', count: quantity })
+                });
+                if (!res.ok) throw new Error('missions post failed');
+              } catch (e) {
+                if (attempt < 2) {
+                  const delay = 400 * Math.pow(2, attempt);
+                  setTimeout(() => post(attempt + 1), delay);
+                }
+              }
+            };
+            post();
           }
         } catch {}
         onSuccess?.(tx);

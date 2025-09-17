@@ -1,8 +1,7 @@
 "use client";
 
 import React from 'react';
-import { useAccount } from 'wagmi';
-import { useWatchBlockNumber } from 'wagmi';
+import { useAccount, useBlockNumber } from 'wagmi';
 import { getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
@@ -40,14 +39,20 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     fetchSlots();
   }, [fetchSlots]);
 
-  useWatchBlockNumber({ onBlockNumber: (bn) => setCurrentBlock(bn), pollingInterval: 3000 });
+  // Initialize and watch the current block number immediately to avoid transient wrong UI
+  const { data: liveBlock } = useBlockNumber({ watch: true, query: { refetchInterval: 1000 } });
+  React.useEffect(() => {
+    if (typeof liveBlock === 'bigint' && liveBlock > BigInt(0)) setCurrentBlock(liveBlock);
+  }, [liveBlock]);
 
   const statusOf = (s: import('@/lib/contracts').QuestSlot): string => {
+    // Until we know the current block, avoid guessing to prevent huge time estimates
+    if (currentBlock === BigInt(0)) return 'Loading';
     const now = currentBlock;
     if (s.coolDownBlock !== BigInt(0) && now < s.coolDownBlock) return 'Cooldown';
     if (s.startBlock === BigInt(0)) return 'Available';
-    if (now <= s.endBlock) return 'In progress';
-    if (s.pseudoRndBlock === BigInt(0)) return 'Ready to commit';
+    if (now >= s.startBlock && now <= s.endBlock) return 'In progress';
+    if (now > s.endBlock && s.pseudoRndBlock === BigInt(0)) return 'Ready to commit';
     if (s.pseudoRndBlock !== BigInt(0)) return 'Committed';
     return 'Available';
   };
@@ -70,25 +75,25 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   };
   const difficultyLabel = (d: number) => (d === 0 ? 'EASY' : d === 1 ? 'MEDIUM' : 'HARD');
 
-  const handleSuccess = async (slotIndex?: number, waitForFinalize?: boolean) => {
+  const handleSuccess = async (opts?: { slotIndex?: number; awaitCommitted?: boolean; awaitUncommitted?: boolean }) => {
     await fetchSlots();
     onQuestUpdate();
     // Ensure building/land UI reflects changes immediately
     try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
 
-    // After opening loot bag, the UI can briefly show stale status. Poll briefly until it flips from 'Committed'.
-    if (waitForFinalize && typeof slotIndex === 'number') {
-      for (let i = 0; i < 5; i++) {
+    // Optional: poll for desired status transition using fresh reads (avoids stale state)
+    if (opts && typeof opts.slotIndex === 'number' && (opts.awaitCommitted || opts.awaitUncommitted)) {
+      for (let i = 0; i < 6; i++) {
         await new Promise((r) => setTimeout(r, 500));
-        await fetchSlots();
-        // Nudge progress calculation by faking a minor block advance if needed
-        // (statusOf uses currentBlock which updates every 3s; this helps visually)
-        // setCurrentBlock((b) => (b > 0n ? b + 1n : b));
         try {
-          const s = (slots || [])[slotIndex];
-          if (!s || statusOf(s) !== 'Committed') break;
+          const fresh = await getQuestSlotsByLandId(landId);
+          const s = fresh?.[opts.slotIndex];
+          const st = s ? statusOf(s) : undefined;
+          if (opts.awaitCommitted && st === 'Committed') break;
+          if (opts.awaitUncommitted && st !== 'Committed') break;
         } catch {}
       }
+      await fetchSlots();
     }
   }
 
@@ -109,13 +114,16 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   <div className="text-xs text-muted-foreground">{statusOf(s)}</div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {statusOf(s) === 'Loading' && (
+                    <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">Loading…</div>
+                  )}
                   {statusOf(s) === 'Ready to commit' && (
                     <SponsoredTransaction
                       calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                       buttonText="Return now"
                       buttonClassName="h-8 px-3 text-xs"
                       hideStatus
-                      onSuccess={handleSuccess}
+                      onSuccess={() => handleSuccess({ slotIndex: idx, awaitCommitted: true })}
                     />
                   )}
                   {statusOf(s) === 'Committed' && (
@@ -126,7 +134,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       buttonText="Open now"
                       buttonClassName="h-8 px-3 text-xs"
                       hideStatus
-                      onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess(idx, true); }}
+                      onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess({ slotIndex: idx, awaitUncommitted: true }); }}
                     />
                   </div>
                   )}

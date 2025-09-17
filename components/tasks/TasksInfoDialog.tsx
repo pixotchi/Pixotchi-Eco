@@ -38,6 +38,7 @@ export default function TasksInfoDialog() {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
+          <div className="text-xs text-muted-foreground">Daily reset at 00:00 UTC.</div>
           <div>
             <div className="font-medium">Section 1 (20 Rock)</div>
             <ul className="list-disc pl-5 text-muted-foreground">

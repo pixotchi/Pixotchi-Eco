@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { getFormattedTokenBalance, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { useBalances } from '@/lib/balance-context';
 import { Strain } from '@/lib/types';
 import { formatNumber, formatTokenAmount } from '@/lib/utils';
 import { ChevronDown, LandPlot, Sprout } from 'lucide-react';
@@ -44,6 +45,7 @@ export default function MintTab() {
   const { address, chainId } = useAccount();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
+  const { seedBalance: seedBalanceRaw } = useBalances();
 
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
@@ -266,7 +268,7 @@ export default function MintTab() {
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Mint Plant"
                 buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                disabled={needsApproval}
+                disabled={needsApproval || (Number(seedBalanceRaw) / 1e18) < (selectedStrain?.mintPrice || 0)}
               />
             ) : (
               <DisabledTransaction
@@ -362,7 +364,7 @@ export default function MintTab() {
             onError={(error) => toast.error(getFriendlyErrorMessage(error))}
             buttonText={`Mint Land`}
             buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-            disabled={!landMintStatus?.canMint || needsLandApproval}
+            disabled={!landMintStatus?.canMint || needsLandApproval || (Number(seedBalanceRaw) < Number(landMintPrice))}
           />
         )}
       </div>
