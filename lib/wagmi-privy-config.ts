@@ -5,11 +5,8 @@ import { http } from "wagmi";
 import { injected, coinbaseWallet } from "wagmi/connectors";
 import { base } from "viem/chains";
 
-// We keep transports simple to avoid large diffs. Your app already uses
-// robust viem fallback transports for onchain calls where it matters.
-// Here, wagmi is primarily for account state and basic RPCs.
+// Expose external EOAs and Coinbase Wallet popup under Privy wagmi so the blue button always sees a connector
 const connectors = [
-  // Enable external EOAs and Coinbase Wallet popup under a single wagmi context (used by OnchainKit)
   coinbaseWallet({ appName: "Pixotchi Mini" }),
   injected(),
 ];

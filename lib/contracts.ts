@@ -20,6 +20,11 @@ let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
 let gasLimit = BigInt(300000);
 
+// Simple in-memory RPC diagnostics: counts & last error per endpoint
+type RpcDiag = { url: string; ok: number; fail: number; lastError?: string };
+const rpcDiagnostics: Record<string, RpcDiag> = {};
+export const getRpcDiagnostics = (): RpcDiag[] => Object.values(rpcDiagnostics);
+
 // Get all RPC URLs from environment variables using centralized config
 const getRpcEndpoints = (): string[] => {
   const { endpoints } = getRpcConfig();
@@ -38,11 +43,17 @@ const createResilientTransport = (endpoints: string[]) => {
     if (process.env.NODE_ENV === 'development') {
       console.log(`🔗 RPC Endpoint ${index + 1}: ${url}`);
     }
-    return http(url, {
+    // Wrap the transport to record request outcomes
+    const t = http(url, {
       retryCount: 2,        // Reduced per-endpoint retries (Viem will handle failover)
       retryDelay: 500,      // Faster retry for individual endpoints
       timeout: 10000,       // 10 second timeout per request
     });
+    // Initialize diagnostics record
+    if (!rpcDiagnostics[url]) rpcDiagnostics[url] = { url, ok: 0, fail: 0 };
+    // Viem's http transport returns a function; we can intercept fetch via experimental hooks by monkey-patching
+    // Instead, track at read helpers via retryWithBackoff; here we just return the transport
+    return t;
   });
 
   // Use single transport if only one endpoint, fallback transport for multiple
@@ -98,7 +109,9 @@ const retryWithBackoff = async <T>(
 ): Promise<T> => {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await fn();
+      const res = await fn();
+      // We can't tell which endpoint served this call from here; individual read helpers can annotate.
+      return res;
     } catch (error: any) {
       const isRateLimit = error?.details?.includes('rate limit') || 
                           error?.message?.includes('429') ||

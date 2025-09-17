@@ -56,6 +56,9 @@ export const getRpcConfig = () => {
   return { endpoints, wssEndpoints };
 };
 
+// Helper to expose RPC list to admin diagnostics (server-only safe values)
+export const listRpcHttpEndpoints = (): string[] => getRpcConfig().endpoints;
+
 // Server-only environment variables (never exposed to client)
 export const SERVER_ENV = {
   // Redis configuration
