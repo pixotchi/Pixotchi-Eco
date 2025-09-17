@@ -13,7 +13,7 @@ export function middleware(request: NextRequest) {
     const origin = request.headers.get('origin');
     
     // Special handling for admin routes - restrict to known origins
-    if (pathname.startsWith('/api/invite/admin/') || pathname.startsWith('/api/gamification/admin/')) {
+    if (pathname.startsWith('/api/invite/admin/') || pathname.startsWith('/api/gamification/admin/') || pathname.startsWith('/api/admin/')) {
       const allowedAdminOrigins = process.env.ALLOWED_ADMIN_ORIGINS?.split(',') || [
         'https://mini.pixotchi.tech',
         'https://beta.mini.pixotchi.tech',
@@ -62,7 +62,7 @@ export function middleware(request: NextRequest) {
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com data:;
     img-src 'self' data: https: blob:;
-    connect-src 'self' https: wss: https://cca-lite.coinbase.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://explorer-api.walletconnect.com https://*.rpc.privy.systems;
+    connect-src 'self' https: wss: https://cca-lite.coinbase.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://explorer-api.walletconnect.com https://*.base.org https://*.rpc.privy.systems;
     frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://*.farcaster.xyz https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com;
     frame-ancestors *;
     base-uri 'self';
