@@ -202,9 +202,10 @@ export function Providers(props: { children: ReactNode }) {
             supportedChains: [base],
             loginMethods: ['wallet', 'email'],
             // Avoid session race conditions by not auto-connecting until hooks report ready
-            embeddedWallets: { 
-              createOnLogin: 'off' // Prevent automatic embedded wallet creation
-            },
+        embeddedWallets: {
+          // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
+          ethereum: { createOnLogin: 'off' },
+        },
           }}
         >
           <QueryClientProvider client={queryClient}>

@@ -64,7 +64,7 @@ export default function AdminInviteDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc'>('overview');
   
   // Chat state
   const [chatMessages, setChatMessages] = useState<AdminChatMessage[]>([]);
@@ -420,6 +420,7 @@ export default function AdminInviteDashboard() {
         } catch {}
       })();
     }
+    if (activeTab === 'rpc' && isAuthenticated) { fetchRpcStatus(); }
   }, [activeTab, isAuthenticated]);
 
   // Gamification helpers
@@ -431,6 +432,22 @@ export default function AdminInviteDashboard() {
       if (res.ok) { toast.success(`Reset ${scope} (${data.deleted} keys deleted)`); }
       else { toast.error(data?.error || 'Reset failed'); }
     } catch { toast.error('Reset failed'); }
+  };
+
+  // RPC status state
+  const [rpcStatus, setRpcStatus] = useState<{ endpoints: Array<{ url: string; ok: boolean; ms: number; error?: string }>; summary: any } | null>(null);
+  const [rpcLoading, setRpcLoading] = useState(false);
+  const fetchRpcStatus = async () => {
+    if (!adminKey.trim()) return;
+    setRpcLoading(true);
+    try {
+      const res = await fetch('/api/admin/rpc-status', { headers: { 'Authorization': `Bearer ${adminKey}` } });
+      const data = await res.json();
+      if (res.ok) setRpcStatus({ endpoints: data.endpoints || [], summary: data.summary || null });
+      else toast.error(data?.error || 'Failed RPC status');
+    } catch {
+      toast.error('Failed RPC status');
+    } finally { setRpcLoading(false); }
   };
 
   // Authentication screen
@@ -525,6 +542,7 @@ export default function AdminInviteDashboard() {
             { id: 'ai-chat', label: 'AI Chat', icon: Bot },
             { id: 'cleanup', label: 'Cleanup', icon: Trash2 },
             { id: 'gamification', label: 'Gamification', icon: TrendingUp },
+            { id: 'rpc', label: 'RPC', icon: BarChart3 },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -1232,6 +1250,53 @@ export default function AdminInviteDashboard() {
                 <Button variant="outline" onClick={() => resetGamification('streaks')}><RefreshCw className="w-4 h-4 mr-2" />Reset Streaks</Button>
                 <Button variant="outline" onClick={() => resetGamification('missions')}><RefreshCw className="w-4 h-4 mr-2" />Reset Missions</Button>
                 <Button variant="destructive" onClick={() => resetGamification('all')}><Trash2 className="w-4 h-4 mr-2" />Reset All</Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* RPC Tab */}
+        {activeTab === 'rpc' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>RPC Health</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm text-muted-foreground">
+                    {rpcStatus ? (
+                      <span>
+                        Total: {rpcStatus.summary?.total} • Healthy: {rpcStatus.summary?.healthy} • Degraded: {rpcStatus.summary?.degraded} • Avg: {rpcStatus.summary?.avgLatencyMs}ms
+                      </span>
+                    ) : (
+                      <span>Press refresh to check RPCs</span>
+                    )}
+                  </div>
+                  <Button variant="outline" size="sm" onClick={fetchRpcStatus} disabled={rpcLoading}>
+                    <RefreshCw className={`w-4 h-4 mr-2 ${rpcLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
+                {rpcLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Checking RPC endpoints…</div>
+                ) : (
+                  <div className="space-y-2">
+                    {(rpcStatus?.endpoints || []).map((e) => (
+                      <div key={e.url} className={`flex items-center justify-between p-2 rounded border ${e.ok ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                        <div className="font-mono text-xs truncate mr-2" title={e.url}>{e.url}</div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className={e.ok ? 'text-green-600' : 'text-red-600'}>{e.ok ? 'OK' : 'DOWN'}</span>
+                          <span className="text-muted-foreground">{e.ms}ms</span>
+                          {!e.ok && e.error && <span className="text-muted-foreground truncate max-w-[12rem]" title={e.error}>{e.error}</span>}
+                        </div>
+                      </div>
+                    ))}
+                    {(rpcStatus?.endpoints?.length || 0) === 0 && (
+                      <div className="text-center text-muted-foreground text-sm">No endpoints configured.</div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

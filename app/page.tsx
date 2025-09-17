@@ -19,7 +19,6 @@ import InviteGate from "@/components/invite-gate";
 import { ChatButton } from "@/components/chat";
 import StatusBar from "@/components/status-bar";
 import { usePrivy, useWallets, useLogin } from "@privy-io/react-auth";
-import { useSetActiveWallet } from "@privy-io/wagmi";
 import { clearAppCaches } from "@/lib/cache-utils";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
@@ -124,7 +123,6 @@ export default function App() {
   const { ready: privyReady, authenticated } = usePrivy();
   const { login } = useLogin();
   const { wallets } = useWallets();
-  const { setActiveWallet } = useSetActiveWallet();
   const { connect, connectors } = useConnect();
   const [surface, setSurface] = useState<'privy' | 'coinbase' | null>(null);
 
@@ -368,7 +366,7 @@ export default function App() {
                 height={22}
               />
               <h1 className="text-sm font-pixel text-foreground">
-                PIXOTCHI MINI
+                {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
               </h1>
             </div>
 

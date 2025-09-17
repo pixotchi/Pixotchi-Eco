@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
     if (!validIds.includes(taskId)) {
       return NextResponse.json({ error: 'Invalid taskId' }, { status: 400 });
     }
-    const updated = await markMissionTask(address, taskId, proof, typeof count === 'number' ? count : 1);
+    const safeCount = typeof count === 'number' ? Math.max(1, Math.floor(count)) : 1;
+    const updated = await markMissionTask(address, taskId, proof, safeCount);
     return NextResponse.json({ success: true, day: updated });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to update mission progress' }, { status: 500 });
