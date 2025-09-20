@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { useAccount, useBalance, useDisconnect, useChainId } from "wagmi";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
@@ -38,6 +40,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { clearAppCaches } from "@/lib/cache-utils";
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
+import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
 
 interface WalletProfileProps {
   open: boolean;
@@ -71,6 +74,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const [showFullAddress, setShowFullAddress] = useState(false);
   const [referrerDomain, setReferrerDomain] = useState<string | null>(null);
   const [showFcDetails, setShowFcDetails] = useState<boolean>(false);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   // Use shared Farcaster provider state
   const isMiniApp = Boolean(fc?.isInMiniApp);
@@ -227,6 +231,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   if (!address || !isConnected) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm md:max-w-md">
         <DialogHeader>
@@ -440,6 +445,16 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
           {/* Actions */}
           <div className="pt-4 border-t border-border">
+            <div className="grid gap-2 mb-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => { setTransferOpen(true); onOpenChange(false); }}
+                className="w-full"
+              >
+                Transfer Assets
+              </Button>
+            </div>
             {isMiniApp ? (
               <Button
                 variant="secondary"
@@ -464,6 +479,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
           </div>
  </div>
  </DialogContent>
- </Dialog>
+    </Dialog>
+    <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />
+    </>
   );
 } 

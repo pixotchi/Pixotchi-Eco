@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { calculateImageLevel } from '@/lib/utils';
@@ -83,7 +85,7 @@ const PlantImage = React.memo(({
         loading={lazy && !priority ? "lazy" : "eager"}
         quality={quality}
         placeholder="blur"
-        blurDataURL={`data:image/svg+xml;base64,${btoa(`
+        blurDataURL={`data:image/svg+xml;base64,${(typeof window !== 'undefined' ? btoa : (s: string) => Buffer.from(s).toString('base64'))(`
           <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
             <rect width="100%" height="100%" fill="#f3f4f6"/>
             <circle cx="50%" cy="50%" r="20%" fill="#d1d5db" opacity="0.5"/>

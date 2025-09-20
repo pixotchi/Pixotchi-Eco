@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
+// Use native <img> for small icons to reduce overhead
 import { useAccount } from "wagmi";
 import StakingDialog from "@/components/staking/staking-dialog";
 import { Skeleton } from "./ui/skeleton";
@@ -37,6 +37,17 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     return () => window.removeEventListener('staking:open', openStaking as EventListener);
   }, []);
 
+  // Open About tab's tasks modal via a global event so we reuse that UI
+  useEffect(() => {
+    if (!tasksOpen) return;
+    try {
+      window.dispatchEvent(new CustomEvent('pixotchi:openTasks' as any));
+    } catch {}
+    // Close flag after dispatch to avoid side-effects during render
+    const t = setTimeout(() => setTasksOpen(false), 0);
+    return () => clearTimeout(t);
+  }, [tasksOpen]);
+
   const seedText = loading ? <Skeleton className="h-5 w-16" /> : formatTokenShort(seed);
   const leafText = loading ? <Skeleton className="h-5 w-16" /> : formatTokenShort(leaf);
   // ETH balance display removed to prioritize SEED and LEAF
@@ -46,11 +57,11 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
       <div className="flex items-center justify-between gap-3 px-4 py-1.5 border-b border-border bg-card/90 backdrop-blur-sm">
         <div className="flex items-center gap-4 min-w-0" role="group" aria-label="Token balances">
           <div className="flex items-center gap-1.5 min-w-0" aria-label={`Seed balance: ${seedText} SEED`}>
-            <Image src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
+            <img src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
             <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{seedText}</span>
           </div>
           <div className="flex items-center gap-1.5 min-w-0" aria-label={`Leaf balance: ${leafText} LEAF`}>
-            <Image src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
+            <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
             <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
           </div>
         </div>
@@ -78,11 +89,8 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
         </div>
       </div>
       <StakingDialog open={stakingOpen} onOpenChange={setStakingOpen} />
-      {/* Open About tab's tasks modal via a global event so we reuse that UI */}
       {tasksOpen && (
-        <div className="sr-only" aria-hidden>
-          {(() => { try { window.dispatchEvent(new CustomEvent('pixotchi:openTasks' as any)); } catch {} setTimeout(() => setTasksOpen(false), 0); return null; })()}
-        </div>
+        <div className="sr-only" aria-hidden />
       )}
     </div>
   );
