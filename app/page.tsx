@@ -14,6 +14,7 @@ import { PlusCircle, User, Leaf, Sparkles, Info, Repeat, History, LandPlot, Trop
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { ThemeSelector } from "@/components/theme-selector";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { INVITE_CONFIG, getLocalStorageKeys } from "@/lib/invite-utils";
 import InviteGate from "@/components/invite-gate";
 import { ChatButton } from "@/components/chat";
@@ -203,15 +204,16 @@ export default function App() {
   // Nudge UI forward immediately after a successful connection
   useEffect(() => {
     if (isConnected) {
-      // Dispatch a global event to refresh balances instead of using a key
-      window.dispatchEvent(new Event('balances:refresh'));
+      try {
+        (window as any).__pixotchi_refresh_balances__?.();
+      } catch {}
     }
   }, [isConnected]);
 
   // Refresh balances whenever the user switches tabs
   useEffect(() => {
     if (!isConnected) return;
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
+    try { (window as any).__pixotchi_refresh_balances__?.(); } catch {}
   }, [activeTab, isConnected]);
 
   const handleSkipInvite = () => {
@@ -413,7 +415,7 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 bg-muted/40 flex flex-col overflow-hidden" role="main" aria-label="Main content area">
-          {(!isConnected && !(privyReady && authenticated)) ? (
+          {(!isConnected) ? (
             <div className="flex flex-col items-center justify-center h-full p-4">
               <div className="flex-grow flex flex-col items-center justify-center text-center">
                 <div className="flex flex-col items-center space-y-3 mb-8">
@@ -426,17 +428,26 @@ export default function App() {
                         decoding="async"
                     />
                     <h1 className="text-2xl font-pixel text-foreground">
-                        PIXOTCHI MINI
+                        {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
                     </h1>
                 </div>
                 <h2 className="text-xl font-semibold text-foreground mb-2">
                   Welcome!
                 </h2>
                 <p className="text-muted-foreground mb-6 max-w-xs">
-                  Connect your wallet to mint and grow your onchain plants on Base.
+                  Connect your wallet, mint a plant and begin your farming journey on Base.
                 </p>
               </div>
               <div className="w-full max-w-xs space-y-3">
+                {!fc?.isInMiniApp && (
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>Not in Mini App</AlertTitle>
+                    <AlertDescription>
+                      Open in Farcaster/Base App for the native experience — search "Pixotchi Mini". You can also continue here.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {/* Web-only login buttons; MiniApp autoconnects above */}
                 {!fc?.isInMiniApp ? (
                   <Button

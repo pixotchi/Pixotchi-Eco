@@ -46,21 +46,17 @@ export function Providers(props: { children: ReactNode }) {
 
   // MiniKit API key validation handled internally
 
-  // Environment variable validation with fallback
+  // Environment variable validation (fail fast in production, warn in dev)
   const privyAppId: string = (() => {
     const envAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-    const fallbackAppId = 'clsjenoh000mhigrekjgcpjpd';
-    
-    if (!envAppId) {
-      console.warn('NEXT_PUBLIC_PRIVY_APP_ID not configured, using fallback');
-      return fallbackAppId;
+    if (!envAppId || envAppId.trim() === '') {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is required in production');
+      } else {
+        console.warn('NEXT_PUBLIC_PRIVY_APP_ID not configured (dev)');
+        return 'dev-placeholder-app-id';
+      }
     }
-    
-    if (envAppId.trim() === '') {
-      console.warn('NEXT_PUBLIC_PRIVY_APP_ID is empty, using fallback');
-      return fallbackAppId;
-    }
-    
     return envAppId;
   })();
 

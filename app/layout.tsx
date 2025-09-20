@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -23,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
     version: "1",
     imageUrl: process.env.NEXT_PUBLIC_APP_HERO_IMAGE || `${baseURL}/og-image.png`,
     button: {
-      title: "Launch Pixotchi Mini",
+      title: "Begin your journey!",
       action: {
         // Per Mini App guidelines, use launch_miniapp for fc:miniapp
         type: "launch_miniapp",
@@ -100,7 +101,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: process.env.NEXT_PUBLIC_APP_HERO_IMAGE || `${baseURL}/og-image.png`,
           width: 1200,
           height: 630,
-          alt: "Pixotchi Mini - Onchain Plant Game",
+          alt: "Pixotchi Mini - Your pocket farm on Base!",
           type: "image/png",
         }
       ],
@@ -183,12 +184,12 @@ export default function RootLayout({
               },
               "genre": ["Simulation", "Blockchain Game", "Virtual Pet"],
               "gamePlatform": "Web Browser",
-              "playMode": "SinglePlayer"
+              "playMode": "MultiPlayer"
             })
           }}
         />
         {/* Theme color */}
-        <meta name="theme-color" content="#a7c7e7" />
+        <meta name="theme-color" content="#2d3c53" />
         <meta name="msapplication-TileColor" content="#2d3c53" />
         {/* Preconnect to external domains */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -208,10 +209,14 @@ export default function RootLayout({
           type="font/ttf"
           crossOrigin="anonymous"
         />
+        {/* Preload above-the-fold art to reduce first paint */}
+        <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
+        <link rel="preload" as="image" href="/og-image.png" />
       </head>
       <body className="bg-background">
         <Providers>{children}</Providers>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

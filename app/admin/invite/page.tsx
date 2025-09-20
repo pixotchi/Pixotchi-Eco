@@ -453,11 +453,11 @@ export default function AdminInviteDashboard() {
   // Authentication screen
   if (!isAuthenticated) {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mb-4">
-              <Shield className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <Shield className="w-6 h-6 text-primary" />
             </div>
             <CardTitle className="text-xl">Admin Access Required</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -508,13 +508,13 @@ export default function AdminInviteDashboard() {
 
   // Main dashboard
   return (
-    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-[100dvh] bg-background">
       {/* Header */}
-      <div className="bg-white dark:bg-slate-800 border-b border-border">
+      <div className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <Shield className="w-6 h-6 text-blue-600" />
+              <Shield className="w-6 h-6 text-primary" />
               <h1 className="text-xl font-bold">Dashboard</h1>
             </div>
             <div className="flex items-center space-x-3">
@@ -571,7 +571,7 @@ export default function AdminInviteDashboard() {
                       <p className="text-sm text-muted-foreground">Total Codes</p>
                       <p className="text-2xl font-bold">{stats.codes.total}</p>
                     </div>
-                    <Code className="w-8 h-8 text-blue-500" />
+                    <Code className="w-8 h-8 text-primary" />
                   </div>
                 </CardContent>
               </Card>
@@ -583,7 +583,7 @@ export default function AdminInviteDashboard() {
                       <p className="text-sm text-muted-foreground">Used Codes</p>
                       <p className="text-2xl font-bold">{stats.codes.used}</p>
                     </div>
-                    <CheckCircle className="w-8 h-8 text-green-500" />
+                    <CheckCircle className="w-8 h-8 text-primary" />
                   </div>
                 </CardContent>
               </Card>
@@ -595,7 +595,7 @@ export default function AdminInviteDashboard() {
                       <p className="text-sm text-muted-foreground">Active Users</p>
                       <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
                     </div>
-                    <Users className="w-8 h-8 text-purple-500" />
+                    <Users className="w-8 h-8 text-primary" />
                   </div>
                 </CardContent>
               </Card>
@@ -609,7 +609,7 @@ export default function AdminInviteDashboard() {
                         {stats.codes.total > 0 ? Math.round((stats.codes.used / stats.codes.total) * 100) : 0}%
                       </p>
                     </div>
-                    <BarChart3 className="w-8 h-8 text-orange-500" />
+                    <BarChart3 className="w-8 h-8 text-primary" />
                   </div>
                 </CardContent>
               </Card>
@@ -629,9 +629,9 @@ export default function AdminInviteDashboard() {
               <CardContent>
                 <div className="space-y-3">
                   {stats.users.topGenerators.slice(0, 10).map((user, index) => (
-                    <div key={user.address} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <div key={user.address} className="flex items-center justify-between p-3 bg-card rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-sm font-bold">
+                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-bold">
                           {index + 1}
                         </div>
                         <div>
@@ -688,9 +688,9 @@ export default function AdminInviteDashboard() {
               <CardContent>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {stats.recentCodes.map((code) => (
-                    <div key={code.code} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <div key={code.code} className="flex items-center justify-between p-3 bg-card rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-green-500' : 'bg-blue-500'}`} />
+                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-primary' : 'bg-primary'}`} />
                         <span className="font-mono">{code.code}</span>
                       </div>
                       <div className="text-right">
@@ -802,7 +802,7 @@ export default function AdminInviteDashboard() {
                   </Button>
                 </div>
                 
-                <div className="border-t border-border pt-4 space-y-4">
+                  <div className="border-t border-border pt-4 space-y-4">
                   <Button
                     variant="destructive"
                     onClick={() => performCleanup('delete_all_codes')}
@@ -813,12 +813,12 @@ export default function AdminInviteDashboard() {
                     Delete ALL Codes
                   </Button>
                   
-                  <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
                     <div className="flex items-center mb-2">
-                      <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
-                      <h4 className="font-semibold text-red-800 dark:text-red-200">DANGER ZONE</h4>
+                      <AlertTriangle className="w-5 h-5 text-destructive mr-2" />
+                      <h4 className="font-semibold text-destructive">DANGER ZONE</h4>
                     </div>
-                    <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                    <p className="text-sm text-destructive mb-3">
                       This will delete <strong>EVERYTHING</strong> from the database including all codes, users, audit logs, and system data. This action cannot be undone!
                     </p>
                     <Button
@@ -834,7 +834,7 @@ export default function AdminInviteDashboard() {
                         }
                       }}
                       disabled={loading}
-                      className="w-full bg-red-600 hover:bg-red-700"
+                      className="w-full"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
                       🚨 DELETE EVERYTHING 🚨
@@ -931,7 +931,7 @@ export default function AdminInviteDashboard() {
                         key={`${message.id}-${message.timestamp}`}
                         className={`p-4 rounded-lg border ${
                           message.isSpam
-                            ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                            ? 'bg-destructive/10 border-destructive/20'
                             : 'bg-card'
                         }`}
                       >
@@ -945,7 +945,7 @@ export default function AdminInviteDashboard() {
                                 {new Date(message.timestamp).toLocaleString()}
                               </span>
                               {message.isSpam && (
-                                <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full dark:bg-red-900 dark:text-red-200">
+                                <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded-full">
                                   Potential Spam
                                 </span>
                               )}
@@ -982,11 +982,11 @@ export default function AdminInviteDashboard() {
         {activeTab === 'ai-chat' && (
           <div className="space-y-6">
             {/* AI Chat Stats */}
-            {aiStats && (
+                {aiStats && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card>
                   <CardContent className="flex items-center p-4">
-                    <MessageCircle className="w-8 h-8 text-blue-500 mr-3" />
+                        <MessageCircle className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Conversations</p>
                       <p className="text-2xl font-bold">{aiStats.totalConversations}</p>
@@ -996,7 +996,7 @@ export default function AdminInviteDashboard() {
                 
                 <Card>
                   <CardContent className="flex items-center p-4">
-                    <Bot className="w-8 h-8 text-green-500 mr-3" />
+                        <Bot className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Messages</p>
                       <p className="text-2xl font-bold">{aiStats.totalMessages}</p>
@@ -1006,7 +1006,7 @@ export default function AdminInviteDashboard() {
                 
                 <Card>
                   <CardContent className="flex items-center p-4">
-                    <TrendingUp className="w-8 h-8 text-orange-500 mr-3" />
+                        <TrendingUp className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Tokens</p>
                       <p className="text-2xl font-bold">{aiStats.totalTokens.toLocaleString()}</p>
@@ -1016,7 +1016,7 @@ export default function AdminInviteDashboard() {
                 
                 <Card>
                   <CardContent className="flex items-center p-4">
-                    <Clock className="w-8 h-8 text-purple-500 mr-3" />
+                        <Clock className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Daily Usage</p>
                       <p className="text-2xl font-bold">{aiStats.dailyUsage}</p>
@@ -1026,7 +1026,7 @@ export default function AdminInviteDashboard() {
                 
                 <Card>
                   <CardContent className="flex items-center p-4">
-                    <DollarSign className="w-8 h-8 text-red-500 mr-3" />
+                        <DollarSign className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Est. Cost</p>
                       <p className="text-2xl font-bold">${aiStats.costEstimate.toFixed(4)}</p>
@@ -1092,7 +1092,7 @@ export default function AdminInviteDashboard() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-medium truncate">{conversation.title}</p>
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                                 {conversation.model}
                               </span>
                             </div>
