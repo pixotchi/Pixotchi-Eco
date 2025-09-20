@@ -78,6 +78,11 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   }, [fetchBalances]);
 
   useEffect(() => {
+    // Expose a safe global refresher for non-React callers as a bridge while migrating away from events
+    try {
+      (window as any).__pixotchi_refresh_balances__ = fetchBalances;
+    } catch {}
+    
     window.addEventListener('balances:refresh', fetchBalances);
     return () => window.removeEventListener('balances:refresh', fetchBalances);
   }, [fetchBalances]);

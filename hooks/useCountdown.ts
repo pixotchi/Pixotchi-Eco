@@ -21,11 +21,20 @@ export function useCountdown(targetTimestamp: number) {
         return;
       }
 
-      const hours = Math.floor(timeLeft / 3600);
+      const totalHours = Math.floor(timeLeft / 3600);
       const minutes = Math.floor((timeLeft % 3600) / 60);
       const seconds = timeLeft % 60;
 
-      const formattedTime = `${hours.toString().padStart(2, '0')}h:${minutes.toString().padStart(2, '0')}m:${seconds.toString().padStart(2, '0')}s`;
+      // If more than 96 hours, display days:hours instead of overflowing hours
+      if (totalHours >= 96) {
+        const days = Math.floor(totalHours / 24);
+        const hoursRemainder = totalHours % 24;
+        const formatted = `${days}d:${hoursRemainder.toString().padStart(2, '0')}h:${minutes.toString().padStart(2, '0')}m:${seconds.toString().padStart(2, '0')}s`;
+        setTimeRemaining(formatted);
+        return;
+      }
+
+      const formattedTime = `${totalHours.toString().padStart(2, '0')}h:${minutes.toString().padStart(2, '0')}m:${seconds.toString().padStart(2, '0')}s`;
       setTimeRemaining(formattedTime);
     };
 

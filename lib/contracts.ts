@@ -12,6 +12,7 @@ export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS
 export const STAKE_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.STAKE_CONTRACT_ADDRESS);
 export const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
 export const PIXOTCHI_TOKEN_ADDRESS = getAddress('0x546D239032b24eCEEE0cb05c92FC39090846adc7');
+export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;
 export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
 export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
 
@@ -296,6 +297,30 @@ const PIXOTCHI_NFT_ABI = [
   },
 ] as const;
 
+// Minimal ERC-721 ABI for transfers
+const ERC721_MIN_ABI = [
+  {
+    inputs: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'tokenId', type: 'uint256' }
+    ],
+    name: 'transferFrom',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'owner', type: 'address' }
+    ],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  }
+] as const;
+
 const PIXOTCHI_TOKEN_ABI = [
   {
     inputs: [{ name: 'account', type: 'address' }],
@@ -383,6 +408,32 @@ const PIXOTCHI_TOKEN_ABI = [
       ]
     }],
     stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+// -------------------- BATCH ROUTER ABI --------------------
+const BATCH_ROUTER_ABI = [
+  {
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'tokenIds', type: 'uint256[]' }
+    ],
+    name: 'batchTransfer721',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'tokens', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'tokenIdsPerToken', type: 'uint256[][]' }
+    ],
+    name: 'batchTransfer721Multi',
+    outputs: [],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
 ] as const;
@@ -673,6 +724,109 @@ export const getLandById = async (landId: bigint): Promise<Land | null> => {
     console.error('Error fetching land by id:', error);
     return null;
   }
+};
+
+// -------------------- ASSET TRANSFERS --------------------
+
+/**
+ * Transfer a batch of plant NFTs to a destination wallet.
+ */
+export const transferPlants = async (
+  walletClient: WalletClient,
+  toAddress: string,
+  plantIds: number[],
+): Promise<{ successIds: number[]; failedIds: number[] }> => {
+  if (!walletClient?.account) throw new Error('No account connected');
+  const from = walletClient.account.address;
+  const to = getAddress(toAddress);
+
+  const writeClient = getWriteClient();
+  const successIds: number[] = [];
+  const failedIds: number[] = [];
+
+  for (const id of plantIds) {
+    try {
+      const hash = await walletClient.writeContract({
+        address: PIXOTCHI_NFT_ADDRESS,
+        abi: ERC721_MIN_ABI,
+        functionName: 'transferFrom',
+        args: [from, to, BigInt(id)],
+        account: walletClient.account,
+        gas: gasLimit,
+        chain: base,
+      });
+      const receipt = await writeClient.waitForTransactionReceipt({ hash });
+      if (receipt.status === 'success') successIds.push(id);
+      else failedIds.push(id);
+    } catch (e) {
+      failedIds.push(id);
+    }
+  }
+
+  return { successIds, failedIds };
+};
+
+/**
+ * Transfer a batch of land NFTs to a destination wallet.
+ */
+export const transferLands = async (
+  walletClient: WalletClient,
+  toAddress: string,
+  landTokenIds: bigint[],
+): Promise<{ successIds: bigint[]; failedIds: bigint[] }> => {
+  if (!walletClient?.account) throw new Error('No account connected');
+  const from = walletClient.account.address;
+  const to = getAddress(toAddress);
+
+  const writeClient = getWriteClient();
+  const successIds: bigint[] = [];
+  const failedIds: bigint[] = [];
+
+  for (const id of landTokenIds) {
+    try {
+      const hash = await walletClient.writeContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: ERC721_MIN_ABI,
+        functionName: 'transferFrom',
+        args: [from, to, id],
+        account: walletClient.account,
+        gas: gasLimit,
+        chain: base,
+      });
+      const receipt = await writeClient.waitForTransactionReceipt({ hash });
+      if (receipt.status === 'success') successIds.push(id);
+      else failedIds.push(id);
+    } catch (e) {
+      failedIds.push(id);
+    }
+  }
+
+  return { successIds, failedIds };
+};
+
+/**
+ * Transfer all Pixotchi (plants) and Land NFTs owned by the current wallet to a destination address.
+ */
+export const transferAllAssets = async (
+  walletClient: WalletClient,
+  ownerAddress: string,
+  toAddress: string,
+): Promise<{
+  plants: { total: number; success: number; failed: number };
+  lands: { total: number; success: number; failed: number };
+}> => {
+  const plants = await getPlantsByOwner(ownerAddress);
+  const lands = await getLandsByOwner(ownerAddress);
+  const plantIds = plants.map(p => p.id);
+  const landIds = lands.map(l => l.tokenId);
+
+  const plantRes = await transferPlants(walletClient, toAddress, plantIds);
+  const landRes = await transferLands(walletClient, toAddress, landIds);
+
+  return {
+    plants: { total: plantIds.length, success: plantRes.successIds.length, failed: plantRes.failedIds.length },
+    lands: { total: landIds.length, success: landRes.successIds.length, failed: landRes.failedIds.length },
+  };
 };
 
 // Token balance (returns raw bigint for precision)
@@ -1271,4 +1425,66 @@ export const getLandLeaderboard = async (): Promise<LandLeaderboardEntry[]> => {
       name: String(entry.name ?? entry[2] ?? ''),
     }));
   });
+};
+
+// -------------------- ROUTER-BASED BULK TRANSFER --------------------
+
+export const routerBatchTransfer = async (
+  walletClient: WalletClient,
+  toAddress: string,
+  plantIds: number[],
+  landIds: bigint[],
+): Promise<{ hash: `0x${string}`; success: boolean }> => {
+  if (!walletClient?.account) throw new Error('No account connected');
+  if (!BATCH_ROUTER_ADDRESS) throw new Error('Batch router not configured');
+  const to = getAddress(toAddress);
+
+  // Build arguments
+  const hasPlants = plantIds.length > 0;
+  const hasLands = landIds.length > 0;
+
+  let hash: `0x${string}`;
+  if (hasPlants && hasLands) {
+    // Single tx for both collections
+    const tokens = [PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS] as const;
+    const tokenIdsPerToken = [
+      plantIds.map((id) => BigInt(id)),
+      landIds
+    ];
+    hash = await walletClient.writeContract({
+      address: BATCH_ROUTER_ADDRESS,
+      abi: BATCH_ROUTER_ABI,
+      functionName: 'batchTransfer721Multi',
+      args: [tokens as unknown as `0x${string}`[], to, tokenIdsPerToken],
+      account: walletClient.account,
+      gas: gasLimit,
+      chain: base,
+    });
+  } else if (hasPlants) {
+    hash = await walletClient.writeContract({
+      address: BATCH_ROUTER_ADDRESS,
+      abi: BATCH_ROUTER_ABI,
+      functionName: 'batchTransfer721',
+      args: [PIXOTCHI_NFT_ADDRESS, to, plantIds.map((id) => BigInt(id))],
+      account: walletClient.account,
+      gas: gasLimit,
+      chain: base,
+    });
+  } else if (hasLands) {
+    hash = await walletClient.writeContract({
+      address: BATCH_ROUTER_ADDRESS,
+      abi: BATCH_ROUTER_ABI,
+      functionName: 'batchTransfer721',
+      args: [LAND_CONTRACT_ADDRESS, to, landIds],
+      account: walletClient.account,
+      gas: gasLimit,
+      chain: base,
+    });
+  } else {
+    throw new Error('No assets to transfer');
+  }
+
+  const writeClient = getWriteClient();
+  const receipt = await writeClient.waitForTransactionReceipt({ hash });
+  return { hash, success: receipt.status === 'success' };
 };

@@ -30,6 +30,9 @@ export const CLIENT_ENV = {
   CDP_CLIENT_API_KEY: process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY,
   CDP_PAYMASTER_URL: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
   ONCHAINKIT_PROJECT_NAME: process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME ?? 'minikit',
+
+  // Optional: Batch router for bulk ERC-721 transfers
+  BATCH_ROUTER_ADDRESS: process.env.NEXT_PUBLIC_BATCH_ROUTER_ADDRESS,
 } as const;
 
 // RPC configuration with fallback handling
@@ -100,7 +103,22 @@ export const validateEnvSecurity = () => {
   }
 };
 
-// Call validation in development
+// Call validation in development and enforce required envs in production
 if (process.env.NODE_ENV === 'development') {
   validateEnvSecurity();
-} 
+}
+
+// Fail fast on missing critical envs in production (server-side only)
+if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+  const required: Array<{ key: string; present: boolean }> = [
+    { key: 'NEXT_PUBLIC_URL', present: Boolean(process.env.NEXT_PUBLIC_URL) },
+    { key: 'NEXT_PUBLIC_PONDER_API_URL', present: Boolean(process.env.NEXT_PUBLIC_PONDER_API_URL) },
+    { key: 'NEXT_PUBLIC_CDP_CLIENT_API_KEY', present: Boolean(process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY) },
+    { key: 'NEXT_PUBLIC_PRIVY_APP_ID', present: Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID) },
+  ];
+  const missing = required.filter(r => !r.present).map(r => r.key);
+  if (missing.length > 0) {
+    // Throwing here will surface during boot in Vercel/Node, preventing a broken prod deploy
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+}
