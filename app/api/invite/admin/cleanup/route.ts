@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
+import { redis, redisScanKeys } from '@/lib/redis';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { validateAdminKey, logAdminAction, createErrorResponse } from '@/lib/auth-utils';
 
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'delete_expired_codes': {
-        const keys = await redis.keys('pixotchi:invite-codes:*');
+        const keys = await redisScanKeys('pixotchi:invite-codes:*');
         let deleted = 0;
         
         for (const key of keys) {
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'delete_used_codes': {
-        const keys = await redis.keys('pixotchi:invite-codes:*');
+        const keys = await redisScanKeys('pixotchi:invite-codes:*');
         let deleted = 0;
         
         for (const key of keys) {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'delete_all_codes': {
-        const keys = await redis.keys('pixotchi:invite-codes:*');
+        const keys = await redisScanKeys('pixotchi:invite-codes:*');
         if (keys.length > 0) {
           await redis.del(...keys);
         }
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'reset_daily_limits': {
-        const keys = await redis.keys('pixotchi:user-invites:*');
+        const keys = await redisScanKeys('pixotchi:user-invites:*');
         let updated = 0;
         
         for (const key of keys) {
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
       case 'delete_everything': {
         // This will delete ALL keys from the database - extremely dangerous!
-        const allKeys = await redis.keys('*');
+        const allKeys = await redisScanKeys('*');
         let deleted = 0;
         
         // Delete in batches to avoid memory issues

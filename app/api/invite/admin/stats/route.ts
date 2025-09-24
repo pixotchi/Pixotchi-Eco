@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
+import { redis, redisScanKeys } from '@/lib/redis';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { validateAdminKey, logAdminAction, createErrorResponse } from '@/lib/auth-utils';
 
@@ -24,26 +24,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    // Get all invite codes
-    const allCodeKeys = await redis.keys('pixotchi:invite-codes:*');
-    const allUserKeys = await redis.keys('pixotchi:user-invites:*');
-    const allValidatedKeys = await redis.keys('pixotchi:user-validated:*');
+    // Get all relevant keys using SCAN to avoid blocking Redis
+    const allCodeKeys = await redisScanKeys('pixotchi:invite-codes:*');
+    const allUserKeys = await redisScanKeys('pixotchi:user-invites:*');
+    const allValidatedKeys = await redisScanKeys('pixotchi:user-validated:*');
     
-    console.log('Admin stats debug - Found keys:', {
-      codeKeys: allCodeKeys.length,
-      userKeys: allUserKeys.length,
-      validatedKeys: allValidatedKeys.length,
-      sampleCodeKeys: allCodeKeys.slice(0, 3),
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Admin stats debug - Found keys:', {
+        codeKeys: allCodeKeys.length,
+        userKeys: allUserKeys.length,
+        validatedKeys: allValidatedKeys.length,
+        sampleCodeKeys: allCodeKeys.slice(0, 3),
+      });
+    }
     
     // Debug first code to see data structure
-    if (allCodeKeys.length > 0) {
-      try {
-        const firstCodeData = await redis.get(allCodeKeys[0]);
-        console.log('First code data type:', typeof firstCodeData);
-        console.log('First code data sample:', firstCodeData);
-      } catch (error) {
-        console.error('Error getting first code for debug:', error);
+    if (process.env.NODE_ENV !== 'production') {
+      if (allCodeKeys.length > 0) {
+        try {
+          const firstCodeData = await redis.get(allCodeKeys[0]);
+          console.log('First code data type:', typeof firstCodeData);
+          console.log('First code data sample:', firstCodeData);
+        } catch (error) {
+          console.error('Error getting first code for debug:', error);
+        }
       }
     }
 
@@ -141,7 +145,7 @@ export async function GET(request: NextRequest) {
     // Sort and get top 10 generators
     userStats.topGenerators = Array.from(userGenerationMap.entries())
       .map(([address, stats]) => ({
-        address: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`, // Truncate for privacy
+        address, // return full address; UI can truncate for display
         generated: stats.generated,
         used: stats.used,
       }))
@@ -159,12 +163,14 @@ export async function GET(request: NextRequest) {
         usedBy: code.usedBy ? `${code.usedBy.substring(0, 6)}...${code.usedBy.substring(code.usedBy.length - 4)}` : null,
       }));
 
-    console.log('Admin stats final results:', {
-      codeStats,
-      userStats,
-      recentCodesCount: recentCodes.length,
-      totalCodesProcessed: codes.length,
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Admin stats final results:', {
+        codeStats,
+        userStats,
+        recentCodesCount: recentCodes.length,
+        totalCodesProcessed: codes.length,
+      });
+    }
 
     // Log successful admin action
     await logAdminAction('admin_stats_success', 'valid_key', { 

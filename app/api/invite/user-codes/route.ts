@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
+import { redis, redisScanKeys } from '@/lib/redis';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { createErrorResponse } from '@/lib/auth-utils';
 
@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
 
     const normalizedAddress = address.toLowerCase();
 
-    // Get all invite code keys
-    const allCodeKeys = await redis.keys('pixotchi:invite-codes:*');
+    // Get all invite code keys via SCAN to avoid blocking
+    const allCodeKeys = await redisScanKeys('pixotchi:invite-codes:*');
     
     // Fetch all codes and filter by createdBy address
     const userCodes = [];

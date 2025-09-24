@@ -1,51 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setUserNotificationDetails, deleteUserNotificationDetails } from '@/lib/notification';
 import crypto from 'crypto';
+// Prefer official JSON Farcaster Signature verification; fall back to HMAC if needed
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: runtime-only import, types may vary across versions
+import { parseWebhookEvent, verifyAppKeyWithNeynar } from '@farcaster/miniapp-node';
 
-async function verifyWebhookSignature(request: NextRequest) {
-  const webhookSecret = process.env.WEBHOOK_SECRET;
-  
-  if (!webhookSecret) {
-    console.error('WEBHOOK_SECRET not configured');
-    return { valid: false, body: null };
+async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolean; body: any }>{
+  // Attempt official JSON Farcaster Signature verification first
+  try {
+    const bodyText = await request.text();
+    // parseWebhookEvent validates header/payload/signature using the provided verifier
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed: any = await (parseWebhookEvent as any)(bodyText, verifyAppKeyWithNeynar);
+    return { valid: true, body: parsed };
+  } catch (e) {
+    // Fall back to legacy HMAC verification for backward compatibility
+    try {
+      const webhookSecret = process.env.WEBHOOK_SECRET;
+      if (!webhookSecret) return { valid: false, body: null };
+
+      const signature = request.headers.get('x-webhook-signature');
+      const timestamp = request.headers.get('x-webhook-timestamp');
+      if (!signature || !timestamp) return { valid: false, body: null };
+
+      const timestampMs = parseInt(timestamp);
+      const now = Date.now();
+      if (Math.abs(now - timestampMs) > 5 * 60 * 1000) return { valid: false, body: null };
+
+      const bodyText = await request.text();
+      const body = JSON.parse(bodyText);
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(`${timestamp}.${bodyText}`)
+        .digest('hex');
+      const sigBuf = Buffer.from(signature);
+      const expBuf = Buffer.from(expectedSignature);
+      if (sigBuf.length !== expBuf.length) return { valid: false, body };
+      const valid = crypto.timingSafeEqual(sigBuf, expBuf);
+      return { valid, body };
+    } catch {
+      return { valid: false, body: null };
+    }
   }
-
-  const signature = request.headers.get('x-webhook-signature');
-  const timestamp = request.headers.get('x-webhook-timestamp');
-  
-  if (!signature || !timestamp) {
-    return { valid: false, body: null };
-  }
-
-  // Check timestamp to prevent replay attacks (5 minute window)
-  const timestampMs = parseInt(timestamp);
-  const now = Date.now();
-  if (Math.abs(now - timestampMs) > 5 * 60 * 1000) {
-    return { valid: false, body: null };
-  }
-
-  const bodyText = await request.text();
-  const body = JSON.parse(bodyText);
-
-  // Create expected signature
-  const payload = `${timestamp}.${bodyText}`;
-  const expectedSignature = crypto
-    .createHmac('sha256', webhookSecret)
-    .update(payload)
-    .digest('hex');
-
-  // Constant time comparison to prevent timing attacks
-  const valid = crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
-
-  return { valid, body };
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { valid, body } = await verifyWebhookSignature(req);
+    const { valid, body } = await verifyWebhookEvent(req);
 
     if (!valid) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });

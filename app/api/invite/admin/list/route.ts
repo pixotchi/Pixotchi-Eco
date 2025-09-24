@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
+import { redis, redisScanKeys } from '@/lib/redis';
 import { RedisKeys } from '@/lib/invite-utils';
 import { InviteCode } from '@/lib/types';
 import { validateAdminKey, logAdminAction, createErrorResponse } from '@/lib/auth-utils';
@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    // Get all invite code keys
-    const keys = await redis.keys('pixotchi:invite-codes:*');
+    // Get all invite code keys using SCAN
+    const keys = await redisScanKeys('pixotchi:invite-codes:*');
     const codes: any[] = [];
 
     // Fetch details for each code

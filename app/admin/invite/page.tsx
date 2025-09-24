@@ -24,7 +24,8 @@ import {
   Search,
   FileText,
   TrendingUp,
-  DollarSign
+  DollarSign,
+  Bell
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStats } from '@/lib/types';
@@ -64,7 +65,7 @@ export default function AdminInviteDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications'>('overview');
   
   // Chat state
   const [chatMessages, setChatMessages] = useState<AdminChatMessage[]>([]);
@@ -195,7 +196,8 @@ export default function AdminInviteDashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminKey}`,
         },
-        body: JSON.stringify({ action, target }),
+        // Map historical UI action to API's supported action name
+        body: JSON.stringify({ action: action === 'delete_specific_user' ? 'delete_user_data' : action, target }),
       });
 
       const data = await response.json();
@@ -421,6 +423,7 @@ export default function AdminInviteDashboard() {
       })();
     }
     if (activeTab === 'rpc' && isAuthenticated) { fetchRpcStatus(); }
+    if (activeTab === 'notifications' && isAuthenticated) { fetchNotifStats(); }
   }, [activeTab, isAuthenticated]);
 
   // Gamification helpers
@@ -448,6 +451,60 @@ export default function AdminInviteDashboard() {
     } catch {
       toast.error('Failed RPC status');
     } finally { setRpcLoading(false); }
+  };
+
+  // Notifications admin data
+  const [notifStats, setNotifStats] = useState<any>(null);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifDebugLoading, setNotifDebugLoading] = useState(false);
+  const [notifDebugResult, setNotifDebugResult] = useState<any>(null);
+  const [notifResetLoading, setNotifResetLoading] = useState(false);
+  const fetchNotifStats = async () => {
+    if (!adminKey.trim()) return;
+    setNotifLoading(true);
+    try {
+      const res = await fetch('/api/admin/notifications', { headers: { Authorization: `Bearer ${adminKey}` } });
+      const data = await res.json();
+      if (res.ok) setNotifStats(data?.stats || data);
+      else toast.error(data?.error || 'Failed to load notifications stats');
+    } catch {
+      toast.error('Failed to load notifications stats');
+    } finally { setNotifLoading(false); }
+  };
+
+  const runNotifDebug = async () => {
+    setNotifDebugLoading(true);
+    try {
+      const res = await fetch('/api/notifications/cron/plant-care?debug=1', { method: 'POST' });
+      const data = await res.json();
+      setNotifDebugResult(data);
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error || 'Debug run failed');
+      } else {
+        toast.success('Debug run completed');
+      }
+    } catch {
+      toast.error('Debug run failed');
+    } finally { setNotifDebugLoading(false); }
+  };
+
+  const resetNotifHistory = async () => {
+    if (!adminKey.trim()) return toast.error('Enter admin key');
+    if (!confirm('Reset notifications counts and history for all users?')) return;
+    setNotifResetLoading(true);
+    try {
+      const res = await fetch('/api/admin/notifications/reset?scope=all', { method: 'DELETE', headers: { Authorization: `Bearer ${adminKey}` } });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Notifications history reset');
+        setNotifDebugResult(null);
+        fetchNotifStats();
+      } else {
+        toast.error(data?.error || 'Reset failed');
+      }
+    } catch {
+      toast.error('Reset failed');
+    } finally { setNotifResetLoading(false); }
   };
 
   // Authentication screen
@@ -543,6 +600,7 @@ export default function AdminInviteDashboard() {
             { id: 'cleanup', label: 'Cleanup', icon: Trash2 },
             { id: 'gamification', label: 'Gamification', icon: TrendingUp },
             { id: 'rpc', label: 'RPC', icon: BarChart3 },
+            { id: 'notifications', label: 'Notifications', icon: Bell },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -690,7 +748,7 @@ export default function AdminInviteDashboard() {
                   {stats.recentCodes.map((code) => (
                     <div key={code.code} className="flex items-center justify-between p-3 bg-card rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-primary' : 'bg-primary'}`} />
+                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-green-500/70' : 'bg-yellow-400/70'}`} />
                         <span className="font-mono">{code.code}</span>
                       </div>
                       <div className="text-right">
@@ -1295,6 +1353,87 @@ export default function AdminInviteDashboard() {
                     {(rpcStatus?.endpoints?.length || 0) === 0 && (
                       <div className="text-center text-muted-foreground text-sm">No endpoints configured.</div>
                     )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications (Plant Care 1h)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm text-muted-foreground">
+                    {notifStats ? (
+                      <span>
+                        Total sent: {notifStats.plant1h?.sentCount || 0}
+                      </span>
+                    ) : (
+                      <span>Press refresh to load stats</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={fetchNotifStats} disabled={notifLoading}>
+                      <RefreshCw className={`w-4 h-4 mr-2 ${notifLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={runNotifDebug} disabled={notifDebugLoading}>
+                      <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoading ? 'animate-spin' : ''}`} />
+                      Debug Run (Force)
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={resetNotifHistory} disabled={notifResetLoading}>
+                      {notifResetLoading ? 'Resetting…' : 'Reset History'}
+                    </Button>
+                  </div>
+                </div>
+                {!notifStats ? (
+                  <div className="text-center py-8 text-muted-foreground">No data yet.</div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="text-sm">
+                      <div className="font-semibold mb-1">Global (all types)</div>
+                      <div className="flex items-center justify-between p-2 rounded border">
+                        <div>Sent total: {notifStats.global?.sentCount || 0}</div>
+                        <div className="text-xs text-muted-foreground">Recent entries: {(notifStats.global?.recent || []).length}</div>
+                      </div>
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-semibold mb-1">Recent batches</div>
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {(notifStats.plant1h?.recent || []).map((e: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between p-2 rounded border">
+                            <div className="text-xs text-muted-foreground">{new Date(e.ts || 0).toLocaleString()}</div>
+                            <div className="text-xs">fids: {(e.fids || []).length}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-semibold mb-1">Last cron run</div>
+                      <div className="p-2 rounded border text-xs text-muted-foreground">
+                        {notifDebugResult ? (
+                          <pre className="whitespace-pre-wrap">{JSON.stringify(notifDebugResult, null, 2)}</pre>
+                        ) : notifStats.plant1h?.lastRun ? (
+                          <pre className="whitespace-pre-wrap">{JSON.stringify(notifStats.plant1h.lastRun, null, 2)}</pre>
+                        ) : (
+                          <span>No run summary yet.</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-semibold mb-1">Eligible fids (seen)</div>
+                      <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto">
+                        {(notifStats.eligibleFids || []).slice(0, 200).map((f: any) => (
+                          <span key={f} className="text-xs bg-muted px-2 py-0.5 rounded">{f}</span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>

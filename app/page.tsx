@@ -201,6 +201,21 @@ export default function App() {
     }
   }, [isConnected, userValidated, startIfFirstVisit]);
 
+  // Map fid -> address for backend notifications (optional, best-effort)
+  useEffect(() => {
+    (async () => {
+      try {
+        const fid = (window as any)?.__pixotchi_frame_context__?.context?.user?.fid;
+        if (!fid || !address) return;
+        await fetch('/api/notifications/map-fid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fid, address }),
+        });
+      } catch {}
+    })();
+  }, [address]);
+
   // Nudge UI forward immediately after a successful connection
   useEffect(() => {
     if (isConnected) {
