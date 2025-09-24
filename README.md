@@ -1,6 +1,6 @@
-## Pixotchi Mini
+## Pixotchi Ecosystem App (Mini app compatible)
 
-Pixotchi Mini is a lightweight, production‑ready Farcaster Mini App and web app on Base. It streamlines onboarding, minting, and managing onchain plants and lands, with smart wallet support, agent actions via Coinbase CDP Spend Permissions, robust chat, and reliability features.
+Pixotchi app is a lightweight, production‑ready Farcaster Mini App and web app on Base. It streamlines onboarding, minting, and managing onchain plants and lands, with smart wallet support, agent actions via Coinbase CDP Spend Permissions, robust chat, and reliability features.
 
 <!-- Badges -->
 
@@ -21,6 +21,7 @@ Pixotchi Mini is a lightweight, production‑ready Farcaster Mini App and web ap
 - **Gamification (new)**: Daily missions, streaks, leaderboards, and admin reset tools.
 - **Chat**: Public chat (anti‑spam) + AI assistant + Agent chat (ZEST mint flow), with admin moderation.
 - **Reliability & Security**: Multi‑endpoint RPC, CSP, CORS, rate limits, audit logs.
+- **Notifications**: Farcaster Mini App notifications for key events (e.g., mint success, plant care alerts) with Neynar delivery and admin tracking.
 
 ## Tech Stack
 - **Framework**: Next.js 15, React 19, TypeScript
@@ -28,14 +29,15 @@ Pixotchi Mini is a lightweight, production‑ready Farcaster Mini App and web ap
 - **Web3**: Viem, Wagmi, Coinbase OnchainKit, Coinbase CDP SDK
 - **AI**: Vercel AI SDK, `@ai-sdk/openai` (OpenAI), optional Anthropic/Claude
 - **Data**: Redis/KV (Upstash compatible) for invites, chat, usage, audit logs
-- **Mini App**: `@farcaster/miniapp-sdk` with manifest and notifications
+- **Mini App**: `@farcaster/miniapp-sdk` with manifest and notifications (Neynar v2 delivery)
+- **Scheduler**: Upstash QStash (HTTP cron) to trigger backend checks
 
 ## Project Structure
 Key directories and files:
 - `app/`: Next.js routes (pages + API)
   - `app/.well-known/farcaster.json/route.ts`: Farcaster Mini App manifest (icon/hero/splash, embeds, webhook, association)
   - `app/admin/*`: Admin dashboard (invites, chat moderation, AI moderation, gamification)
-  - `app/api/*`: Server routes for chat, AI, agent, invites, staking, swap, notify, webhook, gamification
+  - `app/api/*`: Server routes for chat, AI, agent, invites, staking, swap, notify, webhook, gamification, notifications cron/admin
 - `components/`: UI, transactions, chat, tutorial, dialogs, loaders, theme
 - `hooks/`: UX and platform hooks (Farcaster, keyboard, countdown, auto‑connect)
 - `lib/`: Core logic (contracts, env, AI, invites, gamification, redis, logger, wallet contexts)
@@ -83,7 +85,7 @@ Key directories and files:
 
 ### Farcaster Mini App integration
 - Manifest exposes rich metadata and embed allowlist; `fc:miniapp` and legacy `fc:frame` metadata are set in `app/layout.tsx`.
-- Notifications via `/api/notify` and signed webhook `/api/webhook` (stores/removes notification tokens).
+- Notifications: `/api/notify` sends per‑user Mini App notifications; webhook `/api/webhook` saves/removes tokens. Delivery is Neynar‑managed via the manifest `webhookUrl` and uses Neynar v2 publish APIs.
 
 ## Reliability & Security
 ### RPC strategy
@@ -99,6 +101,8 @@ Key directories and files:
 ### Data durability & observability
 - Redis helpers with JSON safety and key prefixing; non‑blocking connectivity check.
 - Structured logger; admin audit logs with TTL and rolling history.
+ - Admin Notifications dashboard summarizes send history, recent batches, eligible users, and last cron runs.
+ - Backend cron uses public Base RPC for reads to isolate from app RPCs.
 
 ## APIs
 All routes are under `/api/*`.
@@ -151,14 +155,17 @@ All routes are under `/api/*`.
 - `POST /api/swap` with `{ action: 'quote'|'execute', ethAmount, userAddress }`
 
 ### Notifications & Webhooks
-- `POST /api/notify`
-- `POST /api/webhook` (HMAC‑SHA256 verification)
+- `POST /api/notify` – send per‑user notification (mint, custom types), with global/type metrics
+- `POST /api/webhook` – Farcaster Mini App events (token add/remove) with signature verification (MiniApp JSON signature; HMAC fallback)
+- `GET|POST /api/notifications/cron/plant-care` – checks wallets for plants under 1h and sends batched alerts (QStash/Vercel cron hits this)
+- Admin: `GET /api/admin/notifications` (stats), `DELETE /api/admin/notifications/reset?scope=all|fid|plant[&fid=..][&plantId=..]`
 
 ### Farcaster Manifest
 - `GET /.well-known/farcaster.json`
 
 ## Environment Configuration
 Centralized in `lib/env-config.ts` and specific routes.
+
 
 ## Development
 Prerequisites: Node.js 18+, npm/pnpm, and a Redis provider for full functionality.
@@ -193,6 +200,11 @@ npm run lint  # eslint
 - Prefer private Base RPCs with multiple endpoints for automatic failover.
 - If using the paymaster, ensure `NEXT_PUBLIC_CDP_*` are set; the app runs without it if omitted.
 
+## Known Limitations
+- Agent Mode currently supports minting the ZEST strain only (id 4, 10 SEED each, up to 5 at once).
+- Destructive admin operations (e.g., “delete everything”) are gated by confirmations but should only be used in secure environments.
+- Public API uses dynamic CORS with origin echo; rate limits and server‑side validation still apply.
+ - Automatic plant‑care alerts require an external scheduler (e.g., QStash or Vercel Cron) calling `/api/notifications/cron/plant-care`.
 
 ## License
 Licensed under the MIT License. See the `LICENSE` file at the project root for details.
@@ -200,4 +212,3 @@ Licensed under the MIT License. See the `LICENSE` file at the project root for d
 ---
 
 **Built with ❤️ for the Pixotchi community**
-
