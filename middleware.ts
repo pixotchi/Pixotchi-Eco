@@ -40,7 +40,6 @@ export function middleware(request: NextRequest) {
       // Allow all origins for public API routes since we can be embedded anywhere
       if (origin) {
         response.headers.set('Access-Control-Allow-Origin', origin);
-        response.headers.set('Access-Control-Allow-Credentials', 'false');
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp');
         response.headers.set('Access-Control-Max-Age', '86400');
