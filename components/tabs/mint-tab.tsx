@@ -264,6 +264,25 @@ export default function MintTab() {
                   toast.success('Plant minted successfully!');
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
+                  try {
+                    const fx = (window as any)?.__pixotchi_frame_context__;
+                    const fid = fx?.context?.user?.fid;
+                    const notificationDetails = fx?.context?.client?.notificationDetails;
+                    if (fid) {
+                      fetch('/api/notify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          fid,
+                          notification: {
+                            title: 'Mint Completed! 🌱',
+                            body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
+                            notificationDetails,
+                          },
+                        }),
+                      }).catch(() => {});
+                    }
+                  } catch {}
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Mint Plant"
