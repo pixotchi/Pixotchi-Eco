@@ -23,10 +23,8 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   const [stakingOpen, setStakingOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
 
-  // Refetch on tab change or external triggers
-  useEffect(() => {
-    refreshBalances();
-  }, [refreshKey, refreshBalances]);
+  // Balance refreshes are handled automatically by balance-context.tsx via events
+  // No need for manual refresh on every render or tab change
 
   // (ETH balance removed) No separate refetch needed here
 

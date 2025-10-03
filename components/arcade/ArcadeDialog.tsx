@@ -85,33 +85,37 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   // Fetch cooldowns when dialog opens or when plant changes
   useEffect(() => {
+    if (!open || !publicClient || !plant) return;
+    const plantId = plant.id; // Capture stable value
     let mounted = true;
     (async () => {
-      if (!open || !publicClient || !plant) return;
       try {
         const [normal, star] = await Promise.all([
           publicClient.readContract({
             address: PIXOTCHI_NFT_ADDRESS,
             abi: BOX_GAME_ABI,
             functionName: 'boxGameGetCoolDownTimePerNFT',
-            args: [BigInt(plant.id)],
+            args: [BigInt(plantId)],
           }) as Promise<bigint>,
           publicClient.readContract({
             address: PIXOTCHI_NFT_ADDRESS,
             abi: BOX_GAME_ABI,
             functionName: 'boxGameGetCoolDownTimeWithStar',
-            args: [BigInt(plant.id)],
+            args: [BigInt(plantId)],
           }) as Promise<bigint>,
         ]);
         if (mounted) setCooldown({ normal: Number(normal), star: Number(star) });
       } catch {}
     })();
     return () => { mounted = false; };
-  }, [open, plant, publicClient]);
+  }, [open, plant?.id, publicClient]);
 
   // Countdown tick
   useEffect(() => {
     if (!open) return;
+    // Stop interval if both cooldowns are 0
+    if (cooldown.normal === 0 && cooldown.star === 0) return;
+    
     const id = setInterval(() => {
       setCooldown((prev: { normal: number; star: number }) => ({
         normal: Math.max(0, prev.normal - 1),
@@ -119,7 +123,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       }));
     }, 1000);
     return () => clearInterval(id);
-  }, [open]);
+  }, [open, cooldown.normal, cooldown.star]);
 
   const calls = useMemo(() => {
     if (!plant || !seed) return [] as any[];

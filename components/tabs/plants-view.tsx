@@ -15,8 +15,6 @@ import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Plant, ShopItem, GardenItem } from "@/lib/types";
 import {
   getPlantsByOwner,
-  getAllShopItems,
-  getAllGardenItems,
 } from "@/lib/contracts";
 import { formatTokenAmount, getPlantStatusText, getStrainName, formatScore, formatEth } from "@/lib/utils";
 import PlantImage from "../PlantImage";
@@ -49,6 +47,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
 import ArcadeDialog from "@/components/arcade/ArcadeDialog";
 import { Gamepad2 } from "lucide-react";
+import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 export default function PlantsView() {
@@ -58,8 +57,7 @@ export default function PlantsView() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
   const [selectedItem, setSelectedItem] = useState<ShopItem | GardenItem | null>(null);
-  const [shopItems, setShopItems] = useState<ShopItem[]>([]);
-  const [gardenItems, setGardenItems] = useState<GardenItem[]>([]);
+  const { shopItems, gardenItems, isLoading: catalogsLoading } = useItemCatalogs();
   const [itemType, setItemType] = useState<"shop" | "garden">("garden");
 
   const [loading, setLoading] = useState(true);
@@ -122,12 +120,7 @@ export default function PlantsView() {
       setLoading(true);
       setError(null);
 
-      const [plantsData, shopItemsData, gardenItemsData] =
-        await Promise.all([
-          getPlantsByOwner(address),
-          getAllShopItems(),
-          getAllGardenItems(),
-        ]);
+      const plantsData = await getPlantsByOwner(address);
 
       setPlants(plantsData);
       
@@ -140,28 +133,26 @@ export default function PlantsView() {
         setSelectedPlant(null);
       }
 
-
-      setShopItems(shopItemsData);
-      setGardenItems(gardenItemsData);
-
-      // Set default selected item only if one isn't already selected
-      if (!selectedItem) {
-        if (gardenItemsData.length > 0) {
-          setSelectedItem(gardenItemsData[0]);
-          setItemType('garden');
-        } else if (shopItemsData.length > 0) {
-          setSelectedItem(shopItemsData[0]);
-          setItemType('shop');
-        }
-      }
-
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       setError("Failed to load dashboard data. Please refresh.");
     } finally {
       setLoading(false);
     }
-  }, [address, selectedItem]); // Depend on address and selectedItem for initial load
+  }, [address, selectedPlant?.id]); // Only depend on address and selected plant ID
+
+  // Set default selected item when catalogs are loaded
+  useEffect(() => {
+    if (!selectedItem) {
+      if (gardenItems.length > 0) {
+        setSelectedItem(gardenItems[0]);
+        setItemType('garden');
+      } else if (shopItems.length > 0) {
+        setSelectedItem(shopItems[0]);
+        setItemType('shop');
+      }
+    }
+  }, [selectedItem, gardenItems, shopItems]);
 
   useEffect(() => {
     if(address) {
@@ -192,13 +183,13 @@ export default function PlantsView() {
     </div>
   );
 
-  const renderLoadingView = () => (
-    <div className="flex items-center justify-center py-8">
-      <BaseExpandedLoadingPageLoader text="Loading dashboard..." />
-    </div>
-  );
-
-  if (loading) return renderLoadingView();
+  if (loading || catalogsLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <BaseExpandedLoadingPageLoader text="Loading dashboard..." />
+      </div>
+    );
+  }
   if (error) return <Card><CardContent className="py-4 text-center text-destructive">{error}</CardContent></Card>;
   if (plants.length === 0) return renderNoPlantsView();
 
@@ -489,7 +480,7 @@ export default function PlantsView() {
                         {/* Item Selection with Quantity */}
                         <div className="space-y-2">
                           <div className="grid grid-cols-3 gap-2">
-                                {(itemType === 'garden' ? gardenItems : shopItems).map(item => {
+                                {(itemType === 'garden' ? gardenItems : shopItems).map((item: ShopItem | GardenItem) => {
                                   const quantity = getItemQuantity(item.id);
                                   return (
                                     <div key={item.id} className="space-y-1">

@@ -95,6 +95,8 @@ export default function BundleBuyTransaction({
                 if (attempt < 2) {
                   const delay = 400 * Math.pow(2, attempt);
                   setTimeout(() => post(attempt + 1), delay);
+                } else {
+                  console.warn('Gamification tracking failed after 3 attempts (non-critical):', e);
                 }
               }
             };

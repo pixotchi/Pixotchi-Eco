@@ -123,14 +123,12 @@ export default function BaseTransaction({
 
     // Gamification: track daily activity (non-blocking)
     (async () => {
-      try {
-        if (!address) return;
-        await fetch('/api/gamification/streak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address })
-        });
-      } catch {}
+      if (!address) return;
+      fetch('/api/gamification/streak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
     })();
   }, [onSuccess, isSponsored]);
 

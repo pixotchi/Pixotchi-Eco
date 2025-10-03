@@ -14,6 +14,7 @@ import { useAccount } from 'wagmi';
 import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { useSlideshow } from "@/components/tutorial";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import packageJson from '@/package.json';
 
 const InfoCard = ({
   icon,
@@ -425,6 +426,13 @@ export default function AboutTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Version Number */}
+      <div className="text-center">
+        <span className="text-xs text-muted-foreground/60 font-mono">
+          v{packageJson.version}
+        </span>
+      </div>
 
       {/* Missions Info Dialog */}
       <Dialog open={showMissionsInfo} onOpenChange={setShowMissionsInfo}>

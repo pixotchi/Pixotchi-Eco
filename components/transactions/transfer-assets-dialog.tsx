@@ -115,9 +115,11 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     let cancelled = false;
     const run = async () => {
       try {
+        if (cancelled) return;
         setResolvingEns(true);
         // Public resolver API (no key). Returns { address, name, display }
         const resp = await fetch(`https://api.ensideas.com/ens/resolve/${encodeURIComponent(debouncedDest)}`);
+        if (cancelled) return;
         if (!resp.ok) throw new Error('ENS lookup failed');
         const data = await resp.json();
         if (cancelled) return;

@@ -54,15 +54,13 @@ export default function SponsoredTransaction({
     onSuccess?.(tx);
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
     // Gamification: track daily activity (non-blocking)
-    try {
-      if (address) {
-        fetch('/api/gamification/streak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address })
-        });
-      }
-    } catch {}
+    if (address) {
+      fetch('/api/gamification/streak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
+    }
   }, [onSuccess]);
 
   // Ensure success is handled once per transaction lifecycle

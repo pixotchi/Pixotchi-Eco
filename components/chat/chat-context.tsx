@@ -38,6 +38,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Cache messages per mode so switching tabs doesn't bleed content across modes
   const messageCacheRef = useRef<{ public: AnyChatMessage[]; ai: AnyChatMessage[]; agent: AnyChatMessage[] }>({ public: [], ai: [], agent: [] });
   const modeRef = useRef<ChatMode>("public");
+  
+  // AbortController for cancelling pending fetch requests
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Cleanup: abort pending requests on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const setMode = (next: ChatMode) => {
     // Save current mode messages before switching
@@ -172,6 +184,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const sendMessage = async (messageText: string) => {
     if (!address || !messageText.trim()) return;
 
+    // Cancel any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     setIsSending(true);
     setError(null);
 
@@ -204,7 +225,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           // Best-effort: prepare Base Account spend calls on the client
           let preparedSpendCalls: Array<{ to: `0x${string}`; value: string; data: `0x${string}` }> | undefined;
           try {
-            const wallet = await fetch('/api/agent/wallet').then(r => r.json()).catch(() => null);
+            const wallet = await fetch('/api/agent/wallet', { signal }).then(r => r.json()).catch(() => null);
             const spender = wallet?.smartAccountAddress as `0x${string}` | undefined;
             if (spender && address) {
               const [{ createBaseAccountSDK }, spendMod, viem] = await Promise.all([
@@ -279,7 +300,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               userAddress: address, // Pass user address for spend permission validation
               conversationHistory, // Pass conversation context
               preparedSpendCalls
-            })
+            }),
+            signal
           });
           if (!response.ok) {
             const err = await response.json().catch(() => ({}));
@@ -299,6 +321,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: messageText, address, conversationId }),
+              signal
           });
   
           if (!response.ok) {
@@ -323,8 +346,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
 
     } catch (err: any) {
-        setError(err.message || 'An unexpected error occurred.');
-        setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        // Don't show error if request was intentionally aborted
+        if (err.name === 'AbortError') {
+          console.log('Request was cancelled');
+          setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        } else {
+          setError(err.message || 'An unexpected error occurred.');
+          setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        }
     } finally {
         setIsSending(false);
         if(mode === 'ai' || mode === 'agent') setIsAITyping(false);

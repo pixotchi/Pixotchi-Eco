@@ -54,8 +54,17 @@ function BuildingDetailsPanel({
   const isPrebuiltTown = buildingType === 'town' && (selectedBuilding.id === 1 || selectedBuilding.id === 3);
 
   const renderBuildingContent = () => {
+    // Globally gate building functions while upgrading, regardless of level/type
+    if (selectedBuilding.isUpgrading) {
+      return (
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          Building is upgrading. Functions are temporarily unavailable until the upgrade completes.
+        </div>
+      );
+    }
+
     if (buildingType === 'village') {
-      if (selectedBuilding.level === 0 || (selectedBuilding.level === 1 && selectedBuilding.isUpgrading)) {
+      if (selectedBuilding.level === 0) {
         return (
             <div className="text-center py-8 text-muted-foreground text-sm">
                 Building hasn't been constructed yet. Upgrade to level 1 to start.

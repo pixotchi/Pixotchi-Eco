@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { getAllActivity, getMyActivity } from "@/lib/activity-service";
-import { getAllShopItems, getAllGardenItems } from "@/lib/contracts";
-import { ActivityEvent, ShopItem, GardenItem, ItemConsumedEvent, BundledItemConsumedEvent } from "@/lib/types";
+import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, User, Globe } from "lucide-react";
 import {
@@ -29,6 +28,7 @@ import {
   VillageProductionClaimedEventRenderer,
 } from "@/components/activity";
 import { ToggleGroup } from "@/components/ui/toggle-group";
+import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 
 type ActivityView = "all" | "my";
 type ItemMap = { [key: string]: string };
@@ -45,6 +45,7 @@ export default function ActivityTab() {
   const [shopItemMap, setShopItemMap] = useState<ItemMap>({});
   const [gardenItemMap, setGardenItemMap] = useState<ItemMap>({});
   const [currentPage, setCurrentPage] = useState(1);
+  const { shopItems, gardenItems, isLoading: catalogsLoading } = useItemCatalogs();
 
   const bundleItemConsumedEvents = (activities: ActivityEvent[]): ProcessedActivityEvent[] => {
     const bundledMap = new Map<string, BundledItemConsumedEvent>();
@@ -82,19 +83,14 @@ export default function ActivityTab() {
       setLoading(true);
       setError(null);
 
-      const [shopItems, gardenItems] = await Promise.all([
-        getAllShopItems(),
-        getAllGardenItems(),
-      ]);
-
       const newShopItemMap: ItemMap = {};
-      shopItems.forEach(item => {
+      shopItems.forEach((item: ShopItem) => {
         newShopItemMap[item.id] = item.name;
       });
       setShopItemMap(newShopItemMap);
 
       const newGardenItemMap: ItemMap = {};
-      gardenItems.forEach(item => {
+      gardenItems.forEach((item: GardenItem) => {
         newGardenItemMap[item.id] = item.name;
       });
       setGardenItemMap(newGardenItemMap);
@@ -116,7 +112,7 @@ export default function ActivityTab() {
     } finally {
       setLoading(false);
     }
-  }, [view, address]);
+  }, [view, address, shopItems, gardenItems]);
 
   useEffect(() => {
     if (view === 'my' && !isConnected) {
@@ -174,7 +170,7 @@ export default function ActivityTab() {
   const currentActivities = allActivities.slice(startIndex, endIndex);
 
   const renderContent = () => {
-    if (loading) {
+    if (loading || catalogsLoading) {
       return (
         <div className="flex items-center justify-center py-8">
           <BaseExpandedLoadingPageLoader text="Loading activities..." />

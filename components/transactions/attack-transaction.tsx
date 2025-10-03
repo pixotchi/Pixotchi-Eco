@@ -52,7 +52,16 @@ export default function AttackTransaction({
   return (
     <SponsoredTransaction
       calls={calls}
-      onSuccess={(tx) => { try { if (address) { fetch('/api/gamification/missions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, taskId: 's2_attack_plant', proof: { txHash: tx?.transactionHash } }) }); } } catch {} onSuccess?.(tx); }}
+      onSuccess={(tx) => { 
+        if (address) { 
+          fetch('/api/gamification/missions', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ address, taskId: 's2_attack_plant', proof: { txHash: tx?.transactionHash } }) 
+          }).catch(err => console.warn('Gamification tracking failed (non-critical):', err)); 
+        }
+        onSuccess?.(tx); 
+      }}
       onError={onError}
       buttonText={buttonText}
       buttonClassName={buttonClassName}
