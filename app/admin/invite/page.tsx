@@ -1,9 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   Shield, 
   Users, 
@@ -58,6 +66,27 @@ interface AdminStats {
   }>;
 }
 
+type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications';
+
+interface ConfirmDialogState {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmText: string;
+  onConfirm: () => void;
+  isDangerous?: boolean;
+  requiresTextConfirmation?: boolean;
+  textToMatch?: string;
+}
+
+// Loading spinner component for consistency
+const LoadingSpinner = ({ text }: { text?: string }) => (
+  <div className="text-center py-8">
+    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    {text && <p className="mt-2 text-muted-foreground">{text}</p>}
+  </div>
+);
+
 export default function AdminInviteDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminKey, setAdminKey] = useState('');
@@ -65,7 +94,20 @@ export default function AdminInviteDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications'>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
+    open: false,
+    title: '',
+    description: '',
+    confirmText: 'Confirm',
+    onConfirm: () => {},
+  });
+  const [confirmationInput, setConfirmationInput] = useState('');
+  
+  // AbortController for canceling requests on tab switch or unmount
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   // Chat state
   const [chatMessages, setChatMessages] = useState<AdminChatMessage[]>([]);
@@ -81,6 +123,37 @@ export default function AdminInviteDashboard() {
   const [aiChatLoading, setAIChatLoading] = useState(false);
   // Gamification leaderboards
   const [gmLb, setGmLb] = useState<{ streakTop: Array<{ address: string; value: number }>; missionTop: Array<{ address: string; value: number }> } | null>(null);
+
+  // Cleanup: abort pending requests on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Helper to show confirmation dialog
+  const showConfirmDialog = useCallback((config: Omit<ConfirmDialogState, 'open'>) => {
+    setConfirmDialog({ ...config, open: true });
+    setConfirmationInput('');
+  }, []);
+
+  // Helper for sanitizing search input
+  const sanitizeInput = useCallback((input: string, maxLength: number = 100): string => {
+    return input.trim().slice(0, maxLength);
+  }, []);
+
+  // Logout handler - clear sensitive data
+  const handleLogout = useCallback(() => {
+    setIsAuthenticated(false);
+    setAdminKey(''); // Clear admin key from memory
+    setStats(null);
+    setChatMessages([]);
+    setAIConversations([]);
+    setGmLb(null);
+    toast.success('Logged out successfully');
+  }, []);
 
   const authenticate = async () => {
     if (!adminKey.trim()) {
@@ -107,11 +180,17 @@ export default function AdminInviteDashboard() {
         });
         setIsAuthenticated(true);
         toast.success('Admin access granted');
+      } else if (response.status === 429) {
+        toast.error('Too many authentication attempts. Please try again in 15 minutes.');
+      } else if (response.status === 401) {
+        toast.error('Invalid admin key. Please check your credentials.');
       } else {
-        toast.error('Invalid admin key');
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.message || `Authentication failed (${response.status})`);
       }
-    } catch (error) {
-      toast.error('Authentication failed');
+    } catch (error: any) {
+      console.error('Authentication error:', error);
+      toast.error(error.message || 'Network error during authentication');
     } finally {
       setLoading(false);
     }
@@ -127,6 +206,7 @@ export default function AdminInviteDashboard() {
           'Authorization': `Bearer ${adminKey}`,
           'Content-Type': 'application/json',
         },
+        signal: abortControllerRef.current?.signal,
       });
       if (response.ok) {
         const data = await response.json();
@@ -136,9 +216,15 @@ export default function AdminInviteDashboard() {
           users: data.users,
           recentCodes: data.recentCodes,
         });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.message || 'Failed to refresh stats');
       }
-    } catch (error) {
-      toast.error('Failed to refresh stats');
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Refresh stats error:', error);
+        toast.error('Failed to refresh stats');
+      }
     } finally {
       setLoading(false);
     }
@@ -184,10 +270,6 @@ export default function AdminInviteDashboard() {
       delete_everything: 'DELETE EVERYTHING from the database',
     };
 
-    const confirmMessage = `Are you sure you want to ${actionNames[action as keyof typeof actionNames]}? This cannot be undone.`;
-    
-    if (!confirm(confirmMessage)) return;
-
     setLoading(true);
     try {
       const response = await fetch('/api/invite/admin/cleanup', {
@@ -198,20 +280,50 @@ export default function AdminInviteDashboard() {
         },
         // Map historical UI action to API's supported action name
         body: JSON.stringify({ action: action === 'delete_specific_user' ? 'delete_user_data' : action, target }),
+        signal: abortControllerRef.current?.signal,
       });
 
       const data = await response.json();
       if (data.success) {
-        toast.success(data.message);
+        toast.success(data.message || `Successfully performed: ${actionNames[action as keyof typeof actionNames]}`);
         refreshStats();
       } else {
-        toast.error(data.error || 'Cleanup failed');
+        toast.error(data.error || `Cleanup failed: ${actionNames[action as keyof typeof actionNames]}`);
       }
-    } catch (error) {
-      toast.error('Cleanup operation failed');
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Cleanup error:', error);
+        toast.error(error.message || 'Cleanup operation failed');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Wrapper to show confirmation before cleanup
+  const confirmCleanup = (action: string, target?: string) => {
+    const actionNames = {
+      delete_all_codes: 'delete ALL codes',
+      delete_expired_codes: 'delete expired codes',
+      delete_used_codes: 'delete used codes',
+      reset_user_data: 'reset ALL user data',
+      reset_daily_limits: 'reset daily limits',
+      delete_specific_user: `delete user ${target}`,
+      delete_everything: 'DELETE EVERYTHING from the database',
+    };
+
+    const actionName = actionNames[action as keyof typeof actionNames];
+    const isDangerous = action === 'delete_everything' || action === 'delete_all_codes' || action === 'reset_user_data';
+    
+    showConfirmDialog({
+      title: isDangerous ? '⚠️ Dangerous Operation' : 'Confirm Action',
+      description: `Are you sure you want to ${actionName}? This action cannot be undone.`,
+      confirmText: isDangerous ? 'Yes, I understand' : 'Confirm',
+      onConfirm: () => performCleanup(action, target),
+      isDangerous,
+      requiresTextConfirmation: action === 'delete_everything',
+      textToMatch: action === 'delete_everything' ? 'DELETE EVERYTHING' : undefined,
+    });
   };
 
   const exportRewardData = () => {
@@ -294,10 +406,6 @@ export default function AdminInviteDashboard() {
 
   const deleteAllMessages = async () => {
     if (!adminKey.trim()) return;
-    
-    if (!confirm('Are you sure you want to delete ALL chat messages? This cannot be undone.')) {
-      return;
-    }
 
     try {
       const response = await fetch('/api/chat/admin/delete', {
@@ -307,6 +415,7 @@ export default function AdminInviteDashboard() {
           'Authorization': `Bearer ${adminKey}`,
         },
         body: JSON.stringify({ deleteAll: true }),
+        signal: abortControllerRef.current?.signal,
       });
 
       if (!response.ok) {
@@ -316,10 +425,22 @@ export default function AdminInviteDashboard() {
       const data = await response.json();
       toast.success(`Deleted ${data.deletedCount} messages`);
       fetchChatData(); // Refresh data
-    } catch (error) {
-      console.error('Error deleting all messages:', error);
-      toast.error('Failed to delete all messages');
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error deleting all messages:', error);
+        toast.error(error.message || 'Failed to delete all messages');
+      }
     }
+  };
+
+  const confirmDeleteAllMessages = () => {
+    showConfirmDialog({
+      title: 'Delete All Chat Messages',
+      description: 'Are you sure you want to delete ALL chat messages? This action cannot be undone.',
+      confirmText: 'Delete All',
+      onConfirm: deleteAllMessages,
+      isDangerous: true,
+    });
   };
 
   // AI Chat management functions
@@ -371,14 +492,13 @@ export default function AdminInviteDashboard() {
   };
 
   const deleteConversation = async (conversationId: string) => {
-    if (!confirm('Are you sure you want to delete this conversation?')) return;
-
     try {
       const response = await fetch(`/api/chat/ai/admin/conversations?conversationId=${conversationId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${adminKey}`,
         },
+        signal: abortControllerRef.current?.signal,
       });
 
       if (!response.ok) {
@@ -392,10 +512,22 @@ export default function AdminInviteDashboard() {
         setSelectedConversation(null);
         setConversationMessages([]);
       }
-    } catch (error) {
-      console.error('Error deleting conversation:', error);
-      toast.error('Failed to delete conversation');
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error deleting conversation:', error);
+        toast.error(error.message || 'Failed to delete conversation');
+      }
     }
+  };
+
+  const confirmDeleteConversation = (conversationId: string) => {
+    showConfirmDialog({
+      title: 'Delete Conversation',
+      description: 'Are you sure you want to delete this conversation? This action cannot be undone.',
+      confirmText: 'Delete',
+      onConfirm: () => deleteConversation(conversationId),
+      isDangerous: true,
+    });
   };
 
   // Filter conversations by search term
@@ -404,37 +536,86 @@ export default function AdminInviteDashboard() {
     conv.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Fetch chat data when switching to chat tab
+  // Fetch data when switching tabs - with AbortController cleanup
   useEffect(() => {
-    if (activeTab === 'chat' && isAuthenticated) {
+    if (!isAuthenticated || !adminKey) return;
+
+    // Cancel any pending requests from previous tab
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new AbortController for this tab
+    abortControllerRef.current = new AbortController();
+
+    if (activeTab === 'chat') {
       fetchChatData();
-    }
-    if (activeTab === 'ai-chat' && isAuthenticated) {
+    } else if (activeTab === 'ai-chat') {
       fetchAIChatData();
-    }
-    if (activeTab === 'gamification' && isAuthenticated) {
+    } else if (activeTab === 'gamification') {
       (async () => {
         try {
-          const res = await fetch('/api/gamification/leaderboards', { headers: { 'Authorization': `Bearer ${adminKey}` } });
-          if (!res.ok) return;
+          const res = await fetch('/api/gamification/leaderboards', { 
+            headers: { 'Authorization': `Bearer ${adminKey}` },
+            signal: abortControllerRef.current?.signal,
+          });
+          if (!res.ok) {
+            console.warn('Failed to fetch gamification leaderboards:', res.status);
+            return;
+          }
           const data = await res.json();
           setGmLb({ streakTop: data.streakTop || [], missionTop: data.missionTop || [] });
-        } catch {}
+        } catch (error: any) {
+          if (error.name !== 'AbortError') {
+            console.error('Error fetching gamification data:', error);
+          }
+        }
       })();
+    } else if (activeTab === 'rpc') {
+      fetchRpcStatus();
+    } else if (activeTab === 'notifications') {
+      fetchNotifStats();
     }
-    if (activeTab === 'rpc' && isAuthenticated) { fetchRpcStatus(); }
-    if (activeTab === 'notifications' && isAuthenticated) { fetchNotifStats(); }
-  }, [activeTab, isAuthenticated]);
+
+    // Cleanup on unmount or tab change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [activeTab, isAuthenticated, adminKey]);
 
   // Gamification helpers
   const resetGamification = async (scope: 'streaks' | 'missions' | 'all') => {
-    if (!confirm(`Are you sure you want to reset ${scope}?`)) return;
     try {
-      const res = await fetch('/api/gamification/admin/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminKey}` }, body: JSON.stringify({ scope }) });
+      const res = await fetch('/api/gamification/admin/reset', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminKey}` }, 
+        body: JSON.stringify({ scope }),
+        signal: abortControllerRef.current?.signal,
+      });
       const data = await res.json();
-      if (res.ok) { toast.success(`Reset ${scope} (${data.deleted} keys deleted)`); }
-      else { toast.error(data?.error || 'Reset failed'); }
-    } catch { toast.error('Reset failed'); }
+      if (res.ok) { 
+        toast.success(`Reset ${scope} successfully (${data.deleted} keys deleted)`); 
+      } else { 
+        toast.error(data?.error || `Failed to reset ${scope}`); 
+      }
+    } catch (error: any) { 
+      if (error.name !== 'AbortError') {
+        console.error('Reset gamification error:', error);
+        toast.error(error.message || 'Reset failed'); 
+      }
+    }
+  };
+
+  const confirmResetGamification = (scope: 'streaks' | 'missions' | 'all') => {
+    showConfirmDialog({
+      title: 'Reset Gamification Data',
+      description: `Are you sure you want to reset ${scope}? This will delete all related data and cannot be undone.`,
+      confirmText: 'Reset',
+      onConfirm: () => resetGamification(scope),
+      isDangerous: scope === 'all',
+    });
   };
 
   // RPC status state
@@ -490,21 +671,37 @@ export default function AdminInviteDashboard() {
 
   const resetNotifHistory = async () => {
     if (!adminKey.trim()) return toast.error('Enter admin key');
-    if (!confirm('Reset notifications counts and history for all users?')) return;
     setNotifResetLoading(true);
     try {
-      const res = await fetch('/api/admin/notifications/reset?scope=all', { method: 'DELETE', headers: { Authorization: `Bearer ${adminKey}` } });
+      const res = await fetch('/api/admin/notifications/reset?scope=all', { 
+        method: 'DELETE', 
+        headers: { Authorization: `Bearer ${adminKey}` },
+        signal: abortControllerRef.current?.signal,
+      });
       const data = await res.json();
       if (res.ok) {
-        toast.success('Notifications history reset');
+        toast.success('Notifications history reset successfully');
         setNotifDebugResult(null);
         fetchNotifStats();
       } else {
         toast.error(data?.error || 'Reset failed');
       }
-    } catch {
-      toast.error('Reset failed');
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Reset notifications error:', error);
+        toast.error(error.message || 'Reset failed');
+      }
     } finally { setNotifResetLoading(false); }
+  };
+
+  const confirmResetNotifHistory = () => {
+    showConfirmDialog({
+      title: 'Reset Notifications History',
+      description: 'Are you sure you want to reset notifications counts and history for all users? This action cannot be undone.',
+      confirmText: 'Reset',
+      onConfirm: resetNotifHistory,
+      isDangerous: true,
+    });
   };
 
   // Authentication screen
@@ -580,7 +777,7 @@ export default function AdminInviteDashboard() {
                 Refresh
               </Button>
               <ThemeSelector />
-              <Button variant="outline" size="sm" onClick={() => setIsAuthenticated(false)}>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
                 Logout
               </Button>
             </div>
@@ -607,7 +804,7 @@ export default function AdminInviteDashboard() {
               <Button
                 key={tab.id}
                 variant={activeTab === tab.id ? 'default' : 'ghost'}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as AdminTab)}
                 className="flex items-center space-x-2"
               >
                 <Icon className="w-4 h-4" />
@@ -754,7 +951,7 @@ export default function AdminInviteDashboard() {
                       <div className="text-right">
                         <p className="text-sm">{code.isUsed ? 'Used' : 'Active'}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(code.createdAt).toLocaleDateString()}
+                          {new Date(code.createdAt).toLocaleString()} (Local)
                         </p>
                       </div>
                     </div>
@@ -786,7 +983,7 @@ export default function AdminInviteDashboard() {
                 
                 <div className="space-y-3">
                   {stats.users.topGenerators.map((user) => (
-                    <div key={user.address} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <div key={user.address} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                       <div>
                         <p className="font-mono text-sm">{user.address}</p>
                         <p className="text-xs text-muted-foreground">
@@ -796,7 +993,7 @@ export default function AdminInviteDashboard() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => performCleanup('delete_specific_user', user.address)}
+                        onClick={() => confirmCleanup('delete_specific_user', user.address)}
                       >
                         <UserX className="w-4 h-4" />
                       </Button>
@@ -825,7 +1022,7 @@ export default function AdminInviteDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Button
                     variant="outline"
-                    onClick={() => performCleanup('delete_expired_codes')}
+                    onClick={() => confirmCleanup('delete_expired_codes')}
                     disabled={loading}
                   >
                     <Clock className="w-4 h-4 mr-2" />
@@ -834,7 +1031,7 @@ export default function AdminInviteDashboard() {
                   
                   <Button
                     variant="outline"
-                    onClick={() => performCleanup('delete_used_codes')}
+                    onClick={() => confirmCleanup('delete_used_codes')}
                     disabled={loading}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
@@ -843,7 +1040,7 @@ export default function AdminInviteDashboard() {
                   
                   <Button
                     variant="outline"
-                    onClick={() => performCleanup('reset_daily_limits')}
+                    onClick={() => confirmCleanup('reset_daily_limits')}
                     disabled={loading}
                   >
                     <RefreshCw className="w-4 h-4 mr-2" />
@@ -852,7 +1049,7 @@ export default function AdminInviteDashboard() {
                   
                   <Button
                     variant="outline"
-                    onClick={() => performCleanup('reset_user_data')}
+                    onClick={() => confirmCleanup('reset_user_data')}
                     disabled={loading}
                   >
                     <Users className="w-4 h-4 mr-2" />
@@ -863,7 +1060,7 @@ export default function AdminInviteDashboard() {
                   <div className="border-t border-border pt-4 space-y-4">
                   <Button
                     variant="destructive"
-                    onClick={() => performCleanup('delete_all_codes')}
+                    onClick={() => confirmCleanup('delete_all_codes')}
                     disabled={loading}
                     className="w-full"
                   >
@@ -881,16 +1078,7 @@ export default function AdminInviteDashboard() {
                     </p>
                     <Button
                       variant="destructive"
-                      onClick={() => {
-                        if (confirm('⚠️ WARNING: This will delete EVERYTHING from the database!\n\nThis includes:\n- All invite codes\n- All user data\n- All audit logs\n- All system data\n\nThis CANNOT be undone!\n\nType "DELETE EVERYTHING" in the next prompt to confirm.')) {
-                          const confirmation = prompt('Type "DELETE EVERYTHING" to confirm this destructive action:');
-                          if (confirmation === 'DELETE EVERYTHING') {
-                            performCleanup('delete_everything');
-                          } else {
-                            toast.error('Confirmation text did not match. Operation cancelled.');
-                          }
-                        }
-                      }}
+                      onClick={() => confirmCleanup('delete_everything')}
                       disabled={loading}
                       className="w-full"
                     >
@@ -963,7 +1151,7 @@ export default function AdminInviteDashboard() {
                   </Button>
                   <Button
                     variant="destructive"
-                    onClick={deleteAllMessages}
+                    onClick={confirmDeleteAllMessages}
                     disabled={chatLoading}
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -1000,7 +1188,7 @@ export default function AdminInviteDashboard() {
                                 {message.displayName}
                               </span>
                               <span className="text-xs text-muted-foreground">
-                                {new Date(message.timestamp).toLocaleString()}
+                                {new Date(message.timestamp).toLocaleString()} (Local)
                               </span>
                               {message.isSpam && (
                                 <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded-full">
@@ -1118,8 +1306,9 @@ export default function AdminInviteDashboard() {
                       <Input
                         placeholder="Search conversations..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => setSearchTerm(sanitizeInput(e.target.value))}
                         className="pl-10"
+                        maxLength={100}
                       />
                     </div>
                   </div>
@@ -1160,7 +1349,7 @@ export default function AdminInviteDashboard() {
                             <div className="flex items-center gap-4 text-xs text-muted-foreground">
                               <span>{conversation.messageCount} messages</span>
                               <span>{conversation.totalTokens} tokens</span>
-                              <span>{formatDistanceToNow(new Date(conversation.lastMessageAt), { addSuffix: true })}</span>
+                              <span title={new Date(conversation.lastMessageAt).toLocaleString()}>{formatDistanceToNow(new Date(conversation.lastMessageAt), { addSuffix: true })}</span>
                             </div>
                           </div>
                           <div className="flex gap-1">
@@ -1179,7 +1368,7 @@ export default function AdminInviteDashboard() {
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteConversation(conversation.id);
+                                confirmDeleteConversation(conversation.id);
                               }}
                             >
                               <Trash2 className="w-3 h-3" />
@@ -1242,7 +1431,7 @@ export default function AdminInviteDashboard() {
                                 </span>
                               )}
                             </div>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground" title={new Date(message.timestamp).toLocaleString()}>
                               {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
                             </span>
                           </div>
@@ -1266,7 +1455,7 @@ export default function AdminInviteDashboard() {
               </CardHeader>
               <CardContent>
                 {!gmLb ? (
-                  <div className="text-center py-8 text-muted-foreground">Loading…</div>
+                  <LoadingSpinner text="Loading leaderboards..." />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
@@ -1275,7 +1464,7 @@ export default function AdminInviteDashboard() {
                         {gmLb.streakTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
                         ) : gmLb.streakTop.map((e, i) => (
-                          <div key={`s-${e.address}-${i}`} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                          <div key={`s-${e.address}-${i}`} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                             <div className="font-mono text-xs">{e.address}</div>
                             <div className="text-sm font-semibold">{e.value}</div>
                           </div>
@@ -1288,7 +1477,7 @@ export default function AdminInviteDashboard() {
                         {gmLb.missionTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
                         ) : gmLb.missionTop.map((e, i) => (
-                          <div key={`m-${e.address}-${i}`} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                          <div key={`m-${e.address}-${i}`} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                             <div className="font-mono text-xs">{e.address}</div>
                             <div className="text-sm font-semibold">{e.value}</div>
                           </div>
@@ -1305,9 +1494,9 @@ export default function AdminInviteDashboard() {
                 <CardTitle>Admin Actions</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Button variant="outline" onClick={() => resetGamification('streaks')}><RefreshCw className="w-4 h-4 mr-2" />Reset Streaks</Button>
-                <Button variant="outline" onClick={() => resetGamification('missions')}><RefreshCw className="w-4 h-4 mr-2" />Reset Missions</Button>
-                <Button variant="destructive" onClick={() => resetGamification('all')}><Trash2 className="w-4 h-4 mr-2" />Reset All</Button>
+                <Button variant="outline" onClick={() => confirmResetGamification('streaks')}><RefreshCw className="w-4 h-4 mr-2" />Reset Streaks</Button>
+                <Button variant="outline" onClick={() => confirmResetGamification('missions')}><RefreshCw className="w-4 h-4 mr-2" />Reset Missions</Button>
+                <Button variant="destructive" onClick={() => confirmResetGamification('all')}><Trash2 className="w-4 h-4 mr-2" />Reset All</Button>
               </CardContent>
             </Card>
           </div>
@@ -1337,7 +1526,7 @@ export default function AdminInviteDashboard() {
                   </Button>
                 </div>
                 {rpcLoading ? (
-                  <div className="text-center py-8 text-muted-foreground">Checking RPC endpoints…</div>
+                  <LoadingSpinner text="Checking RPC endpoints..." />
                 ) : (
                   <div className="space-y-2">
                     {(rpcStatus?.endpoints || []).map((e) => (
@@ -1387,7 +1576,7 @@ export default function AdminInviteDashboard() {
                       <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoading ? 'animate-spin' : ''}`} />
                       Debug Run (Force)
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={resetNotifHistory} disabled={notifResetLoading}>
+                    <Button variant="destructive" size="sm" onClick={confirmResetNotifHistory} disabled={notifResetLoading}>
                       {notifResetLoading ? 'Resetting…' : 'Reset History'}
                     </Button>
                   </div>
@@ -1408,7 +1597,7 @@ export default function AdminInviteDashboard() {
                       <div className="space-y-1 max-h-64 overflow-y-auto">
                         {(notifStats.plant1h?.recent || []).map((e: any, i: number) => (
                           <div key={i} className="flex items-center justify-between p-2 rounded border">
-                            <div className="text-xs text-muted-foreground">{new Date(e.ts || 0).toLocaleString()}</div>
+                            <div className="text-xs text-muted-foreground">{new Date(e.ts || 0).toLocaleString()} (Local)</div>
                             <div className="text-xs">fids: {(e.fids || []).length}</div>
                           </div>
                         ))}
@@ -1441,6 +1630,59 @@ export default function AdminInviteDashboard() {
           </div>
         )}
       </div>
+
+      {/* Custom Confirmation Dialog */}
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ ...confirmDialog, open: false })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className={confirmDialog.isDangerous ? 'text-destructive' : ''}>
+              {confirmDialog.title}
+            </DialogTitle>
+            <DialogDescription>{confirmDialog.description}</DialogDescription>
+          </DialogHeader>
+          
+          {confirmDialog.requiresTextConfirmation && confirmDialog.textToMatch && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Type <strong>{confirmDialog.textToMatch}</strong> to confirm:</p>
+              <Input
+                value={confirmationInput}
+                onChange={(e) => setConfirmationInput(e.target.value)}
+                placeholder={confirmDialog.textToMatch}
+              />
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={confirmDialog.isDangerous ? 'destructive' : 'default'}
+              onClick={() => {
+                // Check text confirmation if required
+                if (confirmDialog.requiresTextConfirmation && confirmDialog.textToMatch) {
+                  if (confirmationInput !== confirmDialog.textToMatch) {
+                    toast.error('Confirmation text does not match. Operation cancelled.');
+                    return;
+                  }
+                }
+                confirmDialog.onConfirm();
+                setConfirmDialog({ ...confirmDialog, open: false });
+              }}
+              disabled={Boolean(
+                confirmDialog.requiresTextConfirmation &&
+                confirmDialog.textToMatch &&
+                confirmationInput !== confirmDialog.textToMatch
+              )}
+            >
+              {confirmDialog.confirmText}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

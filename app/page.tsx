@@ -5,7 +5,7 @@ import { sdk } from "@farcaster/miniapp-sdk";
 import { useFrameContext } from "@/lib/frame-context";
 import { Wallet } from "@coinbase/onchainkit/wallet";
 import { useAccount, useConnect } from "wagmi";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { PageLoader, BasePageLoader } from "@/components/ui/loading";
 import { Tab } from "@/lib/types";
@@ -52,9 +52,10 @@ const tabComponents = {
 };
 
 // Tab prefetching logic with de-duplication
-const loadedTabs = new Set<string>();
-const prefetchingTabs = new Set<string>();
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
+  const loadedTabs = useRef(new Set<string>());
+  const prefetchingTabs = useRef(new Set<string>());
+
   useEffect(() => {
     if (!isConnected) return;
 
@@ -78,17 +79,22 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
       tabsToPrefetch.forEach((tab) => {
         const key = String(tab);
         if (key === activeTab) return;
-        if (loadedTabs.has(key) || prefetchingTabs.has(key)) return;
-        prefetchingTabs.add(key);
+        if (loadedTabs.current.has(key) || prefetchingTabs.current.has(key)) return;
+        prefetchingTabs.current.add(key);
         (window as any).requestIdleCallback?.(() => {
           // Trigger prefetch by accessing the component (causes Next to fetch the chunk)
           import(`@/components/tabs/${tab}-tab`).finally(() => {
-            prefetchingTabs.delete(key);
-            loadedTabs.add(key);
+            prefetchingTabs.current.delete(key);
+            loadedTabs.current.add(key);
           });
         });
       });
     }
+
+    // Cleanup function to clear pending prefetches on unmount
+    return () => {
+      prefetchingTabs.current.clear();
+    };
   }, [activeTab, isConnected]);
 };
 
@@ -125,19 +131,20 @@ export default function App() {
   const { login } = useLogin();
   const { wallets } = useWallets();
   const { connect, connectors } = useConnect();
-  const [surface, setSurface] = useState<'privy' | 'coinbase' | null>(null);
-
-  // Read selected surface once on mount
-  useEffect(() => {
+  
+  // Read selected surface synchronously on initialization to avoid race conditions
+  const [surface, setSurface] = useState<'privy' | 'coinbase' | null>(() => {
+    if (typeof window === 'undefined') return null;
     try {
       const key = 'pixotchi:authSurface';
-      const stored = (typeof window !== 'undefined') ? (sessionStorage.getItem(key) as any) : null;
-      if (stored === 'privy' || stored === 'coinbase') setSurface(stored);
+      const stored = sessionStorage.getItem(key) as any;
+      if (stored === 'privy' || stored === 'coinbase') return stored;
     } catch {}
-  }, []);
+    return null;
+  });
   
   // Farcaster splash-screen: call ready() once UI is stable
-  const readyCalledRef = (typeof window !== 'undefined') ? (window as any).__pixotchi_ready_called_ref ?? ((window as any).__pixotchi_ready_called_ref = { current: false }) : { current: false };
+  const readyCalledRef = useRef(false);
   useEffect(() => {
     (async () => {
       if (readyCalledRef.current) return;
@@ -152,9 +159,11 @@ export default function App() {
 
         await sdk.actions.ready();
         readyCalledRef.current = true;
-      } catch {}
+      } catch (error) {
+        console.warn('Failed to call sdk.actions.ready():', error);
+      }
     })();
-  }, [isConnected, checkingValidation, userValidated, readyCalledRef]);
+  }, [isConnected, checkingValidation, userValidated]);
 
   // Back navigation control: enable web navigation integration inside Mini App
   useEffect(() => {
@@ -225,11 +234,8 @@ export default function App() {
     }
   }, [isConnected]);
 
-  // Refresh balances whenever the user switches tabs
-  useEffect(() => {
-    if (!isConnected) return;
-    try { (window as any).__pixotchi_refresh_balances__?.(); } catch {}
-  }, [activeTab, isConnected]);
+  // Balance refreshes after transactions are handled via events in balance-context.tsx
+  // No need to refresh on every tab change - balances are already in context
 
   const handleSkipInvite = () => {
     // For development - allow skipping invite system
@@ -363,7 +369,6 @@ export default function App() {
       } ${
         isKeyboardNavigation ? 'keyboard-navigation' : ''
       }`}
-      role="application"
       aria-label="Pixotchi Mini Game"
       style={{
         // Dynamic viewport height for mobile
@@ -439,7 +444,9 @@ export default function App() {
                         alt="Pixotchi Mini Logo"
                         width={80}
                         height={80}
-                        loading="lazy"
+                        priority
+                        fetchPriority="high"
+                        sizes="(max-width: 768px) 40vw, 80px"
                         decoding="async"
                     />
                     <h1 className="text-2xl font-pixel text-foreground">

@@ -24,6 +24,7 @@ import { LoadingProvider } from "@/lib/loading-context";
 import { applyTheme } from "@/lib/theme-utils";
 import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
+import ErrorBoundary from "@/components/ui/error-boundary";
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
@@ -179,13 +180,16 @@ export function Providers(props: { children: ReactNode }) {
   }
 
   return (
-    <ServerThemeProvider
-      defaultTheme="light"
-      storageKey="pixotchi-theme"
-      themes={["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"]}
-    >
-      <ThemeInitializer />
-      <PaymasterProvider>
+    <ErrorBoundary variant="card" onError={(error) => {
+      console.error('[Providers] Critical error in provider initialization:', error);
+    }}>
+      <ServerThemeProvider
+        defaultTheme="light"
+        storageKey="pixotchi-theme"
+        themes={["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"]}
+      >
+        <ThemeInitializer />
+        <PaymasterProvider>
         <PrivyProvider
           appId={privyAppId}
           config={{
@@ -274,5 +278,6 @@ export function Providers(props: { children: ReactNode }) {
         </PrivyProvider>
       </PaymasterProvider>
     </ServerThemeProvider>
+    </ErrorBoundary>
   );
 }

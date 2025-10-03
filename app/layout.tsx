@@ -161,6 +161,24 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Prevent theme flash (FOUC) by applying theme before first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const theme = localStorage.getItem('pixotchi-theme') || 'light';
+                  const validThemes = ['light', 'dark', 'green', 'yellow', 'red', 'pink', 'blue', 'violet'];
+                  if (validThemes.includes(theme)) {
+                    document.documentElement.className = theme;
+                  }
+                } catch (e) {
+                  console.warn('Theme initialization failed:', e);
+                }
+              })();
+            `,
+          }}
+        />
         {/* Structured Data */}
         <script
           type="application/ld+json"
@@ -204,14 +222,13 @@ export default function RootLayout({
         />
         <link
           rel="preload"
-          href="/PixotchiKit/pixelmix.ttf"
+          href="/fonts/pixelmix.woff2"
           as="font"
-          type="font/ttf"
+          type="font/woff2"
           crossOrigin="anonymous"
         />
         {/* Preload above-the-fold art to reduce first paint */}
         <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
-        <link rel="preload" as="image" href="/og-image.png" />
       </head>
       <body className="bg-background">
         <Providers>{children}</Providers>

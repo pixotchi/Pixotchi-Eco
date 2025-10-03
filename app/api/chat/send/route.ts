@@ -75,10 +75,12 @@ export async function POST(request: NextRequest) {
     console.log('📝 Updating rate limit...');
     try {
       const updatePromise = updateRateLimit(address);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Rate limit update timeout')), 3000)
-      );
+      let timeoutId: NodeJS.Timeout;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Rate limit update timeout')), 3000);
+      });
       await Promise.race([updatePromise, timeoutPromise]);
+      clearTimeout(timeoutId!);
       console.log('✅ Rate limit updated');
     } catch (error) {
       console.warn('⚠️ Rate limit update failed (non-critical):', error);

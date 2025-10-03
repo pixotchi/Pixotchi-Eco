@@ -50,9 +50,10 @@
 @layer base {
   @font-face {
     font-family: "pixelmix";
-    src: url("/PixotchiKit/pixelmix.ttf") format("truetype");
+    src: url("/fonts/pixelmix.woff2") format("woff2");
     font-weight: normal;
     font-style: normal;
+    font-display: swap;
   }
 
   /* Coinbase Sans Font Family */

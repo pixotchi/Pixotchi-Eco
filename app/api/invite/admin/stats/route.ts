@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis, redisScanKeys } from '@/lib/redis';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
-import { validateAdminKey, logAdminAction, createErrorResponse } from '@/lib/auth-utils';
+import { validateAdminKey, logAdminAction, createErrorResponse, checkAdminRateLimit, trackAdminFailedAttempt } from '@/lib/auth-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,9 +11,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
+    // Get IP for rate limiting
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+
+    // Check rate limit before validating key
+    const rateLimitOk = await checkAdminRateLimit(ip);
+    if (!rateLimitOk) {
+      await logAdminAction('admin_stats_ratelimited', 'unknown', { ip }, false);
+      const error = createErrorResponse('Too many authentication attempts. Please try again in 15 minutes.', 429, 'RATE_LIMITED');
+      return NextResponse.json(error.body, { status: error.status });
+    }
+
     // Validate admin authentication using headers
     if (!validateAdminKey(request)) {
-      await logAdminAction('admin_stats_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
+      await trackAdminFailedAttempt(ip);
+      await logAdminAction('admin_stats_failed', 'invalid_key', { reason: 'invalid_admin_key', ip }, false);
       const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
       return NextResponse.json(error.body, { status: error.status });
     }
