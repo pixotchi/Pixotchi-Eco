@@ -2,22 +2,11 @@
 
 import { createContext, useContext, ReactNode, useState, useEffect } from "react";
 import { useAccount, usePublicClient } from "wagmi";
-import { isWalletACoinbaseSmartWallet } from '@coinbase/onchainkit/wallet';
-
-export interface WalletCapabilities {
-  [chainId: string]: {
-    auxiliaryFunds?: { supported: boolean };
-    atomic?: { supported: string };
-    paymasterService?: { supported: boolean };
-    flowControl?: { supported: boolean };
-    datacallback?: { supported: boolean };
-  };
-}
 
 export interface SmartWalletDetection {
   isSmartWallet: boolean;
   walletType: 'coinbase-smart' | 'other-smart' | 'eoa' | 'unknown';
-  capabilities: WalletCapabilities | null;
+  capabilities: null;
   detectionMethods: string[];
   isContract: boolean;
   isLoading: boolean;
@@ -54,51 +43,6 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
       console.warn('Contract address check failed:', error);
       return false;
     }
-  };
-
-  // Check EIP-5792 wallet capabilities
-  const getWalletCapabilities = async (addr: string): Promise<WalletCapabilities | null> => {
-    if (typeof window === 'undefined' || !(window as any).ethereum?.request) return null;
-
-    try {
-      const provider = (window as any).ethereum as {
-        request: (args: { method: string; params?: unknown[] }) => Promise<any>;
-      };
-      const capabilities = await provider.request({
-        method: 'wallet_getCapabilities',
-        params: [addr],
-      });
-      return capabilities as WalletCapabilities;
-    } catch (error) {
-      console.log('EIP-5792 capabilities check failed:', error);
-      return null;
-    }
-  };
-
-  // Check if capabilities indicate smart wallet features
-  const hasSmartCapabilities = (capabilities: WalletCapabilities | null): boolean => {
-    if (!capabilities) return false;
-    
-    // Check Base mainnet capabilities (0x2105)
-    const baseCapabilities = capabilities["0x2105"] || {};
-    
-    return !!(
-      baseCapabilities.auxiliaryFunds?.supported ||
-      baseCapabilities.paymasterService?.supported ||
-      baseCapabilities.atomic?.supported === "supported" ||
-      baseCapabilities.flowControl?.supported ||
-      baseCapabilities.datacallback?.supported
-    );
-  };
-
-  // Check for Coinbase Wallet indicators (basic)
-  const isCoinbaseWalletClient = (): boolean => {
-    const userAgent = navigator.userAgent;
-    return !!(
-      userAgent.includes('CoinbaseWallet') || 
-      (window as any).coinbaseWalletExtension ||
-      (window as any).ethereum?.isCoinbaseWallet
-    );
   };
 
   // Comprehensive smart wallet detection
@@ -141,45 +85,9 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
         // console.log('❌ Method 1: Address is not a contract (EOA)');
       }
 
-      // Method 2: Coinbase Smart Wallet validation (TEMPORARILY DISABLED)
-      // This method was causing false positives for EOAs
-      // console.log('🔍 Method 2: OnchainKit Coinbase validation (DISABLED)');
-      // console.log('⚠️ Method 2: Temporarily disabled due to false positives with EOAs');
-      // console.log('💡 Method 2: Only contract address check and EIP-5792 capabilities are used');
-
-      // Method 3: EIP-5792 capabilities (feature-based)
-      // console.log('🔍 Method 3: Checking EIP-5792 capabilities...');
-      const capabilities = await getWalletCapabilities(address);
-      results.capabilities = capabilities;
-      
-      if (hasSmartCapabilities(capabilities)) {
-        results.isSmartWallet = true;
-        results.detectionMethods.push('eip-5792-capabilities');
-        
-        if (results.walletType === 'eoa') {
-          results.walletType = 'other-smart';
-        }
-        // console.log('✅ Method 3: Smart wallet capabilities detected');
-      } else {
-        // console.log('❌ Method 3: No smart wallet capabilities');
-      }
-
-      // Method 4: Coinbase wallet client detection (informational only)
-      // console.log('🔍 Method 4: Checking Coinbase wallet client indicators...');
-      const isCoinbaseClient = isCoinbaseWalletClient();
-      
-      if (isCoinbaseClient) {
-        // Only add to detection methods for tracking, don't change smart wallet status
-        results.detectionMethods.push('coinbase-client-detected');
-        // console.log('✅ Method 4: Coinbase client detected (informational only)');
-        
-        // If already detected as smart wallet, refine the type
-        if (results.isSmartWallet && results.walletType === 'other-smart') {
-          results.walletType = 'coinbase-smart';
-          // console.log('📝 Method 4: Refined wallet type to coinbase-smart');
-        }
-      } else {
-        // console.log('❌ Method 4: Not a Coinbase client');
+      // Simplified: Only use contract code to determine smart wallet
+      if (results.isSmartWallet) {
+        results.walletType = 'other-smart';
       }
 
 
@@ -230,7 +138,14 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     }
 
     const runDetection = async () => {
-      setDetection(prev => ({ ...prev, isLoading: true }));
+      // Skip if recently checked (within last 30 seconds)
+      setDetection(prev => {
+        if (prev.lastChecked && Date.now() - prev.lastChecked < 30000) {
+          return prev; // Skip re-detection
+        }
+        return { ...prev, isLoading: true };
+      });
+      
       const result = await detectSmartWallet();
       setDetection({ ...result, isLoading: false });
     };
@@ -238,7 +153,7 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     // Small delay to ensure wallet is fully connected
     const timer = setTimeout(runDetection, 500);
     return () => clearTimeout(timer);
-  }, [address, isConnected, publicClient]);
+  }, [address, isConnected]); // Removed publicClient from deps to prevent unnecessary re-runs
 
   // Manual refetch function
   const refetch = async () => {

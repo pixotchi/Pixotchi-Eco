@@ -1,9 +1,26 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { INVITE_CONFIG } from '@/lib/invite-utils';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   // Get the pathname of the request
   const pathname = request.nextUrl.pathname;
+  
+  // Server-side invite validation for protected routes (excluding API and auth routes)
+  if (INVITE_CONFIG.SYSTEM_ENABLED && !pathname.startsWith('/api/') && !pathname.startsWith('/_next') && pathname === '/') {
+    try {
+      // Check if user has valid invite validation in localStorage (via client-side check)
+      // For server-side validation, we'd need to check cookies or implement session-based auth
+      // For now, we log attempts and rely on client-side enforcement + contract-level checks
+      // A more robust solution would require session cookies or JWT tokens
+      
+      // Note: True server-side validation requires authentication state in cookies/headers
+      // The current architecture relies on blockchain transactions as final validation
+      console.log('[Middleware] Invite system active - client-side enforcement in place');
+    } catch (error) {
+      console.warn('[Middleware] Invite validation check failed:', error);
+    }
+  }
   
   // Create response
   const response = NextResponse.next();

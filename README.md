@@ -1,6 +1,6 @@
-## Pixotchi Ecosystem App (Mini app compatible)
+## Pixotchi Ecosystem App
 
-Pixotchi app is a lightweight, production‑ready Farcaster Mini App and web app on Base. It streamlines onboarding, minting, and managing onchain plants and lands, with smart wallet support, agent actions via Coinbase CDP Spend Permissions, robust chat, and reliability features.
+Production-ready, Farcaster client compatible and web application deployed on Base Network. Provides onchain asset management for NFT-based plants and lands with smart wallet support, autonomous agent actions via Coinbase CDP Spend Permissions, real-time chat infrastructure, and comprehensive reliability features.
 
 <!-- Badges -->
 
@@ -12,20 +12,20 @@ Pixotchi app is a lightweight, production‑ready Farcaster Mini App and web app
 [![Farcaster MiniApp](https://img.shields.io/badge/Farcaster-MiniApp-6f3aff?style=flat-square)](https://www.farcaster.xyz/)
 [![Base Network](https://img.shields.io/badge/Base-Mainnet-0052FF?logo=coinbase&logoColor=white&style=flat-square)](https://www.base.org/)
 
-### Highlights
-- **Dual‑mode**: Runs as a Farcaster Mini App and as a standard web app.
-- **Agent Mode (new)**: Coinbase CDP Smart Account uses Spend Permissions to mint on users’ behalf, with validation and UX built‑in.
-- **Base‑native**: Viem for reads/writes; swap helper via Uniswap V2‑style router.
-- **Rich UI/UX**: React 19 + Next.js 15 + Tailwind + Radix + custom components; tutorial, themes, accessibility.
-- **Wallet/Auth**: Privy (embedded + EOA), Wagmi, OnchainKit MiniKit, smart wallet detection, optional paymaster.
-- **Gamification (new)**: Daily missions, streaks, leaderboards, and admin reset tools.
-- **Chat**: Public chat (anti‑spam) + AI assistant + Agent chat (ZEST mint flow), with admin moderation.
-- **Reliability & Security**: Multi‑endpoint RPC, CSP, CORS, rate limits, audit logs.
-- **Notifications**: Farcaster Mini App notifications for key events (e.g., mint success, plant care alerts) with Neynar delivery and admin tracking.
+## Architecture Overview
+- **Platform**: Dual-deployment architecture supporting Farcaster Mini App and standalone web application.
+- **Agent System**: Coinbase CDP Smart Account implementation with Spend Permissions for delegated transaction execution and comprehensive permission validation.
+- **Blockchain Integration**: Viem-based transaction layer with Uniswap V2-compatible swap routing on Base Network.
+- **Frontend Stack**: React 19 with Next.js 15 App Router, Tailwind CSS 4, Radix UI primitives, WCAG 2.1 accessibility compliance.
+- **Authentication**: Multi-provider wallet support (Privy embedded wallets, EOA, Farcaster embedded), Wagmi hooks, OnchainKit MiniKit integration, ERC-4337 smart wallet detection, optional paymaster sponsorship.
+- **Gamification Engine**: Daily mission tracking, streak persistence, monthly leaderboard aggregation with admin reset capabilities.
+- **Communication Infrastructure**: Redis-backed public chat with rate limiting and spam detection, OpenAI-powered AI assistant, Agent mode with tool-calling capabilities, administrative moderation interface.
+- **Security Architecture**: Multi-endpoint RPC failover, Content Security Policy enforcement, CORS with origin validation, IP-based rate limiting with timing-attack mitigation, structured audit logging.
+- **Notification System**: Farcaster Mini App push notifications via Neynar v2 API for transaction confirmations and time-sensitive alerts.
 
 ## Tech Stack
 - **Framework**: Next.js 15, React 19, TypeScript
-- **UI**: Tailwind CSS 4, Radix UI, Lucide icons
+- **UI**: Tailwind CSS 4, Radix UI, Lucide and custom icons
 - **Web3**: Viem, Wagmi, Coinbase OnchainKit, Coinbase CDP SDK
 - **AI**: Vercel AI SDK, `@ai-sdk/openai` (OpenAI), optional Anthropic/Claude
 - **Data**: Redis/KV (Upstash compatible) for invites, chat, usage, audit logs
@@ -44,170 +44,195 @@ Key directories and files:
 - `public/`: Static assets (icons, fonts, ABIs, images)
 - `middleware.ts`: Global CORS, CSP, and security headers
 
-## Features
-### Onchain interactions (Base)
-- Resilient Viem transports with multi‑RPC fallback and exponential backoff.
-- Addresses and helpers in `lib/contracts.ts`:
-  - `PIXOTCHI_NFT_ADDRESS`, `PIXOTCHI_TOKEN_ADDRESS` (SEED), `LEAF`, `STAKE`, `UNISWAP_ROUTER_ADDRESS`
-- Helpers for: minting, approvals, staking, shop/garden items, lands/buildings, swaps, activity.
+## Core Features
+### Blockchain Transaction Layer
+- Resilient Viem transport configuration with multi-endpoint RPC fallback and exponential backoff retry logic.
+- Contract interface abstractions in `lib/contracts.ts`:
+  - `PIXOTCHI_NFT_ADDRESS` (ERC-721), `PIXOTCHI_TOKEN_ADDRESS` (SEED ERC-20), `LEAF` (ERC-20), `STAKE` (staking contract), `UNISWAP_ROUTER_ADDRESS` (AMM integration)
+- Transaction helpers: NFT minting, token approvals, staking operations, marketplace item purchases, land/building management, token swaps, activity logging.
 
-### Agent Mode (Spend Permissions)
-- Coinbase CDP Smart Account acts on behalf of users with Spend Permissions.
-- Primary flow: Agent can mint the ZEST strain (id 4) at 10 SEED per plant (max 5 per call).
-- Endpoints under `/api/agent/*`:
-  - Wallet bootstrap: `GET|POST /api/agent/wallet`
-  - Config: `GET /api/agent/config`, `GET /api/agent/config/suggest-allowance`
-  - Permissions: `GET /api/agent/permission/summary?address=0x..`, `POST /api/agent/permission/validate`
-  - Mint: `POST /api/agent/mint` (approve + mint + transfer)
-  - Agent chat: `POST /api/agent/chat` (tool‑calling with estimate/confirm steps)
-  - Conversation test: `POST /api/agent/test-conversation`
-- Client UI: `components/chat/AgentPermissionsPanel.tsx` to view/grant allowances and spender.
+### Autonomous Agent System (CDP Spend Permissions)
+- Coinbase CDP Smart Account with ERC-7715 Spend Permission delegation for autonomous transaction execution.
+- Supported operations: ZEST strain minting (strain ID 4, 10 SEED per NFT, maximum 5 NFTs per transaction).
+- API surface `/api/agent/*`:
+  - `GET|POST /api/agent/wallet` – Smart Account initialization and wallet bootstrap
+  - `GET /api/agent/config` – Agent configuration and operational parameters
+  - `GET /api/agent/config/suggest-allowance` – Permission allowance calculation
+  - `GET /api/agent/permission/summary?address=0x..` – Permission enumeration and status
+  - `POST /api/agent/permission/validate` – Pre-execution permission validation
+  - `POST /api/agent/mint` – Atomic approve-mint-transfer transaction sequence
+  - `POST /api/agent/chat` – LLM-driven tool-calling interface with estimation and confirmation flow
+  - `POST /api/agent/test-conversation` – Integration testing endpoint
+- Client implementation: `components/chat/AgentPermissionsPanel.tsx` for permission management interface.
 
-### Invite system
-- Generate/validate/use codes with daily caps, expiration, self‑invite guard, and user validation.
-- Admin dashboard to list/stats/generate/cleanup, with audit logs.
+### Access Control System
+- Invite code generation and validation with daily issuance caps, expiration enforcement, self-invite prevention, and user validation pipeline.
+- Administrative interface for code lifecycle management, statistical analysis, bulk generation, cleanup operations, and audit trail persistence.
 
-### Chat (public)
-- Redis‑backed storage, per‑address rate limits, duplicate detection.
-- Admin moderation: list, delete (single/all), and usage stats.
+### Public Chat Infrastructure
+- Redis-backed message persistence with per-address rate limiting and duplicate message detection.
+- Administrative moderation dashboard with message listing, selective/bulk deletion, and usage analytics.
 
-### AI chat
-- Provider‑switchable via env; validated model list; retry + timeouts; usage and cost tracking.
-- Conversations with history and titles; admin: list, fetch messages, delete; usage metrics.
+### AI Assistant
+- Multi-provider architecture (OpenAI/Anthropic) with runtime model selection, automatic retry with exponential backoff, request timeout enforcement, and usage/cost tracking.
+- Conversation management with persistent history, automatic title generation, administrative list/fetch/delete operations, and aggregated usage metrics.
 
-### Gamification (new)
-- Daily missions and streak tracking with points; monthly leaderboards.
-- Admin reset endpoints for streaks/missions/all; dashboard tab shows leaders.
+### Gamification System
+- Daily mission completion tracking with point attribution, consecutive day streak persistence, and monthly leaderboard aggregation.
+- Administrative reset endpoints with granular scope (streaks/missions/all) and real-time leaderboard visualization dashboard.
 
-### Staking, Marketplace, Buildings
-- SEED staking (approve/stake/claim), marketplace dialog (create/take orders with quotes),
-  and land buildings (upgrade with LEAF, speed‑up with SEED, production claims, quests).
+### DeFi Features
+- SEED token staking with approve-stake-claim workflow, marketplace order creation and fulfillment with dynamic price quotes, land building upgrades (LEAF cost), production acceleration (SEED cost), yield claiming, and quest progression.
 
-### Farcaster Mini App integration
-- Manifest exposes rich metadata and embed allowlist; `fc:miniapp` and legacy `fc:frame` metadata are set in `app/layout.tsx`.
-- Notifications: `/api/notify` sends per‑user Mini App notifications; webhook `/api/webhook` saves/removes tokens. Delivery is Neynar‑managed via the manifest `webhookUrl` and uses Neynar v2 publish APIs.
+### Farcaster Platform Integration
+- Manifest at `/.well-known/farcaster.json` with metadata, embed URL allowlist, and webhook configuration. OpenGraph and `fc:miniapp`/`fc:frame` metadata in `app/layout.tsx`.
+- Push notification delivery via `/api/notify` endpoint; token lifecycle management via `/api/webhook` with signature verification (Farcaster JSON signatures and HMAC fallback). Delivery orchestrated through Neynar v2 API.
 
-## Reliability & Security
-### RPC strategy
-- Central `lib/env-config.ts#getRpcConfig()` builds a resilient fallback transport across multiple RPCs.
+## Security & Reliability
+### RPC Resilience
+- Centralized RPC configuration in `lib/env-config.ts#getRpcConfig()` with multi-endpoint fallback transport, automatic endpoint rotation, and exponential backoff on failures.
 
-### Rate limiting and spam control
-- Public + AI chat rate‑limited; duplicate detection; admin cleanups.
+### Rate Limiting & Abuse Prevention
+- Per-address rate limiting on public and AI chat endpoints with Redis-backed token buckets and duplicate message detection.
+- Administrative endpoint protection: IP-based rate limiting (10 attempts per 15-minute window) with constant-time comparison (`crypto.timingSafeEqual`) to prevent timing attacks.
 
-### CORS & CSP
-- `middleware.ts` sets dynamic CORS for public APIs, strict admin origin allowlist, global OPTIONS handler.
-- CSP permits required hosts for scripts/styles/connect/frames; additional security headers included.
+### CORS & Content Security Policy
+- Dynamic CORS configuration in `middleware.ts` with origin-specific policies for public APIs and strict admin endpoint allowlist. Global OPTIONS handler for preflight requests.
+- Content Security Policy with explicit host allowlisting for scripts, styles, connect sources, and frame ancestors. Additional security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy.
 
-### Data durability & observability
-- Redis helpers with JSON safety and key prefixing; non‑blocking connectivity check.
-- Structured logger; admin audit logs with TTL and rolling history.
- - Admin Notifications dashboard summarizes send history, recent batches, eligible users, and last cron runs.
- - Backend cron uses public Base RPC for reads to isolate from app RPCs.
+### Data Layer & Observability
+- Redis client with JSON serialization safety, key namespace prefixing, and non-blocking connectivity validation.
+- Structured logging infrastructure with request correlation IDs, administrative audit logs with Time-To-Live expiration, and rolling history retention.
+- Notification dashboard aggregates delivery metrics, batch history, eligible user counts, and scheduled cron execution timestamps.
+- Backend scheduled tasks use dedicated public Base RPC endpoints to isolate from application RPC pools.
 
 ## APIs
 All routes are under `/api/*`.
 
 ### Invite
-- `POST /api/invite/generate` – generate code
-- `POST /api/invite/validate` – validate code
-- `POST /api/invite/use` – consume code and mark user validated
-- `GET|POST /api/invite/stats` – user stats
-- `POST /api/invite/user-codes` – list codes created by a user
+- `POST /api/invite/generate` – Generate invite code with expiration and usage limits
+- `POST /api/invite/validate` – Validate invite code without consumption
+- `POST /api/invite/use` – Consume invite code and mark user as validated
+- `GET|POST /api/invite/stats` – Retrieve user statistics and invite history
+- `POST /api/invite/user-codes` – List invite codes created by specific user
 - Admin (Bearer `ADMIN_INVITE_KEY`, allowed origin):
-  - `GET /api/invite/admin/stats`
-  - `GET /api/invite/admin/list`
-  - `POST /api/invite/admin/generate`
-  - `POST /api/invite/admin/cleanup`
+  - `GET /api/invite/admin/stats` – Global invite system statistics
+  - `GET /api/invite/admin/list` – List all invite codes with filters
+  - `POST /api/invite/admin/generate` – Administrative bulk code generation
+  - `POST /api/invite/admin/cleanup` – Cleanup expired or invalid codes
 
-### Chat (public)
-- `GET /api/chat/messages?limit=50`
-- `POST /api/chat/send`
-- Admin: `GET /api/chat/admin/messages`, `DELETE /api/chat/admin/delete`
+### Chat (Public)
+- `GET /api/chat/messages?limit=50` – Retrieve recent public chat messages
+- `POST /api/chat/send` – Send message to public chat with rate limiting
+- Admin:
+  - `GET /api/chat/admin/messages` – List all messages with metadata
+  - `DELETE /api/chat/admin/delete` – Delete specific or all messages
 
-### AI chat
-- `GET /api/chat/ai/messages?address=0x..[&conversationId=..][&limit=50]`
-- `POST /api/chat/ai/send`
-- Admin: `GET /api/chat/ai/admin/conversations?includeStats=true`,
-  `GET /api/chat/ai/admin/messages?conversationId=..[&limit=100]`,
-  `DELETE /api/chat/ai/admin/conversations?conversationId=..`
+### AI Chat
+- `GET /api/chat/ai/messages?address=0x..[&conversationId=..][&limit=50]` – Retrieve conversation messages for address
+- `POST /api/chat/ai/send` – Send message to AI assistant with context
+- Admin:
+  - `GET /api/chat/ai/admin/conversations?includeStats=true` – List all conversations with usage statistics
+  - `GET /api/chat/ai/admin/messages?conversationId=..[&limit=100]` – Retrieve messages from specific conversation
+  - `DELETE /api/chat/ai/admin/conversations?conversationId=..` – Delete conversation and associated messages
 
 ### Agent (Spend Permissions)
-- `GET|POST /api/agent/wallet` – ensure agent SA exists
-- `GET /api/agent/config` – agent flags + defaults
-- `GET /api/agent/config/suggest-allowance?mintsPerDay=10&strainId=4`
-- `GET /api/agent/permission/summary?address=0x..` – list permissions to agent
-- `POST /api/agent/permission/validate` – check allowance/time‑window
-- `POST /api/agent/mint` – approve + mint + transfer
-- `POST /api/agent/chat` – tool‑calling agent (estimate → confirm → execute)
-- `POST /api/agent/test-conversation` – smoke test flow
+- `GET|POST /api/agent/wallet` – Initialize or retrieve agent Smart Account wallet
+- `GET /api/agent/config` – Retrieve agent configuration and operational parameters
+- `GET /api/agent/config/suggest-allowance?mintsPerDay=10&strainId=4` – Calculate suggested allowance for permission grant
+- `GET /api/agent/permission/summary?address=0x..` – Enumerate all permissions granted to agent by address
+- `POST /api/agent/permission/validate` – Validate permission allowance and time window constraints
+- `POST /api/agent/mint` – Execute atomic approve-mint-transfer transaction sequence
+- `POST /api/agent/chat` – LLM-driven conversation interface with tool-calling (estimate, confirm, execute)
+- `POST /api/agent/test-conversation` – End-to-end integration test for agent workflow
 
 ### Gamification
-- `GET /api/gamification/leaderboards`
-- `GET|POST /api/gamification/missions`
-- `GET|POST /api/gamification/streak`
-- Admin: `POST /api/gamification/admin/reset` (scope: `streaks|missions|all`)
+- `GET|POST /api/gamification/missions` – Retrieve or update daily mission progress
+- `GET|POST /api/gamification/streak` – Retrieve or update consecutive day streak
+- Admin (Bearer `ADMIN_INVITE_KEY`, allowed origin):
+  - `GET /api/gamification/leaderboards` – Retrieve monthly leaderboard rankings
+  - `POST /api/gamification/admin/reset` – Reset user data (scope: `streaks|missions|all`)
 
 ### Staking
-- `GET /api/staking/balance?address=0x..`
-- `GET /api/staking/info?address=0x..`
+- `GET /api/staking/balance?address=0x..` – Retrieve staked SEED token balance
+- `GET /api/staking/info?address=0x..` – Retrieve staking position details and rewards
 
 ### Swap
-- `POST /api/swap` with `{ action: 'quote'|'execute', ethAmount, userAddress }`
+- `POST /api/swap` – Execute token swap or retrieve quote (`{ action: 'quote'|'execute', ethAmount, userAddress }`)
 
 ### Notifications & Webhooks
-- `POST /api/notify` – send per‑user notification (mint, custom types), with global/type metrics
-- `POST /api/webhook` – Farcaster Mini App events (token add/remove) with signature verification (MiniApp JSON signature; HMAC fallback)
-- `GET|POST /api/notifications/cron/plant-care` – checks wallets for plants under 1h and sends batched alerts (QStash/Vercel cron hits this)
-- Admin: `GET /api/admin/notifications` (stats), `DELETE /api/admin/notifications/reset?scope=all|fid|plant[&fid=..][&plantId=..]`
+- `POST /api/notify` – Send per-user Farcaster Mini App notification with type-specific metrics
+- `POST /api/webhook` – Process Farcaster Mini App webhook events (token add/remove) with signature verification
+- `GET|POST /api/notifications/cron/plant-care` – Scheduled task to check plant health and send batch alerts (invoked by QStash/Vercel Cron)
+- Admin:
+  - `GET /api/admin/notifications` – Retrieve notification delivery statistics
+  - `DELETE /api/admin/notifications/reset?scope=all|fid|plant[&fid=..][&plantId=..]` – Reset notification tracking data
 
 ### Farcaster Manifest
-- `GET /.well-known/farcaster.json`
+- `GET /.well-known/farcaster.json` – Serve Farcaster Mini App manifest (metadata, icons, webhooks)
 
 ## Environment Configuration
 Centralized in `lib/env-config.ts` and specific routes.
 
 
-## Development
-Prerequisites: Node.js 18+, npm/pnpm, and a Redis provider for full functionality.
+## Development Setup
+**Prerequisites**: Node.js 18+, npm or pnpm, Redis-compatible database (Upstash recommended).
 
-1) Install dependencies
-2) Create `.env.local` (minimal: Base RPCs + Redis + ADMIN_INVITE_KEY). Add CDP + Privy keys to enable Agent Mode and embedded wallets.
-3) Start the dev server
-
+### Installation
 ```bash
-npm run dev   # start Next.js dev server
-npm run build # production build
-npm run start # start production build
-npm run lint  # eslint
+npm install
+```
+
+### Environment Configuration
+Create `.env.local` with required variables:
+- Base Network RPC endpoints
+- Redis connection URL
+- `ADMIN_INVITE_KEY` for administrative access
+- Optional: CDP credentials (`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`) for Agent Mode
+- Optional: Privy credentials for embedded wallet support
+
+### Available Commands
+```bash
+npm run dev    # Start Next.js development server with hot reload
+npm run build  # Generate production build with optimization
+npm run start  # Start production server (requires build)
+npm run lint   # Run ESLint static analysis
 ```
 
 ## Admin Dashboard
 - Path: `/admin/invite`
-- Auth: Bearer key (`ADMIN_INVITE_KEY`) entered in the UI
-- Tabs: Overview, Codes, Users, Chat moderation, AI Chat moderation, Cleanup, Gamification (leaderboards + resets)
+- Auth: Bearer key (`ADMIN_INVITE_KEY`) with constant-time comparison, IP-based rate limiting (10 attempts/15min)
+- Tabs: Overview, Codes, Users, Chat moderation, AI Chat moderation, Cleanup, Gamification (leaderboards + resets), RPC Status, Notifications
+- Architecture: Request cancellation via AbortController, fail-closed rate limiting on Redis unavailability, structured error handling with detailed logging
 
-## Agent Quickstart
-1) Set `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` (server) and optionally `NEXT_PUBLIC_CDP_CLIENT_API_KEY` (client visuals).
-2) Start the app, open Chat → Agent mode. Use the Spend Permission panel to grant allowance to the agent’s Smart Account for SEED.
-3) Ask the agent to “mint 1 ZEST” → it gives an estimate (10 SEED) → confirm → it executes via `/api/agent/mint` and transfers to your wallet.
-4) Troubleshoot with:
-   - `GET /api/agent/permission/summary?address=0x..`
-   - `POST /api/agent/permission/validate`
-   - `POST /api/agent/test-conversation`
+## Agent Mode Integration
+### Configuration
+1. Configure environment variables:
+   - Server-side: `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`
+   - Client-side (optional): `NEXT_PUBLIC_CDP_CLIENT_API_KEY` for UI integration
+2. Start application and navigate to Chat interface, enable Agent mode.
+3. Grant Spend Permission through the permission management panel, authorizing the agent's Smart Account to spend SEED tokens.
+
+### Operation
+4. Initiate minting request through natural language interface (e.g., "mint 1 ZEST").
+5. System provides cost estimation (10 SEED per NFT).
+6. Upon user confirmation, agent executes transaction sequence via `/api/agent/mint` endpoint and transfers NFT to user wallet.
+
+### Diagnostics
+Troubleshooting endpoints:
+- `GET /api/agent/permission/summary?address=0x..` – Permission status verification
+- `POST /api/agent/permission/validate` – Pre-execution validation
+- `POST /api/agent/test-conversation` – End-to-end integration test
 
 ## Configuration Notes
 - Strict CSP/security headers live in `middleware.ts`. If embedding new iframes/RPC domains, update CSP and CORS accordingly.
 - Prefer private Base RPCs with multiple endpoints for automatic failover.
 - If using the paymaster, ensure `NEXT_PUBLIC_CDP_*` are set; the app runs without it if omitted.
 
-## Known Limitations
-- Agent Mode currently supports minting the ZEST strain only (id 4, 10 SEED each, up to 5 at once).
-- Destructive admin operations (e.g., “delete everything”) are gated by confirmations but should only be used in secure environments.
-- Public API uses dynamic CORS with origin echo; rate limits and server‑side validation still apply.
- - Automatic plant‑care alerts require an external scheduler (e.g., QStash or Vercel Cron) calling `/api/notifications/cron/plant-care`.
+
 
 ## License
-Licensed under the MIT License. See the `LICENSE` file at the project root for details.
+Licensed under the MIT License. See the `LICENSE` file at the project root for complete terms and conditions.
 
 ---
 

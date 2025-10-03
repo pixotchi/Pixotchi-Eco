@@ -129,6 +129,36 @@ export async function redisKeys(pattern: string): Promise<string[]> {
   }
 }
 
+// Safer alternative to KEYS: iterate with SCAN to avoid blocking Redis on large datasets
+export async function redisScanKeys(pattern: string, count: number = 1000): Promise<string[]> {
+  if (!redis) return [];
+  try {
+    const pat = pattern.startsWith(KEY_PREFIX) ? pattern : withPrefix(pattern);
+    let cursor = 0;
+    const results: string[] = [];
+    // Upstash scan returns [nextCursor, keys]
+    do {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resp: any = await (redis as any).scan(cursor, { match: pat, count });
+      if (Array.isArray(resp)) {
+        cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
+        const batch: string[] = (resp[1] || []) as string[];
+        results.push(...batch);
+      } else if (resp && typeof resp === 'object' && 'cursor' in resp) {
+        cursor = Number(resp.cursor) || 0;
+        results.push(...((resp.keys || []) as string[]));
+      } else {
+        break;
+      }
+    } while (cursor !== 0);
+    return results;
+  } catch (error) {
+    logger.error('redisScanKeys failed', error, { pattern, count });
+    // Fallback to KEYS (still dangerous, but better than failing silently)
+    return redisKeys(pattern);
+  }
+}
+
 export async function redisIncrBy(key: string, amount: number = 1): Promise<number | null> {
   if (!redis) return null;
   try {

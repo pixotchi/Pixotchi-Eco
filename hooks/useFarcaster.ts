@@ -4,15 +4,18 @@ import { useFrameContext } from '@/lib/frame-context';
 import { sdk } from '@farcaster/miniapp-sdk';
 
 export function useFarcaster() {
-  const { setFrameReady, isFrameReady } = useMiniKit();
+  const miniKit = useMiniKit();
+  // OCK v1.1+: isMiniAppReady/setMiniAppReady (deprecated: isFrameReady/setFrameReady)
+  const isReady = (miniKit as any).isMiniAppReady ?? (miniKit as any).isFrameReady;
+  const setReady = (miniKit as any).setMiniAppReady ?? (miniKit as any).setFrameReady;
   const fc = useFrameContext();
 
   // Initialize SDKs
   useEffect(() => {
     const initializeSDKs = async () => {
-      if (!isFrameReady) {
+      if (!isReady) {
         try {
-          setFrameReady();
+          setReady?.();
           console.log('✅ MiniKit SDK initialized successfully');
         } catch (error) {
           console.warn('⚠️ MiniKit SDK not available or failed:', error);
@@ -21,7 +24,7 @@ export function useFarcaster() {
     };
 
     initializeSDKs();
-  }, [setFrameReady, isFrameReady]);
+  }, [setReady, isReady]);
 
   // Enable web back navigation
   useEffect(() => {

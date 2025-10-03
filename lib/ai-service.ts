@@ -283,17 +283,34 @@ export function validateAIMessage(message: string): string | null {
 // Check AI rate limit for a user
 export async function checkAIRateLimit(address: string): Promise<boolean> {
   if (!redis) {
-    return true; // Allow if Redis is not available
+    console.warn('Redis unavailable - failing closed for rate limit');
+    return false; // Fail closed if Redis is not available
   }
 
-  const rateLimitKey = `ai:ratelimit:${address.toLowerCase()}`;
-  const lastMessage = await redis.get(rateLimitKey);
-  
-  if (!lastMessage) return true;
-  
-  const now = Date.now();
-  const lastMessageTime = parseInt(lastMessage as string);
-  return (now - lastMessageTime) >= (AI_RATE_LIMIT_WINDOW * 1000);
+  try {
+    const rateLimitKey = `ai:ratelimit:${address.toLowerCase()}`;
+    const lastMessage = await redis.get(rateLimitKey);
+    
+    if (!lastMessage) return true;
+    
+    // Validate that lastMessage is a valid timestamp
+    if (typeof lastMessage !== 'string' && typeof lastMessage !== 'number') {
+      console.warn('Invalid rate limit data type');
+      return false;
+    }
+    
+    const now = Date.now();
+    const lastMessageTime = parseInt(String(lastMessage), 10);
+    if (isNaN(lastMessageTime)) {
+      console.warn('Invalid rate limit timestamp');
+      return false;
+    }
+    
+    return (now - lastMessageTime) >= (AI_RATE_LIMIT_WINDOW * 1000);
+  } catch (error) {
+    console.error('Rate limit check failed:', error);
+    return false; // Fail closed on error
+  }
 }
 
 // Update AI rate limit for a user

@@ -80,7 +80,11 @@ export function FrameProvider({ children }: { children: React.ReactNode }) {
           // no-op: rely on CSS env() fallbacks
         }
 
-        if (isMounted) setValue({ context: (context as MiniAppContext) ?? null, isInMiniApp });
+        if (isMounted) {
+          const ctx = (context as MiniAppContext) ?? null;
+          setValue({ context: ctx, isInMiniApp });
+          try { (window as any).__pixotchi_frame_context__ = { context: ctx, isInMiniApp }; } catch {}
+        }
       } catch {
         if (isMounted) setValue({ context: { error: 'Failed to initialize' } as any, isInMiniApp: false });
       }

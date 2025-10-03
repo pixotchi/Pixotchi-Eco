@@ -19,7 +19,6 @@ export const WETH_ADDRESS = getAddress('0x42000000000000000000000000000000000000
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
-let gasLimit = BigInt(300000);
 
 // Simple in-memory RPC diagnostics: counts & last error per endpoint
 type RpcDiag = { url: string; ok: number; fail: number; lastError?: string };
@@ -609,6 +608,34 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
   });
 };
 
+// Explicit public-RPC variant (used by notification cron to avoid internal RPC pool)
+export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): Promise<Plant[]> => {
+  const readClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
+  const plants = await readClient.readContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'getPlantsByOwnerExtended',
+    args: [address as `0x${string}`],
+  }) as any[];
+  return plants.map((plant: any) => ({
+    id: Number(plant.id),
+    name: plant.name || '',
+    score: Number(plant.score),
+    status: Number(plant.status),
+    rewards: Number(plant.rewards),
+    level: Number(plant.level),
+    timeUntilStarving: Number(plant.timeUntilStarving),
+    stars: Number(plant.stars),
+    strain: Number(plant.strain),
+    timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
+    lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
+    lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
+    statusStr: plant.statusStr || '',
+    owner: typeof plant.owner === 'string' ? plant.owner.toLowerCase() : String(plant.owner || '').toLowerCase(),
+    extensions: plant.extensions || [],
+  }));
+};
+
 // Get land balance
 export const getLandBalance = async (address: string): Promise<number> => {
   try {
@@ -752,7 +779,6 @@ export const transferPlants = async (
         functionName: 'transferFrom',
         args: [from, to, BigInt(id)],
         account: walletClient.account,
-        gas: gasLimit,
         chain: base,
       });
       const receipt = await writeClient.waitForTransactionReceipt({ hash });
@@ -790,7 +816,6 @@ export const transferLands = async (
         functionName: 'transferFrom',
         args: [from, to, id],
         account: walletClient.account,
-        gas: gasLimit,
         chain: base,
       });
       const receipt = await writeClient.waitForTransactionReceipt({ hash });
@@ -958,7 +983,6 @@ export const approveTokenSpending = async (walletClient: WalletClient): Promise<
       functionName: 'approve',
       args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
       account: walletClient.account!,
-      gas: gasLimit,
       chain: base,
     });
 
@@ -979,7 +1003,6 @@ export const mintPlant = async (walletClient: WalletClient, strain: number): Pro
       functionName: 'mint',
       args: [BigInt(strain)],
       account: walletClient.account!,
-      gas: gasLimit,
       chain: base,
     });
 
@@ -999,7 +1022,6 @@ export const claimPlantRewards = async (walletClient: WalletClient, plantId: num
       functionName: 'redeem',
       args: [BigInt(plantId)],
       account: walletClient.account!,
-      gas: gasLimit,
       chain: base,
     });
     const writeClient = getWriteClient();
@@ -1023,7 +1045,6 @@ export const buyShopItem = async (
       functionName: 'shopBuyItem',
       args: [BigInt(plantId), BigInt(itemId)],
       account: walletClient.account!,
-      gas: gasLimit,
       chain: base,
     });
 
@@ -1099,7 +1120,6 @@ export const buyGardenItem = async (
       functionName: 'buyAccessory',
       args: [BigInt(plantId), BigInt(itemId)],
       account: walletClient.account!,
-      gas: gasLimit,
       chain: base,
     });
 
@@ -1280,7 +1300,6 @@ export const upgradeVillageWithLeaf = async (walletClient: WalletClient, landId:
     functionName: 'villageUpgradeWithLeaf',
     args: [landId, buildingId],
     account: walletClient.account,
-    gas: gasLimit,
     chain: base,
   });
   
@@ -1296,7 +1315,6 @@ export const speedUpVillageWithSeed = async (walletClient: WalletClient, landId:
     functionName: 'villageSpeedUpWithSeed',
     args: [landId, buildingId],
     account: walletClient.account,
-    gas: gasLimit,
     chain: base,
   });
   
@@ -1313,7 +1331,6 @@ export const upgradeTownWithLeaf = async (walletClient: WalletClient, landId: bi
     functionName: 'townUpgradeWithLeaf',
     args: [landId, buildingId],
     account: walletClient.account,
-    gas: gasLimit,
     chain: base,
   });
   
@@ -1329,7 +1346,6 @@ export const speedUpTownWithSeed = async (walletClient: WalletClient, landId: bi
     functionName: 'townSpeedUpWithSeed',
     args: [landId, buildingId],
     account: walletClient.account,
-    gas: gasLimit,
     chain: base,
   });
   
@@ -1346,7 +1362,6 @@ export const claimVillageProduction = async (walletClient: WalletClient, landId:
     functionName: 'villageClaimProduction',
     args: [landId, buildingId],
     account: walletClient.account,
-    gas: gasLimit,
     chain: base,
   });
   
@@ -1457,7 +1472,6 @@ export const routerBatchTransfer = async (
       functionName: 'batchTransfer721Multi',
       args: [tokens as unknown as `0x${string}`[], to, tokenIdsPerToken],
       account: walletClient.account,
-      gas: gasLimit,
       chain: base,
     });
   } else if (hasPlants) {
@@ -1467,7 +1481,6 @@ export const routerBatchTransfer = async (
       functionName: 'batchTransfer721',
       args: [PIXOTCHI_NFT_ADDRESS, to, plantIds.map((id) => BigInt(id))],
       account: walletClient.account,
-      gas: gasLimit,
       chain: base,
     });
   } else if (hasLands) {
@@ -1477,7 +1490,6 @@ export const routerBatchTransfer = async (
       functionName: 'batchTransfer721',
       args: [LAND_CONTRACT_ADDRESS, to, landIds],
       account: walletClient.account,
-      gas: gasLimit,
       chain: base,
     });
   } else {

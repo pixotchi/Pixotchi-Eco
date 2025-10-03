@@ -53,6 +53,7 @@ export const getRpcConfig = () => {
   if (endpoints.length === 0) {
     // Graceful fallback to public Base RPC to avoid runtime crashes if envs are not injected
     console.warn('RPC configuration missing: falling back to public Base RPC');
+    endpoints.push('https://base-rpc.publicnode.com');
     endpoints.push('https://mainnet.base.org');
   }
   
@@ -86,6 +87,9 @@ export const SERVER_ENV = {
   
   // CORS configuration for admin endpoints only
   ALLOWED_ADMIN_ORIGINS: process.env.ALLOWED_ADMIN_ORIGINS,
+  // Neynar integration
+  NEYNAR_API_KEY: process.env.NEYNAR_API_KEY,
+  NEYNAR_APP_ID: process.env.NEYNAR_APP_ID,
 } as const;
 
 // Validation function to ensure sensitive data isn't exposed

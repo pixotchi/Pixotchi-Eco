@@ -25,6 +25,31 @@ export async function getStreak(address: string): Promise<GmStreak> {
   return { current: 0, best: 0, lastActive: '' };
 }
 
+/**
+ * Normalize a streak on read: if the user has missed at least one full UTC day
+ * since lastActive, their current streak should be 0 while preserving best.
+ * This persists the normalized value so subsequent reads are consistent.
+ */
+export async function normalizeStreakIfMissed(address: string, s: GmStreak): Promise<GmStreak> {
+  try {
+    const day = getTodayDateString();
+    if (!s?.lastActive || s.lastActive === day) return s;
+
+    const yesterday = new Date(day);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const ystr = yesterday.toISOString().slice(0, 10);
+
+    const missed = s.lastActive !== ystr; // not yesterday → at least one day gap
+    if (!missed) return s;
+
+    const updated: GmStreak = { current: 0, best: s.best || 0, lastActive: s.lastActive };
+    await redisSetJSON(keys.streak(address), updated);
+    return updated;
+  } catch {
+    return s;
+  }
+}
+
 export async function trackDailyActivity(address: string): Promise<GmStreak> {
   const day = getTodayDateString();
   const k = keys.streak(address);

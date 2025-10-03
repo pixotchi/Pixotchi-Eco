@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '@/lib/utils';
 import { TransactionState, TransactionStatus } from '@/lib/types';
@@ -17,12 +17,21 @@ export function useTransaction<T, P extends any[]>(
   options: UseTransactionOptions<T> = {}
 ) {
   const [state, setState] = useState<TransactionState>({ status: 'idle' });
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const execute = useCallback(async (...params: P) => {
+    if (!mountedRef.current) return;
     setState({ status: 'pending' });
 
     try {
       const result = await transactionFn(...params);
+      if (!mountedRef.current) return;
       setState({ status: 'success' });
       if (options.successMessage) {
         toast.success(options.successMessage);
@@ -32,6 +41,7 @@ export function useTransaction<T, P extends any[]>(
       }
       return result;
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       const error = err instanceof Error ? err : new Error('An unknown error occurred');
       console.error('Transaction failed:', error);
       setState({ status: 'error', error: getFriendlyErrorMessage(error) });
