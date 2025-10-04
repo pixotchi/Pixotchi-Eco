@@ -152,9 +152,9 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       value={String(difficulty[idx] ?? 0)}
                       onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
                       options={[
-                        { value: '0', label: <span>Easy <span className="text-[11px] text-muted-foreground">(3h)</span></span> },
-                        { value: '1', label: <span>Med <span className="text-[11px] text-muted-foreground">(6h)</span></span> },
-                        { value: '2', label: <span>Hard <span className="text-[11px] text-muted-foreground">(12h)</span></span> },
+                        { value: '0', label: <span>Easy <span className="text-xs text-muted-foreground">(3h)</span></span> },
+                        { value: '1', label: <span>Med <span className="text-xs text-muted-foreground">(6h)</span></span> },
+                        { value: '2', label: <span>Hard <span className="text-xs text-muted-foreground">(12h)</span></span> },
                       ]}
                       className="bg-muted/50 border-primary/20"
                       getButtonClassName={(val, selected) => (
@@ -178,7 +178,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
                     <div className="h-2 bg-primary transition-all" style={{ width: `${Math.min(100, progressPct(s)).toFixed(1)}%` }} />
                   </div>
-                  <div className="text-[11px] text-muted-foreground">Ends in ~{formatSeconds(Math.max(0, Math.ceil(blocksLeft(s.endBlock) * 2)))}</div>
+                  <div className="text-xs text-muted-foreground">Ends in ~{formatSeconds(Math.max(0, Math.ceil(blocksLeft(s.endBlock) * 2)))}</div>
                 </div>
               )}
             </div>

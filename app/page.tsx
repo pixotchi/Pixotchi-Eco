@@ -384,8 +384,8 @@ export default function App() {
               <Image
                 src="/PixotchiKit/Logonotext.svg"
                 alt="Pixotchi Mini Logo"
-                width={22}
-                height={22}
+                width={24}
+                height={24}
               />
               <h1 className="text-sm font-pixel text-foreground">
                 {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
@@ -446,8 +446,8 @@ export default function App() {
                         height={80}
                         priority
                         fetchPriority="high"
-                        sizes="(max-width: 768px) 40vw, 80px"
-                        decoding="async"
+                        sizes="80px"
+                        quality={90}
                     />
                     <h1 className="text-2xl font-pixel text-foreground">
                         {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}

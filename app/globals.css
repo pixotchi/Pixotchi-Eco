@@ -124,6 +124,14 @@
     --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
     --safe-area-inset-left: env(safe-area-inset-left, 0px);
     --safe-area-inset-right: env(safe-area-inset-right, 0px);
+    
+    /* Z-index scale for consistent layering */
+    --z-base: 0;
+    --z-dropdown: 1000;
+    --z-sticky: 2000;
+    --z-overlay: 3000;
+    --z-modal: 4000;
+    --z-toast: 5000;
   }
 
   .dark {
@@ -523,7 +531,7 @@
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     position: relative;
-    z-index: 1000;
+    z-index: var(--z-dropdown);
   }
 }
 
@@ -544,7 +552,7 @@
   /* Scoped overlay stacking contexts */
   .ock-transaction-toast,
   .ock-toast-container {
-    z-index: 4000 !important;
+    z-index: var(--z-toast) !important;
     position: relative !important;
   }
   
@@ -553,20 +561,20 @@
   .ock-modal-overlay,
   .ock-popup,
   .ock-wallet-modal {
-    z-index: 4000 !important;
+    z-index: var(--z-modal) !important;
   }
   
   /* React Hot Toast containers */
   .react-hot-toast,
   .__react-hot-toast {
-    z-index: 3900 !important;
+    z-index: var(--z-toast) !important;
   }
   
   /* Radix poppers/dialogs */
   [data-radix-popper-content-wrapper],
   [data-radix-dialog-overlay],
   [data-radix-dialog-content] {
-    z-index: 4000 !important;
+    z-index: var(--z-modal) !important;
   }
  
 

@@ -41,8 +41,14 @@ function BuildingDetailsPanel({
   if (!selectedBuilding) {
     return (
       <Card>
-        <CardContent className="p-6 text-center text-muted-foreground">
-          Select a building to view details and upgrade options
+        <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
+          <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
+            <span className="text-2xl">🏗️</span>
+          </div>
+          <p className="text-base font-semibold text-foreground mb-1">No Building Selected</p>
+          <p className="text-sm text-muted-foreground">
+            Select a building to view details and upgrade options
+          </p>
         </CardContent>
       </Card>
     );

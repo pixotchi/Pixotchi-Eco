@@ -46,8 +46,8 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     return () => clearTimeout(t);
   }, [tasksOpen]);
 
-  const seedText = loading ? <Skeleton className="h-5 w-16" /> : formatTokenShort(seed);
-  const leafText = loading ? <Skeleton className="h-5 w-16" /> : formatTokenShort(leaf);
+  const seedText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(seed);
+  const leafText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(leaf);
   // ETH balance display removed to prioritize SEED and LEAF
 
   return (
@@ -67,7 +67,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
           <button
             type="button"
             onClick={() => setTasksOpen(true)}
-            className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 btn-compact"
+            className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
             aria-label="Open tasks"
             aria-expanded={tasksOpen}
             aria-haspopup="dialog"
@@ -77,7 +77,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
           <button
             type="button"
             onClick={() => setStakingOpen(true)}
-            className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 btn-compact"
+            className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
             aria-label="Open staking dialog"
             aria-expanded={stakingOpen}
             aria-haspopup="dialog"

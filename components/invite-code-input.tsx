@@ -116,7 +116,7 @@ export default function InviteCodeInput({
 
   return (
     <Card>
-      <CardContent className="p-6">
+      <CardContent className="p-4">
         <div className="space-y-4">
           <div className="relative">
             <Input

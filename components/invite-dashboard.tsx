@@ -159,9 +159,9 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
             <Gift className="w-5 h-5" />
             Invite Friends
           </DialogTitle>

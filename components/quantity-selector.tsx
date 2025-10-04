@@ -33,7 +33,7 @@ export default function QuantitySelector({
 
   const buttonSize = size === 'sm' ? 'w-5 h-5' : 'w-7 h-7';
   const iconSize = size === 'sm' ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5';
-  const textSize = size === 'sm' ? 'text-[10px]' : 'text-xs';
+  const textSize = size === 'sm' ? 'text-xs' : 'text-sm';
 
   return (
     <div className="flex items-center space-x-1">
