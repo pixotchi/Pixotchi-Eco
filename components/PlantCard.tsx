@@ -1,11 +1,11 @@
 "use client";
 
-// Use native <img> for tiny icons
 import { Card, CardContent } from './ui/card';
 import PlantImage from './PlantImage';
 import EditPlantName from './edit-plant-name';
 import { Plant } from '@/lib/types';
 import { formatScore, getPlantStatusColor, getPlantStatusText, getStrainName } from '@/lib/utils';
+import Image from 'next/image';
 import React from 'react';
 
 interface PlantCardProps {
@@ -81,7 +81,7 @@ const PlantCard = React.memo(function PlantCard({
             {showShopItems && hasActiveShopItems && (
               <div className="absolute top-1 right-1">
                 <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                  <img alt="Shield" src="/icons/Fence.png" width={12} height={12} />
+                  <Image src="/icons/Fence.png" alt="Shield" width={12} height={12} />
                 </div>
               </div>
             )}
@@ -120,7 +120,7 @@ const PlantCard = React.memo(function PlantCard({
                   className="w-6 h-6 rounded-sm bg-muted flex items-center justify-center"
                   title={item.name}
                 >
-                  <img src={getShopItemIcon(item.name)} alt={item.name} width={16} height={16} className="w-4 h-4" />
+                  <Image src={getShopItemIcon(item.name)} alt={item.name} width={16} height={16} className="w-4 h-4" />
                 </div>
               ))}
               {activeShopItems.length > 3 && (

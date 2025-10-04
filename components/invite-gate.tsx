@@ -72,14 +72,14 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
       <div className="w-full max-w-md flex flex-col h-dvh bg-background">
         {/* Header wrapper with matching background */}
         <div className="bg-card/90 backdrop-blur-sm">
-          <header className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2" style={{ marginTop: '12px' }}>
+          <header className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 safe-area-top">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
                 <Image
                   src="/PixotchiKit/Logonotext.svg"
                   alt="Pixotchi Mini Logo"
-                  width={22}
-                  height={22}
+                  width={24}
+                  height={24}
                 />
                 <h1 className="text-sm font-pixel text-foreground">
                   PIXOTCHI MINI
@@ -125,6 +125,9 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
                   alt="Pixotchi Logo"
                   width={80}
                   height={80}
+                  sizes="80px"
+                  quality={90}
+                  priority
                   className="opacity-90"
                 />
               </div>

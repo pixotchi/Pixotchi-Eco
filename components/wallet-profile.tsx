@@ -233,11 +233,11 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm md:max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-center space-x-2">
             <Wallet className="w-6 h-6 text-primary" />
-            <DialogTitle>Wallet Profile</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">Wallet Profile</DialogTitle>
           </div>
           <DialogDescription>
             View your wallet details, balances, and connection information.
@@ -260,7 +260,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
  <h3 className="text-sm font-medium text-muted-foreground">
               Connection
  </h3>
-  <StandardContainer className="p-3 space-y-2 rounded-md border bg-card">
+  <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
  <div className="flex items-center justify-between">
  <span className="text-xs font-medium">Provider</span>
  <span className="text-xs font-semibold">
@@ -281,14 +281,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     <span className="text-xs font-medium">Basename</span>
     <div className="flex items-center space-x-1">
       {isNameLoading ? (
-        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-32" />
       ) : name ? (
         <span className="text-xs font-semibold">{name}</span>
       ) : (
         <button
           type="button"
           onClick={() => openExternalUrl("https://base.org/names")}
-          className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md btn-compact"
+          className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
           style={{ backgroundColor: '#0000FF', color: '#FFFFFF' }}
         >
           Get a Basename!
@@ -319,7 +319,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
  <span className="text-xs font-medium">Wallet Type</span>
  <div className="flex items-center space-x-1">
                   {smartWalletLoading ? (
-                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-32" />
                   ) : isSmartWallet ? (
  <div className="flex items-center space-x-1">
  <CheckCircle className="w-3 h-3 text-green-500" />
@@ -401,13 +401,13 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 	<h3 className="text-sm font-medium text-muted-foreground">
 	            Identity
 	</h3>
-  <StandardContainer className="p-3 rounded-md border bg-card">
+  <StandardContainer className="p-4 rounded-md border bg-card">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-3">
  <Avatar address={address} chain={base} />
  <span className="text-sm font-mono break-all">
                     {isNameLoading
-                      ? <Skeleton className="h-5 w-32" />
+                      ? <Skeleton className="h-5 w-40" />
                       : showFullAddress
                       ? address
                       : name || formatAddress(address)}

@@ -31,10 +31,12 @@ export default function Error({
             alt="Pixotchi Logo"
             width={64}
             height={64}
-            className="mx-auto mb-4 opacity-50"
+            sizes="64px"
+            quality={90}
             priority
+            className="mx-auto mb-4 opacity-50"
           />
-          <h1 id="error-title" className="text-xl font-semibold mb-2">Something went wrong!</h1>
+          <h1 id="error-title" className="text-lg font-semibold mb-2">Something went wrong!</h1>
           <p className="text-muted-foreground mb-4">
             We've encountered an unexpected error. Don't worry, your plants are safe!
           </p>

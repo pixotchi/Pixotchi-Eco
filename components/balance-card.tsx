@@ -87,7 +87,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
         </div>
 
         {/* Single consolidated container listing ETH, SEED, LEAF */}
-        <StandardContainer className="p-3 space-y-3 rounded-lg border bg-card">
+        <StandardContainer className="p-4 space-y-3 rounded-lg border bg-card">
           {/* ETH */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -96,7 +96,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
             </div>
             <div className="text-right">
               {ethLoading ? (
-                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-5 w-32" />
               ) : (
                 <div className="text-sm font-mono">
                   {ethBalance ? parseFloat(ethBalance.formatted).toFixed(6) : "0.000000"}
@@ -115,7 +115,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
             </div>
             <div className="text-right">
               {loading ? (
-                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-24" />
               ) : (
                 <div className="text-sm font-mono">{formatLargeNumber(tokenBalance)}</div>
               )}
@@ -132,7 +132,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
             </div>
             <div className="text-right">
               {loading ? (
-                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-24" />
               ) : (
                 <div className="text-sm font-mono">{formatLargeNumber(leafBalance)}</div>
               )}
@@ -152,13 +152,13 @@ export default function BalanceCard({ className = "", variant = "default", onRef
         <div className="flex items-center space-x-2">
           <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={20} height={20} />
           <span className="text-xl md:text-lg font-bold">
-            {loading ? <Skeleton className="h-6 w-32" /> : `${formatLargeNumber(tokenBalance)} SEED`}
+            {loading ? <Skeleton className="h-6 w-40" /> : `${formatLargeNumber(tokenBalance)} SEED`}
           </span>
         </div>
         <div className="flex items-center space-x-2">
           <Image src="/icons/leaf.png" alt="LEAF" width={20} height={20} />
           <span className="text-xl md:text-lg font-bold">
-            {loading ? <Skeleton className="h-6 w-32" /> : `${formatLargeNumber(leafBalance)} LEAF`}
+            {loading ? <Skeleton className="h-6 w-40" /> : `${formatLargeNumber(leafBalance)} LEAF`}
           </span>
         </div>
       </CardContent>

@@ -378,7 +378,7 @@ export default function PlantsView() {
                     <StandardContainer className="flex items-center justify-center space-x-2 bg-primary/10 text-foreground p-2 rounded-md border border-border hover:bg-primary/15 transition-colors">
                       <Image src="/icons/ethlogo.svg" alt="ETH" width={18} height={18} />
                       <div>
-                        <p className="text-[11px] font-semibold leading-3">Rewards</p>
+                        <p className="text-xs font-semibold leading-tight">Rewards</p>
                         <p className="text-sm font-bold">{formatEth(selectedPlant.rewards)} ETH</p>
                       </div>
                     </StandardContainer>
@@ -393,7 +393,7 @@ export default function PlantsView() {
                     <StandardContainer className="flex items-center justify-center space-x-2 bg-accent/15 text-foreground p-2 rounded-md border border-border hover:bg-accent transition-colors">
                       <Image src="/icons/GAME.png" alt="Arcade" width={18} height={18} />
                       <div>
-                        <p className="text-[11px] font-semibold leading-3">Arcade</p>
+                        <p className="text-xs font-semibold leading-tight">Arcade</p>
                         <p className="text-sm font-bold">Play games</p>
                       </div>
                     </StandardContainer>

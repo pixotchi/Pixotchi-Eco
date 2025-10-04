@@ -77,14 +77,14 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 				</Button>
 			</DialogTrigger>
 
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
-					<DialogTitle>Change Land Name</DialogTitle>
-					<DialogDescription>Set a new onchain name for your land.</DialogDescription>
-				</DialogHeader>
+		<DialogContent className="max-w-md">
+			<DialogHeader>
+				<DialogTitle className="text-lg font-semibold">Change Land Name</DialogTitle>
+				<DialogDescription>Set a new onchain name for your land.</DialogDescription>
+			</DialogHeader>
 
-				<div className="space-y-4">
-					<div className="space-y-2">
+				<div className="space-y-6">
+					<div className="space-y-3">
 						<label htmlFor="land-name" className="text-sm font-medium">New Name</label>
 						<Input id="land-name" value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Enter new name..." maxLength={MAX_NAME_LENGTH} className="w-full" />
 						<div className="flex justify-between text-xs text-muted-foreground">

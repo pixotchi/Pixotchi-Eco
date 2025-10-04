@@ -77,8 +77,14 @@ export default function ItemDetailsPanel({
   if (!selectedItem || !selectedPlant) {
     return (
       <Card>
-        <CardContent className="flex items-center justify-center h-full p-6">
-          <p className="text-muted-foreground">Select an item to see details</p>
+        <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
+          <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
+            <span className="text-2xl">🛍️</span>
+          </div>
+          <p className="text-base font-semibold text-foreground mb-1">No Item Selected</p>
+          <p className="text-sm text-muted-foreground">
+            Select an item to see details and purchase options
+          </p>
         </CardContent>
       </Card>
     );

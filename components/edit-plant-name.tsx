@@ -116,18 +116,18 @@ export function EditPlantName({
         </Button>
       </DialogTrigger>
       
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Change Plant Name</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">Change Plant Name</DialogTitle>
           <DialogDescription>
             Change the name of your plant.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
 
           {/* Name input */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <label htmlFor="plant-name" className="text-sm font-medium">
               New Name
             </label>
@@ -148,7 +148,7 @@ export function EditPlantName({
           </div>
 
           {/* Balance and cost info */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
               <span>Your SEED Balance:</span>
               <div className="flex items-center space-x-1">

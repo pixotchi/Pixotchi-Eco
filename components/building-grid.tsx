@@ -104,8 +104,14 @@ export default function BuildingGrid({
 
   if (!buildings || buildings.length === 0) {
     return (
-      <div className="text-center text-muted-foreground p-6">
-        No {buildingType} buildings available
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+        <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
+          <span className="text-2xl">🏘️</span>
+        </div>
+        <p className="text-base font-semibold text-foreground mb-1">No Buildings Available</p>
+        <p className="text-sm text-muted-foreground">
+          No {buildingType} buildings found
+        </p>
       </div>
     );
   }

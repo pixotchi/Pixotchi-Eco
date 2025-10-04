@@ -138,13 +138,13 @@ export default function WarehousePanel({
           <button
             type="button"
             onClick={() => setApplyPts(availablePtsHuman)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center px-2 py-0.5 text-[10px] leading-none rounded-md bg-muted hover:bg-accent btn-compact"
+            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none rounded-md bg-muted hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 btn-compact"
           >
             Max
           </button>
         </div>
         {ptsTooHigh && (
-          <div className="col-span-3 -mt-1 text-[11px] text-red-600">Amount exceeds available PTS.</div>
+          <div className="col-span-3 -mt-1 text-xs text-red-600">Amount exceeds available PTS.</div>
         )}
         <WarehouseApplyTransaction
           landId={landId}
@@ -173,13 +173,13 @@ export default function WarehousePanel({
           <button
             type="button"
             onClick={() => setApplyTodMinutes(availableMinutes)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center px-2 py-0.5 text-[10px] leading-none rounded-md bg-muted hover:bg-accent btn-compact"
+            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none rounded-md bg-muted hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 btn-compact"
           >
             Max
           </button>
         </div>
         {minutesTooHigh && (
-          <div className="col-span-3 -mt-1 text-[11px] text-red-600">Minutes exceed available TOD.</div>
+          <div className="col-span-3 -mt-1 text-xs text-red-600">Minutes exceed available TOD.</div>
         )}
         <WarehouseApplyTransaction
           landId={landId}
