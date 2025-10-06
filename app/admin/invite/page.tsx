@@ -38,13 +38,15 @@ import {
   Bell,
   Megaphone,
   Edit2,
-  X as XIcon
+  X as XIcon,
+  Wallet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStats } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ThemeSelector } from '@/components/theme-selector';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
+import type { WalletConnection } from '@/lib/wallet-tracking-service';
 
 interface AdminStats {
   codes: {
@@ -72,7 +74,7 @@ interface AdminStats {
   }>;
 }
 
-type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast';
+type AdminTab = 'overview' | 'codes' | 'users' | 'wallets' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast';
 
 interface ConfirmDialogState {
   open: boolean;
@@ -143,6 +145,14 @@ export default function AdminInviteDashboard() {
   const [broadcastActionLabel, setBroadcastActionLabel] = useState('');
   const [broadcastActionUrl, setBroadcastActionUrl] = useState('');
   const [editingBroadcastId, setEditingBroadcastId] = useState<string | null>(null);
+
+  // Wallet tracking state
+  const [wallets, setWallets] = useState<WalletConnection[]>([]);
+  const [walletStats, setWalletStats] = useState<any>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletSearch, setWalletSearch] = useState('');
+  const [walletSortBy, setWalletSortBy] = useState<'firstSeen' | 'lastSeen' | 'connectionCount'>('firstSeen');
+  const [walletSortOrder, setWalletSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Cleanup: abort pending requests on unmount
   useEffect(() => {
@@ -384,6 +394,34 @@ export default function AdminInviteDashboard() {
     setBroadcastActionLabel('');
     setBroadcastActionUrl('');
     setBroadcastExpiresIn('86400');
+  };
+
+  // Wallet tracking functions
+  const fetchWallets = async () => {
+    setWalletLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: '100',
+        offset: '0',
+        sortBy: walletSortBy,
+        sortOrder: walletSortOrder,
+      });
+
+      const response = await fetch(`/api/admin/wallets?${params}`, {
+        headers: { 'x-admin-key': adminKey },
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setWallets(data.wallets || []);
+        setWalletStats(data.stats || null);
+      }
+    } catch (error) {
+      console.error('Error fetching wallets:', error);
+      toast.error('Failed to load wallets');
+    } finally {
+      setWalletLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -925,6 +963,7 @@ export default function AdminInviteDashboard() {
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'codes', label: 'Codes', icon: Code },
             { id: 'users', label: 'Users', icon: Users },
+            { id: 'wallets', label: 'Wallets', icon: Wallet },
             { id: 'broadcast', label: 'Broadcast', icon: Megaphone },
             { id: 'chat', label: 'Chat', icon: MessageCircle },
             { id: 'ai-chat', label: 'AI Chat', icon: Bot },
@@ -1134,6 +1173,183 @@ export default function AdminInviteDashboard() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Wallets Tab */}
+        {activeTab === 'wallets' && (
+          <div className="space-y-6">
+            {/* Stats Cards */}
+            {walletStats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Wallets</p>
+                        <p className="text-2xl font-bold">{walletStats.totalWallets}</p>
+                      </div>
+                      <Wallet className="w-8 h-8 text-primary opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Connections</p>
+                        <p className="text-2xl font-bold">{walletStats.totalConnections}</p>
+                      </div>
+                      <RefreshCw className="w-8 h-8 text-blue-500 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Today</p>
+                        <p className="text-2xl font-bold">{walletStats.walletsToday}</p>
+                      </div>
+                      <Clock className="w-8 h-8 text-green-500 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">This Week</p>
+                        <p className="text-2xl font-bold">{walletStats.walletsThisWeek}</p>
+                      </div>
+                      <TrendingUp className="w-8 h-8 text-orange-500 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Wallet Type Breakdown */}
+            {walletStats?.byWalletType && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Wallet Types</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {Object.entries(walletStats.byWalletType).map(([type, count]) => (
+                      <div key={type} className="p-4 bg-muted/50 rounded-lg text-center">
+                        <p className="text-2xl font-bold">{count as number}</p>
+                        <p className="text-sm text-muted-foreground capitalize">{type}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Wallet List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Connected Wallets</CardTitle>
+                <CardDescription>
+                  All wallet addresses that have ever connected to the app
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Search and Sort Controls */}
+                <div className="flex flex-col md:flex-row gap-4 mb-4">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="Search by address..."
+                      value={walletSearch}
+                      onChange={(e) => setWalletSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={walletSortBy}
+                      onChange={(e) => setWalletSortBy(e.target.value as any)}
+                      className="px-3 py-2 border rounded-md bg-background"
+                    >
+                      <option value="firstSeen">First Seen</option>
+                      <option value="lastSeen">Last Seen</option>
+                      <option value="connectionCount">Connections</option>
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWalletSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                    >
+                      {walletSortOrder === 'desc' ? '↓' : '↑'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Wallet List */}
+                {walletLoading ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
+                    <p className="text-muted-foreground">Loading wallets...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                    {wallets
+                      .filter(wallet => 
+                        !walletSearch || 
+                        wallet.address.toLowerCase().includes(walletSearch.toLowerCase())
+                      )
+                      .map((wallet) => (
+                      <div
+                        key={wallet.address}
+                        className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-mono text-sm font-medium">{wallet.address}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              wallet.walletType === 'privy' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
+                              wallet.walletType === 'coinbase' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                              wallet.walletType === 'miniapp' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
+                              wallet.walletType === 'injected' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' :
+                              'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                            }`}>
+                              {wallet.walletType}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            <span>First: {new Date(wallet.firstSeen).toLocaleDateString()}</span>
+                            <span>Last: {new Date(wallet.lastSeen).toLocaleDateString()}</span>
+                            <span>Connections: {wallet.connectionCount}</span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(wallet.address);
+                            toast.success('Address copied!');
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    ))}
+                    {wallets.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No wallets found
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {wallets.length > 0 && (
+                  <div className="mt-4 text-sm text-muted-foreground text-center">
+                    Showing {wallets.length} of {walletStats?.totalWallets || 0} wallets
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
