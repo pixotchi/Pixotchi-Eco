@@ -899,9 +899,9 @@ export default function AdminInviteDashboard() {
 
   // Main dashboard
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen w-full bg-background overflow-y-auto overflow-x-hidden">
       {/* Header */}
-      <div className="bg-card border-b border-border sticky top-0 z-10">
+      <div className="bg-card border-b border-border sticky top-0 z-10 w-full">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
@@ -1079,7 +1079,7 @@ export default function AdminInviteDashboard() {
                 <CardTitle>Recent Codes ({stats.recentCodes.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {stats.recentCodes.map((code) => (
                     <div key={code.code} className="flex items-center justify-between p-3 bg-card rounded-lg">
                       <div className="flex items-center space-x-3">
@@ -1661,7 +1661,7 @@ export default function AdminInviteDashboard() {
                     <p className="text-muted-foreground">No chat messages found</p>
                   </div>
                 ) : (
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto">
                     {chatMessages.map((message) => (
                       <div
                         key={`${message.id}-${message.timestamp}`}
@@ -1803,7 +1803,7 @@ export default function AdminInviteDashboard() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+                <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
                   {aiChatLoading ? (
                     <div className="text-center py-8">
                       <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1884,7 +1884,7 @@ export default function AdminInviteDashboard() {
                     )}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="max-h-96 overflow-y-auto">
+                <CardContent className="max-h-[500px] overflow-y-auto">
                   {!selectedConversation ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -1950,7 +1950,7 @@ export default function AdminInviteDashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <h4 className="font-medium mb-2">Streaks</h4>
-                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.streakTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
                         ) : gmLb.streakTop.map((e, i) => (
@@ -1963,7 +1963,7 @@ export default function AdminInviteDashboard() {
                     </div>
                     <div>
                       <h4 className="font-medium mb-2">Missions (Points)</h4>
-                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.missionTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
                         ) : gmLb.missionTop.map((e, i) => (
@@ -2084,7 +2084,7 @@ export default function AdminInviteDashboard() {
                     </div>
                     <div className="text-sm">
                       <div className="font-semibold mb-1">Recent batches</div>
-                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                      <div className="space-y-1 max-h-[300px] overflow-y-auto">
                         {(notifStats.plant1h?.recent || []).map((e: any, i: number) => (
                           <div key={i} className="flex items-center justify-between p-2 rounded border">
                             <div className="text-xs text-muted-foreground">{new Date(e.ts || 0).toLocaleString()} (Local)</div>
@@ -2107,7 +2107,7 @@ export default function AdminInviteDashboard() {
                     </div>
                     <div className="text-sm">
                       <div className="font-semibold mb-1">Eligible fids (seen)</div>
-                      <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto">
+                      <div className="flex flex-wrap gap-1 max-h-[200px] overflow-y-auto">
                         {(notifStats.eligibleFids || []).slice(0, 200).map((f: any) => (
                           <span key={f} className="text-xs bg-muted px-2 py-0.5 rounded">{f}</span>
                         ))}
