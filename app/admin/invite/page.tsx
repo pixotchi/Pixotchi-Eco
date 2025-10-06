@@ -1394,9 +1394,6 @@ export default function AdminInviteDashboard() {
                               <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
                                 {msg.type}
                               </span>
-                              <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                                {msg.targeting === 'all' ? 'All Users' : 'Current Only'}
-                              </span>
                               {!msg.dismissible && (
                                 <span className="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
                                   Non-dismissible
