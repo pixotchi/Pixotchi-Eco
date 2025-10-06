@@ -28,6 +28,10 @@ import { useMemo } from "react";
 import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
+import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
+
+// Import broadcast component
+import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
 
 // Tab content components with optimized code splitting
 const tabComponents = {
@@ -120,6 +124,10 @@ export default function App() {
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
   useFarcaster();
   useAutoConnect();
+
+  // Broadcast messages system
+  const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
+  const [currentBroadcast, setCurrentBroadcast] = useState<any>(null);
 
   // Keyboard and viewport awareness
   const keyboardState = useKeyboardAware();
@@ -338,6 +346,27 @@ export default function App() {
     window.addEventListener('pixotchi:navigate', handler as EventListener);
     return () => window.removeEventListener('pixotchi:navigate', handler as EventListener);
   }, []);
+
+  // Show broadcast messages (one at a time, highest priority first)
+  useEffect(() => {
+    if (broadcastMessages.length > 0 && !currentBroadcast) {
+      setCurrentBroadcast(broadcastMessages[0]);
+    }
+  }, [broadcastMessages, currentBroadcast]);
+
+  const handleDismissBroadcast = () => {
+    if (currentBroadcast) {
+      dismissMessage(currentBroadcast.id);
+      setCurrentBroadcast(null);
+      
+      // Show next message after a delay (if any)
+      setTimeout(() => {
+        if (broadcastMessages.length > 1) {
+          setCurrentBroadcast(broadcastMessages[1]);
+        }
+      }, 500);
+    }
+  };
 
   // Show loading while checking validation (only if wallet is connected and invite system enabled)
   if (checkingValidation && isConnected && INVITE_CONFIG.SYSTEM_ENABLED) {
@@ -584,6 +613,13 @@ export default function App() {
             onOpenChange={setShowWalletProfile}
           />
         </ErrorBoundary>
+
+        {/* Broadcast Message Modal */}
+        <BroadcastMessageModal
+          message={currentBroadcast}
+          onDismiss={handleDismissBroadcast}
+          onImpression={trackImpression}
+        />
       </div>
     </div>
   );
