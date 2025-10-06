@@ -1,8 +1,6 @@
 import { redis, redisGetJSON, redisSetJSON, withPrefix, redisDel } from './redis';
 import { nanoid } from 'nanoid';
 
-export type BroadcastTargeting = 'current' | 'all';
-
 export type BroadcastMessage = {
   id: string;
   content: string;
@@ -11,7 +9,6 @@ export type BroadcastMessage = {
   expiresAt?: number;
   priority: 'low' | 'normal' | 'high';
   type: 'info' | 'warning' | 'success' | 'announcement';
-  targeting: BroadcastTargeting; // 'current' = only show to users who are already registered, 'all' = show to everyone
   createdBy: string;
   action?: {
     label: string;
@@ -29,7 +26,6 @@ const KEYS = {
   activeList: 'pixotchi:broadcast:active',
   dismissedByUser: (address: string) => `pixotchi:broadcast:dismissed:${address.toLowerCase()}`,
   impressions: (id: string) => `pixotchi:broadcast:impressions:${id}`,
-  currentUsers: 'pixotchi:broadcast:registered-users', // Set of addresses that have connected
 };
 
 /**
@@ -41,7 +37,6 @@ export async function createBroadcast(data: {
   expiresIn?: number;
   priority?: 'low' | 'normal' | 'high';
   type?: 'info' | 'warning' | 'success' | 'announcement';
-  targeting?: BroadcastTargeting;
   createdBy: string;
   action?: { label: string; url: string };
   dismissible?: boolean;
@@ -63,7 +58,6 @@ export async function createBroadcast(data: {
       expiresAt,
       priority: data.priority || 'normal',
       type: data.type || 'info',
-      targeting: data.targeting || 'all',
       createdBy: data.createdBy,
       action: data.action,
       dismissible: data.dismissible !== false, // Default to true
@@ -135,24 +129,18 @@ export async function getActiveBroadcasts(): Promise<BroadcastMessage[]> {
 }
 
 /**
- * Get messages for a specific user (respects targeting and dismissal)
+ * Get messages for a specific user (respects dismissal)
  */
 export async function getMessagesForUser(address?: string): Promise<BroadcastMessage[]> {
   try {
     const allMessages = await getActiveBroadcasts();
     
     if (!address) {
-      // New/anonymous user - only show 'all' targeting messages
-      return allMessages.filter(msg => msg.targeting === 'all');
+      // Anonymous user - show all messages
+      return allMessages;
     }
 
     const normalizedAddress = address.toLowerCase();
-    
-    // Check if user is registered (has connected before)
-    const isRegistered = await redis?.sismember?.(
-      withPrefix(KEYS.currentUsers),
-      normalizedAddress
-    );
 
     // Get dismissed message IDs for this user
     const dismissedIds = await redis?.smembers?.(
@@ -160,36 +148,14 @@ export async function getMessagesForUser(address?: string): Promise<BroadcastMes
     ) || [];
     const dismissedSet = new Set(dismissedIds);
 
-    // Filter messages
-    return allMessages.filter(msg => {
-      // Skip if user dismissed this message
-      if (dismissedSet.has(msg.id)) return false;
-      
-      // If targeting is 'current', only show to registered users
-      if (msg.targeting === 'current' && !isRegistered) return false;
-      
-      return true;
-    });
+    // Filter out dismissed messages
+    return allMessages.filter(msg => !dismissedSet.has(msg.id));
   } catch (error) {
     console.error('Get messages for user error:', error);
     return [];
   }
 }
 
-/**
- * Register a user as having connected (for 'current' targeting)
- */
-export async function registerUser(address: string): Promise<void> {
-  try {
-    if (!address) return;
-    await redis?.sadd?.(
-      withPrefix(KEYS.currentUsers),
-      address.toLowerCase()
-    );
-  } catch (error) {
-    console.error('Register user error:', error);
-  }
-}
 
 /**
  * Dismiss a message for a user
@@ -307,23 +273,17 @@ export async function getBroadcastStats(): Promise<{
   totalMessages: number;
   totalImpressions: number;
   totalDismissals: number;
-  registeredUsers: number;
 }> {
   try {
     const messages = await getActiveBroadcasts();
     
     const totalImpressions = messages.reduce((sum, msg) => sum + msg.stats.impressions, 0);
     const totalDismissals = messages.reduce((sum, msg) => sum + msg.stats.dismissals, 0);
-    
-    const registeredUsersCount = await redis?.scard?.(
-      withPrefix(KEYS.currentUsers)
-    ) || 0;
 
     return {
       totalMessages: messages.length,
       totalImpressions,
       totalDismissals,
-      registeredUsers: registeredUsersCount,
     };
   } catch (error) {
     console.error('Get broadcast stats error:', error);
@@ -331,7 +291,6 @@ export async function getBroadcastStats(): Promise<{
       totalMessages: 0,
       totalImpressions: 0,
       totalDismissals: 0,
-      registeredUsers: 0,
     };
   }
 }

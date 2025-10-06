@@ -56,7 +56,6 @@ export async function POST(req: NextRequest) {
       expiresIn,
       priority = 'normal',
       type = 'info',
-      targeting = 'all',
       action,
       dismissible = true,
     } = body;
@@ -82,7 +81,6 @@ export async function POST(req: NextRequest) {
       expiresIn,
       priority,
       type,
-      targeting,
       action,
       dismissible,
       createdBy: 'admin', // Could be extracted from admin key if needed
@@ -91,7 +89,6 @@ export async function POST(req: NextRequest) {
     if (result.success) {
       await logAdminAction('broadcast_create', 'system', {
         messageId: result.message?.id,
-        targeting,
         priority,
         type,
       });

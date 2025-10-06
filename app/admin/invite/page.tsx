@@ -139,7 +139,6 @@ export default function AdminInviteDashboard() {
   const [broadcastExpiresIn, setBroadcastExpiresIn] = useState('86400');
   const [broadcastPriority, setBroadcastPriority] = useState<'low' | 'normal' | 'high'>('normal');
   const [broadcastType, setBroadcastType] = useState<'info' | 'warning' | 'success' | 'announcement'>('info');
-  const [broadcastTargeting, setBroadcastTargeting] = useState<'current' | 'all'>('all');
   const [broadcastDismissible, setBroadcastDismissible] = useState(true);
   const [broadcastActionLabel, setBroadcastActionLabel] = useState('');
   const [broadcastActionUrl, setBroadcastActionUrl] = useState('');
@@ -308,7 +307,6 @@ export default function AdminInviteDashboard() {
         content: broadcastContent,
         priority: broadcastPriority,
         type: broadcastType,
-        targeting: broadcastTargeting,
         dismissible: broadcastDismissible,
         expiresIn: parseInt(broadcastExpiresIn),
       };
@@ -348,7 +346,6 @@ export default function AdminInviteDashboard() {
     setBroadcastTitle(message.title || '');
     setBroadcastPriority(message.priority);
     setBroadcastType(message.type);
-    setBroadcastTargeting(message.targeting);
     setBroadcastDismissible(message.dismissible);
     setBroadcastActionLabel(message.action?.label || '');
     setBroadcastActionUrl(message.action?.url || '');
@@ -383,7 +380,6 @@ export default function AdminInviteDashboard() {
     setBroadcastTitle('');
     setBroadcastPriority('normal');
     setBroadcastType('info');
-    setBroadcastTargeting('all');
     setBroadcastDismissible(true);
     setBroadcastActionLabel('');
     setBroadcastActionUrl('');
@@ -1148,7 +1144,7 @@ export default function AdminInviteDashboard() {
           <div className="space-y-6">
             {/* Stats Cards */}
             {broadcastStats && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -1179,17 +1175,6 @@ export default function AdminInviteDashboard() {
                         <p className="text-2xl font-bold">{broadcastStats.totalDismissals}</p>
                       </div>
                       <XIcon className="w-8 h-8 text-orange-500 opacity-50" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Registered Users</p>
-                        <p className="text-2xl font-bold">{broadcastStats.registeredUsers}</p>
-                      </div>
-                      <Users className="w-8 h-8 text-green-500 opacity-50" />
                     </div>
                   </CardContent>
                 </Card>
@@ -1281,38 +1266,6 @@ export default function AdminInviteDashboard() {
                         </button>
                       ))}
                     </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium block mb-2">Show To</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setBroadcastTargeting('all')}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        broadcastTargeting === 'all'
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50'
-                      }`}
-                    >
-                      <Users className="w-5 h-5 mb-2 mx-auto" />
-                      <div className="text-sm font-medium">All Users</div>
-                      <div className="text-xs text-muted-foreground mt-1">Current + New visitors</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBroadcastTargeting('current')}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        broadcastTargeting === 'current'
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50'
-                      }`}
-                    >
-                      <Users className="w-5 h-5 mb-2 mx-auto" />
-                      <div className="text-sm font-medium">Current Users Only</div>
-                      <div className="text-xs text-muted-foreground mt-1">Registered wallets only</div>
-                    </button>
                   </div>
                 </div>
 

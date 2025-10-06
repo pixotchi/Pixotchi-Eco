@@ -6,12 +6,27 @@ import type { BroadcastMessage } from '@/lib/broadcast-service';
 
 const POLL_INTERVAL = 30000; // 30 seconds
 const STORAGE_KEY = 'pixotchi:dismissed-broadcasts';
+const TUTORIAL_STORAGE_KEY = 'pixotchi:tutorial';
+
+// Helper to check if tutorial is completed
+function isTutorialCompleted(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const stored = localStorage.getItem(TUTORIAL_STORAGE_KEY);
+    if (!stored) return false;
+    const data = JSON.parse(stored);
+    return data.completed === true;
+  } catch {
+    return false;
+  }
+}
 
 export function useBroadcastMessages() {
   const { address } = useAccount();
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(new Set());
+  const [tutorialCompleted, setTutorialCompleted] = useState(isTutorialCompleted());
   const lastFetchRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -28,8 +43,28 @@ export function useBroadcastMessages() {
     }
   }, []);
 
+  // Check tutorial completion status periodically
+  useEffect(() => {
+    const checkTutorial = () => {
+      setTutorialCompleted(isTutorialCompleted());
+    };
+    
+    // Check immediately
+    checkTutorial();
+    
+    // Check every 2 seconds to detect when tutorial completes
+    const interval = setInterval(checkTutorial, 2000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch active messages
   const fetchMessages = useCallback(async () => {
+    // Don't fetch if tutorial is not completed
+    if (!tutorialCompleted) {
+      return;
+    }
+
     // Prevent excessive polling
     const now = Date.now();
     if (now - lastFetchRef.current < 5000) {
@@ -58,7 +93,7 @@ export function useBroadcastMessages() {
     } finally {
       setLoading(false);
     }
-  }, [address, localDismissedIds]);
+  }, [address, localDismissedIds, tutorialCompleted]);
 
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {

@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Info, AlertTriangle, CheckCircle, Megaphone, ExternalLink, X } from 'lucide-react';
+import { Info, AlertTriangle, CheckCircle, Megaphone, ExternalLink } from 'lucide-react';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
 
 interface BroadcastMessageModalProps {
@@ -82,32 +82,21 @@ export function BroadcastMessageModal({
         className="max-w-md"
         onEscapeKeyDown={(e) => !message.dismissible && e.preventDefault()}
         onPointerDownOutside={(e) => !message.dismissible && e.preventDefault()}
+        hideCloseButton={!message.dismissible}
       >
         <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <Icon className={`w-5 h-5 ${config.color} flex-shrink-0`} />
-              <div className="flex-1">
-                <DialogTitle className="text-left">
-                  {message.title || 'Announcement'}
-                </DialogTitle>
-                {priorityLabel && (
-                  <span className="text-xs text-muted-foreground mt-1 block">
-                    {priorityLabel}
-                  </span>
-                )}
-              </div>
+          <div className="flex items-center gap-2">
+            <Icon className={`w-5 h-5 ${config.color} flex-shrink-0`} />
+            <div className="flex-1">
+              <DialogTitle className="text-left">
+                {message.title || 'Announcement'}
+              </DialogTitle>
+              {priorityLabel && (
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  {priorityLabel}
+                </span>
+              )}
             </div>
-            {message.dismissible && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onDismiss}
-                className="h-6 w-6 -mt-1 -mr-2"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            )}
           </div>
         </DialogHeader>
 
@@ -152,16 +141,6 @@ export function BroadcastMessageModal({
               </p>
             </div>
           )}
-
-          {/* Metadata */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-            <span>{new Date(message.createdAt).toLocaleString()}</span>
-            {message.expiresAt && (
-              <span className="text-orange-600 dark:text-orange-400">
-                Expires: {new Date(message.expiresAt).toLocaleDateString()}
-              </span>
-            )}
-          </div>
         </div>
       </DialogContent>
     </Dialog>
