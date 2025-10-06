@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info, AlertTriangle, CheckCircle, Megaphone, ExternalLink } from 'lucide-react';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
+import { openExternalUrl } from '@/lib/open-external';
 
 interface BroadcastMessageModalProps {
   message: BroadcastMessage | null;
@@ -64,11 +65,11 @@ export function BroadcastMessageModal({
   const Icon = config.icon;
   const priorityLabel = priorityLabels[message.priority];
 
-  const handleAction = () => {
+  const handleAction = async () => {
     if (message.action?.url) {
-      // Open in new tab for external links
+      // Open in new tab for external links (handles both mini app and web)
       if (message.action.url.startsWith('http')) {
-        window.open(message.action.url, '_blank', 'noopener,noreferrer');
+        await openExternalUrl(message.action.url);
       } else {
         // Internal navigation
         window.location.href = message.action.url;
