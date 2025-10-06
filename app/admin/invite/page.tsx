@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -33,12 +35,16 @@ import {
   FileText,
   TrendingUp,
   DollarSign,
-  Bell
+  Bell,
+  Megaphone,
+  Edit2,
+  X as XIcon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStats } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ThemeSelector } from '@/components/theme-selector';
+import type { BroadcastMessage } from '@/lib/broadcast-service';
 
 interface AdminStats {
   codes: {
@@ -66,7 +72,7 @@ interface AdminStats {
   }>;
 }
 
-type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications';
+type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast';
 
 interface ConfirmDialogState {
   open: boolean;
@@ -123,6 +129,21 @@ export default function AdminInviteDashboard() {
   const [aiChatLoading, setAIChatLoading] = useState(false);
   // Gamification leaderboards
   const [gmLb, setGmLb] = useState<{ streakTop: Array<{ address: string; value: number }>; missionTop: Array<{ address: string; value: number }> } | null>(null);
+
+  // Broadcast state
+  const [broadcastMessages, setBroadcastMessages] = useState<BroadcastMessage[]>([]);
+  const [broadcastStats, setBroadcastStats] = useState<any>(null);
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
+  const [broadcastContent, setBroadcastContent] = useState('');
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastExpiresIn, setBroadcastExpiresIn] = useState('86400');
+  const [broadcastPriority, setBroadcastPriority] = useState<'low' | 'normal' | 'high'>('normal');
+  const [broadcastType, setBroadcastType] = useState<'info' | 'warning' | 'success' | 'announcement'>('info');
+  const [broadcastTargeting, setBroadcastTargeting] = useState<'current' | 'all'>('all');
+  const [broadcastDismissible, setBroadcastDismissible] = useState(true);
+  const [broadcastActionLabel, setBroadcastActionLabel] = useState('');
+  const [broadcastActionUrl, setBroadcastActionUrl] = useState('');
+  const [editingBroadcastId, setEditingBroadcastId] = useState<string | null>(null);
 
   // Cleanup: abort pending requests on unmount
   useEffect(() => {
@@ -258,6 +279,122 @@ export default function AdminInviteDashboard() {
       setGenerating(false);
     }
   };
+
+  // Broadcast functions
+  const fetchBroadcastMessages = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const response = await fetch('/api/admin/broadcast', {
+        headers: { 'Authorization': `Bearer ${adminKey}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBroadcastMessages(data.messages || []);
+        setBroadcastStats(data.stats || null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch broadcast messages:', error);
+    }
+  }, [isAuthenticated, adminKey]);
+
+  const handleBroadcastCreate = async () => {
+    if (!broadcastContent.trim()) {
+      toast.error('Content is required');
+      return;
+    }
+    setBroadcastLoading(true);
+    try {
+      const payload: any = {
+        content: broadcastContent,
+        priority: broadcastPriority,
+        type: broadcastType,
+        targeting: broadcastTargeting,
+        dismissible: broadcastDismissible,
+        expiresIn: parseInt(broadcastExpiresIn),
+      };
+      if (broadcastTitle.trim()) payload.title = broadcastTitle.trim();
+      if (broadcastActionLabel.trim() && broadcastActionUrl.trim()) {
+        payload.action = { label: broadcastActionLabel.trim(), url: broadcastActionUrl.trim() };
+      }
+      const method = editingBroadcastId ? 'PUT' : 'POST';
+      if (editingBroadcastId) payload.id = editingBroadcastId;
+
+      const response = await fetch('/api/admin/broadcast', {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        toast.success(editingBroadcastId ? 'Broadcast updated!' : 'Broadcast created!');
+        resetBroadcastForm();
+        fetchBroadcastMessages();
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Failed to save broadcast');
+      }
+    } catch (error) {
+      toast.error('Error saving broadcast');
+    } finally {
+      setBroadcastLoading(false);
+    }
+  };
+
+  const handleBroadcastEdit = (message: BroadcastMessage) => {
+    setEditingBroadcastId(message.id);
+    setBroadcastContent(message.content);
+    setBroadcastTitle(message.title || '');
+    setBroadcastPriority(message.priority);
+    setBroadcastType(message.type);
+    setBroadcastTargeting(message.targeting);
+    setBroadcastDismissible(message.dismissible);
+    setBroadcastActionLabel(message.action?.label || '');
+    setBroadcastActionUrl(message.action?.url || '');
+    if (message.expiresAt) {
+      const remaining = Math.max(0, Math.floor((message.expiresAt - Date.now()) / 1000));
+      setBroadcastExpiresIn(remaining.toString());
+    }
+    setActiveTab('broadcast');
+  };
+
+  const handleBroadcastDelete = async (id: string) => {
+    if (!confirm('Delete this broadcast?')) return;
+    try {
+      const response = await fetch(`/api/admin/broadcast?id=${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminKey}` }
+      });
+      if (response.ok) {
+        toast.success('Broadcast deleted');
+        fetchBroadcastMessages();
+      } else {
+        toast.error('Failed to delete broadcast');
+      }
+    } catch (error) {
+      toast.error('Error deleting broadcast');
+    }
+  };
+
+  const resetBroadcastForm = () => {
+    setEditingBroadcastId(null);
+    setBroadcastContent('');
+    setBroadcastTitle('');
+    setBroadcastPriority('normal');
+    setBroadcastType('info');
+    setBroadcastTargeting('all');
+    setBroadcastDismissible(true);
+    setBroadcastActionLabel('');
+    setBroadcastActionUrl('');
+    setBroadcastExpiresIn('86400');
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && activeTab === 'broadcast') {
+      fetchBroadcastMessages();
+    }
+  }, [isAuthenticated, activeTab, fetchBroadcastMessages]);
 
   const performCleanup = async (action: string, target?: string) => {
     const actionNames = {
@@ -792,6 +929,7 @@ export default function AdminInviteDashboard() {
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'codes', label: 'Codes', icon: Code },
             { id: 'users', label: 'Users', icon: Users },
+            { id: 'broadcast', label: 'Broadcast', icon: Megaphone },
             { id: 'chat', label: 'Chat', icon: MessageCircle },
             { id: 'ai-chat', label: 'AI Chat', icon: Bot },
             { id: 'cleanup', label: 'Cleanup', icon: Trash2 },
@@ -1000,6 +1138,358 @@ export default function AdminInviteDashboard() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Broadcast Tab */}
+        {activeTab === 'broadcast' && (
+          <div className="space-y-6">
+            {/* Stats Cards */}
+            {broadcastStats && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Active Messages</p>
+                        <p className="text-2xl font-bold">{broadcastStats.totalMessages}</p>
+                      </div>
+                      <Megaphone className="w-8 h-8 text-purple-500 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Impressions</p>
+                        <p className="text-2xl font-bold">{broadcastStats.totalImpressions}</p>
+                      </div>
+                      <Eye className="w-8 h-8 text-blue-500 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Dismissals</p>
+                        <p className="text-2xl font-bold">{broadcastStats.totalDismissals}</p>
+                      </div>
+                      <XIcon className="w-8 h-8 text-orange-500 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Registered Users</p>
+                        <p className="text-2xl font-bold">{broadcastStats.registeredUsers}</p>
+                      </div>
+                      <Users className="w-8 h-8 text-green-500 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Create/Edit Form */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {editingBroadcastId ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                  {editingBroadcastId ? 'Edit Broadcast' : 'Create New Broadcast'}
+                </CardTitle>
+                <CardDescription>
+                  {editingBroadcastId ? 'Update the broadcast message' : 'Send a message to all players'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium block mb-2">Title (Optional)</label>
+                  <Input
+                    value={broadcastTitle}
+                    onChange={(e) => setBroadcastTitle(e.target.value)}
+                    placeholder="e.g., Giveaway Alert, System Update"
+                    maxLength={60}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">{broadcastTitle.length}/60 characters</p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">Message Content *</label>
+                  <Textarea
+                    value={broadcastContent}
+                    onChange={(e) => setBroadcastContent(e.target.value)}
+                    placeholder="Your message to players..."
+                    rows={4}
+                    maxLength={500}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">{broadcastContent.length}/500 characters</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Type</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'info', label: 'Info', icon: '💡' },
+                        { value: 'announcement', label: 'Announcement', icon: '📢' },
+                        { value: 'success', label: 'Success', icon: '✅' },
+                        { value: 'warning', label: 'Warning', icon: '⚠️' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setBroadcastType(option.value as any)}
+                          className={`p-3 rounded-lg border-2 transition-all ${
+                            broadcastType === option.value
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="text-2xl mb-1">{option.icon}</div>
+                          <div className="text-xs font-medium">{option.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Priority</label>
+                    <div className="space-y-2">
+                      {[
+                        { value: 'low', label: 'Low', color: 'text-gray-600' },
+                        { value: 'normal', label: 'Normal', color: 'text-blue-600' },
+                        { value: 'high', label: 'High', color: 'text-red-600' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setBroadcastPriority(option.value as any)}
+                          className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                            broadcastPriority === option.value
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                        >
+                          <div className={`text-sm font-medium ${option.color}`}>{option.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">Show To</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastTargeting('all')}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        broadcastTargeting === 'all'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <Users className="w-5 h-5 mb-2 mx-auto" />
+                      <div className="text-sm font-medium">All Users</div>
+                      <div className="text-xs text-muted-foreground mt-1">Current + New visitors</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastTargeting('current')}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        broadcastTargeting === 'current'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <Users className="w-5 h-5 mb-2 mx-auto" />
+                      <div className="text-sm font-medium">Current Users Only</div>
+                      <div className="text-xs text-muted-foreground mt-1">Registered wallets only</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">Expires In</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {[
+                      { value: '3600', label: '1 hour' },
+                      { value: '21600', label: '6 hours' },
+                      { value: '43200', label: '12 hours' },
+                      { value: '86400', label: '24 hours' },
+                      { value: '259200', label: '3 days' },
+                      { value: '604800', label: '7 days' },
+                      { value: '2592000', label: '30 days' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setBroadcastExpiresIn(option.value)}
+                        className={`p-2 rounded-lg border transition-all text-sm ${
+                          broadcastExpiresIn === option.value
+                            ? 'border-primary bg-primary/10 font-medium'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">Call-to-Action (Optional)</label>
+                  <div className="space-y-2">
+                    <Input
+                      value={broadcastActionLabel}
+                      onChange={(e) => setBroadcastActionLabel(e.target.value)}
+                      placeholder="Button label (e.g., Learn More, Join Now)"
+                      maxLength={30}
+                    />
+                    <Input
+                      value={broadcastActionUrl}
+                      onChange={(e) => setBroadcastActionUrl(e.target.value)}
+                      placeholder="URL (e.g., https://pixotchi.tech/event)"
+                      type="url"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                  <div>
+                    <div className="text-sm font-medium">Allow Dismissal</div>
+                    <div className="text-xs text-muted-foreground">Can users close this message?</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastDismissible(!broadcastDismissible)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      broadcastDismissible ? 'bg-primary' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        broadcastDismissible ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {!broadcastDismissible && (
+                  <Alert className="bg-orange-500/10 border-orange-500/20">
+                    <AlertTriangle className="w-4 h-4 text-orange-600" />
+                    <AlertDescription className="text-sm">
+                      Non-dismissible messages will persist until manually deleted or expired.
+                      Use carefully for critical announcements only.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    onClick={handleBroadcastCreate}
+                    disabled={broadcastLoading || !broadcastContent.trim()}
+                    className="flex-1"
+                  >
+                    {broadcastLoading ? 'Saving...' : editingBroadcastId ? 'Update Broadcast' : 'Create Broadcast'}
+                  </Button>
+                  {editingBroadcastId && (
+                    <Button onClick={resetBroadcastForm} variant="outline">Cancel Edit</Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Active Messages List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Active Broadcasts ({broadcastMessages.length})</CardTitle>
+                <CardDescription>Currently visible messages to players</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {broadcastMessages.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Megaphone className="w-12 h-12 mx-auto text-muted-foreground opacity-50 mb-4" />
+                    <p className="text-muted-foreground">No active broadcasts</p>
+                    <p className="text-sm text-muted-foreground mt-1">Create your first message above</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {broadcastMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className="border rounded-lg p-4 space-y-3 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-semibold">{msg.title || 'Untitled Message'}</h3>
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                msg.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                                msg.priority === 'normal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                                'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                              }`}>
+                                {msg.priority}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                                {msg.type}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                {msg.targeting === 'all' ? 'All Users' : 'Current Only'}
+                              </span>
+                              {!msg.dismissible && (
+                                <span className="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                                  Non-dismissible
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleBroadcastEdit(msg)}>
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleBroadcastDelete(msg.id)}>
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground pt-2 border-t">
+                          <div className="flex items-center gap-1">
+                            <Eye className="w-3 h-3" />
+                            {msg.stats.impressions} views
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <XIcon className="w-3 h-3" />
+                            {msg.stats.dismissals} dismissed
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Created {new Date(msg.createdAt).toLocaleString()}
+                          </div>
+                          {msg.expiresAt && (
+                            <div className="flex items-center gap-1 text-orange-600">
+                              <Clock className="w-3 h-3" />
+                              Expires {new Date(msg.expiresAt).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                        {msg.action && (
+                          <div className="text-xs bg-blue-50 dark:bg-blue-950/30 p-2 rounded border border-blue-200 dark:border-blue-800">
+                            <span className="font-medium">Action:</span> {msg.action.label} → {msg.action.url}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
