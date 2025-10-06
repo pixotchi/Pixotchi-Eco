@@ -99,11 +99,11 @@ export async function createBroadcast(data: {
 export async function getActiveBroadcasts(): Promise<BroadcastMessage[]> {
   try {
     // Get message IDs sorted by priority
-    const activeIds = await redis?.zrange?.(
+    const activeIds = (await redis?.zrange?.(
       withPrefix(KEYS.activeList),
       0,
       -1
-    ) || [];
+    ) || []) as string[];
 
     if (activeIds.length === 0) return [];
 
