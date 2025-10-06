@@ -181,4 +181,39 @@ export async function redisExpire(key: string, ttlSeconds: number): Promise<bool
   }
 }
 
+export async function redisTTL(key: string): Promise<number | null> {
+  if (!redis) return null;
+  try {
+    const ttl = await redis.ttl(withPrefix(key));
+    if (typeof ttl === 'number') {
+      return ttl;
+    }
+    if (ttl && typeof ttl === 'object' && 'ttl' in ttl && typeof (ttl as { ttl: number }).ttl === 'number') {
+      return (ttl as { ttl: number }).ttl;
+    }
+    return null;
+  } catch (error) {
+    logger.error('redisTTL failed', error, { key });
+    return null;
+  }
+}
+
+export async function redisPersist(key: string): Promise<boolean> {
+  if (!redis) return false;
+  try {
+    if (typeof (redis as any).persist === 'function') {
+      await (redis as any).persist(withPrefix(key));
+    } else {
+      const ttl = await redisTTL(key);
+      if (ttl && ttl > 0) {
+        await redisExpire(key, Math.max(ttl, 1));
+      }
+    }
+    return true;
+  } catch (error) {
+    logger.error('redisPersist failed', error, { key });
+    return false;
+  }
+}
+
 export type RedisClient = typeof redis;

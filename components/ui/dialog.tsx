@@ -37,8 +37,10 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    hideCloseButton?: boolean;
+  }
+>(({ className, children, hideCloseButton, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -64,26 +66,28 @@ const DialogContent = React.forwardRef<
         style={{ contentVisibility: 'auto' as any }}
       >
         {children}
-        <DialogPrimitive.Close
-          aria-label="Close dialog"
-          className={cn(
-            // Position
-            "absolute top-3 right-3 md:top-4 md:right-4 z-[1]",
-            // Size and alignment
-            "inline-flex h-8 w-8 items-center justify-center md:h-9 md:w-9",
-            // Visuals: avoid borders, provide hover background only
-            "rounded-md bg-transparent text-muted-foreground hover:bg-muted/60",
-            // Accessibility focus style (no persistent ring/border)
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            // Ensure ring offset blends with dialog background
-            "ring-offset-background",
-            // Behavior
-            "transition-colors disabled:pointer-events-none"
-          )}
-        >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {!hideCloseButton && (
+          <DialogPrimitive.Close
+            aria-label="Close dialog"
+            className={cn(
+              // Position
+              "absolute top-3 right-3 md:top-4 md:right-4 z-[1]",
+              // Size and alignment
+              "inline-flex h-8 w-8 items-center justify-center md:h-9 md:w-9",
+              // Visuals: avoid borders, provide hover background only
+              "rounded-md bg-transparent text-muted-foreground hover:bg-muted/60",
+              // Accessibility focus style (no persistent ring/border)
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              // Ensure ring offset blends with dialog background
+              "ring-offset-background",
+              // Behavior
+              "transition-colors disabled:pointer-events-none"
+            )}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
       </div>
     </DialogPrimitive.Content>
   </DialogPortal>
