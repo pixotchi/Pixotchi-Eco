@@ -114,12 +114,15 @@ export async function getActiveBroadcasts(): Promise<BroadcastMessage[]> {
 
     // Filter out expired and null messages
     const now = Date.now();
-    const validMessages = messages.filter(msg => 
-      msg && (!msg.expiresAt || msg.expiresAt > now)
+    const validMessages = messages.filter((msg): msg is BroadcastMessage => 
+      msg !== null && (!msg.expiresAt || msg.expiresAt > now)
     );
 
     // Clean up expired messages
-    const expiredIds = activeIds.filter((id, i) => !validMessages.includes(messages[i]));
+    const expiredIds = activeIds.filter((id, i) => {
+      const msg = messages[i];
+      return !msg || (msg.expiresAt && msg.expiresAt <= now);
+    });
     if (expiredIds.length > 0) {
       await cleanupExpiredMessages(expiredIds);
     }
