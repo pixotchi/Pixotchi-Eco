@@ -899,9 +899,9 @@ export default function AdminInviteDashboard() {
 
   // Main dashboard
   return (
-    <div className="min-h-[100dvh] bg-background">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-card border-b border-border">
+      <div className="bg-card border-b border-border sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
@@ -922,9 +922,9 @@ export default function AdminInviteDashboard() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20">
         {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-8">
+        <div className="flex space-x-1 mb-8 overflow-x-auto pb-2">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'codes', label: 'Codes', icon: Code },
