@@ -123,7 +123,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, ...updates } = body;
+    const { id, expiresIn, ...rest } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -132,12 +132,17 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const result = await updateBroadcast(id, updates);
+    const updatePayload = {
+      ...rest,
+      ...(expiresIn !== undefined ? { expiresIn } : {}),
+    };
+
+    const result = await updateBroadcast(id, updatePayload);
 
     if (result.success) {
       await logAdminAction('broadcast_update', 'system', {
         messageId: id,
-        updates: Object.keys(updates),
+        updates: Object.keys(updatePayload),
       });
 
       return NextResponse.json({

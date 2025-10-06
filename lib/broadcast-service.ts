@@ -1,4 +1,4 @@
-import { redis, redisGetJSON, redisSetJSON, withPrefix, redisDel } from './redis';
+import { redis, redisGetJSON, redisSetJSON, withPrefix, redisDel, redisIncrBy, redisTTL, redisExpire, redisPersist } from './redis';
 import { nanoid } from 'nanoid';
 
 export type BroadcastMessage = {
@@ -25,8 +25,43 @@ const KEYS = {
   message: (id: string) => `pixotchi:broadcast:message:${id}`,
   activeList: 'pixotchi:broadcast:active',
   dismissedByUser: (address: string) => `pixotchi:broadcast:dismissed:${address.toLowerCase()}`,
-  impressions: (id: string) => `pixotchi:broadcast:impressions:${id}`,
+  statsImpressions: (id: string) => `pixotchi:broadcast:stats:impressions:${id}`,
+  statsDismissals: (id: string) => `pixotchi:broadcast:stats:dismissals:${id}`,
 };
+
+async function setCounterInitialValue(key: string, ttlSeconds?: number | null) {
+  if (!redis) return;
+  const namespaced = withPrefix(key);
+  await redis.set(namespaced, '0');
+  if (typeof ttlSeconds === 'number') {
+    if (ttlSeconds > 0) {
+      await redisExpire(key, ttlSeconds);
+    } else if (ttlSeconds === 0) {
+      await redisExpire(key, 1);
+    } else if (ttlSeconds < 0) {
+      await redisPersist(key);
+    }
+  } else if (ttlSeconds === null) {
+    await redisPersist(key);
+  }
+}
+
+async function syncCounterTTL(key: string, ttlSeconds: number | null) {
+  if (ttlSeconds === null) return;
+  if (ttlSeconds > 0) {
+    await redisExpire(key, ttlSeconds);
+  } else if (ttlSeconds === -1) {
+    await redisPersist(key);
+  }
+}
+
+async function getCounterValue(key: string): Promise<number> {
+  if (!redis) return 0;
+  const raw = await redis.get(withPrefix(key));
+  if (raw == null) return 0;
+  const num = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(num) ? num : 0;
+}
 
 /**
  * Create a new broadcast message
@@ -34,7 +69,7 @@ const KEYS = {
 export async function createBroadcast(data: {
   content: string;
   title?: string;
-  expiresIn?: number;
+  expiresIn?: number | null;
   priority?: 'low' | 'normal' | 'high';
   type?: 'info' | 'warning' | 'success' | 'announcement';
   createdBy: string;
@@ -48,7 +83,9 @@ export async function createBroadcast(data: {
 
     const id = nanoid(12);
     const now = Date.now();
-    const expiresAt = data.expiresIn ? now + (data.expiresIn * 1000) : undefined;
+    const expiresAt = typeof data.expiresIn === 'number' && data.expiresIn > 0
+      ? now + (data.expiresIn * 1000)
+      : undefined;
 
     const message: BroadcastMessage = {
       id,
@@ -68,7 +105,20 @@ export async function createBroadcast(data: {
     };
 
     // Store message
-    await redisSetJSON(KEYS.message(id), message, data.expiresIn);
+    if (typeof data.expiresIn === 'number' && data.expiresIn > 0) {
+      await redisSetJSON(KEYS.message(id), message, data.expiresIn);
+    } else {
+      await redisSetJSON(KEYS.message(id), message);
+      if (redis) {
+        await redisPersist(KEYS.message(id));
+      }
+    }
+
+    if (redis) {
+      const ttlSeed = typeof data.expiresIn === 'number' ? data.expiresIn : data.expiresIn ?? null;
+      await setCounterInitialValue(KEYS.statsImpressions(id), ttlSeed);
+      await setCounterInitialValue(KEYS.statsDismissals(id), ttlSeed);
+    }
 
     // Add to active list (sorted by priority and timestamp)
     // Higher priority = lower score = shown first
@@ -121,7 +171,23 @@ export async function getActiveBroadcasts(): Promise<BroadcastMessage[]> {
       await cleanupExpiredMessages(expiredIds);
     }
 
-    return validMessages;
+    const messagesWithStats = await Promise.all(
+      validMessages.map(async (msg) => {
+        const [impressions, dismissals] = await Promise.all([
+          getCounterValue(KEYS.statsImpressions(msg.id)),
+          getCounterValue(KEYS.statsDismissals(msg.id)),
+        ]);
+        return {
+          ...msg,
+          stats: {
+            impressions,
+            dismissals,
+          },
+        } as BroadcastMessage;
+      })
+    );
+
+    return messagesWithStats;
   } catch (error) {
     console.error('Get active broadcasts error:', error);
     return [];
@@ -170,19 +236,17 @@ export async function dismissMessage(
     }
 
     const normalizedAddress = address.toLowerCase();
-    
-    // Add to user's dismissed list
+
     await redis?.sadd?.(
       withPrefix(KEYS.dismissedByUser(normalizedAddress)),
       messageId
     );
 
-    // Increment dismissal count
-    const message = await redisGetJSON<BroadcastMessage>(KEYS.message(messageId));
-    if (message) {
-      message.stats.dismissals++;
-      await redisSetJSON(KEYS.message(messageId), message);
-    }
+    await redisIncrBy(KEYS.statsDismissals(messageId), 1);
+
+    const ttl = await redisTTL(KEYS.message(messageId));
+    await syncCounterTTL(KEYS.statsDismissals(messageId), ttl);
+    await syncCounterTTL(KEYS.statsImpressions(messageId), ttl);
 
     return { success: true };
   } catch (error) {
@@ -196,12 +260,10 @@ export async function dismissMessage(
  */
 export async function trackImpression(messageId: string): Promise<void> {
   try {
-    // Increment impression count
-    const message = await redisGetJSON<BroadcastMessage>(KEYS.message(messageId));
-    if (message) {
-      message.stats.impressions++;
-      await redisSetJSON(KEYS.message(messageId), message);
-    }
+    await redisIncrBy(KEYS.statsImpressions(messageId), 1);
+    const ttl = await redisTTL(KEYS.message(messageId));
+    await syncCounterTTL(KEYS.statsImpressions(messageId), ttl);
+    await syncCounterTTL(KEYS.statsDismissals(messageId), ttl);
   } catch (error) {
     console.error('Track impression error:', error);
   }
@@ -212,7 +274,7 @@ export async function trackImpression(messageId: string): Promise<void> {
  */
 export async function updateBroadcast(
   id: string,
-  updates: Partial<Omit<BroadcastMessage, 'id' | 'createdAt' | 'createdBy' | 'stats'>>
+  updates: Partial<Omit<BroadcastMessage, 'id' | 'createdAt' | 'createdBy' | 'stats'>> & { expiresIn?: number | null }
 ): Promise<{ success: boolean; message?: BroadcastMessage; error?: string }> {
   try {
     const existing = await redisGetJSON<BroadcastMessage>(KEYS.message(id));
@@ -220,19 +282,52 @@ export async function updateBroadcast(
       return { success: false, error: 'Message not found' };
     }
 
+    const { expiresIn, ...rest } = updates;
+
+    let expiresAt = existing.expiresAt;
+    if (typeof expiresIn === 'number') {
+      if (expiresIn > 0) {
+        expiresAt = Date.now() + expiresIn * 1000;
+      } else {
+        expiresAt = undefined;
+      }
+    } else if (expiresIn === null) {
+      expiresAt = undefined;
+    }
+
     const updated: BroadcastMessage = {
       ...existing,
-      ...updates,
+      ...rest,
       id: existing.id,
       createdAt: existing.createdAt,
       createdBy: existing.createdBy,
+      expiresAt,
       stats: existing.stats,
     };
 
-    await redisSetJSON(KEYS.message(id), updated);
+    let ttlSeconds: number | undefined;
+    if (expiresAt) {
+      const diff = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      ttlSeconds = diff > 0 ? diff : 1;
+    }
+
+    if (typeof ttlSeconds === 'number') {
+      await redisSetJSON(KEYS.message(id), updated, ttlSeconds);
+    } else {
+      await redisSetJSON(KEYS.message(id), updated);
+      await redisPersist(KEYS.message(id));
+    }
+
+    if (typeof ttlSeconds === 'number') {
+      await syncCounterTTL(KEYS.statsImpressions(id), ttlSeconds);
+      await syncCounterTTL(KEYS.statsDismissals(id), ttlSeconds);
+    } else if (ttlSeconds === undefined) {
+      await redisPersist(KEYS.statsImpressions(id));
+      await redisPersist(KEYS.statsDismissals(id));
+    }
 
     // Update priority in sorted set if changed
-    if (updates.priority && updates.priority !== existing.priority) {
+    if (rest.priority && rest.priority !== existing.priority) {
       const priorityScore = updated.priority === 'high' ? 1 : updated.priority === 'normal' ? 2 : 3;
       const score = priorityScore * 1e12 + updated.createdAt;
       await redis?.zadd?.(
@@ -258,6 +353,8 @@ export async function deleteBroadcast(id: string): Promise<{ success: boolean; e
 
     // Delete message
     await redisDel(KEYS.message(id));
+    await redisDel(KEYS.statsImpressions(id));
+    await redisDel(KEYS.statsDismissals(id));
 
     return { success: true };
   } catch (error) {
@@ -303,6 +400,8 @@ async function cleanupExpiredMessages(expiredIds: string[]): Promise<void> {
     for (const id of expiredIds) {
       await redis?.zrem?.(withPrefix(KEYS.activeList), id);
       await redisDel(KEYS.message(id));
+      await redisDel(KEYS.statsImpressions(id));
+      await redisDel(KEYS.statsDismissals(id));
     }
   } catch (error) {
     console.error('Cleanup expired messages error:', error);

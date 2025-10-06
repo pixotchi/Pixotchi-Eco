@@ -129,37 +129,6 @@ export default function App() {
   const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
   const [currentBroadcast, setCurrentBroadcast] = useState<any>(null);
 
-  // Track wallet connections
-  const walletTrackedRef = useRef(false);
-  useEffect(() => {
-    if (!address || !isConnected || walletTrackedRef.current) return;
-
-    // Determine wallet type based on context
-    let walletType: 'privy' | 'coinbase' | 'miniapp' | 'injected' | 'unknown' = 'unknown';
-    
-    if (fc?.isInMiniApp) {
-      walletType = 'miniapp';
-    } else if (context) {
-      walletType = 'coinbase';
-    } else if (authenticated || surface === 'privy') {
-      walletType = 'privy';
-    } else {
-      walletType = 'injected';
-    }
-
-    // Track the wallet connection
-    fetch('/api/wallet/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, walletType }),
-    }).catch(err => {
-      console.warn('Failed to track wallet connection:', err);
-      // Fail silently - don't break the app
-    });
-
-    walletTrackedRef.current = true;
-  }, [address, isConnected, fc, context, authenticated, surface]);
-
   // Keyboard and viewport awareness
   const keyboardState = useKeyboardAware();
   const viewportHeight = useViewportHeight();
