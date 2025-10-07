@@ -5,17 +5,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/leaderboard/stake/warm
+ * GET /api/leaderboard/stake/warm
  * 
  * Warms the stake leaderboard cache.
  * Called by QStash scheduler to keep cache always hot.
  */
-export async function POST(request: Request) {
-  // QStash sends signature headers for verification
-  // Optional: Verify QStash signature for security
-  const signature = request.headers.get('upstash-signature');
-  
-  // You can also use CRON_SECRET for simple auth
+export async function GET(request: Request) {
+  // Optional: Verify CRON_SECRET for security
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
   
