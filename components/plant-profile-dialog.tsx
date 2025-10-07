@@ -157,7 +157,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
 
     // Fetch fresh data
     setLoading(true);
-    setError(null);
 
     Promise.all([
       getUserGameStats(plant.owner),
