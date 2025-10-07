@@ -32,8 +32,9 @@ async function resolveENSWithCache(address: string): Promise<string | null> {
   if (redis) {
     try {
       const cached = await redis.get(cacheKey);
-      if (cached !== null) {
-        return cached === '' ? null : cached;
+      if (cached !== null && cached !== undefined) {
+        const cachedStr = typeof cached === 'string' ? cached : String(cached);
+        return cachedStr === '' ? null : cachedStr;
       }
     } catch (error) {
       console.error(`Error reading ENS cache for ${address}:`, error);
