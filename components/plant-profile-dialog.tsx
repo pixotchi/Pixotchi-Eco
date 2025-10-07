@@ -612,8 +612,9 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           <button
             type="button"
             onClick={() => openExternalUrl('https://efp.app')}
-            className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
           >
+            <Image src="/icons/efp-logo.svg" alt="EFP" width={12} height={12} />
             Ethereum Follow Protocol
           </button>
         </div>
