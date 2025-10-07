@@ -18,6 +18,7 @@ export interface StakeLeaderboardEntry {
 
 const CACHE_KEY = 'stake:leaderboard:v2';
 const CACHE_TTL = 15 * 60; // 15 minutes (shared across all users)
+const MIN_STAKE_THRESHOLD = BigInt(5) * BigInt(10) ** BigInt(17); // 0.5 SEED minimum
 
 /**
  * Get all stakers from the staking contract's stakersArray using multicall
@@ -108,7 +109,8 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
           // Index 2 is amountStaked: [timeOfLastUpdate, conditionIdOflastUpdate, amountStaked, unclaimedRewards]
           const amountStaked = BigInt(stakerInfo?.[2] || 0);
           
-          if (amountStaked > BigInt(0)) {
+          // Only include stakers with at least 0.5 SEED to keep leaderboard clean
+          if (amountStaked >= MIN_STAKE_THRESHOLD) {
             allStakers.push({
               address: batch[j].toLowerCase(),
               staked: amountStaked

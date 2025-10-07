@@ -11,6 +11,8 @@ import { getUserGameStats } from '@/lib/user-stats-service';
 import { getStakeInfo } from '@/lib/contracts';
 import { formatEthShort } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/open-external';
+import { useName } from '@coinbase/onchainkit/identity';
+import { base } from 'viem/chains';
 import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 
@@ -24,7 +26,6 @@ interface OwnerStats {
   totalPlants: number;
   totalLands: number;
   stakedSeed: bigint;
-  ens: string | null;
 }
 
 interface CachedOwnerData {
@@ -48,17 +49,6 @@ function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-async function fetchENS(address: string): Promise<string | null> {
-  try {
-    const resp = await fetch(`https://api.ensideas.com/ens/resolve/${encodeURIComponent(address)}`);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    return data?.name || data?.display || null;
-  } catch {
-    return null;
-  }
-}
-
 function SkeletonLoader() {
   return (
     <Card>
@@ -80,6 +70,12 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const [ownerStats, setOwnerStats] = useState<OwnerStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Use OnchainKit's useName hook for ENS/Basename resolution
+  const { data: ownerName, isLoading: isNameLoading } = useName({
+    address: (plant?.owner as `0x${string}`) ?? "0x0000000000000000000000000000000000000000",
+    chain: base,
+  });
 
   useEffect(() => {
     if (!plant || !open) {
@@ -108,17 +104,15 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
 
     Promise.all([
       getUserGameStats(plant.owner),
-      getStakeInfo(plant.owner),
-      fetchENS(plant.owner).catch(() => null)
+      getStakeInfo(plant.owner)
     ])
-      .then(([stats, stake, ens]) => {
+      .then(([stats, stake]) => {
         if (cancelled) return;
         
         const ownerData: OwnerStats = {
           totalPlants: stats.totalPlants,
           totalLands: stats.totalLands,
-          stakedSeed: stake?.staked || BigInt(0),
-          ens: ens
+          stakedSeed: stake?.staked || BigInt(0)
         };
         
         setOwnerStats(ownerData);
@@ -162,7 +156,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         {/* Header with Plant Image */}
         <div className="relative -mt-6 -mx-6 mb-4">
           <div className="h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-background rounded-t-xl" />
-          <div className="absolute -bottom-12 left-6">
+          <div className="absolute -bottom-14 left-6">
             <div className="relative">
               <div className="w-24 h-24 rounded-xl border-4 border-background bg-background overflow-hidden shadow-lg">
                 <PlantImage selectedPlant={plant} width={96} height={96} />
@@ -172,9 +166,9 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         </div>
 
         {/* Plant Info */}
-        <div className="mt-10 mb-4">
+        <div className="mt-14 mb-4">
           <DialogTitle className="text-2xl font-bold truncate">
-            {plant.name || `Plant #${plant.id}`}
+            {plant.name ? `${plant.name} (#${plant.id})` : `Plant #${plant.id}`}
           </DialogTitle>
           <DialogDescription className="text-sm mt-1">
             Level {plant.level} {plant.rank && `· Rank #${plant.rank}`}
@@ -190,6 +184,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           <div className="flex items-center gap-1.5">
             <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
             <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
+            <span className="text-xs text-muted-foreground uppercase">Rewards</span>
           </div>
         </div>
 
@@ -197,8 +192,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         <div className="space-y-3 mb-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
-            {ownerStats?.ens && (
-              <span className="text-sm text-primary font-medium">{ownerStats.ens}</span>
+            {ownerName && !isNameLoading && (
+              <span className="text-sm text-primary font-medium">{ownerName}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
