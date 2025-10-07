@@ -7,11 +7,12 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/leaderboard/stake
  * 
- * Returns the stake leaderboard (cached for 4 hours).
+ * Returns the stake leaderboard with fresh data from the contract.
  * Shows wallet addresses ranked by their staked SEED amount.
  */
 export async function GET() {
   try {
+    console.log('📊 API: Fetching stake leaderboard...');
     const leaderboard = await getStakeLeaderboard();
     
     // Convert bigint to string for JSON serialization
@@ -21,14 +22,15 @@ export async function GET() {
       rank: entry.rank
     }));
     
+    console.log(`📊 API: Returning ${serialized.length} stakers`);
+    
     return NextResponse.json({
       success: true,
       leaderboard: serialized,
-      totalStakers: serialized.length,
-      cachedFor: '4 hours'
+      totalStakers: serialized.length
     });
   } catch (error) {
-    console.error('Error fetching stake leaderboard:', error);
+    console.error('❌ API: Error fetching stake leaderboard:', error);
     
     return NextResponse.json(
       {
