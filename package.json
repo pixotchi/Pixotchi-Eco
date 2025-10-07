@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.1.21",
+  "version": "1.1.23",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -22,7 +22,7 @@
     "@privy-io/react-auth": "3.0.1",
     "@privy-io/wagmi": "2.0.0",
     "wagmi": "2.17.5",
-    "viem": "2.37.13",
+    "viem": "2.38.0",
     "permissionless": "0.2.57",
     "next": "15.5.4",
     "react": "19.2.0",
@@ -50,8 +50,8 @@
   },
   "devDependencies": {
     "@types/node": "24.7.0",
-    "@types/react": "19.2.1",
-    "@types/react-dom": "19.2.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.1",
     "eslint": "9.37.0",
     "eslint-config-next": "15.5.4",
     "eslint-config-prettier": "10.1.8",
