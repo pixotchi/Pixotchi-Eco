@@ -3,6 +3,7 @@ import { getStakeLeaderboard } from '@/lib/stake-leaderboard-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const revalidate = 900; // Revalidate every 15 minutes (shared cache)
 
 /**
  * GET /api/leaderboard/stake

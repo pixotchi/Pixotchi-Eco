@@ -3,11 +3,12 @@
  * 
  * Builds a leaderboard of users ranked by their staked SEED amount.
  * Uses the staking contract's stakersArray to get all stakers directly.
- * Always fetches fresh data, just like plants and lands leaderboards.
+ * Uses multicall for efficient batch fetching and short-term caching (5 minutes).
  */
 
 import { getReadClient, STAKE_CONTRACT_ADDRESS } from './contracts';
 import stakeAbi from '@/public/abi/stakeabi.json';
+import { redis } from './redis';
 
 export interface StakeLeaderboardEntry {
   address: string;
@@ -15,77 +16,113 @@ export interface StakeLeaderboardEntry {
   rank: number;
 }
 
+const CACHE_KEY = 'stake:leaderboard:v2';
+const CACHE_TTL = 15 * 60; // 15 minutes (shared across all users)
+
 /**
- * Get all stakers from the staking contract's stakersArray
+ * Get all stakers from the staking contract's stakersArray using multicall
  */
 async function getAllStakersFromContract(): Promise<Array<{ address: string; staked: bigint }>> {
   const readClient = getReadClient();
-  const allStakers: Array<{ address: string; staked: bigint }> = [];
   
   try {
-    console.log('📡 Fetching stakers from contract stakersArray...');
+    console.log('📡 Fetching stakers using optimized multicall...');
+    const startTime = Date.now();
     
-    // Try to iterate through stakersArray
-    let index = 0;
+    // Step 1: First, do a binary search to find the total number of stakers
+    let low = 0;
+    let high = 10000;
+    let totalStakers = 0;
     
-    while (index < 10000) { // Safety limit
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
       try {
         const address = await readClient.readContract({
           address: STAKE_CONTRACT_ADDRESS,
           abi: stakeAbi as any,
           functionName: 'stakersArray',
-          args: [BigInt(index)],
+          args: [BigInt(mid)],
         }) as `0x${string}`;
         
-        console.log(`📍 Index ${index}: ${address}`);
-        
-        // Check if we've reached the end (address(0) or error)
         if (!address || address === '0x0000000000000000000000000000000000000000') {
-          console.log(`✅ Reached end of stakersArray at index ${index}`);
-          break;
+          high = mid - 1;
+        } else {
+          totalStakers = mid + 1;
+          low = mid + 1;
         }
-        
-        // Get stake info for this address
-        try {
-          const stakerInfo = await readClient.readContract({
-            address: STAKE_CONTRACT_ADDRESS,
-            abi: stakeAbi as any,
-            functionName: 'stakers',
-            args: [address],
-          }) as any;
-          
-          console.log(`💰 Staker ${address}:`, stakerInfo);
-          
-          // The stakers mapping returns a struct with these fields:
-          // [timeOfLastUpdate, conditionIdOflastUpdate, amountStaked, unclaimedRewards]
-          // Based on your example: ["1727036679", "0", "600", "3737724537784581944"]
-          // Index 2 is amountStaked
-          const amountStaked = BigInt(stakerInfo?.[2] || stakerInfo?.amountStaked || 0);
-          
-          console.log(`💰 Amount staked: ${amountStaked.toString()}`);
-          
-          if (amountStaked > BigInt(0)) {
-            allStakers.push({
-              address: address.toLowerCase(),
-              staked: amountStaked
-            });
-            console.log(`✅ Added staker ${address} with ${amountStaked.toString()} staked`);
-          } else {
-            console.log(`⏭️ Skipping ${address} - no stake`);
-          }
-        } catch (error) {
-          console.error(`❌ Error fetching stake info for ${address}:`, error);
-        }
-        
-        index++;
-      } catch (error) {
-        // If we hit an error, we've likely reached the end
-        console.log(`✅ Reached end of stakersArray at index ${index} (error thrown)`, error);
-        break;
+      } catch {
+        high = mid - 1;
       }
     }
     
-    console.log(`✅ Found ${allStakers.length} stakers from contract`);
+    console.log(`📊 Found ${totalStakers} total stakers`);
+    
+    if (totalStakers === 0) {
+      return [];
+    }
+    
+    // Step 2: Batch fetch all addresses using multicall
+    const BATCH_SIZE = 100;
+    const allAddresses: `0x${string}`[] = [];
+    
+    for (let i = 0; i < totalStakers; i += BATCH_SIZE) {
+      const batchSize = Math.min(BATCH_SIZE, totalStakers - i);
+      const contracts = Array.from({ length: batchSize }, (_, idx) => ({
+        address: STAKE_CONTRACT_ADDRESS,
+        abi: stakeAbi as any,
+        functionName: 'stakersArray' as const,
+        args: [BigInt(i + idx)],
+      }));
+      
+      const results = await readClient.multicall({ contracts, allowFailure: true });
+      
+      for (const result of results) {
+        if (result.status === 'success' && result.result) {
+          allAddresses.push(result.result as `0x${string}`);
+        }
+      }
+      
+      console.log(`📦 Fetched addresses batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(totalStakers / BATCH_SIZE)}`);
+    }
+    
+    console.log(`✅ Fetched ${allAddresses.length} addresses in ${Date.now() - startTime}ms`);
+    
+    // Step 3: Batch fetch stake info for all addresses using multicall
+    const allStakers: Array<{ address: string; staked: bigint }> = [];
+    
+    for (let i = 0; i < allAddresses.length; i += BATCH_SIZE) {
+      const batch = allAddresses.slice(i, i + BATCH_SIZE);
+      const contracts = batch.map(addr => ({
+        address: STAKE_CONTRACT_ADDRESS,
+        abi: stakeAbi as any,
+        functionName: 'stakers' as const,
+        args: [addr],
+      }));
+      
+      const results = await readClient.multicall({ contracts, allowFailure: true });
+      
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        if (result.status === 'success' && result.result) {
+          const stakerInfo = result.result as any;
+          // Index 2 is amountStaked: [timeOfLastUpdate, conditionIdOflastUpdate, amountStaked, unclaimedRewards]
+          const amountStaked = BigInt(stakerInfo?.[2] || 0);
+          
+          if (amountStaked > BigInt(0)) {
+            allStakers.push({
+              address: batch[j].toLowerCase(),
+              staked: amountStaked
+            });
+          }
+        }
+      }
+      
+      console.log(`📦 Fetched stakes batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allAddresses.length / BATCH_SIZE)}`);
+    }
+    
+    const totalTime = Date.now() - startTime;
+    console.log(`✅ Found ${allStakers.length} stakers with stake in ${totalTime}ms (avg ${(totalTime / allStakers.length).toFixed(2)}ms per staker)`);
+    
     return allStakers;
   } catch (error) {
     console.error('❌ Error fetching stakers from contract:', error);
@@ -94,13 +131,30 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
 }
 
 /**
- * Get the stake leaderboard - always fetches fresh data from contract
+ * Get the stake leaderboard - uses 5-minute cache for performance
  */
 export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
+  // Try cache first
+  if (redis) {
+    try {
+      const cached = await redis.get(CACHE_KEY);
+      if (cached && typeof cached === 'string') {
+        console.log('⚡ Returning cached stake leaderboard (< 5 min old)');
+        const parsed = JSON.parse(cached);
+        return parsed.map((entry: any) => ({
+          ...entry,
+          stakedAmount: BigInt(entry.stakedAmount)
+        }));
+      }
+    } catch (error) {
+      console.error('Error reading cache:', error);
+    }
+  }
+  
+  // Cache miss - fetch fresh data
   console.log('🔨 Building fresh stake leaderboard from contract...');
   
   try {
-    // Get all stakers directly from the contract
     const allStakers = await getAllStakersFromContract();
     
     if (allStakers.length === 0) {
@@ -122,6 +176,20 @@ export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
       }));
     
     console.log(`✅ Built stake leaderboard with ${sortedStakes.length} stakers`);
+    
+    // Cache for 5 minutes
+    if (redis) {
+      try {
+        const serialized = JSON.stringify(sortedStakes, (key, value) =>
+          typeof value === 'bigint' ? value.toString() : value
+        );
+        await redis.setex(CACHE_KEY, CACHE_TTL, serialized);
+        console.log(`💾 Cached for ${CACHE_TTL / 60} minutes`);
+      } catch (error) {
+        console.error('Error caching:', error);
+      }
+    }
+    
     return sortedStakes;
   } catch (error) {
     console.error('❌ Error building stake leaderboard:', error);
