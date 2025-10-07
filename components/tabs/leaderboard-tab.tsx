@@ -24,6 +24,7 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { ToggleGroup } from "@/components/ui/toggle-group";
+import PlantProfileDialog from "@/components/plant-profile-dialog";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -54,6 +55,8 @@ export default function LeaderboardTab() {
   const [filterMode, setFilterMode] = useState<'all' | 'attackable'>('all');
   const publicClient = usePublicClient();
   const [boardType, setBoardType] = useState<'plants' | 'lands'>('plants');
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
 
   const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
     if (!hash || !publicClient) return;
@@ -247,6 +250,11 @@ export default function LeaderboardTab() {
   };
   const eligibleAttackers = (target: LeaderboardPlant): Plant[] => myPlants.filter((p) => canAttackWith(p, target));
 
+  const handlePlantImageClick = (plant: LeaderboardPlant) => {
+    setSelectedPlantForProfile(plant);
+    setProfileDialogOpen(true);
+  };
+
   // Calculate pagination values
   const isAttackable = (plant: LeaderboardPlant) => !isUserPlant(plant) && !plant.isDead && eligibleAttackers(plant).length > 0 && !hasActiveFence(plant);
   const filteredPlants = filterMode === 'attackable'
@@ -326,7 +334,19 @@ export default function LeaderboardTab() {
                 </div>
 
                 {/* Plant Image */}
-                <div className="relative flex-shrink-0">
+                <div 
+                  className="relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => handlePlantImageClick(plant)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handlePlantImageClick(plant);
+                    }
+                  }}
+                  aria-label="View plant profile"
+                >
                   <PlantImage selectedPlant={plant} width={48} height={48} />
                   {hasActiveFence(plant) && (
                     <div className="absolute -top-1 -right-1">
@@ -801,6 +821,13 @@ export default function LeaderboardTab() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Plant Profile Dialog */}
+        <PlantProfileDialog
+          open={profileDialogOpen}
+          onOpenChange={setProfileDialogOpen}
+          plant={selectedPlantForProfile}
+        />
       </div>
     );
 }
