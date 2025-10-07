@@ -47,6 +47,7 @@ export default function LeaderboardTab() {
   const [landRows, setLandRows] = useState<Array<{ rank: number; landId: number; name: string; exp: number }>>([]);
   const [stakeRows, setStakeRows] = useState<StakeLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [stakeLoading, setStakeLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [myPlants, setMyPlants] = useState<Plant[]>([]);
@@ -147,21 +148,6 @@ export default function LeaderboardTab() {
         setLandRows(sortedLands);
       } catch {}
       
-      // Fetch stake leaderboard
-      try {
-        const stakeResponse = await fetch('/api/leaderboard/stake');
-        if (stakeResponse.ok) {
-          const stakeData = await stakeResponse.json();
-          const sortedStakes = stakeData.leaderboard.map((entry: any) => ({
-            rank: entry.rank,
-            address: entry.address,
-            stakedAmount: BigInt(entry.stakedAmount)
-          }));
-          setStakeRows(sortedStakes);
-        }
-      } catch (error) {
-        console.error('Error fetching stake leaderboard:', error);
-      }
       setCurrentPage(1); // Reset to first page when data changes
     } catch (err) {
       console.error('Error fetching leaderboard data:', err);
@@ -174,6 +160,34 @@ export default function LeaderboardTab() {
   useEffect(() => {
     fetchLeaderboardData();
   }, [fetchLeaderboardData]);
+
+  // Fetch stake leaderboard separately when stake tab is selected
+  const fetchStakeLeaderboard = useCallback(async () => {
+    setStakeLoading(true);
+    try {
+      const stakeResponse = await fetch('/api/leaderboard/stake');
+      if (stakeResponse.ok) {
+        const stakeData = await stakeResponse.json();
+        const sortedStakes = stakeData.leaderboard.map((entry: any) => ({
+          rank: entry.rank,
+          address: entry.address,
+          stakedAmount: BigInt(entry.stakedAmount)
+        }));
+        setStakeRows(sortedStakes);
+      }
+    } catch (error) {
+      console.error('Error fetching stake leaderboard:', error);
+    } finally {
+      setStakeLoading(false);
+    }
+  }, []);
+
+  // Fetch stake data when switching to stake tab
+  useEffect(() => {
+    if (boardType === 'stake') {
+      fetchStakeLeaderboard();
+    }
+  }, [boardType, fetchStakeLeaderboard]);
 
   // Reset pagination when switching board type
   useEffect(() => {
@@ -600,7 +614,7 @@ export default function LeaderboardTab() {
                 </div>
               )
             ) : (
-              loading ? (
+              stakeLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
                 </div>
