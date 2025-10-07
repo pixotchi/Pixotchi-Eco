@@ -29,6 +29,7 @@ export function useBroadcastMessages() {
   const [tutorialCompleted, setTutorialCompleted] = useState(isTutorialCompleted());
   const lastFetchRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchCountRef = useRef<number>(0);
 
   // Load dismissed IDs from localStorage (for anonymous users)
   useEffect(() => {
@@ -43,34 +44,40 @@ export function useBroadcastMessages() {
     }
   }, []);
 
-  // Check tutorial completion status periodically
+  // Check tutorial completion status on mount only
   useEffect(() => {
-    const checkTutorial = () => {
-      setTutorialCompleted(isTutorialCompleted());
+    setTutorialCompleted(isTutorialCompleted());
+    
+    // Listen for tutorial completion event if needed
+    const handleTutorialComplete = () => {
+      console.log('[Broadcast] Tutorial completed, will fetch messages on next poll');
+      setTutorialCompleted(true);
     };
     
-    // Check immediately
-    checkTutorial();
+    window.addEventListener('tutorial:complete', handleTutorialComplete);
     
-    // Check every 2 seconds to detect when tutorial completes
-    const interval = setInterval(checkTutorial, 2000);
-    
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('tutorial:complete', handleTutorialComplete);
+    };
   }, []);
 
-  // Fetch active messages
+  // Fetch active messages - stable callback without excessive dependencies
   const fetchMessages = useCallback(async () => {
     // Don't fetch if tutorial is not completed
-    if (!tutorialCompleted) {
+    if (!isTutorialCompleted()) {
       return;
     }
 
-    // Prevent excessive polling
+    // Prevent excessive polling - minimum 10 seconds between fetches
     const now = Date.now();
-    if (now - lastFetchRef.current < 5000) {
-      return; // Don't fetch more than once per 5 seconds
+    if (now - lastFetchRef.current < 10000) {
+      console.log(`[Broadcast] Skipping fetch - only ${((now - lastFetchRef.current) / 1000).toFixed(1)}s since last fetch`);
+      return;
     }
     lastFetchRef.current = now;
+    fetchCountRef.current += 1;
+
+    console.log(`[Broadcast] Fetching messages (count: ${fetchCountRef.current})`);
 
     try {
       const url = address 
@@ -87,13 +94,14 @@ export function useBroadcastMessages() {
         );
         
         setMessages(activeMessages);
+        console.log(`[Broadcast] Found ${activeMessages.length} active messages`);
       }
     } catch (error) {
-      console.error('Failed to fetch broadcast messages:', error);
+      console.error('[Broadcast] Failed to fetch messages:', error);
     } finally {
       setLoading(false);
     }
-  }, [address, localDismissedIds, tutorialCompleted]);
+  }, [address, localDismissedIds]);
 
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {
@@ -140,35 +148,38 @@ export function useBroadcastMessages() {
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch and setup polling - run once on mount
   useEffect(() => {
+    console.log('[Broadcast] Initializing polling system');
+    
+    // Initial fetch
     fetchMessages();
-  }, [fetchMessages]);
 
-  // Set up polling
-  useEffect(() => {
-    // Clear any existing interval
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
+    // Set up polling interval (only once)
+    pollingIntervalRef.current = setInterval(() => {
+      console.log('[Broadcast] Polling interval triggered');
+      fetchMessages();
+    }, POLL_INTERVAL);
 
-    // Start new polling interval
-    pollingIntervalRef.current = setInterval(fetchMessages, POLL_INTERVAL);
-
-    // Cleanup
+    // Cleanup on unmount
     return () => {
+      console.log('[Broadcast] Cleaning up polling system');
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
-  }, [fetchMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once
 
-  // Refresh when wallet connects/disconnects
+  // Refresh when wallet connects/disconnects (but don't restart polling)
   useEffect(() => {
     if (address !== undefined) {
+      console.log('[Broadcast] Wallet address changed, fetching messages');
       fetchMessages();
     }
-  }, [address, fetchMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address]); // Only depend on address, not fetchMessages
 
   return {
     messages,
