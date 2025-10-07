@@ -20,7 +20,7 @@ export interface StakeLeaderboardEntry {
 const CACHE_KEY = 'stake:leaderboard:v2';
 const CACHE_TTL = 15 * 60; // 15 minutes (shared across all users)
 const MIN_STAKE_THRESHOLD = BigInt(5) * BigInt(10) ** BigInt(17); // 0.5 SEED minimum
-const ENS_CACHE_TTL = 3 * 24 * 60 * 60; // 3 days for ENS resolution
+const ENS_CACHE_TTL = 6 * 60 * 60; // 6 hours for Basename resolution
 
 /**
  * Resolve ENS/Basename for an address with 3-day Redis caching
@@ -41,34 +41,21 @@ async function resolveENSWithCache(address: string): Promise<string | null> {
     }
   }
   
-  // Cache miss - fetch from API
+  // Cache miss - fetch from Basename API
   try {
-    const resp = await fetch(`https://api.ensideas.com/ens/resolve/${encodeURIComponent(address)}`);
-    if (!resp.ok) {
-      // Cache the null result to avoid repeated API calls
+    const resp = await fetch(`https://api.base.org/names/lookup/${encodeURIComponent(address)}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      const basename = data?.name ?? null;
       if (redis) {
-        await redis.setex(cacheKey, ENS_CACHE_TTL, '');
+        await redis.setex(cacheKey, ENS_CACHE_TTL, basename || '');
       }
-      return null;
+      return basename;
     }
-    
-    const data = await resp.json();
-    const ensName = data?.name || data?.display || null;
-    
-    // Cache the result (empty string if null)
-    if (redis) {
-      await redis.setex(cacheKey, ENS_CACHE_TTL, ensName || '');
-    }
-    
-    return ensName;
+    // Do not cache the failure to avoid long stale periods
+    return null;
   } catch (error) {
     console.error(`Error resolving ENS for ${address}:`, error);
-    // Cache the failure to avoid repeated attempts
-    if (redis) {
-      try {
-        await redis.setex(cacheKey, ENS_CACHE_TTL, '');
-      } catch {}
-    }
     return null;
   }
 }

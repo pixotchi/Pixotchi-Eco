@@ -10,7 +10,7 @@ import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
 import { getUserGameStats } from '@/lib/user-stats-service';
 import { getStakeInfo } from '@/lib/contracts';
-import { formatEthShort } from '@/lib/utils';
+import { formatEthShort, formatTokenAmount } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/open-external';
 import { useName } from '@coinbase/onchainkit/identity';
 import { base } from 'viem/chains';
@@ -76,12 +76,7 @@ const efpStatsCache = new Map<string, CachedEFPData>();
 const ensDataCache = new Map<string, CachedENSData>();
 const CACHE_DURATION = 120000; // 2 minutes
 
-function formatStaked(amount: bigint): string {
-  const num = Number(amount) / 1e18;
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toFixed(0);
-}
+const formatStaked = (amount: bigint) => formatTokenAmount(amount, 18);
 
 function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
