@@ -158,103 +158,135 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[420px]">
-        <DialogHeader className="pb-2">
-          <DialogTitle className="flex items-center gap-2">
-            <PlantImage selectedPlant={plant} width={32} height={32} />
-            <span className="truncate">{plant.name || `Plant #${plant.id}`}</span>
+      <DialogContent className="max-w-[440px]">
+        {/* Header with Plant Image */}
+        <div className="relative -mt-6 -mx-6 mb-4">
+          <div className="h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-background rounded-t-xl" />
+          <div className="absolute -bottom-12 left-6">
+            <div className="relative">
+              <div className="w-24 h-24 rounded-xl border-4 border-background bg-background overflow-hidden shadow-lg">
+                <PlantImage selectedPlant={plant} width={96} height={96} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Plant Info */}
+        <div className="mt-10 mb-4">
+          <DialogTitle className="text-2xl font-bold truncate">
+            {plant.name || `Plant #${plant.id}`}
           </DialogTitle>
-          <DialogDescription className="text-left">
+          <DialogDescription className="text-sm mt-1">
             Level {plant.level} {plant.rank && `· Rank #${plant.rank}`}
           </DialogDescription>
-        </DialogHeader>
+        </div>
 
-        <div className="space-y-5">
-          {/* Plant Stats */}
-          <Card className="border-primary/20 bg-primary/5">
+        {/* Plant Stats Row */}
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          <Card className="border-yellow-500/20 bg-yellow-500/5">
             <CardContent className="p-4">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="flex flex-col items-center justify-center">
-                  <div className="text-3xl font-bold mb-1">{plant.stars}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                    <span>Stars</span>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                  <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
                 </div>
-                <div className="flex flex-col items-center justify-center">
-                  <div className="text-3xl font-bold mb-1">{formatEthShort(plant.rewards)}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={12} height={12} />
-                    <span>ETH Rewards</span>
-                  </div>
+                <div className="min-w-0">
+                  <div className="text-2xl font-bold">{plant.stars}</div>
+                  <div className="text-xs text-muted-foreground">Stars</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Owner Info */}
-          <div className="space-y-3">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</div>
-            <div className="flex flex-col gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={handleCopyAddress}
-                className="h-9 px-3 text-sm font-mono justify-start hover:bg-muted/50"
-              >
-                <span className="truncate">{formatAddress(plant.owner)}</span>
-                <Copy className="w-3.5 h-3.5 ml-2 flex-shrink-0" />
-              </Button>
-              {ownerStats?.ens && (
-                <div className="text-sm text-primary font-medium px-3">{ownerStats.ens}</div>
-              )}
-            </div>
-          </div>
-
-          {/* Owner Stats */}
-          {loading ? (
-            <SkeletonLoader />
-          ) : error ? (
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-center text-sm text-muted-foreground">
-                  {error}
+          <Card className="border-blue-500/20 bg-blue-500/5">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                  <Image src="/icons/ethlogo.svg" alt="ETH" width={20} height={20} />
                 </div>
-              </CardContent>
-            </Card>
-          ) : ownerStats ? (
-            <Card>
-              <CardContent className="p-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="text-2xl font-bold mb-1">{ownerStats.totalPlants}</div>
-                    <div className="text-xs text-muted-foreground">Plants</div>
-                  </div>
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="text-2xl font-bold mb-1">{ownerStats.totalLands}</div>
-                    <div className="text-xs text-muted-foreground">Lands</div>
-                  </div>
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="text-2xl font-bold mb-1">{formatStaked(ownerStats.stakedSeed)}</div>
-                    <div className="text-xs text-muted-foreground">Staked</div>
-                  </div>
+                <div className="min-w-0">
+                  <div className="text-2xl font-bold truncate">{formatEthShort(plant.rewards)}</div>
+                  <div className="text-xs text-muted-foreground">ETH</div>
                 </div>
-              </CardContent>
-            </Card>
-          ) : null}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <DialogFooter className="pt-4">
+        {/* Owner Section */}
+        <div className="space-y-3 mb-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
+            {ownerStats?.ens && (
+              <span className="text-sm text-primary font-medium">{ownerStats.ens}</span>
+            )}
+          </div>
           <Button 
             variant="outline" 
             size="sm"
-            onClick={handleViewOnBaseScan}
-            className="w-full"
+            onClick={handleCopyAddress}
+            className="w-full h-10 font-mono text-sm justify-between"
           >
-            View on BaseScan
-            <ExternalLink className="w-3.5 h-3.5 ml-2" />
+            <span className="truncate">{formatAddress(plant.owner)}</span>
+            <Copy className="w-4 h-4 flex-shrink-0" />
           </Button>
-        </DialogFooter>
+        </div>
+
+        {/* Owner Stats */}
+        {loading ? (
+          <SkeletonLoader />
+        ) : error ? (
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center text-sm text-muted-foreground">{error}</div>
+            </CardContent>
+          </Card>
+        ) : ownerStats ? (
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Image src="/icons/plant1.svg" alt="Plants" width={20} height={20} />
+                  </div>
+                  <div className="text-2xl font-bold">{ownerStats.totalPlants}</div>
+                  <div className="text-xs text-muted-foreground">Plants</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                    <Image src="/icons/landIcon.png" alt="Lands" width={20} height={20} />
+                  </div>
+                  <div className="text-2xl font-bold">{ownerStats.totalLands}</div>
+                  <div className="text-xs text-muted-foreground">Lands</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center">
+                    <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={20} height={20} />
+                  </div>
+                  <div className="text-2xl font-bold">{formatStaked(ownerStats.stakedSeed)}</div>
+                  <div className="text-xs text-muted-foreground">Staked</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+
+        {/* BaseScan Button */}
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={handleViewOnBaseScan}
+          className="w-full"
+        >
+          View on BaseScan
+          <ExternalLink className="w-4 h-4 ml-2" />
+        </Button>
       </DialogContent>
     </Dialog>
   );
