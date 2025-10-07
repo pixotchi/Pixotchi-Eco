@@ -35,6 +35,7 @@ type StakeLeaderboardEntry = {
   rank: number;
   address: string;
   stakedAmount: bigint;
+  ensName?: string;
 };
 
 const ITEMS_PER_PAGE = 12;
@@ -171,7 +172,8 @@ export default function LeaderboardTab() {
         const sortedStakes = stakeData.leaderboard.map((entry: any) => ({
           rank: entry.rank,
           address: entry.address,
-          stakedAmount: BigInt(entry.stakedAmount)
+          stakedAmount: BigInt(entry.stakedAmount),
+          ensName: entry.ensName || undefined
         }));
         setStakeRows(sortedStakes);
       }
@@ -645,13 +647,27 @@ export default function LeaderboardTab() {
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-2">
-                              <h4 className="font-semibold text-base font-mono truncate pr-6">
-                                {row.address.slice(0, 6)}...{row.address.slice(-4)}
-                                {isCurrentUser && (
-                                  <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                                )}
-                              </h4>
+                            <div className="flex flex-col">
+                              {row.ensName ? (
+                                <>
+                                  <h4 className="font-semibold text-base truncate pr-6">
+                                    {row.ensName}
+                                    {isCurrentUser && (
+                                      <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                                    )}
+                                  </h4>
+                                  <span className="text-xs text-muted-foreground font-mono truncate">
+                                    {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                                  </span>
+                                </>
+                              ) : (
+                                <h4 className="font-semibold text-base font-mono truncate pr-6">
+                                  {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                                  {isCurrentUser && (
+                                    <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                                  )}
+                                </h4>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center space-x-2 text-right">

@@ -20,7 +20,8 @@ export async function GET() {
     const serialized = leaderboard.map(entry => ({
       address: entry.address,
       stakedAmount: entry.stakedAmount.toString(),
-      rank: entry.rank
+      rank: entry.rank,
+      ensName: entry.ensName || undefined
     }));
     
     console.log(`📊 API: Returning ${serialized.length} stakers`);

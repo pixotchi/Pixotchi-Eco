@@ -14,11 +14,88 @@ export interface StakeLeaderboardEntry {
   address: string;
   stakedAmount: bigint;
   rank: number;
+  ensName?: string;
 }
 
 const CACHE_KEY = 'stake:leaderboard:v2';
 const CACHE_TTL = 15 * 60; // 15 minutes (shared across all users)
 const MIN_STAKE_THRESHOLD = BigInt(5) * BigInt(10) ** BigInt(17); // 0.5 SEED minimum
+const ENS_CACHE_TTL = 3 * 24 * 60 * 60; // 3 days for ENS resolution
+
+/**
+ * Resolve ENS/Basename for an address with 3-day Redis caching
+ */
+async function resolveENSWithCache(address: string): Promise<string | null> {
+  const cacheKey = `ens:name:${address.toLowerCase()}`;
+  
+  // Try cache first
+  if (redis) {
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) {
+        return cached === '' ? null : cached;
+      }
+    } catch (error) {
+      console.error(`Error reading ENS cache for ${address}:`, error);
+    }
+  }
+  
+  // Cache miss - fetch from API
+  try {
+    const resp = await fetch(`https://api.ensideas.com/ens/resolve/${encodeURIComponent(address)}`);
+    if (!resp.ok) {
+      // Cache the null result to avoid repeated API calls
+      if (redis) {
+        await redis.setex(cacheKey, ENS_CACHE_TTL, '');
+      }
+      return null;
+    }
+    
+    const data = await resp.json();
+    const ensName = data?.name || data?.display || null;
+    
+    // Cache the result (empty string if null)
+    if (redis) {
+      await redis.setex(cacheKey, ENS_CACHE_TTL, ensName || '');
+    }
+    
+    return ensName;
+  } catch (error) {
+    console.error(`Error resolving ENS for ${address}:`, error);
+    // Cache the failure to avoid repeated attempts
+    if (redis) {
+      try {
+        await redis.setex(cacheKey, ENS_CACHE_TTL, '');
+      } catch {}
+    }
+    return null;
+  }
+}
+
+/**
+ * Resolve ENS names for multiple addresses in parallel
+ */
+async function resolveENSBatch(addresses: string[]): Promise<Map<string, string | null>> {
+  console.log(`🔍 Resolving ENS names for ${addresses.length} addresses...`);
+  const startTime = Date.now();
+  
+  const results = await Promise.all(
+    addresses.map(async (address) => ({
+      address: address.toLowerCase(),
+      ensName: await resolveENSWithCache(address)
+    }))
+  );
+  
+  const ensMap = new Map<string, string | null>();
+  results.forEach(({ address, ensName }) => {
+    ensMap.set(address, ensName);
+  });
+  
+  const resolvedCount = Array.from(ensMap.values()).filter(name => name !== null).length;
+  console.log(`✅ Resolved ${resolvedCount}/${addresses.length} ENS names in ${Date.now() - startTime}ms`);
+  
+  return ensMap;
+}
 
 /**
  * Get all stakers from the staking contract's stakersArray using multicall
@@ -170,19 +247,26 @@ export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
         if (a.staked > b.staked) return -1;
         if (a.staked < b.staked) return 1;
         return 0;
-      })
-      .map((entry, index) => ({
-        address: entry.address,
-        stakedAmount: entry.staked,
-        rank: index + 1
-      }));
+      });
     
     console.log(`✅ Built stake leaderboard with ${sortedStakes.length} stakers`);
     
-    // Cache for 5 minutes
+    // Resolve ENS names for all stakers
+    const addresses = sortedStakes.map(s => s.address);
+    const ensMap = await resolveENSBatch(addresses);
+    
+    // Build final leaderboard with ENS names
+    const leaderboardWithENS = sortedStakes.map((entry, index) => ({
+      address: entry.address,
+      stakedAmount: entry.staked,
+      rank: index + 1,
+      ensName: ensMap.get(entry.address.toLowerCase()) || undefined
+    }));
+    
+    // Cache for 15 minutes
     if (redis) {
       try {
-        const serialized = JSON.stringify(sortedStakes, (key, value) =>
+        const serialized = JSON.stringify(leaderboardWithENS, (key, value) =>
           typeof value === 'bigint' ? value.toString() : value
         );
         await redis.setex(CACHE_KEY, CACHE_TTL, serialized);
@@ -192,7 +276,7 @@ export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
       }
     }
     
-    return sortedStakes;
+    return leaderboardWithENS;
   } catch (error) {
     console.error('❌ Error building stake leaderboard:', error);
     return [];
