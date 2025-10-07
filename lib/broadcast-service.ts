@@ -408,3 +408,112 @@ async function cleanupExpiredMessages(expiredIds: string[]): Promise<void> {
   }
 }
 
+/**
+ * Clean up orphaned user dismissal records
+ * Removes dismissal records for messages that no longer exist
+ */
+export async function cleanupOrphanedDismissals(): Promise<{ 
+  success: boolean; 
+  cleaned: number; 
+  error?: string 
+}> {
+  try {
+    if (!redis) {
+      return { success: false, cleaned: 0, error: 'Redis not available' };
+    }
+
+    // Get all active message IDs
+    const activeIds = (await redis.zrange(
+      withPrefix(KEYS.activeList),
+      0,
+      -1
+    ) || []) as string[];
+    const activeSet = new Set(activeIds);
+
+    // Scan for all dismissal sets
+    let cursor: string | number = 0;
+    let cleanedCount = 0;
+    const pattern = withPrefix('broadcast:dismissed:*');
+
+    do {
+      const result = await redis.scan(cursor, { match: pattern, count: 100 }) as [string | number, string[]];
+      cursor = result[0];
+      const keys = result[1];
+
+      for (const key of keys) {
+        // Get all message IDs in this user's dismissal set
+        const dismissedIds = await redis.smembers(key) as string[];
+        
+        // Remove IDs for messages that no longer exist
+        for (const msgId of dismissedIds) {
+          if (!activeSet.has(msgId)) {
+            await redis.srem(key, msgId);
+            cleanedCount++;
+          }
+        }
+
+        // If the set is now empty, delete it
+        const remaining = await redis.scard(key);
+        if (remaining === 0) {
+          await redis.del(key);
+        }
+      }
+    } while (cursor !== 0 && cursor !== '0');
+
+    return { success: true, cleaned: cleanedCount };
+  } catch (error) {
+    console.error('Cleanup orphaned dismissals error:', error);
+    return { success: false, cleaned: 0, error: 'Cleanup failed' };
+  }
+}
+
+/**
+ * DANGER: Completely wipe ALL broadcast data from Redis
+ * This includes messages, stats, dismissals, and the active list
+ */
+export async function nukeAllBroadcastData(): Promise<{
+  success: boolean;
+  deletedKeys: number;
+  error?: string;
+}> {
+  try {
+    if (!redis) {
+      return { success: false, deletedKeys: 0, error: 'Redis not available' };
+    }
+
+    let deletedCount = 0;
+
+    // Delete the active list
+    await redis.del(withPrefix(KEYS.activeList));
+    deletedCount++;
+
+    // Scan and delete all broadcast-related keys
+    const patterns = [
+      withPrefix('broadcast:message:*'),
+      withPrefix('broadcast:stats:*'),
+      withPrefix('broadcast:dismissed:*'),
+      withPrefix('broadcast:active-cache'), // If cache exists
+    ];
+
+    for (const pattern of patterns) {
+      let cursor: string | number = 0;
+      do {
+        const result = await redis.scan(cursor, { match: pattern, count: 100 }) as [string | number, string[]];
+        cursor = result[0];
+        const keys = result[1];
+
+        if (keys.length > 0) {
+          await redis.del(...keys);
+          deletedCount += keys.length;
+        }
+      } while (cursor !== 0 && cursor !== '0');
+    }
+
+    console.log(`🧹 Nuked ${deletedCount} broadcast keys from Redis`);
+    return { success: true, deletedKeys: deletedCount };
+  } catch (error) {
+    console.error('Nuke broadcast data error:', error);
+    return { success: false, deletedKeys: 0, error: 'Nuke operation failed' };
+  }
+}
+
