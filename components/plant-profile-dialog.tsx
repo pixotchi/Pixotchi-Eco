@@ -120,27 +120,9 @@ async function fetchENSData(addressOrENS: string): Promise<ENSData | null> {
   }
 }
 
-function SkeletonLoader() {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="grid grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex flex-col items-center justify-center">
-              <div className="h-8 w-16 bg-muted animate-pulse rounded mb-2" />
-              <div className="h-3 w-12 bg-muted animate-pulse rounded" />
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantProfileDialogProps) {
   const [ownerStats, setOwnerStats] = useState<OwnerStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [efpStats, setEfpStats] = useState<EFPStats | null>(null);
   const [efpLoading, setEfpLoading] = useState(false);
   const [viewingENSDetails, setViewingENSDetails] = useState(false);
@@ -156,7 +138,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   useEffect(() => {
     if (!plant || !open) {
       setOwnerStats(null);
-      setError(null);
       return;
     }
 
@@ -203,7 +184,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
       .catch((err) => {
         if (cancelled) return;
         console.error('Error fetching owner stats:', err);
-        setError('Failed to load owner data');
       })
       .finally(() => {
         if (cancelled) return;
@@ -350,8 +330,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           </DialogDescription>
         </div>
 
-        {/* Plant Stats Row */}
-        <div className="flex items-center gap-4 mb-5 text-sm">
+        {/* Plant & Owner Stats Row */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-5 text-sm">
           <div className="flex items-center gap-1.5">
             <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} />
             <span className="font-semibold">{plant.stars}</span>
@@ -361,6 +341,39 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
             <span className="text-xs text-muted-foreground uppercase">Rewards</span>
           </div>
+          {loading ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 w-8" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 w-8" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+            </>
+          ) : ownerStats ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <Image src="/icons/plant1.svg" alt="Plants" width={16} height={16} />
+                <span className="font-semibold">{ownerStats.totalPlants}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Image src="/icons/landIcon.png" alt="Lands" width={16} height={16} />
+                <span className="font-semibold">{ownerStats.totalLands}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={16} height={16} />
+                <span className="font-semibold">{formatStaked(ownerStats.stakedSeed)}</span>
+                <span className="text-xs text-muted-foreground uppercase">Staked</span>
+              </div>
+            </>
+          ) : null}
         </div>
 
         {/* Conditional Content: Main Profile or ENS Details */}
@@ -572,7 +585,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         </div>
 
         {/* EFP Social Stats - Followers/Following */}
-        <div className="flex items-center justify-center gap-6 py-3 mb-5 border-y border-border">
+        <div className="flex items-center justify-center gap-6 py-3 border-y border-border">
           {efpLoading ? (
             <>
               <div className="flex flex-col items-center">
@@ -601,47 +614,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             <span className="text-xs text-muted-foreground italic">No social data available</span>
           )}
         </div>
-
-        {/* Owner Stats */}
-        {loading ? (
-          <SkeletonLoader />
-        ) : error ? (
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-center text-sm text-muted-foreground">{error}</div>
-            </CardContent>
-          </Card>
-        ) : ownerStats ? (
-          <div className="grid grid-cols-3 gap-3">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex flex-col items-center gap-2">
-                  <Image src="/icons/plant1.svg" alt="Plants" width={24} height={24} />
-                  <div className="text-2xl font-bold">{ownerStats.totalPlants}</div>
-                  <div className="text-xs text-muted-foreground">Plants</div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex flex-col items-center gap-2">
-                  <Image src="/icons/landIcon.png" alt="Lands" width={24} height={24} />
-                  <div className="text-2xl font-bold">{ownerStats.totalLands}</div>
-                  <div className="text-xs text-muted-foreground">Lands</div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex flex-col items-center gap-2">
-                  <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={24} height={24} />
-                  <div className="text-2xl font-bold">{formatStaked(ownerStats.stakedSeed)}</div>
-                  <div className="text-xs text-muted-foreground">Staked</div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        ) : null}
           </>
         )}
       </DialogContent>
