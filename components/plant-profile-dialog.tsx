@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Copy, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
@@ -28,14 +29,25 @@ interface OwnerStats {
   stakedSeed: bigint;
 }
 
+interface EFPStats {
+  followersCount: number;
+  followingCount: number;
+}
+
 interface CachedOwnerData {
   stats: OwnerStats;
   timestamp: number;
   plantId: number;
 }
 
+interface CachedEFPData {
+  stats: EFPStats;
+  timestamp: number;
+}
+
 // Cache owner stats to prevent excessive RPC calls
 const ownerStatsCache = new Map<string, CachedOwnerData>();
+const efpStatsCache = new Map<string, CachedEFPData>();
 const CACHE_DURATION = 120000; // 2 minutes
 
 function formatStaked(amount: bigint): string {
@@ -47,6 +59,27 @@ function formatStaked(amount: bigint): string {
 
 function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function formatCount(count: number): string {
+  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+  return count.toString();
+}
+
+async function fetchEFPStats(addressOrENS: string): Promise<EFPStats | null> {
+  try {
+    const resp = await fetch(`https://api.ethfollow.xyz/api/v1/users/${encodeURIComponent(addressOrENS)}/stats`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return {
+      followersCount: parseInt(data.followers_count || '0', 10),
+      followingCount: parseInt(data.following_count || '0', 10),
+    };
+  } catch (error) {
+    console.error('EFP stats fetch error:', error);
+    return null;
+  }
 }
 
 function SkeletonLoader() {
@@ -70,6 +103,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const [ownerStats, setOwnerStats] = useState<OwnerStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [efpStats, setEfpStats] = useState<EFPStats | null>(null);
+  const [efpLoading, setEfpLoading] = useState(false);
 
   // Use OnchainKit's useName hook for ENS/Basename resolution
   const { data: ownerName, isLoading: isNameLoading } = useName({
@@ -139,6 +174,62 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
     };
   }, [plant?.id, plant?.owner, open]);
 
+  // Fetch EFP stats (followers/following)
+  useEffect(() => {
+    if (!plant || !open) {
+      setEfpStats(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    // Check cache first
+    const cacheKey = plant.owner.toLowerCase();
+    const cached = efpStatsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+      setEfpStats(cached.stats);
+      setEfpLoading(false);
+      return;
+    }
+
+    // Fetch fresh EFP data
+    setEfpLoading(true);
+
+    // Prefer ENS name if available, otherwise use address
+    const addressOrENS = ownerName || plant.owner;
+
+    fetchEFPStats(addressOrENS)
+      .then((stats) => {
+        if (cancelled) return;
+        
+        if (stats) {
+          setEfpStats(stats);
+          // Cache the data
+          efpStatsCache.set(cacheKey, {
+            stats,
+            timestamp: now,
+          });
+        } else {
+          setEfpStats(null);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Error fetching EFP stats:', err);
+        setEfpStats(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setEfpLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [plant?.owner, ownerName, open]);
+
   if (!plant) return null;
 
   const handleCopyAddress = () => {
@@ -192,8 +283,12 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         <div className="space-y-3 mb-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
-            {ownerName && !isNameLoading && (
+            {isNameLoading ? (
+              <Skeleton className="h-4 w-32" />
+            ) : ownerName ? (
               <span className="text-sm text-primary font-medium">{ownerName}</span>
+            ) : (
+              <span className="text-xs text-muted-foreground italic">No ENS/Basename found</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -215,6 +310,37 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
               <ExternalLink className="w-4 h-4" />
             </Button>
           </div>
+        </div>
+
+        {/* EFP Social Stats - Followers/Following */}
+        <div className="flex items-center justify-center gap-6 py-3 mb-5 border-y border-border">
+          {efpLoading ? (
+            <>
+              <div className="flex flex-col items-center">
+                <Skeleton className="h-6 w-12 mb-1" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div className="flex flex-col items-center">
+                <Skeleton className="h-6 w-12 mb-1" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </>
+          ) : efpStats ? (
+            <>
+              <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
+                <span className="text-xl font-bold">{formatCount(efpStats.followersCount)}</span>
+                <span className="text-xs text-muted-foreground">Followers</span>
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
+                <span className="text-xl font-bold">{formatCount(efpStats.followingCount)}</span>
+                <span className="text-xs text-muted-foreground">Following</span>
+              </div>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground italic">No social data available</span>
+          )}
         </div>
 
         {/* Owner Stats */}
