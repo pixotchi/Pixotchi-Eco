@@ -2,11 +2,13 @@
  * Stake Leaderboard Service
  * 
  * Builds and caches a leaderboard of users ranked by their staked SEED amount.
+ * Uses the staking contract's stakersArray to get all stakers directly.
  * Data is cached for 4 hours to minimize RPC calls.
  */
 
 import { redis } from './redis';
-import { getStakeInfo } from './contracts';
+import { getReadClient, STAKE_CONTRACT_ADDRESS, retryWithBackoff } from './contracts';
+import { stakingAbi } from '@/public/abi/staking-abi';
 
 export interface StakeLeaderboardEntry {
   address: string;
@@ -18,81 +20,115 @@ const CACHE_KEY = 'stake:leaderboard:cached';
 const CACHE_TTL = 4 * 60 * 60; // 4 hours in seconds
 
 /**
- * Get unique addresses from plant and land ownership data
+ * Get all stakers from the staking contract's stakersArray
  */
-async function getActiveUserAddresses(): Promise<string[]> {
-  const addresses = new Set<string>();
+async function getAllStakersFromContract(): Promise<Array<{ address: string; staked: bigint }>> {
+  const readClient = getReadClient();
+  const allStakers: Array<{ address: string; staked: bigint }> = [];
   
   try {
-    // Get addresses from user stats cache (tracks recent activity)
-    if (redis) {
-      const pattern = 'user:stats:*';
-      let cursor: string | number = 0;
-      
-      do {
-        const result = await redis.scan(cursor, { match: pattern, count: 100 }) as [string | number, string[]];
-        cursor = result[0];
-        const keys = result[1] as string[];
+    console.log('📡 Fetching stakers from contract stakersArray...');
+    
+    // Iterate through stakersArray until we get address(0) or an error
+    let index = 0;
+    const BATCH_SIZE = 20; // Fetch addresses in batches
+    
+    while (true) {
+      try {
+        // Fetch a batch of addresses
+        const batch = await Promise.all(
+          Array.from({ length: BATCH_SIZE }, (_, i) => index + i).map(async (idx) => {
+            try {
+              return await retryWithBackoff(async () => {
+                const address = await readClient.readContract({
+                  address: STAKE_CONTRACT_ADDRESS,
+                  abi: stakingAbi,
+                  functionName: 'stakersArray',
+                  args: [BigInt(idx)],
+                }) as `0x${string}`;
+                return { index: idx, address };
+              });
+            } catch {
+              return { index: idx, address: null };
+            }
+          })
+        );
         
-        for (const key of keys) {
-          // Extract address from key format: user:stats:0x...
-          const address = key.split(':')[2];
-          if (address && address.startsWith('0x')) {
-            addresses.add(address.toLowerCase());
+        // Process batch results
+        let foundEnd = false;
+        for (const result of batch) {
+          if (!result.address || result.address === '0x0000000000000000000000000000000000000000') {
+            foundEnd = true;
+            break;
+          }
+          
+          // Get stake info for this address
+          try {
+            const stakerInfo = await retryWithBackoff(async () => {
+              return await readClient.readContract({
+                address: STAKE_CONTRACT_ADDRESS,
+                abi: stakingAbi,
+                functionName: 'stakers',
+                args: [result.address],
+              }) as any;
+            });
+            
+            const amountStaked = stakerInfo?.amountStaked || stakerInfo?.[2] || BigInt(0);
+            
+            if (amountStaked > BigInt(0)) {
+              allStakers.push({
+                address: result.address.toLowerCase(),
+                staked: BigInt(amountStaked)
+              });
+            }
+          } catch (error) {
+            console.error(`Error fetching stake info for ${result.address}:`, error);
           }
         }
-      } while (cursor !== 0 && cursor !== '0');
+        
+        if (foundEnd) {
+          break;
+        }
+        
+        index += BATCH_SIZE;
+        
+        // Safety check to prevent infinite loops
+        if (index > 10000) {
+          console.warn('⚠️ Reached max index limit (10000) for stakersArray');
+          break;
+        }
+      } catch (error) {
+        // If we hit an error, we've likely reached the end
+        console.log(`Reached end of stakersArray at index ${index}`);
+        break;
+      }
     }
+    
+    console.log(`✅ Found ${allStakers.length} stakers from contract`);
+    return allStakers;
   } catch (error) {
-    console.error('Error fetching user addresses from cache:', error);
+    console.error('Error fetching stakers from contract:', error);
+    return [];
   }
-  
-  return Array.from(addresses);
 }
 
 /**
- * Build the stake leaderboard by fetching stake info for all active users
+ * Build the stake leaderboard by fetching all stakers from the contract
  */
 export async function buildStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
-  console.log('🔨 Building stake leaderboard...');
+  console.log('🔨 Building stake leaderboard from contract...');
   
   try {
-    // Get all active user addresses
-    const addresses = await getActiveUserAddresses();
+    // Get all stakers directly from the contract
+    const allStakers = await getAllStakersFromContract();
     
-    if (addresses.length === 0) {
-      console.log('⚠️ No addresses found for stake leaderboard');
+    if (allStakers.length === 0) {
+      console.log('⚠️ No stakers found in contract');
       return [];
     }
     
-    console.log(`📊 Fetching stake info for ${addresses.length} addresses...`);
-    
-    // Fetch stake info for all addresses in parallel (with batching to avoid overwhelming RPC)
-    const BATCH_SIZE = 50;
-    const allStakes: Array<{ address: string; staked: bigint }> = [];
-    
-    for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
-      const batch = addresses.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async (address) => {
-          try {
-            const stakeInfo = await getStakeInfo(address);
-            return {
-              address,
-              staked: stakeInfo?.staked || BigInt(0)
-            };
-          } catch (error) {
-            console.error(`Error fetching stake for ${address}:`, error);
-            return { address, staked: BigInt(0) };
-          }
-        })
-      );
-      allStakes.push(...batchResults);
-    }
-    
-    // Filter out users with no stake and sort by staked amount (highest first)
-    const sortedStakes = allStakes
-      .filter(entry => entry.staked > BigInt(0))
+    // Sort by staked amount (highest first)
+    const sortedStakes = allStakers
       .sort((a, b) => {
         if (a.staked > b.staked) return -1;
         if (a.staked < b.staked) return 1;
