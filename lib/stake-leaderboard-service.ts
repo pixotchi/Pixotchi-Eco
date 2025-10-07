@@ -6,8 +6,8 @@
  * Always fetches fresh data, just like plants and lands leaderboards.
  */
 
-import { getReadClient, STAKE_CONTRACT_ADDRESS, retryWithBackoff } from './contracts';
-import { stakingAbi } from '@/public/abi/staking-abi';
+import { getReadClient, STAKE_CONTRACT_ADDRESS } from './contracts';
+import stakeAbi from '@/public/abi/stakeabi.json';
 
 export interface StakeLeaderboardEntry {
   address: string;
@@ -32,7 +32,7 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
       try {
         const address = await readClient.readContract({
           address: STAKE_CONTRACT_ADDRESS,
-          abi: stakingAbi,
+          abi: stakeAbi as any,
           functionName: 'stakersArray',
           args: [BigInt(index)],
         }) as `0x${string}`;
@@ -49,7 +49,7 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
         try {
           const stakerInfo = await readClient.readContract({
             address: STAKE_CONTRACT_ADDRESS,
-            abi: stakingAbi,
+            abi: stakeAbi as any,
             functionName: 'stakers',
             args: [address],
           }) as any;
@@ -58,14 +58,20 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
           
           // The stakers mapping returns a struct with these fields:
           // [timeOfLastUpdate, conditionIdOflastUpdate, amountStaked, unclaimedRewards]
-          const amountStaked = stakerInfo?.amountStaked || stakerInfo?.[2] || BigInt(0);
+          // Based on your example: ["1727036679", "0", "600", "3737724537784581944"]
+          // Index 2 is amountStaked
+          const amountStaked = BigInt(stakerInfo?.[2] || stakerInfo?.amountStaked || 0);
+          
+          console.log(`💰 Amount staked: ${amountStaked.toString()}`);
           
           if (amountStaked > BigInt(0)) {
             allStakers.push({
               address: address.toLowerCase(),
-              staked: BigInt(amountStaked)
+              staked: amountStaked
             });
             console.log(`✅ Added staker ${address} with ${amountStaked.toString()} staked`);
+          } else {
+            console.log(`⏭️ Skipping ${address} - no stake`);
           }
         } catch (error) {
           console.error(`❌ Error fetching stake info for ${address}:`, error);
@@ -74,7 +80,7 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
         index++;
       } catch (error) {
         // If we hit an error, we've likely reached the end
-        console.log(`✅ Reached end of stakersArray at index ${index} (error thrown)`);
+        console.log(`✅ Reached end of stakersArray at index ${index} (error thrown)`, error);
         break;
       }
     }
