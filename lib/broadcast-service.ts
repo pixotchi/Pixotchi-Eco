@@ -436,9 +436,9 @@ export async function cleanupOrphanedDismissals(): Promise<{
     const pattern = withPrefix('broadcast:dismissed:*');
 
     do {
-      const result = await redis.scan(cursor, { match: pattern, count: 100 });
+      const result = await redis.scan(cursor, { match: pattern, count: 100 }) as [string | number, string[]];
       cursor = result[0];
-      const keys = result[1] as string[];
+      const keys = result[1];
 
       for (const key of keys) {
         // Get all message IDs in this user's dismissal set
@@ -498,9 +498,9 @@ export async function nukeAllBroadcastData(): Promise<{
     for (const pattern of patterns) {
       let cursor: string | number = 0;
       do {
-        const result = await redis.scan(cursor, { match: pattern, count: 100 });
+        const result = await redis.scan(cursor, { match: pattern, count: 100 }) as [string | number, string[]];
         cursor = result[0];
-        const keys = result[1] as string[];
+        const keys = result[1];
 
         if (keys.length > 0) {
           await redis.del(...keys);
