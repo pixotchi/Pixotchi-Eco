@@ -358,7 +358,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
                 <span className="font-semibold">{ownerStats.totalPlants}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Image src="/icons/landIcon.png" alt="Lands" width={16} height={16} />
+                <Image src="/icons/bee-house.svg" alt="Lands" width={16} height={16} />
                 <span className="font-semibold">{ownerStats.totalLands}</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -579,7 +579,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         </div>
 
         {/* EFP Social Stats - Followers/Following */}
-        <div className="flex items-center justify-center gap-6 py-3 border-y border-border">
+        <div className="flex flex-col items-center gap-2 py-3 border-y border-border">
+          <div className="flex items-center justify-center gap-6">
           {efpLoading ? (
             <>
               <div className="flex flex-col items-center">
@@ -607,6 +608,14 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           ) : (
             <span className="text-xs text-muted-foreground italic">No social data available</span>
           )}
+          </div>
+          <button
+            type="button"
+            onClick={() => openExternalUrl('https://efp.app')}
+            className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Ethereum Follow Protocol
+          </button>
         </div>
           </>
         )}
