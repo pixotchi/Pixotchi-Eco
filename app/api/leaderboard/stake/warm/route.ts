@@ -8,15 +8,7 @@ export const dynamic = 'force-dynamic';
  * POST /api/leaderboard/stake/warm
  * 
  * Warms the stake leaderboard cache.
- * Called by QStash scheduler every 10 minutes to ensure cache is always hot.
- * 
- * QStash Setup:
- * 1. Go to QStash console: https://console.upstash.com/qstash
- * 2. Create Schedule with:
- *    - Destination: https://mini.pixotchi.tech/api/leaderboard/stake/warm
- *    - Cron: */10 * * * * (every 10 minutes)
- *    - Method: POST
- *    - Headers: Content-Type: application/json
+ * Called by QStash scheduler to keep cache always hot.
  */
 export async function POST(request: Request) {
   // QStash sends signature headers for verification
