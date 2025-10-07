@@ -431,7 +431,7 @@ export async function cleanupOrphanedDismissals(): Promise<{
     const activeSet = new Set(activeIds);
 
     // Scan for all dismissal sets
-    let cursor = 0;
+    let cursor: string | number = 0;
     let cleanedCount = 0;
     const pattern = withPrefix('broadcast:dismissed:*');
 
@@ -458,7 +458,7 @@ export async function cleanupOrphanedDismissals(): Promise<{
           await redis.del(key);
         }
       }
-    } while (cursor !== 0);
+    } while (cursor !== 0 && cursor !== '0');
 
     return { success: true, cleaned: cleanedCount };
   } catch (error) {
@@ -496,7 +496,7 @@ export async function nukeAllBroadcastData(): Promise<{
     ];
 
     for (const pattern of patterns) {
-      let cursor = 0;
+      let cursor: string | number = 0;
       do {
         const result = await redis.scan(cursor, { match: pattern, count: 100 });
         cursor = result[0];
@@ -506,7 +506,7 @@ export async function nukeAllBroadcastData(): Promise<{
           await redis.del(...keys);
           deletedCount += keys.length;
         }
-      } while (cursor !== 0);
+      } while (cursor !== 0 && cursor !== '0');
     }
 
     console.log(`🧹 Nuked ${deletedCount} broadcast keys from Redis`);
