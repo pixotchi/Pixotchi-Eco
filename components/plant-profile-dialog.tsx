@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Star, Copy, ExternalLink } from 'lucide-react';
+import { Copy, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
 import { getUserGameStats } from '@/lib/user-stats-service';
@@ -35,7 +35,7 @@ interface CachedOwnerData {
 
 // Cache owner stats to prevent excessive RPC calls
 const ownerStatsCache = new Map<string, CachedOwnerData>();
-const CACHE_DURATION = 30000; // 30 seconds
+const CACHE_DURATION = 120000; // 2 minutes
 
 function formatStaked(amount: bigint): string {
   const num = Number(amount) / 1e18;
@@ -182,33 +182,15 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         </div>
 
         {/* Plant Stats Row */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <Card className="border-yellow-500/20 bg-yellow-500/5">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
-                  <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-2xl font-bold">{plant.stars}</div>
-                  <div className="text-xs text-muted-foreground">Stars</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-blue-500/20 bg-blue-500/5">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                  <Image src="/icons/ethlogo.svg" alt="ETH" width={20} height={20} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-2xl font-bold truncate">{formatEthShort(plant.rewards)}</div>
-                  <div className="text-xs text-muted-foreground">ETH</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex items-center gap-4 mb-5 text-sm">
+          <div className="flex items-center gap-1.5">
+            <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} />
+            <span className="font-semibold">{plant.stars}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+            <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
+          </div>
         </div>
 
         {/* Owner Section */}
@@ -219,15 +201,25 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
               <span className="text-sm text-primary font-medium">{ownerStats.ens}</span>
             )}
           </div>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleCopyAddress}
-            className="w-full h-10 font-mono text-sm justify-between"
-          >
-            <span className="truncate">{formatAddress(plant.owner)}</span>
-            <Copy className="w-4 h-4 flex-shrink-0" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleCopyAddress}
+              className="flex-1 h-10 font-mono text-sm justify-between"
+            >
+              <span className="truncate">{formatAddress(plant.owner)}</span>
+              <Copy className="w-4 h-4 flex-shrink-0" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleViewOnBaseScan}
+              className="h-10 w-10 p-0"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Owner Stats */}
@@ -240,13 +232,11 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             </CardContent>
           </Card>
         ) : ownerStats ? (
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-4">
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <Image src="/icons/plant1.svg" alt="Plants" width={20} height={20} />
-                  </div>
+                  <Image src="/icons/plant1.svg" alt="Plants" width={24} height={24} />
                   <div className="text-2xl font-bold">{ownerStats.totalPlants}</div>
                   <div className="text-xs text-muted-foreground">Plants</div>
                 </div>
@@ -255,9 +245,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             <Card>
               <CardContent className="p-4">
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
-                    <Image src="/icons/landIcon.png" alt="Lands" width={20} height={20} />
-                  </div>
+                  <Image src="/icons/landIcon.png" alt="Lands" width={24} height={24} />
                   <div className="text-2xl font-bold">{ownerStats.totalLands}</div>
                   <div className="text-xs text-muted-foreground">Lands</div>
                 </div>
@@ -266,9 +254,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             <Card>
               <CardContent className="p-4">
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center">
-                    <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={20} height={20} />
-                  </div>
+                  <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={24} height={24} />
                   <div className="text-2xl font-bold">{formatStaked(ownerStats.stakedSeed)}</div>
                   <div className="text-xs text-muted-foreground">Staked</div>
                 </div>
@@ -276,17 +262,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             </Card>
           </div>
         ) : null}
-
-        {/* BaseScan Button */}
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={handleViewOnBaseScan}
-          className="w-full"
-        >
-          View on BaseScan
-          <ExternalLink className="w-4 h-4 ml-2" />
-        </Button>
       </DialogContent>
     </Dialog>
   );
