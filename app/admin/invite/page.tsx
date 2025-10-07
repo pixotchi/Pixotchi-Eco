@@ -416,6 +416,56 @@ export default function AdminInviteDashboard() {
     setCustomExpiry('');
   };
 
+  const handleCleanupOrphans = async () => {
+    if (!confirm('Clean up orphaned dismissal records? This will remove dismissal records for deleted messages.')) return;
+    try {
+      const response = await fetch('/api/admin/broadcast/cleanup', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminKey}` }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`Cleaned up ${data.cleaned} orphaned records`);
+        fetchBroadcastMessages();
+      } else {
+        toast.error(data.error || 'Cleanup failed');
+      }
+    } catch (error) {
+      toast.error('Error during cleanup');
+    }
+  };
+
+  const handleNukeAllBroadcasts = async () => {
+    const confirmed = confirm(
+      '⚠️ DANGER: This will delete ALL broadcast data including messages, stats, and user dismissals.\n\n' +
+      'This action CANNOT be undone!\n\n' +
+      'Type "DELETE ALL" in the next prompt to confirm.'
+    );
+    if (!confirmed) return;
+
+    const verification = prompt('Type "DELETE ALL" to confirm (case-sensitive):');
+    if (verification !== 'DELETE ALL') {
+      toast.error('Verification failed. Operation cancelled.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/broadcast/cleanup?confirm=true', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminKey}` }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`🧹 Deleted ${data.deletedKeys} keys`);
+        fetchBroadcastMessages();
+      } else {
+        toast.error(data.error || 'Nuke operation failed');
+      }
+    } catch (error) {
+      toast.error('Error during nuke operation');
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated && activeTab === 'broadcast') {
       fetchBroadcastMessages();
@@ -1210,6 +1260,47 @@ export default function AdminInviteDashboard() {
                 </Card>
               </div>
             )}
+
+            {/* Cleanup Tools */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trash2 className="w-5 h-5" />
+                  Data Cleanup Tools
+                </CardTitle>
+                <CardDescription>
+                  Manage and clean up broadcast data in Redis
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCleanupOrphans}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Clean Orphaned Records
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleNukeAllBroadcasts}
+                    className="flex items-center gap-2"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    Delete All Broadcast Data
+                  </Button>
+                </div>
+                <Alert>
+                  <AlertDescription className="text-xs">
+                    <strong>Clean Orphaned Records:</strong> Removes dismissal records for messages that no longer exist (safe operation).<br />
+                    <strong>Delete All:</strong> ⚠️ Permanently deletes ALL broadcasts, stats, and user dismissals. Cannot be undone!
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
 
             {/* Create/Edit Form */}
             <Card>
