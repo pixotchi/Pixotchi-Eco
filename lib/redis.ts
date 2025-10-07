@@ -66,6 +66,9 @@ const KEY_PREFIX = env.UPSTASH_KEY_PREFIX || 'pixotchi:';
 
 export const withPrefix = (key: string) => (key.startsWith(KEY_PREFIX) ? key : `${KEY_PREFIX}${key}`);
 
+export const stripPrefix = (key: string) =>
+  key.startsWith(KEY_PREFIX) ? key.slice(KEY_PREFIX.length) : key;
+
 // JSON helpers with type-safety and error-guarding
 export async function redisGetJSON<T>(key: string): Promise<T | null> {
   if (!redis) return null;

@@ -61,7 +61,7 @@ const createResilientTransport = (endpoints: string[]) => {
 };
 
 // Create optimized read client for data fetching
-const getReadClient = () => {
+export const getReadClient = () => {
   if (!cachedReadClient) {
     const endpoints = getRpcEndpoints();
     
@@ -102,7 +102,7 @@ const getPublicClient = () => {
 };
 
 // Retry logic for rate limiting and network issues
-const retryWithBackoff = async <T>(
+export const retryWithBackoff = async <T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
   baseDelay: number = 1000

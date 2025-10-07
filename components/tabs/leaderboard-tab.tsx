@@ -24,10 +24,18 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { ToggleGroup } from "@/components/ui/toggle-group";
+import PlantProfileDialog from "@/components/plant-profile-dialog";
 
 type LeaderboardPlant = Plant & {
   rank: number;
   isDead: boolean;
+};
+
+type StakeLeaderboardEntry = {
+  rank: number;
+  address: string;
+  stakedAmount: bigint;
+  ensName?: string;
 };
 
 const ITEMS_PER_PAGE = 12;
@@ -38,7 +46,9 @@ export default function LeaderboardTab() {
   const { isSmartWallet } = useSmartWallet();
   const [plants, setPlants] = useState<LeaderboardPlant[]>([]);
   const [landRows, setLandRows] = useState<Array<{ rank: number; landId: number; name: string; exp: number }>>([]);
+  const [stakeRows, setStakeRows] = useState<StakeLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [stakeLoading, setStakeLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [myPlants, setMyPlants] = useState<Plant[]>([]);
@@ -53,7 +63,9 @@ export default function LeaderboardTab() {
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [filterMode, setFilterMode] = useState<'all' | 'attackable'>('all');
   const publicClient = usePublicClient();
-  const [boardType, setBoardType] = useState<'plants' | 'lands'>('plants');
+  const [boardType, setBoardType] = useState<'plants' | 'lands' | 'stake'>('plants');
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
 
   const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
     if (!hash || !publicClient) return;
@@ -136,6 +148,7 @@ export default function LeaderboardTab() {
           }));
         setLandRows(sortedLands);
       } catch {}
+      
       setCurrentPage(1); // Reset to first page when data changes
     } catch (err) {
       console.error('Error fetching leaderboard data:', err);
@@ -148,6 +161,35 @@ export default function LeaderboardTab() {
   useEffect(() => {
     fetchLeaderboardData();
   }, [fetchLeaderboardData]);
+
+  // Fetch stake leaderboard separately when stake tab is selected
+  const fetchStakeLeaderboard = useCallback(async () => {
+    setStakeLoading(true);
+    try {
+      const stakeResponse = await fetch('/api/leaderboard/stake');
+      if (stakeResponse.ok) {
+        const stakeData = await stakeResponse.json();
+        const sortedStakes = stakeData.leaderboard.map((entry: any) => ({
+          rank: entry.rank,
+          address: entry.address,
+          stakedAmount: BigInt(entry.stakedAmount),
+          ensName: entry.ensName || undefined
+        }));
+        setStakeRows(sortedStakes);
+      }
+    } catch (error) {
+      console.error('Error fetching stake leaderboard:', error);
+    } finally {
+      setStakeLoading(false);
+    }
+  }, []);
+
+  // Fetch stake data when switching to stake tab
+  useEffect(() => {
+    if (boardType === 'stake') {
+      fetchStakeLeaderboard();
+    }
+  }, [boardType, fetchStakeLeaderboard]);
 
   // Reset pagination when switching board type
   useEffect(() => {
@@ -247,6 +289,11 @@ export default function LeaderboardTab() {
   };
   const eligibleAttackers = (target: LeaderboardPlant): Plant[] => myPlants.filter((p) => canAttackWith(p, target));
 
+  const handlePlantImageClick = (plant: LeaderboardPlant) => {
+    setSelectedPlantForProfile(plant);
+    setProfileDialogOpen(true);
+  };
+
   // Calculate pagination values
   const isAttackable = (plant: LeaderboardPlant) => !isUserPlant(plant) && !plant.isDead && eligibleAttackers(plant).length > 0 && !hasActiveFence(plant);
   const filteredPlants = filterMode === 'attackable'
@@ -265,6 +312,13 @@ export default function LeaderboardTab() {
   const startLandIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endLandIndex = startLandIndex + ITEMS_PER_PAGE;
   const currentLands = landRows.slice(startLandIndex, endLandIndex);
+
+  // Stake pagination
+  const totalStakeItems = stakeRows.length;
+  const totalStakePages = Math.ceil(totalStakeItems / ITEMS_PER_PAGE) || 1;
+  const startStakeIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endStakeIndex = startStakeIndex + ITEMS_PER_PAGE;
+  const currentStakes = stakeRows.slice(startStakeIndex, endStakeIndex);
 
   const renderContent = () => {
     if (loading) {
@@ -326,7 +380,19 @@ export default function LeaderboardTab() {
                 </div>
 
                 {/* Plant Image */}
-                <div className="relative flex-shrink-0">
+                <div 
+                  className="relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => handlePlantImageClick(plant)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handlePlantImageClick(plant);
+                    }
+                  }}
+                  aria-label="View plant profile"
+                >
                   <PlantImage selectedPlant={plant} width={48} height={48} />
                   {hasActiveFence(plant) && (
                     <div className="absolute -top-1 -right-1">
@@ -454,7 +520,7 @@ export default function LeaderboardTab() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>
-                {boardType === 'plants' ? 'Plants Leaderboard' : 'Lands Leaderboard'}
+                {boardType === 'plants' ? 'Plants Leaderboard' : boardType === 'lands' ? 'Lands Leaderboard' : 'Stake Leaderboard'}
               </CardTitle>
               <ToggleGroup
                 value={boardType}
@@ -462,6 +528,7 @@ export default function LeaderboardTab() {
                 options={[
                   { value: 'plants', label: 'Plants' },
                   { value: 'lands', label: 'Lands' },
+                  { value: 'stake', label: 'Stake' },
                 ]}
               />
             </div>
@@ -481,7 +548,7 @@ export default function LeaderboardTab() {
           <CardContent>
             {boardType === 'plants' ? (
               renderContent()
-            ) : (
+            ) : boardType === 'lands' ? (
               loading ? (
                 <div className="flex items-center justify-center py-8">
                   <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
@@ -540,6 +607,100 @@ export default function LeaderboardTab() {
                           size="sm"
                           onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalLandPages))}
                           disabled={currentPage === totalLandPages}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            ) : (
+              stakeLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
+                </div>
+              ) : (
+                <div className="space-y-2 divide-y divide-border -mx-4 px-4">
+                  {totalStakeItems === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">No stakers found.</div>
+                  )}
+                  {currentStakes.map((row) => {
+                    const formattedStake = (Number(row.stakedAmount) / 1e18).toLocaleString(undefined, {
+                      maximumFractionDigits: 2
+                    });
+                    const isCurrentUser = address && row.address.toLowerCase() === address.toLowerCase();
+                    
+                    return (
+                      <div 
+                        key={row.address} 
+                        className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center justify-center w-8">
+                            <div className={`flex items-center ${getRankColor(row.rank)}`}>
+                              {row.rank <= 3 ? (
+                                getRankIcon(row.rank)
+                              ) : (
+                                <span className="text-sm font-semibold">#{row.rank}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col">
+                              {row.ensName ? (
+                                <>
+                                  <h4 className="font-semibold text-base truncate pr-6">
+                                    {row.ensName}
+                                    {isCurrentUser && (
+                                      <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                                    )}
+                                  </h4>
+                                  <span className="text-xs text-muted-foreground font-mono truncate">
+                                    {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                                  </span>
+                                </>
+                              ) : (
+                                <h4 className="font-semibold text-base font-mono truncate pr-6">
+                                  {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                                  {isCurrentUser && (
+                                    <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                                  )}
+                                </h4>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 text-right">
+                            <div className="flex flex-col items-end space-y-1">
+                              <div className="flex items-center space-x-1">
+                                <Image src="/PixotchiKit/COIN.svg" alt="Staked SEED" width={16} height={16} />
+                                <span className="text-base font-bold">{formattedStake}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {totalStakePages > 1 && (
+                    <div className="flex justify-center items-center pt-4">
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Back
+                        </Button>
+                        <span className="flex items-center px-3 text-sm">
+                          Page {currentPage} of {totalStakePages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalStakePages))}
+                          disabled={currentPage === totalStakePages}
                         >
                           Next
                         </Button>
@@ -801,6 +962,13 @@ export default function LeaderboardTab() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Plant Profile Dialog */}
+        <PlantProfileDialog
+          open={profileDialogOpen}
+          onOpenChange={setProfileDialogOpen}
+          plant={selectedPlantForProfile}
+        />
       </div>
     );
 }
