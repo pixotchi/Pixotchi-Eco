@@ -116,6 +116,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
+  const lastDismissedRef = useRef<string | null>(null);
 
   // Enable intelligent tab prefetching
   useTabPrefetching(activeTab, isConnected);
@@ -349,23 +350,27 @@ export default function App() {
 
   // Show broadcast messages (one at a time, highest priority first)
   useEffect(() => {
-    if (broadcastMessages.length > 0 && !currentBroadcast) {
-      setCurrentBroadcast(broadcastMessages[0]);
+    if (currentBroadcast && !broadcastMessages.some((msg) => msg.id === currentBroadcast.id)) {
+      setCurrentBroadcast(null);
+    }
+
+    if (!currentBroadcast) {
+      const next = broadcastMessages.find((msg) => msg.id !== lastDismissedRef.current);
+      if (next) {
+        lastDismissedRef.current = null;
+        setCurrentBroadcast(next);
+      }
     }
   }, [broadcastMessages, currentBroadcast]);
 
   const handleDismissBroadcast = () => {
-    if (currentBroadcast) {
-      dismissMessage(currentBroadcast.id);
-      setCurrentBroadcast(null);
-      
-      // Show next message after a delay (if any)
-      setTimeout(() => {
-        if (broadcastMessages.length > 1) {
-          setCurrentBroadcast(broadcastMessages[1]);
-        }
-      }, 500);
+    if (!currentBroadcast) {
+      return;
     }
+
+    lastDismissedRef.current = currentBroadcast.id;
+    dismissMessage(currentBroadcast.id);
+    setCurrentBroadcast(null);
   };
 
   // Show loading while checking validation (only if wallet is connected and invite system enabled)
