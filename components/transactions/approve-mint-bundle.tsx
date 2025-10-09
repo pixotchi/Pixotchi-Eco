@@ -31,7 +31,6 @@ export default function ApproveMintBundle({
   strain,
   onSuccess,
   onError,
-  onMinted,
   buttonText = 'Approve + Mint',
   buttonClassName = 'w-full',
   disabled = false,
@@ -39,7 +38,6 @@ export default function ApproveMintBundle({
   strain: number;
   onSuccess?: (tx: any) => void;
   onError?: (error: any) => void;
-  onMinted?: (tx: any) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
@@ -65,10 +63,7 @@ export default function ApproveMintBundle({
   return (
     <SmartWalletTransaction
       calls={calls}
-      onSuccess={(tx) => {
-        onSuccess?.(tx);
-        onMinted?.(tx);
-      }}
+      onSuccess={onSuccess}
       onError={onError}
       buttonText={buttonText}
       buttonClassName={buttonClassName}
