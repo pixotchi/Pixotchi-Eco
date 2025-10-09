@@ -22,7 +22,7 @@ function isTutorialCompleted(): boolean {
 }
 
 export function useBroadcastMessages() {
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(new Set());
@@ -63,8 +63,11 @@ export function useBroadcastMessages() {
 
   // Fetch active messages - stable callback without excessive dependencies
   const fetchMessages = useCallback(async () => {
-    // Don't fetch if tutorial is not completed
-    if (!isTutorialCompleted()) {
+    // Require tutorial completion and an authenticated wallet connection
+    if (!isTutorialCompleted() || !isConnected || !address) {
+      // Ensure we clear any messages if user disconnects
+      setMessages(prev => (prev.length > 0 ? [] : prev));
+      setLoading(false);
       return;
     }
 
@@ -80,15 +83,13 @@ export function useBroadcastMessages() {
     console.log(`[Broadcast] Fetching messages (count: ${fetchCountRef.current})`);
 
     try {
-      const url = address 
-        ? `/api/broadcast/active?address=${address}`
-        : '/api/broadcast/active';
-      
+      const url = `/api/broadcast/active?address=${address}`;
+
       const response = await fetch(url);
       const data = await response.json();
       
       if (data.success && Array.isArray(data.messages)) {
-        // Filter out locally dismissed messages (for anonymous users)
+        // Filter out locally dismissed messages (persisted between sessions)
         const activeMessages = data.messages.filter(
           (msg: BroadcastMessage) => !localDismissedIds.has(msg.id)
         );
@@ -101,7 +102,7 @@ export function useBroadcastMessages() {
     } finally {
       setLoading(false);
     }
-  }, [address, localDismissedIds]);
+  }, [address, isConnected, localDismissedIds]);
 
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {
@@ -113,15 +114,15 @@ export function useBroadcastMessages() {
     newDismissed.add(messageId);
     setLocalDismissedIds(newDismissed);
     
-    // Persist to localStorage (fallback for anonymous users)
+    // Persist to localStorage (persists across sessions)
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([...newDismissed]));
     } catch (error) {
       console.warn('Failed to save dismissed broadcasts:', error);
     }
     
-    // Send dismissal to server (if user is connected)
-    if (address) {
+    // Send dismissal to server (only when connected)
+    if (address && isConnected) {
       try {
         await fetch('/api/broadcast/dismiss', {
           method: 'POST',
@@ -132,7 +133,7 @@ export function useBroadcastMessages() {
         console.error('Failed to record dismissal:', error);
       }
     }
-  }, [address, localDismissedIds]);
+  }, [address, isConnected, localDismissedIds]);
 
   // Track impression (message was shown)
   const trackImpression = useCallback(async (messageId: string) => {
