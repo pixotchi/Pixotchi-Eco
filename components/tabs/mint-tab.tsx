@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -28,11 +28,14 @@ import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import LandMintTransaction from '../transactions/land-mint-transaction';
+import { useComposeCast } from '@coinbase/onchainkit/minikit';
+import MintShareDialog from '@/components/share/mint-share-dialog';
+import { getStrainVisual, buildMintShareText } from '@/lib/strains';
+import { sdk } from '@farcaster/miniapp-sdk';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
 
-// Placeholder for plant images, assuming you might have them
 const PLANT_STATIC_IMAGES = [
   '/icons/plant1.svg',
   '/icons/plant2.svg',
@@ -40,6 +43,14 @@ const PLANT_STATIC_IMAGES = [
   '/icons/plant4WithFrame.svg',
   '/icons/plant5.png'
 ];
+
+const buildShareUrl = (baseUrl: string, tokenId?: number, strainId?: number) => {
+  const normalized = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const url = new URL(`${normalized}/share/mint`);
+  if (tokenId !== undefined) url.searchParams.set('tokenId', String(tokenId));
+  if (strainId !== undefined) url.searchParams.set('strain', String(strainId));
+  return url.toString();
+};
 
 export default function MintTab() {
   const { address, chainId } = useAccount();
@@ -58,12 +69,75 @@ export default function MintTab() {
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);
   const [needsLandApproval, setNeedsLandApproval] = useState<boolean>(true);
   const [landMintPrice, setLandMintPrice] = useState<bigint>(BigInt(0));
-  
   const [forcedFetchCount, setForcedFetchCount] = useState(0);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareContext, setShareContext] = useState<'miniapp' | 'web'>('web');
+  const [shareUrl, setShareUrl] = useState('');
+  const [shareText, setShareText] = useState('');
+  const [shareStrainId, setShareStrainId] = useState<number | undefined>(undefined);
+  const [lastMintedTokenId, setLastMintedTokenId] = useState<number | undefined>(undefined);
+  const { composeCast } = useComposeCast();
 
-  const incrementForcedFetch = () => {
-    setForcedFetchCount(prev => prev + 1);
-  };
+  const incrementForcedFetch = useCallback(() => {
+    setForcedFetchCount((prev) => prev + 1);
+  }, []);
+
+  const handleMintShare = useCallback(async (tx: any, strain: Strain | null) => {
+    try {
+      setShareStrainId(strain?.id);
+      const visual = getStrainVisual(strain?.id);
+
+      let mintedTokenId: number | undefined;
+      try {
+        const receipt = tx?.transactionHash ? tx : tx?.statusData?.transactionReceipts?.[0];
+        const logs: any[] = receipt?.logs || [];
+        const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+        const mintLog = logs.find((log: any) => log?.topics?.[0]?.toLowerCase() === transferTopic);
+        if (mintLog?.topics?.[3]) {
+          mintedTokenId = Number(BigInt(mintLog.topics[3]));
+          setLastMintedTokenId(mintedTokenId);
+        }
+      } catch (error) {
+        console.warn('Failed to parse mint log', error);
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_URL || window.location.origin;
+      const shareLink = buildShareUrl(baseUrl, mintedTokenId, strain?.id);
+      setShareUrl(shareLink);
+      setShareText(buildMintShareText(strain?.name, visual.emoji));
+
+      try {
+        const fx = (window as any)?.__pixotchi_frame_context__;
+        const fid = fx?.context?.user?.fid;
+        const notificationDetails = fx?.context?.client?.notificationDetails;
+        if (fid) {
+          fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fid,
+              notification: {
+                title: 'Mint Completed! 🌱',
+                body: `You minted ${strain?.name || 'a plant'} — tap to view your farm`,
+                notificationDetails,
+              },
+            }),
+          }).catch(() => {});
+        }
+      } catch {}
+
+      try {
+        const inMini = await sdk.isInMiniApp();
+        setShareContext(inMini ? 'miniapp' : 'web');
+      } catch {
+        setShareContext('web');
+      }
+
+      setShareDialogOpen(true);
+    } catch (error) {
+      console.warn('Failed to prepare share data', error);
+    }
+  }, [composeCast]);
 
   const fetchData = async () => {
     if (!address) return;
@@ -223,11 +297,15 @@ export default function MintTab() {
               return useBundle ? (
               <ApproveMintBundle
                 strain={selectedStrain.id}
-                onSuccess={() => {
+                onMinted={(tx) => {
                   toast.success('Approved and minted successfully!');
                   setNeedsApproval(false);
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
+                  handleMintShare(tx, selectedStrain);
+                }}
+                onSuccess={() => {
+                  setNeedsApproval(false);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Approve + Mint"
@@ -260,29 +338,11 @@ export default function MintTab() {
             {selectedStrain ? (
               <MintTransaction
                 strain={selectedStrain.id}
-                onSuccess={() => {
+                onSuccess={(tx) => {
                   toast.success('Plant minted successfully!');
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
-                  try {
-                    const fx = (window as any)?.__pixotchi_frame_context__;
-                    const fid = fx?.context?.user?.fid;
-                    const notificationDetails = fx?.context?.client?.notificationDetails;
-                    if (fid) {
-                      fetch('/api/notify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          fid,
-                          notification: {
-                            title: 'Mint Completed! 🌱',
-                            body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
-                            notificationDetails,
-                          },
-                        }),
-                      }).catch(() => {});
-                    }
-                  } catch {}
+                  handleMintShare(tx, selectedStrain);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Mint Plant"
@@ -405,19 +465,50 @@ export default function MintTab() {
         <div className="flex items-center justify-center py-8">
           <BaseExpandedLoadingPageLoader text="Loading mint data..." />
           </div>
-        )
+    );
   }
 
   return (
       <div className="space-y-8">
-        
-        
-
-        
         {mintType === 'plant' ? renderPlantMinting() : renderLandMinting()}
     </div>
   );
   };
 
-  return <div>{renderContent()}</div>;
+  return (
+    <div>
+      {renderContent()}
+      <MintShareDialog
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        strainVisual={getStrainVisual(shareStrainId)}
+        tokenId={lastMintedTokenId}
+        shareUrl={shareUrl}
+        shareText={shareText}
+        shareContext={shareContext}
+        onShareMiniApp={async () => {
+          try {
+            composeCast({
+              text: shareText,
+              embeds: [shareUrl],
+            });
+            setShareDialogOpen(false);
+          } catch (error) {
+            console.error('Compose cast failed:', error);
+            toast.error('Failed to open Farcaster composer.');
+          }
+        }}
+        onShareTwitter={async () => {
+          try {
+            const twitterUrl = new URL('https://twitter.com/intent/tweet');
+            twitterUrl.searchParams.set('text', `${shareText}\n${shareUrl}`);
+            window.open(twitterUrl.toString(), '_blank', 'noopener,noreferrer');
+            setShareDialogOpen(false);
+          } catch (error) {
+            console.error('Twitter share failed:', error);
+          }
+        }}
+      />
+    </div>
+  );
 } 
