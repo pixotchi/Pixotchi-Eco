@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
-export const runtime = 'edge';
-
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 800;
 const BASE_URL = process.env.NEXT_PUBLIC_URL || 'https://mini.pixotchi.tech';
 
 const gradients: Record<number, [string, string]> = {
@@ -20,43 +20,60 @@ const artMap: Record<number, string> = {
   5: '/icons/plant5.png',
 };
 
+const pixelFontPromise = fetch(new URL('../../../../public/fonts/pixelmix.ttf', import.meta.url)).then((res) => res.arrayBuffer());
+
+function formatDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const name = searchParams.get('name') || 'Pixotchi Plant';
   const strain = Number(searchParams.get('strain') || '1');
-  const mintedAt = searchParams.get('mintedAt');
+  const mintedAt = formatDate(searchParams.get('mintedAt'));
   const [from, to] = gradients[strain] || ['#0f172a', '#2dd4bf'];
   const artUrl = new URL(artMap[strain] || '/icons/plant1.svg', BASE_URL).toString();
+  const pixelFont = await pixelFontPromise;
 
   return new ImageResponse(
     <div
       style={{
-        width: 1200,
-        height: 630,
+        width: OG_WIDTH,
+        height: OG_HEIGHT,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        padding: 72,
+        padding: '80px 96px',
         backgroundImage: `linear-gradient(135deg, ${from}, ${to})`,
         color: '#f8fafc',
-        fontFamily: 'sans-serif',
+        fontFamily: 'Pixelmix, sans-serif',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 54, fontWeight: 700 }}>Pixotchi Mini</div>
+        <div style={{ fontSize: 64, fontWeight: 700, letterSpacing: 2 }}>Pixotchi Mini</div>
         <div
           style={{
             borderRadius: 999,
-            padding: '12px 24px',
+            padding: '16px 32px',
             border: '1px solid rgba(255,255,255,0.4)',
-            fontSize: 24,
+            fontSize: 28,
+            textTransform: 'uppercase',
+            letterSpacing: 4,
           }}
         >
           {name}
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 48, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 56, alignItems: 'center' }}>
         <div
           style={{
             width: 420,
@@ -75,31 +92,39 @@ export async function GET(request: Request) {
           <img src={artUrl} alt={name} width={320} height={320} style={{ objectFit: 'contain' }} />
         </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 32 }}>
-          <div style={{ fontSize: 48, fontWeight: 700, lineHeight: 1.2 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 36 }}>
+          <div style={{ fontSize: 54, fontWeight: 700, lineHeight: 1.1 }}>
             A new {name} was just minted on Base.
           </div>
-          <div style={{ fontSize: 26, opacity: 0.85 }}>
-            Every plant is unique—care for it, grow daily streaks, and climb the leaderboard to earn ETH & SEED rewards.
+          <div style={{ fontSize: 28, opacity: 0.9, lineHeight: 1.3 }}>
+            Plant, nurture, and flex your onchain garden. Keep your streak alive to earn SEED & ETH rewards.
           </div>
-          <div style={{ display: 'flex', gap: 24, fontSize: 24, opacity: 0.8 }}>
+          <div style={{ display: 'flex', gap: 28, fontSize: 26, opacity: 0.85 }}>
             <span>Strain #{strain}</span>
-            {mintedAt ? <span>Minted {new Date(mintedAt).toLocaleString()}</span> : null}
+            {mintedAt ? <span>Minted {mintedAt}</span> : null}
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 24, opacity: 0.7 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 26, opacity: 0.75 }}>
         <span>mini.pixotchi.tech</span>
         <span>Grow • Compete • Earn</span>
       </div>
     </div>,
     {
-      width: 1200,
-      height: 630,
+      width: OG_WIDTH,
+      height: OG_HEIGHT,
       headers: {
-        'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400',
+        'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, stale-while-revalidate',
       },
+      fonts: [
+        {
+          name: 'Pixelmix',
+          data: pixelFont,
+          weight: 400,
+          style: 'normal',
+        },
+      ],
     }
   );
 }

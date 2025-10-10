@@ -410,7 +410,7 @@ export default function App() {
         minHeight: viewportHeight > 0 ? `${viewportHeight}px` : undefined
       }}
     >
-      <ShareContextProvider shareData={shareData} clearShareData={() => setShareData(null)}>
+      <ShareContextProvider>
       <div className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none">
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">

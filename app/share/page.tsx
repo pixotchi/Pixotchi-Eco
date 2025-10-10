@@ -18,6 +18,8 @@ const miniAppEmbed = {
   },
 };
 
+const shareDescription = "Join me in Pixotchi Mini – Plant your own SEED, grow streaks, and climb the leaderboard to earn ETH rewards.";
+
 const frameEmbed = {
   ...miniAppEmbed,
   button: {
@@ -31,18 +33,18 @@ const frameEmbed = {
 
 export const metadata: Metadata = {
   title: 'Pixotchi Mini – Share',
-  description: 'Pixotchi Mini is your pocket farm on Base. Mint plants, grow lands, and compete with friends.',
+  description: shareDescription,
   openGraph: {
     title: 'Pixotchi Mini – Share',
-    description: 'Pixotchi Mini is your pocket farm on Base. Mint plants, grow lands, and compete with friends.',
+    description: shareDescription,
     url: `${BASE_URL}/share`,
     type: 'website',
-    images: [{ url: `${BASE_URL}/og-image.png`, width: 1200, height: 630, alt: 'Pixotchi Mini' }],
+    images: [{ url: `${BASE_URL}/og-image.png`, width: 1200, height: 800, alt: 'Pixotchi Mini' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Pixotchi Mini – Share',
-    description: 'Pixotchi Mini is your pocket farm on Base. Mint plants, grow lands, and compete with friends.',
+    description: shareDescription,
     images: [`${BASE_URL}/og-image.png`],
   },
   other: {
