@@ -1,8 +1,6 @@
 import Link from "next/link";
 import type { Metadata, ResolvingMetadata } from "next";
 
-type SearchParams = Record<string, string | string[] | undefined>;
-
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
 
 function getOgImageUrl(params: URLSearchParams) {
@@ -14,7 +12,7 @@ function getOgImageUrl(params: URLSearchParams) {
 }
 
 export async function generateMetadata(
-  { searchParams }: { searchParams?: SearchParams },
+  { searchParams }: any,
   _parent: ResolvingMetadata,
 ): Promise<Metadata> {
   const params = new URLSearchParams();
@@ -79,7 +77,7 @@ export async function generateMetadata(
   };
 }
 
-export default function MintSharePage({ searchParams }: { searchParams?: SearchParams }) {
+export default function MintSharePage({ searchParams }: any) {
   const params = new URLSearchParams();
   Object.entries(searchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
