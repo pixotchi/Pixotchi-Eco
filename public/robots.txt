@@ -1,7 +1,6 @@
 User-Agent: *
 Allow: /
 
-# Explicitly allow OG image generation endpoints for social crawlers
 Allow: /api/og/*
 
 # Sitemap
@@ -10,7 +9,6 @@ Sitemap: https://mini.pixotchi.tech/sitemap.xml
 # Crawl-delay for polite bots
 Crawl-delay: 1
 
-# Block AI training crawlers (optional)
 User-agent: GPTBot
 Disallow: /
 
