@@ -1,6 +1,9 @@
 User-Agent: *
 Allow: /
 
+# Explicitly allow OG image generation endpoints for social crawlers
+Allow: /api/og/*
+
 # Sitemap
 Sitemap: https://mini.pixotchi.tech/sitemap.xml
 

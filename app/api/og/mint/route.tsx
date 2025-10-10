@@ -71,7 +71,7 @@ export async function GET(request: Request) {
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ fontSize: 60, fontWeight: 700, letterSpacing: 1 }}>Pixotchi Mini</div>
+          <div style={{ display: 'flex', fontSize: 60, fontWeight: 700, letterSpacing: 1 }}>Pixotchi Mini</div>
           <div
             style={{
               display: 'flex',
@@ -123,10 +123,10 @@ export async function GET(request: Request) {
               flex: 1,
             }}
           >
-            <div style={{ fontSize: 48, fontWeight: 700, lineHeight: 1.1 }}>
+            <div style={{ display: 'flex', fontSize: 48, fontWeight: 700, lineHeight: 1.1 }}>
               A new {name} was just minted on Base.
             </div>
-            <div style={{ fontSize: 26, opacity: 0.9, lineHeight: 1.35 }}>
+            <div style={{ display: 'flex', fontSize: 26, opacity: 0.9, lineHeight: 1.35 }}>
               Plant, nurture, and flex your onchain garden. Keep your streak alive to earn SEED & ETH rewards.
             </div>
             <div
@@ -182,8 +182,8 @@ export async function GET(request: Request) {
           textAlign: 'center',
         }}
       >
-        <div style={{ fontSize: 60, fontWeight: 700 }}>Pixotchi Mini</div>
-        <p style={{ marginTop: 24, fontSize: 30, opacity: 0.85 }}>Refresh to load the mint preview.</p>
+        <div style={{ display: 'flex', fontSize: 60, fontWeight: 700 }}>Pixotchi Mini</div>
+        <div style={{ display: 'flex', marginTop: 24, fontSize: 30, opacity: 0.85 }}>Refresh to load the mint preview.</div>
       </div>,
       {
         width: OG_WIDTH,
