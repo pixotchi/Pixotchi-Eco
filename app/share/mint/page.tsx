@@ -1,8 +1,11 @@
 import Link from "next/link";
 import type { Metadata, ResolvingMetadata } from "next";
-import { openExternalUrl } from "@/lib/open-external";
+import AddToFarcasterButton from "@/components/share/add-to-farcaster-button";
 
-const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
+export const dynamic = "force-dynamic";
+
+const DEPLOYMENT_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+const BASE_URL = process.env.NEXT_PUBLIC_URL || DEPLOYMENT_URL || "https://mini.pixotchi.tech";
 
 function getOgImageUrl(params: URLSearchParams) {
   const og = new URL("/api/og/mint", BASE_URL);
@@ -130,12 +133,12 @@ export default function MintSharePage({ searchParams }: any) {
           >
             Start playing Pixotchi Mini
           </Link>
-          <button
-            onClick={() => openExternalUrl(`https://warpcast.com/~/add-miniapp?url=${encodeURIComponent(BASE_URL)}`)}
+          <AddToFarcasterButton
+            url={`https://warpcast.com/~/add-miniapp?url=${encodeURIComponent(BASE_URL)}`}
             className="inline-flex items-center justify-center rounded-full border border-white/20 px-6 py-3 font-semibold text-slate-100 hover:bg-white/10 transition"
           >
             Add to Farcaster
-          </button>
+          </AddToFarcasterButton>
         </div>
 
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">mini.pixotchi.tech</p>

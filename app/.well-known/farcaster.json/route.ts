@@ -16,7 +16,7 @@ function withValidProperties(
 }
 
 export async function GET() {
-  const URL = process.env.NEXT_PUBLIC_URL || 'https://mini.pixotchi.tech';
+  const URL = process.env.NEXT_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://mini.pixotchi.tech');
   const WEBHOOK_URL = process.env.FARCASTER_WEBHOOK_URL || `${URL}/api/webhook`;
   const HOSTNAME = (() => {
     try {
