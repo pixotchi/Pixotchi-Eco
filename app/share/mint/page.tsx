@@ -1,6 +1,7 @@
 import Link from "next/link";
-import type { Metadata } from "next";
-import type { PageProps } from "next/app";
+import type { Metadata, ResolvingMetadata } from "next";
+
+type SearchParams = Record<string, string | string[] | undefined>;
 
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
 
@@ -12,9 +13,10 @@ function getOgImageUrl(params: URLSearchParams) {
   return og.toString();
 }
 
-export async function generateMetadata({
-  searchParams,
-}: PageProps): Promise<Metadata> {
+export async function generateMetadata(
+  { searchParams }: { searchParams?: SearchParams },
+  _parent: ResolvingMetadata,
+): Promise<Metadata> {
   const params = new URLSearchParams();
   Object.entries(searchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
@@ -77,7 +79,7 @@ export async function generateMetadata({
   };
 }
 
-export default function MintSharePage({ searchParams }: PageProps) {
+export default function MintSharePage({ searchParams }: { searchParams?: SearchParams }) {
   const params = new URLSearchParams();
   Object.entries(searchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
