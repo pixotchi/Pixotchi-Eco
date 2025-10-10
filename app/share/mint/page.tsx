@@ -18,8 +18,8 @@ export async function generateMetadata(
   const params = new URLSearchParams();
   Object.entries(searchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
-      if (value.length > 0) params.set(key, value[0]);
-    } else if (value) {
+      if (value.length > 0) params.set(key, value[0] ?? "");
+    } else if (typeof value === "string") {
       params.set(key, value);
     }
   });
