@@ -28,6 +28,7 @@ import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import LandMintTransaction from '../transactions/land-mint-transaction';
+import { MintShareModal } from '@/components/mint-share-modal';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
@@ -60,6 +61,14 @@ export default function MintTab() {
   const [landMintPrice, setLandMintPrice] = useState<bigint>(BigInt(0));
   
   const [forcedFetchCount, setForcedFetchCount] = useState(0);
+  const [shareData, setShareData] = useState<{
+    address: string;
+    strainName: string;
+    strainId: number;
+    mintedAt: string;
+    txHash?: string;
+  } | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const incrementForcedFetch = () => {
     setForcedFetchCount(prev => prev + 1);
@@ -229,6 +238,18 @@ export default function MintTab() {
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
                 }}
+                onTransactionComplete={(tx) => {
+                  if (address) {
+                    setShareData({
+                      address,
+                      strainName: selectedStrain.name,
+                      strainId: selectedStrain.id,
+                      mintedAt: new Date().toISOString(),
+                      txHash: tx?.transactionHash,
+                    });
+                    setShowShareModal(true);
+                  }
+                }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Approve + Mint"
                 buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
@@ -260,10 +281,20 @@ export default function MintTab() {
             {selectedStrain ? (
               <MintTransaction
                 strain={selectedStrain.id}
-                onSuccess={() => {
+                onSuccess={(tx) => {
                   toast.success('Plant minted successfully!');
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
+                  if (address) {
+                    setShareData({
+                      address,
+                      strainName: selectedStrain.name,
+                      strainId: selectedStrain.id,
+                      mintedAt: new Date().toISOString(),
+                      txHash: tx?.transactionHash,
+                    });
+                    setShowShareModal(true);
+                  }
                   try {
                     const fx = (window as any)?.__pixotchi_frame_context__;
                     const fid = fx?.context?.user?.fid;
@@ -409,12 +440,14 @@ export default function MintTab() {
   }
 
   return (
-      <div className="space-y-8">
-        
-        
-
-        
-        {mintType === 'plant' ? renderPlantMinting() : renderLandMinting()}
+    <div className="space-y-4">
+      {renderPlantMinting()}
+      {renderLandMinting()}
+      <MintShareModal
+        open={showShareModal}
+        onOpenChange={setShowShareModal}
+        data={shareData}
+      />
     </div>
   );
   };
