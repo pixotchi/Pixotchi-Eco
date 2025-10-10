@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { PageProps } from "next/app";
 
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
 
@@ -13,11 +14,9 @@ function getOgImageUrl(params: URLSearchParams) {
 
 export async function generateMetadata({
   searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}): Promise<Metadata> {
+}: PageProps): Promise<Metadata> {
   const params = new URLSearchParams();
-  Object.entries(searchParams).forEach(([key, value]) => {
+  Object.entries(searchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       if (value.length > 0) params.set(key, value[0]);
     } else if (value) {
@@ -78,13 +77,9 @@ export async function generateMetadata({
   };
 }
 
-export default function MintSharePage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+export default function MintSharePage({ searchParams }: PageProps) {
   const params = new URLSearchParams();
-  Object.entries(searchParams).forEach(([key, value]) => {
+  Object.entries(searchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       if (value.length > 0) params.set(key, value[0]);
     } else if (value) {
