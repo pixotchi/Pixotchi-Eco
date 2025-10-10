@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 const DEPLOYMENT_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 const BASE_URL = process.env.NEXT_PUBLIC_URL || DEPLOYMENT_URL || "https://mini.pixotchi.tech";
 
-function getOgImageUrl(params: URLSearchParams) {
+function getOgImageUrl(params: URLSearchParams, platform: 'twitter' | 'farcaster' = 'farcaster') {
   const og = new URL("/api/og/mint", BASE_URL);
+  og.searchParams.set('platform', platform);
   params.forEach((value, key) => {
     if (value) og.searchParams.set(key, value);
   });
@@ -30,11 +31,14 @@ export async function generateMetadata(
 
   const name = params.get("name") || "Pixotchi Plant";
   const strain = params.get("strain") || "1";
-  const imageUrl = getOgImageUrl(params);
+  
+  // Generate platform-specific OG images
+  const farcasterImageUrl = getOgImageUrl(params, 'farcaster');
+  const twitterImageUrl = getOgImageUrl(params, 'twitter');
 
   const miniAppEmbed = {
     version: "1",
-    imageUrl,
+    imageUrl: farcasterImageUrl,
     button: {
       title: "Play Pixotchi Mini",
       action: {
@@ -66,13 +70,13 @@ export async function generateMetadata(
       description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
       url: `${BASE_URL}/share/mint`,
       type: "website",
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: name }],
+      images: [{ url: farcasterImageUrl, width: 1200, height: 800, alt: name }],
     },
     twitter: {
       card: "summary_large_image",
       title: `I just minted a ${name}!`,
       description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
-      images: [imageUrl],
+      images: [twitterImageUrl],
     },
     other: {
       "fc:miniapp": JSON.stringify(miniAppEmbed),

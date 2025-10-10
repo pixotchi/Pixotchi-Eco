@@ -2,15 +2,18 @@ import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
 
-const OG_WIDTH = 1200;
-const OG_HEIGHT = 630;
+// Platform-specific dimensions
+const DIMENSIONS = {
+  twitter: { width: 1200, height: 630, bg: '/twitter-og.png' },
+  farcaster: { width: 1200, height: 800, bg: '/farcaster-og.png' },
+};
 
-const gradients: Record<number, [string, string]> = {
-  1: ['#0f172a', '#2563eb'],
-  2: ['#14532d', '#22c55e'],
-  3: ['#7c2d12', '#f97316'],
-  4: ['#4c1d95', '#a855f7'],
-  5: ['#1f2937', '#facc15'],
+const strainNames: Record<number, string> = {
+  1: 'OG',
+  2: 'FLORA',
+  3: 'TAKI',
+  4: 'ROSA',
+  5: 'ZEST',
 };
 
 const artMap: Record<number, string> = {
@@ -39,127 +42,133 @@ function resolveBaseUrl(request: Request) {
   return `${protocol}://${host}`;
 }
 
+function formatAddress(address: string): string {
+  // Check if it's a basename or ENS (contains a dot)
+  if (address.includes('.')) {
+    return address;
+  }
+  // Otherwise format as short address
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 export async function GET(request: Request) {
   const baseUrl = resolveBaseUrl(request);
 
   try {
     const { searchParams } = new URL(request.url);
-    const name = searchParams.get('name') || 'Pixotchi Plant';
+    const platform = (searchParams.get('platform') || 'farcaster') as 'twitter' | 'farcaster';
+    const address = searchParams.get('address') || '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
     const strain = Number(searchParams.get('strain') || '1');
-    const mintedAt = formatDate(searchParams.get('mintedAt'));
-    const [from, to] = gradients[strain] || ['#0f172a', '#2dd4bf'];
-    const artUrl = new URL(artMap[strain] || '/icons/plant1.svg', baseUrl).toString();
+    const strainName = strainNames[strain] || 'OG';
+    
+    const dimensions = DIMENSIONS[platform];
+    const bgUrl = new URL(dimensions.bg, baseUrl).toString();
+    const plantUrl = new URL(artMap[strain] || artMap[1], baseUrl).toString();
+    const displayAddress = formatAddress(address);
 
     return new ImageResponse(
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          width: OG_WIDTH,
-          height: OG_HEIGHT,
-          justifyContent: 'space-between',
-          padding: '72px 96px',
-          backgroundImage: `linear-gradient(135deg, ${from}, ${to})`,
-          color: '#f8fafc',
+          width: dimensions.width,
+          height: dimensions.height,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundImage: `url(${bgUrl})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
           fontFamily: '"DM Sans", "Inter", sans-serif',
         }}
       >
+        {/* Left side - Large plant image */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
+            width: dimensions.width * 0.45,
+            height: '100%',
+            padding: '60px',
           }}
         >
-          <div style={{ display: 'flex', fontSize: 60, fontWeight: 700, letterSpacing: 1 }}>Pixotchi Mini</div>
-          <div
+          <img
+            src={plantUrl}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 999,
-              padding: '14px 30px',
-              border: '1px solid rgba(255,255,255,0.4)',
-              fontSize: 26,
-              textTransform: 'uppercase',
-              letterSpacing: 3,
-              backgroundColor: 'rgba(15,23,42,0.2)',
-            }}
-          >
-            {name}
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 48,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 360,
-              height: 360,
-              borderRadius: 44,
-              backgroundColor: 'rgba(15,23,42,0.35)',
-              backgroundImage: `url(${artUrl})`,
-              backgroundSize: 'contain',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center',
-              boxShadow: '0 40px 80px rgba(15,23,42,0.35)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
             }}
           />
+        </div>
 
+        {/* Right side - Text content */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            width: dimensions.width * 0.55,
+            height: '100%',
+            padding: '60px 80px 60px 40px',
+            gap: 32,
+            color: '#ffffff',
+          }}
+        >
+          {/* Main message */}
           <div
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 28,
-              flex: 1,
+              fontSize: platform === 'twitter' ? 42 : 52,
+              fontWeight: 700,
+              lineHeight: 1.2,
+              textShadow: '0 2px 10px rgba(0,0,0,0.3)',
             }}
           >
-            <div style={{ display: 'flex', fontSize: 48, fontWeight: 700, lineHeight: 1.1 }}>
-              A new {name} was just minted on Base.
-            </div>
-            <div style={{ display: 'flex', fontSize: 26, opacity: 0.9, lineHeight: 1.35 }}>
-              Plant, nurture, and flex your onchain garden. Keep your streak alive to earn SEED & ETH rewards.
-            </div>
+            <span style={{ display: 'flex' }}>{displayAddress}</span>
+            <span style={{ display: 'flex' }}>just planted a</span>
+            <span style={{ display: 'flex', color: '#4ade80' }}>{strainName} SEED</span>
+            <span style={{ display: 'flex' }}>on Base!</span>
+          </div>
+
+          {/* Call to action */}
+          <div
+            style={{
+              display: 'flex',
+              fontSize: platform === 'twitter' ? 22 : 26,
+              lineHeight: 1.4,
+              opacity: 0.95,
+              textShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            Start your onchain farming journey today and earn ETH rewards!
+          </div>
+
+          {/* Footer branding */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              marginTop: platform === 'twitter' ? 20 : 40,
+            }}
+          >
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: 24,
-                fontSize: 24,
-                opacity: 0.85,
+                fontSize: platform === 'twitter' ? 18 : 20,
+                fontWeight: 600,
+                opacity: 0.9,
               }}
             >
-              <span>Strain #{strain}</span>
-              {mintedAt ? <span>Minted {mintedAt}</span> : null}
+              mini.pixotchi.tech
             </div>
           </div>
         </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: 24,
-            opacity: 0.75,
-          }}
-        >
-          <span>mini.pixotchi.tech</span>
-          <span>Grow • Compete • Earn</span>
-        </div>
       </div>,
       {
-        width: OG_WIDTH,
-        height: OG_HEIGHT,
+        width: dimensions.width,
+        height: dimensions.height,
         headers: {
           'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400',
         },
@@ -174,8 +183,8 @@ export async function GET(request: Request) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          width: OG_WIDTH,
-          height: OG_HEIGHT,
+          width: 1200,
+          height: 800,
           background: '#0f172a',
           color: '#f8fafc',
           fontFamily: '"DM Sans", "Inter", sans-serif',
@@ -186,8 +195,8 @@ export async function GET(request: Request) {
         <div style={{ display: 'flex', marginTop: 24, fontSize: 30, opacity: 0.85 }}>Refresh to load the mint preview.</div>
       </div>,
       {
-        width: OG_WIDTH,
-        height: OG_HEIGHT,
+        width: 1200,
+        height: 800,
       }
     );
   }
