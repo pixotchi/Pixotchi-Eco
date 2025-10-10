@@ -29,6 +29,7 @@ import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
+import ShareContextProvider from "@/components/share/share-context-provider";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -409,6 +410,7 @@ export default function App() {
         minHeight: viewportHeight > 0 ? `${viewportHeight}px` : undefined
       }}
     >
+      <ShareContextProvider shareData={shareData} clearShareData={() => setShareData(null)}>
       <div className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none">
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">
@@ -626,6 +628,7 @@ export default function App() {
           onImpression={trackImpression}
         />
       </div>
+      </ShareContextProvider>
     </div>
   );
 }

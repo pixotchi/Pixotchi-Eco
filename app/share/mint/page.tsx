@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata, ResolvingMetadata } from "next";
+import { openExternalUrl } from "@/lib/open-external";
 
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
 
@@ -56,10 +57,10 @@ export async function generateMetadata(
 
   return {
     title: `I just minted a ${name}!`,
-    description: "Join me in Pixotchi Mini – mint, grow, and compete on Base.",
+    description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
     openGraph: {
       title: `I just minted a ${name}!`,
-      description: "Join me in Pixotchi Mini – mint, grow, and compete on Base.",
+      description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
       url: `${BASE_URL}/share/mint`,
       type: "website",
       images: [{ url: imageUrl, width: 1200, height: 630, alt: name }],
@@ -67,7 +68,7 @@ export async function generateMetadata(
     twitter: {
       card: "summary_large_image",
       title: `I just minted a ${name}!`,
-      description: "Join me in Pixotchi Mini – mint, grow, and compete on Base.",
+      description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
       images: [imageUrl],
     },
     other: {
@@ -87,7 +88,7 @@ export default function MintSharePage({ searchParams }: any) {
     }
   });
 
-  const name = params.get("name") || "Pixotchi Plant";
+  const name = params.get("name") || "Plant";
   const strain = params.get("strain") || "1";
   const mintedAt = params.get("mintedAt");
   const address = params.get("address");
@@ -100,7 +101,7 @@ export default function MintSharePage({ searchParams }: any) {
           <p className="text-sm uppercase tracking-[0.4em] text-slate-400">Mint Spotlight</p>
           <h1 className="text-4xl font-bold">{name} has sprouted!</h1>
           <p className="text-slate-300">
-            A new Pixotchi plant was just minted on Base. Adopt your own, grow daily streaks, and climb the leaderboard to earn rewards.
+            A new plant was just minted on Base. Join us and Plant your own SEED, grow daily streaks, and climb the leaderboard to earn ETH rewards!
           </p>
         </div>
 
@@ -111,12 +112,12 @@ export default function MintSharePage({ searchParams }: any) {
             <p><span className="text-slate-400">Strain:</span> #{strain}</p>
             {address ? (
               <p>
-                <span className="text-slate-400">Minted by:</span> {address.slice(0, 6)}…{address.slice(-4)}
+                <span className="text-slate-400">Planted by:</span> {address.slice(0, 6)}…{address.slice(-4)}
               </p>
             ) : null}
             {mintedAt ? (
               <p>
-                <span className="text-slate-400">Minted on:</span> {new Date(mintedAt).toLocaleString()}
+                <span className="text-slate-400">Planted on:</span> {new Date(mintedAt).toLocaleString()}
               </p>
             ) : null}
           </div>
@@ -129,12 +130,12 @@ export default function MintSharePage({ searchParams }: any) {
           >
             Start playing Pixotchi Mini
           </Link>
-          <a
-            href={BASE_URL}
+          <button
+            onClick={() => openExternalUrl(`https://warpcast.com/~/add-miniapp?url=${encodeURIComponent(BASE_URL)}`)}
             className="inline-flex items-center justify-center rounded-full border border-white/20 px-6 py-3 font-semibold text-slate-100 hover:bg-white/10 transition"
           >
-            Learn more
-          </a>
+            Add to Farcaster
+          </button>
         </div>
 
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">mini.pixotchi.tech</p>

@@ -15,6 +15,7 @@ import { Copy, Share2, Sparkles, Twitter } from "lucide-react";
 import { useFrameContext } from "@/lib/frame-context";
 import { useComposeCast } from "@coinbase/onchainkit/minikit";
 import { toast } from "react-hot-toast";
+import { openExternalUrl } from "@/lib/open-external";
 
 interface MintShareData {
   address: string;
@@ -88,11 +89,15 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     }
   }, [composeCast, data, onOpenChange, shareUrl]);
 
-  const handleTwitterShare = useCallback(() => {
+  const handleTwitterShare = useCallback(async () => {
     if (!tweetUrl) return;
-    window.open(tweetUrl, "_blank", "noopener,noreferrer");
+    if (isMiniApp) {
+      await openExternalUrl(tweetUrl);
+    } else {
+      window.open(tweetUrl, "_blank", "noopener,noreferrer");
+    }
     onOpenChange(false);
-  }, [onOpenChange, tweetUrl]);
+  }, [isMiniApp, onOpenChange, tweetUrl]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -72,6 +72,7 @@ export async function GET() {
         "https://*.mini.pixotchi.tech",
       ],
     }),
+    castShareUrl: `${URL}/share`,
     baseBuilder: {
       allowedAddresses: [
         "0x2B0ff9e1311a3b7FC4E2250F03B354d6143B1E08",
