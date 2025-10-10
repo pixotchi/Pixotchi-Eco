@@ -52,51 +52,107 @@ export async function GET(request: Request) {
 
     return new ImageResponse(
       <div
-        tw="flex flex-col w-full h-full justify-between"
         style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: OG_WIDTH,
+          height: OG_HEIGHT,
+          justifyContent: 'space-between',
           padding: '72px 96px',
           backgroundImage: `linear-gradient(135deg, ${from}, ${to})`,
           color: '#f8fafc',
           fontFamily: '"DM Sans", "Inter", sans-serif',
         }}
       >
-        <div tw="flex items-center justify-between">
-          <div tw="text-[60px] font-bold tracking-[1px]">Pixotchi Mini</div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ fontSize: 60, fontWeight: 700, letterSpacing: 1 }}>Pixotchi Mini</div>
           <div
-            tw="flex items-center uppercase tracking-[3px] rounded-full border border-white/40 px-7 py-3 text-[26px]"
-            style={{ backgroundColor: 'rgba(15,23,42,0.15)' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 999,
+              padding: '14px 30px',
+              border: '1px solid rgba(255,255,255,0.4)',
+              fontSize: 26,
+              textTransform: 'uppercase',
+              letterSpacing: 3,
+              backgroundColor: 'rgba(15,23,42,0.2)',
+            }}
           >
             {name}
           </div>
         </div>
 
-        <div tw="flex items-center gap-12">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 48,
+          }}
+        >
           <div
-            tw="flex items-center justify-center rounded-[44px] border border-white/10 shadow-[0px_40px_80px_rgba(15,23,42,0.35)]"
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               width: 360,
               height: 360,
-              backgroundColor: 'rgba(15, 23, 42, 0.35)',
+              borderRadius: 44,
+              backgroundColor: 'rgba(15,23,42,0.35)',
               backgroundImage: `url(${artUrl})`,
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
               backgroundPosition: 'center',
+              boxShadow: '0 40px 80px rgba(15,23,42,0.35)',
+              border: '1px solid rgba(255,255,255,0.08)',
             }}
           />
 
-          <div tw="flex flex-col gap-7 flex-1">
-            <div tw="text-[48px] font-bold leading-[1.1]">A new {name} was just minted on Base.</div>
-            <div tw="text-[26px] opacity-90 leading-[1.35]">
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 28,
+              flex: 1,
+            }}
+          >
+            <div style={{ fontSize: 48, fontWeight: 700, lineHeight: 1.1 }}>
+              A new {name} was just minted on Base.
+            </div>
+            <div style={{ fontSize: 26, opacity: 0.9, lineHeight: 1.35 }}>
               Plant, nurture, and flex your onchain garden. Keep your streak alive to earn SEED & ETH rewards.
             </div>
-            <div tw="flex items-center gap-6 text-[24px] opacity-85">
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 24,
+                fontSize: 24,
+                opacity: 0.85,
+              }}
+            >
               <span>Strain #{strain}</span>
               {mintedAt ? <span>Minted {mintedAt}</span> : null}
             </div>
           </div>
         </div>
 
-        <div tw="flex items-center justify-between text-[24px] opacity-75">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 24,
+            opacity: 0.75,
+          }}
+        >
           <span>mini.pixotchi.tech</span>
           <span>Grow • Compete • Earn</span>
         </div>
@@ -112,9 +168,22 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('OG mint image generation failed', error);
     return new ImageResponse(
-      <div tw="flex flex-col items-center justify-center w-full h-full" style={{ background: '#0f172a', color: '#f8fafc' }}>
-        <div tw="text-[60px] font-bold">Pixotchi Mini</div>
-        <p tw="text-[30px] opacity-85 mt-6">Refresh to load the mint preview.</p>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: OG_WIDTH,
+          height: OG_HEIGHT,
+          background: '#0f172a',
+          color: '#f8fafc',
+          fontFamily: '"DM Sans", "Inter", sans-serif',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: 60, fontWeight: 700 }}>Pixotchi Mini</div>
+        <p style={{ marginTop: 24, fontSize: 30, opacity: 0.85 }}>Refresh to load the mint preview.</p>
       </div>,
       {
         width: OG_WIDTH,
