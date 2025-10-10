@@ -1,4 +1,8 @@
 import { ImageResponse } from 'next/og';
+import { readFileSync } from 'fs';
+import path from 'path';
+
+export const runtime = 'nodejs';
 
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 800;
@@ -20,7 +24,7 @@ const artMap: Record<number, string> = {
   5: '/icons/plant5.png',
 };
 
-const pixelFontPromise = fetch(new URL('../../../../public/fonts/pixelmix.ttf', import.meta.url)).then((res) => res.arrayBuffer());
+const pixelmixBuffer = readFileSync(path.join(process.cwd(), 'public', 'fonts', 'pixelmix.ttf'));
 
 function formatDate(value: string | null) {
   if (!value) return null;
@@ -41,7 +45,6 @@ export async function GET(request: Request) {
   const mintedAt = formatDate(searchParams.get('mintedAt'));
   const [from, to] = gradients[strain] || ['#0f172a', '#2dd4bf'];
   const artUrl = new URL(artMap[strain] || '/icons/plant1.svg', BASE_URL).toString();
-  const pixelFont = await pixelFontPromise;
 
   return new ImageResponse(
     <div
@@ -120,7 +123,7 @@ export async function GET(request: Request) {
       fonts: [
         {
           name: 'Pixelmix',
-          data: pixelFont,
+          data: pixelmixBuffer,
           weight: 400,
           style: 'normal',
         },

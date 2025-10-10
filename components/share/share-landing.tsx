@@ -1,9 +1,15 @@
+"use client";
+
 import Link from 'next/link';
 import { openExternalUrl } from '@/lib/open-external';
 
 const BASE_URL = process.env.NEXT_PUBLIC_URL || 'https://mini.pixotchi.tech';
 
 export default function ShareLanding() {
+  const handleAddToWarpcast = () => {
+    void openExternalUrl(`https://warpcast.com/~/add-miniapp?url=${encodeURIComponent(BASE_URL)}`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-2xl space-y-8 text-center">
@@ -34,7 +40,8 @@ export default function ShareLanding() {
             Launch Pixotchi Mini
           </Link>
           <button
-            onClick={() => openExternalUrl('https://warpcast.com/~/add-miniapp?url=https://mini.pixotchi.tech')}
+            type="button"
+            onClick={handleAddToWarpcast}
             className="inline-flex items-center justify-center rounded-full border border-white/20 px-6 py-3 font-semibold text-slate-100 hover:bg-white/10 transition"
           >
             Add to Farcaster
