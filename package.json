@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.2.2",
+  "version": "1.2.21",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,12 +16,12 @@
     "@coinbase/cdp-sdk": "1.38.3",
     "@base-org/account": "2.4.0",
     "@base-org/account-ui": "1.0.1",
-    "@farcaster/miniapp-sdk": "0.1.10",
-    "@farcaster/miniapp-node": "0.1.9",
-    "@farcaster/miniapp-wagmi-connector": "1.0.0",
-    "@privy-io/react-auth": "3.2.0",
-    "@privy-io/wagmi": "2.0.0",
-    "wagmi": "2.17.5",
+    "@farcaster/miniapp-sdk": "0.2.0",
+    "@farcaster/miniapp-node": "0.1.10",
+    "@farcaster/miniapp-wagmi-connector": "1.1.0",
+    "@privy-io/react-auth": "3.2.1",
+    "@privy-io/wagmi": "2.0.1",
+    "wagmi": "2.18.0",
     "viem": "2.38.0",
     "permissionless": "0.2.57",
     "next": "15.5.4",
@@ -49,7 +49,7 @@
     "@react-native-async-storage/async-storage": "2.2.0"
   },
   "devDependencies": {
-    "@types/node": "24.7.0",
+    "@types/node": "24.7.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.1",
     "eslint": "9.37.0",
