@@ -64,7 +64,7 @@ export async function GET(request: Request) {
           fontFamily: '"DM Sans", "Inter", sans-serif',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap' }}>
           <div style={{ fontSize: 60, fontWeight: 700, letterSpacing: 1 }}>Pixotchi Mini</div>
           <div
             style={{
@@ -80,13 +80,13 @@ export async function GET(request: Request) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 48, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 48, alignItems: 'center', flexWrap: 'nowrap' }}>
           <div
             style={{
               width: 360,
               height: 360,
               borderRadius: 44,
-              background: 'rgba(15, 23, 42, 0.35)',
+              background: `rgba(15, 23, 42, 0.35) url(${artUrl}) center / contain no-repeat`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -94,10 +94,7 @@ export async function GET(request: Request) {
               border: '1px solid rgba(255,255,255,0.08)',
               overflow: 'hidden',
             }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={artUrl} alt={name} width={280} height={280} style={{ objectFit: 'contain' }} />
-          </div>
+          />
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 28 }}>
             <div style={{ fontSize: 48, fontWeight: 700, lineHeight: 1.1 }}>
@@ -141,9 +138,19 @@ export async function GET(request: Request) {
           fontFamily: '"DM Sans", "Inter", sans-serif',
         }}
       >
-        <div style={{ textAlign: 'center', maxWidth: 640 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            maxWidth: 640,
+            gap: 24,
+          }}
+        >
           <div style={{ fontSize: 60, fontWeight: 700 }}>Pixotchi Mini</div>
-          <p style={{ marginTop: 24, fontSize: 30, opacity: 0.85 }}>Refresh to load the mint preview.</p>
+          <p style={{ fontSize: 30, opacity: 0.85 }}>Refresh to load the mint preview.</p>
         </div>
       </div>,
       {
