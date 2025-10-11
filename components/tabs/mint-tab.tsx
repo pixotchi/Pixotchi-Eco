@@ -17,7 +17,7 @@ import { getFormattedTokenBalance, getStrainInfo, checkTokenApproval, getLandBal
 import { useBalances } from '@/lib/balance-context';
 import { Strain } from '@/lib/types';
 import { formatNumber, formatTokenAmount } from '@/lib/utils';
-import { ChevronDown, LandPlot, Sprout } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { getFriendlyErrorMessage } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
@@ -28,6 +28,9 @@ import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import LandMintTransaction from '../transactions/land-mint-transaction';
+import { MintShareModal } from '@/components/mint-share-modal';
+import { useName } from '@coinbase/onchainkit/identity';
+import { base } from 'viem/chains';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
@@ -47,6 +50,12 @@ export default function MintTab() {
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
 
+  // Resolve basename for share functionality
+  const { data: basename } = useName({
+    address: address ?? "0x0000000000000000000000000000000000000000",
+    chain: base,
+  });
+
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
@@ -60,6 +69,15 @@ export default function MintTab() {
   const [landMintPrice, setLandMintPrice] = useState<bigint>(BigInt(0));
   
   const [forcedFetchCount, setForcedFetchCount] = useState(0);
+  const [shareData, setShareData] = useState<{
+    address: string;
+    basename?: string;
+    strainName: string;
+    strainId: number;
+    mintedAt: string;
+    txHash?: string;
+  } | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const incrementForcedFetch = () => {
     setForcedFetchCount(prev => prev + 1);
@@ -121,24 +139,6 @@ export default function MintTab() {
 
   const renderPlantMinting = () => (
     <>
-      <Card>
-        <CardContent className="flex flex-col space-y-3">
-          <div className="flex justify-between items-center w-full">
-            <h3 className="text-xl font-pixel font-bold">Mint a Plant</h3>
-            <ToggleGroup
-              value={mintType}
-              onValueChange={(v) => setMintType(v as 'plant' | 'land')}
-              options={[
-                { value: 'plant', label: 'Plants' },
-                { value: 'land', label: 'Lands' },
-              ]}
-            />
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Plant your SEED and mint your very own Pixotchi Plant NFT. Each strain has a unique look and feel.
-          </p>
-        </CardContent>
-      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Choose a Strain</CardTitle>
@@ -205,7 +205,7 @@ export default function MintTab() {
               <span className="font-semibold">{formatNumber(selectedStrain.maxSupply - selectedStrain.totalMinted)} / {formatNumber(selectedStrain.maxSupply)}</span>
             </div>
           </CardContent>
-      </Card>
+        </Card>
       )}
       
       {/* StatusBar replaces BalanceCard globally under header */}
@@ -228,6 +228,20 @@ export default function MintTab() {
                   setNeedsApproval(false);
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
+                }}
+                onTransactionComplete={(tx) => {
+                  if (address) {
+                    const mintedAt = new Date().toISOString();
+                    setShareData({
+                      address,
+                      basename: basename || undefined,
+                      strainName: selectedStrain.name,
+                      strainId: selectedStrain.id,
+                      mintedAt,
+                      txHash: tx?.transactionHash,
+                    });
+                    setShowShareModal(true);
+                  }
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Approve + Mint"
@@ -260,10 +274,22 @@ export default function MintTab() {
             {selectedStrain ? (
               <MintTransaction
                 strain={selectedStrain.id}
-                onSuccess={() => {
+                onSuccess={(tx) => {
                   toast.success('Plant minted successfully!');
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
+                  if (address) {
+                    const mintedAt = new Date().toISOString();
+                    setShareData({
+                      address,
+                      basename: basename || undefined,
+                      strainName: selectedStrain.name,
+                      strainId: selectedStrain.id,
+                      mintedAt,
+                      txHash: tx?.transactionHash,
+                    });
+                    setShowShareModal(true);
+                  }
                   try {
                     const fx = (window as any)?.__pixotchi_frame_context__;
                     const fid = fx?.context?.user?.fid;
@@ -303,24 +329,6 @@ export default function MintTab() {
 
   const renderLandMinting = () => (
     <>
-      <Card>
-        <CardContent className="flex flex-col space-y-3">
-          <div className="flex justify-between items-center w-full">
-            <h3 className="text-xl font-pixel font-bold">Mint a Land</h3>
-            <ToggleGroup
-              value={mintType}
-              onValueChange={(v) => setMintType(v as 'plant' | 'land')}
-              options={[
-                { value: 'plant', label: 'Plants' },
-                { value: 'land', label: 'Lands' },
-              ]}
-            />
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Expand your onchain farm by minting a new land plot. Lands unlock new buildings and opportunities.
-          </p>
-        </CardContent>
-      </Card>
       {landSupply && (
         <Card>
           <CardHeader>
@@ -347,7 +355,7 @@ export default function MintTab() {
           <div className="flex flex-col space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Step 1: Approve SEED</span>
-                                <SponsoredBadge show={isSponsored && isSmartWallet} />
+              <SponsoredBadge show={isSponsored && isSmartWallet} />
             </div>
             <ApproveTransaction
               spenderAddress={LAND_CONTRACT_ADDRESS}
@@ -409,12 +417,39 @@ export default function MintTab() {
   }
 
   return (
-      <div className="space-y-8">
-        
-        
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="flex flex-col space-y-3">
+          <div className="flex justify-between items-start w-full gap-4">
+            <div className="space-y-2">
+              <h3 className="text-xl font-pixel font-bold">
+                {mintType === 'plant' ? 'Mint a Plant' : 'Mint a Land'}
+              </h3>
+              <p className="text-muted-foreground text-sm max-w-xl">
+                {mintType === 'plant'
+                  ? 'Plant your SEED and mint your very own Pixotchi Plant NFT. Each strain has a unique look and feel.'
+                  : 'Expand your onchain farm by minting a new land plot. Lands unlock new buildings and opportunities.'}
+              </p>
+            </div>
+            <ToggleGroup
+              value={mintType}
+              onValueChange={(v) => setMintType(v as 'plant' | 'land')}
+              options={[
+                { value: 'plant', label: 'Plants' },
+                { value: 'land', label: 'Lands' },
+              ]}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-        
-        {mintType === 'plant' ? renderPlantMinting() : renderLandMinting()}
+      {mintType === 'plant' ? renderPlantMinting() : renderLandMinting()}
+
+      <MintShareModal
+        open={showShareModal}
+        onOpenChange={setShowShareModal}
+        data={shareData}
+      />
     </div>
   );
   };

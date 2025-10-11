@@ -30,6 +30,7 @@ const NFT_ABI = [
 export default function ApproveMintBundle({
   strain,
   onSuccess,
+  onTransactionComplete,
   onError,
   buttonText = 'Approve + Mint',
   buttonClassName = 'w-full',
@@ -37,6 +38,7 @@ export default function ApproveMintBundle({
 }: {
   strain: number;
   onSuccess?: (tx: any) => void;
+  onTransactionComplete?: (tx: any) => void;
   onError?: (error: any) => void;
   buttonText?: string;
   buttonClassName?: string;
@@ -63,7 +65,10 @@ export default function ApproveMintBundle({
   return (
     <SmartWalletTransaction
       calls={calls}
-      onSuccess={onSuccess}
+      onSuccess={(tx) => {
+        onSuccess?.(tx);
+        onTransactionComplete?.(tx);
+      }}
       onError={onError}
       buttonText={buttonText}
       buttonClassName={buttonClassName}
