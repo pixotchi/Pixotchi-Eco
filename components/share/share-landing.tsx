@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { useAccount } from 'wagmi';
 import AddToFarcasterButton from '@/components/share/add-to-farcaster-button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -24,6 +25,7 @@ interface CastShareData {
 
 export default function ShareLanding() {
   const searchParams = useSearchParams();
+  const { address } = useAccount(); // Get wallet address from wagmi
   const [castData, setCastData] = useState<CastShareData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -57,15 +59,14 @@ export default function ShareLanding() {
                 
                 setCastData(castData);
                 
-                // Auto-share to public chat if in Mini App
-                const userAddress = context.user?.address;
-                if (userAddress && castData.hash) {
+                // Auto-share to public chat if wallet is connected
+                if (address && castData.hash) {
                   try {
                     const response = await fetch('/api/chat/share-cast', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        address: userAddress,
+                        address: address,
                         castData: castData,
                       }),
                     });
@@ -110,7 +111,7 @@ export default function ShareLanding() {
     };
 
     checkCastShare();
-  }, [searchParams]);
+  }, [searchParams, address]); // Add address to deps since we use it
 
   // Loading state
   if (isLoading) {
