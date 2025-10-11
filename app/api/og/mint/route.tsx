@@ -70,9 +70,12 @@ export async function GET(request: Request) {
     // Use basename if provided, otherwise format the address
     const displayAddress = basename || formatAddress(address);
 
-    // Load custom pixel font for strain name
+    // Load custom fonts
     const pixelFontUrl = new URL('/fonts/pixelmix.ttf', baseUrl).toString();
     const pixelFontData = await fetch(pixelFontUrl).then(res => res.arrayBuffer());
+    
+    const coinbaseFontUrl = new URL('/fonts/Coinbase-Sans/Coinbase_Sans-Bold-web-1.32.woff2', baseUrl).toString();
+    const coinbaseFontData = await fetch(coinbaseFontUrl).then(res => res.arrayBuffer());
 
     return new ImageResponse(
       <div
@@ -85,7 +88,7 @@ export async function GET(request: Request) {
           backgroundImage: `url(${bgUrl})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          fontFamily: '"DM Sans", "Inter", sans-serif',
+          fontFamily: '"Coinbase Sans", sans-serif',
         }}
       >
         {/* Left side - Large plant image */}
@@ -131,11 +134,12 @@ export async function GET(request: Request) {
               fontWeight: 700,
               lineHeight: 1.2,
               textShadow: '0 2px 10px rgba(0,0,0,0.3)',
+              fontFamily: '"Coinbase Sans", sans-serif',
             }}
           >
-            <span style={{ display: 'flex' }}>{displayAddress}</span>
-            <span style={{ display: 'flex' }}>just planted a SEED</span>
-            <span style={{ display: 'flex' }}>on Base to grow a</span>
+            <span style={{ display: 'flex', fontFamily: '"DM Sans", "Inter", sans-serif' }}>{displayAddress}</span>
+            <span style={{ display: 'flex', fontFamily: '"DM Sans", "Inter", sans-serif' }}>planted SEEDs</span>
+            <span style={{ display: 'flex', fontFamily: '"DM Sans", "Inter", sans-serif' }}>on Base to grow a</span>
             <span style={{ display: 'flex', color: '#4ade80', fontFamily: 'Pixelmix' }}>{strainName}</span>
           </div>
 
@@ -147,6 +151,7 @@ export async function GET(request: Request) {
               lineHeight: 1.4,
               opacity: 0.95,
               textShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              fontFamily: '"Coinbase Sans", sans-serif',
             }}
           >
             Start your onchain farming journey today and earn ETH rewards on Base app!
@@ -168,6 +173,7 @@ export async function GET(request: Request) {
                 fontWeight: 700,
                 opacity: 1,
                 textShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                fontFamily: '"Coinbase Sans", sans-serif',
               }}
             >
               mini.pixotchi.tech
@@ -179,6 +185,12 @@ export async function GET(request: Request) {
         width: dimensions.width,
         height: dimensions.height,
         fonts: [
+          {
+            name: 'Coinbase Sans',
+            data: coinbaseFontData,
+            style: 'normal',
+            weight: 700,
+          },
           {
             name: 'Pixelmix',
             data: pixelFontData,
@@ -204,7 +216,7 @@ export async function GET(request: Request) {
           height: 800,
           background: '#0f172a',
           color: '#f8fafc',
-          fontFamily: '"DM Sans", "Inter", sans-serif',
+          fontFamily: '"Coinbase Sans", sans-serif',
           textAlign: 'center',
         }}
       >
