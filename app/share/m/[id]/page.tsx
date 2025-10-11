@@ -1,8 +1,7 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import type { Metadata, ResolvingMetadata } from "next";
 import { redisGetJSON } from "@/lib/redis";
 
-export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 const DEPLOYMENT_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
@@ -111,7 +110,24 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
     notFound();
   }
 
-  // Redirect to the main app (users will see the OG preview, then land in the app)
-  redirect(`/?utm_source=share&utm_medium=mint&utm_content=${id}`);
+  const redirectUrl = `${BASE_URL}/?utm_source=share&utm_medium=mint&utm_content=${id}`;
+
+  // Return a page with meta refresh for crawlers and immediate JS redirect for users
+  return (
+    <html>
+      <head>
+        <meta httpEquiv="refresh" content={`0;url=${redirectUrl}`} />
+      </head>
+      <body>
+        <script dangerouslySetInnerHTML={{
+          __html: `window.location.href = ${JSON.stringify(redirectUrl)};`
+        }} />
+        <noscript>
+          <p>Redirecting to Pixotchi Mini...</p>
+          <a href={redirectUrl}>Click here if you are not redirected</a>
+        </noscript>
+      </body>
+    </html>
+  );
 }
 
