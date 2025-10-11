@@ -76,7 +76,6 @@ export default function MintTab() {
     strainId: number;
     mintedAt: string;
     txHash?: string;
-    shareUrl?: string;
   } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -233,7 +232,6 @@ export default function MintTab() {
                 onTransactionComplete={(tx) => {
                   if (address) {
                     const mintedAt = new Date().toISOString();
-                    const shareUrl = `/share/mint?address=${encodeURIComponent(address)}&strain=${selectedStrain.id}&name=${encodeURIComponent(selectedStrain.name)}&mintedAt=${encodeURIComponent(mintedAt)}`;
                     setShareData({
                       address,
                       basename: basename || undefined,
@@ -241,7 +239,6 @@ export default function MintTab() {
                       strainId: selectedStrain.id,
                       mintedAt,
                       txHash: tx?.transactionHash,
-                      shareUrl,
                     });
                     setShowShareModal(true);
                   }
@@ -283,7 +280,6 @@ export default function MintTab() {
                   window.dispatchEvent(new Event('balances:refresh'));
                   if (address) {
                     const mintedAt = new Date().toISOString();
-                    const shareUrl = `/share/mint?address=${encodeURIComponent(address)}&strain=${selectedStrain.id}&name=${encodeURIComponent(selectedStrain.name)}&mintedAt=${encodeURIComponent(mintedAt)}`;
                     setShareData({
                       address,
                       basename: basename || undefined,
@@ -291,7 +287,6 @@ export default function MintTab() {
                       strainId: selectedStrain.id,
                       mintedAt,
                       txHash: tx?.transactionHash,
-                      shareUrl,
                     });
                     setShowShareModal(true);
                   }

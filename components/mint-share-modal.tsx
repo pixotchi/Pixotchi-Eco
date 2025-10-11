@@ -74,25 +74,12 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
         const result = await response.json();
         setShortUrl(result.shortUrl);
       } else {
-        // Fallback to long URL if short URL generation fails
-        const url = new URL("/share/mint", OG_BASE);
-        url.searchParams.set("address", data.address);
-        url.searchParams.set("strain", String(data.strainId));
-        url.searchParams.set("name", data.strainName);
-        url.searchParams.set("mintedAt", data.mintedAt);
-        if (data.txHash) url.searchParams.set("tx", data.txHash);
-        setShortUrl(url.toString());
+        console.error("Failed to generate short URL - server returned error");
+        toast.error("Unable to generate share link");
       }
     } catch (error) {
       console.error("Failed to generate short URL:", error);
-      // Fallback to long URL
-      const url = new URL("/share/mint", OG_BASE);
-      url.searchParams.set("address", data.address);
-      url.searchParams.set("strain", String(data.strainId));
-      url.searchParams.set("name", data.strainName);
-      url.searchParams.set("mintedAt", data.mintedAt);
-      if (data.txHash) url.searchParams.set("tx", data.txHash);
-      setShortUrl(url.toString());
+      toast.error("Unable to generate share link");
     } finally {
       setIsGeneratingUrl(false);
     }
