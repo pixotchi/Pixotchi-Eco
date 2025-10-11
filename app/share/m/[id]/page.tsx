@@ -30,11 +30,14 @@ function getOgImageUrl(data: MintShareData, platform: 'twitter' | 'farcaster' = 
 }
 
 export async function generateMetadata(
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
   _parent: ResolvingMetadata,
 ): Promise<Metadata> {
+  // Resolve params in Next.js 15
+  const { id } = await params;
+  
   // Resolve the short ID from Redis
-  const data = await redisGetJSON<MintShareData>(`share:mint:${params.id}`);
+  const data = await redisGetJSON<MintShareData>(`share:mint:${id}`);
 
   if (!data) {
     // Fallback metadata if share link expired or doesn't exist
@@ -80,7 +83,7 @@ export async function generateMetadata(
     openGraph: {
       title: `I just minted a ${data.name}!`,
       description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
-      url: `${BASE_URL}/share/m/${params.id}`,
+      url: `${BASE_URL}/share/m/${id}`,
       type: "website",
       images: [{ url: farcasterImageUrl, width: 1200, height: 800, alt: data.name }],
     },
@@ -97,15 +100,18 @@ export async function generateMetadata(
   };
 }
 
-export default async function ShortMintSharePage({ params }: { params: { id: string } }) {
+export default async function ShortMintSharePage({ params }: { params: Promise<{ id: string }> }) {
+  // Resolve params in Next.js 15
+  const { id } = await params;
+  
   // Resolve the short ID from Redis
-  const data = await redisGetJSON<MintShareData>(`share:mint:${params.id}`);
+  const data = await redisGetJSON<MintShareData>(`share:mint:${id}`);
 
   if (!data) {
     notFound();
   }
 
   // Redirect to the main app (users will see the OG preview, then land in the app)
-  redirect(`/?utm_source=share&utm_medium=mint&utm_content=${params.id}`);
+  redirect(`/?utm_source=share&utm_medium=mint&utm_content=${id}`);
 }
 

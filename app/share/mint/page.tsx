@@ -17,11 +17,14 @@ function getOgImageUrl(params: URLSearchParams, platform: 'twitter' | 'farcaster
 }
 
 export async function generateMetadata(
-  { searchParams }: any,
+  { searchParams }: { searchParams: Promise<any> },
   _parent: ResolvingMetadata,
 ): Promise<Metadata> {
+  // Resolve searchParams in Next.js 15
+  const resolvedSearchParams = await searchParams;
+  
   const params = new URLSearchParams();
-  Object.entries(searchParams || {}).forEach(([key, value]) => {
+  Object.entries(resolvedSearchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       if (value.length > 0) params.set(key, value[0] ?? "");
     } else if (typeof value === "string") {
@@ -85,9 +88,12 @@ export async function generateMetadata(
   };
 }
 
-export default function MintSharePage({ searchParams }: any) {
+export default async function MintSharePage({ searchParams }: { searchParams: Promise<any> }) {
+  // Resolve searchParams in Next.js 15
+  const resolvedSearchParams = await searchParams;
+  
   const params = new URLSearchParams();
-  Object.entries(searchParams || {}).forEach(([key, value]) => {
+  Object.entries(resolvedSearchParams || {}).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       if (value.length > 0) params.set(key, value[0] ?? "");
     } else if (typeof value === "string") {
