@@ -5,13 +5,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Copy, Share2, Sparkles, Twitter } from "lucide-react";
+import { Copy, Share2 } from "lucide-react";
+import Image from "next/image";
 import { useFrameContext } from "@/lib/frame-context";
 import { useComposeCast } from "@coinbase/onchainkit/minikit";
 import { toast } from "react-hot-toast";
@@ -33,6 +32,15 @@ interface MintShareModalProps {
 }
 
 const OG_BASE = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
+
+// Plant images matching strain IDs
+const PLANT_IMAGES: Record<number, string> = {
+  1: '/icons/plant1.svg',   // Flora
+  2: '/icons/plant2.svg',   // Taki
+  3: '/icons/plant3WithFrame.svg',  // Rosa
+  4: '/icons/plant4WithFrame.svg',  // Zest
+  5: '/icons/plant5.png',   // TYJ
+};
 
 export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps) {
   const frame = useFrameContext();
@@ -158,26 +166,29 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            Share your mint
-          </DialogTitle>
-          <DialogDescription>
-            Celebrate your new plant with friends. Sharing helps others discover Pixotchi Mini.
+          <DialogTitle className="text-center">Share your mint</DialogTitle>
+          <DialogDescription className="text-center">
+            Celebrate your new plant with friends!
           </DialogDescription>
         </DialogHeader>
 
         {data ? (
-          <div className="space-y-4">
-            <Alert>
-              <AlertDescription>
-                <div className="font-semibold">{data.strainName}</div>
-                <div className="text-xs text-muted-foreground">
-                  Minted on {new Date(data.mintedAt).toLocaleString()}
-                </div>
-              </AlertDescription>
-            </Alert>
+          <div className="space-y-6">
+            {/* Plant Image and Name */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative w-32 h-32 flex items-center justify-center">
+                <Image
+                  src={PLANT_IMAGES[data.strainId] || PLANT_IMAGES[1]}
+                  alt={data.strainName}
+                  width={128}
+                  height={128}
+                  className="object-contain"
+                />
+              </div>
+              <div className="text-xl font-bold text-center">{data.strainName}</div>
+            </div>
 
+            {/* Share Buttons */}
             <div className="space-y-3">
               {isMiniApp ? (
                 <Button
@@ -186,7 +197,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   disabled={isSharing || isGeneratingUrl || !shareUrl}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
-                  {isGeneratingUrl ? "Generating link..." : "Share on Farcaster"}
+                  {isGeneratingUrl ? "Generating link..." : "Share"}
                 </Button>
               ) : (
                 <Button 
@@ -194,8 +205,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   onClick={handleTwitterShare}
                   disabled={isGeneratingUrl || !shareUrl}
                 >
-                  <Twitter className="w-4 h-4 mr-2" />
-                  {isGeneratingUrl ? "Generating link..." : "Share on X"}
+                  <Share2 className="w-4 h-4 mr-2" />
+                  {isGeneratingUrl ? "Generating link..." : "Share"}
                 </Button>
               )}
 
@@ -215,18 +226,16 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 {shareUrl.replace('https://', '')}
               </div>
             )}
+
+            <Button variant="ghost" className="w-full" onClick={() => handleOpenChange(false)}>
+              Not now
+            </Button>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground text-center">
             Mint data unavailable. Try minting again to share your plant.
           </p>
         )}
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => handleOpenChange(false)}>
-            Maybe later
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

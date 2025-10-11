@@ -70,6 +70,10 @@ export async function GET(request: Request) {
     // Use basename if provided, otherwise format the address
     const displayAddress = basename || formatAddress(address);
 
+    // Load custom pixel font for strain name
+    const pixelFontUrl = new URL('/fonts/pixelmix.ttf', baseUrl).toString();
+    const pixelFontData = await fetch(pixelFontUrl).then(res => res.arrayBuffer());
+
     return new ImageResponse(
       <div
         style={{
@@ -132,7 +136,7 @@ export async function GET(request: Request) {
             <span style={{ display: 'flex' }}>{displayAddress}</span>
             <span style={{ display: 'flex' }}>just planted a SEED</span>
             <span style={{ display: 'flex' }}>on Base to grow a</span>
-            <span style={{ display: 'flex', color: '#4ade80' }}>{strainName}</span>
+            <span style={{ display: 'flex', color: '#4ade80', fontFamily: 'Pixelmix' }}>{strainName}</span>
           </div>
 
           {/* Call to action */}
@@ -160,9 +164,10 @@ export async function GET(request: Request) {
             <div
               style={{
                 display: 'flex',
-                fontSize: platform === 'twitter' ? 18 : 20,
-                fontWeight: 600,
-                opacity: 0.9,
+                fontSize: platform === 'twitter' ? 32 : 36,
+                fontWeight: 700,
+                opacity: 1,
+                textShadow: '0 2px 8px rgba(0,0,0,0.3)',
               }}
             >
               mini.pixotchi.tech
@@ -173,6 +178,14 @@ export async function GET(request: Request) {
       {
         width: dimensions.width,
         height: dimensions.height,
+        fonts: [
+          {
+            name: 'Pixelmix',
+            data: pixelFontData,
+            style: 'normal',
+            weight: 400,
+          },
+        ],
         headers: {
           'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400',
         },
