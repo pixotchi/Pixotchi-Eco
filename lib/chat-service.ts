@@ -24,12 +24,7 @@ export function formatDisplayName(address: string): string {
 }
 
 // Store a new chat message
-export async function storeMessage(
-  address: string, 
-  message: string, 
-  type?: 'text' | 'cast_share',
-  castData?: any
-): Promise<ChatMessage> {
+export async function storeMessage(address: string, message: string): Promise<ChatMessage> {
   if (!redis) {
     throw new Error('Redis client not available');
   }
@@ -42,9 +37,7 @@ export async function storeMessage(
     address: address.toLowerCase(),
     message: message.trim(),
     timestamp,
-    displayName: formatDisplayName(address), // Client-side OnchainKit will handle names
-    type: type || 'text', // Default to 'text' for backwards compatibility
-    ...(castData && { castData }) // Include castData if provided
+    displayName: formatDisplayName(address) // Client-side OnchainKit will handle names
   };
 
   // Store message with TTL

@@ -411,28 +411,12 @@ export type BundledItemConsumedEvent = ItemConsumedEvent & {
 };
 
 // Chat system types
-export type CastShareData = {
-  hash: string;
-  author: {
-    fid: number;
-    username?: string;
-    displayName?: string;
-    pfpUrl?: string;
-  };
-  text?: string;
-  timestamp?: number;
-  channelKey?: string;
-  embeds?: string[];
-};
-
 export type ChatMessage = {
   id: string;
   address: string;
   message: string;
   timestamp: number;
   displayName: string; // Fallback display name, OnchainKit handles real names client-side
-  type?: 'text' | 'cast_share'; // Type of message (backwards compatible, defaults to 'text')
-  castData?: CastShareData; // Cast data if type is 'cast_share'
 };
 
 export type ChatRateLimit = {
@@ -449,8 +433,6 @@ export type ChatStats = {
 export type AdminChatMessage = ChatMessage & {
   isSpam?: boolean;
   similarCount?: number;
-  type?: 'text' | 'cast_share'; // Inherited from ChatMessage but explicit for admin
-  castData?: CastShareData; // Inherited from ChatMessage but explicit for admin
 };
 
 // AI Chat Types
