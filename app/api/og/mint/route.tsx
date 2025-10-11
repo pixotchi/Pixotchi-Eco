@@ -74,8 +74,9 @@ export async function GET(request: Request) {
     const pixelFontUrl = new URL('/fonts/pixelmix.ttf', baseUrl).toString();
     const pixelFontData = await fetch(pixelFontUrl).then(res => res.arrayBuffer());
     
-    const coinbaseFontUrl = new URL('/fonts/Coinbase-Sans/Coinbase_Sans-Bold-web-1.32.woff2', baseUrl).toString();
-    const coinbaseFontData = await fetch(coinbaseFontUrl).then(res => res.arrayBuffer());
+    // Use AdelleSans (available in .woff format) - Satori doesn't support .woff2
+    const mainFontUrl = new URL('/fonts/AdelleSans-Semibold.woff', baseUrl).toString();
+    const mainFontData = await fetch(mainFontUrl).then(res => res.arrayBuffer());
 
     return new ImageResponse(
       <div
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
           backgroundImage: `url(${bgUrl})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          fontFamily: '"Coinbase Sans", sans-serif',
+          fontFamily: 'AdelleSans, sans-serif',
         }}
       >
         {/* Left side - Large plant image */}
@@ -134,12 +135,12 @@ export async function GET(request: Request) {
               fontWeight: 700,
               lineHeight: 1.2,
               textShadow: '0 2px 10px rgba(0,0,0,0.3)',
-              fontFamily: '"Coinbase Sans", sans-serif',
+              fontFamily: 'AdelleSans, sans-serif',
             }}
           >
-            <span style={{ display: 'flex', fontFamily: '"DM Sans", "Inter", sans-serif' }}>{displayAddress}</span>
-            <span style={{ display: 'flex', fontFamily: '"DM Sans", "Inter", sans-serif' }}>planted SEEDs</span>
-            <span style={{ display: 'flex', fontFamily: '"DM Sans", "Inter", sans-serif' }}>on Base to grow a</span>
+            <span style={{ display: 'flex', fontFamily: 'AdelleSans, sans-serif' }}>{displayAddress}</span>
+            <span style={{ display: 'flex', fontFamily: 'AdelleSans, sans-serif' }}>planted SEEDs</span>
+            <span style={{ display: 'flex', fontFamily: 'AdelleSans, sans-serif' }}>on Base to grow a</span>
             <span style={{ display: 'flex', color: '#4ade80', fontFamily: 'Pixelmix' }}>{strainName}</span>
           </div>
 
@@ -151,7 +152,7 @@ export async function GET(request: Request) {
               lineHeight: 1.4,
               opacity: 0.95,
               textShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              fontFamily: '"Coinbase Sans", sans-serif',
+              fontFamily: 'AdelleSans, sans-serif',
             }}
           >
             Start your onchain farming journey today and earn ETH rewards on Base app!
@@ -173,7 +174,7 @@ export async function GET(request: Request) {
                 fontWeight: 700,
                 opacity: 1,
                 textShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                fontFamily: '"Coinbase Sans", sans-serif',
+                fontFamily: 'AdelleSans, sans-serif',
               }}
             >
               mini.pixotchi.tech
@@ -186,10 +187,10 @@ export async function GET(request: Request) {
         height: dimensions.height,
         fonts: [
           {
-            name: 'Coinbase Sans',
-            data: coinbaseFontData,
+            name: 'AdelleSans',
+            data: mainFontData,
             style: 'normal',
-            weight: 700,
+            weight: 600,
           },
           {
             name: 'Pixelmix',
@@ -216,7 +217,7 @@ export async function GET(request: Request) {
           height: 800,
           background: '#0f172a',
           color: '#f8fafc',
-          fontFamily: '"Coinbase Sans", sans-serif',
+          fontFamily: 'AdelleSans, sans-serif',
           textAlign: 'center',
         }}
       >
