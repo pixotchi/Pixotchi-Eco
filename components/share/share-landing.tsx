@@ -39,9 +39,47 @@ export default function ShareLanding() {
           try {
             const context = await sdk.context;
             if (context?.location?.type === 'cast_share') {
-              const cast = (context.location as any).cast;
+              const castLocation = (context.location as any);
+              const cast = castLocation.cast;
               if (cast) {
-                setCastData(cast);
+                const castData = {
+                  author: {
+                    fid: cast.author.fid,
+                    username: cast.author.username,
+                    displayName: cast.author.displayName,
+                    pfpUrl: cast.author.pfp?.url,
+                  },
+                  hash: cast.hash,
+                  text: cast.text,
+                  timestamp: cast.timestamp,
+                  channelKey: cast.channel?.key,
+                };
+                
+                setCastData(castData);
+                
+                // Auto-share to public chat if in Mini App
+                const userAddress = context.user?.address;
+                if (userAddress && castData.hash) {
+                  try {
+                    const response = await fetch('/api/chat/share-cast', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        address: userAddress,
+                        castData: castData,
+                      }),
+                    });
+                    
+                    if (response.ok) {
+                      console.log('✅ Cast shared to public chat');
+                    } else {
+                      console.warn('Failed to share cast to chat:', await response.text());
+                    }
+                  } catch (error) {
+                    console.warn('Error sharing cast to chat:', error);
+                  }
+                }
+                
                 setIsLoading(false);
                 return;
               }

@@ -1828,51 +1828,115 @@ export default function AdminInviteDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4 max-h-[500px] overflow-y-auto">
-                    {chatMessages.map((message) => (
-                      <div
-                        key={`${message.id}-${message.timestamp}`}
-                        className={`p-4 rounded-lg border ${
-                          message.isSpam
-                            ? 'bg-destructive/10 border-destructive/20'
-                            : 'bg-card'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="font-medium text-sm">
-                                {message.displayName}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(message.timestamp).toLocaleString()} (Local)
-                              </span>
-                              {message.isSpam && (
-                                <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded-full">
-                                  Potential Spam
+                    {chatMessages.map((message) => {
+                      const isCastShare = message.type === 'cast_share' && message.castData;
+                      return (
+                        <div
+                          key={`${message.id}-${message.timestamp}`}
+                          className={`p-4 rounded-lg border ${
+                            message.isSpam
+                              ? 'bg-destructive/10 border-destructive/20'
+                              : isCastShare
+                                ? 'bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800'
+                                : 'bg-card'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                {isCastShare && (
+                                  <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-full font-semibold">
+                                    🔗 Cast Share
+                                  </span>
+                                )}
+                                <span className="font-medium text-sm">
+                                  {message.displayName}
                                 </span>
-                              )}
-                            </div>
-                            <p className="text-sm">{message.message}</p>
-                            <div className="mt-2 text-xs text-muted-foreground">
-                              Address: {message.address}
-                              {message.similarCount && message.similarCount > 1 && (
-                                <span className="ml-2">
-                                  Similar messages: {message.similarCount}
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(message.timestamp).toLocaleString()} (Local)
                                 </span>
+                                {message.isSpam && (
+                                  <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded-full">
+                                    Potential Spam
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {isCastShare && message.castData ? (
+                                <div className="space-y-2">
+                                  <p className="text-sm text-muted-foreground">{message.message}</p>
+                                  
+                                  {/* Cast author info */}
+                                  <div className="flex items-center gap-2 pl-3 border-l-2 border-purple-300 dark:border-purple-700">
+                                    {message.castData.author.pfpUrl && (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img 
+                                        src={message.castData.author.pfpUrl} 
+                                        alt="Cast author"
+                                        className="w-6 h-6 rounded-full"
+                                      />
+                                    )}
+                                    <span className="text-xs font-semibold">
+                                      {message.castData.author.displayName || message.castData.author.username || `FID ${message.castData.author.fid}`}
+                                    </span>
+                                    {message.castData.author.username && (
+                                      <span className="text-xs text-muted-foreground">
+                                        @{message.castData.author.username}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Cast content */}
+                                  {message.castData.text && (
+                                    <p className="text-sm pl-3 border-l-2 border-purple-300 dark:border-purple-700 italic">
+                                      "{message.castData.text.length > 200 
+                                        ? message.castData.text.slice(0, 200) + '...' 
+                                        : message.castData.text}"
+                                    </p>
+                                  )}
+                                  
+                                  {/* Channel info */}
+                                  {message.castData.channelKey && (
+                                    <p className="text-xs text-muted-foreground pl-3">
+                                      Posted in /{message.castData.channelKey}
+                                    </p>
+                                  )}
+                                  
+                                  {/* View on Warpcast link */}
+                                  <a 
+                                    href={`https://warpcast.com/~/conversations/${message.castData.hash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-purple-600 dark:text-purple-400 hover:underline inline-block pl-3"
+                                  >
+                                    View original cast on Warpcast →
+                                  </a>
+                                </div>
+                              ) : (
+                                <p className="text-sm">{message.message}</p>
                               )}
+                              
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                Address: {message.address}
+                                {message.similarCount && message.similarCount > 1 && (
+                                  <span className="ml-2">
+                                    Similar messages: {message.similarCount}
+                                  </span>
+                                )}
+                              </div>
                             </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteMessage(message.id, message.timestamp)}
+                              disabled={chatLoading}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteMessage(message.id, message.timestamp)}
-                            disabled={chatLoading}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
