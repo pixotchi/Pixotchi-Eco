@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Share2 } from "lucide-react";
+import { Copy, Share2, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { useFrameContext } from "@/lib/frame-context";
 import { useComposeCast } from "@coinbase/onchainkit/minikit";
@@ -105,23 +105,42 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
   const shareUrl = shortUrl;
 
+  // Enhanced share text with engaging copy
+  const shareText = useMemo(() => {
+    if (!data) return "";
+    
+    return isMiniApp
+      ? `🪴 Just planted a ${data.strainName} in Pixotchi Mini!\n\nJoin me, grow your own plants and earn ETH rewards! 🟦`
+      : `🪴 Just planted a ${data.strainName} on @baseapp!\n\nGrowing onchain with @pixotchi 🌿\n\nStart your farming journey and earn ETH rewards! 🟦`;
+  }, [data, isMiniApp]);
+
   const tweetUrl = useMemo(() => {
     if (!data) return "";
-    const tweet = new URL("https://twitter.com/intent/tweet");
-    const text = `🌱 Just minted a ${data.strainName} in Pixotchi Mini! Grow with me on Base.`;
-    tweet.searchParams.set("text", text);
+    const tweet = new URL("https://x.com/intent/tweet");
+    tweet.searchParams.set("text", shareText);
     if (shareUrl) tweet.searchParams.set("url", shareUrl);
     return tweet.toString();
-  }, [data, shareUrl]);
+  }, [data, shareUrl, shareText]);
 
   const handleCopyLink = useCallback(async () => {
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      toast.success("Share link copied");
+      toast.success("Share link copied! 🎉");
     } catch (error) {
       console.warn("Copy failed", error);
-      toast.error("Failed to copy link");
+      // Fallback: try to select the text for manual copy
+      try {
+        const urlElement = document.querySelector('[data-share-url]') as HTMLInputElement;
+        if (urlElement) {
+          urlElement.select();
+          toast.error("Clipboard unavailable - text selected for manual copy");
+        } else {
+          toast.error("Failed to copy link");
+        }
+      } catch {
+        toast.error("Failed to copy link");
+      }
     }
   }, [shareUrl]);
 
@@ -130,18 +149,18 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     setIsSharing(true);
     try {
       await composeCast({
-        text: `🌱 I just minted a ${data.strainName} in Pixotchi Mini!`,
+        text: shareText,
         embeds: [shareUrl],
       });
       toast.success("Share composer opened");
       onOpenChange(false);
     } catch (error) {
       console.warn("Compose cast failed", error);
-      toast.error("Unable to open Farcaster composer");
+      toast.error("Unable to open Farcaster composer - try copying the link instead");
     } finally {
       setIsSharing(false);
     }
-  }, [composeCast, data, onOpenChange, shareUrl]);
+  }, [composeCast, data, onOpenChange, shareUrl, shareText]);
 
   const handleTwitterShare = useCallback(async () => {
     if (!tweetUrl) return;
@@ -164,7 +183,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" hideCloseButton>
         <DialogHeader>
           <DialogTitle className="text-center">Share your mint</DialogTitle>
           <DialogDescription className="text-center">
@@ -174,18 +193,45 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
         {data ? (
           <div className="space-y-6">
-            {/* Plant Image and Name */}
+            {/* Plant Image and Name with celebration animation */}
             <div className="flex flex-col items-center gap-3">
               <div className="relative w-32 h-32 flex items-center justify-center">
+                {/* Celebration sparkles animation */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <Sparkles 
+                    className="absolute top-0 left-0 w-4 h-4 text-yellow-400 animate-pulse" 
+                    style={{ animationDelay: '0s', animationDuration: '1.5s' }}
+                  />
+                  <Sparkles 
+                    className="absolute top-2 right-2 w-5 h-5 text-yellow-300 animate-pulse" 
+                    style={{ animationDelay: '0.3s', animationDuration: '2s' }}
+                  />
+                  <Sparkles 
+                    className="absolute bottom-0 left-4 w-4 h-4 text-yellow-500 animate-pulse" 
+                    style={{ animationDelay: '0.6s', animationDuration: '1.8s' }}
+                  />
+                  <Sparkles 
+                    className="absolute bottom-4 right-0 w-3 h-3 text-yellow-400 animate-pulse" 
+                    style={{ animationDelay: '0.9s', animationDuration: '2.2s' }}
+                  />
+                </div>
+                
+                {/* Subtle glow effect */}
+                <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 via-transparent to-blue-400/10 rounded-full blur-xl animate-pulse" 
+                  style={{ animationDuration: '3s' }}
+                />
+                
                 <Image
                   src={PLANT_IMAGES[data.strainId] || PLANT_IMAGES[1]}
-                  alt={data.strainName}
+                  alt={`${data.strainName} plant`}
+                  aria-label={`${data.strainName} strain plant illustration`}
                   width={128}
                   height={128}
-                  className="object-contain"
+                  className="object-contain relative z-10 animate-[bounce_1s_ease-in-out_3]"
+                  priority
                 />
               </div>
-              <div className="text-xl font-bold text-center">{data.strainName}</div>
+              <div className="text-xl font-bold text-center font-pixel">{data.strainName}</div>
             </div>
 
             {/* Share Buttons */}
@@ -195,6 +241,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   className="w-full"
                   onClick={handleMiniAppShare}
                   disabled={isSharing || isGeneratingUrl || !shareUrl}
+                  aria-busy={isSharing || isGeneratingUrl}
+                  aria-label={`Share your ${data.strainName} mint on Farcaster`}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
                   {isGeneratingUrl ? "Generating link..." : "Share"}
@@ -204,26 +252,34 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   className="w-full" 
                   onClick={handleTwitterShare}
                   disabled={isGeneratingUrl || !shareUrl}
+                  aria-busy={isGeneratingUrl}
+                  aria-label={`Share your ${data.strainName} mint on Twitter`}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
                   {isGeneratingUrl ? "Generating link..." : "Share"}
                 </Button>
               )}
-
-              <Button 
-                variant="outline" 
-                className="w-full" 
-                onClick={handleCopyLink}
-                disabled={isGeneratingUrl || !shareUrl}
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                {isGeneratingUrl ? "Generating..." : "Copy share link"}
-              </Button>
             </div>
 
+            {/* Share URL with inline copy button */}
             {shareUrl && !isGeneratingUrl && (
-              <div className="text-xs text-muted-foreground text-center font-mono bg-muted p-2 rounded">
-                {shareUrl.replace('https://', '')}
+              <div className="relative">
+                <input
+                  readOnly
+                  value={shareUrl.replace('https://', '')}
+                  data-share-url
+                  onFocus={(e) => e.target.select()}
+                  className="w-full text-xs font-mono bg-muted text-muted-foreground p-3 pr-10 rounded border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-text"
+                  aria-label="Share link - click to select"
+                />
+                <button
+                  onClick={handleCopyLink}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-background/80 rounded transition-colors"
+                  aria-label="Copy share link to clipboard"
+                  title="Copy link"
+                >
+                  <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                </button>
               </div>
             )}
 
