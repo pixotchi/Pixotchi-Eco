@@ -19,6 +19,7 @@ import { openExternalUrl } from "@/lib/open-external";
 
 interface MintShareData {
   address: string;
+  basename?: string;
   strainName: string;
   strainId: number;
   mintedAt: string;
@@ -37,19 +38,64 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
   const frame = useFrameContext();
   const { composeCast } = useComposeCast();
   const [isSharing, setIsSharing] = useState(false);
+  const [shortUrl, setShortUrl] = useState<string>("");
+  const [isGeneratingUrl, setIsGeneratingUrl] = useState(false);
 
   const isMiniApp = Boolean(frame?.isInMiniApp);
 
-  const shareUrl = useMemo(() => {
-    if (!data) return "";
-    const url = new URL("/share/mint", OG_BASE);
-    url.searchParams.set("address", data.address);
-    url.searchParams.set("strain", String(data.strainId));
-    url.searchParams.set("name", data.strainName);
-    url.searchParams.set("mintedAt", data.mintedAt);
-    if (data.txHash) url.searchParams.set("tx", data.txHash);
-    return url.toString();
-  }, [data]);
+  // Generate short URL when modal opens with data
+  const generateShortUrl = useCallback(async () => {
+    if (!data || shortUrl) return;
+    
+    setIsGeneratingUrl(true);
+    try {
+      const response = await fetch("/api/share/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: data.address,
+          basename: data.basename,
+          strain: String(data.strainId),
+          name: data.strainName,
+          mintedAt: data.mintedAt,
+          tx: data.txHash,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setShortUrl(result.shortUrl);
+      } else {
+        // Fallback to long URL if short URL generation fails
+        const url = new URL("/share/mint", OG_BASE);
+        url.searchParams.set("address", data.address);
+        url.searchParams.set("strain", String(data.strainId));
+        url.searchParams.set("name", data.strainName);
+        url.searchParams.set("mintedAt", data.mintedAt);
+        if (data.txHash) url.searchParams.set("tx", data.txHash);
+        setShortUrl(url.toString());
+      }
+    } catch (error) {
+      console.error("Failed to generate short URL:", error);
+      // Fallback to long URL
+      const url = new URL("/share/mint", OG_BASE);
+      url.searchParams.set("address", data.address);
+      url.searchParams.set("strain", String(data.strainId));
+      url.searchParams.set("name", data.strainName);
+      url.searchParams.set("mintedAt", data.mintedAt);
+      if (data.txHash) url.searchParams.set("tx", data.txHash);
+      setShortUrl(url.toString());
+    } finally {
+      setIsGeneratingUrl(false);
+    }
+  }, [data, shortUrl]);
+
+  // Generate short URL when modal opens
+  if (open && data && !shortUrl && !isGeneratingUrl) {
+    generateShortUrl();
+  }
+
+  const shareUrl = shortUrl;
 
   const tweetUrl = useMemo(() => {
     if (!data) return "";
@@ -99,8 +145,17 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     onOpenChange(false);
   }, [isMiniApp, onOpenChange, tweetUrl]);
 
+  // Reset short URL when modal closes
+  const handleOpenChange = useCallback((newOpen: boolean) => {
+    if (!newOpen) {
+      setShortUrl("");
+      setIsGeneratingUrl(false);
+    }
+    onOpenChange(newOpen);
+  }, [onOpenChange]);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -128,23 +183,38 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 <Button
                   className="w-full"
                   onClick={handleMiniAppShare}
-                  disabled={isSharing}
+                  disabled={isSharing || isGeneratingUrl || !shareUrl}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
-                  Share on Farcaster
+                  {isGeneratingUrl ? "Generating link..." : "Share on Farcaster"}
                 </Button>
               ) : (
-                <Button className="w-full" onClick={handleTwitterShare}>
+                <Button 
+                  className="w-full" 
+                  onClick={handleTwitterShare}
+                  disabled={isGeneratingUrl || !shareUrl}
+                >
                   <Twitter className="w-4 h-4 mr-2" />
-                  Share on X
+                  {isGeneratingUrl ? "Generating link..." : "Share on X"}
                 </Button>
               )}
 
-              <Button variant="outline" className="w-full" onClick={handleCopyLink}>
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleCopyLink}
+                disabled={isGeneratingUrl || !shareUrl}
+              >
                 <Copy className="w-4 h-4 mr-2" />
-                Copy share link
+                {isGeneratingUrl ? "Generating..." : "Copy share link"}
               </Button>
             </div>
+
+            {shareUrl && !isGeneratingUrl && (
+              <div className="text-xs text-muted-foreground text-center font-mono bg-muted p-2 rounded">
+                {shareUrl.replace('https://', '')}
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -153,7 +223,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
         )}
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={() => handleOpenChange(false)}>
             Maybe later
           </Button>
         </DialogFooter>

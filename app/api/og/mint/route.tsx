@@ -8,20 +8,22 @@ const DIMENSIONS = {
   farcaster: { width: 1200, height: 800, bg: '/farcaster-og.png' },
 };
 
+// Strain IDs from contract are 1-indexed
 const strainNames: Record<number, string> = {
-  1: 'OG',
-  2: 'FLORA',
-  3: 'TAKI',
-  4: 'ROSA',
-  5: 'ZEST',
+  1: 'Flora',
+  2: 'Taki',
+  3: 'Rosa',
+  4: 'Zest',
+  5: 'TYJ',
 };
 
+// Plant images match mint tab: strain.id - 1 = array index
 const artMap: Record<number, string> = {
-  1: '/icons/plant1.svg',
-  2: '/icons/plant2.svg',
-  3: '/icons/plant3WithFrame.svg',
-  4: '/icons/plant4WithFrame.svg',
-  5: '/icons/plant5.png',
+  1: '/icons/plant1.svg',   // Flora
+  2: '/icons/plant2.svg',   // Taki
+  3: '/icons/plant3WithFrame.svg',  // Rosa
+  4: '/icons/plant4WithFrame.svg',  // Zest
+  5: '/icons/plant5.png',   // TYJ
 };
 
 function formatDate(value: string | null) {
@@ -58,13 +60,15 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const platform = (searchParams.get('platform') || 'farcaster') as 'twitter' | 'farcaster';
     const address = searchParams.get('address') || '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
+    const basename = searchParams.get('basename');
     const strain = Number(searchParams.get('strain') || '1');
-    const strainName = strainNames[strain] || 'OG';
+    const strainName = strainNames[strain] || 'Flora';
     
     const dimensions = DIMENSIONS[platform];
     const bgUrl = new URL(dimensions.bg, baseUrl).toString();
     const plantUrl = new URL(artMap[strain] || artMap[1], baseUrl).toString();
-    const displayAddress = formatAddress(address);
+    // Use basename if provided, otherwise format the address
+    const displayAddress = basename || formatAddress(address);
 
     return new ImageResponse(
       <div
@@ -126,9 +130,9 @@ export async function GET(request: Request) {
             }}
           >
             <span style={{ display: 'flex' }}>{displayAddress}</span>
-            <span style={{ display: 'flex' }}>just planted a</span>
-            <span style={{ display: 'flex', color: '#4ade80' }}>{strainName} SEED</span>
-            <span style={{ display: 'flex' }}>on Base!</span>
+            <span style={{ display: 'flex' }}>just planted a SEED</span>
+            <span style={{ display: 'flex' }}>on Base to grow a</span>
+            <span style={{ display: 'flex', color: '#4ade80' }}>{strainName}</span>
           </div>
 
           {/* Call to action */}
@@ -141,7 +145,7 @@ export async function GET(request: Request) {
               textShadow: '0 2px 8px rgba(0,0,0,0.3)',
             }}
           >
-            Start your onchain farming journey today and earn ETH rewards!
+            Start your onchain farming journey today and earn ETH rewards on Base app!
           </div>
 
           {/* Footer branding */}
