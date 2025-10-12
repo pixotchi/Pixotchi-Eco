@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
+import { usePrivy } from '@privy-io/react-auth';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
 
 const POLL_INTERVAL = 30000; // 30 seconds
@@ -23,26 +24,40 @@ function isTutorialCompleted(): boolean {
 
 export function useBroadcastMessages() {
   const { address, isConnected } = useAccount();
+  const { user, authenticated } = usePrivy();
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(new Set());
+  const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(() => {
+    try {
+      if (typeof window === 'undefined') return new Set();
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return new Set(parsed);
+      }
+    } catch (error) {
+      console.warn('Failed to load dismissed broadcasts:', error);
+    }
+    return new Set();
+  });
   const [tutorialCompleted, setTutorialCompleted] = useState(isTutorialCompleted());
   const lastFetchRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fetchCountRef = useRef<number>(0);
 
-  // Load dismissed IDs from localStorage (for anonymous users)
-  useEffect(() => {
+  // Build a cross-session identity for server-side dismissal when wallet is unavailable
+  const identity = useMemo(() => {
+    if (address) return `addr:${address.toLowerCase()}`;
+    if (authenticated && user?.id) return `privy:${user.id}`;
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setLocalDismissedIds(new Set(parsed));
-      }
-    } catch (error) {
-      console.warn('Failed to load dismissed broadcasts:', error);
-    }
-  }, []);
+      // Fallback: Farcaster Mini App fid if present
+      const fid = (window as any)?.__pixotchi_frame_context__?.context?.user?.fid;
+      if (typeof fid === 'number' && fid > 0) return `fid:${fid}`;
+    } catch {}
+    return undefined;
+  }, [address, authenticated, user?.id]);
+
+  // Local dismissed IDs are loaded synchronously in state initializer
 
   // Check tutorial completion status on mount only
   useEffect(() => {
@@ -61,11 +76,11 @@ export function useBroadcastMessages() {
     };
   }, []);
 
-  // Fetch active messages - stable callback without excessive dependencies
+  // Fetch active messages - relaxed to not require wallet connection
   const fetchMessages = useCallback(async () => {
-    // Require tutorial completion and an authenticated wallet connection
-    if (!isTutorialCompleted() || !isConnected || !address) {
-      // Ensure we clear any messages if user disconnects
+    // Require tutorial completion only; wallet connection is optional
+    if (!isTutorialCompleted()) {
+      // Ensure we clear any messages if tutorial isn't completed
       setMessages(prev => (prev.length > 0 ? [] : prev));
       setLoading(false);
       return;
@@ -83,7 +98,7 @@ export function useBroadcastMessages() {
     console.log(`[Broadcast] Fetching messages (count: ${fetchCountRef.current})`);
 
     try {
-      const url = `/api/broadcast/active?address=${address}`;
+      const url = identity ? `/api/broadcast/active?address=${encodeURIComponent(identity)}` : '/api/broadcast/active';
 
       const response = await fetch(url);
       const data = await response.json();
@@ -122,18 +137,18 @@ export function useBroadcastMessages() {
     }
     
     // Send dismissal to server (only when connected)
-    if (address && isConnected) {
+    if (identity && (isConnected || authenticated)) {
       try {
         await fetch('/api/broadcast/dismiss', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageId, address }),
+          body: JSON.stringify({ messageId, address: identity }),
         });
       } catch (error) {
         console.error('Failed to record dismissal:', error);
       }
     }
-  }, [address, isConnected, localDismissedIds]);
+  }, [identity, isConnected, authenticated, localDismissedIds]);
 
   // Track impression (message was shown)
   const trackImpression = useCallback(async (messageId: string) => {
@@ -175,12 +190,12 @@ export function useBroadcastMessages() {
 
   // Refresh when wallet connects/disconnects (but don't restart polling)
   useEffect(() => {
-    if (address !== undefined) {
+    if (address !== undefined || (authenticated && user?.id)) {
       console.log('[Broadcast] Wallet address changed, fetching messages');
       fetchMessages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]); // Only depend on address, not fetchMessages
+  }, [address, authenticated, user?.id]); // Identity-related triggers
 
   return {
     messages,
