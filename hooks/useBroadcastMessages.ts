@@ -27,7 +27,19 @@ export function useBroadcastMessages() {
   const { user, authenticated } = usePrivy();
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(new Set());
+  const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(() => {
+    try {
+      if (typeof window === 'undefined') return new Set();
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return new Set(parsed);
+      }
+    } catch (error) {
+      console.warn('Failed to load dismissed broadcasts:', error);
+    }
+    return new Set();
+  });
   const [tutorialCompleted, setTutorialCompleted] = useState(isTutorialCompleted());
   const lastFetchRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -45,18 +57,7 @@ export function useBroadcastMessages() {
     return undefined;
   }, [address, authenticated, user?.id]);
 
-  // Load dismissed IDs from localStorage (for anonymous users)
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setLocalDismissedIds(new Set(parsed));
-      }
-    } catch (error) {
-      console.warn('Failed to load dismissed broadcasts:', error);
-    }
-  }, []);
+  // Local dismissed IDs are loaded synchronously in state initializer
 
   // Check tutorial completion status on mount only
   useEffect(() => {
