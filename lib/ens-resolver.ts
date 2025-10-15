@@ -1,6 +1,5 @@
 import { createPublicClient, http, isAddress } from 'viem';
 import { mainnet, base } from 'viem/chains';
-import { toCoinType } from 'viem/utils';
 import { redis } from './redis';
 
 const DEFAULT_MAINNET_RPC =
@@ -70,7 +69,7 @@ export async function resolvePrimaryName(
     const client = getEnsClient();
     const name = await client.getEnsName({
       address: normalised,
-      coinType: toCoinType(base.id),
+      coinType: BigInt(base.id),
     });
     await writeCache(cacheKey, name ?? null);
     return name ?? null;

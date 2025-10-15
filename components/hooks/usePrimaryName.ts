@@ -81,7 +81,7 @@ export function usePrimaryName(address?: string | null, options: { enabled?: boo
     return { name: null, loading: true, error: null };
   });
 
-  const cancelRef = useRef<() => void>();
+  const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     cancelRef.current?.();
