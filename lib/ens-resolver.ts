@@ -11,7 +11,22 @@ const DEFAULT_MAINNET_RPC =
 const CACHE_PREFIX = 'ens:name:';
 const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
 
+const ENS_DEBUG_ENABLED = process.env.ENABLE_ENS_DEBUG === 'true';
+
+export function ensDebugLog(message: string, context?: Record<string, unknown>) {
+  if (!ENS_DEBUG_ENABLED && process.env.NODE_ENV === 'production') {
+    return;
+  }
+
+  if (context) {
+    console.log(`[ENS Resolver] ${message}`, context);
+  } else {
+    console.log(`[ENS Resolver] ${message}`);
+  }
+}
+
 let ensClient: ReturnType<typeof createPublicClient> | null = null;
+let hasLoggedTransport = false;
 
 function getEnsClient() {
   if (!ensClient) {
@@ -20,6 +35,24 @@ function getEnsClient() {
       transport: http(DEFAULT_MAINNET_RPC),
     });
   }
+
+  if (!hasLoggedTransport) {
+    const usingFallback =
+      !process.env.VIEM_MAINNET_RPC &&
+      !process.env.NEXT_PUBLIC_MAINNET_RPC &&
+      !process.env.MAINNET_RPC_URL;
+
+    ensDebugLog('Initialised ENS public client', {
+      transport: usingFallback ? 'public-fallback' : 'custom-env',
+    });
+
+    if (usingFallback) {
+      ensDebugLog('Using public fallback RPC – set VIEM_MAINNET_RPC for production reliability');
+    }
+
+    hasLoggedTransport = true;
+  }
+
   return ensClient;
 }
 
@@ -31,7 +64,7 @@ async function readCache(key: string): Promise<string | null> {
     const value = typeof cached === 'string' ? cached : String(cached);
     return value === '' ? null : value;
   } catch (error) {
-    console.warn('[ENS Resolver] Failed to read cache', { key, error });
+    ensDebugLog('Failed to read cache', { key, error });
     return null;
   }
 }
@@ -41,7 +74,7 @@ async function writeCache(key: string, value: string | null) {
   try {
     await redis.setex(key, CACHE_TTL_SECONDS, value ?? '');
   } catch (error) {
-    console.warn('[ENS Resolver] Failed to write cache', { key, error });
+    ensDebugLog('Failed to write cache', { key, error });
   }
 }
 
@@ -55,28 +88,34 @@ export async function resolvePrimaryName(
   { refresh = false }: { refresh?: boolean } = {},
 ): Promise<string | null> {
   const normalised = normaliseAddress(address);
-  if (!normalised) return null;
+  if (!normalised) {
+    ensDebugLog('Skipping resolution for invalid address', { address });
+    return null;
+  }
 
   const cacheKey = `${CACHE_PREFIX}${normalised}`;
   if (!refresh) {
     const cached = await readCache(cacheKey);
     if (cached !== null) {
+      ensDebugLog('Cache hit', { address: normalised, name: cached });
       return cached;
     }
   }
 
   try {
+    ensDebugLog('Resolving via Viem', { address: normalised });
     const client = getEnsClient();
     const name = await client.getEnsName({
       address: normalised,
       coinType: BigInt(base.id),
     });
+    ensDebugLog('Resolved name', { address: normalised, name });
     await writeCache(cacheKey, name ?? null);
     return name ?? null;
   } catch (error) {
-    console.error('[ENS Resolver] Failed to resolve primary name', {
+    ensDebugLog('Failed to resolve name', {
       address: normalised,
-      error,
+      error: error instanceof Error ? error.message : String(error),
     });
     return null;
   }
@@ -86,6 +125,7 @@ export async function resolvePrimaryNames(
   addresses: string[],
   options: { refresh?: boolean } = {},
 ): Promise<Map<string, string | null>> {
+  ensDebugLog('Batch resolve request', { count: addresses.length });
   const unique = Array.from(new Set(addresses.map((addr) => addr.toLowerCase())));
   const results = await Promise.all(
     unique.map(async (addr) => {
@@ -93,6 +133,12 @@ export async function resolvePrimaryNames(
       return [addr, name] as const;
     }),
   );
+
+  const resolvedCount = results.filter(([, value]) => value !== null).length;
+  ensDebugLog('Batch resolve completed', {
+    total: unique.length,
+    resolved: resolvedCount,
+  });
 
   return new Map(results);
 }
