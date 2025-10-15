@@ -3,8 +3,7 @@
 import { ChatMessage, AIChatMessage } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import { useAccount } from "wagmi";
-import { useName } from "@coinbase/onchainkit/identity";
-import { base } from "viem/chains";
+import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Bot, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -45,10 +44,7 @@ export default function ChatMessageComponent({
   const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || (message as any).displayName === 'You');
   const isOwnPublicMessage = !isAIMode && address?.toLowerCase() === message.address.toLowerCase();
   
-  const { data: name } = useName({
-    address: message.address as `0x${string}` ?? "0x0000000000000000000000000000000000000000",
-    chain: base,
-  });
+  const { name } = usePrimaryName(message.address);
   
   let displayName = '';
   if (isAIMessage) {

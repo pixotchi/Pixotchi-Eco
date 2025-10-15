@@ -31,7 +31,8 @@ import {
   X,
   Lightbulb,
 } from "lucide-react";
-import { Avatar, useName } from "@coinbase/onchainkit/identity";
+import { Avatar } from "@coinbase/onchainkit/identity";
+import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { openExternalUrl } from "@/lib/open-external";
 import { base } from "viem/chains";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
@@ -65,10 +66,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
 
 
-  const { data: name, isLoading: isNameLoading } = useName({
-    address: address ?? "0x0000000000000000000000000000000000000000",
-    chain: base,
-  });
+  const { name, loading: isNameLoading } = usePrimaryName(address ?? undefined);
 
   const { loading, refreshBalances } = useBalances();
   const [showFullAddress, setShowFullAddress] = useState(false);

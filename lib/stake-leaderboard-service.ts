@@ -9,6 +9,7 @@
 import { getReadClient, STAKE_CONTRACT_ADDRESS } from './contracts';
 import stakeAbi from '@/public/abi/stakeabi.json';
 import { redis } from './redis';
+import { resolvePrimaryNames } from './ens-resolver';
 
 export interface StakeLeaderboardEntry {
   address: string;
@@ -20,69 +21,14 @@ export interface StakeLeaderboardEntry {
 const CACHE_KEY = 'stake:leaderboard:v2';
 const CACHE_TTL = 15 * 60; // 15 minutes (shared across all users)
 const MIN_STAKE_THRESHOLD = BigInt(5) * BigInt(10) ** BigInt(17); // 0.5 SEED minimum
-const ENS_CACHE_TTL = 6 * 60 * 60; // 6 hours for Basename resolution
 
-/**
- * Resolve ENS/Basename for an address with 3-day Redis caching
- */
-async function resolveENSWithCache(address: string): Promise<string | null> {
-  const cacheKey = `ens:name:${address.toLowerCase()}`;
-  
-  // Try cache first
-  if (redis) {
-    try {
-      const cached = await redis.get(cacheKey);
-      if (cached !== null && cached !== undefined) {
-        const cachedStr = typeof cached === 'string' ? cached : String(cached);
-        return cachedStr === '' ? null : cachedStr;
-      }
-    } catch (error) {
-      console.error(`Error reading ENS cache for ${address}:`, error);
-    }
-  }
-  
-  // Cache miss - fetch from Basename API
-  try {
-    const resp = await fetch(`https://api.base.org/names/lookup/${encodeURIComponent(address)}`);
-    if (resp.ok) {
-      const data = await resp.json();
-      const basename = data?.name ?? null;
-      if (redis) {
-        await redis.setex(cacheKey, ENS_CACHE_TTL, basename || '');
-      }
-      return basename;
-    }
-    // Do not cache the failure to avoid long stale periods
-    return null;
-  } catch (error) {
-    console.error(`Error resolving ENS for ${address}:`, error);
-    return null;
-  }
-}
-
-/**
- * Resolve ENS names for multiple addresses in parallel
- */
 async function resolveENSBatch(addresses: string[]): Promise<Map<string, string | null>> {
-  console.log(`🔍 Resolving ENS names for ${addresses.length} addresses...`);
-  const startTime = Date.now();
-  
-  const results = await Promise.all(
-    addresses.map(async (address) => ({
-      address: address.toLowerCase(),
-      ensName: await resolveENSWithCache(address)
-    }))
-  );
-  
-  const ensMap = new Map<string, string | null>();
-  results.forEach(({ address, ensName }) => {
-    ensMap.set(address, ensName);
-  });
-  
-  const resolvedCount = Array.from(ensMap.values()).filter(name => name !== null).length;
-  console.log(`✅ Resolved ${resolvedCount}/${addresses.length} ENS names in ${Date.now() - startTime}ms`);
-  
-  return ensMap;
+  try {
+    return await resolvePrimaryNames(addresses);
+  } catch (error) {
+    console.error('Error resolving ENS batch', error);
+    return new Map(addresses.map((addr) => [addr.toLowerCase(), null] as const));
+  }
 }
 
 /**
