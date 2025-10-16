@@ -1,7 +1,7 @@
 "use client";
 
 import { ChatMessage, AIChatMessage } from "@/lib/types";
-import { formatDistanceToNow } from "date-fns";
+import { differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from "date-fns";
 import { useAccount } from "wagmi";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Bot, User } from "lucide-react";
@@ -23,6 +23,32 @@ function formatAIMessage(text: string) {
     }
     return part;
   });
+}
+
+function formatRelativeShort(date: Date) {
+  const now = new Date();
+  const totalSeconds = Math.max(0, differenceInSeconds(now, date));
+
+  if (totalSeconds < 10) return 'now';
+  if (totalSeconds < 60) return `${Math.floor(totalSeconds)}s ago`;
+
+  const minutes = differenceInMinutes(now, date);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = differenceInHours(now, date);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = differenceInDays(now, date);
+  if (days < 7) return `${days}d ago`;
+
+  const weeks = differenceInWeeks(now, date);
+  if (weeks < 5) return `${weeks}w ago`;
+
+  const months = differenceInMonths(now, date);
+  if (months < 12) return `${months}mo ago`;
+
+  const years = differenceInYears(now, date);
+  return `${years}y ago`;
 }
 
 interface ChatMessageProps {
@@ -82,7 +108,7 @@ export default function ChatMessageComponent({
             </span>
           </div>
           <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
+            {formatRelativeShort(new Date(message.timestamp))}
           </span>
         </div>
         
