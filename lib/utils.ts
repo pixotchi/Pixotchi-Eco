@@ -48,11 +48,12 @@ export function formatScoreShort(score: number): string {
 }
 
 // Format ETH with max 6 decimals for leaderboard
-export function formatEthShort(wei: number | bigint): string {
+export function formatEthShort(wei: number | bigint, options?: { maximumFractionDigits?: number }): string {
+  const { maximumFractionDigits = 6 } = options || {};
   const ether = Number(wei) / 1e18;
   return ether.toLocaleString(undefined, {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 6,
+    maximumFractionDigits,
   });
 }
 
