@@ -106,7 +106,7 @@ export async function resolvePrimaryName(
     const client = getEnsClient();
     const name = await client.getEnsName({
       address: normalised,
-      coinType: BigInt(base.id),
+      chainId: base.id,
     });
     ensDebugLog('Resolved name', { address: normalised, name });
     await writeCache(cacheKey, name ?? null);
