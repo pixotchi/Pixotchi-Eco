@@ -11,13 +11,7 @@ const DEFAULT_MAINNET_RPC =
 const CACHE_PREFIX = 'ens:name:';
 const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
 
-const ENS_DEBUG_ENABLED = process.env.ENABLE_ENS_DEBUG === 'true';
-
 export function ensDebugLog(message: string, context?: Record<string, unknown>) {
-  if (!ENS_DEBUG_ENABLED && process.env.NODE_ENV === 'production') {
-    return;
-  }
-
   if (context) {
     console.log(`[ENS Resolver] ${message}`, context);
   } else {
