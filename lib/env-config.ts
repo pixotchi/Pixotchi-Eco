@@ -60,6 +60,22 @@ export const getRpcConfig = () => {
   return { endpoints, wssEndpoints };
 };
 
+export const getMainnetRpcConfig = () => {
+  const endpoints = [
+    process.env.MAINNET_RPC_URL,
+    process.env.MAINNET_RPC_URL_FALLBACK,
+    process.env.MAINNET_RPC_URL_BACKUP_1,
+    process.env.MAINNET_RPC_URL_BACKUP_2,
+    process.env.MAINNET_RPC_URL_BACKUP_3,
+    process.env.NEXT_PUBLIC_MAINNET_RPC,
+    process.env.NEXT_PUBLIC_MAINNET_RPC_FALLBACK,
+  ].filter((endpoint): endpoint is string => Boolean(endpoint));
+
+  const fallback = process.env.MAINNET_RPC_URL_DEFAULT || 'https://eth.llamarpc.com';
+
+  return { endpoints, fallback };
+};
+
 // Helper to expose RPC list to admin diagnostics (server-only safe values)
 export const listRpcHttpEndpoints = (): string[] => getRpcConfig().endpoints;
 

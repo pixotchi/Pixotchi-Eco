@@ -1,9 +1,8 @@
-import { createPublicClient, http, isAddress, fallback } from 'viem';
+import { createPublicClient, http, isAddress } from 'viem';
 import { mainnet, base } from 'viem/chains';
 import { redis } from './redis';
-import { getRpcConfig } from './env-config';
 
-const { endpoints: configuredEndpoints } = getRpcConfig();
+const MAINNET_ENS_RPC = 'https://ethereum-rpc.publicnode.com';
 const BASE_COIN_TYPE = (BigInt(0x8000_0000) | BigInt(base.id));
 
 const CACHE_PREFIX = 'ens:name:';
@@ -19,29 +18,12 @@ export function ensDebugLog(message: string, context?: Record<string, unknown>) 
 
 let ensClient: ReturnType<typeof createPublicClient> | null = null;
 
-function buildEnsTransport() {
-  if (configuredEndpoints.length === 0) {
-    const fallbackUrl = 'https://mainnet.base.org';
-    ensDebugLog('No RPC endpoints configured via getRpcConfig; using fallback', { fallback: fallbackUrl });
-    return http(fallbackUrl);
-  }
-
-  const transports = configuredEndpoints.map((endpoint) => http(endpoint));
-
-  if (transports.length === 1) {
-    ensDebugLog('Using single configured RPC endpoint for ENS resolution', { endpoint: configuredEndpoints[0] });
-    return transports[0];
-  }
-
-  ensDebugLog('Using fallback transport across configured RPC endpoints', { endpoints: configuredEndpoints });
-  return fallback(transports);
-}
-
 function getEnsClient() {
   if (!ensClient) {
+    ensDebugLog('Initialising ENS client with hardcoded mainnet RPC', { endpoint: MAINNET_ENS_RPC });
     ensClient = createPublicClient({
       chain: mainnet,
-      transport: buildEnsTransport(),
+      transport: http(MAINNET_ENS_RPC),
     });
   }
 
