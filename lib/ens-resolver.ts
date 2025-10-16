@@ -1,12 +1,9 @@
-import { createPublicClient, http, isAddress } from 'viem';
+import { createPublicClient, http, isAddress, fallback } from 'viem';
 import { mainnet, base } from 'viem/chains';
 import { redis } from './redis';
+import { getRpcConfig } from './env-config';
 
-const DEFAULT_MAINNET_RPC =
-  process.env.VIEM_MAINNET_RPC ||
-  process.env.NEXT_PUBLIC_MAINNET_RPC ||
-  process.env.MAINNET_RPC_URL ||
-  'https://ethereum.publicnode.com';
+const { endpoints: baseRpcEndpoints } = getRpcConfig();
 
 const CACHE_PREFIX = 'ens:name:';
 const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
@@ -22,28 +19,36 @@ export function ensDebugLog(message: string, context?: Record<string, unknown>) 
 let ensClient: ReturnType<typeof createPublicClient> | null = null;
 let hasLoggedTransport = false;
 
+function buildEnsTransport() {
+  const transports = baseRpcEndpoints.map((endpoint) => http(endpoint));
+
+  if (transports.length === 0) {
+    ensDebugLog('No RPC endpoints configured; using public fallback', {
+      fallback: 'https://mainnet.base.org',
+    });
+    return http('https://mainnet.base.org');
+  }
+
+  if (transports.length === 1) {
+    ensDebugLog('Using single ENS transport', { endpoint: baseRpcEndpoints[0] });
+    return transports[0];
+  }
+
+  ensDebugLog('Using fallback ENS transport with multiple endpoints', {
+    endpoints: baseRpcEndpoints,
+  });
+  return fallback(transports);
+}
+
 function getEnsClient() {
   if (!ensClient) {
     ensClient = createPublicClient({
       chain: mainnet,
-      transport: http(DEFAULT_MAINNET_RPC),
+      transport: buildEnsTransport(),
     });
   }
 
   if (!hasLoggedTransport) {
-    const usingFallback =
-      !process.env.VIEM_MAINNET_RPC &&
-      !process.env.NEXT_PUBLIC_MAINNET_RPC &&
-      !process.env.MAINNET_RPC_URL;
-
-    ensDebugLog('Initialised ENS public client', {
-      transport: usingFallback ? 'public-fallback' : 'custom-env',
-    });
-
-    if (usingFallback) {
-      ensDebugLog('Using public fallback RPC – set VIEM_MAINNET_RPC for production reliability');
-    }
-
     hasLoggedTransport = true;
   }
 
