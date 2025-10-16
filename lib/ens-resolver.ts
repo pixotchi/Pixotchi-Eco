@@ -1,9 +1,10 @@
 import { createPublicClient, http, isAddress, fallback } from 'viem';
 import { mainnet, base } from 'viem/chains';
 import { redis } from './redis';
+import { toCoinType } from 'viem/utils';
 import { getRpcConfig } from './env-config';
 
-const { endpoints: baseRpcEndpoints } = getRpcConfig();
+const { endpoints: configuredEndpoints } = getRpcConfig();
 
 const CACHE_PREFIX = 'ens:name:';
 const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
@@ -17,26 +18,22 @@ export function ensDebugLog(message: string, context?: Record<string, unknown>) 
 }
 
 let ensClient: ReturnType<typeof createPublicClient> | null = null;
-let hasLoggedTransport = false;
 
 function buildEnsTransport() {
-  const transports = baseRpcEndpoints.map((endpoint) => http(endpoint));
-
-  if (transports.length === 0) {
-    ensDebugLog('No RPC endpoints configured; using public fallback', {
-      fallback: 'https://mainnet.base.org',
-    });
-    return http('https://mainnet.base.org');
+  if (configuredEndpoints.length === 0) {
+    const fallbackUrl = 'https://mainnet.base.org';
+    ensDebugLog('No RPC endpoints configured via getRpcConfig; using fallback', { fallback: fallbackUrl });
+    return http(fallbackUrl);
   }
 
+  const transports = configuredEndpoints.map((endpoint) => http(endpoint));
+
   if (transports.length === 1) {
-    ensDebugLog('Using single ENS transport', { endpoint: baseRpcEndpoints[0] });
+    ensDebugLog('Using single configured RPC endpoint for ENS resolution', { endpoint: configuredEndpoints[0] });
     return transports[0];
   }
 
-  ensDebugLog('Using fallback ENS transport with multiple endpoints', {
-    endpoints: baseRpcEndpoints,
-  });
+  ensDebugLog('Using fallback transport across configured RPC endpoints', { endpoints: configuredEndpoints });
   return fallback(transports);
 }
 
@@ -46,10 +43,6 @@ function getEnsClient() {
       chain: mainnet,
       transport: buildEnsTransport(),
     });
-  }
-
-  if (!hasLoggedTransport) {
-    hasLoggedTransport = true;
   }
 
   return ensClient;
@@ -106,7 +99,7 @@ export async function resolvePrimaryName(
     const client = getEnsClient();
     const name = await client.getEnsName({
       address: normalised,
-      chainId: base.id,
+      coinType: toCoinType(base.id),
     });
     ensDebugLog('Resolved name', { address: normalised, name });
     await writeCache(cacheKey, name ?? null);
