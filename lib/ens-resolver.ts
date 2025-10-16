@@ -1,10 +1,10 @@
 import { createPublicClient, http, isAddress, fallback } from 'viem';
 import { mainnet, base } from 'viem/chains';
 import { redis } from './redis';
-import { toCoinType } from 'viem/utils';
 import { getRpcConfig } from './env-config';
 
 const { endpoints: configuredEndpoints } = getRpcConfig();
+const BASE_COIN_TYPE = (BigInt(0x8000_0000) | BigInt(base.id));
 
 const CACHE_PREFIX = 'ens:name:';
 const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
@@ -99,7 +99,7 @@ export async function resolvePrimaryName(
     const client = getEnsClient();
     const name = await client.getEnsName({
       address: normalised,
-      coinType: toCoinType(base.id),
+      coinType: BASE_COIN_TYPE,
     });
     ensDebugLog('Resolved name', { address: normalised, name });
     await writeCache(cacheKey, name ?? null);
