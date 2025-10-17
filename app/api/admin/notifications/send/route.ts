@@ -1,127 +1,137 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
-import { CLIENT_ENV, SERVER_ENV } from '@/lib/env-config';
-
-const NEYNAR_NOTIFICATIONS_URL = 'https://api.neynar.com/v2/farcaster/frame/notifications/';
-const MAX_TITLE_LENGTH = 32;
-const MAX_BODY_LENGTH = 128;
-const CHUNK_SIZE = 100;
-
-function parseFids(input: unknown): number[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((fid) => {
-      const num = typeof fid === 'string' ? Number(fid) : fid;
-      return Number.isFinite(num) ? Math.floor(num) : NaN;
-    })
-    .filter((num) => Number.isFinite(num) && num > 0) as number[];
-}
-
-function chunkArray<T>(items: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    result.push(items.slice(i, i + size));
-  }
-  return result;
-}
-
-async function publishToFids(fids: number[], title: string, body: string) {
-  const apiKey = SERVER_ENV.NEYNAR_API_KEY;
-  if (!apiKey) {
-    throw new Error('NEYNAR_API_KEY not configured');
-  }
-
-  const payload = {
-    target_fids: fids,
-    notification: { title, body, target_url: CLIENT_ENV.APP_URL },
-  };
-
-  const res = await fetch(NEYNAR_NOTIFICATIONS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = typeof json === 'object' ? JSON.stringify(json) : String(json);
-    throw new Error(err || `Failed to publish notifications (${res.status})`);
-  }
-  return json;
-}
-
-async function recordCustomLog(entry: Record<string, unknown>, count: number) {
-  if (!redis) return;
-  const ts = Date.now();
-  const logEntry = { ts, ...entry };
-  try {
-    await (redis as any)?.lpush?.('notif:custom:log', JSON.stringify(logEntry));
-    await (redis as any)?.ltrim?.('notif:custom:log', 0, 49);
-    await (redis as any)?.set?.('notif:custom:last', JSON.stringify(logEntry));
-    await (redis as any)?.incrby?.('notif:custom:sentCount', count);
-  } catch (error) {
-    console.warn('[Admin Notifications] Failed to persist custom log', error);
-  }
-}
+import { sendFrameNotification } from '@/lib/notification-client';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-  if (!validateAdminKey(req)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
+interface RequestPayload {
+  title?: string;
+  body?: string;
+  type?: string;
+  target?: 'all' | 'fids';
+  fids?: Array<number | string>;
+}
+
+function sanitizeType(value: string | undefined): string {
+  if (!value) return 'admin';
+  const trimmed = value.trim();
+  if (!trimmed) return 'admin';
+  const sanitized = trimmed.slice(0, 32).replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+  return sanitized || 'admin';
+}
+
+function normalizeFids(raw: Array<number | string> | undefined): number[] {
+  if (!Array.isArray(raw)) return [];
+  const parsed = raw
+    .map((value) => {
+      if (typeof value === 'number' && Number.isFinite(value)) return Math.floor(value);
+      const asNumber = Number(String(value).trim());
+      return Number.isFinite(asNumber) ? Math.floor(asNumber) : null;
+    })
+    .filter((value): value is number => value !== null && value > 0);
+  return Array.from(new Set(parsed));
+}
+
+async function loadEligibleFids(): Promise<number[]> {
+  const members = await redis?.smembers?.('notif:eligible:fids');
+  const parsed = (members || [])
+    .map((value) => Number(String(value)))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return Array.from(new Set(parsed.map((value) => Math.floor(value))));
+}
+
+export async function POST(request: NextRequest) {
+  if (!validateAdminKey(request)) {
+    const { body, status } = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
+    return NextResponse.json(body, { status });
   }
 
+  let payload: RequestPayload;
   try {
-    const body = await req.json();
-    const title = (body?.title ?? '').toString().trim();
-    const message = (body?.body ?? '').toString().trim();
-    const sendToAll = Boolean(body?.sendToAll);
-    const providedFids = parseFids(body?.fids);
-
-    if (!title || !message) {
-      return NextResponse.json(createErrorResponse('Title and body are required', 400).body, { status: 400 });
-    }
-
-    if (title.length > MAX_TITLE_LENGTH) {
-      return NextResponse.json(createErrorResponse(`Title must be <= ${MAX_TITLE_LENGTH} characters`, 400).body, { status: 400 });
-    }
-    if (message.length > MAX_BODY_LENGTH) {
-      return NextResponse.json(createErrorResponse(`Body must be <= ${MAX_BODY_LENGTH} characters`, 400).body, { status: 400 });
-    }
-
-    let targetFids: number[] = [];
-    if (sendToAll || providedFids.length === 0) {
-      const eligible = await redis?.smembers?.('notif:eligible:fids');
-      if (eligible && eligible.length > 0) {
-        targetFids = eligible
-          .map((value: string) => Number(value))
-          .filter((fid) => Number.isFinite(fid) && fid > 0);
-      }
-    } else {
-      targetFids = Array.from(new Set(providedFids));
-    }
-
-    if (targetFids.length === 0) {
-      return NextResponse.json(createErrorResponse('No target FIDs available for notification', 400).body, { status: 400 });
-    }
-
-    const chunks = chunkArray(targetFids, CHUNK_SIZE);
-    for (const chunk of chunks) {
-      await publishToFids(chunk, title, message);
-    }
-
-    await recordCustomLog({ title, body: message, totalFids: targetFids.length, sendToAll: sendToAll || providedFids.length === 0, fids: sendToAll ? undefined : targetFids }, targetFids.length);
-
-    return NextResponse.json({
-      success: true,
-      sent: targetFids.length,
-      batches: chunks.length,
-    });
-  } catch (error: any) {
-    return NextResponse.json(createErrorResponse(error?.message || 'Failed to send notifications', 500).body, { status: 500 });
+    payload = await request.json();
+  } catch {
+    const { body, status } = createErrorResponse('Invalid JSON payload', 400, 'INVALID_JSON');
+    return NextResponse.json(body, { status });
   }
+
+  const title = (payload.title || '').trim();
+  const bodyText = (payload.body || '').trim();
+  if (!title || !bodyText) {
+    const { body, status } = createErrorResponse('Title and body are required', 400, 'MISSING_FIELDS');
+    return NextResponse.json(body, { status });
+  }
+
+  const target = payload.target === 'fids' ? 'fids' : 'all';
+  let targetFids: number[] = [];
+
+  if (target === 'fids') {
+    targetFids = normalizeFids(payload.fids);
+    if (targetFids.length === 0) {
+      const { body, status } = createErrorResponse('Provide at least one valid fid', 400, 'NO_TARGETS');
+      return NextResponse.json(body, { status });
+    }
+  } else {
+    try {
+      targetFids = await loadEligibleFids();
+    } catch (error: any) {
+      const { body, status } = createErrorResponse(error?.message || 'Unable to load eligible fids', 500, 'REDIS_ERROR');
+      return NextResponse.json(body, { status });
+    }
+    if (targetFids.length === 0) {
+      const { body, status } = createErrorResponse('No eligible fids available', 400, 'NO_TARGETS');
+      return NextResponse.json(body, { status });
+    }
+  }
+
+  const type = sanitizeType(payload.type);
+
+  const summary = {
+    total: targetFids.length,
+    sent: 0,
+    failed: 0,
+    rateLimited: 0,
+    missingToken: 0,
+    errors: [] as Array<{ fid: number; reason: string }>,
+  };
+
+  for (const fid of targetFids) {
+    try {
+      const result = await sendFrameNotification({ fid, title, body: bodyText });
+      if (result.state === 'success') {
+        summary.sent += 1;
+        try {
+          const ts = Date.now();
+          await (redis as any)?.lpush?.('notif:global:log', JSON.stringify({ ts, fid, type }));
+          await (redis as any)?.ltrim?.('notif:global:log', 0, 199);
+          await (redis as any)?.hset?.('notif:global:last', { [fid]: String(ts) });
+          await (redis as any)?.incrby?.('notif:global:sentCount', 1);
+          await (redis as any)?.lpush?.(`notif:type:${type}:log`, JSON.stringify({ ts, fid }));
+          await (redis as any)?.ltrim?.(`notif:type:${type}:log`, 0, 199);
+          await (redis as any)?.hset?.(`notif:type:${type}:last`, { [fid]: String(ts) });
+          await (redis as any)?.incrby?.(`notif:type:${type}:sentCount`, 1);
+          await (redis as any)?.sadd?.('notif:eligible:fids', String(fid));
+        } catch {}
+      } else if (result.state === 'rate_limit') {
+        summary.rateLimited += 1;
+        summary.errors.push({ fid, reason: 'rate_limited' });
+      } else if (result.state === 'no_token') {
+        summary.missingToken += 1;
+        summary.errors.push({ fid, reason: 'no_token' });
+      } else {
+        summary.failed += 1;
+        summary.errors.push({ fid, reason: 'error' });
+      }
+    } catch (error: any) {
+      summary.failed += 1;
+      summary.errors.push({ fid, reason: error?.message || 'error' });
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    type,
+    ...summary,
+  });
 }

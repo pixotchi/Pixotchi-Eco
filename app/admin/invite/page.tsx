@@ -45,7 +45,6 @@ import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStat
 import { formatDistanceToNow } from 'date-fns';
 import { ThemeSelector } from '@/components/theme-selector';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
-import { Label } from '@/components/ui/label';
 
 interface AdminStats {
   codes: {
@@ -99,12 +98,6 @@ interface GlobalNotificationStats {
   recent: any[];
 }
 
-interface CustomStats {
-  sentCount: number;
-  recent: any[];
-  last: any;
-}
-
 interface FenceStats {
   warn: {
     sentCount: number;
@@ -125,7 +118,6 @@ interface AdminStatsResponse {
   stats: {
     plant1h: PlantNotificationStats;
     fence: FenceStats;
-    custom: CustomStats;
     global: GlobalNotificationStats;
     eligibleFids: string[];
   };
@@ -912,18 +904,20 @@ export default function AdminInviteDashboard() {
   const [notifStats, setNotifStats] = useState<PlantNotificationStats | null>(null);
   const [notifGlobalStats, setNotifGlobalStats] = useState<GlobalNotificationStats | null>(null);
   const [notifFenceStats, setNotifFenceStats] = useState<FenceStats | null>(null);
-  const [notifCustomStats, setNotifCustomStats] = useState<CustomStats | null>(null);
-  const [customTitle, setCustomTitle] = useState('');
-  const [customBody, setCustomBody] = useState('');
-  const [customFidsText, setCustomFidsText] = useState('');
-  const [customSendToAll, setCustomSendToAll] = useState(true);
-  const [customSending, setCustomSending] = useState(false);
   const [eligibleFids, setEligibleFids] = useState<string[]>([]);
   const [notifDebugResult, setNotifDebugResult] = useState<any>(null);
   const [notifDebugLoadingWarn, setNotifDebugLoadingWarn] = useState(false);
   const [notifDebugLoadingExpire, setNotifDebugLoadingExpire] = useState(false);
   const [notifResetFenceLoading, setNotifResetFenceLoading] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [customNotifTitle, setCustomNotifTitle] = useState('');
+  const [customNotifBody, setCustomNotifBody] = useState('');
+  const [customNotifType, setCustomNotifType] = useState('announcement');
+  const [customNotifTarget, setCustomNotifTarget] = useState<'all' | 'fids'>('all');
+  const [customNotifFids, setCustomNotifFids] = useState('');
+  const [customNotifSending, setCustomNotifSending] = useState(false);
+  const [customNotifResult, setCustomNotifResult] = useState<any | null>(null);
+  const [customNotifError, setCustomNotifError] = useState<string | null>(null);
 
   const fetchNotifStats = async () => {
     if (!adminKey.trim()) return;
@@ -935,7 +929,6 @@ export default function AdminInviteDashboard() {
         const payload = data as AdminStatsResponse;
         setNotifStats(payload?.stats?.plant1h || null);
         setNotifFenceStats(payload?.stats?.fence || null);
-        setNotifCustomStats(payload?.stats?.custom || null);
         setNotifGlobalStats(payload?.stats?.global || null);
         setEligibleFids(payload?.stats?.eligibleFids || []);
       } else {
@@ -1053,6 +1046,77 @@ export default function AdminInviteDashboard() {
     });
   };
 
+  const parseFidsInput = useCallback((input: string): number[] => {
+    return input
+      .split(/[^0-9]+/g)
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0);
+  }, []);
+
+  const handleSendCustomNotification = useCallback(async () => {
+    if (!adminKey.trim()) {
+      toast.error('Enter admin key');
+      return;
+    }
+
+    const title = customNotifTitle.trim();
+    const body = customNotifBody.trim();
+
+    if (!title || !body) {
+      toast.error('Title and body are required');
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      title,
+      body,
+      type: customNotifType.trim() || 'announcement',
+      target: customNotifTarget,
+    };
+
+    if (customNotifTarget === 'fids') {
+      const fidList = parseFidsInput(customNotifFids);
+      if (fidList.length === 0) {
+        toast.error('Provide at least one fid');
+        return;
+      }
+      payload.target = 'fids';
+      payload.fids = fidList;
+    }
+
+    setCustomNotifSending(true);
+    setCustomNotifError(null);
+    setCustomNotifResult(null);
+
+    try {
+      const response = await fetch('/api/admin/notifications/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.success === false) {
+        const message = data?.error || `Failed to send notifications (${response.status})`;
+        setCustomNotifError(message);
+        toast.error(message);
+      } else {
+        setCustomNotifResult(data);
+        toast.success(`Sent ${data.sent}/${data.total} notifications`);
+      }
+    } catch (error: any) {
+      const message = error?.message || 'Failed to send notifications';
+      setCustomNotifError(message);
+      toast.error(message);
+    } finally {
+      setCustomNotifSending(false);
+    }
+  }, [adminKey, customNotifBody, customNotifFids, customNotifTarget, customNotifTitle, customNotifType, parseFidsInput]);
+
   // OG Image test handlers
   const handleOgRefresh = () => {
     setOgRefreshKey((prev) => prev + 1);
@@ -1083,51 +1147,6 @@ export default function AdminInviteDashboard() {
       toast.error('Error generating short URL');
     } finally {
       setOgIsGenerating(false);
-    }
-  };
-
-  const sendCustomNotification = async () => {
-    if (!adminKey.trim()) return toast.error('Enter admin key');
-    if (!customTitle.trim()) return toast.error('Enter title');
-    if (!customBody.trim()) return toast.error('Enter body');
-
-    const fids = customSendToAll
-      ? []
-      : customFidsText
-          .split(/[\s,]+/)
-          .map((value) => value.trim())
-          .filter(Boolean);
-
-    setCustomSending(true);
-    try {
-      const res = await fetch('/api/admin/notifications/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminKey}`,
-        },
-        body: JSON.stringify({
-          title: customTitle,
-          body: customBody,
-          sendToAll: customSendToAll,
-          fids,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data?.success === false) {
-        toast.error(data?.error || 'Failed to send notifications');
-      } else {
-        toast.success(`Sent to ${data.sent} recipients`);
-        setCustomBody('');
-        setCustomTitle('');
-        setCustomFidsText('');
-        fetchNotifStats();
-      }
-    } catch (error) {
-      console.error('Failed to send custom notification', error);
-      toast.error('Failed to send custom notification');
-    } finally {
-      setCustomSending(false);
     }
   };
 
@@ -2376,6 +2395,136 @@ export default function AdminInviteDashboard() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Megaphone className="w-5 h-5" />
+                  Send Custom Notification
+                </CardTitle>
+                <CardDescription>
+                  Broadcast a manual Farcaster push notification to all subscribed users or a specific set of FIDs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Title</label>
+                    <Input
+                      value={customNotifTitle}
+                      onChange={(e) => setCustomNotifTitle(e.target.value)}
+                      placeholder="Maintenance Notice"
+                      maxLength={80}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">{customNotifTitle.length}/80 characters</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Type Tag (optional)</label>
+                    <Input
+                      value={customNotifType}
+                      onChange={(e) => setCustomNotifType(e.target.value)}
+                      placeholder="announcement"
+                      maxLength={32}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Used for logging. Letters, numbers, hyphen, underscore.</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">Body</label>
+                  <Textarea
+                    value={customNotifBody}
+                    onChange={(e) => setCustomNotifBody(e.target.value)}
+                    placeholder="Pixotchi servers will be under maintenance at 18:00 UTC."
+                    rows={4}
+                    maxLength={240}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">{customNotifBody.length}/240 characters</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-medium">Recipients</span>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={customNotifTarget === 'all' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setCustomNotifTarget('all')}
+                    >
+                      All Eligible FIDs
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={customNotifTarget === 'fids' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setCustomNotifTarget('fids')}
+                    >
+                      Specific FIDs
+                    </Button>
+                  </div>
+                </div>
+
+                {customNotifTarget === 'fids' && (
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Target FIDs</label>
+                    <Textarea
+                      value={customNotifFids}
+                      onChange={(e) => setCustomNotifFids(e.target.value)}
+                      placeholder="12345, 54321, 67890"
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Separate FIDs by spaces, commas, or new lines.</p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3">
+                  <Button
+                    onClick={handleSendCustomNotification}
+                    disabled={customNotifSending}
+                  >
+                    {customNotifSending ? 'Sending...' : 'Send Notification'}
+                  </Button>
+                </div>
+
+                {(customNotifResult || customNotifError) && (
+                  <Alert variant={customNotifError ? 'destructive' : 'default'}>
+                    <AlertDescription className="space-y-2">
+                      {customNotifError && <p className="text-sm">{customNotifError}</p>}
+                      {customNotifResult && (
+                        <div className="text-sm space-y-1">
+                          <p>
+                            Sent {customNotifResult.sent} of {customNotifResult.total} notifications.
+                          </p>
+                          {(customNotifResult.rateLimited > 0 || customNotifResult.missingToken > 0 || customNotifResult.failed > 0) && (
+                            <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+                              {customNotifResult.rateLimited > 0 && <li>{customNotifResult.rateLimited} rate limited</li>}
+                              {customNotifResult.missingToken > 0 && <li>{customNotifResult.missingToken} missing tokens</li>}
+                              {customNotifResult.failed > 0 && <li>{customNotifResult.failed} failed</li>}
+                            </ul>
+                          )}
+                          {Array.isArray(customNotifResult.errors) && customNotifResult.errors.length > 0 && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-xs">View details ({customNotifResult.errors.length})</summary>
+                              <div className="mt-1 max-h-40 overflow-y-auto">
+                                {customNotifResult.errors.slice(0, 25).map((item: any, index: number) => (
+                                  <div key={`${item.fid}-${index}`} className="text-xs text-muted-foreground">
+                                    fid {item.fid}: {item.reason}
+                                  </div>
+                                ))}
+                                {customNotifResult.errors.length > 25 && (
+                                  <div className="text-xs text-muted-foreground">...and more</div>
+                                )}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications (Plant Care 1h)</CardTitle>
               </CardHeader>
               <CardContent>
@@ -2538,106 +2687,6 @@ export default function AdminInviteDashboard() {
                       </div>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Custom Notifications</CardTitle>
-                <CardDescription>Send announcements, maintenance alerts, or testing messages.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div>
-                  <Label htmlFor="custom-title">Title</Label>
-                  <Input
-                    id="custom-title"
-                    value={customTitle}
-                    onChange={(e) => setCustomTitle(e.target.value)}
-                    maxLength={32}
-                    placeholder="Up to 32 characters"
-                  />
-                  <p className="text-xs text-muted-foreground text-right">{customTitle.length}/32</p>
-                </div>
-                <div>
-                  <Label htmlFor="custom-body">Body</Label>
-                  <Textarea
-                    id="custom-body"
-                    value={customBody}
-                    onChange={(e) => setCustomBody(e.target.value)}
-                    maxLength={128}
-                    rows={4}
-                    placeholder="Message body (max 128 characters)"
-                  />
-                  <p className="text-xs text-muted-foreground text-right">{customBody.length}/128</p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Recipients</Label>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          className="accent-current"
-                          checked={customSendToAll}
-                          onChange={(e) => setCustomSendToAll(e.target.checked)}
-                        />
-                        <span>Send to all eligible ({eligibleFids.length})</span>
-                      </label>
-                    </div>
-                  </div>
-                  {!customSendToAll && (
-                    <Textarea
-                      value={customFidsText}
-                      onChange={(e) => setCustomFidsText(e.target.value)}
-                      placeholder="Enter FIDs separated by comma or whitespace"
-                      rows={3}
-                    />
-                  )}
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Total sent (custom): {notifCustomStats?.sentCount || 0}</span>
-                  {notifCustomStats?.last && (
-                    <span>Last run: {new Date(notifCustomStats.last.ts || Date.now()).toLocaleString()}</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1"
-                    onClick={sendCustomNotification}
-                    disabled={customSending || !customTitle.trim() || !customBody.trim() || (!customSendToAll && customFidsText.trim().length === 0)}
-                  >
-                    {customSending ? 'Sending…' : 'Send Notification'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setCustomTitle('');
-                      setCustomBody('');
-                      setCustomFidsText('');
-                    }}
-                    disabled={customSending}
-                  >
-                    Clear
-                  </Button>
-                </div>
-                {notifCustomStats?.recent?.length ? (
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {notifCustomStats.recent.map((entry: any, idx: number) => (
-                      <div key={idx} className="p-2 border rounded text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{entry.title}</span>
-                          <span>{new Date(entry.ts || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="text-muted-foreground">{entry.body}</div>
-                        <div className="text-muted-foreground mt-1">
-                          Sent to {entry.totalFids || entry.fids?.length || 0} {entry.sendToAll ? '(all eligible)' : 'specific'} recipients
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">No custom notifications sent yet.</div>
                 )}
               </CardContent>
             </Card>
