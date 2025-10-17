@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,6 +83,44 @@ interface ConfirmDialogState {
   isDangerous?: boolean;
   requiresTextConfirmation?: boolean;
   textToMatch?: string;
+}
+
+interface PlantNotificationStats {
+  sentCount: number;
+  lastPerFid: Record<string, string>;
+  recent: any[];
+  lastRun?: any;
+}
+
+interface GlobalNotificationStats {
+  sentCount: number;
+  lastPerFid: Record<string, string>;
+  recent: any[];
+}
+
+interface FenceStats {
+  warn: {
+    sentCount: number;
+    lastPerFid: Record<string, string>;
+    recent: any[];
+  };
+  expire: {
+    sentCount: number;
+    lastPerFid: Record<string, string>;
+    recent: any[];
+  };
+  lastRun: any;
+  runs: any[];
+}
+
+interface AdminStatsResponse {
+  success: boolean;
+  stats: {
+    plant1h: PlantNotificationStats;
+    fence: FenceStats;
+    global: GlobalNotificationStats;
+    eligibleFids: string[];
+  };
 }
 
 // Loading spinner component for consistency
@@ -863,26 +901,36 @@ export default function AdminInviteDashboard() {
   };
 
   // Notifications admin data
-  const [notifStats, setNotifStats] = useState<any>(null);
-  const [notifLoading, setNotifLoading] = useState(false);
-  const [notifDebugLoading, setNotifDebugLoading] = useState(false);
+  const [notifStats, setNotifStats] = useState<PlantNotificationStats | null>(null);
+  const [notifGlobalStats, setNotifGlobalStats] = useState<GlobalNotificationStats | null>(null);
+  const [notifFenceStats, setNotifFenceStats] = useState<FenceStats | null>(null);
+  const [eligibleFids, setEligibleFids] = useState<string[]>([]);
   const [notifDebugResult, setNotifDebugResult] = useState<any>(null);
-  const [notifResetLoading, setNotifResetLoading] = useState(false);
+  const [notifDebugLoadingWarn, setNotifDebugLoadingWarn] = useState(false);
+  const [notifDebugLoadingExpire, setNotifDebugLoadingExpire] = useState(false);
+  const [notifResetFenceLoading, setNotifResetFenceLoading] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+
   const fetchNotifStats = async () => {
     if (!adminKey.trim()) return;
     setNotifLoading(true);
     try {
       const res = await fetch('/api/admin/notifications', { headers: { Authorization: `Bearer ${adminKey}` } });
-      const data = await res.json();
-      if (res.ok) setNotifStats(data?.stats || data);
-      else toast.error(data?.error || 'Failed to load notifications stats');
-    } catch {
+      const data: AdminStatsResponse = await res.json();
+      if (res.ok && data?.success) {
+        setNotifStats(data?.stats?.plant1h || null);
+        setNotifFenceStats(data?.stats?.fence || null);
+        setNotifGlobalStats(data?.stats?.global || null);
+        setEligibleFids(data?.stats?.eligibleFids || []);
+      } else toast.error(data?.['error'] || 'Failed to load notifications stats');
+    } catch (error) {
+      console.error('Failed to load notifications stats:', error);
       toast.error('Failed to load notifications stats');
     } finally { setNotifLoading(false); }
   };
 
   const runNotifDebug = async () => {
-    setNotifDebugLoading(true);
+    setLoading(true);
     try {
       const res = await fetch('/api/notifications/cron/plant-care?debug=1', { method: 'POST' });
       const data = await res.json();
@@ -894,12 +942,12 @@ export default function AdminInviteDashboard() {
       }
     } catch {
       toast.error('Debug run failed');
-    } finally { setNotifDebugLoading(false); }
+    } finally { setLoading(false); }
   };
 
   const resetNotifHistory = async () => {
     if (!adminKey.trim()) return toast.error('Enter admin key');
-    setNotifResetLoading(true);
+    setLoading(true);
     try {
       const res = await fetch('/api/admin/notifications/reset?scope=all', { 
         method: 'DELETE', 
@@ -919,7 +967,7 @@ export default function AdminInviteDashboard() {
         console.error('Reset notifications error:', error);
         toast.error(error.message || 'Reset failed');
       }
-    } finally { setNotifResetLoading(false); }
+    } finally { setLoading(false); }
   };
 
   const confirmResetNotifHistory = () => {
@@ -928,6 +976,60 @@ export default function AdminInviteDashboard() {
       description: 'Are you sure you want to reset notifications counts and history for all users? This action cannot be undone.',
       confirmText: 'Reset',
       onConfirm: resetNotifHistory,
+      isDangerous: true,
+    });
+  };
+
+  const runFenceDebug = async (type: 'warn' | 'expire') => {
+    const setLoading = type === 'warn' ? setNotifDebugLoadingWarn : setNotifDebugLoadingExpire;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/notifications/cron/fence-expiry?debug=1`, { method: 'POST' });
+      const data = await res.json();
+      setNotifDebugResult(data);
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error || 'Debug run failed');
+      } else {
+        toast.success(type === 'warn' ? 'Warn debug run completed' : 'Expire debug run completed');
+      }
+      fetchNotifStats();
+    } catch (error) {
+      console.error('Debug run failed:', error);
+      toast.error('Debug run failed');
+    } finally { setLoading(false); }
+  };
+
+  const resetFenceData = async (fid?: string, plant?: string) => {
+    setNotifResetFenceLoading(true);
+    try {
+      const params = new URLSearchParams({ scope: 'fence' });
+      if (fid) params.set('fid', fid);
+      if (plant) params.set('plantId', plant);
+      const res = await fetch(`/api/admin/notifications/reset?${params.toString()}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      const data = await res.json();
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error || 'Failed to reset fence data');
+      } else {
+        toast.success('Fence data reset');
+        fetchNotifStats();
+      }
+    } catch (error) {
+      console.error('Reset fence data failed:', error);
+      toast.error('Reset fence data failed');
+    } finally {
+      setNotifResetFenceLoading(false);
+    }
+  };
+
+  const confirmResetNotifFence = () => {
+    showConfirmDialog({
+      title: 'Reset Fence Data',
+      description: 'Are you sure you want to reset fence alert data? This clears all logs, counts, and throttles.',
+      confirmText: 'Reset',
+      onConfirm: () => resetFenceData(),
       isDangerous: true,
     });
   };
@@ -2217,7 +2319,7 @@ export default function AdminInviteDashboard() {
                   <div className="text-sm text-muted-foreground">
                     {notifStats ? (
                       <span>
-                        Total sent: {notifStats.plant1h?.sentCount || 0}
+                        Total sent: {notifStats.sentCount || 0}
                       </span>
                     ) : (
                       <span>Press refresh to load stats</span>
@@ -2228,12 +2330,12 @@ export default function AdminInviteDashboard() {
                       <RefreshCw className={`w-4 h-4 mr-2 ${notifLoading ? 'animate-spin' : ''}`} />
                       Refresh
                     </Button>
-                    <Button variant="outline" size="sm" onClick={runNotifDebug} disabled={notifDebugLoading}>
-                      <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoading ? 'animate-spin' : ''}`} />
+                    <Button variant="outline" size="sm" onClick={runNotifDebug} disabled={loading}>
+                      <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                       Debug Run (Force)
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={confirmResetNotifHistory} disabled={notifResetLoading}>
-                      {notifResetLoading ? 'Resetting…' : 'Reset History'}
+                    <Button variant="destructive" size="sm" onClick={confirmResetNotifHistory} disabled={loading}>
+                      {loading ? 'Resetting…' : 'Reset History'}
                     </Button>
                   </div>
                 </div>
@@ -2244,14 +2346,14 @@ export default function AdminInviteDashboard() {
                     <div className="text-sm">
                       <div className="font-semibold mb-1">Global (all types)</div>
                       <div className="flex items-center justify-between p-2 rounded border">
-                        <div>Sent total: {notifStats.global?.sentCount || 0}</div>
-                        <div className="text-xs text-muted-foreground">Recent entries: {(notifStats.global?.recent || []).length}</div>
+                        <div>Sent total: {notifGlobalStats?.sentCount || 0}</div>
+                        <div className="text-xs text-muted-foreground">Recent entries: {(notifGlobalStats?.recent || []).length}</div>
                       </div>
                     </div>
                     <div className="text-sm">
                       <div className="font-semibold mb-1">Recent batches</div>
                       <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                        {(notifStats.plant1h?.recent || []).map((e: any, i: number) => (
+                        {(notifStats?.recent || []).map((e: any, i: number) => (
                           <div key={i} className="flex items-center justify-between p-2 rounded border">
                             <div className="text-xs text-muted-foreground">{new Date(e.ts || 0).toLocaleString()} (Local)</div>
                             <div className="text-xs">fids: {(e.fids || []).length}</div>
@@ -2264,19 +2366,111 @@ export default function AdminInviteDashboard() {
                       <div className="p-2 rounded border text-xs text-muted-foreground">
                         {notifDebugResult ? (
                           <pre className="whitespace-pre-wrap">{JSON.stringify(notifDebugResult, null, 2)}</pre>
-                        ) : notifStats.plant1h?.lastRun ? (
-                          <pre className="whitespace-pre-wrap">{JSON.stringify(notifStats.plant1h.lastRun, null, 2)}</pre>
+                        ) : notifStats?.lastRun ? (
+                          <pre className="whitespace-pre-wrap">{JSON.stringify(notifStats.lastRun, null, 2)}</pre>
                         ) : (
                           <span>No run summary yet.</span>
                         )}
                       </div>
                     </div>
-                    <div className="text-sm">
-                      <div className="font-semibold mb-1">Eligible fids (seen)</div>
-                      <div className="flex flex-wrap gap-1 max-h-[200px] overflow-y-auto">
-                        {(notifStats.eligibleFids || []).slice(0, 200).map((f: any) => (
-                          <span key={f} className="text-xs bg-muted px-2 py-0.5 rounded">{f}</span>
-                        ))}
+                    {eligibleFids && eligibleFids.length > 0 ? (
+                      <div className="text-sm">
+                        <div className="font-semibold mb-1">Eligible fids (seen)</div>
+                        <div className="flex flex-wrap gap-1 max-h-[200px] overflow-y-auto">
+                          {eligibleFids.slice(0, 200).map((f: any) => (
+                            <span key={f} className="text-xs bg-muted px-2 py-0.5 rounded">{f}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence Alerts (2h warning)</h3>
+                        <Button variant="outline" size="sm" onClick={() => runFenceDebug('warn')} disabled={notifDebugLoadingWarn}>
+                          <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoadingWarn ? 'animate-spin' : ''}`} /> Debug Warn
+                        </Button>
+                      </div>
+                      <Card>
+                        <CardContent className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Total warns</span>
+                            <span className="font-semibold">{notifFenceStats?.warn.sentCount || 0}</span>
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
+                            <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
+                              {(notifFenceStats?.warn.recent || []).length === 0 ? (
+                                <div className="text-muted-foreground">No warn notifications sent yet.</div>
+                              ) : (
+                                (notifFenceStats?.warn.recent || []).map((entry: any, idx: number) => (
+                                  <div key={idx} className="flex items-center justify-between p-2 rounded border">
+                                    <span>{new Date(entry.ts || 0).toLocaleString()}</span>
+                                    <span>fids: {(entry.fids || []).length}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence Alerts (expired)</h3>
+                        <Button variant="outline" size="sm" onClick={() => runFenceDebug('expire')} disabled={notifDebugLoadingExpire}>
+                          <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoadingExpire ? 'animate-spin' : ''}`} /> Debug Expire
+                        </Button>
+                      </div>
+                      <Card>
+                        <CardContent className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Total expiries</span>
+                            <span className="font-semibold">{notifFenceStats?.expire.sentCount || 0}</span>
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
+                            <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
+                              {(notifFenceStats?.expire.recent || []).length === 0 ? (
+                                <div className="text-muted-foreground">No expiry notifications sent yet.</div>
+                              ) : (
+                                (notifFenceStats?.expire.recent || []).map((entry: any, idx: number) => (
+                                  <div key={idx} className="flex items-center justify-between p-2 rounded border">
+                                    <span>{new Date(entry.ts || 0).toLocaleString()}</span>
+                                    <span>fids: {(entry.fids || []).length}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-sm">Last Fence Cron Run</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">{notifFenceStats?.lastRun ? JSON.stringify(notifFenceStats.lastRun, null, 2) : 'No runs yet.'}</pre>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-sm">Run History (last 20)</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">
+                              {(notifFenceStats?.runs || []).length === 0 ? 'No history yet.' : (notifFenceStats?.runs || []).map((run: any, idx: number) => (
+                                <pre key={idx} className="border p-2 rounded">{JSON.stringify(run, null, 2)}</pre>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="destructive" size="sm" onClick={confirmResetNotifFence} disabled={notifResetFenceLoading}>
+                          {notifResetFenceLoading ? 'Clearing Fence Data…' : 'Clear Fence Data'}
+                        </Button>
                       </div>
                     </div>
                   </div>
