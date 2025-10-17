@@ -421,7 +421,7 @@ export default function LeaderboardTab() {
                     {/* Dead label removed. Skull indicator is shown over image and actions show accordingly. */}
                   </div>
                   <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                    <span>LvL {plant.level}</span>
+                    <span>Level {plant.level}</span>
                   </div>
                 </div>
 
@@ -434,9 +434,12 @@ export default function LeaderboardTab() {
                     </div>
                     <div className="flex items-center space-x-3 text-sm text-muted-foreground">
                       <div className="flex items-center space-x-1">
+                        <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} />
+                        <span>{plant.stars}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
                         <Image src="/icons/ethlogo.svg" alt="ETH" width={14} height={14} />
-                        <span>{formatEthShort(plant.rewards, { maximumFractionDigits: 6 })}</span>
-                        <span className="text-xs text-muted-foreground uppercase">Reward</span>
+                        <span>{formatEthShort(plant.rewards)}</span>
                       </div>
                     </div>
                   </div>

@@ -328,7 +328,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           </div>
           <div className="flex items-center gap-1.5">
             <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-            <span className="font-semibold">{formatEthShort(plant.rewards, { maximumFractionDigits: 6 })}</span>
+            <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
             <span className="text-xs text-muted-foreground uppercase">Rewards</span>
           </div>
           {loading ? (

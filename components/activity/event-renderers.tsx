@@ -8,7 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
 import { ITEM_ICONS } from '@/lib/constants';
 import { LAND_EVENT_ICONS } from '@/lib/constants';
-import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward, formatEthShort } from '@/lib/utils';
+import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward } from '@/lib/utils';
 import { 
   LandTransferEvent, 
   LandMintedEvent, 
