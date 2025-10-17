@@ -1,8 +1,8 @@
-import { createPublicClient, http, isAddress } from 'viem';
+import { createPublicClient, http, isAddress, fallback } from 'viem';
 import { mainnet, base } from 'viem/chains';
 import { redis } from './redis';
+import { getMainnetRpcConfig } from './env-config';
 
-const MAINNET_ENS_RPC = 'https://ethereum-rpc.publicnode.com';
 const BASE_COIN_TYPE = (BigInt(0x8000_0000) | BigInt(base.id));
 
 const CACHE_PREFIX = 'ens:name:';
@@ -10,11 +10,29 @@ const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
 
 let ensClient: ReturnType<typeof createPublicClient> | null = null;
 
+function createMainnetTransport() {
+  const { endpoints, fallback: defaultEndpoint } = getMainnetRpcConfig();
+  const urls = endpoints.length > 0 ? endpoints : [defaultEndpoint];
+
+  const transports = urls.map((url, index) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔗 ENS RPC Endpoint ${index + 1}: ${url}`);
+    }
+    return http(url, {
+      retryCount: 2,
+      retryDelay: 500,
+      timeout: 10000,
+    });
+  });
+
+  return transports.length === 1 ? transports[0] : fallback(transports);
+}
+
 function getEnsClient() {
   if (!ensClient) {
     ensClient = createPublicClient({
       chain: mainnet,
-      transport: http(MAINNET_ENS_RPC),
+      transport: createMainnetTransport(),
     });
   }
 
