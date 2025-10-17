@@ -12,8 +12,7 @@ import { getUserGameStats } from '@/lib/user-stats-service';
 import { getStakeInfo } from '@/lib/contracts';
 import { formatEthShort, formatTokenAmount } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/open-external';
-import { useName } from '@coinbase/onchainkit/identity';
-import { base } from 'viem/chains';
+import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 
@@ -124,11 +123,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const [ensData, setEnsData] = useState<ENSData | null>(null);
   const [ensLoading, setEnsLoading] = useState(false);
 
-  // Use OnchainKit's useName hook for ENS/Basename resolution
-  const { data: ownerName, isLoading: isNameLoading } = useName({
-    address: (plant?.owner as `0x${string}`) ?? "0x0000000000000000000000000000000000000000",
-    chain: base,
-  });
+  // Resolve ENS/Basename using shared resolver
+  const { name: ownerName, loading: isNameLoading } = usePrimaryName(plant?.owner);
 
   useEffect(() => {
     if (!plant || !open) {

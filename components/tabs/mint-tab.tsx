@@ -29,8 +29,7 @@ import DisabledTransaction from '@/components/transactions/disabled-transaction'
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import LandMintTransaction from '../transactions/land-mint-transaction';
 import { MintShareModal } from '@/components/mint-share-modal';
-import { useName } from '@coinbase/onchainkit/identity';
-import { base } from 'viem/chains';
+import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
@@ -50,11 +49,8 @@ export default function MintTab() {
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
 
-  // Resolve basename for share functionality
-  const { data: basename } = useName({
-    address: address ?? "0x0000000000000000000000000000000000000000",
-    chain: base,
-  });
+  // Resolve basename/ENS for share functionality
+  const { name: primaryName } = usePrimaryName(address ?? undefined);
 
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
@@ -234,7 +230,7 @@ export default function MintTab() {
                     const mintedAt = new Date().toISOString();
                     setShareData({
                       address,
-                      basename: basename || undefined,
+                      basename: primaryName || undefined,
                       strainName: selectedStrain.name,
                       strainId: selectedStrain.id,
                       mintedAt,
@@ -282,7 +278,7 @@ export default function MintTab() {
                     const mintedAt = new Date().toISOString();
                     setShareData({
                       address,
-                      basename: basename || undefined,
+                      basename: primaryName || undefined,
                       strainName: selectedStrain.name,
                       strainId: selectedStrain.id,
                       mintedAt,

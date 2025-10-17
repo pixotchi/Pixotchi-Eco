@@ -1,10 +1,10 @@
 import { redis } from './redis';
 import { nanoid } from 'nanoid';
 import { ChatMessage, ChatRateLimit, ChatStats, AdminChatMessage } from './types';
+import { resolvePrimaryName } from './ens-resolver';
 
 const CHAT_MESSAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
-const ENS_CACHE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const SPAM_DETECTION_TTL = 30; // 30 seconds for duplicate message detection
 
 // Rate limiting configuration
@@ -31,13 +31,23 @@ export async function storeMessage(address: string, message: string): Promise<Ch
 
   const messageId = nanoid();
   const timestamp = Date.now();
-  
+
+  let displayName = formatDisplayName(address);
+  try {
+    const resolved = await resolvePrimaryName(address);
+    if (resolved) {
+      displayName = resolved;
+    }
+  } catch (error) {
+    console.warn('Failed to resolve display name', { address, error });
+  }
+
   const chatMessage: ChatMessage = {
     id: messageId,
     address: address.toLowerCase(),
     message: message.trim(),
     timestamp,
-    displayName: formatDisplayName(address) // Client-side OnchainKit will handle names
+    displayName,
   };
 
   // Store message with TTL
@@ -57,9 +67,9 @@ export async function getRecentMessages(limit: number = 50): Promise<ChatMessage
   }
 
   const keys = await redis.keys('chat:messages:*');
-  
+
   if (keys.length === 0) return [];
-  
+
   // Sort keys by timestamp (descending)
   keys.sort((a, b) => {
     const timestampA = parseInt(a.split(':')[2]);
@@ -70,7 +80,7 @@ export async function getRecentMessages(limit: number = 50): Promise<ChatMessage
   // Get the most recent messages using simple redis.get() calls (like invite system)
   const recentKeys = keys.slice(0, limit);
   const messages: ChatMessage[] = [];
-  
+
   for (const key of recentKeys) {
     try {
       const data = await redis.get(key);
@@ -84,6 +94,14 @@ export async function getRecentMessages(limit: number = 50): Promise<ChatMessage
           const dataString = String(data);
           message = JSON.parse(dataString);
         }
+
+        if (!message.displayName) {
+          const resolved = await resolvePrimaryName(message.address);
+          if (resolved) {
+            message.displayName = resolved;
+          }
+        }
+
         messages.push(message);
       }
     } catch (error) {
@@ -103,16 +121,16 @@ export async function checkRateLimit(address: string): Promise<boolean> {
 
   const rateLimitKey = `chat:ratelimit:${address.toLowerCase()}`;
   const rateLimitData = await redis.get(rateLimitKey);
-  
+
   if (!rateLimitData) return true;
-  
+
   try {
     // Debug logging
     console.log('Rate limit data type:', typeof rateLimitData);
     console.log('Rate limit data value:', rateLimitData);
-    
+
     let parsedData: ChatRateLimit;
-    
+
     if (typeof rateLimitData === 'object' && rateLimitData !== null) {
       // If Redis returns an object directly, use it
       parsedData = rateLimitData as ChatRateLimit;
@@ -124,10 +142,10 @@ export async function checkRateLimit(address: string): Promise<boolean> {
       const dataString = String(rateLimitData);
       parsedData = JSON.parse(dataString);
     }
-    
+
     const now = Date.now();
     return (now - parsedData.lastMessage) >= (RATE_LIMIT_WINDOW * 1000);
-    
+
   } catch (error) {
     console.error('Error in checkRateLimit:', error);
     console.error('Rate limit key:', rateLimitKey);
@@ -143,12 +161,12 @@ export async function updateRateLimit(address: string): Promise<void> {
 
   const rateLimitKey = `chat:ratelimit:${address.toLowerCase()}`;
   const now = Date.now();
-  
+
   const rateLimitData: ChatRateLimit = {
     lastMessage: now,
     messageCount: 1
   };
-  
+
   await redis.set(rateLimitKey, JSON.stringify(rateLimitData), { ex: RATE_LIMIT_TTL });
 }
 
@@ -161,7 +179,7 @@ export async function checkSpam(message: string, address: string): Promise<boole
   const messageHash = createMessageHash(message);
   const spamKey = `chat:spam:${messageHash}`;
   const spamData = await redis.get(spamKey);
-  
+
   if (!spamData) {
     // First time seeing this message, store it
     await redis.set(spamKey, JSON.stringify({
@@ -170,7 +188,7 @@ export async function checkSpam(message: string, address: string): Promise<boole
     }), { ex: SPAM_DETECTION_TTL });
     return false;
   }
-  
+
   try {
     let spamInfo;
     if (typeof spamData === 'object' && spamData !== null) {
@@ -182,23 +200,23 @@ export async function checkSpam(message: string, address: string): Promise<boole
       spamInfo = JSON.parse(dataString);
     }
     const { count, addresses } = spamInfo;
-    
+
     // If same user is sending identical message within window, it's spam
     if (addresses.includes(address.toLowerCase())) {
       return true;
     }
-    
+
     // If too many different users sending same message, it might be spam
     if (count >= 3) {
       return true;
     }
-    
+
     // Update spam tracking
     await redis.set(spamKey, JSON.stringify({
       count: count + 1,
       addresses: [...addresses, address.toLowerCase()]
     }), { ex: SPAM_DETECTION_TTL });
-    
+
     return false;
   } catch (error) {
     console.error('Error parsing spam data:', error);
@@ -211,48 +229,28 @@ export function validateMessage(message: string): string | null {
   if (!message || typeof message !== 'string') {
     return 'Message is required';
   }
-  
+
   const trimmed = message.trim();
-  
+
   if (trimmed.length < MIN_MESSAGE_LENGTH) {
     return 'Message is too short';
   }
-  
+
   if (trimmed.length > MAX_MESSAGE_LENGTH) {
     return `Message is too long (max ${MAX_MESSAGE_LENGTH} characters)`;
   }
-  
+
   // Basic profanity filter (you can expand this)
   const profanityWords = ['spam', 'scam']; // Add more as needed
   const lowerMessage = trimmed.toLowerCase();
-  
+
   for (const word of profanityWords) {
     if (lowerMessage.includes(word)) {
       return 'Message contains inappropriate content';
     }
   }
-  
+
   return null;
-}
-
-// Store ENS name with cache
-export async function cacheENSName(address: string, ens: string): Promise<void> {
-  if (!redis) {
-    return; // Skip if Redis is not available
-  }
-
-  const ensKey = `chat:ens:${address.toLowerCase()}`;
-  await redis.setex(ensKey, ENS_CACHE_TTL, ens);
-}
-
-// Get cached ENS name
-export async function getCachedENSName(address: string): Promise<string | null> {
-  if (!redis) {
-    return null; // Return null if Redis is not available
-  }
-
-  const ensKey = `chat:ens:${address.toLowerCase()}`;
-  return await redis.get(ensKey);
 }
 
 // Get chat statistics
@@ -268,16 +266,16 @@ export async function getChatStats(): Promise<ChatStats> {
   const keys = await redis.keys('chat:messages:*');
   const now = Date.now();
   const oneDayAgo = now - (24 * 60 * 60 * 1000);
-  
+
   // Count messages from last 24h
   let messagesLast24h = 0;
   const uniqueUsers = new Set<string>();
-  
+
   for (const key of keys) {
     const timestamp = parseInt(key.split(':')[2]);
     if (timestamp >= oneDayAgo) {
       messagesLast24h++;
-      
+
       // Get user address for unique count
       try {
         const messageData = await redis.get(key);
@@ -298,7 +296,7 @@ export async function getChatStats(): Promise<ChatStats> {
       }
     }
   }
-  
+
   return {
     totalMessages: keys.length,
     activeUsers: uniqueUsers.size,
@@ -313,9 +311,9 @@ export async function getAllMessagesForAdmin(): Promise<AdminChatMessage[]> {
   }
 
   const keys = await redis.keys('chat:messages:*');
-  
+
   if (keys.length === 0) return [];
-  
+
   // Sort keys by timestamp (descending)
   keys.sort((a, b) => {
     const timestampA = parseInt(a.split(':')[2]);
@@ -323,69 +321,33 @@ export async function getAllMessagesForAdmin(): Promise<AdminChatMessage[]> {
     return timestampB - timestampA;
   });
 
-  // Use simple redis.get() calls instead of pipeline for compatibility
-  const results: any[] = [];
-  
+  const messages: AdminChatMessage[] = [];
+
   for (const key of keys) {
     try {
       const data = await redis.get(key);
-      results.push([null, data]); // Mimic pipeline result format [error, data]
-    } catch (error) {
-      results.push([error, null]);
-    }
-  }
-  const messages: AdminChatMessage[] = [];
-  
-  if (results) {
-    for (const result of results) {
-      if (result && Array.isArray(result) && result[1]) {
-        try {
-          let message;
-          if (typeof result[1] === 'object' && result[1] !== null) {
-            message = result[1];
-          } else if (typeof result[1] === 'string') {
-            message = JSON.parse(result[1]);
-          } else {
-            const dataString = String(result[1]);
-            message = JSON.parse(dataString);
-          }
-          
-          // Check if message might be spam
-          const messageHash = createMessageHash(message.message);
-          let isSpam = false;
-          let similarCount = 0;
-          
-          if (redis) {
-            const spamData = await redis.get(`chat:spam:${messageHash}`);
-            if (spamData) {
-              try {
-                let spamInfo;
-                if (typeof spamData === 'object' && spamData !== null) {
-                  spamInfo = spamData;
-                } else if (typeof spamData === 'string') {
-                  spamInfo = JSON.parse(spamData);
-                } else {
-                  const dataString = String(spamData);
-                  spamInfo = JSON.parse(dataString);
-                }
-                const { count } = spamInfo;
-                similarCount = count;
-                isSpam = count > 2;
-              } catch (error) {
-                console.error('Error parsing spam data for admin:', error);
-              }
-            }
-          }
-          
-          messages.push({
-            ...message,
-            isSpam,
-            similarCount
-          });
-        } catch (error) {
-          console.error('Error parsing chat message for admin:', error);
+      if (!data) continue;
+
+      let message: AdminChatMessage;
+      if (typeof data === 'object' && data !== null) {
+        message = data as AdminChatMessage;
+      } else if (typeof data === 'string') {
+        message = JSON.parse(data) as AdminChatMessage;
+      } else {
+        const dataString = String(data);
+        message = JSON.parse(dataString) as AdminChatMessage;
+      }
+
+      if (!message.displayName) {
+        const resolved = await resolvePrimaryName(message.address);
+        if (resolved) {
+          message.displayName = resolved;
         }
       }
+
+      messages.push(message);
+    } catch (error) {
+      console.error('Error parsing admin chat message:', error);
     }
   }
 
@@ -399,9 +361,9 @@ export async function deleteMessage(messageId: string, timestamp: number): Promi
   }
 
   const keys = await redis.keys(`chat:messages:${timestamp}:${messageId}`);
-  
+
   if (keys.length === 0) return false;
-  
+
   await redis.del(keys[0]);
   return true;
 }
@@ -413,14 +375,14 @@ export async function deleteAllMessages(): Promise<number> {
   }
 
   const keys = await redis.keys('chat:messages:*');
-  
+
   if (keys.length === 0) return 0;
-  
+
   await redis.del(...keys);
-  
+
   // Reset stats
   await redis.del('chat:stats:total');
-  
+
   return keys.length;
 }
 
@@ -432,18 +394,18 @@ export async function cleanupOldData(): Promise<void> {
 
   const now = Date.now();
   const oneDayAgo = now - (24 * 60 * 60 * 1000);
-  
+
   // Clean old messages
   const messageKeys = await redis.keys('chat:messages:*');
   const oldMessageKeys = messageKeys.filter(key => {
     const timestamp = parseInt(key.split(':')[2]);
     return timestamp < oneDayAgo;
   });
-  
+
   if (oldMessageKeys.length > 0) {
     await redis.del(...oldMessageKeys);
   }
-  
+
   // Clean old spam tracking
   const spamKeys = await redis.keys('chat:spam:*');
   if (spamKeys.length > 0) {
