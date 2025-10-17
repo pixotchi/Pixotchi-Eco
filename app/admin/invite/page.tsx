@@ -1117,6 +1117,16 @@ export default function AdminInviteDashboard() {
     }
   }, [adminKey, customNotifBody, customNotifFids, customNotifTarget, customNotifTitle, customNotifType, parseFidsInput]);
 
+  const sendNotificationDisabled = useMemo(() => {
+    if (!customNotifTitle.trim() || !customNotifBody.trim() || customNotifSending) {
+      return true;
+    }
+    if (customNotifTarget === 'fids') {
+      return parseFidsInput(customNotifFids).length === 0;
+    }
+    return false;
+  }, [customNotifBody, customNotifFids, customNotifSending, customNotifTarget, customNotifTitle, parseFidsInput]);
+
   // OG Image test handlers
   const handleOgRefresh = () => {
     setOgRefreshKey((prev) => prev + 1);
@@ -2478,7 +2488,7 @@ export default function AdminInviteDashboard() {
                 <div className="flex items-center justify-end gap-3">
                   <Button
                     onClick={handleSendCustomNotification}
-                    disabled={customNotifSending}
+                    disabled={sendNotificationDisabled}
                   >
                     {customNotifSending ? 'Sending...' : 'Send Notification'}
                   </Button>
