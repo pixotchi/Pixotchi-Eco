@@ -60,6 +60,9 @@ export async function DELETE(req: NextRequest) {
       ops.push((redis as any)?.del?.('notif:fence:expire:sentCount'));
       ops.push((redis as any)?.del?.('notif:fence:lastRun'));
       ops.push((redis as any)?.del?.('notif:fence:runs'));
+      ops.push((redis as any)?.del?.('notif:custom:log'));
+      ops.push((redis as any)?.del?.('notif:custom:last'));
+      ops.push((redis as any)?.del?.('notif:custom:sentCount'));
       await clearFenceKeys();
     } else if (scope === 'fid' && fid) {
       ops.push((redis as any)?.del?.(`notif:plant1h:fid:${fid}`));
@@ -80,6 +83,10 @@ export async function DELETE(req: NextRequest) {
         ops.push((redis as any)?.del?.('notif:fence:lastRun'));
         ops.push((redis as any)?.del?.('notif:fence:runs'));
       }
+    } else if (scope === 'custom') {
+      ops.push((redis as any)?.del?.('notif:custom:log'));
+      ops.push((redis as any)?.del?.('notif:custom:last'));
+      ops.push((redis as any)?.del?.('notif:custom:sentCount'));
     }
 
     await Promise.all(ops);

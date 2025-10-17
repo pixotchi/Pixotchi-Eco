@@ -48,6 +48,10 @@ export async function GET(request: NextRequest) {
     const fenceLastRun = parseJSON(await (redis as any)?.get?.('notif:fence:lastRun'));
     const fenceRuns = parseList(await (redis as any)?.lrange?.('notif:fence:runs', 0, 20));
 
+    const customSent = Number((await (redis as any)?.get?.('notif:custom:sentCount')) || '0');
+    const customRecent = parseList(await (redis as any)?.lrange?.('notif:custom:log', 0, 20));
+    const customLast = parseJSON(await (redis as any)?.get?.('notif:custom:last'));
+
     return NextResponse.json({
       success: true,
       stats: {
@@ -70,6 +74,11 @@ export async function GET(request: NextRequest) {
           },
           lastRun: fenceLastRun,
           runs: fenceRuns,
+        },
+        custom: {
+          sentCount: customSent,
+          recent: customRecent,
+          last: customLast,
         },
         global: {
           sentCount: globalSent,

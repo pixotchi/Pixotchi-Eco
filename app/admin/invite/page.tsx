@@ -45,6 +45,7 @@ import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStat
 import { formatDistanceToNow } from 'date-fns';
 import { ThemeSelector } from '@/components/theme-selector';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
+import { Label } from '@/components/ui/label';
 
 interface AdminStats {
   codes: {
@@ -98,6 +99,12 @@ interface GlobalNotificationStats {
   recent: any[];
 }
 
+interface CustomStats {
+  sentCount: number;
+  recent: any[];
+  last: any;
+}
+
 interface FenceStats {
   warn: {
     sentCount: number;
@@ -118,6 +125,7 @@ interface AdminStatsResponse {
   stats: {
     plant1h: PlantNotificationStats;
     fence: FenceStats;
+    custom: CustomStats;
     global: GlobalNotificationStats;
     eligibleFids: string[];
   };
@@ -904,6 +912,12 @@ export default function AdminInviteDashboard() {
   const [notifStats, setNotifStats] = useState<PlantNotificationStats | null>(null);
   const [notifGlobalStats, setNotifGlobalStats] = useState<GlobalNotificationStats | null>(null);
   const [notifFenceStats, setNotifFenceStats] = useState<FenceStats | null>(null);
+  const [notifCustomStats, setNotifCustomStats] = useState<CustomStats | null>(null);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customBody, setCustomBody] = useState('');
+  const [customFidsText, setCustomFidsText] = useState('');
+  const [customSendToAll, setCustomSendToAll] = useState(true);
+  const [customSending, setCustomSending] = useState(false);
   const [eligibleFids, setEligibleFids] = useState<string[]>([]);
   const [notifDebugResult, setNotifDebugResult] = useState<any>(null);
   const [notifDebugLoadingWarn, setNotifDebugLoadingWarn] = useState(false);
@@ -921,6 +935,7 @@ export default function AdminInviteDashboard() {
         const payload = data as AdminStatsResponse;
         setNotifStats(payload?.stats?.plant1h || null);
         setNotifFenceStats(payload?.stats?.fence || null);
+        setNotifCustomStats(payload?.stats?.custom || null);
         setNotifGlobalStats(payload?.stats?.global || null);
         setEligibleFids(payload?.stats?.eligibleFids || []);
       } else {
@@ -1068,6 +1083,51 @@ export default function AdminInviteDashboard() {
       toast.error('Error generating short URL');
     } finally {
       setOgIsGenerating(false);
+    }
+  };
+
+  const sendCustomNotification = async () => {
+    if (!adminKey.trim()) return toast.error('Enter admin key');
+    if (!customTitle.trim()) return toast.error('Enter title');
+    if (!customBody.trim()) return toast.error('Enter body');
+
+    const fids = customSendToAll
+      ? []
+      : customFidsText
+          .split(/[\s,]+/)
+          .map((value) => value.trim())
+          .filter(Boolean);
+
+    setCustomSending(true);
+    try {
+      const res = await fetch('/api/admin/notifications/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({
+          title: customTitle,
+          body: customBody,
+          sendToAll: customSendToAll,
+          fids,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error || 'Failed to send notifications');
+      } else {
+        toast.success(`Sent to ${data.sent} recipients`);
+        setCustomBody('');
+        setCustomTitle('');
+        setCustomFidsText('');
+        fetchNotifStats();
+      }
+    } catch (error) {
+      console.error('Failed to send custom notification', error);
+      toast.error('Failed to send custom notification');
+    } finally {
+      setCustomSending(false);
     }
   };
 
@@ -2478,6 +2538,106 @@ export default function AdminInviteDashboard() {
                       </div>
                     </div>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Custom Notifications</CardTitle>
+                <CardDescription>Send announcements, maintenance alerts, or testing messages.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div>
+                  <Label htmlFor="custom-title">Title</Label>
+                  <Input
+                    id="custom-title"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    maxLength={32}
+                    placeholder="Up to 32 characters"
+                  />
+                  <p className="text-xs text-muted-foreground text-right">{customTitle.length}/32</p>
+                </div>
+                <div>
+                  <Label htmlFor="custom-body">Body</Label>
+                  <Textarea
+                    id="custom-body"
+                    value={customBody}
+                    onChange={(e) => setCustomBody(e.target.value)}
+                    maxLength={128}
+                    rows={4}
+                    placeholder="Message body (max 128 characters)"
+                  />
+                  <p className="text-xs text-muted-foreground text-right">{customBody.length}/128</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Recipients</Label>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          className="accent-current"
+                          checked={customSendToAll}
+                          onChange={(e) => setCustomSendToAll(e.target.checked)}
+                        />
+                        <span>Send to all eligible ({eligibleFids.length})</span>
+                      </label>
+                    </div>
+                  </div>
+                  {!customSendToAll && (
+                    <Textarea
+                      value={customFidsText}
+                      onChange={(e) => setCustomFidsText(e.target.value)}
+                      placeholder="Enter FIDs separated by comma or whitespace"
+                      rows={3}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Total sent (custom): {notifCustomStats?.sentCount || 0}</span>
+                  {notifCustomStats?.last && (
+                    <span>Last run: {new Date(notifCustomStats.last.ts || Date.now()).toLocaleString()}</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    onClick={sendCustomNotification}
+                    disabled={customSending || !customTitle.trim() || !customBody.trim() || (!customSendToAll && customFidsText.trim().length === 0)}
+                  >
+                    {customSending ? 'Sending…' : 'Send Notification'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCustomTitle('');
+                      setCustomBody('');
+                      setCustomFidsText('');
+                    }}
+                    disabled={customSending}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                {notifCustomStats?.recent?.length ? (
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {notifCustomStats.recent.map((entry: any, idx: number) => (
+                      <div key={idx} className="p-2 border rounded text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{entry.title}</span>
+                          <span>{new Date(entry.ts || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="text-muted-foreground">{entry.body}</div>
+                        <div className="text-muted-foreground mt-1">
+                          Sent to {entry.totalFids || entry.fids?.length || 0} {entry.sendToAll ? '(all eligible)' : 'specific'} recipients
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">No custom notifications sent yet.</div>
                 )}
               </CardContent>
             </Card>
