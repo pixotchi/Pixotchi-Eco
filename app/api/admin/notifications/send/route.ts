@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
-import { sendFrameNotification } from '@/lib/notification-client';
+import { CLIENT_ENV, SERVER_ENV } from '@/lib/env-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,36 +96,70 @@ export async function POST(request: NextRequest) {
     errors: [] as Array<{ fid: number; reason: string }>,
   };
 
-  for (const fid of targetFids) {
+  const apiKey = SERVER_ENV.NEYNAR_API_KEY;
+  const clientUrl = CLIENT_ENV.APP_URL;
+
+  if (!apiKey) {
+    const { body, status } = createErrorResponse('NEYNAR_API_KEY missing. Cannot deliver notifications.', 500, 'MISSING_API_KEY');
+    return NextResponse.json(body, { status });
+  }
+
+  const publishToFids = async (fids: number[]) => {
+    if (fids.length === 0) {
+      return { ok: true, json: null } as const;
+    }
+    const payload = {
+      target_fids: fids,
+      notification: { title, body: bodyText, target_url: clientUrl },
+    };
+
+    const res = await fetch('https://api.neynar.com/v2/farcaster/frame/notifications/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, json } as const;
+  };
+
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < targetFids.length; i += CHUNK_SIZE) {
+    const chunk = targetFids.slice(i, i + CHUNK_SIZE);
     try {
-      const result = await sendFrameNotification({ fid, title, body: bodyText });
-      if (result.state === 'success') {
-        summary.sent += 1;
-        try {
-          const ts = Date.now();
-          await (redis as any)?.lpush?.('notif:global:log', JSON.stringify({ ts, fid, type }));
-          await (redis as any)?.ltrim?.('notif:global:log', 0, 199);
-          await (redis as any)?.hset?.('notif:global:last', { [fid]: String(ts) });
-          await (redis as any)?.incrby?.('notif:global:sentCount', 1);
-          await (redis as any)?.lpush?.(`notif:type:${type}:log`, JSON.stringify({ ts, fid }));
-          await (redis as any)?.ltrim?.(`notif:type:${type}:log`, 0, 199);
-          await (redis as any)?.hset?.(`notif:type:${type}:last`, { [fid]: String(ts) });
-          await (redis as any)?.incrby?.(`notif:type:${type}:sentCount`, 1);
-          await (redis as any)?.sadd?.('notif:eligible:fids', String(fid));
-        } catch {}
-      } else if (result.state === 'rate_limit') {
-        summary.rateLimited += 1;
-        summary.errors.push({ fid, reason: 'rate_limited' });
-      } else if (result.state === 'no_token') {
-        summary.missingToken += 1;
-        summary.errors.push({ fid, reason: 'no_token' });
+      const result = await publishToFids(chunk);
+      if (!result.ok) {
+        summary.failed += chunk.length;
+        const reason = result.json?.error || 'publish_failed';
+        chunk.forEach((fid) => {
+          summary.errors.push({ fid, reason });
+        });
       } else {
-        summary.failed += 1;
-        summary.errors.push({ fid, reason: 'error' });
+        summary.sent += chunk.length;
+        const ts = Date.now();
+        for (const fid of chunk) {
+          try {
+            await (redis as any)?.lpush?.('notif:global:log', JSON.stringify({ ts, fid, type }));
+            await (redis as any)?.ltrim?.('notif:global:log', 0, 199);
+            await (redis as any)?.hset?.('notif:global:last', { [fid]: String(ts) });
+            await (redis as any)?.incrby?.('notif:global:sentCount', 1);
+            await (redis as any)?.lpush?.(`notif:type:${type}:log`, JSON.stringify({ ts, fid }));
+            await (redis as any)?.ltrim?.(`notif:type:${type}:log`, 0, 199);
+            await (redis as any)?.hset?.(`notif:type:${type}:last`, { [fid]: String(ts) });
+            await (redis as any)?.incrby?.(`notif:type:${type}:sentCount`, 1);
+            await (redis as any)?.sadd?.('notif:eligible:fids', String(fid));
+          } catch {}
+        }
       }
     } catch (error: any) {
-      summary.failed += 1;
-      summary.errors.push({ fid, reason: error?.message || 'error' });
+      summary.failed += chunk.length;
+      const reason = error?.message || 'publish_failed';
+      chunk.forEach((fid) => {
+        summary.errors.push({ fid, reason });
+      });
     }
   }
 
