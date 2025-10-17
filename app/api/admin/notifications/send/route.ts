@@ -133,7 +133,11 @@ export async function POST(request: NextRequest) {
       const result = await publishToFids(chunk);
       if (!result.ok) {
         summary.failed += chunk.length;
-        const reason = result.json?.error || 'publish_failed';
+        const reason =
+          result.json?.error ??
+          result.json?.message ??
+          result.json?.detail ??
+          (Object.keys(result.json || {}).length > 0 ? JSON.stringify(result.json) : `publish_failed_${result?.json?.status ?? ''}`);
         chunk.forEach((fid) => {
           summary.errors.push({ fid, reason });
         });
