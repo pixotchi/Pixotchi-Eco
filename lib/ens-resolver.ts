@@ -1,43 +1,9 @@
-import { createPublicClient, http, isAddress, fallback } from 'viem';
-import { mainnet, base } from 'viem/chains';
+import { getName, getNames } from '@coinbase/onchainkit/identity';
+import { isAddress } from 'viem';
 import { redis } from './redis';
-import { getMainnetRpcConfig } from './env-config';
-
-const BASE_COIN_TYPE = (BigInt(0x8000_0000) | BigInt(base.id));
 
 const CACHE_PREFIX = 'ens:name:';
 const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
-
-let ensClient: ReturnType<typeof createPublicClient> | null = null;
-
-function createMainnetTransport() {
-  const { endpoints, fallback: defaultEndpoint } = getMainnetRpcConfig();
-  const urls = endpoints.length > 0 ? endpoints : [defaultEndpoint];
-
-  const transports = urls.map((url, index) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🔗 ENS RPC Endpoint ${index + 1}: ${url}`);
-    }
-    return http(url, {
-      retryCount: 2,
-      retryDelay: 500,
-      timeout: 10000,
-    });
-  });
-
-  return transports.length === 1 ? transports[0] : fallback(transports);
-}
-
-function getEnsClient() {
-  if (!ensClient) {
-    ensClient = createPublicClient({
-      chain: mainnet,
-      transport: createMainnetTransport(),
-    });
-  }
-
-  return ensClient;
-}
 
 async function readCache(key: string): Promise<string | null> {
   if (!redis) return null;
@@ -66,6 +32,26 @@ function normaliseAddress(address: string): `0x${string}` | null {
   return address.toLowerCase() as `0x${string}`;
 }
 
+function truncateAddress(address: string): string {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function sanitiseResolvedName(address: `0x${string}`, value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const lower = value.toLowerCase();
+  if (lower === address.toLowerCase()) {
+    return null;
+  }
+
+  const truncated = truncateAddress(address);
+  if (value === truncated) {
+    return null;
+  }
+
+  return value;
+}
+
 export async function resolvePrimaryName(
   address: string,
   { refresh = false }: { refresh?: boolean } = {},
@@ -84,13 +70,10 @@ export async function resolvePrimaryName(
   }
 
   try {
-    const client = getEnsClient();
-    const name = await client.getEnsName({
-      address: normalised,
-      coinType: BASE_COIN_TYPE,
-    });
-    await writeCache(cacheKey, name ?? null);
-    return name ?? null;
+    const rawName = await getName({ address: normalised });
+    const name = sanitiseResolvedName(normalised, rawName ?? null);
+    await writeCache(cacheKey, name);
+    return name;
   } catch (error) {
     console.warn('[ENS Resolver] Failed to resolve name', {
       address: normalised,
@@ -105,12 +88,59 @@ export async function resolvePrimaryNames(
   options: { refresh?: boolean } = {},
 ): Promise<Map<string, string | null>> {
   const unique = Array.from(new Set(addresses.map((addr) => addr.toLowerCase())));
-  const results = await Promise.all(
-    unique.map(async (addr) => {
-      const name = await resolvePrimaryName(addr, options);
-      return [addr, name] as const;
-    }),
-  );
+  const resultMap = new Map<string, string | null>();
 
-  return new Map(results);
+  const cachedEntries: Array<{ address: string; name: string | null }> = [];
+  const addressesToFetch: `0x${string}`[] = [];
+
+  for (const addr of unique) {
+    const normalised = normaliseAddress(addr);
+    if (!normalised) {
+      resultMap.set(addr, null);
+      continue;
+    }
+
+    if (!options.refresh) {
+      const cached = await readCache(`${CACHE_PREFIX}${normalised}`);
+      if (cached !== null) {
+        cachedEntries.push({ address: normalised, name: cached });
+        continue;
+      }
+    }
+
+    addressesToFetch.push(normalised);
+  }
+
+  cachedEntries.forEach(({ address, name }) => {
+    resultMap.set(address, name);
+  });
+
+  if (addressesToFetch.length > 0) {
+    try {
+      const fetchedNames = await getNames({ addresses: addressesToFetch });
+
+      addressesToFetch.forEach((address, index) => {
+        const rawName = Array.isArray(fetchedNames) ? fetchedNames[index] : null;
+        const name = sanitiseResolvedName(address, rawName ?? null);
+        resultMap.set(address, name);
+        writeCache(`${CACHE_PREFIX}${address}`, name).catch((error) => {
+          console.warn('[ENS Resolver] Failed to write cache for batch item', { address, error });
+        });
+      });
+    } catch (error) {
+      console.warn('[ENS Resolver] Failed batch name lookup', {
+        addresses: addressesToFetch,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      await Promise.all(
+        addressesToFetch.map(async (address) => {
+          const name = await resolvePrimaryName(address, options);
+          resultMap.set(address, name);
+        }),
+      );
+    }
+  }
+
+  return resultMap;
 }
