@@ -916,13 +916,17 @@ export default function AdminInviteDashboard() {
     setNotifLoading(true);
     try {
       const res = await fetch('/api/admin/notifications', { headers: { Authorization: `Bearer ${adminKey}` } });
-      const data: AdminStatsResponse = await res.json();
-      if (res.ok && data?.success) {
-        setNotifStats(data?.stats?.plant1h || null);
-        setNotifFenceStats(data?.stats?.fence || null);
-        setNotifGlobalStats(data?.stats?.global || null);
-        setEligibleFids(data?.stats?.eligibleFids || []);
-      } else toast.error(data?.['error'] || 'Failed to load notifications stats');
+      const data: AdminStatsResponse | { error?: string } = await res.json();
+      if (res.ok && (data as AdminStatsResponse)?.success) {
+        const payload = data as AdminStatsResponse;
+        setNotifStats(payload?.stats?.plant1h || null);
+        setNotifFenceStats(payload?.stats?.fence || null);
+        setNotifGlobalStats(payload?.stats?.global || null);
+        setEligibleFids(payload?.stats?.eligibleFids || []);
+      } else {
+        const errorMessage = (data as { error?: string })?.error || 'Failed to load notifications stats';
+        toast.error(errorMessage);
+      }
     } catch (error) {
       console.error('Failed to load notifications stats:', error);
       toast.error('Failed to load notifications stats');
