@@ -47,7 +47,7 @@ async function getAllStakersFromContractSignal(): Promise<Array<{ address: strin
 
 const cachedAllStakers = cache(async () => getAllStakersFromContractSignal());
 
-async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderboardEntry[]> {
+async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<Array<{ address: string; staked: bigint }>> {
   const readClient = getReadClient();
   
   try {
