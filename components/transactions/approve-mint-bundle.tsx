@@ -50,13 +50,13 @@ export default function ApproveMintBundle({
 
   const calls = [
     {
-      address: PIXOTCHI_TOKEN_ADDRESS,
+      address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
+      args: [PIXOTCHI_NFT_ADDRESS as `0x${string}`, maxApproval],
     },
     {
-      address: PIXOTCHI_NFT_ADDRESS,
+      address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
       abi: NFT_ABI,
       functionName: 'mint',
       args: [BigInt(strain)],
