@@ -16,7 +16,7 @@ interface TabSystemWithActivityProps {
   tabs: TabDefinition[];
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
-  tabComponents: Record<Tab, React.LazyExoticComponent<() => React.ReactElement>>;
+  tabComponents: Record<Tab, React.ComponentType<any> | React.LazyExoticComponent<() => React.ReactElement>>;
   address?: string;
 }
 
