@@ -6,11 +6,6 @@ import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import { CLIENT_ENV, getRpcConfig } from './env-config';
-import { getReadClient } from './contracts';
-import { STAKE_CONTRACT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_TOKEN_ADDRESS, VILLAGE_CONTRACT_ADDRESS, TOWN_CONTRACT_ADDRESS } from './constants';
-import erc20Abi from '@/public/abi/erc20.json';
-import villageAbi from '@/public/abi/villageabi.json';
-import townAbi from '@/public/abi/townabi.json';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
 export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);
@@ -582,7 +577,7 @@ export const getStakeComposite = async (
 };
 
 // Plant fetching (following main app's exact pattern)
-export const getPlantsByOwner = async (address: string, _options: { signal?: AbortSignal } = {}): Promise<Plant[]> => {
+export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
@@ -591,7 +586,6 @@ export const getPlantsByOwner = async (address: string, _options: { signal?: Abo
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getPlantsByOwnerExtended',
       args: [address as `0x${string}`],
-      signal: _options.signal,
     }) as any[];
 
     return plants.map((plant: any) => ({
@@ -724,7 +718,7 @@ export const getLandMintStatus = async (address: `0x${string}`): Promise<{ canMi
   });
 };
 
-export const getLandsByOwner = async (address: string, _options: { signal?: AbortSignal } = {}): Promise<Land[]> => {
+export const getLandsByOwner = async (address: string): Promise<Land[]> => {
   try {
     const client = getReadClient();
     
@@ -734,7 +728,6 @@ export const getLandsByOwner = async (address: string, _options: { signal?: Abor
       abi: landAbi,
       functionName: 'landGetByOwner',
       args: [address as `0x${string}`],
-      signal: _options.signal,
     });
 
     return lands as Land[];
@@ -862,7 +855,7 @@ export const transferAllAssets = async (
 };
 
 // Token balance (returns raw bigint for precision)
-export const getTokenBalance = async (address: string, _options: { signal?: AbortSignal } = {}): Promise<bigint> => {
+export const getTokenBalance = async (address: string): Promise<bigint> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
@@ -871,7 +864,6 @@ export const getTokenBalance = async (address: string, _options: { signal?: Abor
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'balanceOf',
       args: [address as `0x${string}`],
-      signal: _options.signal,
     }) as bigint;
 
     return balance; // Return raw bigint for precision
@@ -1223,7 +1215,7 @@ export const executeSwap = async (walletClient: WalletClient, ethAmount: string)
 };
 
 // LEAF token balance (returns raw bigint for precision)
-export const getLeafBalance = async (address: string, _options: { signal?: AbortSignal } = {}): Promise<bigint> => {
+export const getLeafBalance = async (address: string): Promise<bigint> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
@@ -1232,7 +1224,6 @@ export const getLeafBalance = async (address: string, _options: { signal?: Abort
       abi: leafAbi,
       functionName: 'balanceOf',
       args: [address as `0x${string}`],
-      signal: _options.signal,
     });
     
     return balance as bigint;
@@ -1240,7 +1231,7 @@ export const getLeafBalance = async (address: string, _options: { signal?: Abort
 };
 
 // Building Management Functions
-export const getVillageBuildingsByLandId = async (landId: bigint, _options: { signal?: AbortSignal } = {}): Promise<any[]> => {
+export const getVillageBuildingsByLandId = async (landId: bigint): Promise<any[]> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
@@ -1249,14 +1240,13 @@ export const getVillageBuildingsByLandId = async (landId: bigint, _options: { si
       abi: landAbi,
       functionName: 'villageGetVillageBuildingsByLandId',
       args: [landId],
-      signal: _options.signal,
     });
     
     return buildings as any[];
   });
 };
 
-export const getTownBuildingsByLandId = async (landId: bigint, _options: { signal?: AbortSignal } = {}): Promise<any[]> => {
+export const getTownBuildingsByLandId = async (landId: bigint): Promise<any[]> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
@@ -1265,7 +1255,6 @@ export const getTownBuildingsByLandId = async (landId: bigint, _options: { signa
       abi: landAbi,
       functionName: 'townGetBuildingsByLandId',
       args: [landId],
-      signal: _options.signal,
     });
     
     return buildings as any[];

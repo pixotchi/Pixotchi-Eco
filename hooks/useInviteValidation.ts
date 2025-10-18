@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useEffectEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { INVITE_CONFIG, getLocalStorageKeys } from '@/lib/invite-utils';
 
@@ -8,8 +8,6 @@ export function useInviteValidation() {
   const [checkingValidation, setCheckingValidation] = useState(false);
 
   useEffect(() => {
-    const keys = getLocalStorageKeys();
-
     const checkInviteValidation = async () => {
       if (!INVITE_CONFIG.SYSTEM_ENABLED || !address) {
         setUserValidated(true);
@@ -19,6 +17,8 @@ export function useInviteValidation() {
 
       setCheckingValidation(true);
       
+      const keys = getLocalStorageKeys();
+
       try {
         const response = await fetch('/api/invite/check-validation', {
           method: 'POST',
@@ -60,6 +60,7 @@ export function useInviteValidation() {
         setUserValidated(true);
         setCheckingValidation(false);
       } else if (!isConnected) {
+        const keys = getLocalStorageKeys();
         localStorage.removeItem(keys.INVITE_VALIDATED);
         localStorage.removeItem(keys.USER_ADDRESS);
         localStorage.removeItem(keys.VALIDATED_CODE);
@@ -71,12 +72,15 @@ export function useInviteValidation() {
     return () => clearTimeout(timeoutId);
   }, [isConnected, address]);
 
-  const handleInviteValidated = useEffectEvent((code: string) => {
+  const handleInviteValidated = (code: string) => {
     setUserValidated(true);
     const keys = getLocalStorageKeys();
     localStorage.setItem(keys.INVITE_VALIDATED, 'true');
-    localStorage.setItem(keys.INVITE_CODE, code);
-  });
+    localStorage.setItem(keys.VALIDATED_CODE, code);
+    if (address) {
+      localStorage.setItem(keys.USER_ADDRESS, address.toLowerCase());
+    }
+  };
 
   return { userValidated, checkingValidation, handleInviteValidated, setUserValidated };
 }

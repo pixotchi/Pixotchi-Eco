@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef, useEffectEvent } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAccount, useWatchBlockNumber } from "wagmi";
 import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -45,39 +45,33 @@ export default function LandsView() {
   const [needsLeafApproval, setNeedsLeafApproval] = useState<boolean>(true);
 
   // Fetch LEAF approval status
-  const fetchApprovalStatusEvent = useEffectEvent(async (currentAddress: string | undefined) => {
-    if (!currentAddress) {
+  const fetchApprovalStatus = useCallback(async () => {
+    if (!address) {
       setNeedsLeafApproval(true);
       return;
     }
     try {
-      const hasLeafApproval = await checkLeafTokenApproval(currentAddress);
+      const hasLeafApproval = await checkLeafTokenApproval(address);
       setNeedsLeafApproval(!hasLeafApproval);
     } catch (error) {
       console.error("Failed to fetch LEAF approval status:", error);
       setNeedsLeafApproval(true);
     }
-  });
+  }, [address]);
 
-  const fetchApprovalStatus = useCallback(() => {
-    fetchApprovalStatusEvent(address);
-  }, [address, fetchApprovalStatusEvent]);
-
-  const fetchDataEvent = useEffectEvent(async (currentAddress: string | undefined, currentSelectedId: bigint | undefined) => {
-    if (!currentAddress) {
-      setLands([]);
-      setSelectedLand(null);
-      return;
-    }
+  const fetchData = useCallback(async () => {
+    if (!address) return;
     setLoading(true);
     setError(null);
     try {
-      const landsData = await getLandsByOwner(currentAddress);
+      const landsData = await getLandsByOwner(address);
 
       setLands(landsData);
 
+
       if (landsData.length > 0) {
-        const newSelectedLand = currentSelectedId != null ? landsData.find(p => p.tokenId === currentSelectedId) : undefined;
+        const currentSelectedId = selectedLand?.tokenId;
+        const newSelectedLand = landsData.find(p => p.tokenId === currentSelectedId);
         setSelectedLand(newSelectedLand || landsData[0]);
       } else {
         setSelectedLand(null);
@@ -88,18 +82,10 @@ export default function LandsView() {
     } finally {
       setLoading(false);
     }
-  });
+  }, [address]);
 
-  const fetchData = useCallback(() => {
-    fetchDataEvent(address, selectedLand?.tokenId);
-  }, [address, selectedLand?.tokenId, fetchDataEvent]);
-
-  const fetchBuildingDataEvent = useEffectEvent(async (
-    currentSelectedLand: Land | null,
-    currentBuildingType: BuildingType,
-    currentSelectedBuilding: BuildingData | null
-  ) => {
-    if (!currentSelectedLand) {
+  const fetchBuildingData = useCallback(async () => {
+    if (!selectedLand) {
       setVillageBuildings([]);
       setTownBuildings([]);
       setSelectedBuilding(null);
@@ -109,8 +95,8 @@ export default function LandsView() {
     setBuildingsLoading(true);
     try {
       const [villageData, townData] = await Promise.all([
-        getVillageBuildingsByLandId(currentSelectedLand.tokenId),
-        getTownBuildingsByLandId(currentSelectedLand.tokenId)
+        getVillageBuildingsByLandId(selectedLand.tokenId),
+        getTownBuildingsByLandId(selectedLand.tokenId)
       ]);
 
       setVillageBuildings(villageData || []);
@@ -163,15 +149,15 @@ export default function LandsView() {
       setTownBuildings(allTownBuildings);
 
       // Choose preferred building for the new land: try last selected id, else first
-      const currentBuildings = currentBuildingType === 'village' ? (villageData || []) : allTownBuildings;
+      const currentBuildings = buildingType === 'village' ? (villageData || []) : allTownBuildings;
       if (currentBuildings.length > 0) {
         const preferredId = lastSelectedBuildingIdRef.current;
         const preferred = preferredId != null ? currentBuildings.find(b => Number(b.id) === Number(preferredId)) : undefined;
         if (preferred) {
-          if (!currentSelectedBuilding || Number(currentSelectedBuilding.id) !== Number(preferred.id)) {
+          if (!selectedBuilding || Number(selectedBuilding.id) !== Number(preferred.id)) {
             setSelectedBuilding(preferred);
           }
-        } else if (!currentSelectedBuilding) {
+        } else if (!selectedBuilding) {
           setSelectedBuilding(currentBuildings[0]);
         }
       }
@@ -182,32 +168,25 @@ export default function LandsView() {
     } finally {
       setBuildingsLoading(false);
     }
-  });
-
-  const fetchBuildingData = useCallback(() => {
-    fetchBuildingDataEvent(selectedLand, buildingType, selectedBuilding);
-  }, [selectedLand, buildingType, selectedBuilding, fetchBuildingDataEvent]);
+  }, [selectedLand, buildingType, selectedBuilding]);
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
-  const refreshWarehouseOnSelect = useEffectEvent(async (
-    currentSelectedLand: Land | null,
-    currentBuildingType: BuildingType,
-    currentSelectedBuilding: BuildingData | null
-  ) => {
-    if (!currentSelectedLand || currentBuildingType !== 'town' || currentSelectedBuilding?.id !== 3) return;
-    try {
-      const latest = await getLandById(currentSelectedLand.tokenId);
-      if (latest) {
-        setSelectedLand(latest);
-      }
-    } catch (e) {
-      // noop
-    }
-  });
-
   useEffect(() => {
-    refreshWarehouseOnSelect(selectedLand, buildingType, selectedBuilding);
-  }, [selectedLand, buildingType, selectedBuilding, refreshWarehouseOnSelect]);
+    const refreshWarehouseOnSelect = async () => {
+      if (!selectedLand || buildingType !== 'town' || selectedBuilding?.id !== 3) return;
+      try {
+        const latest = await getLandById(selectedLand.tokenId);
+        if (latest) {
+          // Update only the selected land info (keeping array intact to avoid extra renders)
+          setSelectedLand(latest);
+        }
+      } catch (e) {
+        // noop
+      }
+    };
+    refreshWarehouseOnSelect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBuilding?.id, buildingType, selectedLand?.tokenId]);
 
   // Combined function to refresh both building data and balances after transactions
   const handleBuildingTransactionSuccess = useCallback(() => {
@@ -220,9 +199,7 @@ export default function LandsView() {
           const latest = await getLandById(selectedLand.tokenId);
           if (latest) setSelectedLand(latest);
         }
-      } catch (error) {
-        console.error('Failed to refresh land summary after transaction:', error);
-      }
+      } catch {}
     })();
     // Balances are refreshed globally via the 'balances:refresh' event
     window.dispatchEvent(new Event('balances:refresh'));

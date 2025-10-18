@@ -6,7 +6,6 @@
  * Uses multicall for efficient batch fetching and short-term caching (5 minutes).
  */
 
-import { cache, cacheSignal } from 'react';
 import { getReadClient, STAKE_CONTRACT_ADDRESS } from './contracts';
 import stakeAbi from '@/public/abi/stakeabi.json';
 import { redis } from './redis';
@@ -35,14 +34,7 @@ async function resolveENSBatch(addresses: string[]): Promise<Map<string, string 
 /**
  * Get all stakers from the staking contract's stakersArray using multicall
  */
-async function getAllStakersFromContractSignal(): Promise<Array<{ address: string; staked: bigint }>> {
-  const signal = cacheSignal();
-  return getAllStakersFromContract(signal);
-}
-
-const cachedAllStakers = cache(async () => getAllStakersFromContractSignal());
-
-async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderboardEntry[]> {
+async function getAllStakersFromContract(): Promise<Array<{ address: string; staked: bigint }>> {
   const readClient = getReadClient();
   
   try {
@@ -151,7 +143,10 @@ async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
   }
 }
 
-async function buildStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderboardEntry[]> {
+/**
+ * Get the stake leaderboard - uses 5-minute cache for performance
+ */
+export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
   // Try cache first
   if (redis) {
     try {
@@ -173,7 +168,7 @@ async function buildStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
   console.log('🔨 Building fresh stake leaderboard from contract...');
   
   try {
-    const allStakers = await cachedAllStakers();
+    const allStakers = await getAllStakersFromContract();
     
     if (allStakers.length === 0) {
       console.log('⚠️ No stakers found in contract');
@@ -221,9 +216,4 @@ async function buildStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
     return [];
   }
 }
-
-export const getStakeLeaderboard = cache(async () => {
-  const signal = cacheSignal();
-  return buildStakeLeaderboard(signal);
-});
 

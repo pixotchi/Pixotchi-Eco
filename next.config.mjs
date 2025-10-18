@@ -7,10 +7,7 @@ const nextConfig = {
     return config;
   },
   // External packages for server components
-  serverExternalPackages: [],
-  experimental: {
-    reactCompiler: true
-  }
+  serverExternalPackages: []
 };
 
 export default nextConfig;
