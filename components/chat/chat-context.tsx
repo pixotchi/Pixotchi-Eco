@@ -268,16 +268,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 // Use the same hardcoded strains as the server (SEED units)
                 const STRAINS = PLANT_STRAINS;
                 // Default to ZEST in agent mode unless user explicitly specifies another strain
-                let chosen = STRAINS.find(s => s.id === 4) || STRAINS[0];
+                let chosen: typeof STRAINS[number] = STRAINS.find(s => s.id === 4) || STRAINS[0];
                 const idMatch = /strain\s*(\d{1,2})/i.exec(messageText);
                 if (idMatch) {
                   const sid = parseInt(idMatch[1], 10);
                   const found = STRAINS.find(s => s.id === sid);
-                  if (found) chosen = found;
+                  if (found) chosen = found as typeof STRAINS[number];
                 } else if (Array.isArray(STRAINS)) {
                   const lower = messageText.toLowerCase();
                   const byName = STRAINS.find(s => lower.includes(String(s.name || '').toLowerCase()));
-                  if (byName) chosen = byName;
+                  if (byName) chosen = byName as typeof STRAINS[number];
                 }
                 const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10); // SEED units
                 const total = unit * inferredCount;
