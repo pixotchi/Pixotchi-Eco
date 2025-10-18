@@ -16,7 +16,7 @@ import {
   UNISWAP_ROUTER_ADDRESS,
   WETH_ADDRESS,
 } from './constants';
-import erc20Abi from '@/public/abi/erc20.json';
+import erc20Abi from '@/public/abi/PixotchiToken.json';
 import villageAbi from '@/public/abi/villageabi.json';
 import townAbi from '@/public/abi/townabi.json';
 
