@@ -2,6 +2,7 @@ import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { formatUnits } from "viem";
 import { ADDRESS_REGEX } from "./contracts";
+import { ADDRESS_TRUNCATION } from "./constants";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -105,9 +106,12 @@ export function formatTokenAmount(amount: bigint, decimals: number = 18): string
   return parseFloat(formatted).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-export function formatAddress(address: string, prefixLen: number = 8, suffixLen: number = 6, full: boolean = false): string {
+// Standardized address formatting using centralized truncation constants
+export function formatAddress(address: string, prefixLen?: number, suffixLen?: number, full: boolean = false): string {
   if (full || address.length <= 14) return address;
-  return `${address.slice(0, prefixLen)}...${address.slice(-suffixLen)}`;
+  const prefix = prefixLen ?? ADDRESS_TRUNCATION.prefix;
+  const suffix = suffixLen ?? ADDRESS_TRUNCATION.suffix;
+  return `${address.slice(0, prefix)}...${address.slice(-suffix)}`;
 }
 
 export function getPlantStatusColor(status: number): string {

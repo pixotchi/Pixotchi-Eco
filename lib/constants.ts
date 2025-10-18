@@ -21,6 +21,18 @@ export const PLANT_ART_MAP = {
   5: '/icons/plant5.png',      // TYJ
 } as const;
 
+// Address formatting constants
+export const ADDRESS_TRUNCATION = {
+  prefix: 6,
+  suffix: 4,
+} as const;
+
+// ENS/Basename resolution configuration
+export const ENS_CONFIG = {
+  CACHE_TTL_SECONDS: 6 * 60 * 60, // 6 hours
+  CACHE_PREFIX: 'identity:name:', // Changed from 'ens:name:' for clarity
+} as const;
+
 // Building ID to name mappings
 export const VILLAGE_BUILDING_NAMES = {
   0: "Solar Panels",
