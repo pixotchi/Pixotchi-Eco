@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     
     const dimensions = DIMENSIONS[platform];
     const bgUrl = new URL(dimensions.bg, baseUrl).toString();
-    const plantUrl = new URL(artMap[strain] || artMap[1], baseUrl).toString();
+    const plantUrl = new URL(artMap[strain as keyof typeof PLANT_ART_MAP] || artMap[1], baseUrl).toString();
     // Use basename if provided, otherwise format the address
     const displayAddress = basename || formatAddress(address);
 
