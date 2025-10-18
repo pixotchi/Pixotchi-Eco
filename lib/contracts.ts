@@ -6,6 +6,11 @@ import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import { CLIENT_ENV, getRpcConfig } from './env-config';
+import { getReadClient } from './contracts';
+import { STAKE_CONTRACT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_TOKEN_ADDRESS, VILLAGE_CONTRACT_ADDRESS, TOWN_CONTRACT_ADDRESS } from './constants';
+import erc20Abi from '@/public/abi/erc20.json';
+import villageAbi from '@/public/abi/villageabi.json';
+import townAbi from '@/public/abi/townabi.json';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
 export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);

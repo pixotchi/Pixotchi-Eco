@@ -186,7 +186,7 @@ export default function LandsView() {
 
   const fetchBuildingData = useCallback(() => {
     fetchBuildingDataEvent(selectedLand, buildingType, selectedBuilding);
-  }, [fetchBuildingDataEvent]);
+  }, [selectedLand, buildingType, selectedBuilding, fetchBuildingDataEvent]);
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
   const refreshWarehouseOnSelect = useEffectEvent(async (
@@ -207,7 +207,7 @@ export default function LandsView() {
 
   useEffect(() => {
     refreshWarehouseOnSelect(selectedLand, buildingType, selectedBuilding);
-  }, [selectedLand, buildingType, selectedBuilding]);
+  }, [selectedLand, buildingType, selectedBuilding, refreshWarehouseOnSelect]);
 
   // Combined function to refresh both building data and balances after transactions
   const handleBuildingTransactionSuccess = useCallback(() => {
@@ -226,7 +226,7 @@ export default function LandsView() {
     })();
     // Balances are refreshed globally via the 'balances:refresh' event
     window.dispatchEvent(new Event('balances:refresh'));
-  }, [fetchBuildingData]);
+  }, [fetchBuildingData, selectedLand]);
 
   useEffect(() => {
     if(address) {

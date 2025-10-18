@@ -37,12 +37,12 @@ async function resolveENSBatch(addresses: string[]): Promise<Map<string, string 
  */
 async function getAllStakersFromContractSignal(): Promise<Array<{ address: string; staked: bigint }>> {
   const signal = cacheSignal();
-  return fetchStakeLeaderboard(signal ?? undefined);
+  return getAllStakersFromContract(signal);
 }
 
 const cachedAllStakers = cache(async () => getAllStakersFromContractSignal());
 
-async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<Array<{ address: string; staked: bigint }>> {
+async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderboardEntry[]> {
   const readClient = getReadClient();
   
   try {
@@ -224,6 +224,6 @@ async function buildStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
 
 export const getStakeLeaderboard = cache(async () => {
   const signal = cacheSignal();
-  return buildStakeLeaderboard(signal ?? undefined);
+  return buildStakeLeaderboard(signal);
 });
 
