@@ -182,7 +182,7 @@ export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLe
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
   const patterns = [] as string[];
   if (scope === 'streaks' || scope === 'all') patterns.push(`${PX}streak:*`, `${PX}streak:leaderboard:*`, `${PX}streak:activity:*`);
-  if (scope === 'missions' || scope === 'all') patterns.push(`${PX}missions:*`);
+  if (scope === 'missions' || scope === 'all') patterns.push(`${PX}missions:*`, `${PX}missions:leaderboard:*`);
 
   let deleted = 0;
   for (const p of patterns) {
