@@ -160,7 +160,7 @@ export function TabSystemWithActivity({
  *     key={tab.id}
  *     mode={activeTab === tab.id ? 'visible' : 'hidden'}
  *   >
- *     {/* Tab content here */}
+ *     // Tab content
  *   </Activity>
  * ))}
  * ```
