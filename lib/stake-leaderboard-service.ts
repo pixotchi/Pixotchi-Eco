@@ -7,7 +7,8 @@
  */
 
 import { cache, cacheSignal } from 'react';
-import { getReadClient, STAKE_CONTRACT_ADDRESS } from './contracts';
+import Contracts from './contracts';
+const { getReadClient, STAKE_CONTRACT_ADDRESS } = Contracts;
 import stakeAbi from '@/public/abi/stakeabi.json';
 import { redis } from './redis';
 import { resolvePrimaryNames } from './ens-resolver';
