@@ -224,6 +224,6 @@ async function buildStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
 
 export const getStakeLeaderboard = cache(async () => {
   const signal = cacheSignal();
-  return buildStakeLeaderboard(signal);
+  return buildStakeLeaderboard(signal ?? undefined);
 });
 
