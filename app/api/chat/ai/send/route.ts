@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendAIMessage, checkAIRateLimit, updateAIRateLimit } from '@/lib/ai-service';
-import { validateAIMessage } from '@/lib/ai-config';
+import { sendAIMessage, checkAIRateLimit, updateAIRateLimit, validateAIMessage } from '@/lib/ai-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 // Extend timeout for AI processing

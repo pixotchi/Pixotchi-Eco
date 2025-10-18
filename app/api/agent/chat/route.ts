@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use centralized strains (mintPriceSeed in SEED units)
-    const HARDCODED_STRAINS = PLANT_STRAINS;
+    const HARDCODED_STRAINS = PLANT_STRAINS as const;
 
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
@@ -45,13 +45,13 @@ export async function POST(req: NextRequest) {
         const effectiveUserAddress = toolUserAddress || userAddress;
         // Use hardcoded strains dataset
         const strains = HARDCODED_STRAINS;
-        let chosen = strains[0];
+        let chosen: typeof HARDCODED_STRAINS[number] = strains[0];
         if (typeof strain === 'number') {
           const found = strains.find(s => s.id === Number(strain));
-          if (found) chosen = found;
+          if (found) chosen = found as typeof HARDCODED_STRAINS[number];
         } else if (strainName) {
           const byName = strains.find(s => `${s.name}`.toLowerCase() === `${strainName}`.toLowerCase());
-          if (byName) chosen = byName;
+          if (byName) chosen = byName as typeof HARDCODED_STRAINS[number];
         }
         const unit = chosen?.mintPriceSeed || 0;
         const total = unit * count;
