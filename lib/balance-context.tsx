@@ -3,18 +3,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAccount } from 'wagmi';
 import { usePublicClient } from 'wagmi';
-import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { leafAbi } from '@/public/abi/leaf-abi'; 
-
-const erc20Abi = [
-  {
-    inputs: [{ name: 'account', type: 'address' }],
-    name: 'balanceOf',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
 
 interface BalanceContextType {
   seedBalance: bigint;
@@ -45,7 +35,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
         contracts: [
           {
             address: PIXOTCHI_TOKEN_ADDRESS,
-            abi: erc20Abi,
+            abi: ERC20_BALANCE_ABI,
             functionName: 'balanceOf',
             args: [address],
           },

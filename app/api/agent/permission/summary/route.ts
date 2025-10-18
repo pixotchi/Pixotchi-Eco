@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdpClient } from '@coinbase/cdp-sdk';
+import { parseUnits } from 'viem';
+import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 
 // Create a single CDP client instance per runtime
 let cdp: CdpClient | null = null;
@@ -59,9 +61,9 @@ export async function GET(request: NextRequest) {
       spender: p.permission.spender,
       account: p.permission.account,
       // Add token symbol for known tokens
-      tokenSymbol: p.permission.token.toLowerCase() === '0x546d239032b24eceee0cb05c92fc39090846adc7' ? 'SEED' : 'UNKNOWN',
+      tokenSymbol: p.permission.token.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase() ? 'SEED' : 'UNKNOWN',
       // Calculate human-readable allowance (assuming 18 decimals for SEED)
-      allowanceFormatted: p.permission.token.toLowerCase() === '0x546d239032b24eceee0cb05c92fc39090846adc7' 
+      allowanceFormatted: p.permission.token.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase() 
         ? (BigInt(p.permission.allowance) / BigInt(10 ** 18)).toString() 
         : p.permission.allowance,
     }));

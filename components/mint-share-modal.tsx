@@ -15,15 +15,7 @@ import { useFrameContext } from "@/lib/frame-context";
 import { useComposeCast } from "@coinbase/onchainkit/minikit";
 import { toast } from "react-hot-toast";
 import { openExternalUrl } from "@/lib/open-external";
-
-interface MintShareData {
-  address: string;
-  basename?: string;
-  strainName: string;
-  strainId: number;
-  mintedAt: string;
-  txHash?: string;
-}
+import type { MintShareData } from "@/lib/types";
 
 interface MintShareModalProps {
   open: boolean;

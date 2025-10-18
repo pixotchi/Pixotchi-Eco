@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { PLANT_STRAINS, PLANT_ART_MAP } from '@/lib/constants';
 
 export const runtime = 'edge';
 
@@ -8,23 +9,13 @@ const DIMENSIONS = {
   farcaster: { width: 1200, height: 800, bg: '/farcaster-og.png' },
 };
 
-// Strain IDs from contract are 1-indexed
-const strainNames: Record<number, string> = {
-  1: 'Flora',
-  2: 'Taki',
-  3: 'Rosa',
-  4: 'Zest',
-  5: 'TYJ',
-};
+// Create strain names map from centralized constants
+const strainNames: Record<number, string> = Object.fromEntries(
+  PLANT_STRAINS.map(s => [s.id, s.name])
+);
 
-// Plant images match mint tab: strain.id - 1 = array index
-const artMap: Record<number, string> = {
-  1: '/icons/plant1.svg',   // Flora
-  2: '/icons/plant2.svg',   // Taki
-  3: '/icons/plant3WithFrame.svg',  // Rosa
-  4: '/icons/plant4WithFrame.svg',  // Zest
-  5: '/icons/plant5.png',   // TYJ
-};
+// Use plant art map from centralized constants
+const artMap = PLANT_ART_MAP;
 
 function formatDate(value: string | null) {
   if (!value) return null;

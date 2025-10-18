@@ -7,6 +7,7 @@ import {
   validateMessage 
 } from '@/lib/chat-service';
 import { markMissionTask, trackDailyActivity } from '@/lib/gamification-service';
+import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Basic address validation (wallet connection is sufficient for public chat)
-    if (!address.match(/^0x[a-fA-F0-9]{40}$/)) {
+    if (!isValidEthereumAddressFormat(address)) {
       return NextResponse.json(
         { error: 'Invalid wallet address format' },
         { status: 400 }

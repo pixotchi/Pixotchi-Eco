@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { parseUnits, encodeFunctionData, maxUint256, createPublicClient, http } from 'viem';
 import { base as baseChain } from 'viem/chains';
-import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
 import { getRpcConfig } from '@/lib/env-config';
 
 // Create a single CDP client instance per runtime
@@ -73,9 +73,8 @@ export async function POST(req: NextRequest) {
       }
 
       // Find SEED token permission
-      const SEED_TOKEN = '0x546D239032b24eCEEE0cb05c92FC39090846adc7';
       const seedPermission = agentPermissions.find(
-        (p: any) => p.permission.token.toLowerCase() === SEED_TOKEN.toLowerCase()
+        (p: any) => p.permission.token.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase()
       );
 
       if (!seedPermission) {
@@ -172,8 +171,8 @@ export async function POST(req: NextRequest) {
       const rpc = getRpcConfig();
       const client = createPublicClient({ chain: baseChain, transport: http(rpc.endpoints[0]) });
       const txReceipt = await client.waitForTransactionReceipt({ hash: mintReceipt.transactionHash as `0x${string}` });
-      const TRANSFER_SIG = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-      const zeroAddressTopic = '0x0000000000000000000000000000000000000000000000000000000000000000';
+      const TRANSFER_SIG = EVM_EVENT_SIGNATURES.ERC20_TRANSFER;
+      const zeroAddressTopic = EVM_TOPICS.ZERO_ADDRESS_TOPIC;
       const agentTopic = `0x000000000000000000000000${agentSmartAccount.address.slice(2).toLowerCase()}`;
       for (const log of txReceipt.logs || []) {
         if (`${log.address}`.toLowerCase() !== PIXOTCHI_NFT_ADDRESS.toLowerCase()) continue;

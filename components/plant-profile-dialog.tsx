@@ -10,7 +10,7 @@ import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
 import { getUserGameStats } from '@/lib/user-stats-service';
 import { getStakeInfo } from '@/lib/contracts';
-import { formatEthShort, formatTokenAmount } from '@/lib/utils';
+import { formatEthShort, formatTokenAmount, formatAddress } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/open-external';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import toast from 'react-hot-toast';
@@ -76,10 +76,6 @@ const ensDataCache = new Map<string, CachedENSData>();
 const CACHE_DURATION = 120000; // 2 minutes
 
 const formatStaked = (amount: bigint) => formatTokenAmount(amount, 18);
-
-function formatAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 function formatCount(count: number): string {
   if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
@@ -560,7 +556,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
               onClick={handleCopyAddress}
               className="flex-1 h-10 font-mono text-sm justify-between"
             >
-              <span className="truncate">{formatAddress(plant.owner)}</span>
+              <span className="truncate">{formatAddress(plant.owner, 6, 4)}</span>
               <Copy className="w-4 h-4 flex-shrink-0" />
             </Button>
             <Button

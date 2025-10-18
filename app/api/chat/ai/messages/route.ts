@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAIConversationMessages, getOrCreateConversation } from '@/lib/ai-service';
+import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate address format
-    if (!address.match(/^0x[a-fA-F0-9]{40}$/)) {
+    if (!isValidEthereumAddressFormat(address)) {
       return NextResponse.json(
         { error: 'Invalid wallet address format' },
         { status: 400 }

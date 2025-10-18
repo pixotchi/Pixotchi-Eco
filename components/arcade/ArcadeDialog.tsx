@@ -9,55 +9,11 @@ import { toast } from "react-hot-toast";
 import { useAccount, usePublicClient } from "wagmi";
 import BoxGameTransaction from "@/components/transactions/box-game-transaction";
 import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
-import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
+import { PIXOTCHI_NFT_ADDRESS, BOX_GAME_ABI } from "@/lib/contracts";
 import { formatDuration } from "@/lib/utils";
 import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
-
-// Minimal ABI entries for box game interactions
-const BOX_GAME_ABI = [
-  {
-    inputs: [{ name: "nftID", type: "uint256" }],
-    name: "boxGameGetCoolDownTimePerNFT",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "nftID", type: "uint256" }],
-    name: "boxGameGetCoolDownTimeWithStar",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "nftID", type: "uint256" },
-      { name: "seed", type: "uint256" },
-    ],
-    name: "boxGamePlay",
-    outputs: [
-      { name: "points", type: "uint256" },
-      { name: "timeExtension", type: "uint256" },
-    ],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "nftID", type: "uint256" },
-      { name: "seed", type: "uint256" },
-    ],
-    name: "boxGamePlayWithStar",
-    outputs: [
-      { name: "points", type: "uint256" },
-      { name: "timeExtension", type: "uint256" },
-    ],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-] as const;
 
 type ArcadeDialogProps = {
   open: boolean;

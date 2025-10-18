@@ -17,14 +17,7 @@ import { CheckCircle, AlertCircle, Clock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useAccount } from 'wagmi';
-
-interface TransactionCall {
-  address: `0x${string}`;
-  abi: any;
-  functionName: string;
-  args: any[];
-  value?: bigint;
-}
+import type { TransactionCall } from '@/lib/types';
 
 interface BaseTransactionProps {
   calls: TransactionCall[];

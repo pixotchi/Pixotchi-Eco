@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useRef } from 'react';
-import { 
-  Transaction, 
+import React, { useCallback, useRef, useEffect } from 'react';
+import {
+  Transaction,
   TransactionButton,
   TransactionStatus,
   TransactionStatusAction,
@@ -10,15 +10,10 @@ import {
 } from '@coinbase/onchainkit/transaction';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+import { useAccount } from 'wagmi';
 import { usePaymaster } from '@/lib/paymaster-context';
-
-interface TransactionCall {
-  address: `0x${string}`;
-  abi: any;
-  functionName: string;
-  args: any[];
-  value?: bigint;
-}
+import { sdk } from '@farcaster/miniapp-sdk';
+import type { TransactionCall } from '@/lib/types';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];

@@ -10,6 +10,7 @@ import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
+import { PIXOTCHI_TOKEN_ADDRESS, WETH_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 
 export default function SwapTab() {
   const { address } = useAccount();
@@ -17,16 +18,16 @@ export default function SwapTab() {
   const isMiniApp = Boolean(fc?.isInMiniApp);
 
   const ETH: Token = {
-    address: "",
+    address: "0x4200000000000000000000000000000000000006",
     chainId: 8453,
     decimals: 18,
-    name: "Ethereum",
+    name: "ETH",
     symbol: "ETH",
-    image: "https://dynamic-assets.coinbase.com/dbb4b4983bde81309ddab83eb598358eb44375b930b94687ebe38bc22e52c3b2125258ffb8477a5ef22e33d6bd72e32a506c391caa13af64c00e46613c3e5806/asset_icons/4113b082d21cc5fab17fc8f2d19fb996165bcce635e6900f7fc2d57c4ef33ae9.png",
+    image: "/PixotchiKit/COIN.svg",
   };
 
   const SEED: Token = {
-    address: "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+    address: PIXOTCHI_TOKEN_ADDRESS,
     chainId: 8453,
     decimals: 18,
     name: "SEED",
@@ -35,7 +36,7 @@ export default function SwapTab() {
   };
 
   const USDC: Token = {
-    address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    address: USDC_ADDRESS,
     chainId: 8453,
     decimals: 6,
     name: "USDC",
@@ -124,7 +125,7 @@ export default function SwapTab() {
                 className="w-full"
                 onClick={async () => {
                   try {
-                    await sdk.actions.viewToken({ token: 'eip155:8453/erc20:0x546D239032b24eCEEE0cb05c92FC39090846adc7' });
+                    await sdk.actions.viewToken({ token: `eip155:8453/erc20:${PIXOTCHI_TOKEN_ADDRESS}` });
                   } catch (err) {
                     toast.error('View Token is only available in supported Farcaster clients.');
                   }

@@ -1,9 +1,15 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { formatUnits } from "viem";
+import { ADDRESS_REGEX } from "./contracts";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+// Address validation helper
+export function isValidEthereumAddressFormat(address: string): boolean {
+  return ADDRESS_REGEX.test(address);
 }
 
 // Plant image level calculation (from main app)
@@ -99,9 +105,9 @@ export function formatTokenAmount(amount: bigint, decimals: number = 18): string
   return parseFloat(formatted).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-export function formatAddress(address: string, full: boolean = false): string {
+export function formatAddress(address: string, prefixLen: number = 8, suffixLen: number = 6, full: boolean = false): string {
   if (full || address.length <= 14) return address;
-  return `${address.slice(0, 8)}...${address.slice(-6)}`;
+  return `${address.slice(0, prefixLen)}...${address.slice(-suffixLen)}`;
 }
 
 export function getPlantStatusColor(status: number): string {
@@ -359,7 +365,30 @@ export function formatProductionRate(rate: bigint): string {
 }
 
 export function formatLifetimeProduction(seconds: bigint): string {
-  const totalSeconds = Number(seconds); // Raw seconds, no decimal conversion needed
-  const hours = totalSeconds / 3600; // Convert seconds to hours
-  return hours.toFixed(2);
+  const hours = Number(seconds) / 3600;
+  return `${hours.toFixed(2)} hours`;
+}
+
+// Utility function for formatting large numbers with M/K suffixes (used in balance-card and user-stats-service)
+export function formatLargeNumber(amount: bigint): string {
+  const num = Number(amount) / 1e18;
+
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+  } else if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.?0+$/, '') + 'K';
+  }
+
+  return formatTokenAmount(amount);
+}
+
+// Utility function for validating Ethereum addresses (consolidates duplicate validation patterns)
+export function isValidEthereumAddress(address: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+// Alternative validation using viem's isAddress for cases that need it
+export function isValidAddress(address: string | unknown): address is `0x${string}` {
+  if (typeof address !== 'string') return false;
+  return isValidEthereumAddress(address);
 } 

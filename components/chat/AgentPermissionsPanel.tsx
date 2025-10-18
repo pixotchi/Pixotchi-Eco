@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useAccount } from 'wagmi';
 import { createBaseAccountSDK } from '@base-org/account';
 import { getRpcConfig } from '@/lib/env-config';
+import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { createPublicClient, http, parseUnits } from 'viem';
 import { base as baseChain } from 'viem/chains';
 
@@ -189,7 +190,7 @@ export default function AgentPermissionsPanel() {
                 if (!address || !spender) return;
                 try {
                   setBusy(true);
-                  const SEED = '0x546D239032b24eCEEE0cb05c92FC39090846adc7' as `0x${string}`;
+                  const SEED = PIXOTCHI_TOKEN_ADDRESS;
                   const decimals = await getTokenDecimals(SEED);
                   let allowance = parseUnits('200', decimals);
                   if (allowanceInput && !isNaN(Number(allowanceInput))) {
