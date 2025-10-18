@@ -139,7 +139,7 @@ export default function PlantsView() {
   const fetchData = useCallback(() => {
     if (!address) return;
     fetchDataEvent(address, selectedPlant?.id);
-  }, [address, selectedPlant?.id, fetchDataEvent]);
+  }, [address, fetchDataEvent]);
 
   // Set default selected item when catalogs are loaded
   useEffect(() => {

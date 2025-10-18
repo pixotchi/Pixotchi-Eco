@@ -515,7 +515,7 @@ export default function LeaderboardTab() {
   };
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 relative z-0">
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -545,7 +545,7 @@ export default function LeaderboardTab() {
               </div>
             )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-hidden">
             {boardType === 'plants' ? (
               renderContent()
             ) : boardType === 'lands' ? (
