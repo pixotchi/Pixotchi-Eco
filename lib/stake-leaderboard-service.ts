@@ -37,7 +37,7 @@ async function resolveENSBatch(addresses: string[]): Promise<Map<string, string 
  */
 async function getAllStakersFromContractSignal(): Promise<Array<{ address: string; staked: bigint }>> {
   const signal = cacheSignal();
-  return fetchStakeLeaderboard(signal).then(entries => 
+  return fetchStakeLeaderboard(signal ?? undefined).then(entries => 
     entries.map(entry => ({
       address: entry.address,
       staked: entry.stakedAmount
