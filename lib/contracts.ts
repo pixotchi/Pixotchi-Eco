@@ -511,7 +511,7 @@ export const buildClaimRewardsCall = (): { address: `0x${string}`; abi: any; fun
   } as const;
 };
 
-const getStakeInfo = async (address: string): Promise<{ staked: bigint; rewards: bigint } | null> => {
+export const getStakeInfo = async (address: string): Promise<{ staked: bigint; rewards: bigint } | null> => {
   const readClient = getReadClient();
   try {
     const result = await retryWithBackoff(async () => {
@@ -647,7 +647,7 @@ export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): 
 };
 
 // Get land balance
-const getLandBalance = async (address: string): Promise<number> => {
+export const getLandBalance = async (address: string): Promise<number> => {
   try {
     const lands = await getLandsByOwner(address);
     return lands.length;
