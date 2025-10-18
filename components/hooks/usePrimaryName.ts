@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from 'react';
 import { isAddress } from 'viem';
 
 const cache = new Map<string, string | null>();
@@ -83,6 +83,11 @@ export function usePrimaryName(address?: string | null, options: { enabled?: boo
 
   const cancelRef = useRef<(() => void) | null>(null);
 
+  // ✅ useEffectEvent: Handle cache resolution without depending on setState
+  const handleCacheResolved = useEffectEvent((value: string | null) => {
+    setState({ name: value, loading: false, error: null });
+  });
+
   useEffect(() => {
     cancelRef.current?.();
 
@@ -100,16 +105,15 @@ export function usePrimaryName(address?: string | null, options: { enabled?: boo
       };
     }
 
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    setState((prev: { name: string | null; loading: boolean; error: string | null }) => ({ ...prev, loading: true, error: null }));
     enqueue(normalised);
-    cancelRef.current = waitForResult(normalised, (value) => {
-      setState({ name: value, loading: false, error: null });
-    });
+    // ✅ Pass useEffectEvent callback - always sees latest state without triggering effect churn
+    cancelRef.current = waitForResult(normalised, handleCacheResolved);
 
     return () => {
       cancelRef.current?.();
     };
-  }, [enabled, normalised]);
+  }, [enabled, normalised, handleCacheResolved]);
 
   return state;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef, useEffectEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
 import { getRecentMessages } from '@/lib/chat-service';
@@ -93,7 +93,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Persist agent-mode messages to localStorage
   useEffect(() => {
     try {
-      // Avoid dependency on the ref object identity; serialize on messages change when in agent mode
       if (mode === 'agent') {
         localStorage.setItem('agent-chat-history', JSON.stringify(messages));
         messageCacheRef.current.agent = messages;
@@ -111,29 +110,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (mode === 'agent') setMessages(parsed);
       }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Note: Message loading is now handled directly in setMode() to prevent race conditions
-
-  const fetchHistory = useCallback(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
+  // ✅ useEffectEvent: Fetch history without dependencies triggering restart
+  const fetchHistory = useEffectEvent(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
     if (showLoading) setLoading(true);
     setError(null);
     
     try {
       if (requestedMode === 'public') {
-        // Fetch public messages using the API endpoint like the original
         const response = await fetch('/api/chat/messages?limit=50');
         if (!response.ok) {
           throw new Error('Failed to fetch messages');
         }
         const data = await response.json();
-        if (modeRef.current !== requestedMode) return; // ignore stale result after tab switch
+        if (modeRef.current !== requestedMode) return;
         const next = data.messages || [];
         setMessages(next);
         messageCacheRef.current.public = next;
       } else if (requestedMode === 'ai' && address) {
-        // Fetch AI messages using the API endpoint like the original
         const params = new URLSearchParams({
           address,
           limit: '50'
@@ -149,7 +144,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
         
         const data = await response.json();
-        if (modeRef.current !== requestedMode) return; // ignore stale result after tab switch
+        if (modeRef.current !== requestedMode) return;
         const next = data.messages || [];
         setMessages(next);
         messageCacheRef.current.ai = next;
@@ -168,9 +163,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [mode, conversationId, address]);
+  });
 
-  // Original behavior: set up polling regardless of dialog visibility
+  // ✅ Original behavior: set up polling with useEffectEvent to prevent restart
   useEffect(() => {
     if (mode === 'public') {
       fetchHistory(true, 'public');
@@ -179,7 +174,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } else if (mode === 'ai' && address) {
       fetchHistory(true, 'ai');
     } else if (mode === 'agent') {
-      // For agent mode, explicitly ensure we have empty messages if cache is empty
       const agentCache = messageCacheRef.current['agent'] || [];
       setMessages(agentCache);
     }
@@ -188,12 +182,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const sendMessage = async (messageText: string) => {
     if (!address || !messageText.trim()) return;
 
-    // Cancel any previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     
-    // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
@@ -219,14 +211,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     try {
         if (mode === 'agent') {
-          // Get recent conversation history for context
           const agentMessages = messageCacheRef.current['agent'] || [];
           const conversationHistory = agentMessages.slice(-6).map(msg => ({
             role: (msg as any).displayName === 'Agent' ? 'assistant' : 'user',
             content: msg.message
           }));
 
-          // Best-effort: prepare Base Account spend calls on the client
           let preparedSpendCalls: Array<{ to: `0x${string}`; value: string; data: `0x${string}` }> | undefined;
           try {
             const wallet = await fetch('/api/agent/wallet', { signal }).then(r => r.json()).catch(() => null);
@@ -245,7 +235,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               const SEED = PIXOTCHI_TOKEN_ADDRESS;
               const seedPerm = (perms || []).find((p: any) => `${p.permission?.token}`.toLowerCase() === SEED.toLowerCase());
               if (seedPerm) {
-                // Robustly infer mint count from current or recent user messages; clamp to 1..5 per agent policy
                 const extractCount = (txt: string): number | null => {
                   const m = txt.match(/\b(\d{1,2})\b/);
                   if (!m) return null;
@@ -265,9 +254,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 }
                 if (inferredCount == null) inferredCount = 1;
 
-                // Use the same hardcoded strains as the server (SEED units)
                 const STRAINS = PLANT_STRAINS;
-                // Default to ZEST in agent mode unless user explicitly specifies another strain
                 let chosen: typeof STRAINS[number] = STRAINS.find(s => s.id === 4) || STRAINS[0];
                 const idMatch = /strain\s*(\d{1,2})/i.exec(messageText);
                 if (idMatch) {
@@ -279,7 +266,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   const byName = STRAINS.find(s => lower.includes(String(s.name || '').toLowerCase()));
                   if (byName) chosen = byName as typeof STRAINS[number];
                 }
-                const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10); // SEED units
+                const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10);
                 const total = unit * inferredCount;
                 const requiredWei = viem.parseUnits(total.toFixed(6), 18);
                 const spendCalls = await spendMod.prepareSpendCallData(seedPerm, requiredWei).catch(() => []);
@@ -295,8 +282,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               prompt: messageText,
-              userAddress: address, // Pass user address for spend permission validation
-              conversationHistory, // Pass conversation context
+              userAddress: address,
+              conversationHistory,
               preparedSpendCalls
             }),
             signal
@@ -334,17 +321,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               if (!conversationId) {
                   setConversationId(userMessage.conversationId);
               }
-              // Replace optimistic user message and add AI response
               setMessages(prev => [...prev.filter(m => m.id !== optimisticId), userMessage, aiResponse]);
           } else {
-              // For public chat, add the returned message
               const newMessage = data.message;
               setMessages(prev => [...prev.filter(m => m.id !== optimisticId), newMessage]);
           }
         }
 
     } catch (err: any) {
-        // Don't show error if request was intentionally aborted
         if (err.name === 'AbortError') {
           console.log('Request was cancelled');
           setMessages(prev => prev.filter(m => m.id !== optimisticId));

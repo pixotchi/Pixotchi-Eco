@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useEffectEvent } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -119,75 +119,58 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   // Resolve ENS/Basename using shared resolver
   const { name: ownerName, loading: isNameLoading } = usePrimaryName(plant?.owner);
 
-  useEffect(() => {
+  // ✅ useEffectEvent: Fetch owner stats without effect dependencies
+  const fetchOwnerStats = useEffectEvent(async () => {
     if (!plant || !open) {
       setOwnerStats(null);
       return;
     }
 
-    let cancelled = false;
-
-    // Check cache first
     const cacheKey = plant.owner.toLowerCase();
     const cached = ownerStatsCache.get(cacheKey);
     const now = Date.now();
 
     if (cached && (now - cached.timestamp) < CACHE_DURATION && cached.plantId === plant.id) {
-      // Use cached data
       setOwnerStats(cached.stats);
       setLoading(false);
       return;
     }
 
-    // Fetch fresh data
     setLoading(true);
 
-    Promise.all([
-      getUserGameStats(plant.owner),
-      getStakeInfo(plant.owner)
-    ])
-      .then(([stats, stake]) => {
-        if (cancelled) return;
-        
-        const ownerData: OwnerStats = {
-          totalPlants: stats.totalPlants,
-          totalLands: stats.totalLands,
-          stakedSeed: stake?.staked || BigInt(0)
-        };
-        
-        setOwnerStats(ownerData);
-        
-        // Cache the data
-        ownerStatsCache.set(cacheKey, {
-          stats: ownerData,
-          timestamp: now,
-          plantId: plant.id
-        });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error('Error fetching owner stats:', err);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
+    try {
+      const [stats, stake] = await Promise.all([
+        getUserGameStats(plant.owner),
+        getStakeInfo(plant.owner)
+      ]);
+      
+      const ownerData: OwnerStats = {
+        totalPlants: stats.totalPlants,
+        totalLands: stats.totalLands,
+        stakedSeed: stake?.staked || BigInt(0)
+      };
+      
+      setOwnerStats(ownerData);
+      
+      ownerStatsCache.set(cacheKey, {
+        stats: ownerData,
+        timestamp: now,
+        plantId: plant.id
       });
+    } catch (err) {
+      console.error('Error fetching owner stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [plant?.id, plant?.owner, open]);
-
-  // Fetch EFP stats (followers/following)
-  useEffect(() => {
+  // ✅ useEffectEvent: Fetch EFP stats without depending on ownerName changes
+  const fetchEFPStatsData = useEffectEvent(async () => {
     if (!plant || !open) {
       setEfpStats(null);
       return;
     }
 
-    let cancelled = false;
-
-    // Check cache first
     const cacheKey = plant.owner.toLowerCase();
     const cached = efpStatsCache.get(cacheKey);
     const now = Date.now();
@@ -198,49 +181,39 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
       return;
     }
 
-    // Fetch fresh EFP data
     setEfpLoading(true);
 
-    // Prefer ENS name if available, otherwise use address
     const addressOrENS = ownerName || plant.owner;
 
-    fetchEFPStats(addressOrENS)
-      .then((stats) => {
-        if (cancelled) return;
-        
-        if (stats) {
-          setEfpStats(stats);
-          // Cache the data
-          efpStatsCache.set(cacheKey, {
-            stats,
-            timestamp: now,
-          });
-        } else {
-          setEfpStats(null);
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error('Error fetching EFP stats:', err);
+    try {
+      const stats = await fetchEFPStats(addressOrENS);
+      
+      if (stats) {
+        setEfpStats(stats);
+        efpStatsCache.set(cacheKey, {
+          stats,
+          timestamp: now,
+        });
+      } else {
         setEfpStats(null);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setEfpLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [plant?.owner, ownerName, open]);
-
-  // Reset view when dialog closes
-  useEffect(() => {
-    if (!open) {
-      // setViewingENSDetails(false); // Removed
-      // setEnsData(null); // Removed
+      }
+    } catch (err) {
+      console.error('Error fetching EFP stats:', err);
+      setEfpStats(null);
+    } finally {
+      setEfpLoading(false);
     }
-  }, [open]);
+  });
+
+  // Fetch owner stats when plant or dialog opens
+  useEffect(() => {
+    fetchOwnerStats();
+  }, [plant?.id, plant?.owner, open, fetchOwnerStats]);
+
+  // Fetch EFP stats when plant or dialog opens
+  useEffect(() => {
+    fetchEFPStatsData();
+  }, [plant?.owner, open, fetchEFPStatsData]);
 
   if (!plant) return null;
 
@@ -324,7 +297,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           ) : null}
         </div>
 
-        {/* Conditional Content: Main Profile Only */}
         {/* Main Profile View */}
         <>
           {/* Owner Section */}
