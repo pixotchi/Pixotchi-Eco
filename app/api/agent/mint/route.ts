@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { parseUnits, encodeFunctionData, maxUint256, createPublicClient, http } from 'viem';
 import { base as baseChain } from 'viem/chains';
-import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/constants';
 import { getRpcConfig } from '@/lib/env-config';
 
 // Create a single CDP client instance per runtime

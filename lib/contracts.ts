@@ -20,8 +20,8 @@ import erc20Abi from '@/public/abi/erc20.json';
 import villageAbi from '@/public/abi/villageabi.json';
 import townAbi from '@/public/abi/townabi.json';
 
-const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
-const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS
+export const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
+export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS
   ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS)
   : (undefined as unknown as `0x${string}`);
 
@@ -32,7 +32,7 @@ let cachedWriteClient: any = null;
 // Simple in-memory RPC diagnostics: counts & last error per endpoint
 type RpcDiag = { url: string; ok: number; fail: number; lastError?: string };
 const rpcDiagnostics: Record<string, RpcDiag> = {};
-const getRpcDiagnostics = (): RpcDiag[] => Object.values(rpcDiagnostics);
+export const getRpcDiagnostics = (): RpcDiag[] => Object.values(rpcDiagnostics);
 
 // Get all RPC URLs from environment variables using centralized config
 const getRpcEndpoints = (): string[] => {
@@ -70,7 +70,7 @@ const createResilientTransport = (endpoints: string[]) => {
 };
 
 // Create optimized read client for data fetching
-const getReadClient = () => {
+export const getReadClient = () => {
   if (!cachedReadClient) {
     const endpoints = getRpcEndpoints();
     
