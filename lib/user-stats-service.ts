@@ -558,7 +558,7 @@ async function fetchUserGameStats(address: string, abortSignal?: AbortSignal): P
 
 const cachedUserStats = cache(async (address: string) => {
   const signal = cacheSignal();
-  return fetchUserGameStats(address, signal);
+  return fetchUserGameStats(address, signal ?? undefined);
 });
 
 export async function getUserGameStats(address: string): Promise<UserGameStats> {
