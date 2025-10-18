@@ -1,13 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Silence warnings
-  // https://github.com/WalletConnect/walletconnect-monorepo/issues/1908
-  webpack: (config) => {
-    config.externals.push("pino-pretty", "lokijs", "encoding");
-    return config;
-  },
-  // External packages for server components
-  serverExternalPackages: []
+  // Treat optional Node-only deps as externals for server bundles (works with Turbopack & webpack)
+  serverExternalPackages: ["pino-pretty", "lokijs", "encoding"],
 };
 
 export default nextConfig;
