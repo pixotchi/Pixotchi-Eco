@@ -33,7 +33,7 @@ export default function MintTransaction({
 }: MintTransactionProps) {
   
   const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS,
+    address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'mint',
     args: [BigInt(strain)], 

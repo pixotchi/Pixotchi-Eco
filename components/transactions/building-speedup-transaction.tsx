@@ -31,7 +31,7 @@ export default function BuildingSpeedUpTransaction({
   const functionName = buildingType === 'village' ? 'villageSpeedUpWithSeed' : 'townSpeedUpWithSeed';
   
   const calls = [{
-    address: LAND_CONTRACT_ADDRESS,
+    address: LAND_CONTRACT_ADDRESS as `0x${string}`,
     abi: landAbi,
     functionName,
     args: [landId, building.id],

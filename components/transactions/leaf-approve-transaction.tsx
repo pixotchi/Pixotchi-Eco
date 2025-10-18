@@ -37,10 +37,10 @@ export default function LeafApproveTransaction({
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
   
   const calls = [{
-    address: LEAF_CONTRACT_ADDRESS,
+    address: LEAF_CONTRACT_ADDRESS as `0x${string}`,
     abi: LEAF_TOKEN_ABI,
     functionName: 'approve',
-    args: [LAND_CONTRACT_ADDRESS, maxApproval], 
+    args: [LAND_CONTRACT_ADDRESS as `0x${string}`, maxApproval], 
   }];
 
   return (

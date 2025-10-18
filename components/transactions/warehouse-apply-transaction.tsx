@@ -61,7 +61,7 @@ export default function WarehouseApplyTransaction({
 
   const calls = [
     {
-      address: LAND_CONTRACT_ADDRESS,
+      address: LAND_CONTRACT_ADDRESS as `0x${string}`,
       abi: landAbi,
       functionName,
       args,

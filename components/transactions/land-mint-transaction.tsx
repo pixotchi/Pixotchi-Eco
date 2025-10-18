@@ -22,7 +22,7 @@ export default function LandMintTransaction({
 }: LandMintTransactionProps) {
   
   const calls = [{
-    address: LAND_CONTRACT_ADDRESS,
+    address: LAND_CONTRACT_ADDRESS as `0x${string}`,
     abi: LAND_ABI,
     functionName: 'mint',
     args: [], 

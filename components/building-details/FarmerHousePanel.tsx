@@ -120,7 +120,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   )}
                   {statusOf(s) === 'Ready to commit' && (
                     <SponsoredTransaction
-                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
+                      calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                       buttonText="Return now"
                       buttonClassName="h-8 px-3 text-xs"
                       hideStatus
@@ -131,7 +131,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Loot bag ready</span>
                     <SponsoredTransaction
-                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
+                      calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                       buttonText="Open now"
                       buttonClassName="h-8 px-3 text-xs"
                       hideStatus
@@ -166,7 +166,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     />
                   </div>
                   <SponsoredTransaction
-                    calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
+                    calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
                     buttonText="Start"
                     buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
                     hideStatus

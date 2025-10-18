@@ -49,7 +49,7 @@ export default function ClaimRewardsTransaction({
   const { isSmartWallet } = useSmartWallet();
 
   const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS,
+    address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'redeem',
     args: [BigInt(plantId)],

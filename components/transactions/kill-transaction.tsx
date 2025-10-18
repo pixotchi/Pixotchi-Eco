@@ -42,7 +42,7 @@ export default function KillTransaction({
 }: KillTransactionProps) {
   const calls = [
     {
-      address: PIXOTCHI_NFT_ADDRESS,
+      address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
       abi: PIXOTCHI_NFT_ABI,
       functionName: "kill",
       args: [BigInt(deadId), BigInt(tokenId)],
