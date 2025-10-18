@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,9 @@ type StakeLeaderboardEntry = {
 
 const ITEMS_PER_PAGE = 12;
 
+// Client-side cache duration for stake data (24 hours since cron runs once at midnight)
+const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
 export default function LeaderboardTab() {
   const { address } = useAccount();
   const { isSponsored } = usePaymaster();
@@ -66,6 +69,12 @@ export default function LeaderboardTab() {
   const [boardType, setBoardType] = useState<'plants' | 'lands' | 'stake'>('plants');
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
+
+  // Client-side cache for stake data to avoid re-fetches on tab toggles
+  const stakeDataCacheRef = useRef<{
+    data: StakeLeaderboardEntry[] | null;
+    timestamp: number;
+  }>({ data: null, timestamp: 0 });
 
   const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
     if (!hash || !publicClient) return;
@@ -164,8 +173,23 @@ export default function LeaderboardTab() {
 
   // Fetch stake leaderboard separately when stake tab is selected
   const fetchStakeLeaderboard = useCallback(async () => {
+    const now = Date.now();
+    const cacheAge = now - stakeDataCacheRef.current.timestamp;
+
+    // ✅ Return cached data if still valid (within 24-hour window since cron runs once at midnight)
+    if (
+      stakeDataCacheRef.current.data &&
+      cacheAge < STAKE_CACHE_DURATION
+    ) {
+      console.log(`📊 [Stake] Using cached data (age: ${Math.round(cacheAge / 1000)}s)`);
+      setStakeRows(stakeDataCacheRef.current.data);
+      return;
+    }
+
+    // Fetch fresh data if cache expired or first load
     setStakeLoading(true);
     try {
+      console.log(`📊 [Stake] Fetching fresh data from API...`);
       const stakeResponse = await fetch('/api/leaderboard/stake');
       if (stakeResponse.ok) {
         const stakeData = await stakeResponse.json();
@@ -175,10 +199,18 @@ export default function LeaderboardTab() {
           stakedAmount: BigInt(entry.stakedAmount),
           ensName: entry.ensName || undefined
         }));
+
+        // ✅ Update cache with fresh data
+        stakeDataCacheRef.current = {
+          data: sortedStakes,
+          timestamp: now
+        };
+
         setStakeRows(sortedStakes);
+        console.log(`📊 [Stake] Cached fresh data (${sortedStakes.length} stakers)`);
       }
     } catch (error) {
-      console.error('Error fetching stake leaderboard:', error);
+      console.error('❌ [Stake] Error fetching stake leaderboard:', error);
     } finally {
       setStakeLoading(false);
     }

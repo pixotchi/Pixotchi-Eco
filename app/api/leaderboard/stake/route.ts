@@ -3,13 +3,14 @@ import { getStakeLeaderboard } from '@/lib/stake-leaderboard-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const revalidate = 900; // Revalidate every 15 minutes (shared cache)
+export const revalidate = 86400; // 24 hours cache - matches midnight cron schedule
 
 /**
  * GET /api/leaderboard/stake
  * 
- * Returns the stake leaderboard with fresh data from the contract.
- * Shows wallet addresses ranked by their staked SEED amount.
+ * Returns the stake leaderboard with cached data.
+ * Cache is warmed daily at midnight by cron job.
+ * Revalidates every 24 hours.
  */
 export async function GET() {
   try {
@@ -26,11 +27,19 @@ export async function GET() {
     
     console.log(`📊 API: Returning ${serialized.length} stakers`);
     
-    return NextResponse.json({
-      success: true,
-      leaderboard: serialized,
-      totalStakers: serialized.length
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        leaderboard: serialized,
+        totalStakers: serialized.length
+      },
+      {
+        // ✅ Add cache headers for browser/CDN (24 hours)
+        headers: {
+          'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+        }
+      }
+    );
   } catch (error) {
     console.error('❌ API: Error fetching stake leaderboard:', error);
     
