@@ -14,8 +14,8 @@ function getOgImageUrl(data: MintShareData, platform: 'twitter' | 'farcaster' = 
   og.searchParams.set('platform', platform);
   og.searchParams.set('address', data.address);
   if (data.basename) og.searchParams.set('basename', data.basename);
-  og.searchParams.set('strain', data.strain);
-  og.searchParams.set('name', data.name);
+  if (data.strain) og.searchParams.set('strain', data.strain);
+  if (data.name) og.searchParams.set('name', data.name);
   og.searchParams.set('mintedAt', data.mintedAt);
   if (data.tx) og.searchParams.set('tx', data.tx);
   return og.toString();
