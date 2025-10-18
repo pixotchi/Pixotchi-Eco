@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount } from "wagmi";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
-import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_APPROVE_ABI } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_APPROVE_ABI, getTokenBalance, getLeafBalance } from '@/lib/contracts';
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import { toast } from "react-hot-toast";
 
