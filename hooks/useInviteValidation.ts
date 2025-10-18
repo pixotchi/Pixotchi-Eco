@@ -75,7 +75,7 @@ export function useInviteValidation() {
     setUserValidated(true);
     const keys = getLocalStorageKeys();
     localStorage.setItem(keys.INVITE_VALIDATED, 'true');
-    localStorage.setItem(keys.INVITE_CODE, code);
+    localStorage.setItem(keys.VALIDATED_CODE, code);
   });
 
   return { userValidated, checkingValidation, handleInviteValidated, setUserValidated };
