@@ -7,7 +7,7 @@
  */
 
 import { cache, cacheSignal } from 'react';
-import { getReadClient, STAKE_CONTRACT_ADDRESS } from './contracts';
+import { getReadClient, STAKE_CONTRACT } from './contracts';
 import stakeAbi from '@/public/abi/stakeabi.json';
 import { redis } from './redis';
 import { resolvePrimaryNames } from './ens-resolver';
@@ -58,7 +58,7 @@ async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
       const mid = Math.floor((low + high) / 2);
       try {
         const address = await readClient.readContract({
-          address: STAKE_CONTRACT_ADDRESS,
+          address: STAKE_CONTRACT.address,
           abi: stakeAbi as any,
           functionName: 'stakersArray',
           args: [BigInt(mid)],
@@ -88,7 +88,7 @@ async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
     for (let i = 0; i < totalStakers; i += BATCH_SIZE) {
       const batchSize = Math.min(BATCH_SIZE, totalStakers - i);
       const contracts = Array.from({ length: batchSize }, (_, idx) => ({
-        address: STAKE_CONTRACT_ADDRESS,
+        address: STAKE_CONTRACT.address,
         abi: stakeAbi as any,
         functionName: 'stakersArray' as const,
         args: [BigInt(i + idx)],
@@ -113,7 +113,7 @@ async function fetchStakeLeaderboard(signal?: AbortSignal): Promise<StakeLeaderb
     for (let i = 0; i < allAddresses.length; i += BATCH_SIZE) {
       const batch = allAddresses.slice(i, i + BATCH_SIZE);
       const contracts = batch.map(addr => ({
-        address: STAKE_CONTRACT_ADDRESS,
+        address: STAKE_CONTRACT.address,
         abi: stakeAbi as any,
         functionName: 'stakers' as const,
         args: [addr],

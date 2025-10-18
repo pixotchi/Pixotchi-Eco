@@ -61,3 +61,8 @@ export const ITEM_ICONS: { [key: string]: string } = {
   pollinator: "/icons/BEE.png",
   fence: "/icons/Fence.png",
 }; 
+
+export const PIXOTCHI_NFT_ADDRESS = "0xeb4e16c804AE9275a655AbBc20cD0658A91F9235" as const;
+export const PIXOTCHI_TOKEN_ADDRESS = "0x546D239032b24eCEEE0cb05c92FC39090846adc7" as const;
+export const UNISWAP_ROUTER_ADDRESS = "0x327Df1E6de05895d2ab08513aaDD9313Fe505d86" as const;
+export const WETH_ADDRESS = "0x4200000000000000000000000000000000000006" as const; 
