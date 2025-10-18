@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAccount } from 'wagmi';
 import { usePublicClient } from 'wagmi';
-import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS } from '@/lib/constants';
+import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { leafAbi } from '@/public/abi/leaf-abi'; 
 
 const erc20Abi = [

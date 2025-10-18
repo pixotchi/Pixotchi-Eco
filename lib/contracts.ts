@@ -6,58 +6,20 @@ import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import { CLIENT_ENV, getRpcConfig } from './env-config';
-import {
-  LEAF_CONTRACT_ADDRESS,
-  LAND_CONTRACT_ADDRESS,
-  STAKE_CONTRACT_ADDRESS,
-  BATCH_ROUTER_ADDRESS,
-  VILLAGE_CONTRACT_ADDRESS,
-  TOWN_CONTRACT_ADDRESS,
-  PIXOTCHI_NFT_ADDRESS,
-  PIXOTCHI_TOKEN_ADDRESS,
-  UNISWAP_ROUTER_ADDRESS,
-  WETH_ADDRESS,
-} from './constants';
-
-export {
-  LEAF_CONTRACT_ADDRESS,
-  LAND_CONTRACT_ADDRESS,
-  STAKE_CONTRACT_ADDRESS,
-  BATCH_ROUTER_ADDRESS,
-  VILLAGE_CONTRACT_ADDRESS,
-  TOWN_CONTRACT_ADDRESS,
-  PIXOTCHI_NFT_ADDRESS,
-  PIXOTCHI_TOKEN_ADDRESS,
-  UNISWAP_ROUTER_ADDRESS,
-  WETH_ADDRESS,
-} from './constants';
+import { getReadClient } from './contracts';
+import { STAKE_CONTRACT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_TOKEN_ADDRESS, VILLAGE_CONTRACT_ADDRESS, TOWN_CONTRACT_ADDRESS } from './constants';
 import erc20Abi from '@/public/abi/erc20.json';
 import villageAbi from '@/public/abi/villageabi.json';
 import townAbi from '@/public/abi/townabi.json';
 
-const LAND_CONTRACT = getAddress(LAND_CONTRACT_ADDRESS);
-const LEAF_CONTRACT = getAddress(LEAF_CONTRACT_ADDRESS);
-const STAKE_CONTRACT = getAddress(STAKE_CONTRACT_ADDRESS);
-const PIXOTCHI_NFT_CONTRACT = getAddress(PIXOTCHI_NFT_ADDRESS);
-const PIXOTCHI_TOKEN_CONTRACT = getAddress(PIXOTCHI_TOKEN_ADDRESS);
-const VILLAGE_CONTRACT = getAddress(VILLAGE_CONTRACT_ADDRESS);
-const TOWN_CONTRACT = getAddress(TOWN_CONTRACT_ADDRESS);
-const BATCH_ROUTER_CONTRACT = BATCH_ROUTER_ADDRESS ? getAddress(BATCH_ROUTER_ADDRESS) : undefined;
-const UNISWAP_ROUTER_CONTRACT = getAddress(UNISWAP_ROUTER_ADDRESS);
-const WETH_CONTRACT = getAddress(WETH_ADDRESS);
-
-export {
-  LAND_CONTRACT,
-  LEAF_CONTRACT,
-  STAKE_CONTRACT,
-  PIXOTCHI_NFT_CONTRACT,
-  PIXOTCHI_TOKEN_CONTRACT,
-  VILLAGE_CONTRACT,
-  TOWN_CONTRACT,
-  BATCH_ROUTER_CONTRACT,
-  UNISWAP_ROUTER_CONTRACT,
-  WETH_CONTRACT,
-};
+export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
+export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);
+export const STAKE_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.STAKE_CONTRACT_ADDRESS);
+export const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
+export const PIXOTCHI_TOKEN_ADDRESS = getAddress('0x546D239032b24eCEEE0cb05c92FC39090846adc7');
+export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;
+export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
+export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
 
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
@@ -487,10 +449,10 @@ export const getStakeAllowance = async (ownerAddress: string): Promise<bigint> =
   const readClient = getReadClient();
   return retryWithBackoff(async () => {
     const allowance = await readClient.readContract({
-      address: STAKE_CONTRACT,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'allowance',
-      args: [ownerAddress as `0x${string}`, STAKE_CONTRACT],
+      args: [ownerAddress as `0x${string}`, STAKE_CONTRACT_ADDRESS],
     }) as bigint;
     return allowance;
   });
@@ -509,17 +471,17 @@ export const isStakeApproved = async (ownerAddress: string): Promise<boolean> =>
 export const buildApproveStakeCall = (): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
   return {
-    address: STAKE_CONTRACT,
+    address: PIXOTCHI_TOKEN_ADDRESS,
     abi: PIXOTCHI_TOKEN_ABI,
     functionName: 'approve',
-    args: [STAKE_CONTRACT, maxApproval],
+    args: [STAKE_CONTRACT_ADDRESS, maxApproval],
   } as const;
 };
 
 export const buildStakeCall = (amount: string): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
   const amountWei = parseUnits(amount || '0', 18);
   return {
-    address: STAKE_CONTRACT,
+    address: STAKE_CONTRACT_ADDRESS,
     abi: stakingAbi,
     functionName: 'stake',
     args: [amountWei],
@@ -529,7 +491,7 @@ export const buildStakeCall = (amount: string): { address: `0x${string}`; abi: a
 export const buildUnstakeCall = (amount: string): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
   const amountWei = parseUnits(amount || '0', 18);
   return {
-    address: STAKE_CONTRACT,
+    address: STAKE_CONTRACT_ADDRESS,
     abi: stakingAbi,
     functionName: 'withdraw',
     args: [amountWei],
@@ -538,7 +500,7 @@ export const buildUnstakeCall = (amount: string): { address: `0x${string}`; abi:
 
 export const buildClaimRewardsCall = (): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
   return {
-    address: STAKE_CONTRACT,
+    address: STAKE_CONTRACT_ADDRESS,
     abi: stakingAbi,
     functionName: 'claimRewards',
     args: [],
@@ -550,7 +512,7 @@ export const getStakeInfo = async (address: string): Promise<{ staked: bigint; r
   try {
     const result = await retryWithBackoff(async () => {
       const info = await readClient.readContract({
-        address: STAKE_CONTRACT,
+        address: STAKE_CONTRACT_ADDRESS,
         abi: stakingAbi,
         functionName: 'getStakeInfo',
         args: [address as `0x${string}`],
@@ -584,16 +546,16 @@ export const getStakeComposite = async (
       const results = await readClient.multicall({
         contracts: [
           {
-            address: STAKE_CONTRACT,
+            address: STAKE_CONTRACT_ADDRESS,
             abi: stakingAbi,
             functionName: 'getStakeInfo',
             args: [ownerAddress as `0x${string}`],
           },
           {
-            address: PIXOTCHI_TOKEN_CONTRACT,
+            address: PIXOTCHI_TOKEN_ADDRESS,
             abi: PIXOTCHI_TOKEN_ABI,
             functionName: 'allowance',
-            args: [ownerAddress as `0x${string}`, STAKE_CONTRACT],
+            args: [ownerAddress as `0x${string}`, STAKE_CONTRACT_ADDRESS],
           },
         ],
         allowFailure: true,
@@ -625,7 +587,7 @@ export const getPlantsByOwner = async (address: string, _options: { signal?: Abo
   
   return retryWithBackoff(async () => {
     const plants = await readClient.readContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getPlantsByOwnerExtended',
       args: [address as `0x${string}`],
@@ -656,7 +618,7 @@ export const getPlantsByOwner = async (address: string, _options: { signal?: Abo
 export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): Promise<Plant[]> => {
   const readClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
   const plants = await readClient.readContract({
-    address: PIXOTCHI_NFT_CONTRACT,
+    address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'getPlantsByOwnerExtended',
     args: [address as `0x${string}`],
@@ -697,12 +659,12 @@ export const getLandSupply = async (): Promise<{ totalSupply: number; maxSupply:
   return retryWithBackoff(async () => {
     const [totalSupply, maxSupply] = await Promise.all([
       readClient.readContract({
-        address: LAND_CONTRACT,
+        address: LAND_CONTRACT_ADDRESS,
         abi: landAbi,
         functionName: 'totalSupply',
       }),
       readClient.readContract({
-        address: LAND_CONTRACT,
+        address: LAND_CONTRACT_ADDRESS,
         abi: landAbi,
         functionName: 'maxSupply',
       })
@@ -720,7 +682,7 @@ export const getLandMintPrice = async (): Promise<bigint> => {
 
   return retryWithBackoff(async () => {
     const price = await readClient.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'landGetMintPrice',
     });
@@ -734,17 +696,17 @@ export const getLandMintStatus = async (address: `0x${string}`): Promise<{ canMi
   return retryWithBackoff(async () => {
     const [isPaused, isWhitelistOnly, isWhitelisted] = await Promise.all([
       readClient.readContract({
-        address: LAND_CONTRACT,
+        address: LAND_CONTRACT_ADDRESS,
         abi: landAbi,
         functionName: 'accessControlGetPaused',
       }),
       readClient.readContract({
-        address: LAND_CONTRACT,
+        address: LAND_CONTRACT_ADDRESS,
         abi: landAbi,
         functionName: 'accessControlGetWhitelistOnly',
       }),
       readClient.readContract({
-        address: LAND_CONTRACT,
+        address: LAND_CONTRACT_ADDRESS,
         abi: landAbi,
         functionName: 'accessControlGetWhitelistAddress',
         args: [address],
@@ -768,7 +730,7 @@ export const getLandsByOwner = async (address: string, _options: { signal?: Abor
     
     // Use the existing Land contract functions from the ABI
     const lands = await client.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'landGetByOwner',
       args: [address as `0x${string}`],
@@ -786,7 +748,7 @@ export const getLandById = async (landId: bigint): Promise<Land | null> => {
   try {
     const client = getReadClient();
     const land = await client.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'landGetById',
       args: [landId],
@@ -819,7 +781,7 @@ export const transferPlants = async (
   for (const id of plantIds) {
     try {
       const hash = await walletClient.writeContract({
-        address: PIXOTCHI_NFT_CONTRACT,
+        address: PIXOTCHI_NFT_ADDRESS,
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, BigInt(id)],
@@ -856,7 +818,7 @@ export const transferLands = async (
   for (const id of landTokenIds) {
     try {
       const hash = await walletClient.writeContract({
-        address: LAND_CONTRACT,
+        address: LAND_CONTRACT_ADDRESS,
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, id],
@@ -905,7 +867,7 @@ export const getTokenBalance = async (address: string, _options: { signal?: Abor
   
   return retryWithBackoff(async () => {
     const balance = await readClient.readContract({
-      address: PIXOTCHI_TOKEN_CONTRACT,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'balanceOf',
       args: [address as `0x${string}`],
@@ -928,10 +890,10 @@ export const checkTokenApproval = async (address: string): Promise<boolean> => {
   
   return retryWithBackoff(async () => {
     const allowance = await readClient.readContract({
-      address: PIXOTCHI_TOKEN_CONTRACT,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'allowance',
-      args: [address as `0x${string}`, PIXOTCHI_NFT_CONTRACT],
+      args: [address as `0x${string}`, PIXOTCHI_NFT_ADDRESS],
     }) as bigint;
 
     return allowance > BigInt(0);
@@ -943,10 +905,10 @@ export const checkLandTokenApproval = async (address: string): Promise<boolean> 
   
   return retryWithBackoff(async () => {
     const allowance = await readClient.readContract({
-      address: PIXOTCHI_TOKEN_CONTRACT,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'allowance',
-      args: [address as `0x${string}`, LAND_CONTRACT],
+      args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS],
     }) as bigint;
 
     return allowance > BigInt(0);
@@ -959,10 +921,10 @@ export const checkLeafTokenApproval = async (address: string): Promise<boolean> 
   
   return retryWithBackoff(async () => {
     const allowance = await readClient.readContract({
-      address: LEAF_CONTRACT,
+      address: LEAF_CONTRACT_ADDRESS,
       abi: leafAbi,
       functionName: 'allowance',
-      args: [address as `0x${string}`, LAND_CONTRACT],
+      args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS],
     }) as bigint;
 
     return allowance > BigInt(0);
@@ -975,7 +937,7 @@ export const getStrainInfo = async (): Promise<Strain[]> => {
   
   return retryWithBackoff(async () => {
     const strains = await readClient.readContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getAllStrainInfo',
       args: [],
@@ -1001,7 +963,7 @@ export const getShopItems = async (): Promise<ShopItem[]> => {
   
   return retryWithBackoff(async () => {
     const items = await readClient.readContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'shopGetAllItems',
       args: [],
@@ -1024,10 +986,10 @@ export const approveTokenSpending = async (walletClient: WalletClient): Promise<
     const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
     
     const hash = await walletClient.writeContract({
-      address: PIXOTCHI_TOKEN_CONTRACT,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'approve',
-      args: [PIXOTCHI_NFT_CONTRACT, maxApproval],
+      args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
       account: walletClient.account!,
       chain: base,
     });
@@ -1044,7 +1006,7 @@ export const mintPlant = async (walletClient: WalletClient, strain: number): Pro
   
   return retryWithBackoff(async () => {
     const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'mint',
       args: [BigInt(strain)],
@@ -1063,7 +1025,7 @@ export const claimPlantRewards = async (walletClient: WalletClient, plantId: num
   if (!walletClient.account) throw new Error('No account connected');
   return retryWithBackoff(async () => {
     const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'redeem',
       args: [BigInt(plantId)],
@@ -1086,7 +1048,7 @@ export const buyShopItem = async (
   
   return retryWithBackoff(async () => {
     const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'shopBuyItem',
       args: [BigInt(plantId), BigInt(itemId)],
@@ -1107,7 +1069,7 @@ export const getAllShopItems = async (): Promise<ShopItem[]> => {
   try {
     const items = await retryWithBackoff(() =>
       readClient.readContract({
-        address: PIXOTCHI_NFT_CONTRACT,
+        address: PIXOTCHI_NFT_ADDRESS,
         abi: PIXOTCHI_NFT_ABI,
         functionName: 'shopGetAllItems',
       })
@@ -1132,7 +1094,7 @@ export const getAllGardenItems = async (): Promise<GardenItem[]> => {
   try {
     const items = await retryWithBackoff(() =>
       readClient.readContract({
-        address: PIXOTCHI_NFT_CONTRACT,
+        address: PIXOTCHI_NFT_ADDRESS,
         abi: PIXOTCHI_NFT_ABI,
         functionName: 'getAllGardenItem',
       })
@@ -1161,7 +1123,7 @@ export const buyGardenItem = async (
   
   return retryWithBackoff(async () => {
     const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'buyAccessory',
       args: [BigInt(plantId), BigInt(itemId)],
@@ -1191,10 +1153,10 @@ export const getSwapQuote = async (ethAmount: string): Promise<{ quote: string; 
     }
 
     const amountsOut = await readClient.readContract({
-      address: UNISWAP_ROUTER_CONTRACT,
+      address: UNISWAP_ROUTER_ADDRESS,
       abi: UniswapAbi,
       functionName: 'getAmountsOut',
-      args: [amountIn, [WETH_CONTRACT, PIXOTCHI_TOKEN_CONTRACT]],
+      args: [amountIn, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
     }) as bigint[];
     
     if (!amountsOut || amountsOut.length < 2 || amountsOut[1] <= BigInt(0)) {
@@ -1231,22 +1193,22 @@ export const executeSwap = async (walletClient: WalletClient, ethAmount: string)
     const amountIn = parseUnits(ethAmount, 18);
 
     const amountsOut = await readClient.readContract({
-      address: UNISWAP_ROUTER_CONTRACT,
+      address: UNISWAP_ROUTER_ADDRESS,
       abi: UniswapAbi,
       functionName: 'getAmountsOut',
-      args: [amountIn, [WETH_CONTRACT, PIXOTCHI_TOKEN_CONTRACT]],
+      args: [amountIn, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
     }) as bigint[];
 
     const amountOutMin = amountsOut[1] * BigInt(95) / BigInt(100); // 5% slippage
     const deadline = Math.floor(Date.now() / 1000) + 60 * 5; // 5 minutes from now
 
     const hash = await walletClient.writeContract({
-      address: UNISWAP_ROUTER_CONTRACT,
+      address: UNISWAP_ROUTER_ADDRESS,
       abi: UniswapAbi,
       functionName: 'swapExactETHForTokens',
       args: [
         amountOutMin,
-        [WETH_CONTRACT, PIXOTCHI_TOKEN_CONTRACT],
+        [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS],
         walletClient.account.address,
         BigInt(deadline)
       ],
@@ -1266,7 +1228,7 @@ export const getLeafBalance = async (address: string, _options: { signal?: Abort
   
   return retryWithBackoff(async () => {
     const balance = await readClient.readContract({
-      address: LEAF_CONTRACT,
+      address: LEAF_CONTRACT_ADDRESS,
       abi: leafAbi,
       functionName: 'balanceOf',
       args: [address as `0x${string}`],
@@ -1283,7 +1245,7 @@ export const getVillageBuildingsByLandId = async (landId: bigint, _options: { si
   
   return retryWithBackoff(async () => {
     const buildings = await readClient.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'villageGetVillageBuildingsByLandId',
       args: [landId],
@@ -1299,7 +1261,7 @@ export const getTownBuildingsByLandId = async (landId: bigint, _options: { signa
   
   return retryWithBackoff(async () => {
     const buildings = await readClient.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'townGetBuildingsByLandId',
       args: [landId],
@@ -1323,7 +1285,7 @@ export const getQuestSlotsByLandId = async (landId: bigint): Promise<QuestSlot[]
   const readClient = getReadClient();
   return retryWithBackoff(async () => {
     const slots = await readClient.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'questGetByLandId',
       args: [landId],
@@ -1344,7 +1306,7 @@ export const upgradeVillageWithLeaf = async (walletClient: WalletClient, landId:
   if (!walletClient.account) throw new Error('No account connected');
   
   const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT,
+    address: LAND_CONTRACT_ADDRESS,
     abi: landAbi,
     functionName: 'villageUpgradeWithLeaf',
     args: [landId, buildingId],
@@ -1359,7 +1321,7 @@ export const speedUpVillageWithSeed = async (walletClient: WalletClient, landId:
   if (!walletClient.account) throw new Error('No account connected');
   
   const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT,
+    address: LAND_CONTRACT_ADDRESS,
     abi: landAbi,
     functionName: 'villageSpeedUpWithSeed',
     args: [landId, buildingId],
@@ -1375,7 +1337,7 @@ export const upgradeTownWithLeaf = async (walletClient: WalletClient, landId: bi
   if (!walletClient.account) throw new Error('No account connected');
   
   const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT,
+    address: LAND_CONTRACT_ADDRESS,
     abi: landAbi,
     functionName: 'townUpgradeWithLeaf',
     args: [landId, buildingId],
@@ -1390,7 +1352,7 @@ export const speedUpTownWithSeed = async (walletClient: WalletClient, landId: bi
   if (!walletClient.account) throw new Error('No account connected');
   
   const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT,
+    address: LAND_CONTRACT_ADDRESS,
     abi: landAbi,
     functionName: 'townSpeedUpWithSeed',
     args: [landId, buildingId],
@@ -1406,7 +1368,7 @@ export const claimVillageProduction = async (walletClient: WalletClient, landId:
   if (!walletClient.account) throw new Error('No account connected');
   
   const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT,
+    address: LAND_CONTRACT_ADDRESS,
     abi: landAbi,
     functionName: 'villageClaimProduction',
     args: [landId, buildingId],
@@ -1423,7 +1385,7 @@ export const getAliveTokenIds = async (): Promise<number[]> => {
   
   return retryWithBackoff(async () => {
     const tokenIds = await readClient.readContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'airdropGetAliveAndDeadTokenIds',
     }) as bigint[];
@@ -1437,7 +1399,7 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
   
   return retryWithBackoff(async () => {
     const plants = await readClient.readContract({
-      address: PIXOTCHI_NFT_CONTRACT,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getPlantsInfoExtended',
       args: [tokenIds.map(id => BigInt(id))],
@@ -1471,13 +1433,13 @@ export const getLandLeaderboard = async (): Promise<LandLeaderboardEntry[]> => {
   return retryWithBackoff(async () => {
     // Determine total supply to cover full range
     const totalSupply = await readClient.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'totalSupply',
     }) as bigint;
 
     const leaderboard = await readClient.readContract({
-      address: LAND_CONTRACT,
+      address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'getLeaderboard',
       args: [BigInt(0), totalSupply],
@@ -1500,7 +1462,7 @@ export const routerBatchTransfer = async (
   landIds: bigint[],
 ): Promise<{ hash: `0x${string}`; success: boolean }> => {
   if (!walletClient?.account) throw new Error('No account connected');
-  if (!BATCH_ROUTER_CONTRACT) throw new Error('Batch router not configured');
+  if (!BATCH_ROUTER_ADDRESS) throw new Error('Batch router not configured');
   const to = getAddress(toAddress);
 
   // Build arguments
@@ -1510,13 +1472,13 @@ export const routerBatchTransfer = async (
   let hash: `0x${string}`;
   if (hasPlants && hasLands) {
     // Single tx for both collections
-    const tokens = [PIXOTCHI_NFT_CONTRACT, LAND_CONTRACT] as const;
+    const tokens = [PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS] as const;
     const tokenIdsPerToken = [
       plantIds.map((id) => BigInt(id)),
       landIds
     ];
     hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_CONTRACT,
+      address: BATCH_ROUTER_ADDRESS,
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721Multi',
       args: [tokens as unknown as `0x${string}`[], to, tokenIdsPerToken],
@@ -1525,19 +1487,19 @@ export const routerBatchTransfer = async (
     });
   } else if (hasPlants) {
     hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_CONTRACT,
+      address: BATCH_ROUTER_ADDRESS,
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721',
-      args: [PIXOTCHI_NFT_CONTRACT, to, plantIds.map((id) => BigInt(id))],
+      args: [PIXOTCHI_NFT_ADDRESS, to, plantIds.map((id) => BigInt(id))],
       account: walletClient.account,
       chain: base,
     });
   } else if (hasLands) {
     hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_CONTRACT,
+      address: BATCH_ROUTER_ADDRESS,
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721',
-      args: [LAND_CONTRACT, to, landIds],
+      args: [LAND_CONTRACT_ADDRESS, to, landIds],
       account: walletClient.account,
       chain: base,
     });

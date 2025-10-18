@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { useAccount, useBlockNumber } from 'wagmi';
-import { getQuestSlotsByLandId } from '@/lib/contracts';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/constants';
+import { getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { ToggleGroup } from '@/components/ui/toggle-group';

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
-import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/constants';
+import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 
 const PIXOTCHI_TOKEN_ABI = [
   {

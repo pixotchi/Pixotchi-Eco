@@ -4,7 +4,7 @@ import React from 'react';
 import SmartWalletTransaction from './smart-wallet-transaction';
 import { useAccount } from 'wagmi';
 import { ShopItem, GardenItem, Plant } from '@/lib/types';
-import { PIXOTCHI_NFT_ADDRESS } from '@/lib/constants';
+import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 
 const PIXOTCHI_NFT_ABI = [
   {

@@ -4,7 +4,7 @@ import React from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import { BuildingData, BuildingType } from "@/lib/types";
 import { landAbi } from "../../public/abi/pixotchi-v3-abi";
-import { LAND_CONTRACT_ADDRESS } from '@/lib/constants';
+import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 interface BuildingUpgradeTransactionProps {
   building: BuildingData;

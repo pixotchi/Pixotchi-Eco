@@ -13,8 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getFormattedTokenBalance, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice } from '@/lib/contracts';
-import { LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/constants';
+import { getFormattedTokenBalance, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { useBalances } from '@/lib/balance-context';
 import { Strain } from '@/lib/types';
 import { formatNumber, formatTokenAmount } from '@/lib/utils';

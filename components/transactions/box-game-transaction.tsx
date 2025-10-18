@@ -2,7 +2,7 @@
 
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
-import { PIXOTCHI_NFT_ADDRESS } from '@/lib/constants';
+import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import PixotchiNFT from '@/public/abi/PixotchiNFT.json';
 import { decodeEventLog } from 'viem';
 import { toast } from 'react-hot-toast';

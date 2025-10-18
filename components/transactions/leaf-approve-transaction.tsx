@@ -2,7 +2,7 @@
 
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
-import { LEAF_CONTRACT_ADDRESS, LAND_CONTRACT_ADDRESS } from '@/lib/constants';
+import { LEAF_CONTRACT_ADDRESS, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 const LEAF_TOKEN_ABI = [
   {
