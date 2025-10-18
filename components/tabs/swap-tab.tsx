@@ -23,7 +23,7 @@ export default function SwapTab() {
     decimals: 18,
     name: "ETH",
     symbol: "ETH",
-    image: "/PixotchiKit/COIN.svg",
+    image: "https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png",
   };
 
   const SEED: Token = {
