@@ -1,3 +1,4 @@
+import { cache, cacheSignal } from 'react';
 import { 
   getPlantsByOwner, 
   getLandsByOwner, 
@@ -144,7 +145,7 @@ export interface UserGameStats {
 
 const USER_STATS_TTL = 30; // 30 seconds cache
 
-export async function getUserGameStats(address: string): Promise<UserGameStats> {
+async function fetchUserGameStats(address: string, abortSignal?: AbortSignal): Promise<UserGameStats> {
   if (!address) {
     throw new Error('Address is required');
   }
@@ -158,19 +159,18 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         return JSON.parse(cached);
       }
     } catch (error) {
-      console.error('Error reading cached user stats:', error);
+      console.warn('[User Stats] Failed to read cache', { cacheKey, error });
     }
   }
 
   console.log(`🔄 Fetching fresh user stats for ${address.slice(0, 6)}...`);
 
   try {
-    // Fetch all user data in parallel
     const [plants, lands, seedBalance, leafBalance] = await Promise.all([
-      getPlantsByOwner(address),
-      getLandsByOwner(address),
-      getTokenBalance(address),
-      getLeafBalance(address)
+      getPlantsByOwner(address, { signal: abortSignal }),
+      getLandsByOwner(address, { signal: abortSignal }),
+      getTokenBalance(address, { signal: abortSignal }),
+      getLeafBalance(address, { signal: abortSignal })
     ]);
 
     // Calculate plant stats
@@ -225,8 +225,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     for (const land of lands) {
       try {
         const [villageData, townData] = await Promise.all([
-          getVillageBuildingsByLandId(land.tokenId),
-          getTownBuildingsByLandId(land.tokenId)
+          getVillageBuildingsByLandId(land.tokenId, { signal: abortSignal }),
+          getTownBuildingsByLandId(land.tokenId, { signal: abortSignal })
         ]);
 
         // Process buildings for this specific land
@@ -551,9 +551,18 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     return stats;
 
   } catch (error) {
-    console.error('Error fetching user game stats:', error);
-    throw new Error('Failed to fetch user game statistics');
+    console.error('[User Stats] Failed to build stats', { address, error });
+    throw error;
   }
+}
+
+const cachedUserStats = cache(async (address: string) => {
+  const signal = cacheSignal();
+  return fetchUserGameStats(address, signal);
+});
+
+export async function getUserGameStats(address: string): Promise<UserGameStats> {
+  return cachedUserStats(address);
 }
 
 // Helper function to format stats for AI context

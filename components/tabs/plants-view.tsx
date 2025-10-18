@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useEffectEvent } from "react";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -112,22 +112,17 @@ export default function PlantsView() {
     return itemQuantities[itemId] || defaultQuantity;
   };
 
-  const fetchData = useCallback(async () => {
-    if (!address) return;
-
+  const fetchDataEvent = useEffectEvent(async (currentAddress: string, currentSelectedId: number | undefined) => {
     try {
-      // Keep loading spinner for refetches
       setLoading(true);
       setError(null);
 
-      const plantsData = await getPlantsByOwner(address);
+      const plantsData = await getPlantsByOwner(currentAddress);
 
       setPlants(plantsData);
       
-      // After refetching, try to find the previously selected plant in the new data
       if (plantsData.length > 0) {
-        const currentSelectedId = selectedPlant?.id;
-        const newSelectedPlant = plantsData.find(p => p.id === currentSelectedId);
+        const newSelectedPlant = currentSelectedId != null ? plantsData.find(p => p.id === currentSelectedId) : undefined;
         setSelectedPlant(newSelectedPlant || plantsData[0]);
       } else {
         setSelectedPlant(null);
@@ -139,7 +134,12 @@ export default function PlantsView() {
     } finally {
       setLoading(false);
     }
-  }, [address, selectedPlant?.id]); // Only depend on address and selected plant ID
+  });
+
+  const fetchData = useCallback(() => {
+    if (!address) return;
+    fetchDataEvent(address, selectedPlant?.id);
+  }, [address, selectedPlant?.id, fetchDataEvent]);
 
   // Set default selected item when catalogs are loaded
   useEffect(() => {
@@ -158,8 +158,7 @@ export default function PlantsView() {
     if(address) {
       fetchData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]);
+  }, [address, fetchData]);
 
   const onPurchaseSuccess = useCallback(() => {
     console.log("Purchase successful, refetching data...");

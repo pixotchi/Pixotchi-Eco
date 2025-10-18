@@ -23,6 +23,7 @@ import { usePrivy, useWallets, useLogin } from "@privy-io/react-auth";
 import { clearAppCaches } from "@/lib/cache-utils";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
+import { Activity } from 'react';
 
 // Import custom hooks
 import { useInviteValidation } from "@/hooks/useInviteValidation";
@@ -549,26 +550,35 @@ export default function App() {
           ) : (
             <>
               {/* Tab Content */}
-              <div
-                className="flex-1 overflow-y-auto overscroll-contain p-4 pb-16 safe-area-inset"
-                role="tabpanel"
-                id={`tabpanel-${activeTab}`}
-                aria-labelledby={`tab-${activeTab}`}
-                aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
-              >
-                <ErrorBoundary
-                  key={activeTab}
-                  resetKeys={[activeTab, ...(address ? [address] : [])]}
-                  variant="card"
-                  onError={(error, errorInfo) => {
-                    console.error(`Error in ${activeTab} tab:`, { error, errorInfo });
-                  }}
-                >
-                  {(() => {
-                    const ActiveTabComponent = tabComponents[activeTab];
-                    return ActiveTabComponent ? <ActiveTabComponent /> : null;
-                  })()}
-                </ErrorBoundary>
+              <div className="flex-1">
+                {tabs.map((tab) => {
+                  const TabComponent = tabComponents[tab.id];
+                  if (!TabComponent) return null;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <Activity key={tab.id} mode={isActive ? 'visible' : 'hidden'}>
+                      <div
+                        role="tabpanel"
+                        id={`tabpanel-${tab.id}`}
+                        aria-labelledby={`tab-${tab.id}`}
+                        aria-hidden={!isActive}
+                        hidden={!isActive}
+                        className={`flex-1 overflow-y-auto overscroll-contain p-4 pb-16 safe-area-inset ${isActive ? '' : 'hidden'}`}
+                      >
+                        <ErrorBoundary
+                          key={tab.id}
+                          resetKeys={[activeTab, ...(address ? [address] : [])]}
+                          variant="card"
+                          onError={(error, errorInfo) => {
+                            console.error(`Error in ${tab.id} tab:`, { error, errorInfo });
+                          }}
+                        >
+                          <TabComponent />
+                        </ErrorBoundary>
+                      </div>
+                    </Activity>
+                  );
+                })}
               </div>
 
               {/* Bottom Navigation with safe area */}
@@ -578,7 +588,7 @@ export default function App() {
                     <Button
                       key={tab.id}
                       variant="ghost"
-                       onClick={() => setActiveTab(tab.id)}
+                      onClick={() => setActiveTab(tab.id)}
                       className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                         activeTab === tab.id
                           ? "bg-primary/10 text-primary border border-primary/20"

@@ -45,6 +45,7 @@ import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStat
 import { formatDistanceToNow } from 'date-fns';
 import { ThemeSelector } from '@/components/theme-selector';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
+import { Activity, useEffectEvent } from 'react';
 
 interface AdminStats {
   codes: {
@@ -1184,198 +1185,204 @@ export default function AdminInviteDashboard() {
         </div>
 
         {/* Overview Tab */}
-        {activeTab === 'overview' && stats && (
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Codes</p>
-                      <p className="text-2xl font-bold">{stats.codes.total}</p>
+        <Activity mode={activeTab === 'overview' ? 'visible' : 'hidden'}>
+          {stats && (
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Codes</p>
+                        <p className="text-2xl font-bold">{stats.codes.total}</p>
+                      </div>
+                      <Code className="w-8 h-8 text-primary" />
                     </div>
-                    <Code className="w-8 h-8 text-primary" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Used Codes</p>
-                      <p className="text-2xl font-bold">{stats.codes.used}</p>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Used Codes</p>
+                        <p className="text-2xl font-bold">{stats.codes.used}</p>
+                      </div>
+                      <CheckCircle className="w-8 h-8 text-primary" />
                     </div>
-                    <CheckCircle className="w-8 h-8 text-primary" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Active Users</p>
-                      <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Active Users</p>
+                        <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
+                      </div>
+                      <Users className="w-8 h-8 text-primary" />
                     </div>
-                    <Users className="w-8 h-8 text-primary" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Success Rate</p>
-                      <p className="text-2xl font-bold">
-                        {stats.codes.total > 0 ? Math.round((stats.codes.used / stats.codes.total) * 100) : 0}%
-                      </p>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Success Rate</p>
+                        <p className="text-2xl font-bold">
+                          {stats.codes.total > 0 ? Math.round((stats.codes.used / stats.codes.total) * 100) : 0}%
+                        </p>
+                      </div>
+                      <BarChart3 className="w-8 h-8 text-primary" />
                     </div>
-                    <BarChart3 className="w-8 h-8 text-primary" />
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Top Generators */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Top Referrers</span>
+                    <Button size="sm" onClick={exportRewardData}>
+                      <Download className="w-4 h-4 mr-2" />
+                      Export Rewards
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {stats.users.topGenerators.slice(0, 10).map((user, index) => (
+                      <div key={user.address} className="flex items-center justify-between p-3 bg-card rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-bold">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="font-mono text-sm">{user.address.slice(0, 10)}...{user.address.slice(-4)}</p>
+                            <p className="text-xs text-muted-foreground">{user.used} successful • {user.generated} generated</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{user.used * 100} tokens</p>
+                          <p className="text-xs text-muted-foreground">reward estimate</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
             </div>
-
-            {/* Top Generators */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Top Referrers</span>
-                  <Button size="sm" onClick={exportRewardData}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Rewards
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {stats.users.topGenerators.slice(0, 10).map((user, index) => (
-                    <div key={user.address} className="flex items-center justify-between p-3 bg-card rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-bold">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-mono text-sm">{user.address.slice(0, 10)}...{user.address.slice(-4)}</p>
-                          <p className="text-xs text-muted-foreground">{user.used} successful • {user.generated} generated</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{user.used * 100} tokens</p>
-                        <p className="text-xs text-muted-foreground">reward estimate</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+          )}
+        </Activity>
 
         {/* Codes Tab */}
-        {activeTab === 'codes' && stats && (
-          <div className="space-y-6">
-            {/* Generate Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Generate Admin Codes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center space-x-3">
-                  <Button onClick={() => generateAdminCodes(1)} disabled={generating}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate 1
-                  </Button>
-                  <Button onClick={() => generateAdminCodes(5)} disabled={generating}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate 5
-                  </Button>
-                  <Button onClick={() => generateAdminCodes(10)} disabled={generating}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate 10
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Generated codes will be copied to clipboard automatically
-                </p>
-              </CardContent>
-            </Card>
+        <Activity mode={activeTab === 'codes' ? 'visible' : 'hidden'}>
+          {stats && (
+            <div className="space-y-6">
+              {/* Generate Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Generate Admin Codes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center space-x-3">
+                    <Button onClick={() => generateAdminCodes(1)} disabled={generating}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Generate 1
+                    </Button>
+                    <Button onClick={() => generateAdminCodes(5)} disabled={generating}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Generate 5
+                    </Button>
+                    <Button onClick={() => generateAdminCodes(10)} disabled={generating}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Generate 10
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Generated codes will be copied to clipboard automatically
+                  </p>
+                </CardContent>
+              </Card>
 
-            {/* Recent Codes */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Codes ({stats.recentCodes.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {stats.recentCodes.map((code) => (
-                    <div key={code.code} className="flex items-center justify-between p-3 bg-card rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-green-500/70' : 'bg-yellow-400/70'}`} />
-                        <span className="font-mono">{code.code}</span>
+              {/* Recent Codes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Codes ({stats.recentCodes.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {stats.recentCodes.map((code) => (
+                      <div key={code.code} className="flex items-center justify-between p-3 bg-card rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-green-500/70' : 'bg-yellow-400/70'}`} />
+                          <span className="font-mono">{code.code}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">{code.isUsed ? 'Used' : 'Active'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(code.createdAt).toLocaleString()} (Local)
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm">{code.isUsed ? 'Used' : 'Active'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(code.createdAt).toLocaleString()} (Local)
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </Activity>
 
         {/* Users Tab */}
-        {activeTab === 'users' && stats && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Statistics</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Users</p>
-                    <p className="text-2xl font-bold">{stats.users.totalUsers}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Validated Users</p>
-                    <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-3">
-                  {stats.users.topGenerators.map((user) => (
-                    <div key={user.address} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div>
-                        <p className="font-mono text-sm">{user.address}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Generated: {user.generated} • Successful: {user.used}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => confirmCleanup('delete_specific_user', user.address)}
-                      >
-                        <UserX className="w-4 h-4" />
-                      </Button>
+        <Activity mode={activeTab === 'users' ? 'visible' : 'hidden'}>
+          {stats && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>User Statistics</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Users</p>
+                      <p className="text-2xl font-bold">{stats.users.totalUsers}</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                    <div>
+                      <p className="text-sm text-muted-foreground">Validated Users</p>
+                      <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {stats.users.topGenerators.map((user) => (
+                      <div key={user.address} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <p className="font-mono text-sm">{user.address}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Generated: {user.generated} • Successful: {user.used}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => confirmCleanup('delete_specific_user', user.address)}
+                        >
+                          <UserX className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </Activity>
 
         {/* Broadcast Tab */}
-        {activeTab === 'broadcast' && (
+        <Activity mode={activeTab === 'broadcast' ? 'visible' : 'hidden'}>
           <div className="space-y-6">
             {/* Stats Cards */}
             {broadcastStats && (
@@ -1766,8 +1773,10 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
+        </Activity>
 
         {/* Cleanup Tab */}
+        <Activity mode={activeTab === 'cleanup' ? 'visible' : 'hidden'}>
         {activeTab === 'cleanup' && (
           <div className="space-y-6">
             <Card>
@@ -1853,8 +1862,10 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
+        </Activity>
 
         {/* Chat Tab */}
+        <Activity mode={activeTab === 'chat' ? 'visible' : 'hidden'}>
         {activeTab === 'chat' && (
           <div className="space-y-6">
             {/* Chat Stats */}
@@ -1985,8 +1996,10 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
+        </Activity>
 
         {/* AI Chat Tab */}
+        <Activity mode={activeTab === 'ai-chat' ? 'visible' : 'hidden'}>
         {activeTab === 'ai-chat' && (
           <div className="space-y-6">
             {/* AI Chat Stats */}
@@ -2207,8 +2220,10 @@ export default function AdminInviteDashboard() {
             </div>
           </div>
         )}
+        </Activity>
 
         {/* Gamification Tab */}
+        <Activity mode={activeTab === 'gamification' ? 'visible' : 'hidden'}>
         {activeTab === 'gamification' && (
           <div className="space-y-6">
             <Card>
@@ -2263,8 +2278,10 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
+        </Activity>
 
         {/* RPC Tab */}
+        <Activity mode={activeTab === 'rpc' ? 'visible' : 'hidden'}>
         {activeTab === 'rpc' && (
           <div className="space-y-6">
             <Card>
@@ -2310,8 +2327,10 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
+        </Activity>
 
         {/* Notifications Tab */}
+        <Activity mode={activeTab === 'notifications' ? 'visible' : 'hidden'}>
         {activeTab === 'notifications' && (
           <div className="space-y-6">
             <Card>
@@ -2483,8 +2502,10 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
+        </Activity>
 
         {/* OG Images Tab */}
+        <Activity mode={activeTab === 'og-images' ? 'visible' : 'hidden'}>
         {activeTab === 'og-images' && (
           <div className="space-y-6">
             <div className="text-center space-y-2 mb-6">
@@ -2698,6 +2719,7 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
+        </Activity>
       </div>
 
       {/* Custom Confirmation Dialog */}

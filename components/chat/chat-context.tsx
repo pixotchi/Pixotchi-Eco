@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef, useEffectEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
 import { getRecentMessages } from '@/lib/chat-service';

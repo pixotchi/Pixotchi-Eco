@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, useEffectEvent } from 'react';
 import { useAccount } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
@@ -119,8 +119,7 @@ export function useBroadcastMessages() {
     }
   }, [address, isConnected, localDismissedIds]);
 
-  // Dismiss a message
-  const dismissMessage = useCallback(async (messageId: string) => {
+  const dismissMessageEvent = useEffectEvent(async (messageId: string) => {
     // Optimistically remove from UI
     setMessages(prev => prev.filter(msg => msg.id !== messageId));
     
@@ -148,10 +147,14 @@ export function useBroadcastMessages() {
         console.error('Failed to record dismissal:', error);
       }
     }
-  }, [identity, isConnected, authenticated, localDismissedIds]);
+  });
+
+  const dismissMessage = useCallback((messageId: string) => {
+    dismissMessageEvent(messageId);
+  }, [dismissMessageEvent]);
 
   // Track impression (message was shown)
-  const trackImpression = useCallback(async (messageId: string) => {
+  const trackImpressionEvent = useEffectEvent(async (messageId: string) => {
     try {
       await fetch('/api/broadcast/impression', {
         method: 'POST',
@@ -162,7 +165,11 @@ export function useBroadcastMessages() {
       // Silent fail - tracking shouldn't break UX
       console.debug('Failed to track impression:', error);
     }
-  }, []);
+  });
+
+  const trackImpression = useCallback((messageId: string) => {
+    trackImpressionEvent(messageId);
+  }, [trackImpressionEvent]);
 
   // Initial fetch and setup polling - run once on mount
   useEffect(() => {
@@ -185,8 +192,7 @@ export function useBroadcastMessages() {
         pollingIntervalRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - only run once
+  }, [fetchMessages]);
 
   // Refresh when wallet connects/disconnects (but don't restart polling)
   useEffect(() => {
@@ -194,8 +200,7 @@ export function useBroadcastMessages() {
       console.log('[Broadcast] Wallet address changed, fetching messages');
       fetchMessages();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, authenticated, user?.id]); // Identity-related triggers
+  }, [address, authenticated, user?.id, fetchMessages]);
 
   return {
     messages,
