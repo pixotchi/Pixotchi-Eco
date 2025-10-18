@@ -2,7 +2,7 @@
 
 import React from 'react';
 import SmartWalletTransaction from './smart-wallet-transaction';
-import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/constants';
 
 const ERC20_ABI = [
   {

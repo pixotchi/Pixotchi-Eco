@@ -3,7 +3,7 @@
 import React from "react";
 import UniversalTransaction from "./universal-transaction";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
-import { LAND_CONTRACT_ADDRESS } from "@/lib/contracts";
+import { LAND_CONTRACT_ADDRESS } from "@/lib/constants";
 
 type ApplyMode = "points" | "lifetime";
 

@@ -12,7 +12,7 @@ import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_NFT_ADDRESS } from '@/lib/constants';
 
 const PIXOTCHI_NFT_ABI = [
   {

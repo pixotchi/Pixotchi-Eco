@@ -3,7 +3,7 @@
 import React from 'react';
 import { useAccount } from 'wagmi';
 import SponsoredTransaction from './sponsored-transaction';
-import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_NFT_ADDRESS } from '@/lib/constants';
 
 const PIXOTCHI_NFT_ABI = [
   {

@@ -18,6 +18,19 @@ import {
   UNISWAP_ROUTER_ADDRESS,
   WETH_ADDRESS,
 } from './constants';
+
+export {
+  LEAF_CONTRACT_ADDRESS,
+  LAND_CONTRACT_ADDRESS,
+  STAKE_CONTRACT_ADDRESS,
+  BATCH_ROUTER_ADDRESS,
+  VILLAGE_CONTRACT_ADDRESS,
+  TOWN_CONTRACT_ADDRESS,
+  PIXOTCHI_NFT_ADDRESS,
+  PIXOTCHI_TOKEN_ADDRESS,
+  UNISWAP_ROUTER_ADDRESS,
+  WETH_ADDRESS,
+} from './constants';
 import erc20Abi from '@/public/abi/erc20.json';
 import villageAbi from '@/public/abi/villageabi.json';
 import townAbi from '@/public/abi/townabi.json';
