@@ -78,7 +78,7 @@ export default function BoxGameTransaction({
 }: BoxGameTransactionProps) {
   const functionName = withStar ? 'boxGamePlayWithStar' : 'boxGamePlay';
   const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
+    address: PIXOTCHI_NFT_ADDRESS,
     abi: BOX_GAME_ABI,
     functionName,
     args: [BigInt(plantId), BigInt(seed)],

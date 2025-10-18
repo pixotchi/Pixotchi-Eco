@@ -6,24 +6,20 @@ import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import { CLIENT_ENV, getRpcConfig } from './env-config';
-import {
-  LAND_CONTRACT_ADDRESS,
-  LEAF_CONTRACT_ADDRESS,
-  STAKE_CONTRACT_ADDRESS,
-  PIXOTCHI_TOKEN_ADDRESS,
-  VILLAGE_CONTRACT_ADDRESS,
-  TOWN_CONTRACT_ADDRESS,
-  UNISWAP_ROUTER_ADDRESS,
-  WETH_ADDRESS,
-} from './constants';
-import erc20Abi from '@/public/abi/PixotchiToken.json';
+import { getReadClient } from './contracts';
+import { STAKE_CONTRACT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_TOKEN_ADDRESS, VILLAGE_CONTRACT_ADDRESS, TOWN_CONTRACT_ADDRESS } from './constants';
+import erc20Abi from '@/public/abi/erc20.json';
 import villageAbi from '@/public/abi/villageabi.json';
 import townAbi from '@/public/abi/townabi.json';
 
+export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
+export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);
+export const STAKE_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.STAKE_CONTRACT_ADDRESS);
 export const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
-export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS
-  ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS)
-  : (undefined as unknown as `0x${string}`);
+export const PIXOTCHI_TOKEN_ADDRESS = getAddress('0x546D239032b24eCEEE0cb05c92FC39090846adc7');
+export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;
+export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
+export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
 
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
@@ -449,7 +445,7 @@ const BATCH_ROUTER_ABI = [
 // -------------------- STAKING HELPERS --------------------
 
 // Check SEED allowance for staking contract
-const getStakeAllowance = async (ownerAddress: string): Promise<bigint> => {
+export const getStakeAllowance = async (ownerAddress: string): Promise<bigint> => {
   const readClient = getReadClient();
   return retryWithBackoff(async () => {
     const allowance = await readClient.readContract({

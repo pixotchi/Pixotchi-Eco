@@ -3,7 +3,7 @@
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
 import { landAbi as LAND_ABI } from '@/public/abi/pixotchi-v3-abi';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/constants';
+import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 interface LandMintTransactionProps {
   onSuccess?: (tx: any) => void;
@@ -22,7 +22,7 @@ export default function LandMintTransaction({
 }: LandMintTransactionProps) {
   
   const calls = [{
-    address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+    address: LAND_CONTRACT_ADDRESS,
     abi: LAND_ABI,
     functionName: 'mint',
     args: [], 

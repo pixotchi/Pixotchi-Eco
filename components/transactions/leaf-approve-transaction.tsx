@@ -2,7 +2,7 @@
 
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
-import { LEAF_CONTRACT_ADDRESS, LAND_CONTRACT_ADDRESS } from '@/lib/constants';
+import { LEAF_CONTRACT_ADDRESS, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 const LEAF_TOKEN_ABI = [
   {
@@ -37,10 +37,10 @@ export default function LeafApproveTransaction({
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
   
   const calls = [{
-    address: LEAF_CONTRACT_ADDRESS as `0x${string}`,
+    address: LEAF_CONTRACT_ADDRESS,
     abi: LEAF_TOKEN_ABI,
     functionName: 'approve',
-    args: [LAND_CONTRACT_ADDRESS as `0x${string}`, maxApproval], 
+    args: [LAND_CONTRACT_ADDRESS, maxApproval], 
   }];
 
   return (

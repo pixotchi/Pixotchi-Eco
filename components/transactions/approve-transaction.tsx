@@ -2,7 +2,7 @@
 
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
-import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/constants';
+import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 
 const PIXOTCHI_TOKEN_ABI = [
   {
@@ -39,7 +39,7 @@ export default function ApproveTransaction({
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
   
   const calls = [{
-    address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
+    address: PIXOTCHI_TOKEN_ADDRESS,
     abi: PIXOTCHI_TOKEN_ABI,
     functionName: 'approve',
     args: [spenderAddress, maxApproval], 

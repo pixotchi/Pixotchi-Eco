@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { useAccount, useBlockNumber } from 'wagmi';
-import { getQuestSlotsByLandId } from '@/lib/contracts';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/constants';
+import { getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { ToggleGroup } from '@/components/ui/toggle-group';
@@ -120,7 +119,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   )}
                   {statusOf(s) === 'Ready to commit' && (
                     <SponsoredTransaction
-                      calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
+                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                       buttonText="Return now"
                       buttonClassName="h-8 px-3 text-xs"
                       hideStatus
@@ -131,7 +130,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Loot bag ready</span>
                     <SponsoredTransaction
-                      calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
+                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                       buttonText="Open now"
                       buttonClassName="h-8 px-3 text-xs"
                       hideStatus
@@ -166,7 +165,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     />
                   </div>
                   <SponsoredTransaction
-                    calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
+                    calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
                     buttonText="Start"
                     buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
                     hideStatus

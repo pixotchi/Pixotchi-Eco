@@ -57,7 +57,7 @@ export default function BundleBuyTransaction({
     
     for (let i = 0; i < quantity; i++) {
       calls.push({
-        address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
+        address: PIXOTCHI_NFT_ADDRESS,
         abi: PIXOTCHI_NFT_ABI,
         functionName,
         args: [BigInt(plant.id), BigInt(item.id)],

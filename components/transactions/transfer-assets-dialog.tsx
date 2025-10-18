@@ -5,8 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount, useWalletClient } from "wagmi";
-import { getPlantsByOwner, getLandsByOwner, transferAllAssets, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
-import { LAND_CONTRACT_ADDRESS } from "@/lib/constants";
+import { getPlantsByOwner, getLandsByOwner, transferAllAssets, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
 import { isAddress, getAddress } from "viem";
 import { toast } from "react-hot-toast";
 import { Skeleton } from "@/components/ui/skeleton";

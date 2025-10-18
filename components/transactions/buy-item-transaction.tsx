@@ -48,7 +48,7 @@ export function BuyShopItemTransaction({
 }: BuyShopItemTransactionProps) {
   
   const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
+    address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'shopBuyItem',
     args: [BigInt(plantId), BigInt(itemId)], 
@@ -87,7 +87,7 @@ export function BuyGardenItemTransaction({
 }: BuyGardenItemTransactionProps) {
   
   const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
+    address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'buyAccessory',
     args: [BigInt(plantId), BigInt(itemId)], 

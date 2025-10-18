@@ -2,8 +2,7 @@
 
 import React from 'react';
 import SmartWalletTransaction from './smart-wallet-transaction';
-import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/constants';
+import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 
 const ERC20_ABI = [
   {
@@ -50,13 +49,13 @@ export default function ApproveMintBundle({
 
   const calls = [
     {
-      address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [PIXOTCHI_NFT_ADDRESS as `0x${string}`, maxApproval],
+      args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
     },
     {
-      address: PIXOTCHI_NFT_ADDRESS as `0x${string}`,
+      address: PIXOTCHI_NFT_ADDRESS,
       abi: NFT_ABI,
       functionName: 'mint',
       args: [BigInt(strain)],
