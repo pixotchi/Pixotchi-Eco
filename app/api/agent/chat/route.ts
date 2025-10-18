@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use centralized strains (mintPriceSeed in SEED units)
-    const HARDCODED_STRAINS = PLANT_STRAINS as const;
+    const HARDCODED_STRAINS = PLANT_STRAINS;
 
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
