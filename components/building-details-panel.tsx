@@ -154,8 +154,8 @@ function BuildingDetailsPanel({
         <div className="pt-2 border-t border-border">
           <p className="text-xs text-muted-foreground text-center">
             {buildingType === 'village' 
-              ? 'Village buildings produce resources for your plants.' 
-              : 'Town buildings provide advanced services and upgrades.'
+              ? 'Village buildings produce daily resources for your plants.' 
+              : 'Town buildings provide advanced services and perks.'
             }
           </p>
         </div>

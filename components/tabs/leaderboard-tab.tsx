@@ -550,7 +550,7 @@ export default function LeaderboardTab() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>
-                {boardType === 'plants' ? 'Plants Leaderboard' : boardType === 'lands' ? 'Lands Leaderboard' : 'Stake Leaderboard'}
+                Leaderboard
               </CardTitle>
               <ToggleGroup
                 value={boardType}

@@ -125,8 +125,7 @@ export default function WarehousePanel({
       </div>
 
       {/* Apply PTS */}
-      <div className="grid grid-cols-[auto,1fr,auto] gap-2 items-center">
-        <div className="text-xs text-muted-foreground px-2 py-1 rounded-md border border-border bg-card">PTS</div>
+      <div className="grid grid-cols-[1fr,auto] gap-2 items-center">
         <div className="relative">
           <Input
             value={applyPts}
@@ -144,7 +143,7 @@ export default function WarehousePanel({
           </button>
         </div>
         {ptsTooHigh && (
-          <div className="col-span-3 -mt-1 text-xs text-red-600">Amount exceeds available PTS.</div>
+          <div className="col-span-2 -mt-1 text-xs text-red-600">Amount exceeds available PTS.</div>
         )}
         <WarehouseApplyTransaction
           landId={landId}
@@ -160,8 +159,7 @@ export default function WarehousePanel({
       </div>
 
       {/* Apply TOD (minutes) */}
-      <div className="grid grid-cols-[auto,1fr,auto] gap-2 items-center">
-        <div className="text-xs text-muted-foreground px-2 py-1 rounded-md border border-border bg-card">min</div>
+      <div className="grid grid-cols-[1fr,auto] gap-2 items-center">
         <div className="relative">
           <Input
             value={applyTodMinutes}
@@ -179,7 +177,7 @@ export default function WarehousePanel({
           </button>
         </div>
         {minutesTooHigh && (
-          <div className="col-span-3 -mt-1 text-xs text-red-600">Minutes exceed available TOD.</div>
+          <div className="col-span-2 -mt-1 text-xs text-red-600">Minutes exceed available TOD.</div>
         )}
         <WarehouseApplyTransaction
           landId={landId}
@@ -193,7 +191,7 @@ export default function WarehousePanel({
           onError={(e) => toast.error(`Apply failed: ${e.message || e}`)}
         />
       </div>
-      <p className="text-xs text-muted-foreground text-center">PTS up to 4 decimals. TOD input is minutes; converted to seconds on-chain.</p>
+      <p className="text-xs text-muted-foreground text-center">PTS up to 4 decimals. TOD input is minutes; converted to seconds onchain.</p>
     </div>
   );
 }

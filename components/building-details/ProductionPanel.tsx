@@ -34,7 +34,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
         }`}>
           <span className="text-muted-foreground">Production (TOD/Day):</span>
           <span className="font-semibold">
-            {formatLifetimeProduction(building.productionRatePlantLifetimePerDay)} hours
+            {formatLifetimeProduction(building.productionRatePlantLifetimePerDay)}
           </span>
         </div>
         
@@ -53,7 +53,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
         }`}>
           <span className="text-muted-foreground">Accumulated TOD:</span>
           <span className="font-semibold text-primary">
-            {formatLifetimeProduction(building.accumulatedLifetime)} hours
+            {formatLifetimeProduction(building.accumulatedLifetime)}
           </span>
         </div>
       </div>
