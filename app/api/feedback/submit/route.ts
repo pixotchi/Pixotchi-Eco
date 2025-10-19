@@ -48,9 +48,7 @@ export async function POST(request: Request) {
       status: 'new',
     };
 
-    await redisSetJSON(feedbackKey, feedbackData, {
-      ex: 86400 * 90, // Expire after 90 days
-    });
+    await redisSetJSON(feedbackKey, feedbackData, 86400 * 90);
 
     // Add to feedback list for admin
     await redis.zadd(
