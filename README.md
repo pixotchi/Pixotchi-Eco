@@ -24,7 +24,7 @@ Production-ready, Farcaster client compatible and web application deployed on Ba
 - **Notification System**: Farcaster Mini App push notifications via Neynar v2 API for transaction confirmations and time-sensitive alerts.
 
 ## Tech Stack
-- **Framework**: Next.js 15, React 19, TypeScript
+- **Framework**: Next.js 16, React 19, TypeScript
 - **UI**: Tailwind CSS 4, Radix UI, Lucide and custom icons
 - **Web3**: Viem, Wagmi, Coinbase OnchainKit, Coinbase CDP SDK
 - **AI**: Vercel AI SDK, `@ai-sdk/openai` (OpenAI), optional Anthropic/Claude
