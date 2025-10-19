@@ -116,8 +116,8 @@ export default function BuildingInfoDialog({
     return null;
   }
 
-  const isProductionBuilding = buildingType === 'village' && info.production;
-  const isUtilityBuilding = buildingType === 'town' && info.features;
+  const isProductionBuilding = buildingType === 'village' && 'production' in info;
+  const isUtilityBuilding = buildingType === 'town' && 'features' in info;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,7 +130,7 @@ export default function BuildingInfoDialog({
         </DialogHeader>
         
         <div className="space-y-3">
-          {isProductionBuilding && (
+          {isProductionBuilding && 'production' in info && (
             <div className="bg-muted/30 rounded-lg p-3">
               <h4 className="font-semibold text-sm mb-2 text-foreground">Production Rates</h4>
               <div className="space-y-1.5 text-sm">
@@ -150,7 +150,7 @@ export default function BuildingInfoDialog({
             </div>
           )}
 
-          {isUtilityBuilding && (
+          {isUtilityBuilding && 'features' in info && (
             <div className="bg-muted/30 rounded-lg p-3">
               <h4 className="font-semibold text-sm mb-2 text-foreground">Key Features</h4>
               <ul className="space-y-1.5 text-sm">
@@ -164,7 +164,7 @@ export default function BuildingInfoDialog({
             </div>
           )}
 
-          {info.upgradeCosts && (
+          {'upgradeCosts' in info && info.upgradeCosts && (
             <div className="bg-muted/30 rounded-lg p-3">
               <h4 className="font-semibold text-sm mb-2 text-foreground">Upgrade Costs</h4>
               <div className="space-y-1.5 text-sm">
