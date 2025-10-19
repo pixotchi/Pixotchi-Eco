@@ -24,21 +24,23 @@ Production-ready, Farcaster client compatible and web application deployed on Ba
 - **Notification System**: Farcaster Mini App push notifications via Neynar v2 API for transaction confirmations and time-sensitive alerts.
 
 ## Tech Stack
-- **Framework**: Next.js 15, React 19, TypeScript
-- **UI**: Tailwind CSS 4, Radix UI, Lucide and custom icons
+- **Framework**: Next.js 16, React 19.2
+- **UI**: Tailwind CSS 4.1, Radix UI, Lucide React, custom pixel art icons
 - **Web3**: Viem, Wagmi, Coinbase OnchainKit, Coinbase CDP SDK
-- **AI**: Vercel AI SDK, `@ai-sdk/openai` (OpenAI), optional Anthropic/Claude
-- **Data**: Redis/KV (Upstash compatible) for invites, chat, usage, audit logs
+- **AI**: Vercel AI SDK 4.3.19, `@ai-sdk/openai`, optional Anthropic/Claude
+- **Data**: Redis/KV (Upstash compatible) for invites, chat, usage, audit logs, feedback, broadcasts
 - **Mini App**: `@farcaster/miniapp-sdk` with manifest and notifications (Neynar v2 delivery)
 - **Scheduler**: Upstash QStash (HTTP cron) to trigger backend checks
+- **Analytics**: Vercel Analytics, Vercel Speed Insights
+- **Authentication**: Privy, Coinbase Wallet SDK
 
 ## Project Structure
 Key directories and files:
 - `app/`: Next.js routes (pages + API)
   - `app/.well-known/farcaster.json/route.ts`: Farcaster Mini App manifest (icon/hero/splash, embeds, webhook, association)
   - `app/admin/*`: Admin dashboard (invites, chat moderation, AI moderation, gamification)
-  - `app/api/*`: Server routes for chat, AI, agent, invites, staking, swap, notify, webhook, gamification, notifications cron/admin
-- `components/`: UI, transactions, chat, tutorial, dialogs, loaders, theme
+  - `app/api/*`: Server routes for chat, AI, agent, invites, staking, swap, notify, webhook, gamification, notifications cron/admin, feedback, broadcast
+- `components/`: UI, transactions, chat, tutorial, dialogs, loaders, theme, feedback, broadcast
 - `hooks/`: UX and platform hooks (Farcaster, keyboard, countdown, auto‑connect)
 - `lib/`: Core logic (contracts, env, AI, invites, gamification, redis, logger, wallet contexts)
 - `public/`: Static assets (icons, fonts, ABIs, images)
@@ -46,10 +48,11 @@ Key directories and files:
 
 ## Core Features
 ### Blockchain Transaction Layer
-- Resilient Viem transport configuration with multi-endpoint RPC fallback and exponential backoff retry logic.
+- Resilient Viem transport configuration with multi-endpoint RPC failover and exponential backoff retry logic.
 - Contract interface abstractions in `lib/contracts.ts`:
   - `PIXOTCHI_NFT_ADDRESS` (ERC-721), `PIXOTCHI_TOKEN_ADDRESS` (SEED ERC-20), `LEAF` (ERC-20), `STAKE` (staking contract), `UNISWAP_ROUTER_ADDRESS` (AMM integration)
 - Transaction helpers: NFT minting, token approvals, staking operations, marketplace item purchases, land/building management, token swaps, activity logging.
+- **Asset Transfer System**: Bulk transfer capabilities for plants and lands with batch router integration for efficient multi-NFT transfers.
 
 ### Autonomous Agent System (CDP Spend Permissions)
 - Coinbase CDP Smart Account with ERC-7715 Spend Permission delegation for autonomous transaction execution.
@@ -87,6 +90,26 @@ Key directories and files:
 ### Farcaster Platform Integration
 - Manifest at `/.well-known/farcaster.json` with metadata, embed URL allowlist, and webhook configuration. OpenGraph and `fc:miniapp`/`fc:frame` metadata in `app/layout.tsx`.
 - Push notification delivery via `/api/notify` endpoint; token lifecycle management via `/api/webhook` with signature verification (Farcaster JSON signatures and HMAC fallback). Delivery orchestrated through Neynar v2 API.
+- **Enhanced Context Handling**: Comprehensive Farcaster context extraction with proper null/undefined handling, safe-area insets application, and platform detection.
+
+### User Experience Features
+- **Interactive Tutorial System**: Slideshow-based onboarding with step-by-step guidance for new users.
+- **Theme System**: 8 customizable themes (light, dark, green, yellow, red, pink, blue, violet) with persistent user preferences.
+- **Mobile Optimization**: Keyboard-aware UI, viewport height management, and touch-friendly navigation.
+- **Error Boundaries**: Comprehensive error handling with graceful fallbacks and user-friendly error messages.
+- **Performance Optimizations**: Code splitting, intelligent tab prefetching, and optimized asset loading.
+
+### Feedback & Communication System
+- **User Feedback Collection**: In-app feedback submission with Farcaster context capture, wallet type detection, and 90-day data retention.
+- **Broadcast Message System**: Admin-controlled in-app messaging with priority levels, expiration settings, and engagement tracking.
+- **Enhanced Chat Infrastructure**: Multi-mode chat system (public, AI assistant, agent mode) with improved moderation tools.
+
+### User Interface & Experience
+- **Tab-Based Navigation**: 6 main tabs (Farm, Mint, Activity, Ranking, Swap, About) with intelligent prefetching and code splitting.
+- **Plant & Land Management**: Comprehensive NFT management with shop items, garden accessories, building upgrades, and quest systems.
+- **Real-Time Status Bar**: Global balance display (SEED, LEAF, ETH) with staking integration and transaction status.
+- **Wallet Profile System**: Detailed wallet information display with Farcaster context, smart wallet status, and transaction history.
+- **Responsive Design**: Mobile-first approach with keyboard awareness, viewport optimization, and touch-friendly interactions.
 
 ## Security & Reliability
 ### RPC Resilience
@@ -168,6 +191,23 @@ All routes are under `/api/*`.
   - `GET /api/admin/notifications` – Retrieve notification delivery statistics
   - `DELETE /api/admin/notifications/reset?scope=all|fid|plant[&fid=..][&plantId=..]` – Reset notification tracking data
 
+### Feedback System
+- `POST /api/feedback/submit` – Submit user feedback with context capture and validation
+- Admin:
+  - `GET /api/admin/feedback/list` – Retrieve all feedback submissions with metadata
+  - `POST /api/admin/feedback/delete` – Delete individual or all feedback entries
+
+### Broadcast Messages
+- `GET /api/broadcast/active` – Retrieve active broadcast messages for display
+- `POST /api/broadcast/impression` – Track message impression for analytics
+- `POST /api/broadcast/dismiss` – Dismiss specific broadcast message
+- Admin:
+  - `GET /api/admin/broadcast` – List all broadcast messages with statistics
+  - `POST /api/admin/broadcast` – Create new broadcast message
+  - `PUT /api/admin/broadcast` – Update existing broadcast message
+  - `DELETE /api/admin/broadcast` – Delete broadcast message
+  - `POST /api/admin/broadcast/cleanup` – Cleanup expired messages
+
 ### Farcaster Manifest
 - `GET /.well-known/farcaster.json` – Serve Farcaster Mini App manifest (metadata, icons, webhooks)
 
@@ -202,7 +242,9 @@ npm run lint   # Run ESLint static analysis
 ## Admin Dashboard
 - Path: `/admin/invite`
 - Auth: Bearer key (`ADMIN_INVITE_KEY`) with constant-time comparison, IP-based rate limiting (10 attempts/15min)
-- Tabs: Overview, Codes, Users, Chat moderation, AI Chat moderation, Cleanup, Gamification (leaderboards + resets), RPC Status, Notifications
+- **Enhanced Tabs**: Overview, Codes, Users, Chat moderation, AI Chat moderation, Cleanup, Gamification (leaderboards + resets), RPC Status, Notifications, **Feedback Management**, **Broadcast Messages**
+- **Feedback Management**: View, filter, and delete user feedback submissions with detailed context information and 90-day retention tracking.
+- **Broadcast System**: Create, edit, and manage in-app broadcast messages with priority levels, expiration settings, and engagement analytics.
 - Architecture: Request cancellation via AbortController, fail-closed rate limiting on Redis unavailability, structured error handling with detailed logging
 
 ## Agent Mode Integration
@@ -225,7 +267,7 @@ Troubleshooting endpoints:
 - `POST /api/agent/test-conversation` – End-to-end integration test
 
 ## Configuration Notes
-- Strict CSP/security headers live in `middleware.ts`. If embedding new iframes/RPC domains, update CSP and CORS accordingly.
+- Strict CSP/security headers live in `proxy.ts` (previously middleware.ts). If embedding new iframes/RPC domains, update CSP and CORS accordingly.
 - Prefer private Base RPCs with multiple endpoints for automatic failover.
 - If using the paymaster, ensure `_PUBLIC_CDP_*` are set; the app runs without it if omitted.
 
