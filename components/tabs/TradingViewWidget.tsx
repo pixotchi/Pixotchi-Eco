@@ -6,13 +6,13 @@ import { useTheme } from 'next-themes';
 
 interface TradingViewWidgetProps {
   symbol?: string;
-  height?: string;
 }
 
-function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD', height = '600px' }: TradingViewWidgetProps) {
+function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingViewWidgetProps) {
   const container = useRef<HTMLDivElement>(null);
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+  const prevIsDarkThemeRef = useRef<boolean | null>(null);
 
   // Determine if dark theme is active
   const isDarkTheme = theme === 'dark' || (theme === 'system' && systemTheme === 'dark');
@@ -24,10 +24,16 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD', height = '
   useEffect(() => {
     if (!mounted || !container.current) return;
 
-    // Remove any existing script to prevent duplicates
-    const existingScript = container.current.querySelector('script');
-    if (existingScript) {
-      existingScript.remove();
+    // Only update if the dark/light theme actually changed (not just switching between light colors)
+    if (prevIsDarkThemeRef.current === isDarkTheme) {
+      return;
+    }
+
+    prevIsDarkThemeRef.current = isDarkTheme;
+
+    // Clear the entire container to remove old chart and script
+    while (container.current.firstChild) {
+      container.current.removeChild(container.current.firstChild);
     }
 
     const script = document.createElement('script');
@@ -63,21 +69,11 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD', height = '
 
     script.innerHTML = JSON.stringify(config);
     container.current.appendChild(script);
-
-    return () => {
-      // Cleanup if component unmounts
-      if (container.current && script.parentNode === container.current) {
-        container.current.removeChild(script);
-      }
-    };
   }, [mounted, isDarkTheme, symbol]);
 
   if (!mounted) {
     return (
-      <div
-        style={{ height, width: '100%' }}
-        className="bg-card border border-border rounded-lg flex items-center justify-center"
-      >
+      <div className="w-full h-full bg-card border border-border rounded-lg flex items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading chart...</p>
       </div>
     );
@@ -85,13 +81,11 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD', height = '
 
   return (
     <div
-      className="tradingview-widget-container bg-card rounded-lg overflow-hidden"
+      className="tradingview-widget-container bg-card rounded-lg overflow-hidden w-full h-full flex flex-col"
       ref={container}
-      style={{ height, width: '100%' }}
     >
       <div
-        className="tradingview-widget-container__widget"
-        style={{ height: 'calc(100% - 32px)', width: '100%' }}
+        className="tradingview-widget-container__widget flex-1"
       />
       <div className="tradingview-widget-copyright text-xs text-muted-foreground px-3 py-1 border-t border-border/50">
         <a

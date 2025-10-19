@@ -67,8 +67,11 @@ export default function SwapTab() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
+      <Card 
+        className={swapView === 'chart' ? 'flex flex-col aspect-square' : ''}
+        padding={swapView === 'chart' ? 'none' : 'md'}
+      >
+        <CardHeader className={swapView === 'chart' ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
           <div className="flex items-center justify-between gap-4">
             <CardTitle>{swapView === 'chart' ? 'Chart' : 'Swap'}</CardTitle>
             <ToggleGroup
@@ -81,7 +84,7 @@ export default function SwapTab() {
             />
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className={swapView === 'chart' ? 'flex-1 p-4 overflow-hidden' : 'space-y-4'}>
           {swapView === 'swap' ? (
             <div data-ock-theme="pixotchi">
               <Swap
@@ -101,7 +104,7 @@ export default function SwapTab() {
               </Swap>
             </div>
           ) : (
-            <TradingViewWidget height="700px" />
+            <TradingViewWidget />
           )}
         </CardContent>
       </Card>
