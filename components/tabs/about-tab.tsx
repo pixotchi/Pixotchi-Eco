@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Book, Gamepad2, Tractor, Gift, Copy, Check, Users, Calendar, Plus, Info, Flame, Shield, MessageCircle, Swords, Box } from "lucide-react";
+import { ArrowUpRight, Book, Gamepad2, Tractor, Gift, Copy, Check, Users, Calendar, Plus, Info, Flame, Shield, MessageCircle, Swords, Box, MessageSquare } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { openExternalUrl } from "@/lib/open-external";
@@ -14,6 +14,7 @@ import { useAccount } from 'wagmi';
 import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { useSlideshow } from "@/components/tutorial";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import packageJson from '@/package.json';
 
 const InfoCard = ({
@@ -81,6 +82,9 @@ export default function AboutTab() {
     createdAt: number;
   }>>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
 
   // Load invite stats and user codes when component mounts
   useEffect(() => {
@@ -225,6 +229,50 @@ export default function AboutTab() {
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);
       toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const submitFeedback = async () => {
+    if (!address) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    if (!feedbackText.trim()) {
+      toast.error('Please enter your feedback');
+      return;
+    }
+
+    if (feedbackText.trim().length < 10) {
+      toast.error('Feedback must be at least 10 characters');
+      return;
+    }
+
+    setFeedbackLoading(true);
+    try {
+      const response = await fetch('/api/feedback/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          address,
+          message: feedbackText.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Thank you for your feedback! 🙏');
+        setFeedbackText('');
+        setShowFeedbackDialog(false);
+      } else {
+        toast.error(data.error || 'Failed to submit feedback');
+      }
+    } catch (error) {
+      console.error('Feedback submission error:', error);
+      toast.error('Failed to submit feedback');
+    } finally {
+      setFeedbackLoading(false);
     }
   };
 
@@ -410,20 +458,32 @@ export default function AboutTab() {
             is a simplified experience focused on minting and caring for your
             plants, designed for Base app.
           </p>
-          <Button 
-            variant="secondary" 
-            onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
-          >
-            <Book className="w-4 h-4 mr-2" />
-            Documentation
-          </Button>
-          {enabled && (
-            <div className="mt-4">
-              <Button variant="outline" onClick={() => start({ reset: true })}>
-                Tutorial
+          <div className="space-y-3">
+            <Button 
+              variant="secondary" 
+              onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
+            >
+              <Book className="w-4 h-4 mr-2" />
+              Documentation
+            </Button>
+            {enabled && (
+              <div>
+                <Button variant="outline" onClick={() => start({ reset: true })} className="w-full">
+                  Tutorial
+                </Button>
+              </div>
+            )}
+            <div>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowFeedbackDialog(true)}
+                className="w-full"
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Feedback
               </Button>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
@@ -469,6 +529,40 @@ export default function AboutTab() {
               </ul>
         </div>
       </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Feedback Dialog */}
+      <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share Your Feedback</DialogTitle>
+            <DialogDescription>
+              We'd love to hear your thoughts on Pixotchi Mini!
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              placeholder="What's on your mind? (e.g., bugs, feature requests, suggestions)"
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              rows={5}
+              className="w-full"
+            />
+            <Button onClick={submitFeedback} disabled={feedbackLoading || !address}>
+              {feedbackLoading ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Send Feedback
+                </>
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

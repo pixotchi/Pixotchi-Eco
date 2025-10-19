@@ -72,7 +72,7 @@ interface AdminStats {
   }>;
 }
 
-type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images';
+type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback';
 
 interface ConfirmDialogState {
   open: boolean;
@@ -802,6 +802,94 @@ export default function AdminInviteDashboard() {
     conv.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Feedback management
+  const [feedbackList, setFeedbackList] = useState<any[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+
+  const fetchFeedback = async () => {
+    if (!adminKey.trim()) return;
+    setFeedbackLoading(true);
+    try {
+      const res = await fetch('/api/admin/feedback/list', { 
+        headers: { 'Authorization': `Bearer ${adminKey}` },
+        signal: abortControllerRef.current?.signal,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFeedbackList(data.feedback || []);
+      } else {
+        toast.error(data.error || 'Failed to fetch feedback');
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Feedback fetch error:', error);
+        toast.error('Failed to fetch feedback');
+      }
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
+  const deleteFeedback = async (feedbackId: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/feedback/delete', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({ feedbackId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Feedback deleted');
+        fetchFeedback();
+      } else {
+        toast.error(data.error || 'Failed to delete feedback');
+      }
+    } catch (error) {
+      console.error('Delete feedback error:', error);
+      toast.error('Failed to delete feedback');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteAllFeedback = async () => {
+    showConfirmDialog({
+      title: '⚠️ Delete All Feedback',
+      description: 'Are you sure you want to delete all feedback? This action cannot be undone.',
+      confirmText: 'Delete All',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          const res = await fetch('/api/admin/feedback/delete', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${adminKey}`,
+            },
+            body: JSON.stringify({ deleteAll: true }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(`Deleted ${data.deletedCount} feedback messages`);
+            fetchFeedback();
+          } else {
+            toast.error(data.error || 'Failed to delete all feedback');
+          }
+        } catch (error) {
+          console.error('Delete all feedback error:', error);
+          toast.error('Failed to delete all feedback');
+        } finally {
+          setLoading(false);
+        }
+      },
+      isDangerous: true,
+    });
+  };
+
   // Fetch data when switching tabs - with AbortController cleanup
   useEffect(() => {
     if (!isAuthenticated || !adminKey) return;
@@ -841,6 +929,8 @@ export default function AdminInviteDashboard() {
       fetchRpcStatus();
     } else if (activeTab === 'notifications') {
       fetchNotifStats();
+    } else if (activeTab === 'feedback') {
+      fetchFeedback();
     }
 
     // Cleanup on unmount or tab change
@@ -1167,6 +1257,7 @@ export default function AdminInviteDashboard() {
             { id: 'rpc', label: 'RPC', icon: BarChart3 },
             { id: 'notifications', label: 'Notifications', icon: Bell },
             { id: 'og-images', label: 'OG Images', icon: FileText },
+            { id: 'feedback', label: 'Feedback', icon: Plus },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -2699,6 +2790,72 @@ export default function AdminInviteDashboard() {
           </div>
         )}
       </div>
+
+      {/* Feedback Tab */}
+      {activeTab === 'feedback' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold">📬 User Feedback</h2>
+            {feedbackList.length > 0 && (
+              <Button 
+                variant="destructive" 
+                onClick={deleteAllFeedback}
+                disabled={feedbackLoading || loading}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete All
+              </Button>
+            )}
+          </div>
+
+          {feedbackLoading ? (
+            <LoadingSpinner text="Loading feedback..." />
+          ) : feedbackList.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-8">
+                <p className="text-muted-foreground">No feedback yet</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {feedbackList.map((feedback: any) => (
+                <Card key={feedback.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-mono text-muted-foreground">
+                            {feedback.address.slice(0, 10)}...{feedback.address.slice(-4)}
+                          </span>
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                            {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                          {feedback.message}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteFeedback(feedback.id)}
+                        disabled={loading}
+                        className="ml-2"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <div className="text-center text-xs text-muted-foreground">
+            Total feedback: {feedbackList.length}
+          </div>
+        </div>
+      )}
 
       {/* Custom Confirmation Dialog */}
       <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ ...confirmDialog, open: false })}>
