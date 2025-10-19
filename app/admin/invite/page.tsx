@@ -2789,105 +2789,105 @@ export default function AdminInviteDashboard() {
             </Card>
           </div>
         )}
-      </div>
 
-      {/* Feedback Tab */}
-      {activeTab === 'feedback' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">User Feedback</h2>
-            {feedbackList.length > 0 && (
-              <Button 
-                variant="destructive" 
-                onClick={deleteAllFeedback}
-                disabled={feedbackLoading || loading}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete All
-              </Button>
-            )}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Feedback Messages ({feedbackList.length})</CardTitle>
-              <CardDescription>User feedback and suggestions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {feedbackLoading ? (
-                <LoadingSpinner text="Loading feedback..." />
-              ) : feedbackList.length === 0 ? (
-                <div className="text-center py-12">
-                  <MessageCircle className="w-12 h-12 mx-auto text-muted-foreground opacity-50 mb-4" />
-                  <p className="text-muted-foreground">No feedback yet</p>
-                  <p className="text-sm text-muted-foreground mt-1">User feedback will appear here</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                  {feedbackList.map((feedback: any) => (
-                    <div
-                      key={feedback.id}
-                      className="border rounded-lg p-4 space-y-3 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          {/* Address and Timestamp */}
-                          <div className="flex items-center gap-2 flex-wrap mb-2">
-                            <span className="text-sm font-mono text-muted-foreground break-all">
-                              {feedback.address}
-                            </span>
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded whitespace-nowrap">
-                              {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
-                            </span>
-                          </div>
-                          
-                          {/* Wallet Profile Data */}
-                          <div className="grid grid-cols-2 gap-2 gap-x-3 mb-3 p-2 bg-muted/30 rounded text-xs">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-muted-foreground text-xs">Wallet Type</span>
-                              <span className="font-semibold text-sm">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : 'EOA'}</span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-muted-foreground text-xs">Smart Wallet</span>
-                              <span className="font-semibold text-sm">{feedback.isSmartWallet ? 'Yes' : 'No'}</span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-muted-foreground text-xs">Mini App</span>
-                              <span className="font-semibold text-sm">{feedback.isMiniApp ? 'Yes' : 'No'}</span>
-                            </div>
-                            {feedback.farcasterDetails && (
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-muted-foreground text-xs">Farcaster</span>
-                                <span className="font-semibold text-sm truncate">
-                                  {feedback.farcasterDetails.username || feedback.farcasterDetails.displayName || `FID: ${feedback.farcasterDetails.fid}`}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Feedback Message */}
-                          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                            {feedback.message}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteFeedback(feedback.id)}
-                          disabled={loading}
-                          className="shrink-0 mt-2"
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {/* Feedback Tab */}
+        {activeTab === 'feedback' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">User Feedback</h2>
+              {feedbackList.length > 0 && (
+                <Button 
+                  variant="destructive" 
+                  onClick={deleteAllFeedback}
+                  disabled={feedbackLoading || loading}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete All
+                </Button>
               )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Feedback Messages ({feedbackList.length})</CardTitle>
+                <CardDescription>User feedback and suggestions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {feedbackLoading ? (
+                  <LoadingSpinner text="Loading feedback..." />
+                ) : feedbackList.length === 0 ? (
+                  <div className="text-center py-12">
+                    <MessageCircle className="w-12 h-12 mx-auto text-muted-foreground opacity-50 mb-4" />
+                    <p className="text-muted-foreground">No feedback yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">User feedback will appear here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                    {feedbackList.map((feedback: any) => (
+                      <div
+                        key={feedback.id}
+                        className="border rounded-lg p-4 space-y-3 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            {/* Address and Timestamp */}
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                              <span className="text-sm font-mono text-muted-foreground break-all">
+                                {feedback.address}
+                              </span>
+                              <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded whitespace-nowrap">
+                                {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            
+                            {/* Wallet Profile Data */}
+                            <div className="grid grid-cols-2 gap-2 gap-x-3 mb-3 p-2 bg-muted/30 rounded text-xs">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground text-xs">Wallet Type</span>
+                                <span className="font-semibold text-sm">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : 'EOA'}</span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground text-xs">Smart Wallet</span>
+                                <span className="font-semibold text-sm">{feedback.isSmartWallet ? 'Yes' : 'No'}</span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground text-xs">Mini App</span>
+                                <span className="font-semibold text-sm">{feedback.isMiniApp ? 'Yes' : 'No'}</span>
+                              </div>
+                              {feedback.farcasterDetails && (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-muted-foreground text-xs">Farcaster</span>
+                                  <span className="font-semibold text-sm truncate">
+                                    {feedback.farcasterDetails.username || feedback.farcasterDetails.displayName || `FID: ${feedback.farcasterDetails.fid}`}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Feedback Message */}
+                            <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                              {feedback.message}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteFeedback(feedback.id)}
+                            disabled={loading}
+                            className="shrink-0 mt-2"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
 
       {/* Custom Confirmation Dialog */}
       <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ ...confirmDialog, open: false })}>
