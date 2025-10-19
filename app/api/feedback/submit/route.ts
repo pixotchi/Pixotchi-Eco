@@ -51,11 +51,10 @@ export async function POST(request: Request) {
     await redisSetJSON(feedbackKey, feedbackData, 86400 * 90);
 
     // Add to feedback list for admin
-    await redis.zadd(
-      'pixotchi:feedback:list',
-      Date.now(),
-      feedbackId
-    );
+    await redis.zadd('pixotchi:feedback:list', {
+      score: Date.now(),
+      member: feedbackId,
+    });
 
     logger.info(`Feedback submitted`, {
       feedbackId,
