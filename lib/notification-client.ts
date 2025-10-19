@@ -3,14 +3,9 @@ import {
   sendNotificationResponseSchema,
 } from "@farcaster/miniapp-sdk";
 import { getUserNotificationDetails } from "@/lib/notification";
+import type { FrameNotificationDetails } from "@/lib/types";
 
 const appUrl = process.env.NEXT_PUBLIC_URL || "";
-
-// Define the type locally to avoid import issues
-type FrameNotificationDetails = {
-  url: string;
-  token: string;
-};
 
 type SendFrameNotificationResult =
   | {

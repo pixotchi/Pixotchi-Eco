@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  sendAIMessage,
-  checkAIRateLimit, 
-  updateAIRateLimit,
-  validateAIMessage 
-} from '@/lib/ai-service';
+import { sendAIMessage, checkAIRateLimit, updateAIRateLimit, validateAIMessage } from '@/lib/ai-service';
+import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 // Extend timeout for AI processing
 export const maxDuration = 60; // 60 seconds
@@ -33,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Basic address validation
-    if (!address.match(/^0x[a-fA-F0-9]{40}$/)) {
+    if (!isValidEthereumAddressFormat(address)) {
       return NextResponse.json(
         { error: 'Invalid wallet address format' },
         { status: 400 }

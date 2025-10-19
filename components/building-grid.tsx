@@ -55,7 +55,7 @@ const BuildingItem = React.memo(({
               className={`building-icon ${
                 building.level === 0 ? 'filter grayscale opacity-50' : ''
               }`}
-              style={{ height: 'auto' }}
+              style={{ width: 'auto', height: 'auto' }}
             />
             
             {/* Max Level Badge */}

@@ -15,15 +15,7 @@ import { useFrameContext } from "@/lib/frame-context";
 import { useComposeCast } from "@coinbase/onchainkit/minikit";
 import { toast } from "react-hot-toast";
 import { openExternalUrl } from "@/lib/open-external";
-
-interface MintShareData {
-  address: string;
-  basename?: string;
-  strainName: string;
-  strainId: number;
-  mintedAt: string;
-  txHash?: string;
-}
+import type { MintShareData } from "@/lib/types";
 
 interface MintShareModalProps {
   open: boolean;
@@ -209,7 +201,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 />
                 
                 <Image
-                  src={PLANT_IMAGES[data.strainId] || PLANT_IMAGES[1]}
+                  src={PLANT_IMAGES[(data.strainId || 1) as keyof typeof PLANT_IMAGES] || PLANT_IMAGES[1]}
                   alt={`${data.strainName} plant`}
                   aria-label={`${data.strainName} strain plant illustration`}
                   width={128}

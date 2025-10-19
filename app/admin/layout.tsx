@@ -11,5 +11,11 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <html className="admin-page-scrollable">
+      <body>
+        {children}
+      </body>
+    </html>
+  );
 } 

@@ -1,3 +1,38 @@
+// Plant strain definitions (mint prices in SEED units)
+export const PLANT_STRAINS = [
+  { id: 1, name: 'Flora', mintPriceSeed: 10 },
+  { id: 2, name: 'Taki', mintPriceSeed: 20 },
+  { id: 3, name: 'Rosa', mintPriceSeed: 40 },
+  { id: 4, name: 'Zest', mintPriceSeed: 10 },
+  { id: 5, name: 'TYJ', mintPriceSeed: 500 },
+] as const;
+
+// Plant strain index for quick lookups
+export const PLANT_STRAINS_BY_ID = Object.fromEntries(
+  PLANT_STRAINS.map(s => [s.id, s])
+) as Record<number, typeof PLANT_STRAINS[number]>;
+
+// Plant art assets mapping (strain ID to SVG/PNG path)
+export const PLANT_ART_MAP = {
+  1: '/icons/plant1.svg',      // Flora
+  2: '/icons/plant2.svg',      // Taki
+  3: '/icons/plant3WithFrame.svg', // Rosa
+  4: '/icons/plant4WithFrame.svg', // Zest
+  5: '/icons/plant5.png',      // TYJ
+} as const;
+
+// Address formatting constants
+export const ADDRESS_TRUNCATION = {
+  prefix: 6,
+  suffix: 4,
+} as const;
+
+// ENS/Basename resolution configuration
+export const ENS_CONFIG = {
+  CACHE_TTL_SECONDS: 6 * 60 * 60, // 6 hours
+  CACHE_PREFIX: 'identity:name:', // Changed from 'ens:name:' for clarity
+} as const;
+
 // Building ID to name mappings
 export const VILLAGE_BUILDING_NAMES = {
   0: "Solar Panels",

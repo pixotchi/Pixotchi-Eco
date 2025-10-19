@@ -1,28 +1,21 @@
 import { notFound } from "next/navigation";
-import type { Metadata, ResolvingMetadata } from "next";
+import { Metadata, ResolvingMetadata } from "next";
+import { redis } from "@/lib/redis";
 import { redisGetJSON } from "@/lib/redis";
+import type { MintShareData } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 const DEPLOYMENT_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 const BASE_URL = process.env.NEXT_PUBLIC_URL || DEPLOYMENT_URL || "https://mini.pixotchi.tech";
 
-interface MintShareData {
-  address: string;
-  basename?: string;
-  strain: string;
-  name: string;
-  mintedAt: string;
-  tx?: string;
-}
-
 function getOgImageUrl(data: MintShareData, platform: 'twitter' | 'farcaster' = 'farcaster') {
   const og = new URL("/api/og/mint", BASE_URL);
   og.searchParams.set('platform', platform);
   og.searchParams.set('address', data.address);
   if (data.basename) og.searchParams.set('basename', data.basename);
-  og.searchParams.set('strain', data.strain);
-  og.searchParams.set('name', data.name);
+  if (data.strain) og.searchParams.set('strain', data.strain);
+  if (data.name) og.searchParams.set('name', data.name);
   og.searchParams.set('mintedAt', data.mintedAt);
   if (data.tx) og.searchParams.set('tx', data.tx);
   return og.toString();

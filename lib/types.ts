@@ -187,7 +187,7 @@ export type AsyncState<T> = {
   data: T | null;
   loading: boolean;
   error: string | null;
-}; 
+};
 
 // Invite System Types
 export type InviteCode = {
@@ -230,7 +230,7 @@ export type InviteGenerationResult = {
   code?: string;
   error?: string;
   errorCode?: 'DAILY_LIMIT_EXCEEDED' | 'GENERATION_FAILED' | 'SYSTEM_DISABLED';
-}; 
+};
 
 // Types for Ponder Indexer
 export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent;
@@ -476,4 +476,32 @@ export type AICostMetrics = {
   messages: number;
   tokens: number;
   estimatedCost: number;
-}; 
+};
+
+// Transaction types - consolidated from multiple transaction component files
+export interface TransactionCall {
+  address: `0x${string}`;
+  abi: any;
+  functionName: string;
+  args: any[];
+  value?: bigint;
+}
+
+// Notification types - consolidated from notification.ts and notification-client.ts
+export type FrameNotificationDetails = {
+  url: string;
+  token: string;
+};
+
+// Mint share data types - consolidated from multiple files
+export interface MintShareData {
+  address: string;
+  basename?: string;
+  strain?: string; // from share/m/[id]/page.tsx
+  strainName?: string; // from mint-share-modal.tsx
+  strainId?: number; // from mint-share-modal.tsx
+  name?: string; // from share/m/[id]/page.tsx
+  mintedAt: string;
+  tx?: string; // from share/m/[id]/page.tsx
+  txHash?: string; // from mint-share-modal.tsx
+} 

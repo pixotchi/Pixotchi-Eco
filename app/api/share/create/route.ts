@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redisSetJSON } from '@/lib/redis';
+import type { MintShareData } from '@/lib/types';
 
 export const runtime = 'edge';
-
-interface MintShareData {
-  address: string;
-  basename?: string;
-  strain: string;
-  name: string;
-  mintedAt: string;
-  tx?: string;
-}
 
 // Generate a short, URL-safe ID (8 chars base62)
 function generateShortId(): string {

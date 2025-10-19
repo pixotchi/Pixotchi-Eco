@@ -1,10 +1,5 @@
 import { redis } from "./redis";
-
-// Define the type locally to avoid import issues
-type FrameNotificationDetails = {
-  url: string;
-  token: string;
-};
+import type { FrameNotificationDetails } from "./types";
 
 const notificationServiceKey =
   process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME ?? "minikit";

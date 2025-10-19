@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { parseUnits } from 'viem';
+import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 
 // Create a single CDP client instance per runtime
 let cdp: CdpClient | null = null;
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Find permission for the specific token (default to SEED)
-    const targetToken = tokenAddress || '0x546D239032b24eCEEE0cb05c92FC39090846adc7';
+    const targetToken = tokenAddress || PIXOTCHI_TOKEN_ADDRESS;
     const tokenPermission = agentPermissions.find(
       (p: any) => p.permission.token.toLowerCase() === targetToken.toLowerCase()
     );
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
       permission: {
         hash: tokenPermission.permissionHash,
         token: tokenPermission.permission.token,
-        tokenSymbol: targetToken.toLowerCase() === '0x546d239032b24eceee0cb05c92fc39090846adc7' ? 'SEED' : 'UNKNOWN',
+        tokenSymbol: targetToken.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase() ? 'SEED' : 'UNKNOWN',
         allowance: tokenPermission.permission.allowance,
         allowanceFormatted: (availableAllowance / BigInt(10 ** 18)).toString(),
         spender: tokenPermission.permission.spender,

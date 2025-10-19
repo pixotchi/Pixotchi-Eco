@@ -72,7 +72,7 @@ interface AdminStats {
   }>;
 }
 
-type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images';
+type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback';
 
 interface ConfirmDialogState {
   open: boolean;
@@ -802,6 +802,94 @@ export default function AdminInviteDashboard() {
     conv.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Feedback management
+  const [feedbackList, setFeedbackList] = useState<any[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+
+  const fetchFeedback = async () => {
+    if (!adminKey.trim()) return;
+    setFeedbackLoading(true);
+    try {
+      const res = await fetch('/api/admin/feedback/list', { 
+        headers: { 'Authorization': `Bearer ${adminKey}` },
+        signal: abortControllerRef.current?.signal,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFeedbackList(data.feedback || []);
+      } else {
+        toast.error(data.error || 'Failed to fetch feedback');
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Feedback fetch error:', error);
+        toast.error('Failed to fetch feedback');
+      }
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
+  const deleteFeedback = async (feedbackId: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/feedback/delete', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({ feedbackId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Feedback deleted');
+        fetchFeedback();
+      } else {
+        toast.error(data.error || 'Failed to delete feedback');
+      }
+    } catch (error) {
+      console.error('Delete feedback error:', error);
+      toast.error('Failed to delete feedback');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteAllFeedback = async () => {
+    showConfirmDialog({
+      title: '⚠️ Delete All Feedback',
+      description: 'Are you sure you want to delete all feedback? This action cannot be undone.',
+      confirmText: 'Delete All',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          const res = await fetch('/api/admin/feedback/delete', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${adminKey}`,
+            },
+            body: JSON.stringify({ deleteAll: true }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(`Deleted ${data.deletedCount} feedback messages`);
+            fetchFeedback();
+          } else {
+            toast.error(data.error || 'Failed to delete all feedback');
+          }
+        } catch (error) {
+          console.error('Delete all feedback error:', error);
+          toast.error('Failed to delete all feedback');
+        } finally {
+          setLoading(false);
+        }
+      },
+      isDangerous: true,
+    });
+  };
+
   // Fetch data when switching tabs - with AbortController cleanup
   useEffect(() => {
     if (!isAuthenticated || !adminKey) return;
@@ -841,6 +929,8 @@ export default function AdminInviteDashboard() {
       fetchRpcStatus();
     } else if (activeTab === 'notifications') {
       fetchNotifStats();
+    } else if (activeTab === 'feedback') {
+      fetchFeedback();
     }
 
     // Cleanup on unmount or tab change
@@ -1167,6 +1257,7 @@ export default function AdminInviteDashboard() {
             { id: 'rpc', label: 'RPC', icon: BarChart3 },
             { id: 'notifications', label: 'Notifications', icon: Bell },
             { id: 'og-images', label: 'OG Images', icon: FileText },
+            { id: 'feedback', label: 'Feedback', icon: Plus },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -2694,6 +2785,104 @@ export default function AdminInviteDashboard() {
                   <span>✅</span>
                   <span>Short URLs work and redirect correctly</span>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Feedback Tab */}
+        {activeTab === 'feedback' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">User Feedback</h2>
+              {feedbackList.length > 0 && (
+                <Button 
+                  variant="destructive" 
+                  onClick={deleteAllFeedback}
+                  disabled={feedbackLoading || loading}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete All
+                </Button>
+              )}
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Feedback Messages ({feedbackList.length})</CardTitle>
+                <CardDescription>User feedback and suggestions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {feedbackLoading ? (
+                  <LoadingSpinner text="Loading feedback..." />
+                ) : feedbackList.length === 0 ? (
+                  <div className="text-center py-12">
+                    <MessageCircle className="w-12 h-12 mx-auto text-muted-foreground opacity-50 mb-4" />
+                    <p className="text-muted-foreground">No feedback yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">User feedback will appear here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                    {feedbackList.map((feedback: any) => (
+                      <div
+                        key={feedback.id}
+                        className="border rounded-lg p-4 space-y-3 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            {/* Address and Timestamp */}
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                              <span className="text-sm font-mono text-muted-foreground break-all">
+                                {feedback.address}
+                              </span>
+                              <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded whitespace-nowrap">
+                                {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            
+                            {/* Wallet Profile Data */}
+                            <div className="grid grid-cols-2 gap-2 gap-x-3 mb-3 p-2 bg-muted/30 rounded text-xs">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground text-xs">Wallet Type</span>
+                                <span className="font-semibold text-sm">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : 'EOA'}</span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground text-xs">Smart Wallet</span>
+                                <span className="font-semibold text-sm">{feedback.isSmartWallet ? 'Yes' : 'No'}</span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground text-xs">Mini App</span>
+                                <span className="font-semibold text-sm">{feedback.isMiniApp ? 'Yes' : 'No'}</span>
+                              </div>
+                              {feedback.farcasterDetails && (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-muted-foreground text-xs">Farcaster</span>
+                                  <span className="font-semibold text-sm truncate">
+                                    {feedback.farcasterDetails.username || feedback.farcasterDetails.displayName || `FID: ${feedback.farcasterDetails.fid}`}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Feedback Message */}
+                            <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                              {feedback.message}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteFeedback(feedback.id)}
+                            disabled={loading}
+                            className="shrink-0 mt-2"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

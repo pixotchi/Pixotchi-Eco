@@ -2,6 +2,7 @@ import { redis } from './redis';
 import { nanoid } from 'nanoid';
 import { ChatMessage, ChatRateLimit, ChatStats, AdminChatMessage } from './types';
 import { resolvePrimaryName } from './ens-resolver';
+import { ADDRESS_TRUNCATION } from './constants';
 
 const CHAT_MESSAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
@@ -18,9 +19,9 @@ function createMessageHash(message: string): string {
   return Buffer.from(message.toLowerCase().trim()).toString('base64');
 }
 
-// Helper function to format display name
+// Helper function to format display name with consistent truncation
 export function formatDisplayName(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  return `${address.slice(0, ADDRESS_TRUNCATION.prefix)}...${address.slice(-ADDRESS_TRUNCATION.suffix)}`;
 }
 
 // Store a new chat message

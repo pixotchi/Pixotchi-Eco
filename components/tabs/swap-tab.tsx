@@ -4,29 +4,34 @@ import { useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ToggleGroup } from '@/components/ui/toggle-group';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
+import { PIXOTCHI_TOKEN_ADDRESS, WETH_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
+import TradingViewWidget from './TradingViewWidget';
 
 export default function SwapTab() {
   const { address } = useAccount();
   const fc = useFrameContext();
   const isMiniApp = Boolean(fc?.isInMiniApp);
+  const [swapView, setSwapView] = useState<'swap' | 'chart'>('swap');
 
   const ETH: Token = {
-    address: "",
+    address: "0x4200000000000000000000000000000000000006",
     chainId: 8453,
     decimals: 18,
-    name: "Ethereum",
+    name: "ETH",
     symbol: "ETH",
-    image: "https://dynamic-assets.coinbase.com/dbb4b4983bde81309ddab83eb598358eb44375b930b94687ebe38bc22e52c3b2125258ffb8477a5ef22e33d6bd72e32a506c391caa13af64c00e46613c3e5806/asset_icons/4113b082d21cc5fab17fc8f2d19fb996165bcce635e6900f7fc2d57c4ef33ae9.png",
+    image: "https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png",
   };
 
   const SEED: Token = {
-    address: "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+    address: PIXOTCHI_TOKEN_ADDRESS,
     chainId: 8453,
     decimals: 18,
     name: "SEED",
@@ -35,7 +40,7 @@ export default function SwapTab() {
   };
 
   const USDC: Token = {
-    address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    address: USDC_ADDRESS,
     chainId: 8453,
     decimals: 6,
     name: "USDC",
@@ -62,28 +67,45 @@ export default function SwapTab() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Swap</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div data-ock-theme="pixotchi">
-          <Swap
-            isSponsored={false}
-            experimental={{ useAggregator: true }}
-            config={{ maxSlippage: 5.5 }}
-            onSuccess={handleSuccess}
-            onError={handleError}
-          >
-            {/* Allow token rotation and selection between ETH and SEED */}
-            <SwapAmountInput label="Sell" token={ETH} swappableTokens={SWAPPABLE} type="from" />
-            <SwapToggleButton />
-            <SwapAmountInput label="Buy" token={SEED} swappableTokens={SWAPPABLE} type="to" />
-            <SwapButton />
-            <SwapMessage />
-            <SwapToast />
-          </Swap>
+      <Card 
+        className={swapView === 'chart' ? 'flex flex-col aspect-square' : ''}
+        padding={swapView === 'chart' ? 'none' : 'md'}
+      >
+        <CardHeader className={swapView === 'chart' ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>{swapView === 'chart' ? 'Chart' : 'Swap'}</CardTitle>
+            <ToggleGroup
+              value={swapView}
+              onValueChange={(v) => setSwapView(v as 'swap' | 'chart')}
+              options={[
+                { value: 'swap', label: 'Swap' },
+                { value: 'chart', label: 'Chart' },
+              ]}
+            />
           </div>
+        </CardHeader>
+        <CardContent className={swapView === 'chart' ? 'flex-1 p-4 overflow-hidden' : 'space-y-4'}>
+          {swapView === 'swap' ? (
+            <div data-ock-theme="pixotchi">
+              <Swap
+                isSponsored={false}
+                experimental={{ useAggregator: true }}
+                config={{ maxSlippage: 5.5 }}
+                onSuccess={handleSuccess}
+                onError={handleError}
+              >
+                {/* Allow token rotation and selection between ETH and SEED */}
+                <SwapAmountInput label="Sell" token={ETH} swappableTokens={SWAPPABLE} type="from" />
+                <SwapToggleButton />
+                <SwapAmountInput label="Buy" token={SEED} swappableTokens={SWAPPABLE} type="to" />
+                <SwapButton />
+                <SwapMessage />
+                <SwapToast />
+              </Swap>
+            </div>
+          ) : (
+            <TradingViewWidget />
+          )}
         </CardContent>
       </Card>
 
@@ -96,9 +118,9 @@ export default function SwapTab() {
           <div className="flex items-start space-x-3">
             <Image src="/icons/fire.svg" alt="Burn" width={20} height={20} className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold">100% In-Game Burn</h4>
+              <h4 className="font-semibold">70% In-Game Burn</h4>
               <p className="text-muted-foreground text-xs">
-                Currently, 100% of the SEED tokens spent within the game on items or upgrades are permanently burned.
+                Currently, 70% of the SEED tokens spent within the game on items or upgrades are permanently burned. 30% are added to the Quests rewards pool.
               </p>
             </div>
           </div>
@@ -113,7 +135,7 @@ export default function SwapTab() {
               <ul className="mt-2 space-y-1 text-xs list-disc pl-5">
                 <li><span className="font-semibold">2% to Player Rewards:</span> Distributed as ETH to players based on ranking.</li>
                 <li><span className="font-semibold">2% to Project Treasury:</span> Funds ongoing development and operational costs.</li>
-                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure stability.</li>
+                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure higher stablity.</li>
               </ul>
             </div>
           </div>
@@ -124,7 +146,7 @@ export default function SwapTab() {
                 className="w-full"
                 onClick={async () => {
                   try {
-                    await sdk.actions.viewToken({ token: 'eip155:8453/erc20:0x546D239032b24eCEEE0cb05c92FC39090846adc7' });
+                    await sdk.actions.viewToken({ token: `eip155:8453/erc20:${PIXOTCHI_TOKEN_ADDRESS}` });
                   } catch (err) {
                     toast.error('View Token is only available in supported Farcaster clients.');
                   }
@@ -135,6 +157,14 @@ export default function SwapTab() {
               </Button>
             </div>
           )}
+
+          {/* Disclaimer Section */}
+          <div className="pt-4 mt-4 border-t border-border/30">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold block mb-2">Disclaimer:</span>
+              SEED was launched independently via BaseSwap with 100% of the supply (20M) in circulation with no pre-mint or team allocation. Acquiring $SEED tokens does not represent an investment contract or financial advice. Token value may fluctuate significantly. Please consult your local laws regarding token ownership in your jurisdiction.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

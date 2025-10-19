@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount } from "wagmi";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
-import { LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, getTokenBalance, getLeafBalance } from "@/lib/contracts";
+import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_APPROVE_ABI, getTokenBalance, getLeafBalance } from '@/lib/contracts';
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import { toast } from "react-hot-toast";
 
@@ -184,21 +184,11 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
         const { createPublicClient, http } = await import("viem");
         const { base } = await import("viem/chains");
         const c = createPublicClient({ chain: base, transport: http() });
-        const erc20AllowanceAbi = [{
-          name: 'allowance',
-          type: 'function',
-          stateMutability: 'view',
-          inputs: [
-            { name: 'owner', type: 'address' },
-            { name: 'spender', type: 'address' },
-          ],
-          outputs: [{ name: '', type: 'uint256' }],
-        }] as const;
         const [seed, leaf, seedAll, leafAll] = await Promise.all([
           getTokenBalance(address),
           getLeafBalance(address),
-          c.readContract({ address: PIXOTCHI_TOKEN_ADDRESS, abi: erc20AllowanceAbi as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
-          c.readContract({ address: LEAF_CONTRACT_ADDRESS, abi: erc20AllowanceAbi as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
+          c.readContract({ address: PIXOTCHI_TOKEN_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
+          c.readContract({ address: LEAF_CONTRACT_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
         ]);
         setSeedBalance(seed || BigInt(0));
         setLeafBalance(leaf || BigInt(0));
@@ -404,7 +394,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               <div className="flex gap-2">
                 {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
-                    calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: [{ name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] }] as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                    calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve SEED"
                     buttonClassName="h-9 px-4"
                     hideStatus
@@ -413,7 +403,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 )}
                 {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
-                    calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: [{ name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] }] as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                    calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve LEAF"
                     buttonClassName="h-9 px-4"
                     hideStatus
@@ -508,7 +498,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               <div className="flex gap-2">
                 {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
-                    calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: [{ name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] }] as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                    calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve SEED"
                     buttonClassName="h-9 px-4"
                     hideStatus
@@ -517,7 +507,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 )}
                 {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
-                    calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: [{ name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] }] as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                    calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve LEAF"
                     buttonClassName="h-9 px-4"
                     hideStatus

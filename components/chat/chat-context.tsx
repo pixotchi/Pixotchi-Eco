@@ -6,6 +6,10 @@ import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
 import { getRecentMessages } from '@/lib/chat-service';
 import { getAIConversationMessages } from '@/lib/ai-service';
 import { useAccount } from 'wagmi';
+import toast from 'react-hot-toast';
+import { getReadClient } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
+import { PLANT_STRAINS } from '@/lib/constants';
 
 // Combined message type for simplicity in the context
 type AnyChatMessage = ChatMessage | AIChatMessage;
@@ -238,7 +242,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               try { await provider.request({ method: 'eth_requestAccounts' }); } catch {}
               try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch {}
               const perms = await spendMod.fetchPermissions({ account: address as `0x${string}`, chainId: 8453, spender, provider }).catch(() => []);
-              const SEED = '0x546D239032b24eCEEE0cb05c92FC39090846adc7' as `0x${string}`;
+              const SEED = PIXOTCHI_TOKEN_ADDRESS;
               const seedPerm = (perms || []).find((p: any) => `${p.permission?.token}`.toLowerCase() === SEED.toLowerCase());
               if (seedPerm) {
                 // Robustly infer mint count from current or recent user messages; clamp to 1..5 per agent policy
@@ -262,24 +266,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 if (inferredCount == null) inferredCount = 1;
 
                 // Use the same hardcoded strains as the server (SEED units)
-                const STRAINS = [
-                  { id: 1, name: 'Flora', mintPriceSeed: 10 },
-                  { id: 2, name: 'Taki', mintPriceSeed: 20 },
-                  { id: 3, name: 'ROSA', mintPriceSeed: 40 },
-                  { id: 4, name: 'ZEST', mintPriceSeed: 10 },
-                  { id: 5, name: 'TYJ', mintPriceSeed: 500 },
-                ];
+                const STRAINS = PLANT_STRAINS;
                 // Default to ZEST in agent mode unless user explicitly specifies another strain
-                let chosen = STRAINS.find(s => s.id === 4) || STRAINS[0];
+                let chosen: typeof STRAINS[number] = STRAINS.find(s => s.id === 4) || STRAINS[0];
                 const idMatch = /strain\s*(\d{1,2})/i.exec(messageText);
                 if (idMatch) {
                   const sid = parseInt(idMatch[1], 10);
                   const found = STRAINS.find(s => s.id === sid);
-                  if (found) chosen = found;
+                  if (found) chosen = found as typeof STRAINS[number];
                 } else if (Array.isArray(STRAINS)) {
                   const lower = messageText.toLowerCase();
                   const byName = STRAINS.find(s => lower.includes(String(s.name || '').toLowerCase()));
-                  if (byName) chosen = byName;
+                  if (byName) chosen = byName as typeof STRAINS[number];
                 }
                 const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10); // SEED units
                 const total = unit * inferredCount;

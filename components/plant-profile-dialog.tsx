@@ -5,12 +5,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Copy, ExternalLink, ArrowLeft, Eye } from 'lucide-react';
+import { Copy, ExternalLink, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
 import { getUserGameStats } from '@/lib/user-stats-service';
 import { getStakeInfo } from '@/lib/contracts';
-import { formatEthShort, formatTokenAmount } from '@/lib/utils';
+import { formatEthShort, formatTokenAmount, formatAddress } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/open-external';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import toast from 'react-hot-toast';
@@ -77,10 +77,6 @@ const CACHE_DURATION = 120000; // 2 minutes
 
 const formatStaked = (amount: bigint) => formatTokenAmount(amount, 18);
 
-function formatAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
 function formatCount(count: number): string {
   if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
@@ -119,9 +115,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const [loading, setLoading] = useState(false);
   const [efpStats, setEfpStats] = useState<EFPStats | null>(null);
   const [efpLoading, setEfpLoading] = useState(false);
-  const [viewingENSDetails, setViewingENSDetails] = useState(false);
-  const [ensData, setEnsData] = useState<ENSData | null>(null);
-  const [ensLoading, setEnsLoading] = useState(false);
 
   // Resolve ENS/Basename using shared resolver
   const { name: ownerName, loading: isNameLoading } = usePrimaryName(plant?.owner);
@@ -244,8 +237,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   // Reset view when dialog closes
   useEffect(() => {
     if (!open) {
-      setViewingENSDetails(false);
-      setEnsData(null);
+      // setViewingENSDetails(false); // Removed
+      // setEnsData(null); // Removed
     }
   }, [open]);
 
@@ -258,41 +251,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
 
   const handleViewOnBaseScan = async () => {
     await openExternalUrl(`https://basescan.org/address/${plant.owner}`);
-  };
-
-  const handleViewENSDetails = async () => {
-    if (!ownerName) return;
-
-    // Check cache first
-    const cacheKey = plant.owner.toLowerCase();
-    const cached = ensDataCache.get(cacheKey);
-    const now = Date.now();
-
-    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-      setEnsData(cached.data);
-      setViewingENSDetails(true);
-      return;
-    }
-
-    // Fetch fresh data
-    setEnsLoading(true);
-    const data = await fetchENSData(ownerName);
-    setEnsLoading(false);
-
-    if (data) {
-      setEnsData(data);
-      ensDataCache.set(cacheKey, {
-        data,
-        timestamp: now,
-      });
-      setViewingENSDetails(true);
-    } else {
-      toast.error('Failed to load ENS data');
-    }
-  };
-
-  const handleBackToProfile = () => {
-    setViewingENSDetails(false);
   };
 
   return (
@@ -366,193 +324,23 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           ) : null}
         </div>
 
-        {/* Conditional Content: Main Profile or ENS Details */}
-        {viewingENSDetails ? (
-          /* ENS Details View */
-          <div className="space-y-4">
-            {/* Back Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBackToProfile}
-              className="mb-2"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Profile
-            </Button>
-
-            {/* ENS Data Display */}
-            {ensData && (
-              <div className="space-y-4">
-                {/* Avatar & Header */}
-                {ensData.records?.header && (
-                  <div className="relative w-full h-24 rounded-lg overflow-hidden bg-muted">
-                    <img 
-                      src={ensData.records.header} 
-                      alt="ENS Header" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
-
-                {ensData.avatar && (
-                  <div className="flex justify-center -mt-8">
-                    <div className="w-20 h-20 rounded-full border-4 border-background overflow-hidden bg-muted">
-                      <img 
-                        src={ensData.avatar} 
-                        alt="ENS Avatar" 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* ENS Name */}
-                <div className="text-center">
-                  <h3 className="text-xl font-bold">{ensData.name}</h3>
-                  {ensData.records?.name && ensData.records.name !== ensData.name && (
-                    <p className="text-sm text-muted-foreground mt-1">{ensData.records.name}</p>
-                  )}
-                </div>
-
-                {/* Description */}
-                {ensData.records?.description && (
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                        {ensData.records.description}
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Social & Contact Links */}
-                <div className="space-y-2">
-                  {ensData.records?.url && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Website</span>
-                        <button
-                          type="button"
-                          onClick={() => openExternalUrl(ensData.records!.url!)}
-                          className="text-sm text-primary hover:underline truncate max-w-[60%] text-left"
-                        >
-                          {ensData.records.url}
-                        </button>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {ensData.records?.location && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Location</span>
-                        <span className="text-sm">{ensData.records.location}</span>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {ensData.records?.email && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Email</span>
-                        <button
-                          type="button"
-                          onClick={() => openExternalUrl(`mailto:${ensData.records!.email!}`)}
-                          className="text-sm text-primary hover:underline truncate max-w-[60%] text-left"
-                        >
-                          {ensData.records.email}
-                        </button>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {ensData.records?.['com.twitter'] && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Twitter</span>
-                        <button
-                          type="button"
-                          onClick={() => openExternalUrl(`https://twitter.com/${ensData.records!['com.twitter']!}`)}
-                          className="text-sm text-primary hover:underline"
-                        >
-                          @{ensData.records['com.twitter']}
-                        </button>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {ensData.records?.['com.github'] && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">GitHub</span>
-                        <button
-                          type="button"
-                          onClick={() => openExternalUrl(`https://github.com/${ensData.records!['com.github']!}`)}
-                          className="text-sm text-primary hover:underline"
-                        >
-                          @{ensData.records['com.github']}
-                        </button>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {ensData.records?.['com.discord'] && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Discord</span>
-                        <span className="text-sm">{ensData.records['com.discord']}</span>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {ensData.records?.['org.telegram'] && (
-                    <Card>
-                      <CardContent className="p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Telegram</span>
-                        <span className="text-sm">@{ensData.records['org.telegram']}</span>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-
-                {/* Updated At */}
-                {ensData.updated_at && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Last updated: {new Date(ensData.updated_at).toLocaleDateString()}
-                  </p>
+        {/* Conditional Content: Main Profile Only */}
+        {/* Main Profile View */}
+        <>
+          {/* Owner Section */}
+          <div className="space-y-3 mb-5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
+              <div className="flex items-center gap-2">
+                {isNameLoading ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : ownerName ? (
+                  <span className="text-sm text-primary font-medium">{ownerName}</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">No ENS/Basename found</span>
                 )}
               </div>
-            )}
-          </div>
-        ) : (
-          /* Main Profile View */
-          <>
-            {/* Owner Section */}
-        <div className="space-y-3 mb-5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
-            <div className="flex items-center gap-2">
-              {isNameLoading ? (
-                <Skeleton className="h-4 w-32" />
-              ) : ownerName ? (
-                <>
-                  <span className="text-sm text-primary font-medium">{ownerName}</span>
-                  <button
-                    type="button"
-                    onClick={handleViewENSDetails}
-                    disabled={ensLoading}
-                    className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact disabled:opacity-50"
-                    aria-label="View ENS details"
-                  >
-                    {ensLoading ? '...' : <Eye className="w-3 h-3" />}
-                  </button>
-                </>
-              ) : (
-                <span className="text-xs text-muted-foreground italic">No ENS/Basename found</span>
-              )}
             </div>
-          </div>
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
@@ -560,7 +348,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
               onClick={handleCopyAddress}
               className="flex-1 h-10 font-mono text-sm justify-between"
             >
-              <span className="truncate">{formatAddress(plant.owner)}</span>
+              <span className="truncate">{formatAddress(plant.owner, 6, 4)}</span>
               <Copy className="w-4 h-4 flex-shrink-0" />
             </Button>
             <Button
@@ -614,8 +402,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             Ethereum Follow Protocol
           </button>
         </div>
-          </>
-        )}
+        </>
       </DialogContent>
     </Dialog>
   );

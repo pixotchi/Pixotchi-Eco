@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { generateText, tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
-// Use hardcoded strain data for Agent (do not fetch from contract)
+// Use centralized strain data for Agent
 import { z } from 'zod';
+import { PLANT_STRAINS } from '@/lib/constants';
 // Removed generic AgentKit/Vercel AI tools to avoid requiring RPC URLs in this route
 
 export const dynamic = 'force-dynamic';
@@ -19,20 +20,14 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Missing prompt' }), { status: 400 });
     }
 
-    // Hardcoded strains (mintPriceSeed in SEED units)
-    const HARDCODED_STRAINS = [
-      { id: 1, name: 'Flora', mintPriceSeed: 10 },
-      { id: 2, name: 'Taki', mintPriceSeed: 20 },
-      { id: 3, name: 'ROSA', mintPriceSeed: 40 },
-      { id: 4, name: 'ZEST', mintPriceSeed: 10 },
-      { id: 5, name: 'TYJ', mintPriceSeed: 500 },
-    ];
+    // Use centralized strains (mintPriceSeed in SEED units)
+    const HARDCODED_STRAINS = PLANT_STRAINS;
 
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
       parameters: z.object({}),
       execute: async () => {
-        // Return hardcoded dataset
+        // Return centralized strain dataset
         return HARDCODED_STRAINS.map(s => ({ id: s.id, name: s.name, mintPriceSeed: s.mintPriceSeed }));
       }
     });
@@ -50,13 +45,13 @@ export async function POST(req: NextRequest) {
         const effectiveUserAddress = toolUserAddress || userAddress;
         // Use hardcoded strains dataset
         const strains = HARDCODED_STRAINS;
-        let chosen = strains[0];
+        let chosen: typeof HARDCODED_STRAINS[number] = strains[0];
         if (typeof strain === 'number') {
           const found = strains.find(s => s.id === Number(strain));
-          if (found) chosen = found;
+          if (found) chosen = found as typeof HARDCODED_STRAINS[number];
         } else if (strainName) {
           const byName = strains.find(s => `${s.name}`.toLowerCase() === `${strainName}`.toLowerCase());
-          if (byName) chosen = byName;
+          if (byName) chosen = byName as typeof HARDCODED_STRAINS[number];
         }
         const unit = chosen?.mintPriceSeed || 0;
         const total = unit * count;

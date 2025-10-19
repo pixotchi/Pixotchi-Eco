@@ -1,25 +1,18 @@
 "use client";
 
-import React, { useCallback, useRef } from 'react';
-import { 
-  Transaction, 
+import React, { useCallback, useRef, useEffect } from 'react';
+import {
+  Transaction,
   TransactionButton,
   TransactionStatus,
   TransactionStatusAction,
   TransactionStatusLabel,
 } from '@coinbase/onchainkit/transaction';
-import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+import GlobalTransactionToast from './global-transaction-toast';
 import { usePaymaster } from '@/lib/paymaster-context';
+import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
-
-interface TransactionCall {
-  address: `0x${string}`;
-  abi: any;
-  functionName: string;
-  args: any[];
-  value?: bigint;
-}
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];

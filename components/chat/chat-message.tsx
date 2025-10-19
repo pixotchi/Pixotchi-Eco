@@ -4,7 +4,7 @@ import { ChatMessage, AIChatMessage } from "@/lib/types";
 import { differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from "date-fns";
 import { useAccount } from "wagmi";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
-import { Bot, User } from "lucide-react";
+import { Bot, User, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Function to format AI messages with bold syntax **text**
@@ -106,6 +106,9 @@ export default function ChatMessageComponent({
             <span className="text-xs font-semibold">
               {displayName}
             </span>
+            {!isAIMessage && !isUserAIMessage && !isOwnPublicMessage && name && (
+              <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+            )}
           </div>
           <span className="text-xs text-muted-foreground">
             {formatRelativeShort(new Date(message.timestamp))}

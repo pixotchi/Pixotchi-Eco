@@ -25,7 +25,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         )}
         {...props}
       >
-        <div className={cn('h-full w-full', paddingStyles[padding])} role="group">
+        <div className={cn('h-full w-full flex flex-col', paddingStyles[padding])} role="group">
           {children}
         </div>
       </div>

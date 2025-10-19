@@ -6,27 +6,11 @@ import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { formatTokenAmount, formatNumber } from "@/lib/utils";
+import { formatTokenAmount, formatNumber, formatLargeNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 
 import { StandardContainer } from "./ui/pixel-container";
-import { formatUnits } from "viem";
-
-// Format large numbers with M/K suffixes
-function formatLargeNumber(amount: bigint): string {
-  // Convert bigint to number directly (tokens are stored in wei, so divide by 1e18)
-  const num = parseFloat(formatUnits(amount, 18));
-  
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
-  } else if (num >= 1000) {
-    return (num / 1000).toFixed(1).replace(/\.?0+$/, '') + 'K';
-  }
-  
-  // For smaller numbers, use the standard formatting
-  return formatTokenAmount(amount);
-}
 
 interface BalanceCardProps {
   className?: string;

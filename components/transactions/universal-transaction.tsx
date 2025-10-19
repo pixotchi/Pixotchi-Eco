@@ -11,14 +11,7 @@ import {
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
-
-interface TransactionCall {
-  address: `0x${string}`;
-  abi: any;
-  functionName: string;
-  args: any[];
-  value?: bigint;
-}
+import type { TransactionCall } from '@/lib/types';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];

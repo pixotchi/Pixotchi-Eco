@@ -12,24 +12,12 @@ import {
   formatNumber, 
   getPlantStatusText,
   getStrainName,
-  formatDuration
+  formatDuration,
+  formatLargeNumber
 } from './utils';
 import { Plant, Land, BuildingData } from './types';
 import { redis } from './redis';
 import { VILLAGE_BUILDING_NAMES, TOWN_BUILDING_NAMES } from './constants';
-
-// Format large numbers exactly as shown to users (matching balance-card.tsx)
-function formatLargeNumber(amount: bigint): string {
-  const num = Number(amount) / 1e18;
-  
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
-  } else if (num >= 1000) {
-    return (num / 1000).toFixed(1).replace(/\.?0+$/, '') + 'K';
-  }
-  
-  return formatTokenAmount(amount);
-}
 
 // Building type names as shown to users
 const getVillageBuildingName = (buildingId: number): string => {

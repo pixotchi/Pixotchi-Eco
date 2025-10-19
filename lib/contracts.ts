@@ -16,6 +16,92 @@ export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress
 export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
 export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
 
+// Common constants
+export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+export const SYSTEM_ADDRESS = '0x0000000000000000000000000000000000000001';
+export const USDC_ADDRESS = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913');
+
+// EVM event signatures for log parsing
+export const EVM_EVENT_SIGNATURES = {
+  // ERC20 Transfer(address indexed from, address indexed to, uint256 value)
+  ERC20_TRANSFER: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+} as const;
+
+// Topic constants for log filtering
+export const EVM_TOPICS = {
+  ZERO_ADDRESS_TOPIC: '0x0000000000000000000000000000000000000000000000000000000000000000',
+} as const;
+
+// Address validation pattern
+export const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
+
+// Centralized ABI definitions to avoid duplication
+export const ERC20_APPROVE_ABI = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'bool' }]
+  }
+] as const;
+
+export const ERC20_BALANCE_ABI = [
+  {
+    inputs: [{ name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+export const BOX_GAME_ABI = [
+  {
+    inputs: [{ name: "nftID", type: "uint256" }],
+    name: "boxGameGetCoolDownTimePerNFT",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "nftID", type: "uint256" }],
+    name: "boxGameGetCoolDownTimeWithStar",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "nftID", type: "uint256" },
+      { name: "seed", type: "uint256" },
+    ],
+    name: "boxGamePlay",
+    outputs: [
+      { name: "points", type: "uint256" },
+      { name: "timeExtension", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "nftID", type: "uint256" },
+      { name: "seed", type: "uint256" },
+    ],
+    name: "boxGamePlayWithStar",
+    outputs: [
+      { name: "points", type: "uint256" },
+      { name: "timeExtension", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
