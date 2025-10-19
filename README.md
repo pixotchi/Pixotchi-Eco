@@ -227,7 +227,7 @@ Troubleshooting endpoints:
 ## Configuration Notes
 - Strict CSP/security headers live in `middleware.ts`. If embedding new iframes/RPC domains, update CSP and CORS accordingly.
 - Prefer private Base RPCs with multiple endpoints for automatic failover.
-- If using the paymaster, ensure `NEXT_PUBLIC_CDP_*` are set; the app runs without it if omitted.
+- If using the paymaster, ensure `_PUBLIC_CDP_*` are set; the app runs without it if omitted.
 
 
 
