@@ -2795,7 +2795,7 @@ export default function AdminInviteDashboard() {
       {activeTab === 'feedback' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">📬 User Feedback</h2>
+            <h2 className="text-2xl font-bold">User Feedback</h2>
             {feedbackList.length > 0 && (
               <Button 
                 variant="destructive" 
@@ -2842,23 +2842,23 @@ export default function AdminInviteDashboard() {
                           </div>
                           
                           {/* Wallet Profile Data */}
-                          <div className="grid grid-cols-2 gap-2 mb-3 p-2 bg-muted/30 rounded text-xs">
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Wallet Type:</span>
-                              <span className="font-semibold">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : 'EOA'}</span>
+                          <div className="grid grid-cols-2 gap-2 gap-x-3 mb-3 p-2 bg-muted/30 rounded text-xs">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground text-xs">Wallet Type</span>
+                              <span className="font-semibold text-sm">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : 'EOA'}</span>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Smart Wallet:</span>
-                              <span className="font-semibold">{feedback.isSmartWallet ? 'Yes' : 'No'}</span>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground text-xs">Smart Wallet</span>
+                              <span className="font-semibold text-sm">{feedback.isSmartWallet ? 'Yes' : 'No'}</span>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Mini App:</span>
-                              <span className="font-semibold">{feedback.isMiniApp ? 'Yes' : 'No'}</span>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground text-xs">Mini App</span>
+                              <span className="font-semibold text-sm">{feedback.isMiniApp ? 'Yes' : 'No'}</span>
                             </div>
                             {feedback.farcasterDetails && (
-                              <div className="col-span-2 text-xs">
-                                <span className="text-muted-foreground block">Farcaster:</span>
-                                <span className="text-foreground block">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground text-xs">Farcaster</span>
+                                <span className="font-semibold text-sm truncate">
                                   {feedback.farcasterDetails.username || feedback.farcasterDetails.displayName || `FID: ${feedback.farcasterDetails.fid}`}
                                 </span>
                               </div>
@@ -2875,7 +2875,7 @@ export default function AdminInviteDashboard() {
                           size="sm"
                           onClick={() => deleteFeedback(feedback.id)}
                           disabled={loading}
-                          className="shrink-0"
+                          className="shrink-0 mt-2"
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
