@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo, useEffectEvent } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
@@ -50,20 +50,43 @@ export function useBroadcastMessages() {
     if (address) return `addr:${address.toLowerCase()}`;
     if (authenticated && user?.id) return `privy:${user.id}`;
     try {
+      // Fallback: Farcaster Mini App fid if present
       const fid = (window as any)?.__pixotchi_frame_context__?.context?.user?.fid;
       if (typeof fid === 'number' && fid > 0) return `fid:${fid}`;
     } catch {}
     return undefined;
   }, [address, authenticated, user?.id]);
 
+  // Local dismissed IDs are loaded synchronously in state initializer
+
+  // Check tutorial completion status on mount only
+  useEffect(() => {
+    setTutorialCompleted(isTutorialCompleted());
+    
+    // Listen for tutorial completion event if needed
+    const handleTutorialComplete = () => {
+      console.log('[Broadcast] Tutorial completed, will fetch messages on next poll');
+      setTutorialCompleted(true);
+    };
+    
+    window.addEventListener('tutorial:complete', handleTutorialComplete);
+    
+    return () => {
+      window.removeEventListener('tutorial:complete', handleTutorialComplete);
+    };
+  }, []);
+
   // Fetch active messages - relaxed to not require wallet connection
   const fetchMessages = useCallback(async () => {
+    // Require tutorial completion only; wallet connection is optional
     if (!isTutorialCompleted()) {
+      // Ensure we clear any messages if tutorial isn't completed
       setMessages(prev => (prev.length > 0 ? [] : prev));
       setLoading(false);
       return;
     }
 
+    // Prevent excessive polling - minimum 10 seconds between fetches
     const now = Date.now();
     if (now - lastFetchRef.current < 10000) {
       console.log(`[Broadcast] Skipping fetch - only ${((now - lastFetchRef.current) / 1000).toFixed(1)}s since last fetch`);
@@ -81,6 +104,7 @@ export function useBroadcastMessages() {
       const data = await response.json();
       
       if (data.success && Array.isArray(data.messages)) {
+        // Filter out locally dismissed messages (persisted between sessions)
         const activeMessages = data.messages.filter(
           (msg: BroadcastMessage) => !localDismissedIds.has(msg.id)
         );
@@ -93,77 +117,26 @@ export function useBroadcastMessages() {
     } finally {
       setLoading(false);
     }
-  }, [identity, localDismissedIds]);
-
-  // ✅ useEffectEvent: Handles tutorial completion without triggering effect re-runs
-  const handleTutorialComplete = useEffectEvent(() => {
-    console.log('[Broadcast] Tutorial completed, will fetch messages on next poll');
-    setTutorialCompleted(true);
-    // Don't call fetchMessages here - let the polling interval handle it
-  });
-
-  // ✅ useEffectEvent: Setup polling (always sees latest fetchMessages without re-running effect)
-  const setupPolling = useEffectEvent(() => {
-    console.log('[Broadcast] Initializing polling system');
-    
-    fetchMessages();
-
-    pollingIntervalRef.current = setInterval(() => {
-      console.log('[Broadcast] Polling interval triggered');
-      fetchMessages();
-    }, POLL_INTERVAL);
-
-    return () => {
-      console.log('[Broadcast] Cleaning up polling system');
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
-  });
-
-  // ✅ useEffectEvent: Refresh on wallet/identity change without affecting polling
-  const refreshOnIdentityChange = useEffectEvent(() => {
-    console.log('[Broadcast] Wallet address changed, fetching messages');
-    fetchMessages();
-  });
-
-  // Initialize event listeners on mount
-  useEffect(() => {
-    setTutorialCompleted(isTutorialCompleted());
-    window.addEventListener('tutorial:complete', handleTutorialComplete);
-    return () => {
-      window.removeEventListener('tutorial:complete', handleTutorialComplete);
-    };
-  }, [handleTutorialComplete]);
-
-  // Setup polling once on mount
-  useEffect(() => {
-    const cleanup = setupPolling();
-    return cleanup;
-  }, [setupPolling]);
-
-  // Refresh when identity changes - uses useEffectEvent so polling isn't restarted
-  useEffect(() => {
-    if (address !== undefined || (authenticated && user?.id)) {
-      refreshOnIdentityChange();
-    }
-  }, [address, authenticated, user?.id, refreshOnIdentityChange]);
+  }, [address, isConnected, localDismissedIds]);
 
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {
+    // Optimistically remove from UI
     setMessages(prev => prev.filter(msg => msg.id !== messageId));
     
+    // Track dismissal locally
     const newDismissed = new Set(localDismissedIds);
     newDismissed.add(messageId);
     setLocalDismissedIds(newDismissed);
     
+    // Persist to localStorage (persists across sessions)
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([...newDismissed]));
     } catch (error) {
       console.warn('Failed to save dismissed broadcasts:', error);
     }
     
+    // Send dismissal to server (only when connected)
     if (identity && (isConnected || authenticated)) {
       try {
         await fetch('/api/broadcast/dismiss', {
@@ -186,9 +159,43 @@ export function useBroadcastMessages() {
         body: JSON.stringify({ messageId }),
       });
     } catch (error) {
+      // Silent fail - tracking shouldn't break UX
       console.debug('Failed to track impression:', error);
     }
   }, []);
+
+  // Initial fetch and setup polling - run once on mount
+  useEffect(() => {
+    console.log('[Broadcast] Initializing polling system');
+    
+    // Initial fetch
+    fetchMessages();
+
+    // Set up polling interval (only once)
+    pollingIntervalRef.current = setInterval(() => {
+      console.log('[Broadcast] Polling interval triggered');
+      fetchMessages();
+    }, POLL_INTERVAL);
+
+    // Cleanup on unmount
+    return () => {
+      console.log('[Broadcast] Cleaning up polling system');
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once
+
+  // Refresh when wallet connects/disconnects (but don't restart polling)
+  useEffect(() => {
+    if (address !== undefined || (authenticated && user?.id)) {
+      console.log('[Broadcast] Wallet address changed, fetching messages');
+      fetchMessages();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, authenticated, user?.id]); // Identity-related triggers
 
   return {
     messages,

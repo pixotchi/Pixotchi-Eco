@@ -43,11 +43,7 @@ export default function SponsoredTransaction({
   // Sponsored transaction with paymaster integration
   
   const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Sponsored transaction successful:', {
-      hash: tx?.transactionHash,
-      blockNumber: tx?.blockNumber ? Number(tx.blockNumber) : undefined,
-      status: tx?.status
-    }); // ✅ Only log safe properties, avoid BigInt serialization
+    console.log('Sponsored transaction successful:', tx);
     onSuccess?.(tx);
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
     // Gamification: track daily activity (non-blocking)
@@ -58,7 +54,7 @@ export default function SponsoredTransaction({
         body: JSON.stringify({ address })
       }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
     }
-  }, [onSuccess, address]);
+  }, [onSuccess]);
 
   // Ensure success is handled once per transaction lifecycle
   const successHandledRef = useRef(false);
@@ -68,7 +64,7 @@ export default function SponsoredTransaction({
       successHandledRef.current = true;
       handleOnSuccess(status.statusData.transactionReceipts[0]);
     }
-  }, [onStatusUpdate]);
+  }, [handleOnSuccess, onStatusUpdate]);
 
   return (
     <Transaction

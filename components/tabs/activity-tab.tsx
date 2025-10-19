@@ -120,7 +120,7 @@ export default function ActivityTab() {
     } else {
       fetchActivities();
     }
-  }, [view, isConnected]); // ✅ Removed fetchActivities to prevent infinite loop
+  }, [view, isConnected, fetchActivities]);
 
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {

@@ -33,9 +33,6 @@ import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
 
-// ✅ React 19.2 Activity: Import optimized tab system
-import { TabSystemWithActivity } from "@/components/tabs/tab-system-with-activity";
-
 // Tab content components with optimized code splitting
 const tabComponents = {
   dashboard: dynamic(() => import(/* webpackChunkName: "dashboard-tab" */ "@/components/tabs/dashboard-tab"), {
@@ -551,14 +548,59 @@ export default function App() {
             </div>
           ) : (
             <>
-              {/* ✅ React 19.2 Activity: Optimized tab system with state preservation */}
-              <TabSystemWithActivity
-                tabs={tabs}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                tabComponents={tabComponents}
-                address={address}
-              />
+              {/* Tab Content */}
+              <div
+                className="flex-1 overflow-y-auto overscroll-contain p-4 pb-16 safe-area-inset"
+                role="tabpanel"
+                id={`tabpanel-${activeTab}`}
+                aria-labelledby={`tab-${activeTab}`}
+                aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
+              >
+                <ErrorBoundary
+                  key={activeTab}
+                  resetKeys={[activeTab, ...(address ? [address] : [])]}
+                  variant="card"
+                  onError={(error, errorInfo) => {
+                    console.error(`Error in ${activeTab} tab:`, { error, errorInfo });
+                  }}
+                >
+                  {(() => {
+                    const ActiveTabComponent = tabComponents[activeTab];
+                    return ActiveTabComponent ? <ActiveTabComponent /> : null;
+                  })()}
+                </ErrorBoundary>
+              </div>
+
+              {/* Bottom Navigation with safe area */}
+              <nav className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom" role="navigation" aria-label="Main navigation">
+                <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
+                  {tabs.map((tab) => (
+                    <Button
+                      key={tab.id}
+                      variant="ghost"
+                       onClick={() => setActiveTab(tab.id)}
+                      className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                        activeTab === tab.id
+                          ? "bg-primary/10 text-primary border border-primary/20"
+                          : "text-muted-foreground border border-transparent"
+                      }`}
+                      role="tab"
+                      id={`tab-${tab.id}`}
+                      aria-selected={activeTab === tab.id}
+                      aria-controls={`tabpanel-${tab.id}`}
+                      aria-label={`Switch to ${tab.label} tab`}
+                      tabIndex={activeTab === tab.id ? 0 : -1}
+                    >
+                      <tab.icon
+                        className={`w-5 h-5 ${
+                          activeTab === tab.id ? "text-primary" : ""
+                        }`}
+                      />
+                      <span className="text-xs font-medium">{tab.label}</span>
+                    </Button>
+                  ))}
+                </div>
+              </nav>
             </>
           )}
         </main>

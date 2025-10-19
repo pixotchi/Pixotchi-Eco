@@ -39,11 +39,7 @@ export default function SmartWalletTransaction({
   // Smart wallet transaction with OnchainKit integration
   
   const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Smart wallet transaction successful:', {
-      hash: tx?.transactionHash,
-      blockNumber: tx?.blockNumber ? Number(tx.blockNumber) : undefined,
-      status: tx?.status
-    }); // ✅ Only log safe properties, avoid BigInt serialization
+    console.log('Smart wallet transaction successful:', tx);
     onSuccess?.(tx);
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
   }, [onSuccess]);
@@ -55,7 +51,7 @@ export default function SmartWalletTransaction({
       successHandledRef.current = true;
       handleOnSuccess(status.statusData.transactionReceipts[0]);
     }
-  }, []);
+  }, [handleOnSuccess]);
 
   return (
     <Transaction

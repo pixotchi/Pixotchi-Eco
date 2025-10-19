@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -112,8 +112,6 @@ export default function PlantsView() {
     return itemQuantities[itemId] || defaultQuantity;
   };
 
-  const selectedPlantRef = useRef<typeof selectedPlant>(null);
-
   const fetchData = useCallback(async () => {
     if (!address) return;
 
@@ -128,7 +126,7 @@ export default function PlantsView() {
       
       // After refetching, try to find the previously selected plant in the new data
       if (plantsData.length > 0) {
-        const currentSelectedId = selectedPlantRef.current?.id;
+        const currentSelectedId = selectedPlant?.id;
         const newSelectedPlant = plantsData.find(p => p.id === currentSelectedId);
         setSelectedPlant(newSelectedPlant || plantsData[0]);
       } else {
@@ -141,12 +139,7 @@ export default function PlantsView() {
     } finally {
       setLoading(false);
     }
-  }, [address]); // ✅ FIXED: Removed selectedPlant?.id to prevent infinite loop
-
-  // Track selected plant in ref for fetchData to access
-  useEffect(() => {
-    selectedPlantRef.current = selectedPlant;
-  }, [selectedPlant]);
+  }, [address, selectedPlant?.id]); // Only depend on address and selected plant ID
 
   // Set default selected item when catalogs are loaded
   useEffect(() => {
@@ -174,7 +167,7 @@ export default function PlantsView() {
     fetchData(); // Refetch all data
     // Manually trigger a balance refresh across the app
     window.dispatchEvent(new Event('balances:refresh'));
-  }, [fetchData]); // ✅ OK: fetchData now has stable dependencies
+  }, [fetchData]);
 
   const renderNoPlantsView = () => (
     <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useEffectEvent } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '@/lib/utils';
 import { TransactionState, TransactionStatus } from '@/lib/types';
@@ -25,28 +25,6 @@ export function useTransaction<T, P extends any[]>(
     };
   }, []);
 
-  // ✅ useEffectEvent: Handle success/error callbacks without triggering re-runs
-  const handleSuccess = useEffectEvent((result: T) => {
-    if (options.successMessage) {
-      toast.success(options.successMessage);
-    }
-    if (options.onSuccess) {
-      options.onSuccess(result);
-    }
-  });
-
-  const handleError = useEffectEvent((error: Error) => {
-    console.error('Transaction failed:', error);
-    if (options.errorMessage) {
-      toast.error(options.errorMessage);
-    } else {
-      toast.error(getFriendlyErrorMessage(error));
-    }
-    if (options.onError) {
-      options.onError(error);
-    }
-  });
-
   const execute = useCallback(async (...params: P) => {
     if (!mountedRef.current) return;
     setState({ status: 'pending' });
@@ -55,17 +33,28 @@ export function useTransaction<T, P extends any[]>(
       const result = await transactionFn(...params);
       if (!mountedRef.current) return;
       setState({ status: 'success' });
-      // ✅ Call useEffectEvent callbacks - always see latest options without triggering re-runs
-      handleSuccess(result);
+      if (options.successMessage) {
+        toast.success(options.successMessage);
+      }
+      if (options.onSuccess) {
+        options.onSuccess(result);
+      }
       return result;
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       const error = err instanceof Error ? err : new Error('An unknown error occurred');
+      console.error('Transaction failed:', error);
       setState({ status: 'error', error: getFriendlyErrorMessage(error) });
-      // ✅ Call useEffectEvent callbacks - always see latest options without triggering re-runs
-      handleError(error);
+      if (options.errorMessage) {
+        toast.error(options.errorMessage);
+      } else {
+        toast.error(getFriendlyErrorMessage(error));
+      }
+      if (options.onError) {
+        options.onError(error);
+      }
     }
-  }, [transactionFn, handleSuccess, handleError]); // ✅ FIXED: Only depend on transactionFn and stable callbacks
+  }, [transactionFn, options]);
 
   const reset = useCallback(() => {
     setState({ status: 'idle' });
