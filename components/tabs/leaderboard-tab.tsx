@@ -128,11 +128,9 @@ export default function LeaderboardTab() {
     try {
       // Get all alive token IDs
       const aliveTokenIds = await getAliveTokenIds();
-      console.log('Alive token IDs:', aliveTokenIds);
       
       // Get detailed plant info for all alive plants
       const plantsData = await getPlantsInfoExtended(aliveTokenIds);
-      console.log('Plants data:', plantsData);
       
       // Sort by score (highest first) and add ranking
       const sortedPlants = plantsData

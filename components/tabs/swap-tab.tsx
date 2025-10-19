@@ -70,7 +70,7 @@ export default function SwapTab() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
-            <CardTitle>Swap & Chart</CardTitle>
+            <CardTitle>{swapView === 'chart' ? 'Chart' : 'Swap'}</CardTitle>
             <ToggleGroup
               value={swapView}
               onValueChange={(v) => setSwapView(v as 'swap' | 'chart')}
@@ -101,7 +101,7 @@ export default function SwapTab() {
               </Swap>
             </div>
           ) : (
-            <TradingViewWidget height="500px" />
+            <TradingViewWidget height="700px" />
           )}
         </CardContent>
       </Card>
