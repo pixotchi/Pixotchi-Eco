@@ -8,7 +8,11 @@ const nextConfig = {
     return config;
   },
   // External packages for server components
-  serverExternalPackages: []
+  serverExternalPackages: [],
+  // Configure Next.js Image optimization qualities
+  images: {
+    qualities: [75, 80, 85, 90],
+  },
 };
 
 export default nextConfig;

@@ -157,6 +157,14 @@ export default function SwapTab() {
               </Button>
             </div>
           )}
+
+          {/* Disclaimer Section */}
+          <div className="pt-4 mt-4 border-t border-border/30">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold block mb-2">Disclaimer:</span>
+              SEED was launched independently via BaseSwap with 100% of the supply (20M) in circulation with no pre-mint or team allocation. Acquiring $SEED tokens does not represent an investment contract or financial advice. Token value may fluctuate significantly. Please consult your local laws regarding token ownership in your jurisdiction.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

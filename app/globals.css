@@ -790,3 +790,14 @@
   .mq-md-overflow-auto { overflow: auto !important; }
   .mq-md-max-h-22rem { max-height: 22rem !important; }
 }
+
+/* Admin page scroll override - allows scrolling in admin dashboard while preserving mobile-view UX in main app */
+.admin-page-scrollable {
+  height: auto !important;
+  overflow: auto !important;
+}
+
+.admin-page-scrollable body {
+  height: auto !important;
+  overflow: auto !important;
+}
