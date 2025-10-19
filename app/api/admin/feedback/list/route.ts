@@ -1,13 +1,12 @@
-import { redis, redisGetJSON, redisDel } from '@/lib/redis';
+import { redis, redisGetJSON } from '@/lib/redis';
 import { logger } from '@/lib/logger';
-import { env } from '@/lib/env-config';
 
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     const adminKey = authHeader?.replace('Bearer ', '');
 
-    if (!adminKey || adminKey !== env.ADMIN_KEY) {
+    if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
       return Response.json(
         { error: 'Unauthorized' },
         { status: 401 }
