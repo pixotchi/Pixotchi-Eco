@@ -4,18 +4,22 @@ import { useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ToggleGroup } from '@/components/ui/toggle-group';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
 import { PIXOTCHI_TOKEN_ADDRESS, WETH_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
+import TradingViewWidget from './TradingViewWidget';
 
 export default function SwapTab() {
   const { address } = useAccount();
   const fc = useFrameContext();
   const isMiniApp = Boolean(fc?.isInMiniApp);
+  const [swapView, setSwapView] = useState<'swap' | 'chart'>('swap');
 
   const ETH: Token = {
     address: "0x4200000000000000000000000000000000000006",
@@ -65,26 +69,40 @@ export default function SwapTab() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Swap</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>Swap & Chart</CardTitle>
+            <ToggleGroup
+              value={swapView}
+              onValueChange={(v) => setSwapView(v as 'swap' | 'chart')}
+              options={[
+                { value: 'swap', label: 'Swap' },
+                { value: 'chart', label: 'Chart' },
+              ]}
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div data-ock-theme="pixotchi">
-          <Swap
-            isSponsored={false}
-            experimental={{ useAggregator: true }}
-            config={{ maxSlippage: 5.5 }}
-            onSuccess={handleSuccess}
-            onError={handleError}
-          >
-            {/* Allow token rotation and selection between ETH and SEED */}
-            <SwapAmountInput label="Sell" token={ETH} swappableTokens={SWAPPABLE} type="from" />
-            <SwapToggleButton />
-            <SwapAmountInput label="Buy" token={SEED} swappableTokens={SWAPPABLE} type="to" />
-            <SwapButton />
-            <SwapMessage />
-            <SwapToast />
-          </Swap>
-          </div>
+          {swapView === 'swap' ? (
+            <div data-ock-theme="pixotchi">
+              <Swap
+                isSponsored={false}
+                experimental={{ useAggregator: true }}
+                config={{ maxSlippage: 5.5 }}
+                onSuccess={handleSuccess}
+                onError={handleError}
+              >
+                {/* Allow token rotation and selection between ETH and SEED */}
+                <SwapAmountInput label="Sell" token={ETH} swappableTokens={SWAPPABLE} type="from" />
+                <SwapToggleButton />
+                <SwapAmountInput label="Buy" token={SEED} swappableTokens={SWAPPABLE} type="to" />
+                <SwapButton />
+                <SwapMessage />
+                <SwapToast />
+              </Swap>
+            </div>
+          ) : (
+            <TradingViewWidget height="500px" />
+          )}
         </CardContent>
       </Card>
 
@@ -97,9 +115,9 @@ export default function SwapTab() {
           <div className="flex items-start space-x-3">
             <Image src="/icons/fire.svg" alt="Burn" width={20} height={20} className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold">100% In-Game Burn</h4>
+              <h4 className="font-semibold">70% In-Game Burn</h4>
               <p className="text-muted-foreground text-xs">
-                Currently, 100% of the SEED tokens spent within the game on items or upgrades are permanently burned.
+                Currently, 70% of the SEED tokens spent within the game on items or upgrades are permanently burned. 30% are added to the Quests rewards pool.
               </p>
             </div>
           </div>
@@ -114,7 +132,7 @@ export default function SwapTab() {
               <ul className="mt-2 space-y-1 text-xs list-disc pl-5">
                 <li><span className="font-semibold">2% to Player Rewards:</span> Distributed as ETH to players based on ranking.</li>
                 <li><span className="font-semibold">2% to Project Treasury:</span> Funds ongoing development and operational costs.</li>
-                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure stability.</li>
+                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure higher stablity.</li>
               </ul>
             </div>
           </div>
