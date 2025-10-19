@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     }
 
     // Get all feedback IDs sorted by timestamp (newest first)
-    const feedbackIds = await redis.zrevrange('pixotchi:feedback:list', 0, -1);
+    const feedbackIds = (await redis.zrange('pixotchi:feedback:list', 0, -1)) as string[];
 
     if (!feedbackIds || feedbackIds.length === 0) {
       return Response.json({

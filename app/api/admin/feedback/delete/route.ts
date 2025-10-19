@@ -25,13 +25,12 @@ export async function POST(request: Request) {
 
     if (deleteAll) {
       // Delete all feedback
-      const feedbackIds = await redis.zrevrange('pixotchi:feedback:list', 0, -1);
+      const feedbackIds = (await redis.zrange('pixotchi:feedback:list', 0, -1)) as string[];
       
       if (feedbackIds && feedbackIds.length > 0) {
-        for (const id of feedbackIds) {
-          await redisDel(`pixotchi:feedback:${id}`);
-        }
-        await redisDel('pixotchi:feedback:list');
+        const keysToDelete = feedbackIds.map(id => `pixotchi:feedback:${id}`);
+        await redis.del(...keysToDelete);
+        await redis.del('pixotchi:feedback:list');
       }
 
       logger.info('All feedback deleted by admin');
