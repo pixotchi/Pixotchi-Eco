@@ -169,7 +169,7 @@ export default function BaseTransaction({
         }
       }
     }
-  }, [handleOnSuccess, onStatusUpdate, successMessage, errorMessage]);
+  }, [onStatusUpdate, successMessage, errorMessage]);
 
   const handleOnError = useCallback((error: any) => {
     console.error('Transaction failed:', {

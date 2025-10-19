@@ -42,7 +42,11 @@ export default function UniversalTransaction({
   // Transaction sponsorship determined by paymaster context and forceUnsponsored flag
   
   const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Universal transaction successful:', tx);
+    console.log('Universal transaction successful:', {
+      hash: tx?.transactionHash,
+      blockNumber: tx?.blockNumber ? Number(tx.blockNumber) : undefined,
+      status: tx?.status
+    }); // ✅ Only log safe properties, avoid BigInt serialization
     onSuccess?.(tx);
     // Notify status bar to refresh balances
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
@@ -55,7 +59,7 @@ export default function UniversalTransaction({
       successHandledRef.current = true;
       handleOnSuccess(status.statusData.transactionReceipts[0]);
     }
-  }, [handleOnSuccess]);
+  }, []); // ✅ REMOVED handleOnSuccess - ref prevents infinite loop
 
   return (
     <Transaction
