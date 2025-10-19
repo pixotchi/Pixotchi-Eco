@@ -1,10 +1,12 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
+import { Info } from 'lucide-react';
+import BuildingInfoDialog from './building-info-dialog';
 
 // Import the new specialized panel components
 import UpgradePanel from './building-details/UpgradePanel';
@@ -37,6 +39,7 @@ function BuildingDetailsPanel({
   warehousePoints,
   warehouseLifetime
 }: BuildingDetailsPanelProps) {
+  const [showInfoDialog, setShowInfoDialog] = useState(false);
   
   if (!selectedBuilding) {
     return (
@@ -127,8 +130,17 @@ function BuildingDetailsPanel({
             className="rounded-md"
             style={{ height: 'auto' }}
           />
-          <div>
-            <CardTitle className="font-pixel">{buildingName}</CardTitle>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="font-pixel">{buildingName}</CardTitle>
+              <button
+                onClick={() => setShowInfoDialog(true)}
+                className="flex items-center justify-center w-6 h-6 hover:bg-muted rounded transition-colors"
+                title={`Info about ${buildingName}`}
+              >
+                <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            </div>
             <p className="text-sm text-muted-foreground">
               Level {selectedBuilding.level}/{selectedBuilding.maxLevel}
             </p>
@@ -160,6 +172,14 @@ function BuildingDetailsPanel({
           </p>
         </div>
       </CardContent>
+
+      {/* Building Info Dialog */}
+      <BuildingInfoDialog
+        open={showInfoDialog}
+        onOpenChange={setShowInfoDialog}
+        buildingId={selectedBuilding.id}
+        buildingType={buildingType}
+      />
     </Card>
   );
 }

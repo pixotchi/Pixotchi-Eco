@@ -10,6 +10,8 @@ import PlantImage from '@/components/PlantImage';
 import { ChevronDown } from 'lucide-react';
 import WarehouseApplyTransaction from '@/components/transactions/warehouse-apply-transaction';
 import { toast } from 'react-hot-toast';
+import CountdownTimer from '@/components/countdown-timer';
+import { Plant } from '@/lib/types';
 
 interface WarehousePanelProps {
   landId: bigint;
@@ -25,7 +27,7 @@ export default function WarehousePanel({
   onApplySuccess
 }: WarehousePanelProps) {
   const { address } = useAccount();
-  const [plants, setPlants] = useState<{ id: number; name: string }[]>([]);
+  const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlantId, setSelectedPlantId] = useState<number | null>(null);
   const [applyPts, setApplyPts] = useState<string>("");
   const [applyTodMinutes, setApplyTodMinutes] = useState<string>("");
@@ -34,10 +36,9 @@ export default function WarehousePanel({
     if (!address) return;
     try {
       const list = await getPlantsByOwner(address);
-      const simplified = list.map(p => ({ id: p.id, name: p.name || `Plant #${p.id}` }));
-      setPlants(simplified);
-      if (!selectedPlantId && simplified.length > 0) {
-        setSelectedPlantId(simplified[0].id);
+      setPlants(list);
+      if (!selectedPlantId && list.length > 0) {
+        setSelectedPlantId(list[0].id);
       }
     } catch (e) {
       // Silently ignore
@@ -101,22 +102,44 @@ export default function WarehousePanel({
       <div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between h-9 text-sm">
+            <Button variant="outline" className="w-full justify-between h-12 text-sm">
               {selectedPlantId ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <PlantImage selectedPlant={{ id: selectedPlantId, name: '', level: 0, score: 0, status: 0, rewards: 0, stars: 0, strain: 1, timeUntilStarving: 0, timePlantBorn: '0', lastAttackUsed: '0', lastAttacked: '0', statusStr: '', owner: address || '0x', extensions: [] }} width={20} height={20} />
-                  <span>{plants.find(pl => pl.id === selectedPlantId)?.name || `Plant #${selectedPlantId}`}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{plants.find(pl => pl.id === selectedPlantId)?.name || `Plant #${selectedPlantId}`}</div>
+                    <div className="text-xs text-muted-foreground">#{selectedPlantId}</div>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <CountdownTimer 
+                      timeUntilStarving={plants.find(pl => pl.id === selectedPlantId)?.timeUntilStarving || 0} 
+                      noBackground={true} 
+                      className="text-xs"
+                      showSeconds={false}
+                    />
+                  </div>
                 </div>
               ) : 'Select Plant'}
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="w-4 h-4 flex-shrink-0" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
             {plants.map(p => (
-              <DropdownMenuItem key={p.id} onSelect={() => setSelectedPlantId(p.id)}>
-                <div className="flex items-center gap-2">
-                  <span>{p.name}</span>
-                  <span className="text-xs text-muted-foreground">#{p.id}</span>
+              <DropdownMenuItem key={p.id} onSelect={() => setSelectedPlantId(p.id)} className="h-16">
+                <div className="flex items-center gap-2 w-full">
+                  <PlantImage selectedPlant={p} width={20} height={20} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{p.name || `Plant #${p.id}`}</div>
+                    <div className="text-xs text-muted-foreground">#{p.id}</div>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <CountdownTimer 
+                      timeUntilStarving={p.timeUntilStarving} 
+                      noBackground={true} 
+                      className="text-xs"
+                      showSeconds={false}
+                    />
+                  </div>
                 </div>
               </DropdownMenuItem>
             ))}

@@ -8,14 +8,16 @@ interface CountdownTimerProps {
   timeUntilStarving: number; // Unix timestamp
   className?: string;
   noBackground?: boolean;
+  showSeconds?: boolean;
 }
 
 export default function CountdownTimer({ 
   timeUntilStarving, 
   className = "",
-  noBackground = false 
+  noBackground = false,
+  showSeconds = true
 }: CountdownTimerProps) {
-  const timeRemaining = useCountdown(timeUntilStarving);
+  const timeRemaining = useCountdown(timeUntilStarving, showSeconds);
 
   const baseClasses = `flex items-center rounded-full font-semibold space-x-1`;
   const backgroundClasses = noBackground 
