@@ -132,7 +132,7 @@ export default function LeaderboardTab() {
       
       // Get detailed plant info for all alive plants
       const plantsData = await getPlantsInfoExtended(aliveTokenIds);
-      console.log('Plants data:', plantsData);
+      console.log('Plants data count:', plantsData.length); // ✅ Log count instead of entire data with BigInt
       
       // Sort by score (highest first) and add ranking
       const sortedPlants = plantsData

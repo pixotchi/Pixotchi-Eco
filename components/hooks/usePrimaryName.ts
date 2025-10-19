@@ -113,7 +113,7 @@ export function usePrimaryName(address?: string | null, options: { enabled?: boo
     return () => {
       cancelRef.current?.();
     };
-  }, [enabled, normalised, handleCacheResolved]);
+  }, [enabled, normalised]); // ✅ REMOVED handleCacheResolved - useEffectEvent should never be in dependencies
 
   return state;
 }
