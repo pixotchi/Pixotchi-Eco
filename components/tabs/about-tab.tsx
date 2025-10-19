@@ -16,6 +16,8 @@ import { useSlideshow } from "@/components/tutorial";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import packageJson from '@/package.json';
+import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { useFrameContext } from "@/lib/frame-context";
 
 const InfoCard = ({
   icon,
@@ -73,6 +75,8 @@ const InfoCard = ({
 export default function AboutTab() {
   const { address } = useAccount();
   const { start, enabled } = useSlideshow();
+  const { walletType, isSmartWallet } = useSmartWallet();
+  const frameData = useFrameContext();
   const [stats, setStats] = useState<InviteStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -250,12 +254,32 @@ export default function AboutTab() {
 
     setFeedbackLoading(true);
     try {
+      // Collect wallet profile data
+      const isMiniApp = Boolean(frameData?.isInMiniApp);
+      const fcContext = (frameData?.context as any) ?? null;
+      
+      // Extract farcaster details
+      let farcasterDetails: any = null;
+      if (isMiniApp && fcContext) {
+        farcasterDetails = {
+          fid: fcContext.user?.fid,
+          username: fcContext.user?.username,
+          displayName: fcContext.user?.displayName,
+          clientType: fcContext.client?.platformType,
+          referrerDomain: fcContext.location?.referrerDomain || fcContext.location?.referrer,
+        };
+      }
+
       const response = await fetch('/api/feedback/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           address,
           message: feedbackText.trim(),
+          walletType,
+          isSmartWallet,
+          isMiniApp,
+          farcasterDetails,
         }),
       });
 

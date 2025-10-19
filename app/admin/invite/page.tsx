@@ -2831,14 +2831,41 @@ export default function AdminInviteDashboard() {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
+                          {/* Address and Timestamp */}
                           <div className="flex items-center gap-2 flex-wrap mb-2">
-                            <span className="text-sm font-mono text-muted-foreground truncate">
+                            <span className="text-sm font-mono text-muted-foreground break-all">
                               {feedback.address}
                             </span>
                             <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded whitespace-nowrap">
                               {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
                             </span>
                           </div>
+                          
+                          {/* Wallet Profile Data */}
+                          <div className="grid grid-cols-2 gap-2 mb-3 p-2 bg-muted/30 rounded text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Wallet Type:</span>
+                              <span className="font-semibold">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : 'EOA'}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Smart Wallet:</span>
+                              <span className="font-semibold">{feedback.isSmartWallet ? 'Yes' : 'No'}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Mini App:</span>
+                              <span className="font-semibold">{feedback.isMiniApp ? 'Yes' : 'No'}</span>
+                            </div>
+                            {feedback.farcasterDetails && (
+                              <div className="col-span-2 text-xs">
+                                <span className="text-muted-foreground block">Farcaster:</span>
+                                <span className="text-foreground block">
+                                  {feedback.farcasterDetails.username || feedback.farcasterDetails.displayName || `FID: ${feedback.farcasterDetails.fid}`}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Feedback Message */}
                           <p className="text-sm text-foreground whitespace-pre-wrap break-words">
                             {feedback.message}
                           </p>

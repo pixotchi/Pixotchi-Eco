@@ -4,7 +4,14 @@ import { logger } from '@/lib/logger';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { address, message } = body;
+    const { 
+      address, 
+      message,
+      walletType,
+      isSmartWallet,
+      isMiniApp,
+      farcasterDetails,
+    } = body;
 
     // Validation
     if (!address || typeof address !== 'string') {
@@ -46,6 +53,10 @@ export async function POST(request: Request) {
       message: trimmedMessage,
       createdAt: Date.now(),
       status: 'new',
+      walletType: walletType || 'unknown',
+      isSmartWallet: Boolean(isSmartWallet),
+      isMiniApp: Boolean(isMiniApp),
+      farcasterDetails: farcasterDetails || null,
     };
 
     await redisSetJSON(feedbackKey, feedbackData, 86400 * 90);
@@ -60,6 +71,9 @@ export async function POST(request: Request) {
       feedbackId,
       address: address.toLowerCase(),
       messageLength: trimmedMessage.length,
+      walletType,
+      isSmartWallet,
+      isMiniApp,
     });
 
     return Response.json({
