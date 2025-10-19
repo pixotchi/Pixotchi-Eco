@@ -2808,52 +2808,57 @@ export default function AdminInviteDashboard() {
             )}
           </div>
 
-          {feedbackLoading ? (
-            <LoadingSpinner text="Loading feedback..." />
-          ) : feedbackList.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-muted-foreground">No feedback yet</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {feedbackList.map((feedback: any) => (
-                <Card key={feedback.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-sm font-mono text-muted-foreground">
-                            {feedback.address.slice(0, 10)}...{feedback.address.slice(-4)}
-                          </span>
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                            {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
-                          </span>
+          <Card>
+            <CardHeader>
+              <CardTitle>Feedback Messages ({feedbackList.length})</CardTitle>
+              <CardDescription>User feedback and suggestions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {feedbackLoading ? (
+                <LoadingSpinner text="Loading feedback..." />
+              ) : feedbackList.length === 0 ? (
+                <div className="text-center py-12">
+                  <MessageCircle className="w-12 h-12 mx-auto text-muted-foreground opacity-50 mb-4" />
+                  <p className="text-muted-foreground">No feedback yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">User feedback will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {feedbackList.map((feedback: any) => (
+                    <div
+                      key={feedback.id}
+                      className="border rounded-lg p-4 space-y-3 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            <span className="text-sm font-mono text-muted-foreground truncate">
+                              {feedback.address}
+                            </span>
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded whitespace-nowrap">
+                              {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                            {feedback.message}
+                          </p>
                         </div>
-                        <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                          {feedback.message}
-                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteFeedback(feedback.id)}
+                          disabled={loading}
+                          className="shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteFeedback(feedback.id)}
-                        disabled={loading}
-                        className="ml-2"
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          <div className="text-center text-xs text-muted-foreground">
-            Total feedback: {feedbackList.length}
-          </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
