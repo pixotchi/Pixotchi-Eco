@@ -454,9 +454,8 @@ export default function AboutTab() {
         <CardContent>
           <p className="text-muted-foreground mb-4">
             <span className="font-pixel text-foreground">PIXOTCHI</span> is a 1.5 year old tamagotchi-style onchain game on Base where you can mint, grow,
-            and interact with your plants and lands; earning ETH rewards in the process. This Mini App
-            is a simplified experience focused on minting and caring for your
-            plants, designed for Base app.
+            and interact with your plants and lands; earning ETH rewards in the process. This App
+            brings an enhanced experience using latest Base features, designed for Base app.
           </p>
           <div className="space-y-3">
             <Button 
@@ -467,22 +466,26 @@ export default function AboutTab() {
               Documentation
             </Button>
             {enabled && (
-              <div>
-                <Button variant="outline" onClick={() => start({ reset: true })} className="w-full">
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" onClick={() => start({ reset: true })}>
                   Tutorial
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowFeedbackDialog(true)}
+                >
+                  Feedback
                 </Button>
               </div>
             )}
-            <div>
+            {!enabled && (
               <Button 
                 variant="outline" 
                 onClick={() => setShowFeedbackDialog(true)}
-                className="w-full"
               >
-                <MessageSquare className="w-4 h-4 mr-2" />
                 Feedback
               </Button>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -535,7 +538,7 @@ export default function AboutTab() {
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader className="mb-6">
             <DialogTitle>Share Your Feedback</DialogTitle>
             <DialogDescription>
               We'd love to hear your thoughts on Pixotchi Mini!

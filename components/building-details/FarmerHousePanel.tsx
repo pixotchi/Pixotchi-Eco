@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { useAccount, useBlockNumber } from 'wagmi';
-import { getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { toast } from 'react-hot-toast';
+import { usePublicClient } from 'wagmi';
+import { parseUnits } from 'viem';
 
 interface FarmerHousePanelProps {
   landId: bigint;
@@ -14,13 +16,38 @@ interface FarmerHousePanelProps {
   onQuestUpdate: () => void;
 }
 
+// Rewards wallet that funds farmer quests
+const QUEST_REWARDS_WALLET = '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB' as const;
+const MIN_SEED_BALANCE = parseUnits('200', 18); 
+
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
+  const publicClient = usePublicClient();
   const [slots, setSlots] = React.useState<import('@/lib/contracts').QuestSlot[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
   const [currentBlock, setCurrentBlock] = React.useState<bigint>(BigInt(0));
   const [difficulty, setDifficulty] = React.useState<Record<number, number>>({});
+  const [rewardsWalletBalance, setRewardsWalletBalance] = React.useState<bigint>(BigInt(0));
+  const [balanceLoading, setBalanceLoading] = React.useState<boolean>(false);
+
+  const fetchRewardsBalance = React.useCallback(async () => {
+    if (!publicClient) return;
+    setBalanceLoading(true);
+    try {
+      const balance = await publicClient.readContract({
+        address: PIXOTCHI_TOKEN_ADDRESS,
+        abi: ERC20_BALANCE_ABI,
+        functionName: 'balanceOf',
+        args: [QUEST_REWARDS_WALLET as `0x${string}`],
+      }) as bigint;
+      setRewardsWalletBalance(balance);
+    } catch (e: any) {
+      console.error('Failed to fetch rewards wallet balance:', e);
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, [publicClient]);
 
   const fetchSlots = React.useCallback(async () => {
     setLoading(true);
@@ -37,7 +64,11 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
 
   React.useEffect(() => {
     fetchSlots();
-  }, [fetchSlots]);
+    fetchRewardsBalance();
+    // Refresh balance every 30 seconds to stay up-to-date
+    const interval = setInterval(fetchRewardsBalance, 30000);
+    return () => clearInterval(interval);
+  }, [fetchSlots, fetchRewardsBalance]);
 
   // Initialize and watch the current block number immediately to avoid transient wrong UI
   const { data: liveBlock } = useBlockNumber({ watch: true, query: { refetchInterval: 1000 } });
@@ -104,6 +135,10 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
         <div className="text-center text-muted-foreground text-sm">Loading…</div>
       ) : error ? (
         <div className="text-center text-destructive text-sm">{error}</div>
+      ) : rewardsWalletBalance < MIN_SEED_BALANCE ? (
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          Farmer House is temporarily closed. All quest functions are temporarily unavailable until the quest rewards pool is refilled..
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-2">
           {slots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (

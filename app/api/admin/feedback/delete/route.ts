@@ -3,16 +3,6 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const adminKey = authHeader?.replace('Bearer ', '');
-
-    if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
-      return Response.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     if (!redis) {
       return Response.json(
         { error: 'Database unavailable' },
