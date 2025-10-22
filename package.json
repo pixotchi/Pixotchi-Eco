@@ -21,7 +21,7 @@
     "@farcaster/miniapp-wagmi-connector": "1.1.0",
     "@privy-io/react-auth": "3.3.0",
     "@privy-io/wagmi": "2.0.1",
-    "wagmi": "2.18.1",
+    "wagmi": "2.18.2",
     "viem": "2.38.3",
     "permissionless": "0.2.57",
     "next": "16.0.0-beta.0",

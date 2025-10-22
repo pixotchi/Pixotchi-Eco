@@ -35,9 +35,9 @@
   --radius-sm: calc(var(--radius) - 4px);
 
   /* Fonts */
-  --font-sans: 'Coinbase Sans', system-ui, sans-serif;
-  --font-coinbase: 'Coinbase Sans', system-ui, sans-serif;
-  --font-pixel: 'pixelmix', sans-serif;
+  --font-sans: var(--font-coinbase-sans), system-ui, sans-serif;
+  --font-coinbase: var(--font-coinbase-sans), system-ui, sans-serif;
+  --font-pixel: var(--font-pixelmix), sans-serif;
 
   /* Explicit breakpoints so md/lg variants work in Tailwind v4 when using @theme */
   --breakpoint-sm: 40rem; /* 640px */
@@ -48,55 +48,6 @@
 }
 
 @layer base {
-  @font-face {
-    font-family: "pixelmix";
-    src: url("/fonts/pixelmix.woff2") format("woff2");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  /* Coinbase Sans Font Family */
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Regular-web-1.32.woff2') format('woff2');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Medium-web-1.32.woff2') format('woff2');
-    font-weight: 500;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Bold-web-1.32.woff2') format('woff2');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Light-web-1.32.woff2') format('woff2');
-    font-weight: 300;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Extra_Light-web-1.32.woff2') format('woff2');
-    font-weight: 200;
-    font-style: normal;
-    font-display: swap;
-  }
-
   :root {
     --background: 212 56% 81%; /* #a7c7e7 */
     --foreground: 224 71.4% 4.1%;
@@ -312,6 +263,18 @@
     --color-input: hsl(var(--input));
     --color-ring: hsl(var(--ring));
   }
+
+  .font-sans {
+    font-family: var(--font-coinbase-sans), system-ui, sans-serif;
+  }
+
+  .font-coinbase {
+    font-family: var(--font-coinbase-sans), system-ui, sans-serif;
+  }
+
+  .font-pixel {
+    font-family: var(--font-pixelmix), sans-serif;
+  }
 }
 
 /* Theme-specific styles will be loaded dynamically */
@@ -325,7 +288,7 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: 'Coinbase Sans', system-ui, sans-serif;
+    font-family: var(--font-coinbase-sans), system-ui, sans-serif;
     font-weight: 400;
     letter-spacing: 0.01em;
     /* Limit global transitions to reduce repaint/reflow cost */

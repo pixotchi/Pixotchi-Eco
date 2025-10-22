@@ -1,9 +1,79 @@
 import "@coinbase/onchainkit/styles.css";
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+
+const coinbaseSans = localFont({
+  src: [
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Extra_Light-web-1.32.woff2",
+      weight: "200",
+      style: "normal"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Extra_Light_Italic-web-1.32.woff2",
+      weight: "200",
+      style: "italic"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Light-web-1.32.woff2",
+      weight: "300",
+      style: "normal"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Light_Italic-web-1.32.woff2",
+      weight: "300",
+      style: "italic"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Regular-web-1.32.woff2",
+      weight: "400",
+      style: "normal"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Regular_Italic-web-1.32.woff2",
+      weight: "400",
+      style: "italic"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Medium-web-1.32.woff2",
+      weight: "500",
+      style: "normal"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Medium_Italic-web-1.32.woff2",
+      weight: "500",
+      style: "italic"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Bold-web-1.32.woff2",
+      weight: "700",
+      style: "normal"
+    },
+    {
+      path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Bold_Italic-web-1.32.woff2",
+      weight: "700",
+      style: "italic"
+    }
+  ],
+  display: "swap",
+  variable: "--font-coinbase-sans"
+});
+
+const pixelmix = localFont({
+  src: [
+    {
+      path: "../public/fonts/pixelmix.woff2",
+      weight: "400",
+      style: "normal"
+    }
+  ],
+  display: "swap",
+  variable: "--font-pixelmix"
+});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -209,28 +279,10 @@ export default function RootLayout({
         {/* Theme color */}
         <meta name="theme-color" content="#2d3c53" />
         <meta name="msapplication-TileColor" content="#2d3c53" />
-        {/* Preconnect to external domains */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        {/* Preload local fonts */}
-        <link
-          rel="preload"
-          href="/fonts/Coinbase-Sans/Coinbase_Sans-Regular-web-1.32.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preload"
-          href="/fonts/pixelmix.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
         {/* Preload above-the-fold art to reduce first paint */}
         <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
       </head>
-      <body className="bg-background">
+      <body className={`${coinbaseSans.className} ${coinbaseSans.variable} ${pixelmix.variable} bg-background`}>
         <Providers>{children}</Providers>
         <Analytics />
         <SpeedInsights />
