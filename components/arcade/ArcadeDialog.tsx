@@ -231,17 +231,17 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_COMMITTED_EVENT],
-          ...(logArgs ? { args: logArgs } : {}),
+          ...(logArgs ? ({ args: logArgs } as { args: typeof logArgs }) : {}),
         } satisfies Parameters<typeof publicClient.getLogs>[0]),
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_PLAYED_EVENT],
-          ...(logArgs ? { args: logArgs } : {}),
+          ...(logArgs ? ({ args: logArgs } as { args: typeof logArgs }) : {}),
         } satisfies Parameters<typeof publicClient.getLogs>[0]),
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_FORFEITED_EVENT],
-          ...(logArgs ? { args: logArgs } : {}),
+          ...(logArgs ? ({ args: logArgs } as { args: typeof logArgs }) : {}),
         } satisfies Parameters<typeof publicClient.getLogs>[0]),
       ]);
 
