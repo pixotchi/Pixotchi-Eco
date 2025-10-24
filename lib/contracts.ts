@@ -46,6 +46,16 @@ export const ERC20_APPROVE_ABI = [
       { name: 'amount', type: 'uint256' }
     ],
     outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    outputs: [{ name: '', type: 'uint256' }]
   }
 ] as const;
 
@@ -1031,6 +1041,36 @@ export const getTokenBalance = async (address: string): Promise<bigint> => {
 export const getFormattedTokenBalance = async (address: string): Promise<number> => {
   const balance = await getTokenBalance(address);
   return Number(balance) / 1e18; // Convert from wei to token units
+};
+
+// Raw SEED allowance for Land contract interactions (e.g., marketplace)
+export const getSeedAllowanceForLand = async (ownerAddress: string): Promise<bigint> => {
+  if (!ownerAddress) return BigInt(0);
+  const readClient = getReadClient();
+
+  return retryWithBackoff(async () => {
+    return await readClient.readContract({
+      address: PIXOTCHI_TOKEN_ADDRESS,
+      abi: PIXOTCHI_TOKEN_ABI,
+      functionName: 'allowance',
+      args: [ownerAddress as `0x${string}`, LAND_CONTRACT_ADDRESS],
+    }) as bigint;
+  });
+};
+
+// Raw LEAF allowance for Land contract interactions (e.g., marketplace)
+export const getLeafAllowanceForLand = async (ownerAddress: string): Promise<bigint> => {
+  if (!ownerAddress) return BigInt(0);
+  const readClient = getReadClient();
+
+  return retryWithBackoff(async () => {
+    return await readClient.readContract({
+      address: LEAF_CONTRACT_ADDRESS,
+      abi: leafAbi,
+      functionName: 'allowance',
+      args: [ownerAddress as `0x${string}`, LAND_CONTRACT_ADDRESS],
+    }) as bigint;
+  });
 };
 
 // Check token approval

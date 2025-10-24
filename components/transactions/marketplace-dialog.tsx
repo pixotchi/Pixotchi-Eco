@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount } from "wagmi";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
-import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_APPROVE_ABI, getTokenBalance, getLeafBalance } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_APPROVE_ABI, getTokenBalance, getLeafBalance, getReadClient, getSeedAllowanceForLand, getLeafAllowanceForLand } from '@/lib/contracts';
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import { toast } from "react-hot-toast";
 
@@ -69,20 +69,16 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [showUserOrders, setShowUserOrders] = useState<boolean>(false);
   const [isMarketplaceActive, setIsMarketplaceActive] = useState<boolean>(true);
 
-  // Add new state for refresh tracking to prevent race conditions
-  const [refreshCounter, setRefreshCounter] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const fetchOrders = useCallback(async () => {
       try {
         setLoading(true);
-        const { createPublicClient, http } = await import("viem");
-        const { base } = await import("viem/chains");
-        const c = createPublicClient({ chain: base, transport: http() });
+        const client = getReadClient();
         const [active, mine, activeFlag] = await Promise.all([
-          c.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<any[]>,
-          address ? c.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceGetUserOrders', args: [address as `0x${string}`] }) as Promise<any[]> : Promise.resolve([]),
-          c.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>
+          client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<any[]>,
+          address ? client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceGetUserOrders', args: [address as `0x${string}`] }) as Promise<any[]> : Promise.resolve([]),
+          client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>
         ]);
         setActiveOrders((active || []).map(mapOrder));
         setUserOrders((mine || []).map(mapOrder));
@@ -99,14 +95,11 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     if (!address || isRefreshing) return;
     setIsRefreshing(true);
     try {
-      const { createPublicClient, http } = await import("viem");
-      const { base } = await import("viem/chains");
-      const c = createPublicClient({ chain: base, transport: http() });
       const [seed, leaf, seedAll, leafAll] = await Promise.all([
         getTokenBalance(address),
         getLeafBalance(address),
-        c.readContract({ address: PIXOTCHI_TOKEN_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
-        c.readContract({ address: LEAF_CONTRACT_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
+        getSeedAllowanceForLand(address),
+        getLeafAllowanceForLand(address),
       ]);
       setSeedBalance(seed || BigInt(0));
       setLeafBalance(leaf || BigInt(0));
@@ -125,7 +118,6 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   // NEW: Improved refresh function that triggers allowance updates
   const refreshBalancesAndAllowances = useCallback(() => {
-    setRefreshCounter(prev => prev + 1);
     // Small delay to allow transaction to fully finalize onchain
     setTimeout(() => {
       fetchBalances();
@@ -226,18 +218,15 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
 
   useEffect(() => {
-    const fetchBalances = async () => {
+    const run = async () => {
       if (!address) { setSeedBalance(BigInt(0)); setLeafBalance(BigInt(0)); return; }
       setLoadingBalances(true);
       try {
-        const { createPublicClient, http } = await import("viem");
-        const { base } = await import("viem/chains");
-        const c = createPublicClient({ chain: base, transport: http() });
         const [seed, leaf, seedAll, leafAll] = await Promise.all([
           getTokenBalance(address),
           getLeafBalance(address),
-          c.readContract({ address: PIXOTCHI_TOKEN_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
-          c.readContract({ address: LEAF_CONTRACT_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
+          getSeedAllowanceForLand(address),
+          getLeafAllowanceForLand(address),
         ]);
         setSeedBalance(seed || BigInt(0));
         setLeafBalance(leaf || BigInt(0));
@@ -252,7 +241,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
         setLoadingBalances(false);
       }
     };
-    if (open) fetchBalances();
+    if (open) run();
   }, [open, address]);
 
   const hasSufficientForOrder = (o: OrderView): boolean => {
