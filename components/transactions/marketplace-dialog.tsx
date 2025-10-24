@@ -69,6 +69,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [showUserOrders, setShowUserOrders] = useState<boolean>(false);
   const [isMarketplaceActive, setIsMarketplaceActive] = useState<boolean>(true);
 
+  // Add new state for refresh tracking to prevent race conditions
+  const [refreshCounter, setRefreshCounter] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
   const fetchOrders = useCallback(async () => {
       try {
         setLoading(true);
@@ -90,14 +94,59 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
       }
   }, [address]);
 
-  useEffect(() => {
-    if (open) fetchOrders();
+  // Extract fetchBalances outside useEffect to be reusable
+  const fetchBalances = useCallback(async () => {
+    if (!address || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const { createPublicClient, http } = await import("viem");
+      const { base } = await import("viem/chains");
+      const c = createPublicClient({ chain: base, transport: http() });
+      const [seed, leaf, seedAll, leafAll] = await Promise.all([
+        getTokenBalance(address),
+        getLeafBalance(address),
+        c.readContract({ address: PIXOTCHI_TOKEN_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
+        c.readContract({ address: LEAF_CONTRACT_ADDRESS, abi: ERC20_APPROVE_ABI as any, functionName: 'allowance', args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS] }) as Promise<bigint>,
+      ]);
+      setSeedBalance(seed || BigInt(0));
+      setLeafBalance(leaf || BigInt(0));
+      setSeedAllowance(seedAll || BigInt(0));
+      setLeafAllowance(leafAll || BigInt(0));
+    } catch (error) {
+      console.warn('[Marketplace] Failed to fetch balances:', error);
+      setSeedBalance(BigInt(0));
+      setLeafBalance(BigInt(0));
+      setSeedAllowance(BigInt(0));
+      setLeafAllowance(BigInt(0));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [address, isRefreshing]);
 
-    // Refresh orders after transactions complete elsewhere
-    const refreshHandler = () => { if (open) fetchOrders(); };
+  // NEW: Improved refresh function that triggers allowance updates
+  const refreshBalancesAndAllowances = useCallback(() => {
+    setRefreshCounter(prev => prev + 1);
+    // Small delay to allow transaction to fully finalize onchain
+    setTimeout(() => {
+      fetchBalances();
+      fetchOrders();
+    }, 1000);
+  }, [fetchBalances, fetchOrders]);
+
+  useEffect(() => {
+    if (!open) return;
+    
+    // Initial fetch
+    fetchBalances();
+    fetchOrders();
+
+    // NEW: Proper event listener that triggers BOTH balance and order refresh
+    const refreshHandler = () => {
+      if (open) refreshBalancesAndAllowances();
+    };
     window.addEventListener('balances:refresh', refreshHandler as EventListener);
     return () => window.removeEventListener('balances:refresh', refreshHandler as EventListener);
-  }, [open, address, fetchOrders]);
+  }, [open, address, fetchBalances, fetchOrders, refreshBalancesAndAllowances]);
 
   const mapOrder = (o: any): OrderView => ({
     id: BigInt(o.id),
@@ -392,22 +441,40 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 </div>
               </div>
               <div className="flex gap-2">
-                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
+                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve SEED"
                     buttonClassName="h-9 px-4"
                     hideStatus
-                    onSuccess={() => { toast.success('SEED approved'); }}
+                    onSuccess={() => { 
+                      toast.success('SEED approved'); 
+                      // FIX: Refresh allowance state immediately + trigger UI update
+                      setSeedAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
+                      setTimeout(() => fetchBalances(), 500);
+                    }}
+                    onError={(error) => {
+                      console.error('[Marketplace] SEED approval failed:', error);
+                      toast.error('Approval failed - please try again');
+                    }}
                   />
                 )}
-                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
+                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve LEAF"
                     buttonClassName="h-9 px-4"
                     hideStatus
-                    onSuccess={() => { toast.success('LEAF approved'); }}
+                    onSuccess={() => { 
+                      toast.success('LEAF approved'); 
+                      // FIX: Refresh allowance state immediately + trigger UI update
+                      setLeafAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
+                      setTimeout(() => fetchBalances(), 500);
+                    }}
+                    onError={(error) => {
+                      console.error('[Marketplace] LEAF approval failed:', error);
+                      toast.error('Approval failed - please try again');
+                    }}
                   />
                 )}
               </div>
@@ -496,22 +563,40 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
               {/* Allowance helpers */}
               <div className="flex gap-2">
-                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
+                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve SEED"
                     buttonClassName="h-9 px-4"
                     hideStatus
-                    onSuccess={() => { toast.success('SEED approved'); }}
+                    onSuccess={() => { 
+                      toast.success('SEED approved'); 
+                      // FIX: Refresh allowance state immediately + trigger UI update
+                      setSeedAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
+                      setTimeout(() => fetchBalances(), 500);
+                    }}
+                    onError={(error) => {
+                      console.error('[Marketplace] SEED approval failed:', error);
+                      toast.error('Approval failed - please try again');
+                    }}
                   />
                 )}
-                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
+                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve LEAF"
                     buttonClassName="h-9 px-4"
                     hideStatus
-                    onSuccess={() => { toast.success('LEAF approved'); }}
+                    onSuccess={() => { 
+                      toast.success('LEAF approved'); 
+                      // FIX: Refresh allowance state immediately + trigger UI update
+                      setLeafAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
+                      setTimeout(() => fetchBalances(), 500);
+                    }}
+                    onError={(error) => {
+                      console.error('[Marketplace] LEAF approval failed:', error);
+                      toast.error('Approval failed - please try again');
+                    }}
                   />
                 )}
               </div>
