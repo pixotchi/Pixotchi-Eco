@@ -225,7 +225,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         toBlock: currentBlock,
       } as const;
 
-      const fetchLogs = (event: typeof SPIN_GAME_COMMITTED_EVENT) =>
+      const fetchLogs = (
+        event:
+          | typeof SPIN_GAME_COMMITTED_EVENT
+          | typeof SPIN_GAME_PLAYED_EVENT
+          | typeof SPIN_GAME_FORFEITED_EVENT,
+      ) =>
         publicClient.getLogs({
           ...filterBase,
           events: [event],
