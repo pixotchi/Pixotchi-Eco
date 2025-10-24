@@ -18,12 +18,12 @@ function filterLast24Hours(activities: ActivityEvent[]): ActivityEvent[] {
 function getPlayedRewardWeight(event: PlayedEvent): number {
   const pointsDelta = Number(event.points ?? '0');
   const timeBonus = event.timeAdded ?? event.timeExtension ? Number(event.timeAdded ?? event.timeExtension ?? '0') : 0;
-  const leafReward = event.leafAmount ? BigInt(event.leafAmount) : 0n;
+  const leafReward = event.leafAmount ? BigInt(event.leafAmount) : BigInt("0");
 
   let weight = 0;
   if (pointsDelta !== 0) weight += 1;
   if (timeBonus !== 0) weight += 2;
-  if (leafReward !== 0n) weight += 4;
+  if (leafReward !== BigInt("0")) weight += 4;
 
   return weight;
 }

@@ -134,9 +134,9 @@ export default function SpinGameTransaction({
               if (time !== 0) {
                 parts.push(`${time > 0 ? "+" : ""}${formatDuration(Math.abs(time))} TOD`);
               }
-              if (leafRaw && BigInt(leafRaw) !== 0n) {
+              if (leafRaw && BigInt(leafRaw) !== BigInt("0")) {
                 const leafFormatted = formatTokenAmount(BigInt(leafRaw));
-                parts.push(`${BigInt(leafRaw) > 0n ? "+" : ""}${leafFormatted} LEAF`);
+                parts.push(`${BigInt(leafRaw) > BigInt("0") ? "+" : ""}${leafFormatted} LEAF`);
               }
 
               toast.success(parts.length ? `Spin result: ${parts.join(" • ")}` : "Spin result: no reward this time", {

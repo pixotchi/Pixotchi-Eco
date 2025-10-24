@@ -355,7 +355,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           cooldown: Number(perNftCooldown ?? globalCooldown),
           starCost: Number(starCost),
           rewards: formattedRewards,
-          pending: reconciledPending,
+          pending: reconciledPending ?? null,
         });
         const cooldownSeconds = Number(perNftCooldown ?? globalCooldown);
         setCooldownDeadline(cooldownSeconds > 0 ? Date.now() + cooldownSeconds * 1000 : null);
@@ -828,9 +828,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     TOD: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : ""}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
                   </li>
                 )}
-                {typeof resultDetails.leafAmount === "bigint" && resultDetails.leafAmount !== 0n && (
+                {typeof resultDetails.leafAmount === "bigint" && resultDetails.leafAmount !== BigInt("0") && (
                   <li>
-                    LEAF: <span className="font-medium text-foreground">{`${resultDetails.leafAmount > 0n ? "+" : ""}${formatTokenAmount(resultDetails.leafAmount)}`}</span>
+                    LEAF: <span className="font-medium text-foreground">{`${resultDetails.leafAmount > BigInt("0") ? "+" : ""}${formatTokenAmount(resultDetails.leafAmount)} LEAF`}</span>
                   </li>
                 )}
                 {(resultDetails.pointsDelta ?? 0) === 0 && (resultDetails.timeAdded ?? 0) === 0 && (
