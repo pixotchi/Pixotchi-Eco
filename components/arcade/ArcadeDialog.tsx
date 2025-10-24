@@ -225,22 +225,24 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         toBlock: currentBlock,
       } as const;
 
+      const logArgs = address ? { nftId: BigInt(plant.id), player: address as `0x${string}` } : undefined;
+
       const [committedLogs, playedLogs, forfeitedLogs] = await Promise.all([
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_COMMITTED_EVENT],
-          ...(address ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } } : {}),
-        }),
+          ...(logArgs ? { args: logArgs } : {}),
+        } satisfies Parameters<typeof publicClient.getLogs>[0]),
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_PLAYED_EVENT],
-          ...(address ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } } : {}),
-        }),
+          ...(logArgs ? { args: logArgs } : {}),
+        } satisfies Parameters<typeof publicClient.getLogs>[0]),
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_FORFEITED_EVENT],
-          ...(address ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } } : {}),
-        }),
+          ...(logArgs ? { args: logArgs } : {}),
+        } satisfies Parameters<typeof publicClient.getLogs>[0]),
       ]);
 
       const lastCommit = committedLogs.at(-1);
