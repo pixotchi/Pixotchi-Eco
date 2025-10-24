@@ -274,7 +274,7 @@ export const PlayedEventRenderer = ({ event, userAddress, shopItemMap, gardenIte
     const displayGameName = GAME_NAME_ALIASES[event.gameName] ?? event.gameName;
     const pointsDelta = Number(event.points ?? "0");
     const timeBonusSeconds = event.timeAdded ?? event.timeExtension ? Number(event.timeAdded ?? event.timeExtension ?? "0") : 0;
-    const leafReward = event.leafAmount ? BigInt(event.leafAmount) : 0n;
+    const leafReward = event.leafAmount ? BigInt(String(event.leafAmount)) : BigInt("0");
 
     const rewardChips: React.ReactNode[] = [];
 
