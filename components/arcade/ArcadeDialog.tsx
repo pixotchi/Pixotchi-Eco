@@ -546,6 +546,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
     if (spinMeta?.pending) {
       setWheelState((prev) => (prev.spinning ? prev : { ...prev, spinning: true }));
+    } else {
+      setWheelState((prev) =>
+        prev.spinning || prev.revealReady
+          ? { spinning: false, revealReady: false, rewardIndex: undefined }
+          : prev,
+      );
     }
   }, [open, selectedGame, spinMeta?.pending]);
 
