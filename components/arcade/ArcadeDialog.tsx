@@ -505,7 +505,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         if (txHash && lastHandledCommitRef.current === txHash) return;
         if (txHash) lastHandledCommitRef.current = txHash;
         const localKey = `spinleaf:pending:${plant.id}`;
-        const blockNumber = Number(status.statusData?.transactionReceipts?.[0]?.blockNumber ?? 0n);
+        const blockNumberValue = status.statusData?.transactionReceipts?.[0]?.blockNumber;
+        const blockNumber = Number(blockNumberValue !== undefined ? blockNumberValue : BigInt("0"));
         const data: PendingCommit = {
           player: address ?? "",
           commitBlock: blockNumber,
