@@ -46,7 +46,7 @@ interface SpinState {
   pending: PendingCommit | null;
 }
 
-const LOG_LOOKBACK_BLOCKS = 5000n;
+const LOG_LOOKBACK_BLOCKS = 5000;
 const BLOCK_TIME_SECONDS = 12;
 
 const SPIN_GAME_COMMITTED_EVENT = parseAbiItem(
@@ -217,7 +217,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
     try {
     const currentBlock = await publicClient.getBlockNumber();
-      const fromBlock = currentBlock > LOG_LOOKBACK_BLOCKS ? currentBlock - LOG_LOOKBACK_BLOCKS : 0n;
+      const lookback = BigInt(LOG_LOOKBACK_BLOCKS);
+      const fromBlock = currentBlock > lookback ? currentBlock - lookback : 0n;
       const filterBase = {
         address: PIXOTCHI_NFT_ADDRESS,
         fromBlock,
