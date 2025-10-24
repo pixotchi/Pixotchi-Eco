@@ -294,10 +294,10 @@ export const PlayedEventRenderer = ({ event, userAddress, shopItemMap, gardenIte
         );
     }
 
-    if (leafReward !== 0n) {
+    if (leafReward !== BigInt("0")) {
         rewardChips.push(
             <span key="leaf" className="font-semibold text-primary">
-                {`${leafReward > 0n ? '+' : ''}${formatTokenAmount(leafReward)} LEAF`}
+                {`${leafReward > BigInt("0") ? '+' : ''}${formatTokenAmount(leafReward)} LEAF`}
             </span>
         );
     }
