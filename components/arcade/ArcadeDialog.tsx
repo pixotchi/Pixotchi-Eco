@@ -225,24 +225,17 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         toBlock: currentBlock,
       } as const;
 
-      const logArgs = address ? { nftId: BigInt(plant.id), player: address as `0x${string}` } : undefined;
+      const fetchLogs = (event: typeof SPIN_GAME_COMMITTED_EVENT) =>
+        publicClient.getLogs({
+          ...filterBase,
+          events: [event],
+          ...(address ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } } : {}),
+        } as Parameters<typeof publicClient.getLogs>[0]);
 
       const [committedLogs, playedLogs, forfeitedLogs] = await Promise.all([
-        publicClient.getLogs({
-          ...filterBase,
-          events: [SPIN_GAME_COMMITTED_EVENT],
-          ...(logArgs ? ({ args: logArgs } as { args: typeof logArgs }) : {}),
-        } satisfies Parameters<typeof publicClient.getLogs>[0]),
-        publicClient.getLogs({
-          ...filterBase,
-          events: [SPIN_GAME_PLAYED_EVENT],
-          ...(logArgs ? ({ args: logArgs } as { args: typeof logArgs }) : {}),
-        } satisfies Parameters<typeof publicClient.getLogs>[0]),
-        publicClient.getLogs({
-          ...filterBase,
-          events: [SPIN_GAME_FORFEITED_EVENT],
-          ...(logArgs ? ({ args: logArgs } as { args: typeof logArgs }) : {}),
-        } satisfies Parameters<typeof publicClient.getLogs>[0]),
+        fetchLogs(SPIN_GAME_COMMITTED_EVENT),
+        fetchLogs(SPIN_GAME_PLAYED_EVENT),
+        fetchLogs(SPIN_GAME_FORFEITED_EVENT),
       ]);
 
       const lastCommit = committedLogs.at(-1);
