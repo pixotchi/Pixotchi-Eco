@@ -218,7 +218,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     try {
     const currentBlock = await publicClient.getBlockNumber();
       const lookback = BigInt(LOG_LOOKBACK_BLOCKS);
-      const fromBlock = currentBlock > lookback ? currentBlock - lookback : 0n;
+      const fromBlock = currentBlock > lookback ? currentBlock - lookback : BigInt("0");
       const filterBase = {
         address: PIXOTCHI_NFT_ADDRESS,
         fromBlock,
@@ -248,15 +248,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         return null;
       }
 
-      const commitBlock = lastCommit.blockNumber ?? 0n;
+      const commitBlock = lastCommit.blockNumber ?? BigInt("0");
       const commitData: PendingCommit = {
         player: (lastCommit.args?.player ?? address) as string,
         commitment: (lastCommit.args?.commitHash ?? "0x") as `0x${string}`,
         commitBlock: Number(commitBlock),
       };
 
-      const lastPlay = playedLogs.find((log) => (log.blockNumber ?? 0n) >= commitBlock);
-      const lastForfeit = forfeitedLogs.find((log) => (log.blockNumber ?? 0n) >= commitBlock);
+      const lastPlay = playedLogs.find((log) => (log.blockNumber ?? BigInt("0")) >= commitBlock);
+      const lastForfeit = forfeitedLogs.find((log) => (log.blockNumber ?? BigInt("0")) >= commitBlock);
 
       if (lastPlay || lastForfeit) {
         return null;
@@ -495,7 +495,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       }
       if (mode === "commit" && status.statusName === "success" && spinMeta && commitmentHex) {
         const localKey = `spinleaf:pending:${plant.id}`;
-        const blockNumber = Number(status.statusData?.transactionReceipts?.[0]?.blockNumber ?? 0n);
+        const blockNumber = Number(status.statusData?.transactionReceipts?.[0]?.blockNumber ?? BigInt("0"));
         const data: PendingCommit = {
           player: address ?? "",
           commitBlock: blockNumber,
