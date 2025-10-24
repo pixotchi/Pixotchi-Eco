@@ -24,6 +24,7 @@ interface SponsoredTransactionProps {
   showToast?: boolean;
   onStatusUpdate?: (status: LifecycleStatus) => void;
   hideStatus?: boolean;
+  onButtonClick?: () => void;
 }
 
 export default function SponsoredTransaction({
@@ -35,7 +36,8 @@ export default function SponsoredTransaction({
   disabled = false,
   showToast = true
   , onStatusUpdate,
-  hideStatus = false
+  hideStatus = false,
+  onButtonClick
 }: SponsoredTransactionProps) {
   const { isSponsored } = usePaymaster();
   const { address } = useAccount();
@@ -43,7 +45,7 @@ export default function SponsoredTransaction({
   // Sponsored transaction with paymaster integration
   
   const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Sponsored transaction successful:', tx);
+    console.log('Sponsored transaction successful');
     onSuccess?.(tx);
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
     // Gamification: track daily activity (non-blocking)
@@ -77,6 +79,14 @@ export default function SponsoredTransaction({
         text={buttonText} 
         className={`${buttonClassName} inline-flex items-center justify-center whitespace-nowrap leading-none`}
         disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          try {
+            onButtonClick?.();
+          } catch (error) {
+            console.warn('Pre-transaction handler failed', error);
+          }
+        }}
       />
       {!hideStatus && (
         <TransactionStatus>

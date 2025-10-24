@@ -1,4 +1,4 @@
-import { ActivityEvent } from './types';
+import { ActivityEvent, PlayedEvent } from './types';
 import { getPlantsByOwner, getLandsByOwner } from './contracts';
 
 // Updated to use unified indexer endpoint
@@ -13,6 +13,48 @@ function filterLast24Hours(activities: ActivityEvent[]): ActivityEvent[] {
     const activityTimestamp = parseInt(activity.timestamp);
     return activityTimestamp >= twentyFourHoursAgo;
   });
+}
+
+function getPlayedRewardWeight(event: PlayedEvent): number {
+  const pointsDelta = Number(event.points ?? '0');
+  const timeBonus = event.timeAdded ?? event.timeExtension ? Number(event.timeAdded ?? event.timeExtension ?? '0') : 0;
+  const leafReward = event.leafAmount ? BigInt(event.leafAmount) : 0n;
+
+  let weight = 0;
+  if (pointsDelta !== 0) weight += 1;
+  if (timeBonus !== 0) weight += 2;
+  if (leafReward !== 0n) weight += 4;
+
+  return weight;
+}
+
+function dedupePlayedEvents(activities: ActivityEvent[]): ActivityEvent[] {
+  const result: ActivityEvent[] = [];
+  const seen = new Map<string, { index: number; weight: number }>();
+
+  for (const activity of activities) {
+    if (activity.__typename !== 'Played') {
+      result.push(activity);
+      continue;
+    }
+
+    const key = `${activity.nftId ?? activity.nftName}:${activity.timestamp}:${activity.gameName ?? ''}`.toLowerCase();
+    const weight = getPlayedRewardWeight(activity);
+    const existing = seen.get(key);
+
+    if (!existing) {
+      seen.set(key, { index: result.length, weight });
+      result.push(activity);
+      continue;
+    }
+
+    if (weight > existing.weight) {
+      result[existing.index] = activity;
+      existing.weight = weight;
+    }
+  }
+
+  return result;
 }
 
 const GET_ALL_ACTIVITY_QUERY = `
@@ -59,6 +101,11 @@ const GET_ALL_ACTIVITY_QUERY = `
         nftName
         gameName
         points
+        timeExtension
+        timeAdded
+        leafAmount
+        rewardIndex
+        player
       }
     }
     itemConsumeds(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
@@ -245,6 +292,11 @@ const GET_MY_ACTIVITY_QUERY = `
         nftName
         gameName
         points
+        timeExtension
+        timeAdded
+        leafAmount
+        rewardIndex
+        player
       }
     }
     itemConsumeds(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { nftId_in: $plantIds }) {
@@ -432,11 +484,13 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
       ...(data.villageProductionClaimedEvents?.items || []),
     ];
 
+    const deduped = dedupePlayedEvents(allActivities);
+
     // Sort all activities by timestamp in descending order
-    allActivities.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
+    deduped.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
     
     // Filter to last 24 hours and return all activities
-    return filterLast24Hours(allActivities);
+    return filterLast24Hours(deduped);
 
   } catch (error) {
     console.error('Failed to fetch recent activity:', error);
@@ -504,9 +558,11 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
       ...(data.villageProductionClaimedEvents?.items || []),
     ];
 
-    myActivities.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
+    const deduped = dedupePlayedEvents(myActivities);
 
-    return filterLast24Hours(myActivities);
+    deduped.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
+
+    return filterLast24Hours(deduped);
 
   } catch (error) {
     console.error('Failed to fetch personal activity:', error);

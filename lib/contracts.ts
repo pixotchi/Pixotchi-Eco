@@ -102,6 +102,77 @@ export const BOX_GAME_ABI = [
   },
 ] as const;
 
+export const SPIN_GAME_ABI = [
+  {
+    inputs: [],
+    name: "getCoolDownTime",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getStarCost",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "index", type: "uint256" }],
+    name: "getReward",
+    outputs: [
+      { name: "pointsDelta", type: "int256" },
+      { name: "timeExtension", type: "uint256" },
+      { name: "leafAmount", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "nftID", type: "uint256" }],
+    name: "spinGameV2GetCoolDownTimePerNFT",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "nftID", type: "uint256" }],
+    name: "spinGameV2GetPendingCommit",
+    outputs: [
+      { name: "commitment", type: "bytes32" },
+      { name: "commitBlock", type: "uint256" },
+      { name: "player", type: "address" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "nftId", type: "uint256" },
+      { name: "commitment", type: "bytes32" },
+    ],
+    name: "spinGameV2Commit",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "nftId", type: "uint256" },
+      { name: "secret", type: "bytes32" },
+    ],
+    name: "spinGameV2Play",
+    outputs: [
+      { name: "pointsDelta", type: "int256" },
+      { name: "timeAdded", type: "uint256" },
+      { name: "leafAmount", type: "uint256" },
+      { name: "rewardIndex", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
