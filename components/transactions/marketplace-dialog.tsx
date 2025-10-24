@@ -392,7 +392,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 </div>
               </div>
               <div className="flex gap-2">
-                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
+                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve SEED"
@@ -401,7 +401,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     onSuccess={() => { toast.success('SEED approved'); }}
                   />
                 )}
-                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
+                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve LEAF"
@@ -496,7 +496,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
               {/* Allowance helpers */}
               <div className="flex gap-2">
-                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
+                {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve SEED"
@@ -505,7 +505,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     onSuccess={() => { toast.success('SEED approved'); }}
                   />
                 )}
-                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[3] as bigint || BigInt(0)) && (
+                {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                   <SponsoredTransaction
                     calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                     buttonText="Approve LEAF"
