@@ -510,9 +510,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           if (!prev) return prev;
           return { ...prev, pending: data };
         });
-        try {
-          setPendingSecret(hexToBytes(secretHex));
-        } catch {}
+        if (secretHex) {
+          try {
+            setPendingSecret(hexToBytes(secretHex));
+          } catch {}
+        }
         setBlockCountdown(1);
         setBlockSecondsRemaining(BLOCK_TIME_SECONDS);
         startWheelSpin();
