@@ -161,6 +161,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [targetRotation, setTargetRotation] = useState<number | null>(null);
   const [revealDeadline, setRevealDeadline] = useState<number | null>(null);
   const [cooldownDeadline, setCooldownDeadline] = useState<number | null>(null);
+  const lastHandledCommitRef = useRef<string | null>(null);
+  const lastHandledRevealRef = useRef<string | null>(null);
 
   // Generate a deterministic-ish default seed on open
   useEffect(() => {
@@ -465,7 +467,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   }, [pendingSecret]);
 
   const syncAfterTx = useCallback(async () => {
-    await hydratePendingState();
+    const pending = await hydratePendingState();
+    setSpinMeta((prev) => (prev ? { ...prev, pending: pending ?? null } : prev));
     setSpinRefreshKey((key) => key + 1);
   }, [hydratePendingState]);
 
@@ -491,12 +494,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const handleSpinStatus = useCallback(
     (mode: "commit" | "reveal") => (status: LifecycleStatus) => {
       if (!plant) return;
+      const txHash = status.statusData?.transactionReceipts?.[0]?.transactionHash as string | undefined;
+
       if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
         setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
+        return;
       }
+
       if (mode === "commit" && status.statusName === "success" && spinMeta && commitmentHex) {
+        if (txHash && lastHandledCommitRef.current === txHash) return;
+        if (txHash) lastHandledCommitRef.current = txHash;
         const localKey = `spinleaf:pending:${plant.id}`;
-        const blockNumber = Number(status.statusData?.transactionReceipts?.[0]?.blockNumber ?? BigInt("0"));
+        const blockNumber = Number(status.statusData?.transactionReceipts?.[0]?.blockNumber ?? 0n);
         const data: PendingCommit = {
           player: address ?? "",
           commitBlock: blockNumber,
@@ -520,6 +529,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         startWheelSpin();
       }
       if (mode === "reveal" && status.statusName === "success") {
+        if (txHash && lastHandledRevealRef.current === txHash) return;
+        if (txHash) lastHandledRevealRef.current = txHash;
         const localKey = `spinleaf:pending:${plant.id}`;
         try {
           localStorage.removeItem(localKey);
@@ -533,7 +544,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     if (!open || selectedGame !== "spin") return;
 
     if (spinMeta?.pending) {
-      setWheelState((prev) => ({ ...prev, spinning: true }));
+      setWheelState((prev) => (prev.spinning ? prev : { ...prev, spinning: true }));
     }
   }, [open, selectedGame, spinMeta?.pending]);
 
@@ -772,20 +783,22 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 </div>
 
                 <div className="space-y-2">
-                  <SpinGameTransaction
-                    mode="commit"
-                    plantId={plant.id}
-                    commitment={commitmentHex ?? undefined}
-                    disabled={!(commitmentHex && canCommit)}
-                    buttonClassName="w-full"
-                    buttonText={spinStarCost > 0 ? `Spin! (${spinStarCost}★)` : "Spin!"}
-                    onStatusUpdate={handleSpinStatus("commit") as any}
-                    onButtonClick={() => {
-                      if (!(commitmentHex && canCommit)) return;
-                      setResultDetails(null);
-                      startWheelSpin();
-                    }}
-                  />
+                  {!pending && (
+                    <SpinGameTransaction
+                      mode="commit"
+                      plantId={plant.id}
+                      commitment={commitmentHex ?? undefined}
+                      disabled={!(commitmentHex && canCommit)}
+                      buttonClassName="w-full"
+                      buttonText={spinStarCost > 0 ? `Spin! (${spinStarCost}★)` : "Spin!"}
+                      onStatusUpdate={handleSpinStatus("commit") as any}
+                      onButtonClick={() => {
+                        if (!(commitmentHex && canCommit)) return;
+                        setResultDetails(null);
+                        startWheelSpin();
+                      }}
+                    />
+                  )}
 
                   {pending && (
                     <SpinGameTransaction
@@ -835,7 +848,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     LEAF: <span className="font-medium text-foreground">{`${resultDetails.leafAmount > BigInt("0") ? "+" : ""}${formatTokenAmount(resultDetails.leafAmount)} LEAF`}</span>
                   </li>
                 )}
-                {(resultDetails.pointsDelta ?? 0) === 0 && (resultDetails.timeAdded ?? 0) === 0 && (
+                {(resultDetails.pointsDelta ?? 0) === 0 && (resultDetails.timeAdded ?? 0) === 0 &&
+                  (!resultDetails.leafAmount || resultDetails.leafAmount === BigInt("0")) && (
                   <li className="text-muted-foreground">No reward this time. Better luck next spin!</li>
                 )}
               </ul>
