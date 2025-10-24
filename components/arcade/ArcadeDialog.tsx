@@ -225,21 +225,23 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         toBlock: currentBlock,
       } as const;
 
+      const args = address ? { nftId: BigInt(plant.id), player: address as `0x${string}` } : undefined;
+
       const [committedLogs, playedLogs, forfeitedLogs] = await Promise.all([
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_COMMITTED_EVENT],
-          args: { nftId: BigInt(plant.id), player: address as `0x${string}` },
+          args,
         }),
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_PLAYED_EVENT],
-          args: { nftId: BigInt(plant.id), player: address as `0x${string}` },
+          args,
         }),
         publicClient.getLogs({
           ...filterBase,
           events: [SPIN_GAME_FORFEITED_EVENT],
-          args: { nftId: BigInt(plant.id), player: address as `0x${string}` },
+          args,
         }),
       ]);
 
