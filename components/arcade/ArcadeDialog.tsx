@@ -249,9 +249,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       }
 
       const commitBlock = lastCommit.blockNumber ?? BigInt("0");
+      const commitArgs = (lastCommit as unknown as { args?: { player?: string; commitHash?: `0x${string}` } }).args;
       const commitData: PendingCommit = {
-        player: (lastCommit.args?.player ?? address) as string,
-        commitment: (lastCommit.args?.commitHash ?? "0x") as `0x${string}`,
+        player: (commitArgs?.player ?? address) as string,
+        commitment: (commitArgs?.commitHash ?? "0x") as `0x${string}`,
         commitBlock: Number(commitBlock),
       };
 
