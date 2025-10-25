@@ -196,4 +196,20 @@ export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise
   return { deleted };
 }
 
+export async function getMissionScore(address: string, month?: string): Promise<number> {
+  if (!address) return 0;
+  const d = getTodayDateString();
+  const yyyymm = month || toMonth(d);
+  const key = withPrefix(keys.missionsLeaderboard(yyyymm));
+  try {
+    const raw = await (redis as any)?.zscore?.(key, address.toLowerCase());
+    if (raw == null) return 0;
+    const num = Number(raw);
+    return Number.isFinite(num) ? num : 0;
+  } catch (error) {
+    console.warn('getMissionScore failed', error);
+    return 0;
+  }
+}
+
 

@@ -46,6 +46,16 @@ export const ERC20_APPROVE_ABI = [
       { name: 'amount', type: 'uint256' }
     ],
     outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    outputs: [{ name: '', type: 'uint256' }]
   }
 ] as const;
 
@@ -96,6 +106,66 @@ export const BOX_GAME_ABI = [
     outputs: [
       { name: "points", type: "uint256" },
       { name: "timeExtension", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+export const SPIN_GAME_ABI = [
+  {
+    inputs: [],
+    name: "getCoolDownTime",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getStarCost",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "index", type: "uint256" }],
+    name: "getReward",
+    outputs: [
+      { name: "pointsDelta", type: "int256" },
+      { name: "timeExtension", type: "uint256" },
+      { name: "leafAmount", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "nftID", type: "uint256" }],
+    name: "spinGameV2GetCoolDownTimePerNFT",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "nftId", type: "uint256" },
+      { name: "commitment", type: "bytes32" },
+    ],
+    name: "spinGameV2Commit",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "nftId", type: "uint256" },
+      { name: "secret", type: "bytes32" },
+    ],
+    name: "spinGameV2Play",
+    outputs: [
+      { name: "pointsDelta", type: "int256" },
+      { name: "timeAdded", type: "uint256" },
+      { name: "leafAmount", type: "uint256" },
+      { name: "rewardIndex", type: "uint256" },
     ],
     stateMutability: "nonpayable",
     type: "function",
@@ -433,68 +503,7 @@ const PIXOTCHI_TOKEN_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
-  },
-
-  // Shop item purchase
-  {
-    inputs: [
-      { name: 'nftId', type: 'uint256' },
-      { name: 'itemId', type: 'uint256' }
-    ],
-    name: 'shopBuyItem',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-
-  // Get all shop items
-  {
-    inputs: [],
-    name: 'shopGetAllItems',
-    outputs: [{ 
-      name: '', 
-      type: 'tuple[]', 
-      components: [
-        { name: 'id', type: 'uint256' },
-        { name: 'name', type: 'string' },
-        { name: 'price', type: 'uint256' },
-        { name: 'effectTime', type: 'uint256' }
-      ]
-    }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-
-  // Garden item purchase
-  {
-    inputs: [
-      { name: 'nftId', type: 'uint256' },
-      { name: 'itemId', type: 'uint256' }
-    ],
-    name: 'buyAccessory',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-
-  // Get all garden items
-  {
-    inputs: [],
-    name: 'getAllGardenItem',
-    outputs: [{ 
-      name: '', 
-      type: 'tuple[]', 
-      components: [
-        { name: 'id', type: 'uint256' },
-        { name: 'name', type: 'string' },
-        { name: 'price', type: 'uint256' },
-        { name: 'points', type: 'uint256' },
-        { name: 'timeExtension', type: 'uint256' }
-      ]
-    }],
-    stateMutability: 'view',
-    type: 'function',
-  },
+  }
 ] as const;
 
 // -------------------- BATCH ROUTER ABI --------------------
@@ -960,6 +969,36 @@ export const getTokenBalance = async (address: string): Promise<bigint> => {
 export const getFormattedTokenBalance = async (address: string): Promise<number> => {
   const balance = await getTokenBalance(address);
   return Number(balance) / 1e18; // Convert from wei to token units
+};
+
+// Raw SEED allowance for Land contract interactions (e.g., marketplace)
+export const getSeedAllowanceForLand = async (ownerAddress: string): Promise<bigint> => {
+  if (!ownerAddress) return BigInt(0);
+  const readClient = getReadClient();
+
+  return retryWithBackoff(async () => {
+    return await readClient.readContract({
+      address: PIXOTCHI_TOKEN_ADDRESS,
+      abi: PIXOTCHI_TOKEN_ABI,
+      functionName: 'allowance',
+      args: [ownerAddress as `0x${string}`, LAND_CONTRACT_ADDRESS],
+    }) as bigint;
+  });
+};
+
+// Raw LEAF allowance for Land contract interactions (e.g., marketplace)
+export const getLeafAllowanceForLand = async (ownerAddress: string): Promise<bigint> => {
+  if (!ownerAddress) return BigInt(0);
+  const readClient = getReadClient();
+
+  return retryWithBackoff(async () => {
+    return await readClient.readContract({
+      address: LEAF_CONTRACT_ADDRESS,
+      abi: leafAbi,
+      functionName: 'allowance',
+      args: [ownerAddress as `0x${string}`, LAND_CONTRACT_ADDRESS],
+    }) as bigint;
+  });
 };
 
 // Check token approval

@@ -169,7 +169,8 @@ export async function POST(req: NextRequest) {
     let mintedTokenIds: bigint[] = [];
     try {
       const rpc = getRpcConfig();
-      const client = createPublicClient({ chain: baseChain, transport: http(rpc.endpoints[0]) });
+      const rpcUrl = rpc.endpoints[0] || 'https://mainnet.base.org';
+      const client = createPublicClient({ chain: baseChain, transport: http(rpcUrl) });
       const txReceipt = await client.waitForTransactionReceipt({ hash: mintReceipt.transactionHash as `0x${string}` });
       const TRANSFER_SIG = EVM_EVENT_SIGNATURES.ERC20_TRANSFER;
       const zeroAddressTopic = EVM_TOPICS.ZERO_ADDRESS_TOPIC;

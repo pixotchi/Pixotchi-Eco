@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMissionDay, markMissionTask } from '@/lib/gamification-service';
+import { getMissionDay, markMissionTask, getMissionScore } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 import type { GmTaskId } from '@/lib/gamification-types';
 
@@ -7,11 +7,15 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get('address');
+    const month = searchParams.get('month') || undefined;
     if (!address || !isValidEthereumAddressFormat(address)) {
       return NextResponse.json({ error: 'Valid wallet address is required' }, { status: 400 });
     }
-    const day = await getMissionDay(address);
-    return NextResponse.json({ success: true, day });
+    const [day, total] = await Promise.all([
+      getMissionDay(address),
+      getMissionScore(address, month),
+    ]);
+    return NextResponse.json({ success: true, day, total });
   } catch (error) {
     console.error('Error fetching mission day:', error);
     return NextResponse.json({ error: 'Failed to fetch mission day' }, { status: 500 });

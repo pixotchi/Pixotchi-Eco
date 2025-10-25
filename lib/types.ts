@@ -276,6 +276,10 @@ export type PlayedEvent = {
   points: string;
   timeExtension: string;
   gameName: string;
+  rewardIndex?: string;
+  timeAdded?: string;
+  leafAmount?: string;
+  player?: string;
 };
 
 export type ItemConsumedEvent = {

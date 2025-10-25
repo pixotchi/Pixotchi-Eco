@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -12,7 +12,7 @@ import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
-import { PIXOTCHI_TOKEN_ADDRESS, WETH_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
 
 export default function SwapTab() {
@@ -21,34 +21,41 @@ export default function SwapTab() {
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const [swapView, setSwapView] = useState<'swap' | 'chart'>('swap');
 
-  const ETH: Token = {
-    address: "0x4200000000000000000000000000000000000006",
-    chainId: 8453,
-    decimals: 18,
-    name: "ETH",
-    symbol: "ETH",
-    image: "https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png",
-  };
+  const { ETH, SEED, USDC, SWAPPABLE } = useMemo(() => {
+    const eth: Token = {
+      address: "0x4200000000000000000000000000000000000006",
+      chainId: 8453,
+      decimals: 18,
+      name: "ETH",
+      symbol: "ETH",
+      image: "https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png",
+    };
 
-  const SEED: Token = {
-    address: PIXOTCHI_TOKEN_ADDRESS,
-    chainId: 8453,
-    decimals: 18,
-    name: "SEED",
-    symbol: "SEED",
-    image: "/PixotchiKit/COIN.svg",
-  };
+    const seed: Token = {
+      address: PIXOTCHI_TOKEN_ADDRESS,
+      chainId: 8453,
+      decimals: 18,
+      name: "SEED",
+      symbol: "SEED",
+      image: "/PixotchiKit/COIN.svg",
+    };
 
-  const USDC: Token = {
-    address: USDC_ADDRESS,
-    chainId: 8453,
-    decimals: 6,
-    name: "USDC",
-    symbol: "USDC",
-    image: "https://dynamic-assets.coinbase.com/3c15df5e2ac7d4abbe9499ed9335041f00c620f28e8de2f93474a9f432058742cdf4674bd43f309e69778a26969372310135be97eb183d91c492154176d455b8/asset_icons/9d67b728b6c8f457717154b3a35f9ddc702eae7e76c4684ee39302c4d7fd0bb8.png",
-  };
+    const usdc: Token = {
+      address: USDC_ADDRESS,
+      chainId: 8453,
+      decimals: 6,
+      name: "USDC",
+      symbol: "USDC",
+      image: "https://dynamic-assets.coinbase.com/3c15df5e2ac7d4abbe9499ed9335041f00c620f28e8de2f93474a9f432058742cdf4674bd43f309e69778a26969372310135be97eb183d91c492154176d455b8/asset_icons/9d67b728b6c8f457717154b3a35f9ddc702eae7e76c4684ee39302c4d7fd0bb8.png",
+    };
 
-  const SWAPPABLE: Token[] = [ETH, SEED, USDC];
+    return {
+      ETH: eth,
+      SEED: seed,
+      USDC: usdc,
+      SWAPPABLE: [eth, seed, usdc] as Token[],
+    };
+  }, []);
 
   const handleSuccess = useCallback(() => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { AttackEvent, KilledEvent, MintEvent, PlayedEvent, ItemConsumedEvent, ShopItemPurchasedEvent, ActivityEvent, BundledItemConsumedEvent } from '@/lib/types';
-import { formatAddress, formatTokenAmount, formatScore } from '@/lib/utils';
+import { formatAddress, formatTokenAmount, formatScore, formatDuration } from '@/lib/utils';
 import { Sword, Skull, Sparkles, Gamepad2, Apple, ShoppingCart, HelpCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
@@ -193,6 +193,11 @@ const EventWrapper = ({
     </div>
 );
 
+const GAME_NAME_ALIASES: Record<string, string> = {
+    SpinGameV2: "SpinLeaf",
+    "spinGameV2": "SpinLeaf",
+};
+
 export const AttackEventRenderer = React.memo(({
     event,
     userAddress,
@@ -266,10 +271,56 @@ export const MintEventRenderer = ({ event, shopItemMap, gardenItemMap }: { event
 
 export const PlayedEventRenderer = ({ event, userAddress, shopItemMap, gardenItemMap }: { event: PlayedEvent, userAddress?: string | null, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
     const isYou = userAddress && event.nftName.toLowerCase() === userAddress.toLowerCase();
+    const displayGameName = GAME_NAME_ALIASES[event.gameName] ?? event.gameName;
+    const pointsDelta = Number(event.points ?? "0");
+    const timeBonusSeconds = event.timeAdded ?? event.timeExtension ? Number(event.timeAdded ?? event.timeExtension ?? "0") : 0;
+    const leafReward = event.leafAmount ? BigInt(String(event.leafAmount)) : BigInt("0");
+
+    const rewardChips: React.ReactNode[] = [];
+
+    if (pointsDelta !== 0) {
+        rewardChips.push(
+            <span key="points" className="font-semibold text-primary">
+                {`${pointsDelta > 0 ? '+' : ''}${formatScore(Math.abs(pointsDelta))} PTS`}
+            </span>
+        );
+    }
+
+    if (timeBonusSeconds !== 0) {
+        rewardChips.push(
+            <span key="tod" className="font-semibold text-primary">
+                {`${timeBonusSeconds > 0 ? '+' : ''}${formatDuration(Math.abs(timeBonusSeconds))} TOD`}
+            </span>
+        );
+    }
+
+    if (leafReward !== BigInt("0")) {
+        rewardChips.push(
+            <span key="leaf" className="font-semibold text-primary">
+                {`${leafReward > BigInt("0") ? '+' : ''}${formatTokenAmount(leafReward)} LEAF`}
+            </span>
+        );
+    }
+
+    let rewardSummary: React.ReactNode = <span className="text-muted-foreground">no reward this time</span>;
+
+    if (rewardChips.length > 0) {
+        rewardSummary = rewardChips.reduce<React.ReactNode[]>((acc, chip, index) => {
+            if (index === 0) return [chip];
+            acc.push(
+                <span key={`separator-${index}`} className="px-1 text-muted-foreground">
+                    •
+                </span>
+            );
+            acc.push(chip);
+            return acc;
+        }, []);
+    }
+
     return (
         <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
             <p className="text-sm">
-                <PlantName name={event.nftName} id={event.nftId} isYou={!!isYou} /> played <span className="font-semibold">{event.gameName}</span> and scored <span className="font-semibold text-primary">{formatScore(parseInt(event.points))}</span> points.
+                <PlantName name={event.nftName} id={event.nftId} isYou={!!isYou} /> played <span className="font-semibold">{displayGameName}</span> and won {rewardSummary}.
             </p>
         </EventWrapper>
     );
