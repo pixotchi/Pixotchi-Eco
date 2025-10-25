@@ -375,10 +375,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             if (!isRangeTooLargeError(error) || from === to) {
               throw error;
             }
-            const mid = from + (to - from) / 2n;
+            const mid = from + (to - from) / BigInt(2);
             const [first, second] = await Promise.all([
               fetchChunk(from, mid),
-              fetchChunk(mid + 1n, to),
+              fetchChunk(mid + BigInt(1), to),
             ]);
             return [...first, ...second];
           }
@@ -388,10 +388,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         let cursor = baseFrom;
         const upper = baseTo;
         while (cursor <= upper) {
-          const chunkEnd = cursor + LOG_CHUNK_SIZE - 1n;
+          const chunkEnd = cursor + LOG_CHUNK_SIZE - BigInt(1);
           const to = chunkEnd > upper ? upper : chunkEnd;
           ranges.push([cursor, to]);
-          cursor = to + 1n;
+          cursor = to + BigInt(1);
         }
 
         const chunkResults: Awaited<ReturnType<typeof publicClient.getLogs>>[] = [];
