@@ -548,7 +548,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
           {/* Actions */}
           <div className="pt-4 border-t border-border">
             <div className="grid gap-2 mb-3">
-              {canExportEmbeddedWallet ? (
+              {canExportEmbeddedWallet && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -558,17 +558,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                   <Key className="w-4 h-4 mr-2" />
                   {exportWalletLabel}
                 </Button>
-              ) : privyReady && privyAuthenticated && !isMiniApp ? (
-                <Alert className="text-xs">
-                  <div className="flex items-center gap-1 text-xs font-semibold">
-                    <ShieldAlert className="w-3 h-3" />
-                    Embedded wallet export unavailable
-                  </div>
-                  <p className="mt-1 text-xs">
-                    Export is only supported for Privy embedded wallets. Connect with email/embedded wallet to enable this action.
-                  </p>
-                </Alert>
-              ) : null}
+              )}
               <Button
                 variant="secondary"
                 size="sm"
