@@ -15,7 +15,7 @@ import { cn, formatDuration, formatScore, formatTokenAmount } from "@/lib/utils"
 import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
-import { keccak256, encodePacked, toHex, hexToBytes, parseAbiItem } from "viem";
+import { keccak256, encodePacked, toHex, hexToBytes, parseAbiItem, RpcRequestError } from "viem";
 
 type ArcadeDialogProps = {
   open: boolean;
@@ -46,8 +46,12 @@ interface SpinState {
   pending: PendingCommit | null;
 }
 
-const LOG_LOOKBACK_BLOCKS = 5000;
-const BLOCK_TIME_SECONDS = 12;
+const LOG_LOOKBACK_BLOCKS = 1000;
+const LOG_LOOKBACK_BUFFER_BLOCKS = 64;
+const LOG_CHUNK_SIZE = 500n;
+const BLOCK_TIME_SECONDS = 4;
+const BLOCK_POLL_INTERVAL_MS = 3000;
+const MIN_REVEAL_DELAY_SECONDS = 8;
 
 const SPIN_GAME_COMMITTED_EVENT = parseAbiItem(
   "event SpinGameV2Committed(uint256 indexed nftId, address indexed player, bytes32 commitHash)"
@@ -156,6 +160,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     timeAdded?: number;
     leafAmount?: bigint;
   } | null>(null);
+  const [lastSeenCommitBlock, setLastSeenCommitBlock] = useState<number | null>(null);
   const wheelRotationRef = useRef(0);
   const [currentRotation, setCurrentRotation] = useState(0);
   const [targetRotation, setTargetRotation] = useState<number | null>(null);
@@ -163,6 +168,82 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [cooldownDeadline, setCooldownDeadline] = useState<number | null>(null);
   const lastHandledCommitRef = useRef<string | null>(null);
   const lastHandledRevealRef = useRef<string | null>(null);
+  const lastSeenCommitBlockRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    lastSeenCommitBlockRef.current = lastSeenCommitBlock;
+  }, [lastSeenCommitBlock]);
+
+  const handleRewardUpdate = useCallback(
+    (index: number, reward: { pointDelta: bigint; timeExtension: bigint; leafAmount: bigint }) => {
+      setSpinMeta((prev) => {
+        if (!prev) return prev;
+        const existing = prev.rewards[index];
+        const nextReward = {
+          index,
+          pointsDelta: Number(reward.pointDelta),
+          timeExtension: Number(reward.timeExtension),
+          leafAmount: reward.leafAmount,
+        };
+        if (
+          existing &&
+          existing.pointsDelta === nextReward.pointsDelta &&
+          existing.timeExtension === nextReward.timeExtension &&
+          existing.leafAmount === nextReward.leafAmount
+        ) {
+          return prev;
+        }
+        const nextRewards = [...prev.rewards];
+        nextRewards[index] = nextReward;
+        return { ...prev, rewards: nextRewards };
+      });
+    },
+    [],
+  );
+
+  const rewardsAreEqual = useCallback((a: RewardPreview[], b: RewardPreview[]) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      const ra = a[i];
+      const rb = b[i];
+      if (
+        ra.index !== rb.index ||
+        ra.pointsDelta !== rb.pointsDelta ||
+        ra.timeExtension !== rb.timeExtension ||
+        ra.leafAmount !== rb.leafAmount
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
+  const pendingEquals = useCallback((a: PendingCommit | null, b: PendingCommit | null) => {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return (
+      a.commitBlock === b.commitBlock &&
+      a.commitment === b.commitment &&
+      a.player?.toLowerCase() === b.player?.toLowerCase()
+    );
+  }, []);
+
+  const persistLastSeenBlock = useCallback(
+    async (block: number) => {
+      if (!address || !plant || Number.isNaN(block) || block <= 0) return;
+      setLastSeenCommitBlock((prev) => (prev !== null ? Math.max(prev, block) : block));
+      try {
+        await fetch("/api/spin/commit-state", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ address, plantId: plant.id, block }),
+        });
+      } catch (error) {
+        console.warn("Failed to persist spin commit block", error);
+      }
+    },
+    [address, plant]
+  );
 
   // Generate a deterministic-ish default seed on open
   useEffect(() => {
@@ -171,6 +252,30 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       setSeed(s);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || selectedGame !== "spin" || !address || !plant) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ address, plantId: String(plant.id) });
+        const res = await fetch(`/api/spin/commit-state?${params.toString()}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const block = Number.isFinite(data?.block) ? Number(data.block) : null;
+        if (!cancelled) {
+          setLastSeenCommitBlock(block);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch last spin commit block", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, selectedGame, address, plant]);
 
   // Fetch cooldowns when dialog opens or when plant changes
   useEffect(() => {
@@ -220,24 +325,81 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     try {
     const currentBlock = await publicClient.getBlockNumber();
       const lookback = BigInt(LOG_LOOKBACK_BLOCKS);
-      const fromBlock = currentBlock > lookback ? currentBlock - lookback : BigInt("0");
+      const fallbackFrom = currentBlock > lookback ? currentBlock - lookback : BigInt("0");
+      const lastSeen = lastSeenCommitBlockRef.current != null
+        ? BigInt(Math.max(0, lastSeenCommitBlockRef.current - LOG_LOOKBACK_BUFFER_BLOCKS))
+        : null;
+      const fromBlock = lastSeen !== null && lastSeen < fallbackFrom ? lastSeen : fallbackFrom;
       const filterBase = {
         address: PIXOTCHI_NFT_ADDRESS,
         fromBlock,
         toBlock: currentBlock,
       } as const;
 
-      const fetchLogs = (
+      const isRangeTooLargeError = (err: unknown) => {
+        if (!err) return false;
+        const maybe = err as { shortMessage?: string; message?: string } | undefined;
+        const msg = (maybe?.shortMessage ?? maybe?.message ?? "").toLowerCase();
+        return msg.includes("block range") && msg.includes("large");
+      };
+
+      const fetchLogs = async (
         event:
           | typeof SPIN_GAME_COMMITTED_EVENT
           | typeof SPIN_GAME_PLAYED_EVENT
           | typeof SPIN_GAME_FORFEITED_EVENT,
-      ) =>
-        publicClient.getLogs({
-          ...filterBase,
-          events: [event],
-          ...(address ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } } : {}),
-        } as Parameters<typeof publicClient.getLogs>[0]);
+      ) => {
+        const argsFilter = address
+          ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } }
+          : {};
+
+        const baseFrom = filterBase.fromBlock ?? fromBlock;
+        const baseTo = filterBase.toBlock ?? currentBlock;
+
+        const execute = async (from: bigint, to: bigint) =>
+          publicClient.getLogs({
+            ...filterBase,
+            fromBlock: from,
+            toBlock: to,
+            events: [event],
+            ...argsFilter,
+          } as Parameters<typeof publicClient.getLogs>[0]);
+
+        const fetchChunk = async (
+          from: bigint,
+          to: bigint,
+        ): Promise<Awaited<ReturnType<typeof publicClient.getLogs>>> => {
+          try {
+            return await execute(from, to);
+          } catch (error) {
+            if (!isRangeTooLargeError(error) || from === to) {
+              throw error;
+            }
+            const mid = from + (to - from) / 2n;
+            const [first, second] = await Promise.all([
+              fetchChunk(from, mid),
+              fetchChunk(mid + 1n, to),
+            ]);
+            return [...first, ...second];
+          }
+        };
+
+        const ranges: Array<[bigint, bigint]> = [];
+        let cursor = baseFrom;
+        const upper = baseTo;
+        while (cursor <= upper) {
+          const chunkEnd = cursor + LOG_CHUNK_SIZE - 1n;
+          const to = chunkEnd > upper ? upper : chunkEnd;
+          ranges.push([cursor, to]);
+          cursor = to + 1n;
+        }
+
+        const chunkResults: Awaited<ReturnType<typeof publicClient.getLogs>>[] = [];
+        for (const [start, end] of ranges) {
+          chunkResults.push(await fetchChunk(start, end));
+        }
+        return chunkResults.flat();
+      };
 
       const [committedLogs, playedLogs, forfeitedLogs] = await Promise.all([
         fetchLogs(SPIN_GAME_COMMITTED_EVENT),
@@ -257,6 +419,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         commitment: (commitArgs?.commitHash ?? "0x") as `0x${string}`,
         commitBlock: Number(commitBlock),
       };
+
+      if (Number(commitBlock) > 0) {
+        persistLastSeenBlock(Number(commitBlock));
+      }
 
       const lastPlay = playedLogs.find((log) => (log.blockNumber ?? BigInt("0")) >= commitBlock);
       const lastForfeit = forfeitedLogs.find((log) => (log.blockNumber ?? BigInt("0")) >= commitBlock);
@@ -353,11 +519,24 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
         const reconciledPending = await hydratePendingState();
 
-        setSpinMeta({
+        const nextMeta: SpinState = {
           cooldown: Number(perNftCooldown ?? globalCooldown),
           starCost: Number(starCost),
           rewards: formattedRewards,
           pending: reconciledPending ?? null,
+        };
+
+        setSpinMeta((prev) => {
+          if (
+            prev &&
+            prev.cooldown === nextMeta.cooldown &&
+            prev.starCost === nextMeta.starCost &&
+            pendingEquals(prev.pending, nextMeta.pending) &&
+            rewardsAreEqual(prev.rewards, nextMeta.rewards)
+          ) {
+            return prev;
+          }
+          return nextMeta;
         });
         const cooldownSeconds = Number(perNftCooldown ?? globalCooldown);
         setCooldownDeadline(cooldownSeconds > 0 ? Date.now() + cooldownSeconds * 1000 : null);
@@ -388,9 +567,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         if (cancelled) return;
 
         if (spinMeta?.pending) {
-          const revealUnlockBlocks = Math.max(0, spinMeta.pending.commitBlock + 1 - blockNumber);
+          const revealUnlockBlocks = Math.max(0, spinMeta.pending.commitBlock + 2 - blockNumber);
           const expiryBlocks = Math.max(0, spinMeta.pending.commitBlock + 1 + 256 - blockNumber);
-          const secondsRemaining = revealUnlockBlocks * BLOCK_TIME_SECONDS;
+          const secondsRemaining = Math.max(
+            MIN_REVEAL_DELAY_SECONDS,
+            revealUnlockBlocks * BLOCK_TIME_SECONDS,
+          );
           setBlockCountdown(revealUnlockBlocks);
           setBlockSecondsRemaining(secondsRemaining);
           setRevealDeadline(Date.now() + secondsRemaining * 1000);
@@ -415,7 +597,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     };
 
     updateCountdown();
-    const interval = setInterval(updateCountdown, 12000);
+    const interval = setInterval(updateCountdown, BLOCK_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
@@ -497,7 +679,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       const txHash = status.statusData?.transactionReceipts?.[0]?.transactionHash as string | undefined;
 
       if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
-        setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
+        setWheelState((prev) =>
+          prev.spinning || prev.revealReady || prev.rewardIndex !== undefined
+            ? { spinning: false, revealReady: false, rewardIndex: undefined }
+            : prev,
+        );
         return;
       }
 
@@ -516,6 +702,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         try {
           localStorage.setItem(localKey, JSON.stringify(data));
         } catch {}
+        if (blockNumber > 0) persistLastSeenBlock(blockNumber);
         setSpinMeta((prev) => {
           if (!prev) return prev;
           return { ...prev, pending: data };
@@ -525,8 +712,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             setPendingSecret(hexToBytes(secretHex));
           } catch {}
         }
-        setBlockCountdown(1);
-        setBlockSecondsRemaining(BLOCK_TIME_SECONDS);
+        const unlockBlock = blockNumber + 2;
+        setBlockCountdown(Math.max(0, unlockBlock - blockNumber));
+        setBlockSecondsRemaining(Math.max(0, (unlockBlock - blockNumber) * BLOCK_TIME_SECONDS));
         startWheelSpin();
       }
       if (mode === "reveal" && status.statusName === "success") {
@@ -804,6 +992,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         setResultDetails(null);
                         startWheelSpin();
                       }}
+                    onRewardConfigUpdate={handleRewardUpdate}
                     />
                   )}
 
@@ -830,6 +1019,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                       onButtonClick={() => {
                         setWheelState((prev) => ({ ...prev, spinning: false, revealReady: true }));
                       }}
+                    onRewardConfigUpdate={handleRewardUpdate}
                     />
                   )}
                 </div>

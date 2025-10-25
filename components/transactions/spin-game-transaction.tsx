@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import { PIXOTCHI_NFT_ADDRESS, SPIN_GAME_ABI } from "@/lib/contracts";
 import { toast } from "react-hot-toast";
-import { decodeEventLog } from "viem";
+import { AbiEventSignatureNotFoundError, decodeEventLog } from "viem";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
 import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
@@ -30,6 +30,11 @@ interface SpinGameTransactionProps {
     leafAmount?: bigint;
   }) => void;
   onButtonClick?: () => void;
+  onRewardConfigUpdate?: (index: number, reward: {
+    pointDelta: bigint;
+    timeExtension: bigint;
+    leafAmount: bigint;
+  }) => void;
 }
 
 export default function SpinGameTransaction({
@@ -43,6 +48,7 @@ export default function SpinGameTransaction({
   onStatusUpdate,
   onComplete,
   onButtonClick,
+  onRewardConfigUpdate,
 }: SpinGameTransactionProps) {
   const calls = useMemo(() => {
     const fn = FUNCTION_MAP[mode];
@@ -145,7 +151,30 @@ export default function SpinGameTransaction({
               summaryShown = true;
               break;
             }
+
+            if (decoded.eventName === "SpinGameV2RewardUpdated") {
+              try {
+                const indexRaw = decoded.args.index ?? decoded.args[0];
+                const pointDelta = decoded.args.pointDelta ?? decoded.args[1];
+                const timeExtension = decoded.args.timeExtension ?? decoded.args[2];
+                const leafAmount = decoded.args.leafAmount ?? decoded.args[3];
+                const index = Number(indexRaw ?? 0);
+                if (!Number.isNaN(index) && onRewardConfigUpdate) {
+                  onRewardConfigUpdate(index, {
+                    pointDelta: BigInt(pointDelta ?? 0),
+                    timeExtension: BigInt(timeExtension ?? 0),
+                    leafAmount: BigInt(leafAmount ?? 0),
+                  });
+                }
+              } catch (updateError) {
+                console.warn("Failed to process reward update event", updateError);
+              }
+              continue;
+            }
           } catch (error) {
+            if (error instanceof AbiEventSignatureNotFoundError) {
+              continue;
+            }
             console.warn("Failed to decode spin event", error);
           }
         }

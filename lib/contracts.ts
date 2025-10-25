@@ -146,17 +146,6 @@ export const SPIN_GAME_ABI = [
     type: "function",
   },
   {
-    inputs: [{ name: "nftID", type: "uint256" }],
-    name: "spinGameV2GetPendingCommit",
-    outputs: [
-      { name: "commitment", type: "bytes32" },
-      { name: "commitBlock", type: "uint256" },
-      { name: "player", type: "address" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
     inputs: [
       { name: "nftId", type: "uint256" },
       { name: "commitment", type: "bytes32" },
