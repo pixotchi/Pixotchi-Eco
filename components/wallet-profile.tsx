@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAccount, useBalance, useDisconnect, useChainId } from "wagmi";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatAddress } from "@/lib/utils";
@@ -30,6 +31,8 @@ import {
   EyeOff,
   X,
   Lightbulb,
+  Key,
+  ShieldAlert,
 } from "lucide-react";
 import { Avatar } from "@coinbase/onchainkit/identity";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
@@ -37,11 +40,13 @@ import { openExternalUrl } from "@/lib/open-external";
 import { base } from "viem/chains";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { StandardContainer } from "./ui/pixel-container";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useLogin } from "@privy-io/react-auth";
+import type { WalletWithMetadata } from "@privy-io/react-auth";
 import { clearAppCaches } from "@/lib/cache-utils";
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface WalletProfileProps {
   open: boolean;
@@ -51,7 +56,14 @@ interface WalletProfileProps {
 export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const { address, isConnected, connector } = useAccount();
   const { disconnect } = useDisconnect();
-  const { logout } = usePrivy();
+  const {
+    logout,
+    ready: privyReady,
+    authenticated: privyAuthenticated,
+    user: privyUser,
+    exportWallet,
+  } = usePrivy();
+  const { login } = useLogin();
   const chainId = useChainId();
   const { context } = useMiniKit(); // Get MiniKit context (Coinbase)
   const fc = useFrameContext();     // Farcaster context provider
@@ -73,13 +85,101 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const [referrerDomain, setReferrerDomain] = useState<string | null>(null);
   const [showFcDetails, setShowFcDetails] = useState<boolean>(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [selectedEmbeddedAddress, setSelectedEmbeddedAddress] = useState<string | null>(null);
 
-  // Use shared Farcaster provider state
+  // Farcaster / Mini App state (evaluate before export gating)
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const fcContext = (fc?.context as any) ?? null;
+  const isInFrame = isMiniApp; // alias for clarity
 
-  // MiniKit context can exist on web too; Farcaster flag decides frame UI
-  const isInFrame = isMiniApp;
+  const embeddedWallets = useMemo(() => {
+    if (!privyUser?.linkedAccounts) return [] as Array<{ address: string }>;
+
+    const wallets = privyUser.linkedAccounts.filter((account): account is WalletWithMetadata => {
+      if (account?.type !== "wallet") return false;
+      const walletAccount = account as WalletWithMetadata;
+      return (
+        walletAccount.walletClientType === "privy" &&
+        walletAccount.chainType === "ethereum" &&
+        typeof walletAccount.address === "string"
+      );
+    });
+
+    return wallets.map((wallet) => ({ address: wallet.address }));
+  }, [privyUser?.linkedAccounts]);
+
+  useEffect(() => {
+    if (embeddedWallets.length > 0) {
+      setSelectedEmbeddedAddress((prev) => prev ?? embeddedWallets[0].address);
+    } else {
+      setSelectedEmbeddedAddress(null);
+    }
+  }, [embeddedWallets]);
+
+  const canExportEmbeddedWallet =
+    privyReady &&
+    privyAuthenticated &&
+    embeddedWallets.length > 0 &&
+    Boolean(exportWallet) &&
+    !isMiniApp;
+
+  const exportWalletLabel = "Export Embedded Wallet";
+
+  const handleOpenExportDialog = () => {
+    if (!canExportEmbeddedWallet) {
+      toast.error("Export is only available for embedded Privy wallets.");
+      return;
+    }
+    setExportDialogOpen(true);
+  };
+
+  const handleConfirmExport = async () => {
+    if (!exportWallet || !canExportEmbeddedWallet) {
+      toast.error("Export is currently unavailable.");
+      return;
+    }
+
+    const performExport = async () => {
+      if (embeddedWallets.length > 1 && selectedEmbeddedAddress) {
+        await exportWallet({ address: selectedEmbeddedAddress });
+      } else {
+        await exportWallet();
+      }
+    };
+
+    setIsExporting(true);
+    try {
+      await performExport();
+      toast.success("Export window opened. Follow the instructions to copy your key.");
+      setExportDialogOpen(false);
+    } catch (error: any) {
+      console.error("Embedded wallet export failed", error);
+      const rawMessage = (error?.message || "").toString();
+      const needsReauth = /access token/i.test(rawMessage) || /mfa/i.test(rawMessage);
+
+      if (needsReauth && login) {
+        try {
+          await login();
+          await performExport();
+          toast.success("Re-authenticated! Export window opened. Follow the instructions to copy your key.");
+          setExportDialogOpen(false);
+          return;
+        } catch (reauthError: any) {
+          console.error("Re-authentication before export failed", reauthError);
+          const fallback = (reauthError?.message || rawMessage || "Please re-authenticate and try again.").toString();
+          toast.error(fallback.includes("access token") ? "Please complete authentication and try again." : fallback);
+          return;
+        }
+      }
+
+      const fallbackMessage = rawMessage || "Failed to export embedded wallet";
+      toast.error(fallbackMessage);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Derive referrer from provider's context
   useEffect(() => {
@@ -226,10 +326,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     });
   };
 
+  const handleEmbeddedWalletAddressChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedEmbeddedAddress(event.target.value);
+  };
+
   if (!address || !isConnected) return null;
 
   return (
-    <>
+    <React.Fragment>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -299,15 +403,15 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <span className="text-xs font-medium">Mini App</span>
                 <div className="flex items-center space-x-1">
                   {isMiniApp ? (
-                    <>
+                    <React.Fragment>
                       <CheckCircle className="w-3 h-3 text-green-500" />
                       <span className="text-xs font-semibold text-green-600 dark:text-green-400">Yes</span>
-                    </>
+                    </React.Fragment>
                   ) : (
-                    <>
+                    <React.Fragment>
                       <XCircle className="w-3 h-3 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground">No</span>
-                    </>
+                    </React.Fragment>
                   )}
                 </div>
               </div>
@@ -315,26 +419,26 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
  {/* Smart Wallet Indicator */}
  <div className="flex items-center justify-between">
  <span className="text-xs font-medium">Wallet Type</span>
- <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-1">
                   {smartWalletLoading ? (
                     <Skeleton className="h-4 w-32" />
                   ) : isSmartWallet ? (
- <div className="flex items-center space-x-1">
- <CheckCircle className="w-3 h-3 text-green-500" />
- <span className="text-xs font-semibold text-green-600 dark:text-green-400">
+                    <div className="flex items-center space-x-1">
+                      <CheckCircle className="w-3 h-3 text-green-500" />
+                      <span className="text-xs font-semibold text-green-600 dark:text-green-400">
                         Smart Wallet
                         {walletType === 'coinbase-smart' && ' (Coinbase)'}
- </span>
- </div>
+                      </span>
+                    </div>
                   ) : (
- <div className="flex items-center space-x-1">
- <Wallet className="w-3 h-3 text-blue-500" />
- <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                    <div className="flex items-center space-x-1">
+                      <Wallet className="w-3 h-3 text-blue-500" />
+                      <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                         Regular Wallet
- </span>
- </div>
+                      </span>
+                    </div>
                   )}
- </div>
+                </div>
  </div>
 
               {/* Farcaster Mini App Context (collapsible) */}
@@ -444,6 +548,17 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
           {/* Actions */}
           <div className="pt-4 border-t border-border">
             <div className="grid gap-2 mb-3">
+              {canExportEmbeddedWallet && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenExportDialog}
+                  className="w-full"
+                >
+                  <Key className="w-4 h-4 mr-2" />
+                  {exportWalletLabel}
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
@@ -479,6 +594,82 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
  </DialogContent>
     </Dialog>
     <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />
-    </>
+    <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+      <DialogContent className="max-w-lg" hideCloseButton={isExporting}>
+        <DialogHeader>
+          <div className="flex items-center space-x-2">
+            <Key className="w-5 h-5 text-primary" />
+            <DialogTitle>Export Embedded Wallet</DialogTitle>
+          </div>
+          <DialogDescription>
+            Exporting will open a secure Privy window where you can copy the private key for your embedded wallet. Keep it safe and never share it.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <Alert>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <ShieldAlert className="w-4 h-4" />
+              Security Notice
+            </div>
+            <p className="mt-1 text-sm leading-relaxed">
+              Only export your key in a trusted environment. Anyone with this key can fully control your wallet. Pixotchi never sees or stores your private key.
+            </p>
+          </Alert>
+
+          {embeddedWallets.length > 1 && (
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Select embedded wallet</span>
+              <div className="space-y-2">
+                {embeddedWallets.map((wallet) => (
+                  <label
+                    key={wallet.address}
+                    className="flex items-center space-x-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+                  >
+                    <input
+                      type="radio"
+                      name="embedded-wallet-address"
+                      value={wallet.address}
+                      checked={selectedEmbeddedAddress === wallet.address}
+                      onChange={handleEmbeddedWalletAddressChange}
+                      className="h-4 w-4 border-border text-primary focus:ring-primary"
+                      disabled={isExporting}
+                    />
+                    <span className="font-mono text-xs break-all">
+                      {wallet.address}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="pt-4">
+          <Button
+            variant="outline"
+            onClick={() => setExportDialogOpen(false)}
+            disabled={isExporting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmExport}
+            disabled={isExporting || (embeddedWallets.length > 1 && !selectedEmbeddedAddress)}
+            className="min-w-[140px]"
+          >
+            {isExporting ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Opening...
+              </>
+            ) : (
+              "Open Export"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </React.Fragment>
   );
 } 
