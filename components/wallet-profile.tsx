@@ -41,6 +41,7 @@ import { base } from "viem/chains";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { StandardContainer } from "./ui/pixel-container";
 import { usePrivy, useLogin } from "@privy-io/react-auth";
+import type { WalletWithMetadata } from "@privy-io/react-auth";
 import { clearAppCaches } from "@/lib/cache-utils";
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
@@ -95,15 +96,18 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
   const embeddedWallets = useMemo(() => {
     if (!privyUser?.linkedAccounts) return [] as Array<{ address: string }>;
-    return privyUser.linkedAccounts
-      .filter(
-        (account: any): account is { address: string } =>
-          account?.type === "wallet" &&
-          account?.walletClientType === "privy" &&
-          account?.chainType === "ethereum" &&
-          typeof account?.address === "string"
-      )
-      .map((account) => ({ address: account.address }));
+
+    const wallets = privyUser.linkedAccounts.filter((account): account is WalletWithMetadata => {
+      if (account?.type !== "wallet") return false;
+      const walletAccount = account as WalletWithMetadata;
+      return (
+        walletAccount.walletClientType === "privy" &&
+        walletAccount.chainType === "ethereum" &&
+        typeof walletAccount.address === "string"
+      );
+    });
+
+    return wallets.map((wallet) => ({ address: wallet.address }));
   }, [privyUser?.linkedAccounts]);
 
   useEffect(() => {
