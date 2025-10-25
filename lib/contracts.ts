@@ -514,68 +514,7 @@ const PIXOTCHI_TOKEN_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
-  },
-
-  // Shop item purchase
-  {
-    inputs: [
-      { name: 'nftId', type: 'uint256' },
-      { name: 'itemId', type: 'uint256' }
-    ],
-    name: 'shopBuyItem',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-
-  // Get all shop items
-  {
-    inputs: [],
-    name: 'shopGetAllItems',
-    outputs: [{ 
-      name: '', 
-      type: 'tuple[]', 
-      components: [
-        { name: 'id', type: 'uint256' },
-        { name: 'name', type: 'string' },
-        { name: 'price', type: 'uint256' },
-        { name: 'effectTime', type: 'uint256' }
-      ]
-    }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-
-  // Garden item purchase
-  {
-    inputs: [
-      { name: 'nftId', type: 'uint256' },
-      { name: 'itemId', type: 'uint256' }
-    ],
-    name: 'buyAccessory',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-
-  // Get all garden items
-  {
-    inputs: [],
-    name: 'getAllGardenItem',
-    outputs: [{ 
-      name: '', 
-      type: 'tuple[]', 
-      components: [
-        { name: 'id', type: 'uint256' },
-        { name: 'name', type: 'string' },
-        { name: 'price', type: 'uint256' },
-        { name: 'points', type: 'uint256' },
-        { name: 'timeExtension', type: 'uint256' }
-      ]
-    }],
-    stateMutability: 'view',
-    type: 'function',
-  },
+  }
 ] as const;
 
 // -------------------- BATCH ROUTER ABI --------------------

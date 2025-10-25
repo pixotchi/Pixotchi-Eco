@@ -43,7 +43,7 @@ export default function AgentPermissionsPanel() {
   async function getTokenDecimals(token: `0x${string}`): Promise<number> {
     try {
       const { endpoints } = getRpcConfig();
-      const rpcUrl = endpoints[0];
+      const rpcUrl = endpoints[0] || 'https://mainnet.base.org';
       const client = createPublicClient({ chain: baseChain, transport: http(rpcUrl) });
       const decimals = await client.readContract({ address: token, abi: erc20Abi, functionName: 'decimals' });
       return Number(decimals);
