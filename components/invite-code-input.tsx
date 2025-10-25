@@ -125,6 +125,7 @@ export default function InviteCodeInput({
               onChange={(e) => handleCodeChange(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
               className="text-center text-lg font-pixel tracking-wider pr-12 placeholder:text-center"
+              style={{ fontFamily: "var(--font-pixel, sans-serif)" }}
               maxLength={8}
               disabled={isValidating}
             />

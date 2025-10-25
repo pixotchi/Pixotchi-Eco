@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { coinbaseSans, pixelmix } from "./fonts";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -159,8 +160,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${coinbaseSans.variable} ${pixelmix.variable}`}
+    >
       <head>
+        <style
+          id="pixotchi-font-prelude"
+          dangerouslySetInnerHTML={{
+            __html: `:root { --font-coinbase: ${coinbaseSans.style.fontFamily}; --font-pixel: ${pixelmix.style.fontFamily}; }`,
+          }}
+        />
         {/* Prevent theme flash (FOUC) by applying theme before first paint */}
         <script
           dangerouslySetInnerHTML={{
@@ -170,7 +181,11 @@ export default function RootLayout({
                   const theme = localStorage.getItem('pixotchi-theme') || 'light';
                   const validThemes = ['light', 'dark', 'green', 'yellow', 'red', 'pink', 'blue', 'violet'];
                   if (validThemes.includes(theme)) {
-                    document.documentElement.className = theme;
+                    const root = document.documentElement;
+                    const existing = new Set((root.className || '').split(/\s+/).filter(Boolean));
+                    validThemes.forEach((t) => existing.delete(t));
+                    existing.add(theme);
+                    root.className = Array.from(existing).join(' ');
                   }
                 } catch (e) {
                   console.warn('Theme initialization failed:', e);
@@ -209,24 +224,7 @@ export default function RootLayout({
         {/* Theme color */}
         <meta name="theme-color" content="#2d3c53" />
         <meta name="msapplication-TileColor" content="#2d3c53" />
-        {/* Preconnect to external domains */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        {/* Preload local fonts */}
-        <link
-          rel="preload"
-          href="/fonts/Coinbase-Sans/Coinbase_Sans-Regular-web-1.32.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preload"
-          href="/fonts/pixelmix.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
+        {/* Fonts are self-hosted via next/font/local */}
         {/* Preload above-the-fold art to reduce first paint */}
         <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
       </head>

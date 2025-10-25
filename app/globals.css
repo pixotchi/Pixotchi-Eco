@@ -35,9 +35,7 @@
   --radius-sm: calc(var(--radius) - 4px);
 
   /* Fonts */
-  --font-sans: 'Coinbase Sans', system-ui, sans-serif;
-  --font-coinbase: 'Coinbase Sans', system-ui, sans-serif;
-  --font-pixel: 'pixelmix', sans-serif;
+  --font-sans: var(--font-coinbase, system-ui);
 
   /* Explicit breakpoints so md/lg variants work in Tailwind v4 when using @theme */
   --breakpoint-sm: 40rem; /* 640px */
@@ -48,55 +46,6 @@
 }
 
 @layer base {
-  @font-face {
-    font-family: "pixelmix";
-    src: url("/fonts/pixelmix.woff2") format("woff2");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  /* Coinbase Sans Font Family */
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Regular-web-1.32.woff2') format('woff2');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Medium-web-1.32.woff2') format('woff2');
-    font-weight: 500;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Bold-web-1.32.woff2') format('woff2');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Light-web-1.32.woff2') format('woff2');
-    font-weight: 300;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Coinbase Sans';
-    src: url('/fonts/Coinbase-Sans/Coinbase_Sans-Extra_Light-web-1.32.woff2') format('woff2');
-    font-weight: 200;
-    font-style: normal;
-    font-display: swap;
-  }
-
   :root {
     --background: 212 56% 81%; /* #a7c7e7 */
     --foreground: 224 71.4% 4.1%;
@@ -325,7 +274,7 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: 'Coinbase Sans', system-ui, sans-serif;
+    font-family: var(--font-coinbase, system-ui);
     font-weight: 400;
     letter-spacing: 0.01em;
     /* Limit global transitions to reduce repaint/reflow cost */
@@ -379,21 +328,6 @@
   }
 
   /* Proper font weight mapping */
-  .font-normal {
-    font-weight: 400;
-  }
-
-  .font-medium {
-    font-weight: 500;
-  }
-
-  .font-semibold {
-    font-weight: 600;
-  }
-
-  .font-bold {
-    font-weight: 700;
-  }
 }
 
 @layer components {
@@ -469,6 +403,11 @@
 
 /* In-app browser touch optimizations */
 @layer utilities {
+  .font-pixel {
+    font-family: var(--font-pixel, sans-serif) !important;
+    letter-spacing: 0.05em;
+  }
+
   /* Safe area support for mobile devices and mini apps */
   .safe-area-inset {
     padding-top: max(1rem, env(safe-area-inset-top));
