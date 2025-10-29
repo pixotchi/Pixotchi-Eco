@@ -138,7 +138,7 @@ function normalizeHandles(payload: any): MemoryIdentityHandle[] {
         verified: Boolean(entry.verified || entry.is_verified || entry.isVerified),
       } satisfies MemoryIdentityHandle;
     })
-    .filter((entry): entry is MemoryIdentityHandle => Boolean(entry));
+    .filter((entry): entry is MemoryIdentityHandle => Boolean(entry)) satisfies MemoryIdentityHandle[];
 }
 
 export function deriveHandlesFromRaw(raw: unknown): MemoryIdentityHandle[] {
