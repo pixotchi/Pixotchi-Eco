@@ -118,7 +118,7 @@ function normalizeHandles(payload: any): MemoryIdentityHandle[] {
   if (!Array.isArray(payload)) return [];
   return payload
     .map((entry) => {
-      if (!entry) return null;
+      if (!entry) return undefined;
       const platformRaw = entry.platform ?? entry.type ?? entry.source?.platform ?? entry.platform_name;
       const platformValue = typeof platformRaw === 'string'
         ? platformRaw
@@ -130,7 +130,7 @@ function normalizeHandles(payload: any): MemoryIdentityHandle[] {
         ?? entry.id
         ?? entry.address
         ?? entry.href;
-      if (!platformValue || !valueRaw) return null;
+      if (!platformValue || !valueRaw) return undefined;
       return {
         platform: platformValue.toString(),
         value: valueRaw.toString(),
@@ -138,7 +138,7 @@ function normalizeHandles(payload: any): MemoryIdentityHandle[] {
         verified: Boolean(entry.verified || entry.is_verified || entry.isVerified),
       } satisfies MemoryIdentityHandle;
     })
-    .filter((entry): entry is MemoryIdentityHandle => Boolean(entry));
+    .filter((handle): handle is MemoryIdentityHandle => Boolean(handle));
 }
 
 export function deriveHandlesFromRaw(raw: unknown): MemoryIdentityHandle[] {
