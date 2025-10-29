@@ -202,9 +202,9 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [primaryIdentity, socialIconHandles]);
 
   const otherWallets = useMemo(() => {
-    if (!identitySummary?.handles) return [] as typeof identitySummary.handles;
+    const handles = identitySummary?.handles ?? [];
     const primaryKey = primaryIdentity ? `${primaryIdentity.platform}:${primaryIdentity.value}` : null;
-    const wallets = identitySummary.handles.filter((handle) => {
+    const wallets = handles.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       const isWallet = platform === 'ethereum' || platform === 'solana';
       if (!isWallet) return false;
@@ -224,9 +224,9 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [identitySummary, primaryIdentity]);
 
   const otherBasenames = useMemo(() => {
-    if (!identitySummary?.handles) return [] as typeof identitySummary.handles;
+    const handles = identitySummary?.handles ?? [];
     const primaryKey = primaryIdentity ? `${primaryIdentity.platform}:${primaryIdentity.value}` : null;
-    const names = identitySummary.handles.filter((handle) => {
+    const names = handles.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       if (platform !== 'basenames') return false;
       const key = `${handle.platform}:${handle.value}`;
