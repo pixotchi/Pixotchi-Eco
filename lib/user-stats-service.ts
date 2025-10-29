@@ -4,7 +4,8 @@ import {
   getTokenBalance, 
   getLeafBalance,
   getVillageBuildingsByLandId,
-  getTownBuildingsByLandId
+  getTownBuildingsByLandId,
+  getLandBuildingsBatch
 } from './contracts';
 import { 
   formatTokenAmount, 
@@ -183,7 +184,24 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     let totalDailyTODProduction = 0;
     let unclaimedPTS = 0;
     let unclaimedTOD = 0;
-    
+ 
+    const landBuildingMap = new Map<string, { village: any[]; town: any[] }>();
+    if (lands.length > 0) {
+      try {
+        const batchedBuildings = await getLandBuildingsBatch(
+          lands.map((land) => (typeof land.tokenId === 'bigint' ? land.tokenId : BigInt(land.tokenId))),
+        );
+        batchedBuildings.forEach(({ landId, villageBuildings, townBuildings }) => {
+          landBuildingMap.set(landId.toString(), {
+            village: Array.isArray(villageBuildings) ? villageBuildings : [],
+            town: Array.isArray(townBuildings) ? townBuildings : [],
+          });
+        });
+      } catch (error) {
+        console.error('Batch building fetch failed; falling back to per-land requests', error);
+      }
+    }
+
     // Detailed land information for AI
     const landDetails: Array<{
       tokenId: string;
@@ -212,10 +230,19 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
 
     for (const land of lands) {
       try {
-        const [villageData, townData] = await Promise.all([
-          getVillageBuildingsByLandId(land.tokenId),
-          getTownBuildingsByLandId(land.tokenId)
-        ]);
+        let villageData: any[] = [];
+        let townData: any[] = [];
+        const landKey = land.tokenId.toString();
+        const preloaded = landBuildingMap.get(landKey);
+        if (preloaded) {
+          villageData = preloaded.village ?? [];
+          townData = preloaded.town ?? [];
+        } else {
+          [villageData, townData] = await Promise.all([
+            getVillageBuildingsByLandId(land.tokenId),
+            getTownBuildingsByLandId(land.tokenId)
+          ]);
+        }
 
         // Process buildings for this specific land
         const landVillageBuildings: Array<{

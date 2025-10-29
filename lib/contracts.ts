@@ -1386,6 +1386,69 @@ export const getTownBuildingsByLandId = async (landId: bigint): Promise<any[]> =
   });
 };
 
+export interface LandBuildingsBatchResult {
+  landId: bigint;
+  villageBuildings: any[];
+  townBuildings: any[];
+}
+
+export const getLandBuildingsBatch = async (
+  landIds: bigint[],
+  options: { chunkSize?: number } = {},
+): Promise<LandBuildingsBatchResult[]> => {
+  if (landIds.length === 0) return [];
+
+  const { chunkSize = 15 } = options;
+  const readClient = getReadClient();
+  const results: LandBuildingsBatchResult[] = [];
+
+  for (let i = 0; i < landIds.length; i += chunkSize) {
+    const chunk = landIds.slice(i, i + chunkSize);
+    const contracts = chunk.flatMap((landId) => [
+      {
+        address: LAND_CONTRACT_ADDRESS,
+        abi: landAbi,
+        functionName: 'villageGetVillageBuildingsByLandId' as const,
+        args: [landId],
+      },
+      {
+        address: LAND_CONTRACT_ADDRESS,
+        abi: landAbi,
+        functionName: 'townGetBuildingsByLandId' as const,
+        args: [landId],
+      },
+    ]);
+
+    const chunkResults = await retryWithBackoff(async () => {
+      return readClient.multicall({
+        allowFailure: true,
+        contracts,
+      });
+    });
+
+    for (let index = 0; index < chunk.length; index++) {
+      const landId = chunk[index];
+      const villageEntry = chunkResults[index * 2];
+      const townEntry = chunkResults[index * 2 + 1];
+
+      const villageBuildings = Array.isArray(villageEntry?.result)
+        ? (villageEntry.result as any[])
+        : [];
+      const townBuildings = Array.isArray(townEntry?.result)
+        ? (townEntry.result as any[])
+        : [];
+
+      results.push({
+        landId,
+        villageBuildings,
+        townBuildings,
+      });
+    }
+  }
+
+  return results;
+};
+
 // Quest slots
 export type QuestSlot = {
   difficulty: number;

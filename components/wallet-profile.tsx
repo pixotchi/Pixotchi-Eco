@@ -47,7 +47,6 @@ import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
 interface WalletProfileProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
