@@ -117,8 +117,8 @@ function normalizeSentiment(payload: any): MemorySentiment | undefined {
 function normalizeHandles(payload: any): MemoryIdentityHandle[] {
   if (!Array.isArray(payload)) return [];
   return payload
-    .map((entry) => {
-      if (!entry) return undefined;
+    .flatMap((entry) => {
+      if (!entry) return [];
       const platformRaw = entry.platform ?? entry.type ?? entry.source?.platform ?? entry.platform_name;
       const platformValue = typeof platformRaw === 'string'
         ? platformRaw
@@ -130,15 +130,14 @@ function normalizeHandles(payload: any): MemoryIdentityHandle[] {
         ?? entry.id
         ?? entry.address
         ?? entry.href;
-      if (!platformValue || !valueRaw) return undefined;
-      return {
+      if (!platformValue || !valueRaw) return [];
+      return [{
         platform: platformValue.toString(),
         value: valueRaw.toString(),
         url: entry.url || entry.link,
         verified: Boolean(entry.verified || entry.is_verified || entry.isVerified),
-      } satisfies MemoryIdentityHandle;
-    })
-    .filter((handle): handle is MemoryIdentityHandle => Boolean(handle));
+      } satisfies MemoryIdentityHandle];
+    });
 }
 
 export function deriveHandlesFromRaw(raw: unknown): MemoryIdentityHandle[] {
