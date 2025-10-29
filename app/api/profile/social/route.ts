@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { redisGetJSON, redisSetJSON } from '@/lib/redis';
+import { redisGetJSON, redisSetJSON, redisScanKeys, redis } from '@/lib/redis';
 import {
   fetchMemoryWalletProfile,
   MemoryServiceError,
@@ -9,9 +9,77 @@ import { fetchEfpStats } from '@/lib/efp-service';
 import type { SocialProfilePayload, IdentitySummary } from '@/lib/social-profile';
 
 const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
+const SOCIAL_CACHE_PREFIX = 'profile:social:';
+const SOCIAL_CACHE_VERSION_KEY = `${SOCIAL_CACHE_PREFIX}deploy-version`;
+const REDIS_KEY_PREFIX = process.env.UPSTASH_KEY_PREFIX || 'pixotchi:';
+const DEPLOYMENT_VERSION = process.env.VERCEL_GIT_COMMIT_SHA
+  || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA
+  || process.env.VERCEL_DEPLOYMENT_ID
+  || process.env.VERCEL_BUILD_ID
+  || process.env.COMMIT_REF
+  || process.env.BUILD_ID
+  || process.env.GIT_COMMIT_SHA
+  || (typeof process !== 'undefined' && typeof process.pid === 'number' ? `local-${process.pid}` : 'local');
+
+let ensuredDeploymentVersion: string | null = null;
+let ensuringDeploymentPromise: Promise<void> | null = null;
+
+function fullKey(key: string) {
+  return key.startsWith(REDIS_KEY_PREFIX) ? key : `${REDIS_KEY_PREFIX}${key}`;
+}
+
+async function deleteKeys(keys: string[]) {
+  if (!redis || !keys.length) return;
+  const chunkSize = 256;
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    const chunk = keys.slice(i, i + chunkSize);
+    if (chunk.length) {
+      await redis.del(...chunk);
+    }
+  }
+}
+
+async function ensureFreshSocialCache() {
+  if (!redis) return;
+  if (!DEPLOYMENT_VERSION) return;
+  if (ensuredDeploymentVersion === DEPLOYMENT_VERSION) return;
+  if (ensuringDeploymentPromise) {
+    await ensuringDeploymentPromise;
+    return;
+  }
+
+  ensuringDeploymentPromise = (async () => {
+    const versionKey = fullKey(SOCIAL_CACHE_VERSION_KEY);
+    try {
+      const storedVersionRaw = await redis.get(versionKey);
+      const storedVersion = typeof storedVersionRaw === 'string'
+        ? storedVersionRaw
+        : storedVersionRaw != null
+          ? String(storedVersionRaw)
+          : null;
+
+      if (storedVersion !== DEPLOYMENT_VERSION) {
+        const keys = await redisScanKeys(`${SOCIAL_CACHE_PREFIX}*`);
+        const keysToDelete = keys.filter((key) => key !== versionKey);
+        if (keysToDelete.length) {
+          await deleteKeys(keysToDelete);
+        }
+        await redis.set(versionKey, DEPLOYMENT_VERSION);
+      }
+
+      ensuredDeploymentVersion = DEPLOYMENT_VERSION;
+    } catch (error) {
+      console.warn('[SocialProfile] Failed to ensure fresh deployment cache', error);
+    } finally {
+      ensuringDeploymentPromise = null;
+    }
+  })();
+
+  await ensuringDeploymentPromise;
+}
 
 function buildCacheKey(address: string): string {
-  return `profile:social:${address.toLowerCase()}`;
+  return `${SOCIAL_CACHE_PREFIX}${address.toLowerCase()}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -25,6 +93,8 @@ export async function GET(request: NextRequest) {
       error: 'Missing required "address" query parameter.',
     }, { status: 400 });
   }
+
+  await ensureFreshSocialCache();
 
   const cacheKey = buildCacheKey(addressParam);
 

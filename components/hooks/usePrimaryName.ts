@@ -66,6 +66,23 @@ function waitForResult(address: string, callback: (value: string | null) => void
   return () => cancelAnimationFrame(frameId);
 }
 
+type PrimaryNameState = {
+  address: string | null;
+  name: string | null;
+  loading: boolean;
+  error: string | null;
+};
+
+function makeInitialState(address: string | null): PrimaryNameState {
+  if (!address) {
+    return { address: null, name: null, loading: false, error: null };
+  }
+  if (cache.has(address)) {
+    return { address, name: cache.get(address) ?? null, loading: false, error: null };
+  }
+  return { address, name: null, loading: true, error: null };
+}
+
 export function usePrimaryName(address?: string | null, options: { enabled?: boolean } = {}) {
   const { enabled = true } = options;
   const normalised = useMemo(() => {
@@ -73,13 +90,7 @@ export function usePrimaryName(address?: string | null, options: { enabled?: boo
     return address.toLowerCase();
   }, [address]);
 
-  const [state, setState] = useState<{ name: string | null; loading: boolean; error: string | null }>(() => {
-    if (!normalised) return { name: null, loading: false, error: null };
-    if (cache.has(normalised)) {
-      return { name: cache.get(normalised) ?? null, loading: false, error: null };
-    }
-    return { name: null, loading: true, error: null };
-  });
+  const [state, setState] = useState<PrimaryNameState>(() => makeInitialState(normalised));
 
   const cancelRef = useRef<(() => void) | null>(null);
 
@@ -87,23 +98,28 @@ export function usePrimaryName(address?: string | null, options: { enabled?: boo
     cancelRef.current?.();
 
     if (!enabled || !normalised) {
-      setState({ name: null, loading: false, error: null });
+      setState({ address: null, name: null, loading: false, error: null });
       return () => {
         cancelRef.current?.();
       };
     }
 
     if (cache.has(normalised)) {
-      setState({ name: cache.get(normalised) ?? null, loading: false, error: null });
+      setState({ address: normalised, name: cache.get(normalised) ?? null, loading: false, error: null });
       return () => {
         cancelRef.current?.();
       };
     }
 
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    setState({ address: normalised, name: null, loading: true, error: null });
     enqueue(normalised);
     cancelRef.current = waitForResult(normalised, (value) => {
-      setState({ name: value, loading: false, error: null });
+      setState((prev) => {
+        if (prev.address !== normalised) {
+          return prev;
+        }
+        return { address: normalised, name: value, loading: false, error: null };
+      });
     });
 
     return () => {
@@ -111,5 +127,11 @@ export function usePrimaryName(address?: string | null, options: { enabled?: boo
     };
   }, [enabled, normalised]);
 
-  return state;
+  const isCurrent = state.address === normalised;
+
+  return {
+    name: isCurrent ? state.name : null,
+    loading: !enabled || !normalised ? false : (!isCurrent || state.loading),
+    error: isCurrent ? state.error : null,
+  };
 }
