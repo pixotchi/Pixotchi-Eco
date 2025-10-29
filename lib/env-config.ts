@@ -106,6 +106,7 @@ export const SERVER_ENV = {
   // Neynar integration
   NEYNAR_API_KEY: process.env.NEYNAR_API_KEY,
   NEYNAR_APP_ID: process.env.NEYNAR_APP_ID,
+  MEMORY_API_KEY: process.env.MEMORY_API_KEY,
 } as const;
 
 // Validation function to ensure sensitive data isn't exposed

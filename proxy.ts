@@ -9,13 +9,7 @@ export async function proxy(request: NextRequest) {
   // Server-side invite validation for protected routes (excluding API and auth routes)
   if (INVITE_CONFIG.SYSTEM_ENABLED && !pathname.startsWith('/api/') && !pathname.startsWith('/_next') && pathname === '/') {
     try {
-      // Check if user has valid invite validation in localStorage (via client-side check)
-      // For server-side validation, we'd need to check cookies or implement session-based auth
-      // For now, we log attempts and rely on client-side enforcement + contract-level checks
-      // A more robust solution would require session cookies or JWT tokens
-      
-      // Note: True server-side validation requires authentication state in cookies/headers
-      // The current architecture relies on blockchain transactions as final validation
+
       console.log('[Middleware] Invite system active - client-side enforcement in place');
     } catch (error) {
       console.warn('[Middleware] Invite validation check failed:', error);
