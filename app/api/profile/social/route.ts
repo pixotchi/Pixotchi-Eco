@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
       identitySummary,
     };
 
-    if (memoryProfile || efpStats) {
+    if (memoryProfile) {
       redisSetJSON(cacheKey, payload, CACHE_TTL_SECONDS).catch((error) => {
         console.warn('[SocialProfile] Failed to write cache', error);
       });
