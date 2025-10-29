@@ -245,6 +245,10 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [identitySummary, primaryIdentity]);
 
   const showOtherButton = useMemo(() => {
+    if (!identitySummary?.handles) {
+      return false;
+    }
+
     const hasExtraWallet = otherWallets.length > 0;
     const hasExtraBasename = otherBasenames.length > 0;
 
@@ -259,12 +263,12 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
       return hasExtraWallet || hasExtraBasename;
     }
 
-    const totalWalletHandles = identitySummary?.handles?.filter((handle) => {
+    const totalWalletHandles = identitySummary.handles.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       return platform === 'ethereum' || platform === 'solana';
     }).length ?? 0;
 
-    const totalBasenameHandles = identitySummary?.handles?.filter((handle) => {
+    const totalBasenameHandles = identitySummary.handles.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       return platform === 'basenames';
     }).length ?? 0;
