@@ -17,7 +17,6 @@ import { useWalletSocialProfile } from '@/hooks/useWalletSocialProfile';
 import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats, type EthFollowStats } from '@/lib/efp-service';
-import type { MemoryIdentityHandle } from '@/lib/memory-service';
 
 interface PlantProfileDialogProps {
   open: boolean;
@@ -203,17 +202,16 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [primaryIdentity, socialIconHandles]);
 
   const otherWallets = useMemo(() => {
-    const handles: MemoryIdentityHandle[] = identitySummary?.handles ?? [];
-    if (handles.length === 0) return [] as MemoryIdentityHandle[];
+    if (!identitySummary?.handles) return [] as typeof identitySummary.handles;
     const primaryKey = primaryIdentity ? `${primaryIdentity.platform}:${primaryIdentity.value}` : null;
-    const wallets = handles.filter((handle) => {
+    const wallets = identitySummary.handles.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       const isWallet = platform === 'ethereum' || platform === 'solana';
       if (!isWallet) return false;
       const key = `${handle.platform}:${handle.value}`;
       return key !== primaryKey;
     });
-    const unique: MemoryIdentityHandle[] = [];
+    const unique: typeof wallets = [];
     const seen = new Set<string>();
     wallets.forEach((handle) => {
       const key = `${handle.platform}:${handle.value}`;
@@ -226,16 +224,15 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [identitySummary, primaryIdentity]);
 
   const otherBasenames = useMemo(() => {
-    const handles: MemoryIdentityHandle[] = identitySummary?.handles ?? [];
-    if (handles.length === 0) return [] as MemoryIdentityHandle[];
+    if (!identitySummary?.handles) return [] as typeof identitySummary.handles;
     const primaryKey = primaryIdentity ? `${primaryIdentity.platform}:${primaryIdentity.value}` : null;
-    const names = handles.filter((handle) => {
+    const names = identitySummary.handles.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       if (platform !== 'basenames') return false;
       const key = `${handle.platform}:${handle.value}`;
       return key !== primaryKey;
     });
-    const unique: MemoryIdentityHandle[] = [];
+    const unique: typeof names = [];
     const seen = new Set<string>();
     names.forEach((handle) => {
       const key = `${handle.platform}:${handle.value}`;
@@ -248,11 +245,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [identitySummary, primaryIdentity]);
 
   const showOtherButton = useMemo(() => {
-    const handles: MemoryIdentityHandle[] = identitySummary?.handles ?? [];
-    if (handles.length === 0) {
-      return false;
-    }
-
     const hasExtraWallet = otherWallets.length > 0;
     const hasExtraBasename = otherBasenames.length > 0;
 
@@ -267,12 +259,12 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
       return hasExtraWallet || hasExtraBasename;
     }
 
-    const totalWalletHandles = handles.filter((handle) => {
+    const totalWalletHandles = identitySummary?.handles?.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       return platform === 'ethereum' || platform === 'solana';
     }).length ?? 0;
 
-    const totalBasenameHandles = handles.filter((handle) => {
+    const totalBasenameHandles = identitySummary?.handles?.filter((handle) => {
       const platform = handle.platform?.toLowerCase?.() || '';
       return platform === 'basenames';
     }).length ?? 0;
