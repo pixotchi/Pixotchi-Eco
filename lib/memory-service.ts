@@ -116,7 +116,7 @@ function normalizeSentiment(payload: any): MemorySentiment | undefined {
 
 function normalizeHandles(payload: any): MemoryIdentityHandle[] {
   if (!Array.isArray(payload)) return [];
-  return payload
+  const mapped = payload
     .map((entry) => {
       if (!entry) return null;
       const platformRaw = entry.platform ?? entry.type ?? entry.source?.platform ?? entry.platform_name;
@@ -138,7 +138,9 @@ function normalizeHandles(payload: any): MemoryIdentityHandle[] {
         verified: Boolean(entry.verified || entry.is_verified || entry.isVerified),
       } satisfies MemoryIdentityHandle;
     })
-    .filter((entry): entry is MemoryIdentityHandle => Boolean(entry)) satisfies MemoryIdentityHandle[];
+    .filter((entry): entry is MemoryIdentityHandle => Boolean(entry));
+
+  return mapped;
 }
 
 export function deriveHandlesFromRaw(raw: unknown): MemoryIdentityHandle[] {
