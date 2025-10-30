@@ -161,6 +161,9 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
 
     const handlePointerDown = (event: PointerEvent) => {
       handleRevealStart();
+      try {
+        grid.setPointerCapture(event.pointerId);
+      } catch {}
       const previous = grid.querySelector('[data-hover="true"]') as HTMLElement | null;
       previous?.removeAttribute("data-hover");
 
@@ -168,6 +171,20 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
       if (target && grid.contains(target) && target.dataset.pixel === "true") {
         target.setAttribute("data-hover", "true");
       }
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      try {
+        grid.releasePointerCapture(event.pointerId);
+      } catch {}
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      try {
+        grid.releasePointerCapture(event.pointerId);
+      } catch {}
+      const previous = grid.querySelector('[data-hover="true"]') as HTMLElement | null;
+      previous?.removeAttribute("data-hover");
     };
 
     const handlePointerLeave = () => {
@@ -178,11 +195,15 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
     grid.addEventListener("pointermove", handlePointerMove);
     grid.addEventListener("pointerleave", handlePointerLeave);
     grid.addEventListener("pointerdown", handlePointerDown);
+    grid.addEventListener("pointerup", handlePointerUp);
+    grid.addEventListener("pointercancel", handlePointerCancel);
 
     return () => {
       grid.removeEventListener("pointermove", handlePointerMove);
       grid.removeEventListener("pointerleave", handlePointerLeave);
       grid.removeEventListener("pointerdown", handlePointerDown);
+      grid.removeEventListener("pointerup", handlePointerUp);
+      grid.removeEventListener("pointercancel", handlePointerCancel);
     };
   }, [open, handleRevealStart]);
 
