@@ -79,6 +79,7 @@ const SECRET_CELLS = PIXOTCHI_PATTERN.flatMap((row, rowIndex) =>
 );
 
 const GRID_COLUMNS = PIXOTCHI_PATTERN[0]?.length ?? 0;
+const GRID_ROWS = PIXOTCHI_PATTERN.length;
 const FOCUSABLE_SELECTORS = [
   "a[href]",
   "button:not([disabled])",
@@ -97,6 +98,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
   const contentRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const lastHoveredRef = useRef<HTMLElement | null>(null);
   const initialRevealRef = useRef(initialReveal);
   const headingId = useId();
   const descriptionId = useId();
@@ -108,6 +110,73 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
     initialRevealRef.current = false;
     setInitialReveal(false);
   }, []);
+
+  const clearHover = useCallback(() => {
+    const previous = lastHoveredRef.current;
+    if (previous) {
+      previous.removeAttribute("data-hover");
+      lastHoveredRef.current = null;
+    }
+  }, []);
+
+  const updateHoverFromPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const grid = gridRef.current;
+      if (!grid) {
+        return;
+      }
+
+      const rect = grid.getBoundingClientRect();
+      const relativeX = clientX - rect.left;
+      const relativeY = clientY - rect.top;
+
+      if (
+        relativeX < 0 ||
+        relativeY < 0 ||
+        relativeX >= rect.width ||
+        relativeY >= rect.height
+      ) {
+        clearHover();
+        return;
+      }
+
+      const cellWidth = rect.width / GRID_COLUMNS;
+      const cellHeight = rect.height / GRID_ROWS;
+
+      if (cellWidth <= 0 || cellHeight <= 0) {
+        clearHover();
+        return;
+      }
+
+      const column = Math.floor(relativeX / cellWidth);
+      const row = Math.floor(relativeY / cellHeight);
+
+      if (
+        column < 0 ||
+        column >= GRID_COLUMNS ||
+        row < 0 ||
+        row >= GRID_ROWS
+      ) {
+        clearHover();
+        return;
+      }
+
+      const index = row * GRID_COLUMNS + column;
+      const target = grid.children[index] as HTMLElement | undefined;
+
+      if (!target || target.dataset.pixel !== "true") {
+        clearHover();
+        return;
+      }
+
+      if (lastHoveredRef.current !== target) {
+        lastHoveredRef.current?.removeAttribute("data-hover");
+        target.setAttribute("data-hover", "true");
+        lastHoveredRef.current = target;
+      }
+    },
+    [clearHover]
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -150,13 +219,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
 
     const handlePointerMove = (event: PointerEvent) => {
       handleRevealStart();
-      const previous = grid.querySelector('[data-hover="true"]') as HTMLElement | null;
-      previous?.removeAttribute("data-hover");
-
-      const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
-      if (target && grid.contains(target) && target.dataset.pixel === "true") {
-        target.setAttribute("data-hover", "true");
-      }
+      updateHoverFromPoint(event.clientX, event.clientY);
     };
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -164,32 +227,25 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
       try {
         grid.setPointerCapture(event.pointerId);
       } catch {}
-      const previous = grid.querySelector('[data-hover="true"]') as HTMLElement | null;
-      previous?.removeAttribute("data-hover");
-
-      const target = event.target as HTMLElement | null;
-      if (target && grid.contains(target) && target.dataset.pixel === "true") {
-        target.setAttribute("data-hover", "true");
-      }
+      updateHoverFromPoint(event.clientX, event.clientY);
     };
 
     const handlePointerUp = (event: PointerEvent) => {
       try {
         grid.releasePointerCapture(event.pointerId);
       } catch {}
+      clearHover();
     };
 
     const handlePointerCancel = (event: PointerEvent) => {
       try {
         grid.releasePointerCapture(event.pointerId);
       } catch {}
-      const previous = grid.querySelector('[data-hover="true"]') as HTMLElement | null;
-      previous?.removeAttribute("data-hover");
+      clearHover();
     };
 
     const handlePointerLeave = () => {
-      const previous = grid.querySelector('[data-hover="true"]') as HTMLElement | null;
-      previous?.removeAttribute("data-hover");
+      clearHover();
     };
 
     grid.addEventListener("pointermove", handlePointerMove);
@@ -205,7 +261,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
       grid.removeEventListener("pointerup", handlePointerUp);
       grid.removeEventListener("pointercancel", handlePointerCancel);
     };
-  }, [open, handleRevealStart]);
+  }, [open, handleRevealStart, updateHoverFromPoint, clearHover]);
 
   useEffect(() => {
     initialRevealRef.current = initialReveal;
