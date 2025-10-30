@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 type SecretGardenOverlayProps = {
   open: boolean;
   onClose: () => void;
+  debug?: boolean;
 };
 
 type SecretCellStyle = CSSProperties & {
@@ -89,7 +90,7 @@ const FOCUSABLE_SELECTORS = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(", ");
 
-export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps) {
+export function SecretGardenOverlay({ open, onClose, debug = false }: SecretGardenOverlayProps) {
   const [mounted, setMounted] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [artVisible, setArtVisible] = useState(false);
@@ -99,6 +100,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const lastHoveredRef = useRef<HTMLElement | null>(null);
+  const debugIndicatorRef = useRef<HTMLDivElement | null>(null);
   const initialRevealRef = useRef(initialReveal);
   const headingId = useId();
   const descriptionId = useId();
@@ -109,7 +111,13 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
     }
     initialRevealRef.current = false;
     setInitialReveal(false);
-  }, []);
+    if (debug) {
+      const indicator = debugIndicatorRef.current;
+      if (indicator) {
+        indicator.style.opacity = "1";
+      }
+    }
+  }, [debug]);
 
   const clearHover = useCallback(() => {
     const previous = lastHoveredRef.current;
@@ -117,7 +125,13 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
       previous.removeAttribute("data-hover");
       lastHoveredRef.current = null;
     }
-  }, []);
+    if (debug) {
+      const indicator = debugIndicatorRef.current;
+      if (indicator) {
+        indicator.style.opacity = "0";
+      }
+    }
+  }, [debug]);
 
   const updateHoverFromPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -127,6 +141,13 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
       }
 
       const rect = grid.getBoundingClientRect();
+      if (debug) {
+        const indicator = debugIndicatorRef.current;
+        if (indicator) {
+          indicator.style.transform = `translate(${clientX}px, ${clientY}px)`;
+          indicator.style.opacity = "1";
+        }
+      }
       const relativeX = clientX - rect.left;
       const relativeY = clientY - rect.top;
 
@@ -137,6 +158,12 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
         relativeY >= rect.height
       ) {
         clearHover();
+        if (debug) {
+          const indicator = debugIndicatorRef.current;
+          if (indicator) {
+            indicator.style.opacity = "0";
+          }
+        }
         return;
       }
 
@@ -145,6 +172,12 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
 
       if (cellWidth <= 0 || cellHeight <= 0) {
         clearHover();
+        if (debug) {
+          const indicator = debugIndicatorRef.current;
+          if (indicator) {
+            indicator.style.opacity = "0";
+          }
+        }
         return;
       }
 
@@ -158,6 +191,12 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
         row >= GRID_ROWS
       ) {
         clearHover();
+        if (debug) {
+          const indicator = debugIndicatorRef.current;
+          if (indicator) {
+            indicator.style.opacity = "0";
+          }
+        }
         return;
       }
 
@@ -166,6 +205,12 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
 
       if (!target || target.dataset.pixel !== "true") {
         clearHover();
+        if (debug) {
+          const indicator = debugIndicatorRef.current;
+          if (indicator) {
+            indicator.style.opacity = "0";
+          }
+        }
         return;
       }
 
@@ -174,8 +219,14 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
         target.setAttribute("data-hover", "true");
         lastHoveredRef.current = target;
       }
+      if (debug) {
+        const indicator = debugIndicatorRef.current;
+        if (indicator) {
+          indicator.style.opacity = "1";
+        }
+      }
     },
-    [clearHover]
+    [clearHover, debug]
   );
 
   useEffect(() => {
@@ -396,6 +447,14 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
               </span>
             ))}
           </div>
+
+          {debug ? (
+            <div
+              ref={debugIndicatorRef}
+              aria-hidden="true"
+              className="pointer-events-none fixed left-0 top-0 z-[7000] h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-blue-500/50 opacity-0 transition-opacity duration-150"
+            />
+          ) : null}
 
           <Button
             ref={closeButtonRef}

@@ -12,11 +12,27 @@ type SecretGardenUnlockDetail = {
 export function SecretGardenListener() {
   const [open, setOpen] = useState(false);
   const [rerenderKey, setRerenderKey] = useState(0);
+  const [debug, setDebug] = useState(false);
 
   const handleUnlock = useCallback(() => {
     // Reset key to ensure animation restarts if triggered consecutively
     setRerenderKey((key) => key + 1);
     setOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const flag = params.get("sgDebug");
+      if (flag && ["1", "true", "debug"].includes(flag.toLowerCase())) {
+        setDebug(true);
+      }
+    } catch (error) {
+      console.warn("Secret garden debug flag parse failed", error);
+    }
   }, []);
 
   const validateToken = useCallback(
@@ -71,6 +87,7 @@ export function SecretGardenListener() {
       key={rerenderKey}
       open={open}
       onClose={handleClose}
+      debug={debug}
     />
   );
 }
