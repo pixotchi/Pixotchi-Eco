@@ -645,7 +645,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             <div className="flex justify-center pt-4 border-t border-border">
               <div className="w-full">
                 <FollowButton
-                  lookupAddress={plant.owner}
+                  lookupAddress={plant.owner as `0x${string}`}
                   connectedAddress={connectedAddress}
                   onDisconnectedClick={() => {
                     toast.error('Please connect your wallet to follow users');
