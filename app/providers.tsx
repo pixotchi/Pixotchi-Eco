@@ -26,6 +26,7 @@ import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
+import { sessionStorageManager } from "@/lib/session-storage-manager";
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
@@ -78,9 +79,10 @@ export function Providers(props: { children: ReactNode }) {
         });
         markCacheVersion(CACHE_VERSION);
       }
-
-
-    } catch {}
+    } catch (error) {
+      console.error('Cache migration failed:', error);
+      // Non-critical - cache migration failure shouldn't break the app
+    }
   }, []);
 
   // Respect user preference for reduced motion (don't arbitrarily disable on touch devices)
@@ -110,55 +112,80 @@ export function Providers(props: { children: ReactNode }) {
     
     useEffect(() => {
       let mounted = true;
+      let cancelToken = false;
       
       const initializeRouter = async () => {
         try {
-          // Check if we're in a MiniApp
+          // Sequential initialization with cancellation checks
+          // Step 1: Check if we're in a MiniApp
           const flag = await sdk.isInMiniApp();
-          if (mounted) setIsMiniApp(Boolean(flag));
-        } catch {
-          if (mounted) setIsMiniApp(false);
-        }
-        
-        // Determine selected auth surface (persisted or via URL)
-        try {
-          if (!mounted) return;
+          
+          // Check if component unmounted or cancelled before proceeding
+          if (cancelToken || !mounted) return;
+          
+          setIsMiniApp(Boolean(flag));
+          
+          // If we're in a MiniApp, we can initialize immediately
+          if (Boolean(flag)) {
+            if (cancelToken || !mounted) return;
+            setIsInitialized(true);
+            return;
+          }
+          
+          // Step 2: Determine selected auth surface (only if not MiniApp)
+          if (cancelToken || !mounted) return;
+          
           if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const urlSurface = params.get('surface');
-            const key = 'pixotchi:authSurface';
             
             if (urlSurface === 'privy' || urlSurface === 'coinbase') {
-              // Store the surface preference
+              // Store the surface preference using centralized manager
               try {
-                sessionStorage.setItem(key, urlSurface);
+                await sessionStorageManager.setAuthSurface(urlSurface as 'privy' | 'coinbase');
               } catch (e) {
-                console.warn('Failed to store surface preference:', e);
+                console.error('Failed to store surface preference:', e);
               }
+              
+              // Check again before state update
+              if (cancelToken || !mounted) return;
               setSurface(urlSurface as 'privy' | 'coinbase');
             } else {
-              // Try to get stored preference, fallback to 'privy'
+              // Try to get stored preference using centralized manager, fallback to 'privy'
               try {
-                const stored = sessionStorage.getItem(key) as 'privy' | 'coinbase' | null;
+                const stored = sessionStorageManager.getAuthSurface();
+                
+                // Check again before state update
+                if (cancelToken || !mounted) return;
                 setSurface(stored || 'privy');
               } catch (e) {
-                console.warn('Failed to read surface preference:', e);
+                console.error('Failed to read surface preference:', e);
+                if (cancelToken || !mounted) return;
                 setSurface('privy');
               }
             }
           }
+          
+          // Final initialization check
+          if (cancelToken || !mounted) return;
+          setIsInitialized(true);
+          
         } catch (error) {
-          console.warn('Failed to initialize surface:', error);
-          setSurface('privy'); // Fallback to privy on any error
-        }
-        
-        if (mounted) {
+          console.error('Failed to initialize router:', error);
+          
+          // Safe fallback on error
+          if (cancelToken || !mounted) return;
+          setSurface('privy');
           setIsInitialized(true);
         }
       };
       
       initializeRouter();
-      return () => { mounted = false; };
+      
+      return () => { 
+        cancelToken = true;
+        mounted = false;
+      };
     }, []);
 
     // Show loading state until initialization is complete

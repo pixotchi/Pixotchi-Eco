@@ -45,8 +45,9 @@ export async function normalizeStreakIfMissed(address: string, s: GmStreak): Pro
     const updated: GmStreak = { current: 0, best: s.best || 0, lastActive: s.lastActive };
     await redisSetJSON(keys.streak(address), updated);
     return updated;
-  } catch {
-    return s;
+  } catch (error) {
+    console.warn('Failed to normalize streak:', error);
+    return s; // Return original on error
   }
 }
 
@@ -66,10 +67,22 @@ export async function trackDailyActivity(address: string): Promise<GmStreak> {
   const best = Math.max(s.best || 0, current);
   const updated: GmStreak = { current, best, lastActive: day };
   await redisSetJSON(k, updated);
-  // Add to activity set for analytics
-  try { await (redis as any)?.sadd?.(withPrefix(keys.todayActiveSet(day)), address.toLowerCase()); } catch {}
-  // Update monthly leaderboard
-  try { await (redis as any)?.zadd?.(withPrefix(keys.streakLeaderboard(toMonth(day))), { score: current, member: address.toLowerCase() }); } catch {}
+  // Add to activity set for analytics (best-effort, non-blocking)
+  Promise.resolve().then(async () => {
+    try {
+      await (redis as any)?.sadd?.(withPrefix(keys.todayActiveSet(day)), address.toLowerCase());
+    } catch (error) {
+      console.warn('Failed to update activity set:', error);
+    }
+  });
+  // Update monthly leaderboard (best-effort, non-blocking)
+  Promise.resolve().then(async () => {
+    try {
+      await (redis as any)?.zadd?.(withPrefix(keys.streakLeaderboard(toMonth(day))), { score: current, member: address.toLowerCase() });
+    } catch (error) {
+      console.warn('Failed to update streak leaderboard:', error);
+    }
+  });
   return updated;
 }
 
@@ -151,7 +164,14 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
 
   // Update monthly leaderboard on any gain
   if (gained > 0) {
-    try { await (redis as any)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), gained, address.toLowerCase()); } catch {}
+    // Best-effort leaderboard update (non-blocking)
+    Promise.resolve().then(async () => {
+      try {
+        await (redis as any)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), gained, address.toLowerCase());
+      } catch (error) {
+        console.warn('Failed to update missions leaderboard:', error);
+      }
+    });
   }
 
   return m;

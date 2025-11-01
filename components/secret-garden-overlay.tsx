@@ -226,21 +226,30 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
       handleRevealStart();
       try {
         grid.setPointerCapture(event.pointerId);
-      } catch {}
+      } catch (error) {
+        // Pointer capture may fail in some browsers/contexts - this is expected
+        console.debug('Pointer capture failed (non-critical):', error);
+      }
       updateHoverFromPoint(event.clientX, event.clientY);
     };
 
     const handlePointerUp = (event: PointerEvent) => {
       try {
         grid.releasePointerCapture(event.pointerId);
-      } catch {}
+      } catch (error) {
+        // Pointer release may fail if capture wasn't set - this is expected
+        console.debug('Pointer release failed (non-critical):', error);
+      }
       clearHover();
     };
 
     const handlePointerCancel = (event: PointerEvent) => {
       try {
         grid.releasePointerCapture(event.pointerId);
-      } catch {}
+      } catch (error) {
+        // Pointer release may fail if capture wasn't set - this is expected
+        console.debug('Pointer release failed (non-critical):', error);
+      }
       clearHover();
     };
 

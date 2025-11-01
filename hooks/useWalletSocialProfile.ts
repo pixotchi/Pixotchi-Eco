@@ -25,14 +25,17 @@ export function useWalletSocialProfile(
   const [error, setError] = useState<string | null>(null);
   const [cached, setCached] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
 
   const doFetch = useCallback(async () => {
     const targetAddress = address?.trim();
     if (!targetAddress || !enabled) {
-      setData(null);
-      setCached(false);
-      setError(null);
-      setLoading(false);
+      if (mountedRef.current) {
+        setData(null);
+        setCached(false);
+        setError(null);
+        setLoading(false);
+      }
       return;
     }
 
@@ -40,8 +43,10 @@ export function useWalletSocialProfile(
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setLoading(true);
-    setError(null);
+    if (mountedRef.current) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       const params = new URLSearchParams({ address: targetAddress });
@@ -53,28 +58,44 @@ export function useWalletSocialProfile(
         signal: controller.signal,
       });
 
+      // Check if component is still mounted before processing response
+      if (!mountedRef.current) return;
+
       if (!resp.ok) {
         const payload = await resp.json().catch(() => ({}));
         throw new Error(payload.error || `Request failed with status ${resp.status}`);
       }
 
       const body = await resp.json();
+      
+      // Check again after async operation
+      if (!mountedRef.current) return;
+      
       setData(body.data ?? null);
       setCached(Boolean(body.cached));
     } catch (fetchError: any) {
       if (fetchError?.name === 'AbortError') return;
       console.error('[useWalletSocialProfile] Failed to fetch social profile', fetchError);
-      setError(fetchError?.message || 'Failed to load social profile');
-      setData(null);
-      setCached(false);
+      
+      // Only update state if component is still mounted
+      if (mountedRef.current) {
+        setError(fetchError?.message || 'Failed to load social profile');
+        setData(null);
+        setCached(false);
+      }
     } finally {
-      setLoading(false);
+      // Only update loading state if component is still mounted
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [address, enabled, identifier]);
 
   useEffect(() => {
+    mountedRef.current = true;
     doFetch();
     return () => {
+      mountedRef.current = false;
       abortRef.current?.abort();
     };
   }, [doFetch]);
