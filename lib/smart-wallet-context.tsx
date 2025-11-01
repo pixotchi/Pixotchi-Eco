@@ -122,37 +122,53 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Track mounted state to prevent state updates after unmount
+  const mountedRef = useRef(true);
+
   // Run detection when wallet connects or changes
   useEffect(() => {
+    mountedRef.current = true;
+    
     if (!address || !isConnected) {
-      setDetection({
-        isSmartWallet: false,
-        walletType: 'unknown',
-        capabilities: null,
-        detectionMethods: [],
-        isContract: false,
-        isLoading: false,
-        lastChecked: null,
-      });
+      if (mountedRef.current) {
+        setDetection({
+          isSmartWallet: false,
+          walletType: 'unknown',
+          capabilities: null,
+          detectionMethods: [],
+          isContract: false,
+          isLoading: false,
+          lastChecked: null,
+        });
+      }
       return;
     }
 
     const runDetection = async () => {
       // Skip if recently checked (within last 30 seconds)
-      setDetection(prev => {
-        if (prev.lastChecked && Date.now() - prev.lastChecked < 30000) {
-          return prev; // Skip re-detection
-        }
-        return { ...prev, isLoading: true };
-      });
+      if (mountedRef.current) {
+        setDetection(prev => {
+          if (prev.lastChecked && Date.now() - prev.lastChecked < 30000) {
+            return prev; // Skip re-detection
+          }
+          return { ...prev, isLoading: true };
+        });
+      }
       
       const result = await detectSmartWallet();
-      setDetection({ ...result, isLoading: false });
+      
+      // Only update state if component is still mounted
+      if (mountedRef.current) {
+        setDetection({ ...result, isLoading: false });
+      }
     };
 
     // Small delay to ensure wallet is fully connected
     const timer = setTimeout(runDetection, 500);
-    return () => clearTimeout(timer);
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timer);
+    };
   }, [address, isConnected]); // Removed publicClient from deps to prevent unnecessary re-runs
 
   // Manual refetch function

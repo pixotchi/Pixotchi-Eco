@@ -71,41 +71,59 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     lastFetchTimeRef.current = Date.now();
 
-    const fetchPromise = (async () => {
-      try {
-        const results = await publicClient.multicall({
-          contracts: [
-            {
-              address: PIXOTCHI_TOKEN_ADDRESS,
-              abi: ERC20_BALANCE_ABI,
-              functionName: 'balanceOf',
-              args: [address],
-            },
-            {
-              address: LEAF_CONTRACT_ADDRESS,
-              abi: leafAbi,
-              functionName: 'balanceOf',
-              args: [address],
-            },
-          ],
-          allowFailure: true,
-        });
+    // Store address at time of fetch to prevent race conditions
+    const fetchAddress = address;
+    
+    // Create promise function
+    const createFetchPromise = () => {
+      const promise = (async () => {
+        try {
+          const results = await publicClient.multicall({
+            contracts: [
+              {
+                address: PIXOTCHI_TOKEN_ADDRESS,
+                abi: ERC20_BALANCE_ABI,
+                functionName: 'balanceOf',
+                args: [fetchAddress],
+              },
+              {
+                address: LEAF_CONTRACT_ADDRESS,
+                abi: leafAbi,
+                functionName: 'balanceOf',
+                args: [fetchAddress],
+              },
+            ],
+            allowFailure: true,
+          });
 
-        const [seedResult, leafResult] = results;
+          const [seedResult, leafResult] = results;
 
-        setSeedBalance(seedResult.status === 'success' ? (seedResult.result as bigint) : BigInt(0));
-        setLeafBalance(leafResult.status === 'success' ? (leafResult.result as bigint) : BigInt(0));
+          // Only update state if address hasn't changed during fetch
+          if (lastAddressRef.current === fetchAddress) {
+            setSeedBalance(seedResult.status === 'success' ? (seedResult.result as bigint) : BigInt(0));
+            setLeafBalance(leafResult.status === 'success' ? (leafResult.result as bigint) : BigInt(0));
+          }
 
-      } catch (error) {
-        console.error("Failed to fetch balances via multicall:", error);
-        setSeedBalance(BigInt(0));
-        setLeafBalance(BigInt(0));
-      } finally {
-        setLoading(false);
-        pendingRequestRef.current = null;
-      }
-    })();
+        } catch (error) {
+          console.error("Failed to fetch balances via multicall:", error);
+          // Only update state if address hasn't changed during fetch
+          if (lastAddressRef.current === fetchAddress) {
+            setSeedBalance(BigInt(0));
+            setLeafBalance(BigInt(0));
+          }
+        } finally {
+          // Only update loading if address hasn't changed during fetch
+          if (lastAddressRef.current === fetchAddress) {
+            setLoading(false);
+            // Clear pending request if address still matches (this is the current request)
+            pendingRequestRef.current = null;
+          }
+        }
+      })();
+      return promise;
+    };
 
+    const fetchPromise = createFetchPromise();
     pendingRequestRef.current = fetchPromise;
     return fetchPromise;
   }, [address, publicClient]);
@@ -127,6 +145,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
 
   // Track address and connection changes - fetch immediately on login/connection
   useEffect(() => {
+    let mounted = true;
     const previousAddress = lastAddressRef.current;
     const currentAddress = address;
     const previousConnected = lastConnectedRef.current;
@@ -157,20 +176,33 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
         
 
         const retryTimeoutId1 = setTimeout(() => {
+          // Guard against concurrent requests and unmount
+          if (!mounted) return;
           if (lastAddressRef.current && lastConnectedRef.current && publicClient) {
+            // Check if another fetch is already in progress before retrying
+            if (pendingRequestRef.current) {
+              return; // Skip retry if fetch is ongoing
+            }
             pendingRequestRef.current = null;
             fetchBalances(true, true);
           }
         }, 500);
         
         const retryTimeoutId2 = setTimeout(() => {
+          // Guard against concurrent requests and unmount
+          if (!mounted) return;
           if (lastAddressRef.current && lastConnectedRef.current && publicClient) {
+            // Check if another fetch is already in progress before retrying
+            if (pendingRequestRef.current) {
+              return; // Skip retry if fetch is ongoing
+            }
             pendingRequestRef.current = null;
             fetchBalances(true, true);
           }
         }, 1500);
         
         return () => {
+          mounted = false;
           clearTimeout(retryTimeoutId1);
           clearTimeout(retryTimeoutId2);
         };
@@ -182,12 +214,18 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
       }
     } else if (justLoggedOut || !currentAddress || !currentConnected) {
       // User logged out or not connected - reset balances immediately
-      setSeedBalance(BigInt(0));
-      setLeafBalance(BigInt(0));
-      setLoading(false);
+      if (mounted) {
+        setSeedBalance(BigInt(0));
+        setLeafBalance(BigInt(0));
+        setLoading(false);
+      }
       // Clear pending request
       pendingRequestRef.current = null;
     }
+    
+    return () => {
+      mounted = false;
+    };
   }, [address, isConnected, publicClient, fetchBalances]);
 
   useEffect(() => {

@@ -76,13 +76,21 @@ export function useBroadcastMessages() {
     };
   }, []);
 
+  // Track mounted state to prevent state updates after unmount
+  const mountedRef = useRef(true);
+  
   // Fetch active messages - relaxed to not require wallet connection
   const fetchMessages = useCallback(async () => {
+    // Guard against calls after unmount
+    if (!mountedRef.current) return;
+    
     // Require tutorial completion only; wallet connection is optional
     if (!isTutorialCompleted()) {
       // Ensure we clear any messages if tutorial isn't completed
-      setMessages(prev => (prev.length > 0 ? [] : prev));
-      setLoading(false);
+      if (mountedRef.current) {
+        setMessages(prev => (prev.length > 0 ? [] : prev));
+        setLoading(false);
+      }
       return;
     }
 
@@ -101,7 +109,14 @@ export function useBroadcastMessages() {
       const url = identity ? `/api/broadcast/active?address=${encodeURIComponent(identity)}` : '/api/broadcast/active';
 
       const response = await fetch(url);
+      
+      // Check if component is still mounted before processing response
+      if (!mountedRef.current) return;
+      
       const data = await response.json();
+      
+      // Check again after async operation
+      if (!mountedRef.current) return;
       
       if (data.success && Array.isArray(data.messages)) {
         // Filter out locally dismissed messages (persisted between sessions)
@@ -115,9 +130,12 @@ export function useBroadcastMessages() {
     } catch (error) {
       console.error('[Broadcast] Failed to fetch messages:', error);
     } finally {
-      setLoading(false);
+      // Only update loading state if component is still mounted
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, [address, isConnected, localDismissedIds]);
+  }, [address, isConnected, localDismissedIds, identity]);
 
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {
@@ -166,6 +184,7 @@ export function useBroadcastMessages() {
 
   // Initial fetch and setup polling - run once on mount
   useEffect(() => {
+    mountedRef.current = true;
     console.log('[Broadcast] Initializing polling system');
     
     // Initial fetch
@@ -173,12 +192,15 @@ export function useBroadcastMessages() {
 
     // Set up polling interval (only once)
     pollingIntervalRef.current = setInterval(() => {
-      console.log('[Broadcast] Polling interval triggered');
-      fetchMessages();
+      if (mountedRef.current) {
+        console.log('[Broadcast] Polling interval triggered');
+        fetchMessages();
+      }
     }, POLL_INTERVAL);
 
     // Cleanup on unmount
     return () => {
+      mountedRef.current = false;
       console.log('[Broadcast] Cleaning up polling system');
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -190,6 +212,8 @@ export function useBroadcastMessages() {
 
   // Refresh when wallet connects/disconnects (but don't restart polling)
   useEffect(() => {
+    if (!mountedRef.current) return;
+    
     if (address !== undefined || (authenticated && user?.id)) {
       console.log('[Broadcast] Wallet address changed, fetching messages');
       fetchMessages();
