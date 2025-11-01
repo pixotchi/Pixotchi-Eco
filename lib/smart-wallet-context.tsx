@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useState, useEffect } from "react";
+import { createContext, useContext, ReactNode, useState, useEffect, useRef } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 
 export interface SmartWalletDetection {
