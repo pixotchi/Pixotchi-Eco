@@ -169,7 +169,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
           await login();
           setIsExporting(false);
           // After login, user needs to manually retry export
-          toast.info("Please try exporting again after logging in.");
+          toast("Please try exporting again after logging in.", { icon: "ℹ️" });
           return;
         } catch (loginError) {
           console.error("Authentication failed:", loginError);
