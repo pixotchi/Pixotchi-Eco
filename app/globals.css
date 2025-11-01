@@ -503,17 +503,100 @@
     z-index: var(--z-modal) !important;
   }
   
+  /* Ethereum Identity Kit Transaction Modal - must appear above dialogs */
+  /* Dialog uses z-[1200] and z-[1201], so TransactionModal needs higher z-index */
+  /* Target TransactionModal and all its potential class names */
+  [class*="transaction-modal"],
+  [class*="TransactionModal"],
+  [data-ethereum-identity-kit-transaction-modal],
+  [data-ethereum-identity-kit-transaction-modal-overlay],
+  .ethereum-identity-kit-transaction-modal,
+  .ethereum-identity-kit-transaction-overlay {
+    z-index: 1300 !important;
+  }
+  
+  /* Ensure TransactionModal overlays are above Dialog overlays */
+  [class*="transaction-modal-overlay"],
+  [class*="TransactionModalOverlay"],
+  [data-ethereum-identity-kit-transaction-modal-overlay] {
+    z-index: 1299 !important;
+  }
+  
+  /* Ensure TransactionModal content is above everything */
+  [class*="transaction-modal-content"],
+  [class*="TransactionModalContent"],
+  [data-ethereum-identity-kit-transaction-modal] {
+    z-index: 1301 !important;
+  }
+  
+  /* If TransactionModal uses Radix Portal, ensure it appears above Dialog Portal */
+  /* Target portals that come after Dialog Portal */
+  body > div[data-radix-portal]:not(:first-of-type) {
+    z-index: 1300 !important;
+  }
+  
+  /* Ensure any portal containing transaction modal elements appears above */
+  body > div[data-radix-portal] [class*="transaction-modal"],
+  body > div[data-radix-portal] [class*="TransactionModal"] {
+    z-index: 1301 !important;
+    position: relative;
+  }
+  
   /* React Hot Toast containers */
   .react-hot-toast,
   .__react-hot-toast {
     z-index: var(--z-toast) !important;
   }
   
-  /* Radix poppers/dialogs */
-  [data-radix-popper-content-wrapper],
-  [data-radix-dialog-overlay],
-  [data-radix-dialog-content] {
-    z-index: var(--z-modal) !important;
+  /* Reduce hover expansion effect on FollowButton */
+  /* Target the button element inside FollowButton component */
+  button[class*="follow"]:not([aria-label*="close" i]),
+  [class*="follow-button"]:not([aria-label*="close" i]),
+  [class*="FollowButton"]:not([aria-label*="close" i]),
+  /* Target any button that might be inside FollowButton */
+  [class*="follow-button"] button,
+  [class*="FollowButton"] button {
+    transform: none !important;
+    scale: 1 !important;
+    transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease !important;
+  }
+  
+  [class*="transaction-modal"] button:hover,
+  [class*="TransactionModal"] button:hover,
+  button[class*="follow"]:hover:not([aria-label*="close" i]),
+  [class*="follow-button"]:hover:not([aria-label*="close" i]),
+  [class*="FollowButton"]:hover:not([aria-label*="close" i]),
+  [class*="follow-button"] button:hover,
+  [class*="FollowButton"] button:hover {
+    transform: none !important;
+    scale: 1 !important;
+  }
+  
+  /* Specifically target FollowButton content to prevent expansion */
+  [class*="follow-button"] > *,
+  [class*="FollowButton"] > * {
+    transform: none !important;
+    scale: 1 !important;
+    transition: none !important;
+  }
+  
+  [class*="follow-button"]:hover > *,
+  [class*="FollowButton"]:hover > * {
+    transform: none !important;
+    scale: 1 !important;
+  }
+  
+  /* Disable pointer events on Dialog overlay when TransactionModal is open */
+  /* This prevents Dialog from blocking clicks to TransactionModal */
+  body:has([class*="transaction-modal"]:not([aria-hidden="true"])) 
+    [data-radix-dialog-overlay] {
+    pointer-events: none !important;
+  }
+  
+  /* When TransactionModal is open, allow clicks through Dialog overlay */
+  body:has([class*="TransactionModal"]:not([aria-hidden="true"])) 
+    [data-radix-dialog-overlay] {
+    pointer-events: none !important;
   }
  
 

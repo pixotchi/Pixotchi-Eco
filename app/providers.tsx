@@ -27,6 +27,8 @@ import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
+import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum-identity-kit';
+import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
@@ -195,16 +197,37 @@ export function Providers(props: { children: ReactNode }) {
 
     // Mini App: use Farcaster connector.
     if (isMiniApp) {
-      return <CoreWagmiProvider config={wagmiMiniAppConfig}>{children}</CoreWagmiProvider>;
+      return (
+        <CoreWagmiProvider config={wagmiMiniAppConfig}>
+          <TransactionProvider defaultChainId={8453}>
+            {children}
+            <TransactionModalWrapper className="!z-[1300]" />
+          </TransactionProvider>
+        </CoreWagmiProvider>
+      );
     }
     
     // Web: choose a single provider per session based on selected surface
     if (surface === 'coinbase') {
-      return <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>{children}</CoreWagmiProvider>;
+      return (
+        <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>
+          <TransactionProvider defaultChainId={8453}>
+            {children}
+            <TransactionModalWrapper className="!z-[1300]" />
+          </TransactionProvider>
+        </CoreWagmiProvider>
+      );
     }
     
     // default & 'privy'
-    return <PrivyWagmiProvider config={wagmiPrivyConfig}>{children}</PrivyWagmiProvider>;
+    return (
+      <PrivyWagmiProvider config={wagmiPrivyConfig}>
+        <TransactionProvider defaultChainId={8453}>
+          {children}
+          <TransactionModalWrapper className="!z-[1300]" />
+        </TransactionProvider>
+      </PrivyWagmiProvider>
+    );
   }
 
   return (
