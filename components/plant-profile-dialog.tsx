@@ -110,6 +110,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const [loading, setLoading] = useState(false);
   const [efpStats, setEfpStats] = useState<EthFollowStats | null>(null);
   const [efpLoading, setEfpLoading] = useState(false);
+  const [efpError, setEfpError] = useState<string | null>(null);
   const [otherDialogOpen, setOtherDialogOpen] = useState(false);
   const [efpRefreshKey, setEfpRefreshKey] = useState(0);
 
@@ -119,6 +120,13 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   // Get TransactionModal state to detect when it's open/closed
   const { txModalOpen } = useTransactions();
   
+  // Close plant profile dialog when TransactionModal opens
+  useEffect(() => {
+    if (txModalOpen && open) {
+      onOpenChange(false);
+    }
+  }, [txModalOpen, open, onOpenChange]);
+
   // Resolve ENS/Basename using shared resolver
   const { name: ownerName, loading: isNameLoading } = usePrimaryName(plant?.owner);
   const ownerAddress = plant?.owner ?? null;
@@ -344,25 +352,28 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   useEffect(() => {
     if (!plant || !open) {
       setEfpStats(null);
+      setEfpError(null);
       return;
     }
 
     let cancelled = false;
 
-    // Check cache first (but invalidate if refresh key changed)
+    // Check cache first - use timestamp-based TTL
     const cacheKey = plant.owner.toLowerCase();
     const cached = efpStatsCache.get(cacheKey);
     const now = Date.now();
 
-    // Only use cache if refresh key hasn't changed (refresh key increments after follow/unfollow)
+    // Use cache if it's fresh (within CACHE_DURATION) and we haven't manually refreshed
     if (cached && (now - cached.timestamp) < CACHE_DURATION && efpRefreshKey === 0) {
       setEfpStats(cached.stats);
+      setEfpError(null);
       setEfpLoading(false);
       return;
     }
 
     // Fetch fresh EFP data
     setEfpLoading(true);
+    setEfpError(null);
 
     const addressForEfp = plant.owner;
 
@@ -372,6 +383,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
         
         if (stats) {
           setEfpStats(stats);
+          setEfpError(null);
           // Cache the data
           efpStatsCache.set(cacheKey, {
             stats,
@@ -379,12 +391,14 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           });
         } else {
           setEfpStats(null);
+          setEfpError(null);
         }
       })
       .catch((err) => {
         if (cancelled) return;
         console.error('Error fetching EFP stats:', err);
         setEfpStats(null);
+        setEfpError('Failed to load follow stats');
       })
       .finally(() => {
         if (cancelled) return;
@@ -399,12 +413,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   // Function to refresh EFP stats after follow/unfollow
   const refreshEfpStats = useCallback(() => {
     setEfpRefreshKey(prev => prev + 1);
-    // Clear cache to force fresh fetch
-    const currentOwner = plant?.owner?.toLowerCase() ?? lastViewedOwnerRef.current;
-    if (currentOwner) {
-      efpStatsCache.delete(currentOwner);
-    }
-  }, [plant?.owner]);
+  }, []);
 
   // Track previous TransactionModal state to detect when it closes
   const prevTxModalOpenRef = React.useRef(txModalOpen);
