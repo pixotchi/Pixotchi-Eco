@@ -119,13 +119,6 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   // Get TransactionModal state to detect when it's open/closed
   const { txModalOpen } = useTransactions();
   
-  // Close plant profile dialog when TransactionModal opens
-  useEffect(() => {
-    if (txModalOpen && open) {
-      onOpenChange(false);
-    }
-  }, [txModalOpen, open, onOpenChange]);
-
   // Resolve ENS/Basename using shared resolver
   const { name: ownerName, loading: isNameLoading } = usePrimaryName(plant?.owner);
   const ownerAddress = plant?.owner ?? null;
@@ -407,22 +400,30 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const refreshEfpStats = useCallback(() => {
     setEfpRefreshKey(prev => prev + 1);
     // Clear cache to force fresh fetch
-    if (plant?.owner) {
-      efpStatsCache.delete(plant.owner.toLowerCase());
+    const currentOwner = plant?.owner?.toLowerCase() ?? lastViewedOwnerRef.current;
+    if (currentOwner) {
+      efpStatsCache.delete(currentOwner);
     }
   }, [plant?.owner]);
 
   // Track previous TransactionModal state to detect when it closes
   const prevTxModalOpenRef = React.useRef(txModalOpen);
+  const lastViewedOwnerRef = React.useRef<string | null>(null);
+
+  useEffect(() => {
+    if (plant?.owner) {
+      lastViewedOwnerRef.current = plant.owner.toLowerCase();
+    }
+  }, [plant?.owner]);
   
   // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
   useEffect(() => {
     // If TransactionModal was open and now it's closed, refresh stats
-    if (prevTxModalOpenRef.current && !txModalOpen && open && plant?.owner) {
+    if (prevTxModalOpenRef.current && !txModalOpen) {
       refreshEfpStats();
     }
     prevTxModalOpenRef.current = txModalOpen;
-  }, [txModalOpen, open, plant?.owner, refreshEfpStats]);
+  }, [txModalOpen, refreshEfpStats]);
 
   // Reset view when dialog closes
   useEffect(() => {
