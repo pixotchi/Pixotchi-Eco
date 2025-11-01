@@ -29,6 +29,7 @@ import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
+import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -59,6 +60,7 @@ const tabComponents = {
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
   const loadedTabs = useRef(new Set<string>());
   const prefetchingTabs = useRef(new Set<string>());
+  const prefetchPromises = useRef<Map<string, Promise<void>>>(new Map());
 
   useEffect(() => {
     if (!isConnected) return;
@@ -80,24 +82,37 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 
     // Use requestIdleCallback for non-blocking prefetching, avoid duplicates
     if ('requestIdleCallback' in window) {
-      tabsToPrefetch.forEach((tab) => {
-        const key = String(tab);
-        if (key === activeTab) return;
-        if (loadedTabs.current.has(key) || prefetchingTabs.current.has(key)) return;
-        prefetchingTabs.current.add(key);
-        (window as any).requestIdleCallback?.(() => {
-          // Trigger prefetch by accessing the component (causes Next to fetch the chunk)
-          import(`@/components/tabs/${tab}-tab`).finally(() => {
-            prefetchingTabs.current.delete(key);
-            loadedTabs.current.add(key);
-          });
+      const idleCallbackId = (window as any).requestIdleCallback?.(() => {
+        tabsToPrefetch.forEach((tab) => {
+          const key = String(tab);
+          if (key === activeTab) return;
+          if (loadedTabs.current.has(key) || prefetchingTabs.current.has(key)) return;
+          prefetchingTabs.current.add(key);
+          
+          const prefetchPromise = import(`@/components/tabs/${tab}-tab`)
+            .finally(() => {
+              prefetchingTabs.current.delete(key);
+              loadedTabs.current.add(key);
+              prefetchPromises.current.delete(key);
+            });
+          
+          prefetchPromises.current.set(key, prefetchPromise);
         });
       });
+
+      // Cleanup function to clear pending prefetches on unmount
+      return () => {
+        if (idleCallbackId && typeof idleCallbackId === 'number') {
+          (window as any).cancelIdleCallback?.(idleCallbackId);
+        }
+        prefetchingTabs.current.clear();
+        prefetchPromises.current.clear();
+      };
     }
 
-    // Cleanup function to clear pending prefetches on unmount
     return () => {
       prefetchingTabs.current.clear();
+      prefetchPromises.current.clear();
     };
   }, [activeTab, isConnected]);
 };
@@ -145,11 +160,12 @@ export default function App() {
   const [surface, setSurface] = useState<'privy' | 'coinbase' | null>(() => {
     if (typeof window === 'undefined') return null;
     try {
-      const key = 'pixotchi:authSurface';
-      const stored = sessionStorage.getItem(key) as any;
-      if (stored === 'privy' || stored === 'coinbase') return stored;
-    } catch {}
-    return null;
+      const stored = sessionStorageManager.getAuthSurface();
+      return stored;
+    } catch (error) {
+      console.warn('Failed to read surface on mount:', error);
+      return null;
+    }
   });
   
   // Farcaster splash-screen: call ready() once UI is stable
@@ -189,20 +205,36 @@ export default function App() {
   // One-shot autologin after surface switch
   useEffect(() => {
     if (isConnected) return;
-    try {
-      const auto = (typeof window !== 'undefined') ? sessionStorage.getItem('pixotchi:autologin') : null;
-      if (!auto) return;
-      if (auto === 'privy' && surface === 'privy' && privyReady) {
-        sessionStorage.removeItem('pixotchi:autologin');
-        login();
-      } else if (auto === 'coinbase' && surface === 'coinbase') {
-        const cb = (connectors || []).find((c: any) => `${c.name}`.toLowerCase().includes('coinbase')) || (connectors || [])[0];
-        if (cb) {
-          sessionStorage.removeItem('pixotchi:autologin');
-          connect({ connector: cb as any });
+    
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    const handleAutologin = async () => {
+      try {
+        const auto = sessionStorageManager.getAutologin();
+        if (!auto) return;
+        
+        if (auto === 'privy' && surface === 'privy' && privyReady) {
+          await sessionStorageManager.removeAutologin();
+          if (mounted) login();
+        } else if (auto === 'coinbase' && surface === 'coinbase') {
+          const cb = (connectors || []).find((c: any) => `${c.name}`.toLowerCase().includes('coinbase')) || (connectors || [])[0];
+          if (cb) {
+            await sessionStorageManager.removeAutologin();
+            if (mounted) connect({ connector: cb as any });
+          }
         }
+      } catch (error) {
+        console.error('Failed to handle autologin:', error);
       }
-    } catch {}
+    };
+    
+    handleAutologin();
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [isConnected, privyReady, surface, connectors, connect, login]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
@@ -221,17 +253,36 @@ export default function App() {
 
   // Map fid -> address for backend notifications (optional, best-effort)
   useEffect(() => {
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     (async () => {
       try {
         const fid = (window as any)?.__pixotchi_frame_context__?.context?.user?.fid;
-        if (!fid || !address) return;
+        if (!fid || !address || !mounted) return;
+        
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 5000);
+        
         await fetch('/api/notifications/map-fid', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fid, address }),
+          signal: controller.signal,
         });
-      } catch {}
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.warn('Failed to map FID to address:', error);
+        }
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
     })();
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [address]);
 
   // Nudge UI forward immediately after a successful connection
@@ -273,9 +324,8 @@ export default function App() {
 
     const handleClick = async () => {
       try {
-        // Set preferences first
-        sessionStorage.setItem('pixotchi:authSurface', 'coinbase');
-        sessionStorage.setItem('pixotchi:autologin', 'coinbase');
+        // Set preferences first using centralized manager
+        await sessionStorageManager.setAuthSurfaceAndAutologin('coinbase');
         
         // Wait a tick to ensure storage operations complete
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -511,9 +561,8 @@ export default function App() {
                     variant="default"
                     onClick={async () => {
                       try {
-                        // Set preferences first
-                        sessionStorage.setItem('pixotchi:authSurface', 'privy');
-                        sessionStorage.setItem('pixotchi:autologin', 'privy');
+                        // Set preferences first using centralized manager
+                        await sessionStorageManager.setAuthSurfaceAndAutologin('privy');
                         
                         // Wait a tick to ensure storage operations complete
                         await new Promise(resolve => setTimeout(resolve, 0));

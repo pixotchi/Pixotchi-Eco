@@ -117,10 +117,29 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     }
   }, [embeddedWallets]);
 
+  // Check if the currently connected wallet is an embedded Privy wallet
+  const isCurrentlyEmbeddedWallet = useMemo(() => {
+    if (!address || !privyUser?.linkedAccounts) return false;
+    
+    // Find the linked account that matches the current address
+    const linkedWallet = privyUser.linkedAccounts.find((account) => {
+      if (account?.type !== "wallet") return false;
+      const walletAccount = account as WalletWithMetadata;
+      return (
+        walletAccount.address?.toLowerCase() === address.toLowerCase() &&
+        walletAccount.walletClientType === "privy" &&
+        walletAccount.chainType === "ethereum"
+      );
+    });
+    
+    return Boolean(linkedWallet);
+  }, [address, privyUser?.linkedAccounts]);
+
   const canExportEmbeddedWallet =
     privyReady &&
     privyAuthenticated &&
     embeddedWallets.length > 0 &&
+    isCurrentlyEmbeddedWallet &&
     Boolean(exportWallet) &&
     !isMiniApp;
 
@@ -140,6 +159,29 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       return;
     }
 
+    // According to Privy docs (exp.md line 51): exportWallet requires user to be authenticated
+    // Check that user is both ready AND authenticated (not just connected via Wagmi)
+    if (!privyReady || !privyAuthenticated) {
+      toast.error("Please log in with Privy to export your wallet. Wallet export requires Privy authentication.");
+      if (login) {
+        try {
+          setIsExporting(true);
+          await login();
+          setIsExporting(false);
+          // After login, user needs to manually retry export
+          toast.info("Please try exporting again after logging in.");
+          return;
+        } catch (loginError) {
+          console.error("Authentication failed:", loginError);
+          setIsExporting(false);
+          toast.error("Authentication failed. Please try logging in again.");
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
     const performExport = async () => {
       if (embeddedWallets.length > 1 && selectedEmbeddedAddress) {
         await exportWallet({ address: selectedEmbeddedAddress });
@@ -157,20 +199,15 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       console.error("Embedded wallet export failed", error);
       const rawMessage = (error?.message || "").toString();
       const needsReauth = /access token/i.test(rawMessage) || /mfa/i.test(rawMessage);
+      const isMfaError = /mfa/i.test(rawMessage) && /enroll/i.test(rawMessage);
 
-      if (needsReauth && login) {
-        try {
-          await login();
-          await performExport();
-          toast.success("Re-authenticated! Export window opened. Follow the instructions to copy your key.");
-          setExportDialogOpen(false);
-          return;
-        } catch (reauthError: any) {
-          console.error("Re-authentication before export failed", reauthError);
-          const fallback = (reauthError?.message || rawMessage || "Please re-authenticate and try again.").toString();
-          toast.error(fallback.includes("access token") ? "Please complete authentication and try again." : fallback);
-          return;
-        }
+      // MFA/access token errors indicate missing or invalid Privy authentication
+      // According to Privy docs, exportWallet requires authenticated user with valid access token
+      if (isMfaError || needsReauth) {
+        toast.error("Wallet export requires Privy authentication with a valid access token. Please log out and log back in via Privy.");
+        // Don't automatically retry - user needs to properly authenticate first
+        setIsExporting(false);
+        return;
       }
 
       const fallbackMessage = rawMessage || "Failed to export embedded wallet";
@@ -281,6 +318,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         sessionStorage.removeItem('pixotchi:autologin');
       } catch (storageError) {
         console.warn('Failed to clear auth preferences:', storageError);
+      }
+      
+      // Clear URL query parameters and redirect to root
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('surface');
+        // Use replace to avoid adding to browser history
+        window.history.replaceState({}, '', url.pathname);
       }
       
       // Show success message

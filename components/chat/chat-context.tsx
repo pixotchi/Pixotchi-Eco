@@ -175,9 +175,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (mode === 'public') {
       fetchHistory(true, 'public');
       const interval = setInterval(() => { fetchHistory(false, 'public'); }, 10000);
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+        // Abort any pending fetch requests
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      };
     } else if (mode === 'ai' && address) {
       fetchHistory(true, 'ai');
+      return () => {
+        // Abort any pending fetch requests
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      };
     } else if (mode === 'agent') {
       // For agent mode, explicitly ensure we have empty messages if cache is empty
       const agentCache = messageCacheRef.current['agent'] || [];

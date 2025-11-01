@@ -18,6 +18,12 @@ export function useTransaction<T, P extends any[]>(
 ) {
   const [state, setState] = useState<TransactionState>({ status: 'idle' });
   const mountedRef = useRef(true);
+  const optionsRef = useRef(options);
+
+  // Keep options ref up to date without causing re-renders
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(() => {
     return () => {
@@ -33,11 +39,13 @@ export function useTransaction<T, P extends any[]>(
       const result = await transactionFn(...params);
       if (!mountedRef.current) return;
       setState({ status: 'success' });
-      if (options.successMessage) {
-        toast.success(options.successMessage);
+      
+      const opts = optionsRef.current;
+      if (opts.successMessage) {
+        toast.success(opts.successMessage);
       }
-      if (options.onSuccess) {
-        options.onSuccess(result);
+      if (opts.onSuccess) {
+        opts.onSuccess(result);
       }
       return result;
     } catch (err: unknown) {
@@ -45,16 +53,19 @@ export function useTransaction<T, P extends any[]>(
       const error = err instanceof Error ? err : new Error('An unknown error occurred');
       console.error('Transaction failed:', error);
       setState({ status: 'error', error: getFriendlyErrorMessage(error) });
-      if (options.errorMessage) {
-        toast.error(options.errorMessage);
+      
+      const opts = optionsRef.current;
+      if (opts.errorMessage) {
+        toast.error(opts.errorMessage);
       } else {
         toast.error(getFriendlyErrorMessage(error));
       }
-      if (options.onError) {
-        options.onError(error);
+      if (opts.onError) {
+        opts.onError(error);
       }
+      throw error; // Re-throw to allow caller to handle
     }
-  }, [transactionFn, options]);
+  }, [transactionFn]);
 
   const reset = useCallback(() => {
     setState({ status: 'idle' });

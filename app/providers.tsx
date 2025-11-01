@@ -26,6 +26,7 @@ import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
+import { sessionStorageManager } from "@/lib/session-storage-manager";
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
@@ -78,9 +79,10 @@ export function Providers(props: { children: ReactNode }) {
         });
         markCacheVersion(CACHE_VERSION);
       }
-
-
-    } catch {}
+    } catch (error) {
+      console.error('Cache migration failed:', error);
+      // Non-critical - cache migration failure shouldn't break the app
+    }
   }, []);
 
   // Respect user preference for reduced motion (don't arbitrarily disable on touch devices)
@@ -110,13 +112,15 @@ export function Providers(props: { children: ReactNode }) {
     
     useEffect(() => {
       let mounted = true;
+      let timeoutId: NodeJS.Timeout | null = null;
       
       const initializeRouter = async () => {
         try {
           // Check if we're in a MiniApp
           const flag = await sdk.isInMiniApp();
           if (mounted) setIsMiniApp(Boolean(flag));
-        } catch {
+        } catch (error) {
+          console.warn('Failed to check MiniApp status:', error);
           if (mounted) setIsMiniApp(false);
         }
         
@@ -126,30 +130,29 @@ export function Providers(props: { children: ReactNode }) {
           if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const urlSurface = params.get('surface');
-            const key = 'pixotchi:authSurface';
             
             if (urlSurface === 'privy' || urlSurface === 'coinbase') {
-              // Store the surface preference
+              // Store the surface preference using centralized manager
               try {
-                sessionStorage.setItem(key, urlSurface);
+                await sessionStorageManager.setAuthSurface(urlSurface as 'privy' | 'coinbase');
               } catch (e) {
-                console.warn('Failed to store surface preference:', e);
+                console.error('Failed to store surface preference:', e);
               }
-              setSurface(urlSurface as 'privy' | 'coinbase');
+              if (mounted) setSurface(urlSurface as 'privy' | 'coinbase');
             } else {
-              // Try to get stored preference, fallback to 'privy'
+              // Try to get stored preference using centralized manager, fallback to 'privy'
               try {
-                const stored = sessionStorage.getItem(key) as 'privy' | 'coinbase' | null;
-                setSurface(stored || 'privy');
+                const stored = sessionStorageManager.getAuthSurface();
+                if (mounted) setSurface(stored || 'privy');
               } catch (e) {
-                console.warn('Failed to read surface preference:', e);
-                setSurface('privy');
+                console.error('Failed to read surface preference:', e);
+                if (mounted) setSurface('privy');
               }
             }
           }
         } catch (error) {
-          console.warn('Failed to initialize surface:', error);
-          setSurface('privy'); // Fallback to privy on any error
+          console.error('Failed to initialize surface:', error);
+          if (mounted) setSurface('privy'); // Fallback to privy on any error
         }
         
         if (mounted) {
@@ -158,7 +161,10 @@ export function Providers(props: { children: ReactNode }) {
       };
       
       initializeRouter();
-      return () => { mounted = false; };
+      return () => { 
+        mounted = false;
+        if (timeoutId) clearTimeout(timeoutId);
+      };
     }, []);
 
     // Show loading state until initialization is complete

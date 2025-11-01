@@ -84,13 +84,23 @@ export async function POST(request: NextRequest) {
       clearTimeout(timeoutId!);
       console.log('✅ Rate limit updated');
     } catch (error) {
-      console.warn('⚠️ Rate limit update failed (non-critical):', error);
-      // Continue anyway
+      console.error('❌ Rate limit update failed:', error);
+      // Don't fail the request, but log the error for monitoring
+      // Rate limit update failure is non-critical but should be monitored
     }
 
     // Gamification: mark chat task and streak activity (fire-and-forget, non-blocking)
-    try { markMissionTask(address, 's2_chat_message'); } catch {}
-    try { trackDailyActivity(address); } catch {}
+    // These are best-effort operations - failures shouldn't block the request
+    Promise.allSettled([
+      markMissionTask(address, 's2_chat_message').catch(err => {
+        console.warn('Failed to mark mission task:', err);
+      }),
+      trackDailyActivity(address).catch(err => {
+        console.warn('Failed to track daily activity:', err);
+      })
+    ]).catch(err => {
+      console.warn('Gamification tracking failed:', err);
+    });
 
     return NextResponse.json({
       success: true,
