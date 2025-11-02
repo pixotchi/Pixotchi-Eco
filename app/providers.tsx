@@ -199,7 +199,10 @@ export function Providers(props: { children: ReactNode }) {
     if (isMiniApp) {
       return (
         <CoreWagmiProvider config={wagmiMiniAppConfig}>
-          <TransactionProvider defaultChainId={8453}>
+          <TransactionProvider 
+            defaultChainId={8453}
+            paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+          >
             {children}
             <TransactionModalWrapper className="!z-[1300]" />
           </TransactionProvider>
@@ -211,7 +214,10 @@ export function Providers(props: { children: ReactNode }) {
     if (surface === 'coinbase') {
       return (
         <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>
-          <TransactionProvider defaultChainId={8453}>
+          <TransactionProvider 
+            defaultChainId={8453}
+            paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+          >
             {children}
             <TransactionModalWrapper className="!z-[1300]" />
           </TransactionProvider>
@@ -222,7 +228,10 @@ export function Providers(props: { children: ReactNode }) {
     // default & 'privy'
     return (
       <PrivyWagmiProvider config={wagmiPrivyConfig}>
-        <TransactionProvider defaultChainId={8453}>
+        <TransactionProvider 
+          defaultChainId={8453}
+          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+        >
           {children}
           <TransactionModalWrapper className="!z-[1300]" />
         </TransactionProvider>
