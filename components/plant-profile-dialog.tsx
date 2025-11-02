@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats, type EthFollowStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
+import FollowTransaction from '@/components/transactions/follow-transaction';
 
 interface PlantProfileDialogProps {
   open: boolean;
@@ -636,9 +637,12 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           <div className="pt-2">
             {plant.owner && connectedAddress && 
               plant.owner.toLowerCase() !== connectedAddress.toLowerCase() ? (
-              <div className="text-xs text-amber-600 flex items-center gap-2 p-2 bg-amber-50 rounded">
-                ℹ️ EFP follow currently uses ethereum-identity-kit. To get sponsored gas, use the EFP app at ethfollow.xyz
-              </div>
+              <FollowTransaction
+                targetAddress={plant.owner as `0x${string}`}
+                onSuccess={refreshEfpStats}
+                buttonClassName="w-full h-10"
+                showToast={true}
+              />
             ) : plant.owner && connectedAddress && 
                 plant.owner.toLowerCase() === connectedAddress.toLowerCase() ? (
               <div className="text-xs text-muted-foreground italic px-2 py-1">
