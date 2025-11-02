@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.4.53",
+  "version": "1.4.57",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -19,10 +19,10 @@
     "@farcaster/miniapp-sdk": "0.2.1",
     "@farcaster/miniapp-node": "0.1.11",
     "@farcaster/miniapp-wagmi-connector": "1.1.0",
-    "@privy-io/react-auth": "3.4.1",
+    "@privy-io/react-auth": "3.5.0",
     "@privy-io/wagmi": "2.0.2",
-    "wagmi": "2.19.1",
-    "viem": "2.38.5",
+    "wagmi": "2.19.2",
+    "viem": "2.38.6",
     "permissionless": "0.2.57",
     "next": "16.0.1",
     "react": "19.2.0",
@@ -37,7 +37,7 @@
     "tailwind-merge": "3.3.1",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "@tanstack/react-query": "5.90.5",
+    "@tanstack/react-query": "5.90.6",
     "zod": "3.25.76",
     "nanoid": "5.1.6",
     "date-fns": "4.1.0",
@@ -46,13 +46,14 @@
     "@vercel/analytics": "1.5.0",
     "@vercel/speed-insights": "1.2.0",
     "@upstash/redis": "1.35.6",
-    "@react-native-async-storage/async-storage": "2.2.0"
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "ethereum-identity-kit": "0.2.61"
   },
   "devDependencies": {
     "@types/node": "24.9.2",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
-    "eslint": "9.38.0",
+    "eslint": "9.39.0",
     "eslint-config-next": "16.0.1",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-prettier": "5.5.4",
