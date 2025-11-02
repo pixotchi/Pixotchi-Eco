@@ -18,7 +18,7 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats, type EthFollowStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
-import FollowTransaction from '@/components/transactions/follow-transaction';
+import { FollowButton, useTransactions } from 'ethereum-identity-kit';
 
 interface PlantProfileDialogProps {
   open: boolean;
@@ -114,8 +114,19 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const [otherDialogOpen, setOtherDialogOpen] = useState(false);
   const [efpRefreshKey, setEfpRefreshKey] = useState(0);
 
+  // Get connected wallet address
   const { address: connectedAddress } = useAccount();
   
+  // Get TransactionModal state to detect when it's open/closed
+  const { txModalOpen } = useTransactions();
+  
+  // Close plant profile dialog when TransactionModal opens
+  useEffect(() => {
+    if (txModalOpen && open) {
+      onOpenChange(false);
+    }
+  }, [txModalOpen, open, onOpenChange]);
+
   // Resolve ENS/Basename using shared resolver
   const { name: ownerName, loading: isNameLoading } = usePrimaryName(plant?.owner);
   const ownerAddress = plant?.owner ?? null;
@@ -405,7 +416,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, []);
 
   // Track previous TransactionModal state to detect when it closes
-  const prevTxModalOpenRef = React.useRef(false);
+  const prevTxModalOpenRef = React.useRef(txModalOpen);
   const lastViewedOwnerRef = React.useRef<string | null>(null);
 
   useEffect(() => {
@@ -416,8 +427,12 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   
   // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
   useEffect(() => {
-    prevTxModalOpenRef.current = false;
-  }, []);
+    // If TransactionModal was open and now it's closed, refresh stats
+    if (prevTxModalOpenRef.current && !txModalOpen) {
+      refreshEfpStats();
+    }
+    prevTxModalOpenRef.current = txModalOpen;
+  }, [txModalOpen, refreshEfpStats]);
 
   // Reset view when dialog closes
   useEffect(() => {
@@ -634,22 +649,22 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           </div>
 
           {/* Follow Button Section */}
-          <div className="pt-2">
-            {plant.owner && connectedAddress && 
-              plant.owner.toLowerCase() !== connectedAddress.toLowerCase() ? (
-              <FollowTransaction
-                targetAddress={plant.owner as `0x${string}`}
-                onSuccess={refreshEfpStats}
-                buttonClassName="w-full h-10"
-                showToast={true}
-              />
-            ) : plant.owner && connectedAddress && 
-                plant.owner.toLowerCase() === connectedAddress.toLowerCase() ? (
-              <div className="text-xs text-muted-foreground italic px-2 py-1">
-                💡 It's your plant! You can't follow yourself.
+          {connectedAddress && 
+           plant?.owner && 
+           connectedAddress.toLowerCase() !== plant.owner.toLowerCase() && (
+            <div className="flex justify-center pt-4 border-t border-border">
+              <div className="w-full">
+                <FollowButton
+                  lookupAddress={plant.owner as `0x${string}`}
+                  connectedAddress={connectedAddress}
+                  onDisconnectedClick={() => {
+                    toast.error('Please connect your wallet to follow users');
+                  }}
+                  className="w-full h-10 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                />
               </div>
-            ) : null}
-          </div>
+            </div>
+          )}
 
           </>
         </DialogContent>
