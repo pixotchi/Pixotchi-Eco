@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -66,26 +66,43 @@ export default function PlantsView() {
   const [claimOpen, setClaimOpen] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
 
-  const getActiveFence = () => {
-    if (!selectedPlant?.extensions) return null;
-    
-    for (const extension of selectedPlant.extensions) {
-      if (extension.shopItemOwned) {
+  const fenceStatuses = useMemo(() => {
+    const active: { type: 'Fence V1' | 'Fence V2'; effectUntil: number }[] = [];
+    if (!selectedPlant) return active;
+
+    const fenceV2State = selectedPlant.fenceV2;
+    const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > 0);
+    const fenceV2EffectUntil = fenceV2Active ? Number(fenceV2State?.activeUntil ?? 0) : 0;
+    const fenceV2Mirroring = Boolean(fenceV2State?.isMirroringV1);
+    const isApproxEqual = (a: number, b: number) => Math.abs(a - b) <= 1;
+
+    if (selectedPlant.extensions) {
+      for (const extension of selectedPlant.extensions) {
+        if (!extension.shopItemOwned) continue;
         for (const item of extension.shopItemOwned) {
-          if (item.effectIsOngoingActive && item.name.toLowerCase().includes('fence')) {
-            return {
-              name: item.name,
-              effectUntil: Number(item.effectUntil)
-            };
+          if (!item?.effectIsOngoingActive) continue;
+          const lowerName = item?.name?.toLowerCase() || '';
+          if (!lowerName.includes('fence') && !lowerName.includes('shield')) continue;
+          const effectUntil = Number(item.effectUntil || 0);
+          if (!Number.isFinite(effectUntil) || effectUntil <= 0) continue;
+          if (fenceV2Active && fenceV2Mirroring && isApproxEqual(effectUntil, fenceV2EffectUntil)) {
+            continue;
           }
+          active.push({ type: 'Fence V1', effectUntil });
+          break;
         }
       }
     }
-    return null;
-  };
 
-  const activeFence = getActiveFence();
-  const hasActiveFence = activeFence !== null;
+    if (fenceV2Active) {
+      active.push({ type: 'Fence V2', effectUntil: fenceV2EffectUntil });
+    }
+
+    active.sort((a, b) => b.effectUntil - a.effectUntil);
+    return active;
+  }, [selectedPlant]);
+
+  const hasActiveFence = fenceStatuses.length > 0;
 
   const handleItemTypeChange = (type: 'garden' | 'shop') => {
     setItemType(type);
@@ -318,9 +335,13 @@ export default function PlantsView() {
                     {/* Bottom-left: Timers */}
                     <div className="flex flex-col justify-start gap-1">
                       {/* Fence Timer (if active) */}
-                      {hasActiveFence && activeFence && (
-                        <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                          <FenceTimer effectUntil={activeFence.effectUntil} noBackground={true} className="text-sm" />
+                      {hasActiveFence && (
+                        <div className="flex flex-col gap-1">
+                          {fenceStatuses.map((fence) => (
+                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                              <FenceTimer effectUntil={fence.effectUntil} noBackground={true} className="text-sm" label={fence.type} />
+                            </div>
+                          ))}
                         </div>
                       )}
                       {/* TOD Timer */}
@@ -358,6 +379,11 @@ export default function PlantsView() {
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">{getStrainName(selectedPlant.strain)}</p>
+                {selectedPlant.timePlantBorn && (
+                  <p className="text-xs text-muted-foreground">
+                    Planted on {new Date(Number(selectedPlant.timePlantBorn) * 1000).toLocaleDateString()}
+                  </p>
+                )}
               </div>
 
               {/* Actions Section: Unclaimed Rewards + Arcade */}

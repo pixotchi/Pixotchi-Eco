@@ -1,5 +1,14 @@
 // Note: utility helpers such as `cn` live in `lib/utils.ts` to avoid duplication
 // Plant data types
+export type FenceV2State = {
+  activeUntil: number;
+  isActive: boolean;
+  v1Active: boolean;
+  totalDaysPurchased: number;
+  quotedDays?: number | null;
+  isMirroringV1?: boolean;
+};
+
 export type Plant = {
   id: number;
   name: string;
@@ -16,6 +25,7 @@ export type Plant = {
   statusStr: string;
   owner: string;
   extensions: Extension[];
+  fenceV2?: FenceV2State | null;
 };
 
 export type Extension = {

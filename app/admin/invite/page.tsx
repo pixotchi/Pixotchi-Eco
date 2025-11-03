@@ -118,6 +118,7 @@ interface AdminStatsResponse {
   stats: {
     plant1h: PlantNotificationStats;
     fence: FenceStats;
+    fenceV2?: FenceStats;
     global: GlobalNotificationStats;
     eligibleFids: string[];
   };
@@ -994,6 +995,7 @@ export default function AdminInviteDashboard() {
   const [notifStats, setNotifStats] = useState<PlantNotificationStats | null>(null);
   const [notifGlobalStats, setNotifGlobalStats] = useState<GlobalNotificationStats | null>(null);
   const [notifFenceStats, setNotifFenceStats] = useState<FenceStats | null>(null);
+  const [notifFenceV2Stats, setNotifFenceV2Stats] = useState<FenceStats | null>(null);
   const [eligibleFids, setEligibleFids] = useState<string[]>([]);
   const [notifDebugResult, setNotifDebugResult] = useState<any>(null);
   const [notifDebugLoadingWarn, setNotifDebugLoadingWarn] = useState(false);
@@ -1011,6 +1013,7 @@ export default function AdminInviteDashboard() {
         const payload = data as AdminStatsResponse;
         setNotifStats(payload?.stats?.plant1h || null);
         setNotifFenceStats(payload?.stats?.fence || null);
+        setNotifFenceV2Stats(payload?.stats?.fenceV2 || null);
         setNotifGlobalStats(payload?.stats?.global || null);
         setEligibleFids(payload?.stats?.eligibleFids || []);
       } else {
@@ -2481,7 +2484,7 @@ export default function AdminInviteDashboard() {
 
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence Alerts (2h warning)</h3>
+                        <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence V1 Alerts (2h warning)</h3>
                         <Button variant="outline" size="sm" onClick={() => runFenceDebug('warn')} disabled={notifDebugLoadingWarn}>
                           <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoadingWarn ? 'animate-spin' : ''}`} /> Debug Warn
                         </Button>
@@ -2511,7 +2514,7 @@ export default function AdminInviteDashboard() {
                       </Card>
 
                       <div className="flex items-center justify-between">
-                        <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence Alerts (expired)</h3>
+                        <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence V1 Alerts (expired)</h3>
                         <Button variant="outline" size="sm" onClick={() => runFenceDebug('expire')} disabled={notifDebugLoadingExpire}>
                           <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoadingExpire ? 'animate-spin' : ''}`} /> Debug Expire
                         </Button>
@@ -2543,7 +2546,7 @@ export default function AdminInviteDashboard() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <Card>
                           <CardHeader>
-                            <CardTitle className="text-sm">Last Fence Cron Run</CardTitle>
+                            <CardTitle className="text-sm">Last Fence V1 Cron Run</CardTitle>
                           </CardHeader>
                           <CardContent>
                             <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">{notifFenceStats?.lastRun ? JSON.stringify(notifFenceStats.lastRun, null, 2) : 'No runs yet.'}</pre>
@@ -2564,10 +2567,91 @@ export default function AdminInviteDashboard() {
                       </div>
                       <div className="flex gap-2">
                         <Button variant="destructive" size="sm" onClick={confirmResetNotifFence} disabled={notifResetFenceLoading}>
-                          {notifResetFenceLoading ? 'Clearing Fence Data…' : 'Clear Fence Data'}
+                          {notifResetFenceLoading ? 'Clearing Fence Data…' : 'Clear Fence Data (V1 & V2)'}
                         </Button>
                       </div>
                     </div>
+
+                    {notifFenceV2Stats && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence V2 Alerts (2h warning)</h3>
+                        </div>
+                        <Card>
+                          <CardContent className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span>Total warns</span>
+                              <span className="font-semibold">{notifFenceV2Stats?.warn.sentCount || 0}</span>
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
+                              <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
+                                {(notifFenceV2Stats?.warn.recent || []).length === 0 ? (
+                                  <div className="text-muted-foreground">No Fence V2 warn notifications sent yet.</div>
+                                ) : (
+                                  (notifFenceV2Stats?.warn.recent || []).map((entry: any, idx: number) => (
+                                    <div key={idx} className="flex items-center justify-between p-2 rounded border">
+                                      <span>{new Date(entry.ts || 0).toLocaleString()}</span>
+                                      <span>fids: {(entry.fids || []).length}</span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence V2 Alerts (expired)</h3>
+                        </div>
+                        <Card>
+                          <CardContent className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span>Total expiries</span>
+                              <span className="font-semibold">{notifFenceV2Stats?.expire.sentCount || 0}</span>
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
+                              <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
+                                {(notifFenceV2Stats?.expire.recent || []).length === 0 ? (
+                                  <div className="text-muted-foreground">No Fence V2 expiry notifications sent yet.</div>
+                                ) : (
+                                  (notifFenceV2Stats?.expire.recent || []).map((entry: any, idx: number) => (
+                                    <div key={idx} className="flex items-center justify-between p-2 rounded border">
+                                      <span>{new Date(entry.ts || 0).toLocaleString()}</span>
+                                      <span>fids: {(entry.fids || []).length}</span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-sm">Last Fence V2 Cron Run</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">{notifFenceV2Stats?.lastRun ? JSON.stringify(notifFenceV2Stats.lastRun, null, 2) : 'No runs yet.'}</pre>
+                            </CardContent>
+                          </Card>
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-sm">Run History (Fence V2)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">
+                                {(notifFenceV2Stats?.runs || []).length === 0 ? 'No history yet.' : (notifFenceV2Stats?.runs || []).map((run: any, idx: number) => (
+                                  <pre key={idx} className="border p-2 rounded">{JSON.stringify(run, null, 2)}</pre>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

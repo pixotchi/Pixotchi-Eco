@@ -48,6 +48,17 @@ export async function GET(request: NextRequest) {
     const fenceLastRun = parseJSON(await (redis as any)?.get?.('notif:fence:lastRun'));
     const fenceRuns = parseList(await (redis as any)?.lrange?.('notif:fence:runs', 0, 20));
 
+    const fenceV2WarnSent = Number((await (redis as any)?.get?.('notif:fencev2:warn:sentCount')) || '0');
+    const fenceV2WarnRecent = parseList(await (redis as any)?.lrange?.('notif:fencev2:warn:log', 0, 20));
+    const fenceV2WarnLast = await (redis as any)?.hgetall?.('notif:fencev2:warn:last');
+
+    const fenceV2ExpireSent = Number((await (redis as any)?.get?.('notif:fencev2:expire:sentCount')) || '0');
+    const fenceV2ExpireRecent = parseList(await (redis as any)?.lrange?.('notif:fencev2:expire:log', 0, 20));
+    const fenceV2ExpireLast = await (redis as any)?.hgetall?.('notif:fencev2:expire:last');
+
+    const fenceV2LastRun = parseJSON(await (redis as any)?.get?.('notif:fencev2:lastRun'));
+    const fenceV2Runs = parseList(await (redis as any)?.lrange?.('notif:fencev2:runs', 0, 20));
+
     return NextResponse.json({
       success: true,
       stats: {
@@ -70,6 +81,20 @@ export async function GET(request: NextRequest) {
           },
           lastRun: fenceLastRun,
           runs: fenceRuns,
+        },
+        fenceV2: {
+          warn: {
+            sentCount: fenceV2WarnSent,
+            lastPerFid: fenceV2WarnLast || {},
+            recent: fenceV2WarnRecent,
+          },
+          expire: {
+            sentCount: fenceV2ExpireSent,
+            lastPerFid: fenceV2ExpireLast || {},
+            recent: fenceV2ExpireRecent,
+          },
+          lastRun: fenceV2LastRun,
+          runs: fenceV2Runs,
         },
         global: {
           sentCount: globalSent,

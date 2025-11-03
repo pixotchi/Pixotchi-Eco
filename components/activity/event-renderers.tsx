@@ -8,6 +8,10 @@ import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
 import { ITEM_ICONS } from '@/lib/constants';
 import { LAND_EVENT_ICONS } from '@/lib/constants';
+
+const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
+  '1': { name: 'Fence V2', icon: '/icons/Fence.png' },
+};
 import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward } from '@/lib/utils';
 import { 
   LandTransferEvent, 
@@ -67,9 +71,10 @@ const EventIcon = React.memo(({
                 return { iconSrc: "/icons/BEE.png", altText: "Item Consumed" };
             case 'ShopItemPurchased':
                 if (event && shopItemMap) {
-                    const itemName = shopItemMap[event.itemId];
-                    const itemIcon = ITEM_ICONS[itemName?.toLowerCase()] || '/icons/BEE.png';
-                    return { iconSrc: itemIcon, altText: itemName || 'Shop Item' };
+                    const override = SHOP_ITEM_OVERRIDES[event.itemId];
+                    const itemName = override?.name || shopItemMap[event.itemId];
+                    const itemIcon = override?.icon || ITEM_ICONS[itemName?.toLowerCase()] || '/icons/BEE.png';
+                    return { iconSrc: itemIcon, altText: itemName || override?.name || 'Shop Item' };
                 }
                 return { iconSrc: "/icons/BEE.png", altText: "Shop Item" };
             // Land Event Icons
@@ -342,7 +347,8 @@ export const ItemConsumedEventRenderer = ({ event, userAddress, itemMap, shopIte
 
 export const ShopItemPurchasedEventRenderer = ({ event, userAddress, itemMap, shopItemMap, gardenItemMap }: { event: ShopItemPurchasedEvent, userAddress?: string | null, itemMap: { [key: string]: string }, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
     const isYou = userAddress && event.nftName.toLowerCase() === userAddress.toLowerCase();
-    const itemName = itemMap[event.itemId] || `Item #${event.itemId}`;
+    const override = SHOP_ITEM_OVERRIDES[event.itemId];
+    const itemName = override?.name || itemMap[event.itemId] || `Item #${event.itemId}`;
     return (
         <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
             <p className="text-sm">

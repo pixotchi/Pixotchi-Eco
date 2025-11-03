@@ -469,20 +469,44 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         }
       }
 
-      // Check for active fence
-      const hasActiveFence = p.extensions?.some((extension: any) =>
-        extension.shopItemOwned?.some((item: any) => 
-          item.effectIsOngoingActive && item.name.toLowerCase().includes('fence')
-        )
-      ) || false;
+      // Check for active fence (V1 or V2)
+      const fenceV2Active = Boolean(p.fenceV2?.isActive && Number(p.fenceV2.activeUntil) > Math.floor(Date.now() / 1000));
+      const fenceV2EffectUntil = Number(p.fenceV2?.activeUntil || 0);
+      const fenceV2Mirroring = Boolean(p.fenceV2?.isMirroringV1);
+      const fenceV1Active = p.extensions?.some((extension: any) => {
+        const owned = extension?.shopItemOwned || [];
+        return owned.some((item: any) => {
+          if (!item?.effectIsOngoingActive) return false;
+          const lowerName = item?.name?.toLowerCase() || '';
+          if (!lowerName.includes('fence') && !lowerName.includes('shield')) return false;
+          const effectUntil = Number(item?.effectUntil || 0);
+          if (!Number.isFinite(effectUntil)) return false;
+          if (fenceV2Active && fenceV2Mirroring && Math.abs(effectUntil - fenceV2EffectUntil) <= 1) {
+            return false;
+          }
+          return true;
+        });
+      }) || false;
+      const hasActiveFence = fenceV1Active || fenceV2Active;
 
-      // Get active items
-      const activeItems = p.extensions?.flatMap((extension: any) => 
+      // Get active items (dedupe mirrored V1 when V2 is active)
+      const activeItems = (p.extensions?.flatMap((extension: any) =>
         extension.shopItemOwned?.filter((item: any) => item.effectIsOngoingActive) || []
-      ).map((item: any) => ({
-        name: item.name,
-        effectIsOngoingActive: item.effectIsOngoingActive
-      })) || [];
+      ) || [])
+        .filter((item: any) => {
+          const lowerName = item?.name?.toLowerCase() || '';
+          if (!lowerName.includes('fence') && !lowerName.includes('shield')) return true;
+          const effectUntil = Number(item?.effectUntil || 0);
+          if (!Number.isFinite(effectUntil)) return true;
+          if (fenceV2Active && fenceV2Mirroring && Math.abs(effectUntil - fenceV2EffectUntil) <= 1) {
+            return false;
+          }
+          return true;
+        })
+        .map((item: any) => ({
+          name: item.name,
+          effectIsOngoingActive: item.effectIsOngoingActive
+        }));
 
       return {
         id: p.id,
@@ -502,6 +526,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         urgency,
         timePlantBorn: p.timePlantBorn,
         hasActiveFence,
+        fenceV2Active,
         activeItems
       };
     });
@@ -599,7 +624,7 @@ export function formatStatsForAI(stats: UserGameStats): string {
       timeUntilStarving: plant.timeUntilStarvingDisplay,
       urgency: plant.urgency,
       bornDate: plant.timePlantBorn,
-      protected: plant.hasActiveFence ? "Protected by fence" : "Not protected",
+      protected: plant.hasActiveFence || plant.fenceV2Active ? "Protected by fence" : "Not protected",
       activeItems: plant.activeItems.length > 0 ? 
         plant.activeItems.map(item => item.name) : 
         "No active items"

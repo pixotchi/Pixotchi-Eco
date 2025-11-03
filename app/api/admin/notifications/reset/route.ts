@@ -5,7 +5,14 @@ import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const fencePrefixes = ['notif:fence:warned:fid:', 'notif:fence:expired:fid:', 'notif:fence:pending:fid:'];
+const fencePrefixes = [
+  'notif:fence:warned:fid:',
+  'notif:fence:expired:fid:',
+  'notif:fence:pending:fid:',
+  'notif:fencev2:warned:fid:',
+  'notif:fencev2:expired:fid:',
+  'notif:fencev2:pending:fid:',
+];
 
 function buildFencePattern(prefix: string, fid?: string, plantId?: string): string {
   if (fid && plantId) return `${prefix}${fid}:plant:${plantId}`;
@@ -60,6 +67,14 @@ export async function DELETE(req: NextRequest) {
       ops.push((redis as any)?.del?.('notif:fence:expire:sentCount'));
       ops.push((redis as any)?.del?.('notif:fence:lastRun'));
       ops.push((redis as any)?.del?.('notif:fence:runs'));
+      ops.push((redis as any)?.del?.('notif:fencev2:warn:log'));
+      ops.push((redis as any)?.del?.('notif:fencev2:warn:last'));
+      ops.push((redis as any)?.del?.('notif:fencev2:warn:sentCount'));
+      ops.push((redis as any)?.del?.('notif:fencev2:expire:log'));
+      ops.push((redis as any)?.del?.('notif:fencev2:expire:last'));
+      ops.push((redis as any)?.del?.('notif:fencev2:expire:sentCount'));
+      ops.push((redis as any)?.del?.('notif:fencev2:lastRun'));
+      ops.push((redis as any)?.del?.('notif:fencev2:runs'));
       await clearFenceKeys();
     } else if (scope === 'fid' && fid) {
       ops.push((redis as any)?.del?.(`notif:plant1h:fid:${fid}`));
@@ -79,6 +94,14 @@ export async function DELETE(req: NextRequest) {
         ops.push((redis as any)?.del?.('notif:fence:expire:sentCount'));
         ops.push((redis as any)?.del?.('notif:fence:lastRun'));
         ops.push((redis as any)?.del?.('notif:fence:runs'));
+        ops.push((redis as any)?.del?.('notif:fencev2:warn:log'));
+        ops.push((redis as any)?.del?.('notif:fencev2:warn:last'));
+        ops.push((redis as any)?.del?.('notif:fencev2:warn:sentCount'));
+        ops.push((redis as any)?.del?.('notif:fencev2:expire:log'));
+        ops.push((redis as any)?.del?.('notif:fencev2:expire:last'));
+        ops.push((redis as any)?.del?.('notif:fencev2:expire:sentCount'));
+        ops.push((redis as any)?.del?.('notif:fencev2:lastRun'));
+        ops.push((redis as any)?.del?.('notif:fencev2:runs'));
       }
     }
 
