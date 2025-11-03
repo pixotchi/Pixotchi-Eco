@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge"
 import { formatUnits } from "viem";
 import { ADDRESS_REGEX } from "./contracts";
 import { ADDRESS_TRUNCATION } from "./constants";
+import { type Plant } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
