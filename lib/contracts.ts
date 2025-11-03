@@ -757,7 +757,7 @@ export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): 
     functionName: 'getPlantsByOwnerExtended',
     args: [address as `0x${string}`],
   }) as any[];
-  const fenceV2Map = await attachFenceV2State(readClient, plants);
+  const fenceV2Map = await attachFenceV2State(readClient as any, plants);
   return plants.map((plant: any) => {
     const plantId = Number(plant.id);
     const extensions = plant.extensions || [];
