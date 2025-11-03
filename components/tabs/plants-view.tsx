@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import { Plant, ShopItem, GardenItem } from "@/lib/types";
 import {
   getPlantsByOwner,
 } from "@/lib/contracts";
-import { formatTokenAmount, getPlantStatusText, getStrainName, formatScore, formatEth } from "@/lib/utils";
+import { getStrainName, formatScore, formatEth, formatTokenAmount, getPlantStatusText, cn, getActiveFences } from '@/lib/utils';
 import PlantImage from "../PlantImage";
 import CountdownTimer from "../countdown-timer";
 import FenceTimer from "../fence-timer";
@@ -66,26 +66,12 @@ export default function PlantsView() {
   const [claimOpen, setClaimOpen] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
 
-  const getActiveFence = () => {
-    if (!selectedPlant?.extensions) return null;
-    
-    for (const extension of selectedPlant.extensions) {
-      if (extension.shopItemOwned) {
-        for (const item of extension.shopItemOwned) {
-          if (item.effectIsOngoingActive && item.name.toLowerCase().includes('fence')) {
-            return {
-              name: item.name,
-              effectUntil: Number(item.effectUntil)
-            };
-          }
-        }
-      }
-    }
-    return null;
-  };
+  const fenceStatuses = useMemo(() => {
+    if (!selectedPlant) return [];
+    return getActiveFences(selectedPlant);
+  }, [selectedPlant]);
 
-  const activeFence = getActiveFence();
-  const hasActiveFence = activeFence !== null;
+  const hasActiveFence = fenceStatuses.length > 0;
 
   const handleItemTypeChange = (type: 'garden' | 'shop') => {
     setItemType(type);
@@ -318,9 +304,13 @@ export default function PlantsView() {
                     {/* Bottom-left: Timers */}
                     <div className="flex flex-col justify-start gap-1">
                       {/* Fence Timer (if active) */}
-                      {hasActiveFence && activeFence && (
-                        <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                          <FenceTimer effectUntil={activeFence.effectUntil} noBackground={true} className="text-sm" />
+                      {hasActiveFence && (
+                        <div className="flex flex-col gap-1">
+                          {fenceStatuses.map((fence) => (
+                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                              <FenceTimer effectUntil={fence.effectUntil} noBackground={true} className="text-sm" label={fence.type} />
+                            </div>
+                          ))}
                         </div>
                       )}
                       {/* TOD Timer */}
@@ -358,6 +348,11 @@ export default function PlantsView() {
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">{getStrainName(selectedPlant.strain)}</p>
+                {selectedPlant.timePlantBorn && (
+                  <p className="text-xs text-muted-foreground">
+                    Planted on {new Date(Number(selectedPlant.timePlantBorn) * 1000).toLocaleDateString()}
+                  </p>
+                )}
               </div>
 
               {/* Actions Section: Unclaimed Rewards + Arcade */}

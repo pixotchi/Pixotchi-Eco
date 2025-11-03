@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge"
 import { formatUnits } from "viem";
 import { ADDRESS_REGEX } from "./contracts";
 import { ADDRESS_TRUNCATION } from "./constants";
+import { type Plant } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -396,3 +397,125 @@ export function isValidAddress(address: string | unknown): address is `0x${strin
   if (typeof address !== 'string') return false;
   return isValidEthereumAddress(address);
 } 
+
+// ============ FENCE V1/V2 UTILITIES ============
+
+/**
+ * Check if timestamps are approximately equal (within 1 second tolerance for blockchain variance)
+ */
+export const approxTimestampEqual = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+
+/**
+ * Get comprehensive fence status including V1, V2, and mirroring state
+ */
+export const getFenceStatus = (plant: Plant): {
+  hasActiveFence: boolean;
+  fenceV1Active: boolean;
+  fenceV2Active: boolean;
+  isMirroringV1: boolean;
+  expiresAt: number;
+  daysRemaining: number;
+  type: 'V1' | 'V2' | 'V1+V2' | null;
+} => {
+  const now = Math.floor(Date.now() / 1000);
+  
+  // Check V2 status
+  const fenceV2State = plant.fenceV2 ?? null;
+  const fenceV2EffectUntil = Number(fenceV2State?.activeUntil ?? 0);
+  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2EffectUntil > now);
+  const fenceV2Mirroring = Boolean(fenceV2State?.isMirroringV1);
+
+  // Check V1 status - but only if not mirrored by V2
+  const fenceV1Active = plant.extensions?.some((extension: any) => {
+    const owned = extension?.shopItemOwned || [];
+    return owned.some((item: any) => {
+      if (!item?.effectIsOngoingActive) return false;
+      const lowerName = item?.name?.toLowerCase() || '';
+      if (!lowerName.includes('fence') && !lowerName.includes('shield')) return false;
+      const effectUntil = Number(item?.effectUntil || 0);
+      if (!Number.isFinite(effectUntil) || effectUntil <= 0) return false;
+      // Skip if mirroring V2
+      if (fenceV2Active && fenceV2Mirroring && approxTimestampEqual(effectUntil, fenceV2EffectUntil)) {
+        return false;
+      }
+      return effectUntil > now;
+    });
+  }) || false;
+
+  // Determine expiry info (prefer V2 if both active)
+  let expiresAt = 0;
+  let daysRemaining = 0;
+  let type: 'V1' | 'V2' | 'V1+V2' | null = null;
+
+  if (fenceV2Active) {
+    expiresAt = fenceV2EffectUntil;
+    daysRemaining = fenceV2State?.totalDaysPurchased || Math.ceil((fenceV2EffectUntil - now) / (24 * 60 * 60));
+    type = fenceV1Active ? 'V1+V2' : 'V2';
+  } else if (fenceV1Active) {
+    const v1Fence = plant.extensions
+      ?.flatMap(ext => ext.shopItemOwned || [])
+      .find(item => {
+        const lowerName = item?.name?.toLowerCase() || '';
+        return (lowerName.includes('fence') || lowerName.includes('shield')) &&
+               item?.effectIsOngoingActive &&
+               Number(item?.effectUntil || 0) > now;
+      });
+    if (v1Fence) {
+      expiresAt = Number(v1Fence.effectUntil);
+      daysRemaining = Math.ceil((expiresAt - now) / (24 * 60 * 60));
+      type = 'V1';
+    }
+  }
+
+  return {
+    hasActiveFence: fenceV1Active || fenceV2Active,
+    fenceV1Active,
+    fenceV2Active,
+    isMirroringV1: fenceV2Mirroring,
+    expiresAt,
+    daysRemaining,
+    type
+  };
+};
+
+/**
+ * Get array of active fences for display (handles both V1 and V2, respects mirroring)
+ */
+export const getActiveFences = (plant: Plant): Array<{ type: 'Fence V1' | 'Fence V2'; effectUntil: number }> => {
+  const active: Array<{ type: 'Fence V1' | 'Fence V2'; effectUntil: number }> = [];
+  const now = Math.floor(Date.now() / 1000);
+
+  const fenceV2State = plant.fenceV2 ?? null;
+  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > 0);
+  const fenceV2EffectUntil = fenceV2Active ? Number(fenceV2State?.activeUntil ?? 0) : 0;
+  const fenceV2Mirroring = Boolean(fenceV2State?.isMirroringV1);
+
+  // Check V1 fences
+  if (plant.extensions) {
+    for (const extension of plant.extensions) {
+      if (!extension.shopItemOwned) continue;
+      for (const item of extension.shopItemOwned) {
+        if (!item?.effectIsOngoingActive) continue;
+        const lowerName = item?.name?.toLowerCase() || '';
+        if (!lowerName.includes('fence') && !lowerName.includes('shield')) continue;
+        const effectUntil = Number(item.effectUntil || 0);
+        if (!Number.isFinite(effectUntil) || effectUntil <= 0) continue;
+        // Skip if mirroring V2
+        if (fenceV2Active && fenceV2Mirroring && approxTimestampEqual(effectUntil, fenceV2EffectUntil)) {
+          continue;
+        }
+        active.push({ type: 'Fence V1', effectUntil });
+        break;
+      }
+    }
+  }
+
+  // Check V2 fence
+  if (fenceV2Active) {
+    active.push({ type: 'Fence V2', effectUntil: fenceV2EffectUntil });
+  }
+
+  // Sort by expiry time (soonest first)
+  active.sort((a, b) => a.effectUntil - b.effectUntil);
+  return active;
+}; 

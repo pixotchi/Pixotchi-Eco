@@ -1,10 +1,11 @@
-import { createPublicClient, createWalletClient, http, custom, WalletClient, getAddress, parseUnits, formatUnits, fallback } from 'viem';
+import { createPublicClient, createWalletClient, http, custom, WalletClient, getAddress, parseUnits, formatUnits, fallback, PublicClient } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
-import { Plant, ShopItem, Strain, GardenItem, Land } from './types';
+import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
 import UniswapAbi from '@/public/abi/Uniswap.json';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
+import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { CLIENT_ENV, getRpcConfig } from './env-config';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
@@ -15,6 +16,32 @@ export const PIXOTCHI_TOKEN_ADDRESS = getAddress('0x546D239032b24eCEEE0cb05c92FC
 export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;
 export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
 export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
+export const FENCE_V2_EXTENSION_ADDRESS = PIXOTCHI_NFT_ADDRESS;
+
+const isFenceItemName = (name: unknown): boolean => {
+  if (typeof name !== 'string') return false;
+  const lower = name.toLowerCase();
+  return lower.includes('fence') || lower.includes('shield');
+};
+
+const approxTimestampEqual = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+
+const getMaxFenceEffectUntil = (extensions: any[]): number => {
+  let max = 0;
+  if (!Array.isArray(extensions)) return max;
+  for (const extension of extensions) {
+    const owned = extension?.shopItemOwned || [];
+    if (!Array.isArray(owned)) continue;
+    for (const item of owned) {
+      if (!item?.effectIsOngoingActive) continue;
+      if (!isFenceItemName(item?.name)) continue;
+      const effectUntil = Number(item?.effectUntil ?? 0);
+      if (!Number.isFinite(effectUntil)) continue;
+      if (effectUntil > max) max = effectUntil;
+    }
+  }
+  return max;
+};
 
 // Common constants
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -683,8 +710,70 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
       args: [address as `0x${string}`],
     }) as any[];
 
-    return plants.map((plant: any) => ({
-      id: Number(plant.id),
+    const fenceV2Map = await attachFenceV2State(readClient, plants);
+
+    return plants.map((plant: any) => {
+      const plantId = Number(plant.id);
+      const extensions = plant.extensions || [];
+      const fenceV1EffectUntil = getMaxFenceEffectUntil(extensions);
+      const baseFenceV2 = fenceV2Map[plantId] ?? null;
+      const isMirroring = baseFenceV2?.isActive && fenceV1EffectUntil > 0 && approxTimestampEqual(fenceV1EffectUntil, Number(baseFenceV2?.activeUntil ?? 0));
+      const fenceV2 = baseFenceV2
+        ? {
+            ...baseFenceV2,
+            v1Active: isMirroring ? false : baseFenceV2.v1Active,
+            isMirroringV1: Boolean(isMirroring),
+          }
+        : null;
+
+      return {
+        id: plantId,
+        name: plant.name || '',
+        score: Number(plant.score),
+        status: Number(plant.status),
+        rewards: Number(plant.rewards),
+        level: Number(plant.level),
+        timeUntilStarving: Number(plant.timeUntilStarving),
+        stars: Number(plant.stars),
+        strain: Number(plant.strain),
+        timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
+        lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
+        lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
+        statusStr: plant.statusStr || '',
+        owner: typeof plant.owner === 'string' ? plant.owner.toLowerCase() : String(plant.owner || '').toLowerCase(),
+        extensions,
+        fenceV2,
+      };
+    });
+  });
+};
+
+// Explicit public-RPC variant (used by notification cron to avoid internal RPC pool)
+export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): Promise<Plant[]> => {
+  const readClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
+  const plants = await readClient.readContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'getPlantsByOwnerExtended',
+    args: [address as `0x${string}`],
+  }) as any[];
+  const fenceV2Map = await attachFenceV2State(readClient as any, plants);
+  return plants.map((plant: any) => {
+    const plantId = Number(plant.id);
+    const extensions = plant.extensions || [];
+    const fenceV1EffectUntil = getMaxFenceEffectUntil(extensions);
+    const baseFenceV2 = fenceV2Map[plantId] ?? null;
+    const isMirroring = baseFenceV2?.isActive && fenceV1EffectUntil > 0 && approxTimestampEqual(fenceV1EffectUntil, Number(baseFenceV2?.activeUntil ?? 0));
+    const fenceV2 = baseFenceV2
+      ? {
+          ...baseFenceV2,
+          v1Active: isMirroring ? false : baseFenceV2.v1Active,
+          isMirroringV1: Boolean(isMirroring),
+        }
+      : null;
+
+    return {
+      id: plantId,
       name: plant.name || '',
       score: Number(plant.score),
       status: Number(plant.status),
@@ -698,37 +787,10 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
       lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
       statusStr: plant.statusStr || '',
       owner: typeof plant.owner === 'string' ? plant.owner.toLowerCase() : String(plant.owner || '').toLowerCase(),
-      extensions: plant.extensions || [],
-    }));
+      extensions,
+      fenceV2,
+    };
   });
-};
-
-// Explicit public-RPC variant (used by notification cron to avoid internal RPC pool)
-export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): Promise<Plant[]> => {
-  const readClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
-  const plants = await readClient.readContract({
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'getPlantsByOwnerExtended',
-    args: [address as `0x${string}`],
-  }) as any[];
-  return plants.map((plant: any) => ({
-    id: Number(plant.id),
-    name: plant.name || '',
-    score: Number(plant.score),
-    status: Number(plant.status),
-    rewards: Number(plant.rewards),
-    level: Number(plant.level),
-    timeUntilStarving: Number(plant.timeUntilStarving),
-    stars: Number(plant.stars),
-    strain: Number(plant.strain),
-    timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
-    lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
-    lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
-    statusStr: plant.statusStr || '',
-    owner: typeof plant.owner === 'string' ? plant.owner.toLowerCase() : String(plant.owner || '').toLowerCase(),
-    extensions: plant.extensions || [],
-  }));
 };
 
 // Get land balance
@@ -1339,6 +1401,174 @@ export const executeSwap = async (walletClient: WalletClient, ethAmount: string)
   });
 };
 
+// -------------------- FENCE V2 HELPERS --------------------
+
+export type FenceV2Config = {
+  pricePerDay: bigint;
+  minDurationDays: number;
+  maxDurationDays: number;
+};
+
+const normalizeFenceV2Config = (result: any): FenceV2Config => {
+  const priceRaw = result?.pricePerDay ?? result?.[0] ?? 0;
+  const minRaw = result?.minDurationDays ?? result?.minDays ?? result?.[1] ?? 0;
+  const maxRaw = result?.maxDurationDays ?? result?.maxDays ?? result?.[2] ?? 0;
+  return {
+    pricePerDay: BigInt(priceRaw ?? 0),
+    minDurationDays: Number(minRaw ?? 0),
+    maxDurationDays: Number(maxRaw ?? 0),
+  };
+};
+
+const computeFenceV2State = (effectUntilRaw: any, isActiveRaw: any, v1ActiveRaw: any): FenceV2State | null => {
+  const effectUntilNumber = Number(effectUntilRaw ?? 0);
+  const isActive = Boolean(isActiveRaw);
+  const v1Active = Boolean(v1ActiveRaw);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const secondsRemaining = effectUntilNumber > 0 ? Math.max(0, effectUntilNumber - nowSec) : 0;
+  const totalDaysPurchased = secondsRemaining > 0 ? Math.ceil(secondsRemaining / (24 * 60 * 60)) : 0;
+
+  return {
+    activeUntil: effectUntilNumber,
+    isActive,
+    v1Active,
+    totalDaysPurchased,
+    quotedDays: null,
+    isMirroringV1: false,
+  };
+};
+
+type PublicClientType = PublicClient;
+
+const getFenceV2StatesInternal = async (
+  plantIds: number[],
+  client: PublicClientType,
+): Promise<Record<number, FenceV2State | null>> => {
+  if (plantIds.length === 0) return {};
+
+  // Use fenceV2GetPurchaseStats which returns everything we need in one call
+  const calls = plantIds.map((id) => ({
+    address: FENCE_V2_EXTENSION_ADDRESS,
+    abi: fenceV2Abi,
+    functionName: 'fenceV2GetPurchaseStats' as const,
+    args: [BigInt(id)],
+  }));
+
+  const responses = await retryWithBackoff(async () => {
+    return client.multicall({ contracts: calls, allowFailure: true });
+  });
+
+  const result: Record<number, FenceV2State | null> = {};
+  for (let index = 0; index < plantIds.length; index++) {
+    const stats = responses[index]?.result as any;
+    if (stats) {
+      const effectUntilRes = stats[1]; // activeUntil
+      const isActiveRes = stats[1] && Number(stats[1]) > Math.floor(Date.now() / 1000); // Check if activeUntil is in future
+      const hasV1Res = stats[3]; // fenceV1Active
+      result[plantIds[index]] = computeFenceV2State(effectUntilRes, isActiveRes, hasV1Res);
+    } else {
+      result[plantIds[index]] = null;
+    }
+  }
+  return result;
+};
+
+export const getFenceV2Config = async (): Promise<FenceV2Config | null> => {
+  const readClient = getReadClient();
+  try {
+    const raw = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: FENCE_V2_EXTENSION_ADDRESS,
+        abi: fenceV2Abi,
+        functionName: 'fenceV2GetConfig',
+      });
+    });
+    return normalizeFenceV2Config(raw);
+  } catch (error) {
+    console.warn('getFenceV2Config failed:', error);
+    return null;
+  }
+};
+
+export const quoteFenceV2 = async (days: number): Promise<bigint> => {
+  if (!Number.isFinite(days) || days <= 0) return BigInt(0);
+  const readClient = getReadClient();
+  try {
+    const quote = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: FENCE_V2_EXTENSION_ADDRESS,
+        abi: fenceV2Abi,
+        functionName: 'fenceV2Quote',
+        args: [BigInt(days)],
+      });
+    });
+    if (typeof quote === 'bigint') return quote;
+    const numeric = (quote ?? 0) as number | string | bigint;
+    return BigInt(numeric);
+  } catch (error) {
+    console.warn('quoteFenceV2 failed:', error);
+    return BigInt(0);
+  }
+};
+
+export const buildFenceV2PurchaseCall = (plantId: number, days: number): { address: `0x${string}`; abi: typeof fenceV2Abi; functionName: 'fenceV2Purchase'; args: [bigint, bigint] } => {
+  return {
+    address: FENCE_V2_EXTENSION_ADDRESS,
+    abi: fenceV2Abi,
+    functionName: 'fenceV2Purchase',
+    args: [BigInt(plantId), BigInt(days)],
+  };
+};
+
+export const buyFenceV2 = async (walletClient: WalletClient, plantId: number, days: number): Promise<boolean> => {
+  if (!walletClient.account) throw new Error('No account connected');
+  return retryWithBackoff(async () => {
+    const hash = await walletClient.writeContract({
+      address: FENCE_V2_EXTENSION_ADDRESS,
+      abi: fenceV2Abi,
+      functionName: 'fenceV2Purchase',
+      args: [BigInt(plantId), BigInt(days)],
+      account: walletClient.account!,
+      chain: base,
+    });
+    const writeClient = getWriteClient();
+    const receipt = await writeClient.waitForTransactionReceipt({ hash });
+    return receipt.status === 'success';
+  });
+};
+
+export const setFenceV2PricePerDay = async (walletClient: WalletClient, pricePerDay: bigint): Promise<boolean> => {
+  if (!walletClient.account) throw new Error('No account connected');
+  return retryWithBackoff(async () => {
+    const hash = await walletClient.writeContract({
+      address: FENCE_V2_EXTENSION_ADDRESS,
+      abi: fenceV2Abi,
+      functionName: 'fenceV2SetPricePerDay',
+      args: [pricePerDay],
+      account: walletClient.account!,
+      chain: base,
+    });
+    const writeClient = getWriteClient();
+    const receipt = await writeClient.waitForTransactionReceipt({ hash });
+    return receipt.status === 'success';
+  });
+};
+
+const attachFenceV2State = async (
+  client: PublicClientType,
+  plants: any[],
+): Promise<Record<number, FenceV2State | null>> => {
+  try {
+    const ids = plants
+      .map((plant) => Number(plant?.id ?? plant?.[0] ?? 0))
+      .filter((id) => Number.isFinite(id) && id >= 0);
+    return await getFenceV2StatesInternal(ids, client);
+  } catch (error) {
+    console.warn('attachFenceV2State failed:', error);
+    return {};
+  }
+};
+
 // LEAF token balance (returns raw bigint for precision)
 export const getLeafBalance = async (address: string): Promise<bigint> => {
   const readClient = getReadClient();
@@ -1582,23 +1812,41 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
       args: [tokenIds.map(id => BigInt(id))],
     }) as any[];
 
-    return plants.map((plant: any) => ({
-      id: Number(plant.id),
-      name: plant.name || '',
-      score: Number(plant.score),
-      status: Number(plant.status),
-      rewards: Number(plant.rewards),
-      level: Number(plant.level),
-      timeUntilStarving: Number(plant.timeUntilStarving),
-      stars: Number(plant.stars),
-      strain: Number(plant.strain),
-      timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
-      lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
-      lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
-      statusStr: plant.statusStr || '',
-      owner: plant.owner,
-      extensions: plant.extensions || [],
-    }));
+    const fenceV2Map = await attachFenceV2State(readClient, plants);
+
+    return plants.map((plant: any) => {
+      const plantId = Number(plant.id);
+      const extensions = plant.extensions || [];
+    const fenceV1EffectUntil = getMaxFenceEffectUntil(extensions);
+    const baseFenceV2 = fenceV2Map[plantId] ?? null;
+    const isMirroring = baseFenceV2?.isActive && fenceV1EffectUntil > 0 && approxTimestampEqual(fenceV1EffectUntil, Number(baseFenceV2?.activeUntil ?? 0));
+    const fenceV2 = baseFenceV2
+      ? {
+          ...baseFenceV2,
+          v1Active: isMirroring ? false : baseFenceV2.v1Active,
+          isMirroringV1: Boolean(isMirroring),
+        }
+      : null;
+
+      return {
+        id: plantId,
+        name: plant.name || '',
+        score: Number(plant.score),
+        status: Number(plant.status),
+        rewards: Number(plant.rewards),
+        level: Number(plant.level),
+        timeUntilStarving: Number(plant.timeUntilStarving),
+        stars: Number(plant.stars),
+        strain: Number(plant.strain),
+        timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
+        lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
+        lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
+        statusStr: plant.statusStr || '',
+        owner: plant.owner,
+        extensions,
+        fenceV2,
+      };
+    });
   });
 }; 
 

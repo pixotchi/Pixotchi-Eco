@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Plant } from "@/lib/types";
 import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard } from "@/lib/contracts";
-import { formatScoreShort, formatEthShort } from "@/lib/utils";
+import { formatScoreShort, formatEthShort, formatScore, formatAddress, cn, getFenceStatus } from "@/lib/utils";
 import PlantImage from "@/components/PlantImage";
 import { Trophy, Skull, Sword, HeartPulse } from "lucide-react";
 import Image from "next/image";
@@ -289,11 +289,8 @@ export default function LeaderboardTab() {
   };
 
   const hasActiveFence = (plant: LeaderboardPlant) => {
-    return plant.extensions?.some((extension: any) =>
-      extension.shopItemOwned?.some((item: any) => 
-        item.effectIsOngoingActive && item.name.toLowerCase().includes('fence')
-      )
-    );
+    const fenceInfo = getFenceStatus(plant);
+    return fenceInfo.hasActiveFence;
   };
 
   // Eligibility checks (client-side guardrails based on app rules)

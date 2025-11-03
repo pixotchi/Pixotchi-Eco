@@ -494,6 +494,11 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
             <DialogDescription className="text-sm mt-1">
               Level {plant.level} {plant.rank && `· Rank #${plant.rank}`}
             </DialogDescription>
+            {plant.timePlantBorn && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Planted on {new Date(Number(plant.timePlantBorn) * 1000).toLocaleDateString()}
+              </div>
+            )}
           </div>
 
           {/* Plant & Owner Stats Row */}

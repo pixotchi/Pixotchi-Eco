@@ -48,6 +48,12 @@ const PlantCard = React.memo(function PlantCard({
     return { hasActiveShopItems: hasActive, activeShopItems: active };
   }, [plant.extensions]);
 
+  const fenceV2Active = React.useMemo(() => {
+    return Boolean(plant.fenceV2?.isActive && Number(plant.fenceV2.activeUntil) > Math.floor(Date.now() / 1000));
+  }, [plant.fenceV2]);
+
+  const showProtectionIndicator = hasActiveShopItems || fenceV2Active;
+
   const getShopItemIcon = React.useCallback((itemName: string) => {
     const name = itemName.toLowerCase();
     return SHOP_ITEM_ICONS[name] || '/icons/Fence.png';
@@ -78,7 +84,7 @@ const PlantCard = React.memo(function PlantCard({
               quality={75}
             />
             {/* Active Shop Item Indicator */}
-            {showShopItems && hasActiveShopItems && (
+            {showShopItems && showProtectionIndicator && (
               <div className="absolute top-1 right-1">
                 <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
                   <Image src="/icons/Fence.png" alt="Shield" width={12} height={12} />

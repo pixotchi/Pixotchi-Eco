@@ -14,7 +14,8 @@ import {
   getPlantStatusText,
   getStrainName,
   formatDuration,
-  formatLargeNumber
+  formatLargeNumber,
+  getFenceStatus
 } from './utils';
 import { Plant, Land, BuildingData } from './types';
 import { redis } from './redis';
@@ -59,6 +60,7 @@ export interface UserGameStats {
     urgency: 'critical' | 'warning' | 'ok';
     timePlantBorn: string;
     hasActiveFence: boolean;
+    fenceV2Active: boolean;
     activeItems: Array<{
       name: string;
       effectIsOngoingActive: boolean;
@@ -469,20 +471,28 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         }
       }
 
-      // Check for active fence
-      const hasActiveFence = p.extensions?.some((extension: any) =>
-        extension.shopItemOwned?.some((item: any) => 
-          item.effectIsOngoingActive && item.name.toLowerCase().includes('fence')
-        )
-      ) || false;
+      // Check for active fence (V1 or V2)
+      const fenceInfo = getFenceStatus(p);
+      const hasActiveFence = fenceInfo.hasActiveFence;
 
-      // Get active items
-      const activeItems = p.extensions?.flatMap((extension: any) => 
+      // Get active items (dedupe mirrored V1 when V2 is active)
+      const activeItems = (p.extensions?.flatMap((extension: any) =>
         extension.shopItemOwned?.filter((item: any) => item.effectIsOngoingActive) || []
-      ).map((item: any) => ({
-        name: item.name,
-        effectIsOngoingActive: item.effectIsOngoingActive
-      })) || [];
+      ) || [])
+        .filter((item: any) => {
+          const lowerName = item?.name?.toLowerCase() || '';
+          if (!lowerName.includes('fence') && !lowerName.includes('shield')) return true;
+          const effectUntil = Number(item?.effectUntil || 0);
+          if (!Number.isFinite(effectUntil)) return true;
+          if (fenceInfo.fenceV2Active && fenceInfo.isMirroringV1 && Math.abs(effectUntil - fenceInfo.expiresAt) <= 1) {
+            return false;
+          }
+          return true;
+        })
+        .map((item: any) => ({
+          name: item.name,
+          effectIsOngoingActive: item.effectIsOngoingActive
+        }));
 
       return {
         id: p.id,
@@ -502,6 +512,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         urgency,
         timePlantBorn: p.timePlantBorn,
         hasActiveFence,
+        fenceV2Active: fenceInfo.fenceV2Active,
         activeItems
       };
     });
@@ -599,7 +610,7 @@ export function formatStatsForAI(stats: UserGameStats): string {
       timeUntilStarving: plant.timeUntilStarvingDisplay,
       urgency: plant.urgency,
       bornDate: plant.timePlantBorn,
-      protected: plant.hasActiveFence ? "Protected by fence" : "Not protected",
+      protected: plant.hasActiveFence || plant.fenceV2Active ? "Protected by fence" : "Not protected",
       activeItems: plant.activeItems.length > 0 ? 
         plant.activeItems.map(item => item.name) : 
         "No active items"

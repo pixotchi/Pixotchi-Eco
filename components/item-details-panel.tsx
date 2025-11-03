@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { ShopItem, GardenItem, Plant } from '@/lib/types';
-import { buyShopItem, buyGardenItem, getTokenBalance } from '@/lib/contracts';
+import { buyShopItem, buyGardenItem, getTokenBalance, quoteFenceV2, buildFenceV2PurchaseCall, getFenceV2Config } from '@/lib/contracts';
 import { formatTokenAmount, formatDuration, getFriendlyErrorMessage } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoadingSpinner } from '@/components/ui/loading';
 import Image from 'next/image';
 import { ITEM_ICONS } from '@/lib/constants';
 import { toast } from 'react-hot-toast';
@@ -16,6 +15,11 @@ import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { BuyShopItemTransaction, BuyGardenItemTransaction } from '@/components/transactions/buy-item-transaction';
 import BundleBuyTransaction from '@/components/transactions/bundle-buy-transaction';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
+import { Input } from '@/components/ui/input';
+import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
+import type { FenceV2Config } from '@/lib/contracts';
+import { ToggleGroup } from '@/components/ui/toggle-group';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -36,16 +40,28 @@ export default function ItemDetailsPanel({
   const { data: walletClient } = useWalletClient();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, walletType, isLoading: smartWalletLoading } = useSmartWallet();
-  const [purchasing, setPurchasing] = useState(false);
   const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
   const [balanceLoading, setBalanceLoading] = useState(true);
+  const [fenceMode, setFenceMode] = useState<'v1' | 'v2'>('v1');
+  const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
+  const [fenceV2Days, setFenceV2Days] = useState<number>(1);
+  const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
+  const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
+
+  const fenceItemName = selectedItem?.name?.toLowerCase() || '';
+  const isFenceItem = fenceItemName.includes('fence') || fenceItemName.includes('shield');
 
   // Calculate total cost and effects based on quantity
-  const totalCost = quantity > 0 ? BigInt(selectedItem?.price || 0) * BigInt(quantity) : BigInt(0);
-  const hasQuantitySelected = quantity > 0;
+  const basePrice = BigInt(selectedItem?.price || 0);
+  const totalCost = itemType === 'garden'
+    ? (quantity > 0 ? basePrice * BigInt(quantity) : BigInt(0))
+    : basePrice;
+  const hasQuantitySelected = itemType === 'garden' ? quantity > 0 : true;
   
   // Check if user has insufficient funds
-  const hasInsufficientFunds = totalCost > userSeedBalance;
+  const hasInsufficientFunds = (isFenceItem && fenceMode === 'v2')
+    ? fenceV2Quote > userSeedBalance
+    : totalCost > userSeedBalance;
   
   // Bundle transactions are only available for garden items and Smart Wallets
   const canBundle = itemType === 'garden' && quantity > 1;
@@ -74,6 +90,73 @@ export default function ItemDetailsPanel({
     fetchBalance();
   }, [address]);
 
+  useEffect(() => {
+    if (!isFenceItem) {
+      setFenceMode('v1');
+      return;
+    }
+
+    let cancelled = false;
+    const loadConfig = async () => {
+      try {
+        const config = await getFenceV2Config();
+        if (!cancelled && config) {
+          setFenceV2Config(config);
+          setFenceV2Days((prev) => {
+            const min = Math.max(1, config.minDurationDays || 1);
+            const max = Math.max(min, config.maxDurationDays || 30);
+            if (prev >= min && prev <= max) return prev;
+            return min;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load Fence V2 config:', error);
+      }
+    };
+
+    loadConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isFenceItem]);
+
+  useEffect(() => {
+    if (!isFenceItem || fenceMode !== 'v2') return;
+
+    let cancelled = false;
+    const fetchQuote = async () => {
+      setFenceV2QuoteLoading(true);
+      try {
+        const quote = await quoteFenceV2(fenceV2Days);
+        if (!cancelled) {
+          setFenceV2Quote(quote);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to quote Fence V2:', error);
+          setFenceV2Quote(BigInt(0));
+        }
+      } finally {
+        if (!cancelled) {
+          setFenceV2QuoteLoading(false);
+        }
+      }
+    };
+
+    fetchQuote();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isFenceItem, fenceMode, fenceV2Days]);
+
+  useEffect(() => {
+    if (fenceMode === 'v1') {
+      setFenceV2Quote(BigInt(0));
+    }
+  }, [fenceMode]);
+
   if (!selectedItem || !selectedPlant) {
     return (
       <Card>
@@ -90,14 +173,91 @@ export default function ItemDetailsPanel({
     );
   }
 
-  const hasActiveFence = selectedPlant.extensions?.some((extension: any) =>
-    extension.shopItemOwned?.some((item: any) => 
-      item.effectIsOngoingActive && item.name.toLowerCase().includes('fence')
-    )
-  );
+  const currentTimeSec = Math.floor(Date.now() / 1000);
+  const fenceV2State = selectedPlant.fenceV2 ?? null;
+  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > currentTimeSec);
+  const fenceV2MirroringV1 = Boolean(fenceV2State?.isMirroringV1);
+  const fenceV2EffectUntil = Number(fenceV2State?.activeUntil || 0);
+  const fenceV2BlockedByV1 = Boolean(fenceV2State?.v1Active);
 
-  const isFenceItem = selectedItem.name.toLowerCase().includes('fence');
-  const preventPurchase = isFenceItem && hasActiveFence;
+  const plantTimeUntilStarving = Number(selectedPlant.timeUntilStarving || 0);
+  const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
+  const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
+  const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
+  const fenceV1EffectSeconds = isFenceItem ? Number((selectedItem as ShopItem)?.effectTime || 0) : 0;
+  const fenceV1TodCapBreached = isFenceItem && fenceMode === 'v1' && fenceV1EffectSeconds > 0 && fenceV1EffectSeconds >= plantSecondsLeft;
+
+  const fenceV1Active = useMemo(() => {
+    if (!selectedPlant.extensions) return false;
+    for (const extension of selectedPlant.extensions) {
+      const owned = extension?.shopItemOwned || [];
+      for (const item of owned) {
+        if (!item?.effectIsOngoingActive) continue;
+        const lowerName = item?.name?.toLowerCase() || '';
+        if (!lowerName.includes('fence') && !lowerName.includes('shield')) continue;
+        const effectUntil = Number(item?.effectUntil || 0);
+        if (!Number.isFinite(effectUntil)) continue;
+        if (fenceV2Active && fenceV2MirroringV1 && Math.abs(effectUntil - fenceV2EffectUntil) <= 1) {
+          continue;
+        }
+        return true;
+      }
+    }
+    return false;
+  }, [selectedPlant.extensions, fenceV2Active, fenceV2EffectUntil, fenceV2MirroringV1]);
+
+  const preventFenceV1Purchase = isFenceItem && fenceMode === 'v1' && (fenceV1Active || fenceV2BlockedByV1 || fenceV2Active || fenceV1TodCapBreached);
+  const fenceV2Bounds = useMemo(() => {
+    const minFromConfig = fenceV2Config ? Math.max(1, fenceV2Config.minDurationDays || 1) : 1;
+    const maxFromConfig = fenceV2Config ? fenceV2Config.maxDurationDays || 30 : 30;
+    const todLimitedMax = plantTodDaysCap > 0 ? Math.min(maxFromConfig, plantTodDaysCap) : plantTodDaysCap;
+    const todCapBreached = todLimitedMax < minFromConfig;
+    const max = todCapBreached ? minFromConfig : Math.max(minFromConfig, todLimitedMax);
+    return { min: minFromConfig, max, todCapBreached };
+  }, [fenceV2Config, plantTodDaysCap]);
+
+  const fenceV2Calls = useMemo(() => {
+    return [buildFenceV2PurchaseCall(selectedPlant.id, fenceV2Days)];
+  }, [selectedPlant.id, fenceV2Days]);
+
+  const fenceV2ButtonText = fenceV2Active
+    ? `Extend Fence V2 (+${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`
+    : `Buy Fence V2 (${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`;
+
+  useEffect(() => {
+    if (!isFenceItem || fenceMode !== 'v2') return;
+    if (fenceV2Bounds.todCapBreached) return;
+    if (fenceV2Days > fenceV2Bounds.max) {
+      setFenceV2Days(fenceV2Bounds.max);
+    } else if (fenceV2Days < fenceV2Bounds.min) {
+      setFenceV2Days(fenceV2Bounds.min);
+    }
+  }, [isFenceItem, fenceMode, fenceV2Bounds, fenceV2Days]);
+
+  const disabledMessage = (() => {
+    if (!hasQuantitySelected && itemType === 'garden') return 'Select quantity above';
+    if (isFenceItem && fenceMode === 'v1' && fenceV1TodCapBreached) return 'Fence duration exceeds plant TOD';
+    if (isFenceItem && fenceMode === 'v1' && (fenceV1Active || fenceV2BlockedByV1 || fenceV2Active)) return 'Fence V1 already active';
+    if (isFenceItem && fenceMode === 'v2' && fenceV2Bounds.todCapBreached) return 'Fence duration exceeds plant TOD';
+    if (isFenceItem && fenceMode === 'v2' && fenceV2BlockedByV1) return 'Wait for expiry of Fence V1 first';
+    if (hasInsufficientFunds) return 'Insufficient SEED Balance';
+    if (canBundle && itemType === 'garden' && !isSmartWallet) {
+      return smartWalletLoading ? 'Detecting Wallet Type...' : 'Bundle Transactions Require Smart Wallet';
+    }
+    return null;
+  })();
+
+  const headerTitle = isFenceItem
+    ? (fenceMode === 'v2'
+        ? `Fence V2 (${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`
+        : `Use 1 ${selectedItem.name}`)
+    : itemType === 'shop'
+      ? `Use 1 ${selectedItem.name}`
+      : quantity === 0
+        ? `${selectedItem.name}`
+        : quantity === 1
+          ? `Use 1 ${selectedItem.name}`
+          : `Use ${quantity} ${selectedItem.name}s`;
 
   // Debug logging for bundle conditions
   // console.log('🔍 Bundle Debug Info:', {
@@ -114,7 +274,15 @@ export default function ItemDetailsPanel({
   // });
 
   const getItemBenefits = () => {
-    if (quantity === 0) return 'Select quantity above';
+    if (isFenceItem) {
+      if (fenceMode === 'v2') {
+        return `${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'} protection`;
+      }
+      const shopItem = selectedItem as ShopItem;
+      return `${formatDuration(shopItem.effectTime)} protection`;
+    }
+
+    if (quantity === 0 && itemType === 'garden') return 'Select quantity above';
     
     if (itemType === 'shop') {
       const shopItem = selectedItem as ShopItem;
@@ -131,49 +299,50 @@ export default function ItemDetailsPanel({
     }
   };
 
-  const handlePurchase = async () => {
-    if (!walletClient || !address || !selectedItem || !selectedPlant) return;
-    
-    setPurchasing(true);
-    try {
-      let success = false;
-      if (itemType === 'shop') {
-        success = await buyShopItem(walletClient, selectedPlant.id, selectedItem.id);
-      } else {
-        success = await buyGardenItem(walletClient, selectedPlant.id, selectedItem.id);
-      }
-      if (success) {
-        onPurchaseSuccess();
-      }
-    } catch (error) {
-      console.error('Error during purchase:', error);
-      toast.error(getFriendlyErrorMessage(error));
-    } finally {
-      setPurchasing(false);
-    }
-  };
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>
-          {itemType === 'shop' ? `Use 1 ${selectedItem.name}` :
-           quantity === 0 ? `${selectedItem.name}` : 
-           quantity === 1 ? `Use 1 ${selectedItem.name}` : 
-           `Use ${quantity} ${selectedItem.name}s`}
-        </CardTitle>
+        <CardTitle>{headerTitle}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isFenceItem && (
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium text-muted-foreground">Select Fence Version</span>
+            <ToggleGroup
+              value={fenceMode}
+              onValueChange={(value) => setFenceMode((value as 'v1' | 'v2') ?? 'v1')}
+              options={[
+                { value: 'v1', label: 'Fence V1' },
+                { value: 'v2', label: 'Fence V2' },
+              ]}
+            />
+          </div>
+        )}
+
         <div className="space-y-2">
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">
-              {quantity > 1 && itemType === 'garden' ? 'Total Cost:' : 'Cost:'}
+              {isFenceItem && fenceMode === 'v2'
+                ? 'Estimated Cost:'
+                : quantity > 1 && itemType === 'garden'
+                  ? 'Total Cost:'
+                  : 'Cost:'}
             </span>
-            <span className="font-semibold text-destructive">
-              {itemType === 'shop' ? `${formatTokenAmount(selectedItem.price)} SEED` :
-               quantity === 0 ? `${formatTokenAmount(selectedItem.price)} SEED each` : 
-               `${formatTokenAmount(totalCost)} SEED`}
-            </span>
+            <div className="font-semibold text-destructive flex items-center gap-2">
+              {isFenceItem && fenceMode === 'v2' ? (
+                fenceV2QuoteLoading ? (
+                  <Skeleton className="h-4 w-20" />
+                ) : (
+                  `${formatTokenAmount(fenceV2Quote)} SEED`
+                )
+              ) : itemType === 'shop' ? (
+                `${formatTokenAmount(selectedItem.price)} SEED`
+              ) : quantity === 0 ? (
+                `${formatTokenAmount(selectedItem.price)} SEED each`
+              ) : (
+                `${formatTokenAmount(totalCost)} SEED`
+              )}
+            </div>
           </div>
           
           <div className="flex justify-between items-center text-sm">
@@ -182,6 +351,44 @@ export default function ItemDetailsPanel({
               {getItemBenefits()}
             </span>
           </div>
+
+          {isFenceItem && fenceMode === 'v2' && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Duration (days):</span>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={fenceV2Bounds.min}
+                  max={fenceV2Bounds.max}
+                  value={fenceV2Days}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (Number.isNaN(value)) return;
+                    const clamped = Math.min(Math.max(value, fenceV2Bounds.min), fenceV2Bounds.max);
+                    setFenceV2Days(clamped);
+                  }}
+                  className="w-20"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {fenceV2Bounds.min === fenceV2Bounds.max
+                    ? `${fenceV2Bounds.min} day${fenceV2Bounds.min === 1 ? '' : 's'} required`
+                    : `${fenceV2Bounds.min}-${fenceV2Bounds.max} days`}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isFenceItem && fenceMode === 'v2' && fenceV2Active && fenceV2State && (
+            <p className="text-xs text-muted-foreground">
+              Fence V2 active until {new Date(fenceV2State.activeUntil * 1000).toLocaleString()}.
+            </p>
+          )}
+
+          {isFenceItem && fenceMode === 'v2' && fenceV2BlockedByV1 && (
+            <p className="text-xs text-muted-foreground">
+              Fence V1 is still active. Disable it or wait for expiry before buying Fence V2.
+            </p>
+          )}
 
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">For Plant:</span>
@@ -194,34 +401,28 @@ export default function ItemDetailsPanel({
         <div className="pt-2">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">
-              {itemType === 'shop' ? 'Purchase Item' :
-               quantity === 0 ? 'Select quantity above' :
-               quantity === 1 ? 'Purchase Item' : 
-               canBundle && isSmartWallet ? `Purchase ${quantity} Items (Bundle)` :
-               canBundle && !isSmartWallet ? `Purchase ${quantity} Items (Smart Wallet Required)` :
-               `Purchase ${quantity} Items`}
+              {isFenceItem
+                ? fenceMode === 'v2'
+                  ? 'Purchase Fence V2'
+                  : 'Purchase Fence V1'
+                : itemType === 'shop'
+                  ? 'Purchase Item'
+                  : quantity === 0
+                    ? 'Select quantity above'
+                    : quantity === 1
+                      ? 'Purchase Item'
+                      : canBundle && isSmartWallet
+                        ? `Purchase ${quantity} Items (Bundle)`
+                        : canBundle && !isSmartWallet
+                          ? `Purchase ${quantity} Items (Smart Wallet Required)`
+                          : `Purchase ${quantity} Items`}
             </span>
             <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
           
-          {!hasQuantitySelected && itemType === 'garden' ? (
+          {disabledMessage ? (
             <DisabledTransaction
-              buttonText="Select quantity above"
-              buttonClassName="w-full"
-            />
-          ) : preventPurchase ? (
-            <DisabledTransaction
-              buttonText="Fence Already Active"
-              buttonClassName="w-full"
-            />
-          ) : hasInsufficientFunds ? (
-            <DisabledTransaction
-              buttonText="Insufficient SEED Balance"
-              buttonClassName="w-full"
-            />
-          ) : canBundle && !isSmartWallet ? (
-            <DisabledTransaction
-              buttonText={smartWalletLoading ? "Detecting Wallet Type..." : "Bundle Transactions Require Smart Wallet"}
+              buttonText={disabledMessage}
               buttonClassName="w-full"
             />
           ) : canBundle && isSmartWallet && selectedPlant && selectedItem ? (
@@ -240,24 +441,44 @@ export default function ItemDetailsPanel({
           ) : selectedPlant && selectedItem ? (
             // Single Purchase for 1 item (both sponsored and regular)
             itemType === 'shop' ? (
-              <BuyShopItemTransaction
-                plantId={selectedPlant.id}
-                itemId={selectedItem.id}
-                onSuccess={() => {
-                  onPurchaseSuccess();
-                  try {
-                    fetch('/api/gamification/missions', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ address, taskId: 's1_buy_shield' })
-                    });
-                  } catch {}
-                }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Buy Item"
-                buttonClassName="w-full"
-                disabled={selectedPlant.status === 4 || hasInsufficientFunds}
-              />
+              isFenceItem && fenceMode === 'v2' ? (
+                <SponsoredTransaction
+                  calls={fenceV2Calls}
+                  onSuccess={() => {
+                    onPurchaseSuccess();
+                    try {
+                      fetch('/api/gamification/missions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address, taskId: 's1_buy_shield' })
+                      });
+                    } catch {}
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText={fenceV2ButtonText}
+                  buttonClassName="w-full"
+                  disabled={selectedPlant.status === 4 || fenceV2QuoteLoading || fenceV2BlockedByV1 || hasInsufficientFunds || fenceV2Bounds.todCapBreached}
+                />
+              ) : (
+                <BuyShopItemTransaction
+                  plantId={selectedPlant.id}
+                  itemId={selectedItem.id}
+                  onSuccess={() => {
+                    onPurchaseSuccess();
+                    try {
+                      fetch('/api/gamification/missions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address, taskId: 's1_buy_shield' })
+                      });
+                    } catch {}
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText="Buy Item"
+                  buttonClassName="w-full"
+                  disabled={selectedPlant.status === 4 || hasInsufficientFunds || preventFenceV1Purchase || fenceV1TodCapBreached}
+                />
+              )
             ) : (
               <BuyGardenItemTransaction
                 plantId={selectedPlant.id}
@@ -304,7 +525,7 @@ export default function ItemDetailsPanel({
           
           {hasInsufficientFunds && (
             <p className="text-xs text-destructive text-center mt-2">
-              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} SEED
+              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} SEED • Required: {formatTokenAmount(isFenceItem && fenceMode === 'v2' ? fenceV2Quote : totalCost)} SEED
             </p>
           )}
           
