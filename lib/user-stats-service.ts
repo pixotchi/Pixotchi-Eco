@@ -14,7 +14,8 @@ import {
   getPlantStatusText,
   getStrainName,
   formatDuration,
-  formatLargeNumber
+  formatLargeNumber,
+  getFenceStatus
 } from './utils';
 import { Plant, Land, BuildingData } from './types';
 import { redis } from './redis';
@@ -59,6 +60,7 @@ export interface UserGameStats {
     urgency: 'critical' | 'warning' | 'ok';
     timePlantBorn: string;
     hasActiveFence: boolean;
+    fenceV2Active: boolean;
     activeItems: Array<{
       name: string;
       effectIsOngoingActive: boolean;
@@ -470,24 +472,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       }
 
       // Check for active fence (V1 or V2)
-      const fenceV2Active = Boolean(p.fenceV2?.isActive && Number(p.fenceV2.activeUntil) > Math.floor(Date.now() / 1000));
-      const fenceV2EffectUntil = Number(p.fenceV2?.activeUntil || 0);
-      const fenceV2Mirroring = Boolean(p.fenceV2?.isMirroringV1);
-      const fenceV1Active = p.extensions?.some((extension: any) => {
-        const owned = extension?.shopItemOwned || [];
-        return owned.some((item: any) => {
-          if (!item?.effectIsOngoingActive) return false;
-          const lowerName = item?.name?.toLowerCase() || '';
-          if (!lowerName.includes('fence') && !lowerName.includes('shield')) return false;
-          const effectUntil = Number(item?.effectUntil || 0);
-          if (!Number.isFinite(effectUntil)) return false;
-          if (fenceV2Active && fenceV2Mirroring && Math.abs(effectUntil - fenceV2EffectUntil) <= 1) {
-            return false;
-          }
-          return true;
-        });
-      }) || false;
-      const hasActiveFence = fenceV1Active || fenceV2Active;
+      const fenceInfo = getFenceStatus(p);
+      const hasActiveFence = fenceInfo.hasActiveFence;
 
       // Get active items (dedupe mirrored V1 when V2 is active)
       const activeItems = (p.extensions?.flatMap((extension: any) =>
@@ -498,7 +484,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           if (!lowerName.includes('fence') && !lowerName.includes('shield')) return true;
           const effectUntil = Number(item?.effectUntil || 0);
           if (!Number.isFinite(effectUntil)) return true;
-          if (fenceV2Active && fenceV2Mirroring && Math.abs(effectUntil - fenceV2EffectUntil) <= 1) {
+          if (fenceInfo.fenceV2Active && fenceInfo.isMirroringV1 && Math.abs(effectUntil - fenceInfo.expiresAt) <= 1) {
             return false;
           }
           return true;
@@ -526,7 +512,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         urgency,
         timePlantBorn: p.timePlantBorn,
         hasActiveFence,
-        fenceV2Active,
+        fenceV2Active: fenceInfo.fenceV2Active,
         activeItems
       };
     });

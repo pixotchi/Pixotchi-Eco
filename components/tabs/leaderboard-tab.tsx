@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Plant } from "@/lib/types";
 import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard } from "@/lib/contracts";
-import { formatScoreShort, formatEthShort } from "@/lib/utils";
+import { formatScoreShort, formatEthShort, formatScore, formatAddress, cn, getFenceStatus } from "@/lib/utils";
 import PlantImage from "@/components/PlantImage";
 import { Trophy, Skull, Sword, HeartPulse } from "lucide-react";
 import Image from "next/image";
@@ -289,27 +289,8 @@ export default function LeaderboardTab() {
   };
 
   const hasActiveFence = (plant: LeaderboardPlant) => {
-    const fenceV2State = plant.fenceV2 ?? null;
-    const fenceV2Active = Boolean(fenceV2State?.isActive && Number(fenceV2State.activeUntil) > Math.floor(Date.now() / 1000));
-    const fenceV2EffectUntil = Number(fenceV2State?.activeUntil || 0);
-    const fenceV2Mirroring = Boolean(fenceV2State?.isMirroringV1);
-
-    const fenceV1Active = plant.extensions?.some((extension: any) => {
-      const owned = extension?.shopItemOwned || [];
-      return owned.some((item: any) => {
-        if (!item?.effectIsOngoingActive) return false;
-        const lowerName = item?.name?.toLowerCase() || '';
-        if (!lowerName.includes('fence') && !lowerName.includes('shield')) return false;
-        const effectUntil = Number(item?.effectUntil || 0);
-        if (!Number.isFinite(effectUntil) || effectUntil <= 0) return false;
-        if (fenceV2Active && fenceV2Mirroring && Math.abs(effectUntil - fenceV2EffectUntil) <= 1) {
-          return false;
-        }
-        return true;
-      });
-    }) || false;
-
-    return fenceV1Active || fenceV2Active;
+    const fenceInfo = getFenceStatus(plant);
+    return fenceInfo.hasActiveFence;
   };
 
   // Eligibility checks (client-side guardrails based on app rules)

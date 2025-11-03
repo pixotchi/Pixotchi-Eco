@@ -33,6 +33,18 @@ export const fenceV2Abi = [
   },
   {
     type: "function",
+    name: "fenceV2GetPurchaseStats",
+    inputs: [{ name: "nftId", type: "uint256" }],
+    outputs: [
+      { name: "pricePerDay", type: "uint256" },
+      { name: "activeUntil", type: "uint256" },
+      { name: "totalDaysPurchased", type: "uint256" },
+      { name: "fenceV1Active", type: "bool" }
+    ],
+    stateMutability: "view"
+  },
+  {
+    type: "function",
     name: "fenceV2Quote",
     inputs: [{ name: "days", type: "uint256" }],
     outputs: [{ name: "cost", type: "uint256" }],

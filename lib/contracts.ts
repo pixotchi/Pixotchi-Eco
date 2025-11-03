@@ -1446,26 +1446,13 @@ const getFenceV2StatesInternal = async (
 ): Promise<Record<number, FenceV2State | null>> => {
   if (plantIds.length === 0) return {};
 
-  const calls = plantIds.flatMap((id) => [
-    {
-      address: FENCE_V2_EXTENSION_ADDRESS,
-      abi: fenceV2Abi,
-      functionName: 'fenceV2EffectUntil' as const,
-      args: [BigInt(id)],
-    },
-    {
-      address: FENCE_V2_EXTENSION_ADDRESS,
-      abi: fenceV2Abi,
-      functionName: 'fenceV2IsEffectOngoing' as const,
-      args: [BigInt(id)],
-    },
-    {
-      address: FENCE_V2_EXTENSION_ADDRESS,
-      abi: fenceV2Abi,
-      functionName: 'fenceV2HasFenceV1' as const,
-      args: [BigInt(id)],
-    },
-  ]);
+  // Use fenceV2GetPurchaseStats which returns everything we need in one call
+  const calls = plantIds.map((id) => ({
+    address: FENCE_V2_EXTENSION_ADDRESS,
+    abi: fenceV2Abi,
+    functionName: 'fenceV2GetPurchaseStats' as const,
+    args: [BigInt(id)],
+  }));
 
   const responses = await retryWithBackoff(async () => {
     return client.multicall({ contracts: calls, allowFailure: true });
@@ -1473,10 +1460,15 @@ const getFenceV2StatesInternal = async (
 
   const result: Record<number, FenceV2State | null> = {};
   for (let index = 0; index < plantIds.length; index++) {
-    const effectUntilRes = responses[index * 3]?.result ?? 0;
-    const isActiveRes = responses[index * 3 + 1]?.result ?? false;
-    const hasV1Res = responses[index * 3 + 2]?.result ?? false;
-    result[plantIds[index]] = computeFenceV2State(effectUntilRes, isActiveRes, hasV1Res);
+    const stats = responses[index]?.result as any;
+    if (stats) {
+      const effectUntilRes = stats[1]; // activeUntil
+      const isActiveRes = stats[1] && Number(stats[1]) > Math.floor(Date.now() / 1000); // Check if activeUntil is in future
+      const hasV1Res = stats[3]; // fenceV1Active
+      result[plantIds[index]] = computeFenceV2State(effectUntilRes, isActiveRes, hasV1Res);
+    } else {
+      result[plantIds[index]] = null;
+    }
   }
   return result;
 };

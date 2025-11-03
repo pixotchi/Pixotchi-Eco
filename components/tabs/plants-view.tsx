@@ -16,7 +16,7 @@ import { Plant, ShopItem, GardenItem } from "@/lib/types";
 import {
   getPlantsByOwner,
 } from "@/lib/contracts";
-import { formatTokenAmount, getPlantStatusText, getStrainName, formatScore, formatEth } from "@/lib/utils";
+import { getStrainName, formatScore, formatEth, formatTokenAmount, getPlantStatusText, cn, getActiveFences } from '@/lib/utils';
 import PlantImage from "../PlantImage";
 import CountdownTimer from "../countdown-timer";
 import FenceTimer from "../fence-timer";
@@ -67,39 +67,8 @@ export default function PlantsView() {
   const [arcadeOpen, setArcadeOpen] = useState(false);
 
   const fenceStatuses = useMemo(() => {
-    const active: { type: 'Fence V1' | 'Fence V2'; effectUntil: number }[] = [];
-    if (!selectedPlant) return active;
-
-    const fenceV2State = selectedPlant.fenceV2;
-    const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > 0);
-    const fenceV2EffectUntil = fenceV2Active ? Number(fenceV2State?.activeUntil ?? 0) : 0;
-    const fenceV2Mirroring = Boolean(fenceV2State?.isMirroringV1);
-    const isApproxEqual = (a: number, b: number) => Math.abs(a - b) <= 1;
-
-    if (selectedPlant.extensions) {
-      for (const extension of selectedPlant.extensions) {
-        if (!extension.shopItemOwned) continue;
-        for (const item of extension.shopItemOwned) {
-          if (!item?.effectIsOngoingActive) continue;
-          const lowerName = item?.name?.toLowerCase() || '';
-          if (!lowerName.includes('fence') && !lowerName.includes('shield')) continue;
-          const effectUntil = Number(item.effectUntil || 0);
-          if (!Number.isFinite(effectUntil) || effectUntil <= 0) continue;
-          if (fenceV2Active && fenceV2Mirroring && isApproxEqual(effectUntil, fenceV2EffectUntil)) {
-            continue;
-          }
-          active.push({ type: 'Fence V1', effectUntil });
-          break;
-        }
-      }
-    }
-
-    if (fenceV2Active) {
-      active.push({ type: 'Fence V2', effectUntil: fenceV2EffectUntil });
-    }
-
-    active.sort((a, b) => b.effectUntil - a.effectUntil);
-    return active;
+    if (!selectedPlant) return [];
+    return getActiveFences(selectedPlant);
   }, [selectedPlant]);
 
   const hasActiveFence = fenceStatuses.length > 0;
