@@ -184,7 +184,7 @@ export default function ItemDetailsPanel({
   const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
   const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
   const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
-  const fenceV1EffectSeconds = isFenceItem ? Number(selectedItem?.effectTime || 0) : 0;
+  const fenceV1EffectSeconds = isFenceItem ? Number((selectedItem as ShopItem)?.effectTime || 0) : 0;
   const fenceV1TodCapBreached = isFenceItem && fenceMode === 'v1' && fenceV1EffectSeconds > 0 && fenceV1EffectSeconds >= plantSecondsLeft;
 
   const fenceV1Active = useMemo(() => {
