@@ -95,4 +95,7 @@ export const ITEM_ICONS: { [key: string]: string } = {
   "dream dew": "/icons/DREAMDEW.png",
   pollinator: "/icons/BEE.png",
   fence: "/icons/Fence.png",
+  botano: "/icons/botano.svg",
+  moonlight: "/icons/moonlight.svg",
+  nitro: "/icons/Nitro.svg",
 }; 
