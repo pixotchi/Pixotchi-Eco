@@ -63,7 +63,7 @@ export default function SwapTab() {
     toast.success('Swap successful!');
 
     if (!address) return;
-    const hash = receipt?.transactionHash ?? receipt?.hash ?? null;
+    const hash = receipt?.transactionHash ?? null;
 
     if (!hash) {
       console.warn('[SwapTab] Swap completed without transaction hash; skipping mission update');
