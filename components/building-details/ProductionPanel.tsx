@@ -68,16 +68,20 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
               buildingId={building.id}
               buttonText="Collect"
               buttonClassName="h-9 px-3 text-sm"
-              onSuccess={() => { 
+              onSuccess={(tx: any) => { 
                 toast.success('Collected to Warehouse'); 
                 onClaimSuccess(); 
                 window.dispatchEvent(new Event('balances:refresh'));
                 window.dispatchEvent(new Event('buildings:refresh'));
                 try {
+                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
+                  if (tx?.transactionHash) {
+                    payload.proof = { txHash: tx.transactionHash };
+                  }
                   fetch('/api/gamification/missions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address, taskId: 's1_claim_production' })
+                    body: JSON.stringify(payload)
                   });
                 } catch {}
               }}

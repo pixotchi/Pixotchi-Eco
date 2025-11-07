@@ -12,7 +12,7 @@ interface WarehouseApplyTransactionProps {
   plantId: number;
   amount: string; // human-friendly input
   mode: ApplyMode; // points (PTS) or lifetime (TOD)
-  onSuccess?: () => void;
+  onSuccess?: (tx: any) => void;
   onError?: (error: any) => void;
   buttonText?: string;
   buttonClassName?: string;

@@ -1,7 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMissionDay, markMissionTask, getMissionScore } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
-import type { GmTaskId } from '@/lib/gamification-types';
+import type { GmProgressProof, GmTaskId } from '@/lib/gamification-types';
+import { getReadClient } from '@/lib/contracts';
+import type { Hex } from 'viem';
+
+const DEFAULT_ORIGINS = [
+  process.env.NEXT_PUBLIC_URL,
+  process.env.MISSION_ALLOWED_ORIGINS,
+  'https://mini.pixotchi.tech',
+  'https://beta.mini.pixotchi.tech',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+].filter(Boolean) as string[];
+
+const ALLOWED_ORIGINS = new Set(
+  DEFAULT_ORIGINS.flatMap(origin => origin.split(',').map(o => o.trim()).filter(Boolean)),
+);
+
+const TASKS_REQUIRING_PROOF: ReadonlySet<GmTaskId> = new Set([
+  's1_buy5_elements',
+  's1_buy_shield',
+  's1_claim_production',
+  's2_apply_resources',
+  's2_attack_plant',
+  's3_send_quest',
+  's3_place_order',
+  's3_claim_stake',
+]);
+
+const MAX_COUNT_PER_UPDATE = 80;
+
+function isAllowedOrigin(request: NextRequest): boolean {
+  const origin = request.headers.get('origin');
+  if (!origin) return true; // SSR or same-origin fetch
+  if (origin === 'null') return false;
+  return ALLOWED_ORIGINS.has(origin);
+}
+
+function isHexHash(value: string): value is Hex {
+  return /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+async function validateOnchainProof(address: string, proof: GmProgressProof | undefined, taskId: GmTaskId) {
+  if (!proof || typeof proof.txHash !== 'string' || !proof.txHash) {
+    throw new Error(`Transaction proof required for task ${taskId}`);
+  }
+  const txHash = proof.txHash;
+  if (!isHexHash(txHash)) {
+    throw new Error('Invalid transaction hash format');
+  }
+
+  try {
+    const client = getReadClient();
+    const receipt = await client.getTransactionReceipt({ hash: txHash });
+    if (!receipt) {
+      throw new Error('Transaction not found');
+    }
+    if (receipt.status !== 'success') {
+      throw new Error('Transaction did not succeed');
+    }
+    if (!receipt.from || receipt.from.toLowerCase() !== address.toLowerCase()) {
+      throw new Error('Transaction sender mismatch');
+    }
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Failed to verify transaction proof');
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,6 +89,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isAllowedOrigin(request)) {
+      return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { address, taskId, proof, count } = body || {};
     if (!address || !isValidEthereumAddressFormat(address)) {
@@ -32,13 +101,22 @@ export async function POST(request: NextRequest) {
     if (!taskId) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
     }
-    const safeCount = typeof count === 'number' ? Math.max(1, Math.floor(count)) : 1;
-    const updated = await markMissionTask(address, taskId as GmTaskId, proof, safeCount);
+    const missionTaskId = taskId as GmTaskId;
+    const safeCount = typeof count === 'number'
+      ? Math.max(1, Math.min(MAX_COUNT_PER_UPDATE, Math.floor(count)))
+      : 1;
+
+    if (TASKS_REQUIRING_PROOF.has(missionTaskId)) {
+      await validateOnchainProof(address, proof, missionTaskId);
+    }
+
+    const updated = await markMissionTask(address, missionTaskId, proof, safeCount);
     return NextResponse.json({ success: true, day: updated });
   } catch (error) {
     console.error('Error updating mission:', error);
-    return NextResponse.json({ error: 'Failed to update mission' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to update mission';
+    const status = /proof|origin|sender|transaction/i.test(message) ? 403 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
-
 

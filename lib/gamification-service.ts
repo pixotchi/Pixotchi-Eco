@@ -1,4 +1,4 @@
-import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix } from '@/lib/redis';
+import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON } from '@/lib/redis';
 import { getTodayDateString } from '@/lib/invite-utils';
 import type { GmDay, GmLeaderEntry, GmMissionDay, GmProgressProof, GmSectionKey, GmStreak, GmTaskId } from './gamification-types';
 
@@ -17,6 +17,77 @@ const keys = {
 
 function toMonth(day: GmDay): string {
   return day.replace(/\-/g, '').slice(0, 6); // YYYYMM
+}
+
+function createInitialMissionDay(day: GmDay): GmMissionDay {
+  return {
+    date: day,
+    s1: { buy5: false, buyElementsCount: 0, buyShield: false, claimProduction: false, done: false },
+    s2: { applyResources: false, attackPlant: false, chatMessage: false, done: false },
+    s3: { sendQuest: false, placeOrder: false, claimStake: false, done: false },
+    pts: 0,
+  };
+}
+
+function hydrateMissionDay(data: any, day: GmDay): GmMissionDay {
+  if (!data) return createInitialMissionDay(day);
+  const normalizeNumber = (value: unknown, fallback = 0) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  const normalizeBoolean = (value: unknown) => Boolean(value);
+
+  return {
+    date: typeof data?.date === 'string' ? data.date : day,
+    s1: {
+      buy5: normalizeBoolean(data?.s1?.buy5),
+      buyElementsCount: Math.max(0, Math.floor(normalizeNumber(data?.s1?.buyElementsCount))),
+      buyShield: normalizeBoolean(data?.s1?.buyShield),
+      claimProduction: normalizeBoolean(data?.s1?.claimProduction),
+      done: normalizeBoolean(data?.s1?.done),
+    },
+    s2: {
+      applyResources: normalizeBoolean(data?.s2?.applyResources),
+      attackPlant: normalizeBoolean(data?.s2?.attackPlant),
+      chatMessage: normalizeBoolean(data?.s2?.chatMessage),
+      done: normalizeBoolean(data?.s2?.done),
+    },
+    s3: {
+      sendQuest: normalizeBoolean(data?.s3?.sendQuest),
+      placeOrder: normalizeBoolean(data?.s3?.placeOrder),
+      claimStake: normalizeBoolean(data?.s3?.claimStake),
+      done: normalizeBoolean(data?.s3?.done),
+    },
+    pts: Math.min(50, Math.max(0, normalizeNumber(data?.pts))),
+    completedAt: typeof data?.completedAt === 'number' ? data.completedAt : undefined,
+  };
+}
+
+function applyMissionTaskProgress(m: GmMissionDay, taskId: GmTaskId, count: number): void {
+  switch (taskId) {
+    case 's1_buy5_elements': {
+      const prev = m.s1.buyElementsCount || 0;
+      const increment = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+      const next = prev + increment;
+      m.s1.buyElementsCount = next;
+      if (next >= 5) m.s1.buy5 = true;
+      break;
+    }
+    case 's1_buy_shield':
+      m.s1.buyShield = true; break;
+    case 's1_claim_production':
+      m.s1.claimProduction = true; break;
+    case 's2_apply_resources':
+      m.s2.applyResources = true; break;
+    case 's2_attack_plant':
+      m.s2.attackPlant = true; break;
+    case 's2_chat_message':
+      m.s2.chatMessage = true; break;
+    case 's3_send_quest':
+      m.s3.sendQuest = true; break;
+    case 's3_place_order':
+      m.s3.placeOrder = true; break;
+    case 's3_claim_stake':
+      m.s3.claimStake = true; break;
+  }
 }
 
 export async function getStreak(address: string): Promise<GmStreak> {
@@ -90,14 +161,8 @@ export async function getMissionDay(address: string, day?: GmDay): Promise<GmMis
   const d = day || getTodayDateString();
   const k = keys.missions(address, d);
   const data = await redisGetJSON<GmMissionDay>(k);
-  if (data) return data;
-  const init: GmMissionDay = {
-    date: d,
-    s1: { buy5: false, buyElementsCount: 0, buyShield: false, claimProduction: false, done: false },
-    s2: { applyResources: false, attackPlant: false, chatMessage: false, done: false },
-    s3: { sendQuest: false, placeOrder: false, claimStake: false, done: false },
-    pts: 0,
-  };
+  if (data) return hydrateMissionDay(data, d);
+  const init = createInitialMissionDay(d);
   await redisSetJSON(k, init);
   return init;
 }
@@ -126,55 +191,84 @@ function awardPoints(m: GmMissionDay): number {
 export async function markMissionTask(address: string, taskId: GmTaskId, proof?: GmProgressProof, count: number = 1): Promise<GmMissionDay> {
   const d = getTodayDateString();
   const k = keys.missions(address, d);
-  const m = await getMissionDay(address, d);
+  const safeCount = Number.isFinite(count) && count > 0 ? Math.min(1000, Math.floor(count)) : 1;
+  const redisClient = redis;
 
-  switch (taskId) {
-    case 's1_buy5_elements': {
-      const prev = m.s1.buyElementsCount || 0;
-      const next = prev + (Number.isFinite(count) && count > 0 ? count : 1);
-      m.s1.buyElementsCount = next;
-      if (next >= 5) m.s1.buy5 = true;
-      break;
+  if (!redisClient) {
+    const fallback = await getMissionDay(address, d);
+    applyMissionTaskProgress(fallback, taskId, safeCount);
+    const awarded = awardPoints(fallback);
+    await redisSetJSON(k, fallback);
+    if (proof && (proof.txHash || proof.meta)) {
+      await redisSetJSON(keys.proof(address, d, taskId), proof);
     }
-    case 's1_buy_shield':
-      m.s1.buyShield = true; break;
-    case 's1_claim_production':
-      m.s1.claimProduction = true; break;
-    case 's2_apply_resources':
-      m.s2.applyResources = true; break;
-    case 's2_attack_plant':
-      m.s2.attackPlant = true; break;
-    case 's2_chat_message':
-      m.s2.chatMessage = true; break;
-    case 's3_send_quest':
-      m.s3.sendQuest = true; break;
-    case 's3_place_order':
-      m.s3.placeOrder = true; break;
-    case 's3_claim_stake':
-      m.s3.claimStake = true; break;
+    if (awarded > 0) {
+      Promise.resolve().then(async () => {
+        try {
+          await (redis as any)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), awarded, address.toLowerCase());
+        } catch (error) {
+          console.warn('Failed to update missions leaderboard:', error);
+        }
+      });
+    }
+    return fallback;
   }
 
-  const gained = awardPoints(m);
-  await redisSetJSON(k, m);
+  const prefixedKey = withPrefix(k);
+  const maxAttempts = 5;
+  let lastError: unknown = null;
 
-  // Store minimal proof (optional)
-  if (proof && (proof.txHash || proof.meta)) {
-    await redisSetJSON(keys.proof(address, d, taskId), proof);
-  }
-
-  // Update monthly leaderboard on any gain
-  if (gained > 0) {
-    // Best-effort leaderboard update (non-blocking)
-    Promise.resolve().then(async () => {
-      try {
-        await (redis as any)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), gained, address.toLowerCase());
-      } catch (error) {
-        console.warn('Failed to update missions leaderboard:', error);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      let raw = await (redisClient as any)?.get?.(prefixedKey);
+      if (raw && typeof raw !== 'string') {
+        try {
+          raw = JSON.stringify(raw);
+        } catch {
+          raw = null;
+        }
       }
-    });
+
+      let parsed: any = null;
+      if (typeof raw === 'string') {
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = null;
+        }
+      }
+
+      const mission = hydrateMissionDay(parsed, d);
+      applyMissionTaskProgress(mission, taskId, safeCount);
+      const gained = awardPoints(mission);
+      const nextRaw = JSON.stringify(mission);
+
+      const setSuccess = await redisCompareAndSetJSON(k, typeof raw === 'string' ? raw : null, nextRaw);
+      if (!setSuccess) {
+        continue;
+      }
+
+      if (proof && (proof.txHash || proof.meta)) {
+        await redisSetJSON(keys.proof(address, d, taskId), proof);
+      }
+
+      if (gained > 0) {
+        Promise.resolve().then(async () => {
+          try {
+            await (redis as any)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), gained, address.toLowerCase());
+          } catch (error) {
+            console.warn('Failed to update missions leaderboard:', error);
+          }
+        });
+      }
+
+      return mission;
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  return m;
+  throw new Error(`Failed to update mission progress after retries${lastError ? `: ${String(lastError)}` : ''}`);
 }
 
 export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLeaderEntry[]; missionTop: GmLeaderEntry[] }> {

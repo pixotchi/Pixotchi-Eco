@@ -220,3 +220,57 @@ export async function redisPersist(key: string): Promise<boolean> {
 }
 
 export type RedisClient = typeof redis;
+
+const REDIS_CAS_SCRIPT = `
+local key = KEYS[1]
+local expected = ARGV[1]
+local value = ARGV[2]
+
+if expected == "__nil__" then
+  if redis.call("EXISTS", key) == 0 then
+    redis.call("SET", key, value)
+    return 1
+  else
+    return 0
+  end
+end
+
+local current = redis.call("GET", key)
+if current == expected then
+  redis.call("SET", key, value)
+  return 1
+end
+return 0
+`;
+
+export async function redisCompareAndSetJSON(key: string, expected: string | null, value: string): Promise<boolean> {
+  if (!redis) return false;
+  const fullKey = withPrefix(key);
+  const sentinel = '__nil__';
+  try {
+    const evalFn = (redis as any)?.eval;
+    if (typeof evalFn === 'function') {
+      const result = await evalFn.call(redis, REDIS_CAS_SCRIPT, [fullKey], [expected ?? sentinel, value]);
+      return Number(result) === 1;
+    }
+
+    if (expected == null) {
+      const exists = await (redis as any)?.exists?.(fullKey);
+      if (Number(exists) === 0) {
+        await redis.set(fullKey, value);
+        return true;
+      }
+      return false;
+    }
+
+    const current = await redis.get(fullKey);
+    if (current === expected) {
+      await redis.set(fullKey, value);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    logger.error('redisCompareAndSetJSON failed', error, { key });
+    return false;
+  }
+}

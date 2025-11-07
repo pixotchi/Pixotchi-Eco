@@ -204,7 +204,20 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     buttonText="Start"
                     buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
                     hideStatus
-                    onSuccess={() => { handleSuccess(); try { fetch('/api/gamification/missions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, taskId: 's3_send_quest' }) }); } catch {} }}
+                    onSuccess={(tx: any) => {
+                      handleSuccess();
+                      try {
+                        const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
+                        if (tx?.transactionHash) {
+                          payload.proof = { txHash: tx.transactionHash };
+                        }
+                        fetch('/api/gamification/missions', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload)
+                        });
+                      } catch {}
+                    }}
                   />
                 </div>
               )}

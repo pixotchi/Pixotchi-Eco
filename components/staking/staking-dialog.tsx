@@ -308,14 +308,18 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               calls={[buildClaimRewardsCall()]}
               buttonText="Claim Rewards"
               buttonClassName="bg-green-600 hover:bg-green-700 text-white"
-              onSuccess={() => {
+              onSuccess={(tx: any) => {
                 refresh();
                 window.dispatchEvent(new Event('balances:refresh'));
                 try {
+                  const payload: Record<string, unknown> = { address, taskId: 's3_claim_stake' };
+                  if (tx?.transactionHash) {
+                    payload.proof = { txHash: tx.transactionHash };
+                  }
                   fetch('/api/gamification/missions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address, taskId: 's3_claim_stake' })
+                    body: JSON.stringify(payload)
                   });
                 } catch {}
               }}
