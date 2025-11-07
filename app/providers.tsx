@@ -302,7 +302,7 @@ export function Providers(props: { children: ReactNode }) {
                             toastOptions={{
                               duration: 4000,
                               style: {
-                                background: "hsl(var(--background))",
+                                backgroundColor: "hsl(var(--background))",
                                 color: "hsl(var(--foreground))",
                                 border: "1px solid hsl(var(--border))",
                                 zIndex: 9999,

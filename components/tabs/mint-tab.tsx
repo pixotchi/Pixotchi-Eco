@@ -268,49 +268,56 @@ export default function MintTab() {
               <SponsoredBadge show={isSponsored && isSmartWallet} />
             </div>
             {selectedStrain ? (
-              <MintTransaction
-                strain={selectedStrain.id}
-                onSuccess={(tx) => {
-                  toast.success('Plant minted successfully!');
-                  incrementForcedFetch();
-                  window.dispatchEvent(new Event('balances:refresh'));
-                  if (address) {
-                    const mintedAt = new Date().toISOString();
-                    setShareData({
-                      address,
-                      basename: primaryName || undefined,
-                      strainName: selectedStrain.name,
-                      strainId: selectedStrain.id,
-                      mintedAt,
-                      txHash: tx?.transactionHash,
-                    });
-                    setShowShareModal(true);
-                  }
-                  try {
-                    const fx = (window as any)?.__pixotchi_frame_context__;
-                    const fid = fx?.context?.user?.fid;
-                    const notificationDetails = fx?.context?.client?.notificationDetails;
-                    if (fid) {
-                      fetch('/api/notify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          fid,
-                          notification: {
-                            title: 'Mint Completed! 🌱',
-                            body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
-                            notificationDetails,
-                          },
-                        }),
-                      }).catch(() => {});
+              <>
+                <MintTransaction
+                  strain={selectedStrain.id}
+                  onSuccess={(tx) => {
+                    toast.success('Plant minted successfully!');
+                    incrementForcedFetch();
+                    window.dispatchEvent(new Event('balances:refresh'));
+                    if (address) {
+                      const mintedAt = new Date().toISOString();
+                      setShareData({
+                        address,
+                        basename: primaryName || undefined,
+                        strainName: selectedStrain.name,
+                        strainId: selectedStrain.id,
+                        mintedAt,
+                        txHash: tx?.transactionHash,
+                      });
+                      setShowShareModal(true);
                     }
-                  } catch {}
-                }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Mint Plant"
-                buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                disabled={needsApproval || (Number(seedBalanceRaw) / 1e18) < (selectedStrain?.mintPrice || 0)}
-              />
+                    try {
+                      const fx = (window as any)?.__pixotchi_frame_context__;
+                      const fid = fx?.context?.user?.fid;
+                      const notificationDetails = fx?.context?.client?.notificationDetails;
+                      if (fid) {
+                        fetch('/api/notify', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            fid,
+                            notification: {
+                              title: 'Mint Completed! 🌱',
+                              body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
+                              notificationDetails,
+                            },
+                          }),
+                        }).catch(() => {});
+                      }
+                    } catch {}
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText="Mint Plant"
+                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={needsApproval || seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))}
+                />
+                {!needsApproval && seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)) && (
+                  <p className="text-xs text-destructive text-center mt-2">
+                    Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatNumber(selectedStrain.mintPrice)} SEED
+                  </p>
+                )}
+              </>
             ) : (
               <DisabledTransaction
                 buttonText="Select a Strain First"
@@ -378,17 +385,24 @@ export default function MintTab() {
             buttonClassName="w-full"
           />
         ) : (
-          <LandMintTransaction
-            onSuccess={() => {
-              toast.success('Land minted successfully!');
-              incrementForcedFetch();
-              window.dispatchEvent(new Event('balances:refresh'));
-            }}
-            onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-            buttonText={`Mint Land`}
-            buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-            disabled={!landMintStatus?.canMint || needsLandApproval || (Number(seedBalanceRaw) < Number(landMintPrice))}
-          />
+          <>
+            <LandMintTransaction
+              onSuccess={() => {
+                toast.success('Land minted successfully!');
+                incrementForcedFetch();
+                window.dispatchEvent(new Event('balances:refresh'));
+              }}
+              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+              buttonText={`Mint Land`}
+              buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+              disabled={!landMintStatus?.canMint || needsLandApproval || seedBalanceRaw < landMintPrice}
+            />
+            {landMintStatus?.canMint && !needsLandApproval && seedBalanceRaw < landMintPrice && (
+              <p className="text-xs text-destructive text-center mt-2">
+                Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
+              </p>
+            )}
+          </>
         )}
       </div>
     </>
