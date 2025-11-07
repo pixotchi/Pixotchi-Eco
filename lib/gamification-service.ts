@@ -25,6 +25,7 @@ function createInitialMissionDay(day: GmDay): GmMissionDay {
     s1: { buy5: false, buyElementsCount: 0, buyShield: false, claimProduction: false, done: false },
     s2: { applyResources: false, attackPlant: false, chatMessage: false, done: false },
     s3: { sendQuest: false, placeOrder: false, claimStake: false, done: false },
+    s4: { makeSwap: false, collectStar: false, playArcade: false, done: false },
     pts: 0,
   };
 }
@@ -56,7 +57,13 @@ function hydrateMissionDay(data: any, day: GmDay): GmMissionDay {
       claimStake: normalizeBoolean(data?.s3?.claimStake),
       done: normalizeBoolean(data?.s3?.done),
     },
-    pts: Math.min(50, Math.max(0, normalizeNumber(data?.pts))),
+    s4: {
+      makeSwap: normalizeBoolean(data?.s4?.makeSwap),
+      collectStar: normalizeBoolean(data?.s4?.collectStar),
+      playArcade: normalizeBoolean(data?.s4?.playArcade),
+      done: normalizeBoolean(data?.s4?.done),
+    },
+    pts: Math.min(80, Math.max(0, normalizeNumber(data?.pts))),
     completedAt: typeof data?.completedAt === 'number' ? data.completedAt : undefined,
   };
 }
@@ -87,6 +94,12 @@ function applyMissionTaskProgress(m: GmMissionDay, taskId: GmTaskId, count: numb
       m.s3.placeOrder = true; break;
     case 's3_claim_stake':
       m.s3.claimStake = true; break;
+    case 's4_make_swap':
+      m.s4.makeSwap = true; break;
+    case 's4_collect_star':
+      m.s4.collectStar = true; break;
+    case 's4_play_arcade':
+      m.s4.playArcade = true; break;
   }
 }
 
@@ -176,15 +189,19 @@ function sectionCompleteS2(s2: GmMissionDay['s2']): boolean {
 function sectionCompleteS3(s3: GmMissionDay['s3']): boolean {
   return s3.sendQuest && s3.placeOrder && s3.claimStake;
 }
+function sectionCompleteS4(s4: GmMissionDay['s4']): boolean {
+  return s4.makeSwap && s4.collectStar && s4.playArcade;
+}
 
 function awardPoints(m: GmMissionDay): number {
   let award = 0;
   if (!m.s1.done && sectionCompleteS1(m.s1)) { m.s1.done = true; award += 20; }
   if (!m.s2.done && sectionCompleteS2(m.s2)) { m.s2.done = true; award += 20; }
   if (!m.s3.done && sectionCompleteS3(m.s3)) { m.s3.done = true; award += 10; }
+  if (!m.s4.done && sectionCompleteS4(m.s4)) { m.s4.done = true; award += 30; }
   const before = m.pts;
-  m.pts = Math.min(50, m.pts + award);
-  if (m.pts === 50 && !m.completedAt) m.completedAt = Date.now();
+  m.pts = Math.min(80, m.pts + award);
+  if (m.pts === 80 && !m.completedAt) m.completedAt = Date.now();
   return m.pts - before;
 }
 

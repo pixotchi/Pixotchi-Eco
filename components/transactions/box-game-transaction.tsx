@@ -7,6 +7,7 @@ import PixotchiNFT from '@/public/abi/PixotchiNFT.json';
 import { decodeEventLog } from 'viem';
 import { toast } from 'react-hot-toast';
 import { formatDuration, formatScore } from '@/lib/utils';
+import { useAccount } from 'wagmi';
 
 const BOX_GAME_ABI = [
   {
@@ -76,6 +77,7 @@ export default function BoxGameTransaction({
   showToast = true,
   onStatusUpdate,
 }: BoxGameTransactionProps) {
+  const { address } = useAccount();
   const functionName = withStar ? 'boxGamePlayWithStar' : 'boxGamePlay';
   const calls = [{
     address: PIXOTCHI_NFT_ADDRESS,
@@ -84,10 +86,29 @@ export default function BoxGameTransaction({
     args: [BigInt(plantId), BigInt(seed)],
   }];
 
+  const handleSuccess = (tx: any) => {
+    if (address && tx?.transactionHash) {
+      try {
+        fetch('/api/gamification/missions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            taskId: 's4_play_arcade',
+            proof: { txHash: tx.transactionHash },
+          }),
+        }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
+      } catch (error) {
+        console.warn('Failed to dispatch gamification mission (arcade):', error);
+      }
+    }
+    onSuccess?.(tx);
+  };
+
   return (
     <SponsoredTransaction
       calls={calls as any}
-      onSuccess={onSuccess}
+      onSuccess={handleSuccess}
       onError={onError}
       buttonText={buttonText}
       buttonClassName={buttonClassName}

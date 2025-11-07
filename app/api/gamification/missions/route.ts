@@ -27,6 +27,9 @@ const TASKS_REQUIRING_PROOF: ReadonlySet<GmTaskId> = new Set([
   's3_send_quest',
   's3_place_order',
   's3_claim_stake',
+  's4_make_swap',
+  's4_collect_star',
+  's4_play_arcade',
 ]);
 
 const MAX_COUNT_PER_UPDATE = 80;

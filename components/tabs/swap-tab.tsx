@@ -57,10 +57,40 @@ export default function SwapTab() {
     };
   }, []);
 
-  const handleSuccess = useCallback(() => {
+  const handleSuccess = useCallback((result?: { hash?: string } | string | null) => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
     toast.success('Swap successful!');
-  }, []);
+
+    if (!address) return;
+    const hash =
+      typeof result === 'string'
+        ? result
+        : result?.hash ??
+          (result as any)?.transactionHash ??
+          (result as any)?.txHash ??
+          (result as any)?.receipt?.transactionHash ??
+          null;
+
+    if (!hash) {
+      console.warn('[SwapTab] Swap completed without transaction hash; skipping mission update');
+      return;
+    }
+
+    try {
+      const payload: Record<string, unknown> = {
+        address,
+        taskId: 's4_make_swap',
+        proof: { txHash: hash },
+      };
+      fetch('/api/gamification/missions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch((err) => console.warn('[SwapTab] Gamification tracking failed (non-critical):', err));
+    } catch (error) {
+      console.warn('[SwapTab] Failed to dispatch gamification mission:', error);
+    }
+  }, [address]);
 
   const handleError = useCallback((error: any) => {
     try { toast.error(String(error?.message || error || 'Swap failed')); } catch {}

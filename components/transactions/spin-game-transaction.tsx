@@ -8,6 +8,7 @@ import { AbiEventSignatureNotFoundError, decodeEventLog } from "viem";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
 import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
+import { useAccount } from "wagmi";
 
 const FUNCTION_MAP = {
   commit: "spinGameV2Commit",
@@ -50,6 +51,7 @@ export default function SpinGameTransaction({
   onButtonClick,
   onRewardConfigUpdate,
 }: SpinGameTransactionProps) {
+  const { address } = useAccount();
   const calls = useMemo(() => {
     const fn = FUNCTION_MAP[mode];
 
@@ -91,6 +93,26 @@ export default function SpinGameTransaction({
       });
     } else if (mode === "reveal") {
       const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
+      if (address) {
+        const txHash = receipts?.[0]?.transactionHash ?? receipts?.[0]?.transaction?.hash;
+        if (txHash) {
+          try {
+            fetch('/api/gamification/missions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                address,
+                taskId: 's4_play_arcade',
+                proof: { txHash },
+              }),
+            }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
+          } catch (error) {
+            console.warn('Failed to dispatch gamification mission (spin arcade):', error);
+          }
+        } else {
+          console.warn('Spin reveal completed without transaction hash; skipping mission update');
+        }
+      }
       const abi = (PixotchiNFT as any).abi || PixotchiNFT;
       let summaryShown = false;
       let revealResult: {

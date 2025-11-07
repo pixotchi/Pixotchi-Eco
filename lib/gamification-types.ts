@@ -9,9 +9,12 @@ export type GmTaskId =
   | 's2_chat_message'
   | 's3_send_quest'
   | 's3_place_order'
-  | 's3_claim_stake';
+  | 's3_claim_stake'
+  | 's4_make_swap'
+  | 's4_collect_star'
+  | 's4_play_arcade';
 
-export type GmSectionKey = 's1' | 's2' | 's3';
+export type GmSectionKey = 's1' | 's2' | 's3' | 's4';
 
 export type GmMissionDay = {
   date: GmDay;
@@ -34,7 +37,13 @@ export type GmMissionDay = {
     claimStake: boolean;
     done: boolean;
   };
-  pts: number; // 0..50
+  s4: {
+    makeSwap: boolean;
+    collectStar: boolean;
+    playArcade: boolean;
+    done: boolean;
+  };
+  pts: number; // 0..80
   completedAt?: number;
 };
 
