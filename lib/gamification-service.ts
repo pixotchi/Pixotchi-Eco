@@ -313,7 +313,13 @@ export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLe
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
   const patterns = [] as string[];
   if (scope === 'streaks' || scope === 'all') patterns.push(`${PX}streak:*`, `${PX}streak:leaderboard:*`, `${PX}streak:activity:*`);
-  if (scope === 'missions' || scope === 'all') patterns.push(`${PX}missions:*`, `${PX}missions:leaderboard:*`);
+  if (scope === 'missions' || scope === 'all') {
+    patterns.push(
+      `${PX}missions:*`,           // All mission data (includes proofs: missions:proof:*)
+      `${PX}missions:leaderboard:*`, // Mission leaderboards
+      `${PX}idemp:*`                // Idempotency keys for reward claims
+    );
+  }
 
   let deleted = 0;
   for (const p of patterns) {
