@@ -14,6 +14,7 @@ import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleBu
 import type { Token } from '@coinbase/onchainkit/token';
 import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
+import type { TransactionReceipt } from 'viem';
 
 export default function SwapTab() {
   const { address } = useAccount();
@@ -57,19 +58,12 @@ export default function SwapTab() {
     };
   }, []);
 
-  const handleSuccess = useCallback((result?: { hash?: string } | string | null) => {
+  const handleSuccess = useCallback((receipt: TransactionReceipt) => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
     toast.success('Swap successful!');
 
     if (!address) return;
-    const hash =
-      typeof result === 'string'
-        ? result
-        : result?.hash ??
-          (result as any)?.transactionHash ??
-          (result as any)?.txHash ??
-          (result as any)?.receipt?.transactionHash ??
-          null;
+    const hash = receipt?.transactionHash ?? receipt?.hash ?? null;
 
     if (!hash) {
       console.warn('[SwapTab] Swap completed without transaction hash; skipping mission update');
