@@ -434,12 +434,12 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
           opacity: var(--o, 0.2);
           transition: opacity 0.8s ease-in, rotate 0.4s ease-out, filter 0.6s ease-out, background-color 0.45s ease, border-color 0.45s ease;
           transform-origin: center;
-          background: rgba(255, 255, 255, 0.96);
+          background-color: rgba(255, 255, 255, 0.96);
           box-shadow: 0 0 10px rgba(15, 23, 42, 0.08);
           border: 1px solid rgba(255, 255, 255, 0.75);
         }
         .secret-garden-pixel--initial {
-          background: var(--pixel-color, rgba(255, 255, 255, 1));
+          background-color: var(--pixel-color, rgba(255, 255, 255, 1));
           border-color: transparent;
           box-shadow: none;
         }
@@ -449,7 +449,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
           rotate: calc(var(--r, 0) * 90deg);
           opacity: 1 !important;
           filter: grayscale(0) brightness(1);
-          background: var(--pixel-color, rgba(255, 255, 255, 1));
+          background-color: var(--pixel-color, rgba(255, 255, 255, 1));
           border-color: rgba(148, 163, 184, 0.3);
           box-shadow: 0 0 14px rgba(34, 197, 94, 0.22);
         }

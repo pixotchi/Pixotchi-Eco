@@ -20,6 +20,8 @@ import SponsoredTransaction from '@/components/transactions/sponsored-transactio
 import type { FenceV2Config } from '@/lib/contracts';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Info } from 'lucide-react';
+import { StandardContainer } from '@/components/ui/pixel-container';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -236,6 +238,8 @@ export default function ItemDetailsPanel({
 
   const disabledMessage = (() => {
     if (!hasQuantitySelected && itemType === 'garden') return 'Select quantity above';
+    // Fence V1 is deprecated - always disabled
+    if (isFenceItem && fenceMode === 'v1') return 'Fence V2 available only';
     if (isFenceItem && fenceMode === 'v1' && fenceV1TodCapBreached) return 'Fence duration exceeds plant TOD';
     if (isFenceItem && fenceMode === 'v1' && (fenceV1Active || fenceV2BlockedByV1 || fenceV2Active)) return 'Fence V1 already active';
     if (isFenceItem && fenceMode === 'v2' && fenceV2Bounds.todCapBreached) return 'Fence duration exceeds plant TOD';
@@ -306,17 +310,30 @@ export default function ItemDetailsPanel({
       </CardHeader>
       <CardContent className="space-y-4">
         {isFenceItem && (
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium text-muted-foreground">Select Fence Version</span>
-            <ToggleGroup
-              value={fenceMode}
-              onValueChange={(value) => setFenceMode((value as 'v1' | 'v2') ?? 'v1')}
-              options={[
-                { value: 'v1', label: 'Fence V1' },
-                { value: 'v2', label: 'Fence V2' },
-              ]}
-            />
-          </div>
+          <>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-muted-foreground">Select Fence Version</span>
+              <ToggleGroup
+                value={fenceMode}
+                onValueChange={(value) => setFenceMode((value as 'v1' | 'v2') ?? 'v1')}
+                options={[
+                  { value: 'v1', label: 'Fence V1' },
+                  { value: 'v2', label: 'Fence V2' },
+                ]}
+              />
+            </div>
+            {fenceMode === 'v1' && (
+              <StandardContainer className="p-3 rounded-md border bg-muted/50">
+                <div className="flex items-start space-x-2">
+                  <Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-foreground">
+                    <div className="font-medium">Fence V1 Deprecated</div>
+                    <div className="text-xs mt-1 text-muted-foreground">Fence V2 is now available only. Please use Fence V2 for protection.</div>
+                  </div>
+                </div>
+              </StandardContainer>
+            )}
+          </>
         )}
 
         <div className="space-y-2">
@@ -476,7 +493,7 @@ export default function ItemDetailsPanel({
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Buy Item"
                   buttonClassName="w-full"
-                  disabled={selectedPlant.status === 4 || hasInsufficientFunds || preventFenceV1Purchase || fenceV1TodCapBreached}
+                  disabled={true}
                 />
               )
             ) : (
