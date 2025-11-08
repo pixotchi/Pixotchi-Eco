@@ -3,7 +3,7 @@ import { getMissionDay, markMissionTask, getMissionScore } from '@/lib/gamificat
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 import type { GmProgressProof, GmTaskId } from '@/lib/gamification-types';
 import { getReadClient } from '@/lib/contracts';
-import type { Hex } from 'viem';
+import { keccak256, toHex, type Hex } from 'viem';
 
 const DEFAULT_ORIGINS = [
   process.env.NEXT_PUBLIC_URL,
@@ -34,6 +34,10 @@ const TASKS_REQUIRING_PROOF: ReadonlySet<GmTaskId> = new Set([
 
 const MAX_COUNT_PER_UPDATE = 80;
 
+const USER_OPERATION_EVENT_TOPIC = keccak256(
+  toHex('UserOperationEvent(address,bytes32,address,uint256,bool,uint256,uint256)')
+).toLowerCase();
+
 function isAllowedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return true; // SSR or same-origin fetch
@@ -43,6 +47,29 @@ function isAllowedOrigin(request: NextRequest): boolean {
 
 function isHexHash(value: string): value is Hex {
   return /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function normalizeAddress(value?: string | null): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  const hex = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`;
+  return hex.length === 42 ? hex : null;
+}
+
+function extractUserOperationSender(logs: any[]): string | null {
+  if (!Array.isArray(logs)) return null;
+  for (const log of logs) {
+    const topics = Array.isArray(log?.topics) ? log.topics : [];
+    if (topics.length < 2) continue;
+    const topic0 = typeof topics[0] === 'string' ? topics[0].toLowerCase() : null;
+    if (topic0 !== USER_OPERATION_EVENT_TOPIC) continue;
+    const senderTopic = topics[1];
+    if (typeof senderTopic === 'string' && senderTopic.length >= 42) {
+      return `0x${senderTopic.slice(-40)}`.toLowerCase();
+    }
+  }
+  return null;
 }
 
 async function validateOnchainProof(address: string, proof: GmProgressProof | undefined, taskId: GmTaskId) {
@@ -63,7 +90,23 @@ async function validateOnchainProof(address: string, proof: GmProgressProof | un
     if (receipt.status !== 'success') {
       throw new Error('Transaction did not succeed');
     }
-    if (!receipt.from || receipt.from.toLowerCase() !== address.toLowerCase()) {
+    const normalizedTarget = normalizeAddress(address);
+    if (!normalizedTarget) {
+      throw new Error('Invalid wallet address');
+    }
+    const candidateSenders = new Set<string>();
+    const receiptFrom = normalizeAddress(receipt.from);
+    if (receiptFrom) candidateSenders.add(receiptFrom);
+
+    const userOpSender = extractUserOperationSender((receipt as any)?.logs ?? []);
+    if (userOpSender) candidateSenders.add(userOpSender);
+
+    const metaSender =
+      normalizeAddress((proof.meta as any)?.smartAccountAddress) ||
+      normalizeAddress((proof.meta as any)?.sender);
+    if (metaSender) candidateSenders.add(metaSender);
+
+    if (!candidateSenders.has(normalizedTarget)) {
       throw new Error('Transaction sender mismatch');
     }
   } catch (error) {
