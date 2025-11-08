@@ -116,8 +116,6 @@ export default function SwapTab() {
   }, []);
 
   const handleStatus = useCallback((status: LifecycleStatus) => {
-    console.log('[SwapTab] Swap lifecycle:', status.statusName, status.statusData);
-    
     // Detect when OnchainKit's internal tokens have changed (via toggle or manual selection)
     // and sync our state to match
     if (status.statusName === 'amountChange') {
