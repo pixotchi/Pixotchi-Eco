@@ -13,7 +13,7 @@ import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
 import type { LifecycleStatus } from '@coinbase/onchainkit/swap';
-import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS, getReadClient } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
 import type { TransactionReceipt } from 'viem';
 
@@ -59,7 +59,7 @@ export default function SwapTab() {
     };
   }, []);
 
-  const handleSuccess = useCallback(async (receipt: TransactionReceipt) => {
+  const handleSuccess = useCallback((receipt: TransactionReceipt) => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
     toast.success('Swap successful!');
 
@@ -68,35 +68,6 @@ export default function SwapTab() {
 
     if (!hash) {
       console.warn('[SwapTab] Swap completed without transaction hash; skipping mission update');
-      return;
-    }
-
-    let logs = Array.isArray(receipt?.logs) ? receipt.logs : [];
-
-    if (logs.length === 0) {
-      try {
-        const client = getReadClient();
-        const fullReceipt = await client.getTransactionReceipt({ hash: hash as `0x${string}` });
-        if (Array.isArray(fullReceipt?.logs) && fullReceipt.logs.length > 0) {
-          logs = fullReceipt.logs as typeof logs;
-        }
-      } catch (error) {
-        console.warn('[SwapTab] Failed to fetch full transaction receipt:', error);
-      }
-    }
-
-    const touchesSeed = Array.isArray(logs)
-      && logs.some((log) => {
-        try {
-          const logAddress = (log as { address?: string })?.address;
-          return typeof logAddress === 'string' && logAddress.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase();
-        } catch {
-          return false;
-        }
-      });
-
-    if (!touchesSeed) {
-      console.info('[SwapTab] Swap completed without SEED involvement; mission not updated.');
       return;
     }
 

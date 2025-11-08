@@ -1,4 +1,4 @@
-import { redis, redisGetJSON, redisSetJSON, redisKeys, redisScanKeys, redisDel, withPrefix, redisCompareAndSetJSON } from '@/lib/redis';
+import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON } from '@/lib/redis';
 import { getTodayDateString } from '@/lib/invite-utils';
 import type { GmDay, GmLeaderEntry, GmMissionDay, GmProgressProof, GmSectionKey, GmStreak, GmTaskId } from './gamification-types';
 
@@ -312,74 +312,17 @@ export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLe
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
   const patterns = [] as string[];
-  if (scope === 'streaks' || scope === 'all') {
-    patterns.push(`${PX}streak:*`, `${PX}streak:leaderboard:*`, `${PX}streak:activity:*`);
-  }
-  if (scope === 'missions' || scope === 'all') {
-    // Use multiple patterns to ensure we catch all mission-related keys
-    patterns.push(
-      `${PX}missions:*`,              // All mission data keys (should match missions:{address}:{date} and missions:proof:*)
-      `${PX}missions:proof:*`,        // Explicit pattern for proof keys
-      `${PX}missions:leaderboard:*`,  // Mission leaderboards
-      `${PX}idemp:*`                  // Idempotency keys for reward claims
-    );
-  }
+  if (scope === 'streaks' || scope === 'all') patterns.push(`${PX}streak:*`, `${PX}streak:leaderboard:*`, `${PX}streak:activity:*`);
+  if (scope === 'missions' || scope === 'all') patterns.push(`${PX}missions:*`, `${PX}missions:leaderboard:*`);
 
   let deleted = 0;
-  const allKeys = new Set<string>(); // Use Set to deduplicate keys across patterns
-  
-  // Collect all keys first (deduplicated)
   for (const p of patterns) {
-    try {
-      // Use redisScanKeys for more reliable pattern matching, especially for large datasets
-      // Note: redisScanKeys handles prefixing automatically, so we pass the full pattern
-      const keysList = await redisScanKeys(p, 1000);
-      if (keysList && keysList.length > 0) {
-        keysList.forEach(key => {
-          // Ensure we're working with the actual key format from Redis
-          // Keys from redisScanKeys are already fully qualified
-          if (key && typeof key === 'string') {
-            allKeys.add(key);
-          }
-        });
-      }
-    } catch (error) {
-      console.error(`[adminReset] Failed to scan pattern ${p}:`, error);
+    const keysList = await redisKeys(p);
+    if (keysList.length) {
+      await redis?.del?.(...keysList as any);
+      deleted += keysList.length;
     }
   }
-
-  // Delete all collected keys in batches
-  if (allKeys.size > 0) {
-    const keysArray = Array.from(allKeys);
-    const batchSize = 100; // Delete in batches to avoid overwhelming Redis
-    for (let i = 0; i < keysArray.length; i += batchSize) {
-      const batch = keysArray.slice(i, i + batchSize);
-      if (batch.length > 0) {
-        try {
-          // Keys returned from redisScanKeys are already fully qualified (with prefix)
-          // So we delete them directly without adding prefix again
-          const result = await redis?.del?.(...batch as any);
-          deleted += batch.length;
-          // Log if deletion count doesn't match (for debugging)
-          if (result !== undefined && typeof result === 'number' && result !== batch.length) {
-            console.warn(`[adminReset] Deletion mismatch: expected ${batch.length}, got ${result}`);
-          }
-        } catch (error) {
-          console.error(`[adminReset] Failed to delete batch (${i}-${i + batch.length}):`, error);
-          // Try deleting keys individually as fallback
-          for (const key of batch) {
-            try {
-              await redis?.del?.(key);
-              deleted++;
-            } catch (e) {
-              console.error(`[adminReset] Failed to delete individual key ${key}:`, e);
-            }
-          }
-        }
-      }
-    }
-  }
-  
   await redisSetJSON(keys.adminLastReset, { at: Date.now(), scope });
   return { deleted };
 }
