@@ -41,7 +41,7 @@ const USER_OPERATION_EVENT_TOPIC = keccak256(
 function isAllowedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return true; // SSR or same-origin fetch
-  if (origin === 'null') return false;
+  if (origin === 'null') return true; // Mini-app / native webview environments
   return ALLOWED_ORIGINS.has(origin);
 }
 
