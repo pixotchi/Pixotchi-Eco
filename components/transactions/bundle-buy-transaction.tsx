@@ -80,27 +80,35 @@ export default function BundleBuyTransaction({
   return (
     <SmartWalletTransaction
       calls={generateBundleCalls()}
-      onSuccess={(tx) => {
+      onSuccess={(tx: any) => {
         try {
           if (address && itemType === 'garden') {
-            const post = async (attempt = 0) => {
+            const post = async (currentTx: any, attempt = 0) => {
               try {
+                const payload: Record<string, unknown> = {
+                  address,
+                  taskId: 's1_buy5_elements',
+                  count: quantity,
+                };
+                if (currentTx?.transactionHash) {
+                  payload.proof = { txHash: currentTx.transactionHash };
+                }
                 const res = await fetch('/api/gamification/missions', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ address, taskId: 's1_buy5_elements', count: quantity })
+                  body: JSON.stringify(payload)
                 });
                 if (!res.ok) throw new Error('missions post failed');
               } catch (e) {
                 if (attempt < 2) {
                   const delay = 400 * Math.pow(2, attempt);
-                  setTimeout(() => post(attempt + 1), delay);
+                  setTimeout(() => post(currentTx, attempt + 1), delay);
                 } else {
                   console.warn('Gamification tracking failed after 3 attempts (non-critical):', e);
                 }
               }
             };
-            post();
+            post(tx);
           }
         } catch {}
         onSuccess?.(tx);

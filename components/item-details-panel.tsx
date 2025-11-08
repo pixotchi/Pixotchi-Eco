@@ -461,13 +461,17 @@ export default function ItemDetailsPanel({
               isFenceItem && fenceMode === 'v2' ? (
                 <SponsoredTransaction
                   calls={fenceV2Calls}
-                  onSuccess={() => {
+                  onSuccess={(tx: any) => {
                     onPurchaseSuccess();
                     try {
+                      const payload: Record<string, unknown> = { address, taskId: 's1_buy_shield' };
+                      if (tx?.transactionHash) {
+                        payload.proof = { txHash: tx.transactionHash };
+                      }
                       fetch('/api/gamification/missions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ address, taskId: 's1_buy_shield' })
+                        body: JSON.stringify(payload)
                       });
                     } catch {}
                   }}
@@ -480,13 +484,17 @@ export default function ItemDetailsPanel({
                 <BuyShopItemTransaction
                   plantId={selectedPlant.id}
                   itemId={selectedItem.id}
-                  onSuccess={() => {
+                  onSuccess={(tx: any) => {
                     onPurchaseSuccess();
                     try {
+                      const payload: Record<string, unknown> = { address, taskId: 's1_buy_shield' };
+                      if (tx?.transactionHash) {
+                        payload.proof = { txHash: tx.transactionHash };
+                      }
                       fetch('/api/gamification/missions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ address, taskId: 's1_buy_shield' })
+                        body: JSON.stringify(payload)
                       });
                     } catch {}
                   }}
@@ -500,25 +508,29 @@ export default function ItemDetailsPanel({
               <BuyGardenItemTransaction
                 plantId={selectedPlant.id}
                 itemId={selectedItem.id}
-                onSuccess={() => {
+                onSuccess={(tx: any) => {
                   onPurchaseSuccess();
                   try {
-                    const post = async (attempt = 0) => {
+                    const post = async (currentTx: any, attempt = 0) => {
                       try {
+                        const payload: Record<string, unknown> = { address, taskId: 's1_buy5_elements' };
+                        if (currentTx?.transactionHash) {
+                          payload.proof = { txHash: currentTx.transactionHash };
+                        }
                         const res = await fetch('/api/gamification/missions', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ address, taskId: 's1_buy5_elements' })
+                          body: JSON.stringify(payload)
                         });
                         if (!res.ok) throw new Error('missions post failed');
                       } catch (e) {
                         if (attempt < 2) {
                           const delay = 400 * Math.pow(2, attempt);
-                          setTimeout(() => post(attempt + 1), delay);
+                          setTimeout(() => post(currentTx, attempt + 1), delay);
                         }
                       }
                     };
-                    post();
+                    post(tx);
                   } catch {}
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}

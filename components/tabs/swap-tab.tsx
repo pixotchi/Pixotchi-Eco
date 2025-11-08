@@ -12,8 +12,10 @@ import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
+import type { LifecycleStatus } from '@coinbase/onchainkit/swap';
 import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
+import type { TransactionReceipt } from 'viem';
 
 export default function SwapTab() {
   const { address } = useAccount();
@@ -23,7 +25,7 @@ export default function SwapTab() {
 
   const { ETH, SEED, USDC, SWAPPABLE } = useMemo(() => {
     const eth: Token = {
-      address: "0x4200000000000000000000000000000000000006",
+      address: "", // Empty string for native ETH (per OnchainKit guidelines)
       chainId: 8453,
       decimals: 18,
       name: "ETH",
@@ -57,13 +59,63 @@ export default function SwapTab() {
     };
   }, []);
 
-  const handleSuccess = useCallback(() => {
+  const handleSuccess = useCallback((receipt: TransactionReceipt) => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
     toast.success('Swap successful!');
-  }, []);
+
+    if (!address) return;
+    const hash = receipt?.transactionHash ?? null;
+
+    if (!hash) {
+      console.warn('[SwapTab] Swap completed without transaction hash; skipping mission update');
+      return;
+    }
+
+    const touchesSeed = Array.isArray(receipt?.logs)
+      && receipt.logs.some((log) => {
+        try {
+          const logAddress = (log as { address?: string })?.address;
+          return typeof logAddress === 'string' && logAddress.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase();
+        } catch {
+          return false;
+        }
+      });
+
+    if (!touchesSeed) {
+      console.info('[SwapTab] Swap completed without SEED involvement; mission not updated.');
+      return;
+    }
+
+    try {
+      const payload: Record<string, unknown> = {
+        address,
+        taskId: 's4_make_swap',
+        proof: { txHash: hash },
+      };
+      fetch('/api/gamification/missions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch((err) => console.warn('[SwapTab] Gamification tracking failed (non-critical):', err));
+    } catch (error) {
+      console.warn('[SwapTab] Failed to dispatch gamification mission:', error);
+    }
+  }, [address]);
 
   const handleError = useCallback((error: any) => {
-    try { toast.error(String(error?.message || error || 'Swap failed')); } catch {}
+    try {
+      const errorMessage = error?.message || error?.error || String(error) || 'Swap failed';
+      toast.error(errorMessage);
+      console.error('[SwapTab] Swap error:', error);
+    } catch (e) {
+      console.error('[SwapTab] Error handling failed:', e);
+      toast.error('An unexpected error occurred');
+    }
+  }, []);
+
+  const handleStatus = useCallback((status: LifecycleStatus) => {
+    console.log('[SwapTab] Swap lifecycle:', status.statusName, status.statusData);
+    // Could be extended to show loading states, progress indicators, etc.
   }, []);
 
   if (!address) {
@@ -100,6 +152,7 @@ export default function SwapTab() {
                 config={{ maxSlippage: 5.5 }}
                 onSuccess={handleSuccess}
                 onError={handleError}
+                onStatus={handleStatus}
               >
                 {/* Allow token rotation and selection between ETH and SEED */}
                 <SwapAmountInput label="Sell" token={ETH} swappableTokens={SWAPPABLE} type="from" />

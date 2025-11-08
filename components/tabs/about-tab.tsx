@@ -466,7 +466,7 @@ export default function AboutTab() {
             <div className="p-3 rounded-lg bg-muted flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Today's Rock</p>
-                <p className="text-2xl font-bold">{missionPts ?? 0} / 50</p>
+                <p className="text-2xl font-bold">{missionPts ?? 0} / 80</p>
                 <p className="text-xs text-muted-foreground mt-1">Total Rocks: {missionTotal}</p>
               </div>
               <Image src="/icons/Volcanic_Rock.svg" alt="Rock" width={24} height={24} className="w-6 h-6" />
@@ -530,7 +530,7 @@ export default function AboutTab() {
           <DialogHeader>
             <DialogTitle>How Tasks Work</DialogTitle>
             <DialogDescription>
-              Earn up to 50 Rock per day by completing 3 sections:
+              Earn up to 80 Rock per day by completing 4 sections:
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
@@ -558,6 +558,14 @@ export default function AboutTab() {
                 <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
               </ul>
         </div>
+            <div>
+              <div className="font-medium">Section 4 (30 Rock)</div>
+              <ul className="list-disc pl-5 text-muted-foreground">
+                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.makeSwap ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Make a SEED swap</li>
+                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.collectStar ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Collect a star by killing a plant</li>
+                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.playArcade ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play an arcade game (Box or Spin)</li>
+              </ul>
+            </div>
       </div>
         </DialogContent>
       </Dialog>

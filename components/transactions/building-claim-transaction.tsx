@@ -8,7 +8,7 @@ import { LAND_CONTRACT_ADDRESS } from "@/lib/contracts";
 interface BuildingClaimTransactionProps {
   landId: bigint;
   buildingId: number;
-  onSuccess?: () => void;
+  onSuccess?: (tx: any) => void;
   onError?: (error: any) => void;
   buttonText?: string;
   buttonClassName?: string;

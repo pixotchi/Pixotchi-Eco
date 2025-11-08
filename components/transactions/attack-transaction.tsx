@@ -54,10 +54,14 @@ export default function AttackTransaction({
       calls={calls}
       onSuccess={(tx) => { 
         if (address) { 
+          const payload: Record<string, unknown> = { address, taskId: 's2_attack_plant' };
+          if (tx?.transactionHash) {
+            payload.proof = { txHash: tx.transactionHash };
+          }
           fetch('/api/gamification/missions', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ address, taskId: 's2_attack_plant', proof: { txHash: tx?.transactionHash } }) 
+            body: JSON.stringify(payload) 
           }).catch(err => console.warn('Gamification tracking failed (non-critical):', err)); 
         }
         onSuccess?.(tx); 

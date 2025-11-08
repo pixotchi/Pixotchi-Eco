@@ -176,7 +176,23 @@ export default function WarehousePanel({
           buttonText="Apply"
           buttonClassName="h-9 px-3 text-sm"
           disabled={!selectedPlantId || !applyPts || ptsTooHigh || ptsParsedScaled === null || ptsParsedScaled <= BigInt(0)}
-          onSuccess={() => { toast.success('PTS applied'); setApplyPts(''); onApplySuccess(); try { window.dispatchEvent(new Event('buildings:refresh')); } catch {} try { fetch('/api/gamification/missions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, taskId: 's2_apply_resources' }) }); } catch {} }}
+          onSuccess={(tx: any) => {
+            toast.success('PTS applied');
+            setApplyPts('');
+            onApplySuccess();
+            try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
+            try {
+              const payload: Record<string, unknown> = { address, taskId: 's2_apply_resources' };
+              if (tx?.transactionHash) {
+                payload.proof = { txHash: tx.transactionHash };
+              }
+              fetch('/api/gamification/missions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+            } catch {}
+          }}
           onError={(e) => toast.error(`Apply failed: ${e.message || e}`)}
         />
       </div>
@@ -210,7 +226,23 @@ export default function WarehousePanel({
           buttonText="Apply"
           buttonClassName="h-9 px-3 text-sm"
           disabled={!selectedPlantId || !applyTodMinutes || minutesTooHigh || !Number.isFinite(minutesParsed) || minutesParsed <= 0}
-          onSuccess={() => { toast.success('TOD applied'); setApplyTodMinutes(''); onApplySuccess(); try { window.dispatchEvent(new Event('buildings:refresh')); } catch {} try { fetch('/api/gamification/missions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, taskId: 's2_apply_resources' }) }); } catch {} }}
+          onSuccess={(tx: any) => {
+            toast.success('TOD applied');
+            setApplyTodMinutes('');
+            onApplySuccess();
+            try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
+            try {
+              const payload: Record<string, unknown> = { address, taskId: 's2_apply_resources' };
+              if (tx?.transactionHash) {
+                payload.proof = { txHash: tx.transactionHash };
+              }
+              fetch('/api/gamification/missions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+            } catch {}
+          }}
           onError={(e) => toast.error(`Apply failed: ${e.message || e}`)}
         />
       </div>

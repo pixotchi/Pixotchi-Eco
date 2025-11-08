@@ -34,7 +34,7 @@ export default function TasksInfoDialog() {
         <DialogHeader>
           <DialogTitle>How Tasks Work</DialogTitle>
           <DialogDescription>
-            Earn up to 50 Rock per day by completing 3 sections:
+            Earn up to 80 Rock per day by completing 4 sections:
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
@@ -61,6 +61,14 @@ export default function TasksInfoDialog() {
               <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.sendQuest ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a farmer on a quest</li>
               <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.placeOrder ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Place a SEED/LEAF order</li>
               <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
+            </ul>
+          </div>
+          <div>
+            <div className="font-medium">Section 4 (30 Rock)</div>
+            <ul className="list-disc pl-5 text-muted-foreground">
+              <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.makeSwap ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Make a SEED swap</li>
+              <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.collectStar ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Collect a star by killing a plant</li>
+              <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.playArcade ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play an arcade game (Box or Spin)</li>
             </ul>
           </div>
         </div>

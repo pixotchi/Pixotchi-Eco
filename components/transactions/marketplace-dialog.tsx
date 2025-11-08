@@ -304,10 +304,14 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   // After successful create order, mark mission progress
   const onOrderSuccess = (tx: any) => {
+    const payload: Record<string, unknown> = { address, taskId: 's3_place_order' };
+    if (tx?.transactionHash) {
+      payload.proof = { txHash: tx.transactionHash };
+    }
     fetch('/api/gamification/missions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, taskId: 's3_place_order', proof: { txHash: tx?.transactionHash } })
+      body: JSON.stringify(payload)
     }).catch(err => console.warn('Gamification tracking failed (non-critical):', err));
   };
 

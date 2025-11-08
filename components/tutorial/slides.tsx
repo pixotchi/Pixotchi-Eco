@@ -156,7 +156,7 @@ export const slides: TutorialSlide[] = [
         <p>Keep a daily streak by completing onchain actions and earn Rock from Farmer's Tasks.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Daily streak resets if you miss a day.</li>
-          <li>Tasks award up to 50 Rock per day; details may change over time.</li>
+          <li>Tasks award up to 80 Rock per day across four sections; details may change over time.</li>
           <li>These stats may be used at the team’s discretion to reward players.</li>
         </ul>
       </div>
