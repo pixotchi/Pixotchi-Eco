@@ -9,6 +9,7 @@ import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
 import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
 import { useAccount } from "wagmi";
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 const FUNCTION_MAP = {
   commit: "spinGameV2Commit",
@@ -94,7 +95,7 @@ export default function SpinGameTransaction({
     } else if (mode === "reveal") {
       const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
       if (address) {
-        const txHash = receipts?.[0]?.transactionHash ?? receipts?.[0]?.transaction?.hash;
+        const txHash = extractTransactionHash(receipts[0]);
         if (txHash) {
           try {
             fetch('/api/gamification/missions', {

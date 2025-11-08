@@ -8,6 +8,7 @@ import { decodeEventLog } from 'viem';
 import { toast } from 'react-hot-toast';
 import { formatDuration, formatScore } from '@/lib/utils';
 import { useAccount } from 'wagmi';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 const BOX_GAME_ABI = [
   {
@@ -87,7 +88,8 @@ export default function BoxGameTransaction({
   }];
 
   const handleSuccess = (tx: any) => {
-    if (address && tx?.transactionHash) {
+    const txHash = extractTransactionHash(tx);
+    if (address && txHash) {
       try {
         fetch('/api/gamification/missions', {
           method: 'POST',
@@ -95,7 +97,7 @@ export default function BoxGameTransaction({
           body: JSON.stringify({
             address,
             taskId: 's4_play_arcade',
-            proof: { txHash: tx.transactionHash },
+            proof: { txHash },
           }),
         }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
       } catch (error) {

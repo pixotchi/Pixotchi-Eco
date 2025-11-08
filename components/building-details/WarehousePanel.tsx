@@ -12,6 +12,7 @@ import WarehouseApplyTransaction from '@/components/transactions/warehouse-apply
 import { toast } from 'react-hot-toast';
 import CountdownTimer from '@/components/countdown-timer';
 import { Plant } from '@/lib/types';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 interface WarehousePanelProps {
   landId: bigint;
@@ -183,8 +184,9 @@ export default function WarehousePanel({
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
             try {
               const payload: Record<string, unknown> = { address, taskId: 's2_apply_resources' };
-              if (tx?.transactionHash) {
-                payload.proof = { txHash: tx.transactionHash };
+              const txHash = extractTransactionHash(tx);
+              if (txHash) {
+                payload.proof = { txHash };
               }
               fetch('/api/gamification/missions', {
                 method: 'POST',
@@ -233,8 +235,9 @@ export default function WarehousePanel({
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
             try {
               const payload: Record<string, unknown> = { address, taskId: 's2_apply_resources' };
-              if (tx?.transactionHash) {
-                payload.proof = { txHash: tx.transactionHash };
+              const txHash = extractTransactionHash(tx);
+              if (txHash) {
+                payload.proof = { txHash };
               }
               fetch('/api/gamification/missions', {
                 method: 'POST',
