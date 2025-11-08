@@ -13,6 +13,7 @@ import GlobalTransactionToast from './global-transaction-toast';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
+import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -64,7 +65,10 @@ export default function SponsoredTransaction({
     try { onStatusUpdate?.(status); } catch {}
     if (status.statusName === 'success' && !successHandledRef.current) {
       successHandledRef.current = true;
-      handleOnSuccess(status.statusData.transactionReceipts[0]);
+      const receipt = status.statusData.transactionReceipts?.[0];
+      // Normalize receipt to ensure transactionHash is accessible across all wallet types
+      const normalizedReceipt = normalizeTransactionReceipt(receipt);
+      handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess, onStatusUpdate]);
 

@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useAccount } from 'wagmi';
 import type { TransactionCall } from '@/lib/types';
+import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 
 interface BaseTransactionProps {
   calls: TransactionCall[];
@@ -158,14 +159,17 @@ export default function BaseTransaction({
     // Handle success only once per transaction
     if (status.statusName === 'success' && !successHandledRef.current) {
       // Validate we have transaction data
-      if (status.statusData?.transactionReceipts?.[0]) {
-        const transactionHash = status.statusData.transactionReceipts[0].transactionHash;
+      const receipt = status.statusData?.transactionReceipts?.[0];
+      if (receipt) {
+        // Normalize receipt to ensure transactionHash is accessible across all wallet types
+        const normalizedReceipt = normalizeTransactionReceipt(receipt);
+        const transactionHash = normalizedReceipt.transactionHash;
 
         // Prevent duplicate handling for the same transaction
-        if (currentTransactionRef.current !== transactionHash) {
+        if (transactionHash && currentTransactionRef.current !== transactionHash) {
           successHandledRef.current = true;
           currentTransactionRef.current = transactionHash;
-          handleOnSuccess(status.statusData.transactionReceipts[0]);
+          handleOnSuccess(normalizedReceipt);
         }
       }
     }

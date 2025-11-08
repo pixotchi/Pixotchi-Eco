@@ -9,6 +9,7 @@ import { landAbi } from "@/public/abi/pixotchi-v3-abi";
 import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_APPROVE_ABI, getTokenBalance, getLeafBalance, getReadClient, getSeedAllowanceForLand, getLeafAllowanceForLand } from '@/lib/contracts';
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import { toast } from "react-hot-toast";
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 type OrderView = {
   id: bigint;
@@ -305,8 +306,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   // After successful create order, mark mission progress
   const onOrderSuccess = (tx: any) => {
     const payload: Record<string, unknown> = { address, taskId: 's3_place_order' };
-    if (tx?.transactionHash) {
-      payload.proof = { txHash: tx.transactionHash };
+    const txHash = extractTransactionHash(tx);
+    if (txHash) {
+      payload.proof = { txHash };
     }
     fetch('/api/gamification/missions', {
       method: 'POST',

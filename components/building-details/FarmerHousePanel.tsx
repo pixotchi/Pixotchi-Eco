@@ -9,6 +9,7 @@ import { ToggleGroup } from '@/components/ui/toggle-group';
 import { toast } from 'react-hot-toast';
 import { usePublicClient } from 'wagmi';
 import { parseUnits } from 'viem';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 interface FarmerHousePanelProps {
   landId: bigint;
@@ -208,8 +209,9 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       handleSuccess();
                       try {
                         const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
-                        if (tx?.transactionHash) {
-                          payload.proof = { txHash: tx.transactionHash };
+                        const txHash = extractTransactionHash(tx);
+                        if (txHash) {
+                          payload.proof = { txHash };
                         }
                         fetch('/api/gamification/missions', {
                           method: 'POST',

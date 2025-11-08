@@ -5,6 +5,7 @@ import SmartWalletTransaction from './smart-wallet-transaction';
 import { useAccount } from 'wagmi';
 import { ShopItem, GardenItem, Plant } from '@/lib/types';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -90,8 +91,9 @@ export default function BundleBuyTransaction({
                   taskId: 's1_buy5_elements',
                   count: quantity,
                 };
-                if (currentTx?.transactionHash) {
-                  payload.proof = { txHash: currentTx.transactionHash };
+                const txHash = extractTransactionHash(currentTx);
+                if (txHash) {
+                  payload.proof = { txHash };
                 }
                 const res = await fetch('/api/gamification/missions', {
                   method: 'POST',

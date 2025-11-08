@@ -18,6 +18,7 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import { formatUnits, parseUnits } from "viem";
 import { RefreshCw } from "lucide-react";
 import { ToggleGroup } from "@/components/ui/toggle-group";
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 type StakingDialogProps = {
   open: boolean;
@@ -313,8 +314,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                 window.dispatchEvent(new Event('balances:refresh'));
                 try {
                   const payload: Record<string, unknown> = { address, taskId: 's3_claim_stake' };
-                  if (tx?.transactionHash) {
-                    payload.proof = { txHash: tx.transactionHash };
+                  const txHash = extractTransactionHash(tx);
+                  if (txHash) {
+                    payload.proof = { txHash };
                   }
                   fetch('/api/gamification/missions', {
                     method: 'POST',

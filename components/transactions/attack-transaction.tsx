@@ -4,6 +4,7 @@ import React from 'react';
 import { useAccount } from 'wagmi';
 import SponsoredTransaction from './sponsored-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -55,8 +56,9 @@ export default function AttackTransaction({
       onSuccess={(tx) => { 
         if (address) { 
           const payload: Record<string, unknown> = { address, taskId: 's2_attack_plant' };
-          if (tx?.transactionHash) {
-            payload.proof = { txHash: tx.transactionHash };
+          const txHash = extractTransactionHash(tx);
+          if (txHash) {
+            payload.proof = { txHash };
           }
           fetch('/api/gamification/missions', { 
             method: 'POST', 

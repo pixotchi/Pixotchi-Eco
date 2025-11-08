@@ -14,6 +14,7 @@ import { useAccount } from 'wagmi';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { sdk } from '@farcaster/miniapp-sdk';
 import type { TransactionCall } from '@/lib/types';
+import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
@@ -49,7 +50,10 @@ export default function SmartWalletTransaction({
   const handleOnStatus = useCallback((status: LifecycleStatus) => {
     if (status.statusName === 'success' && !successHandledRef.current) {
       successHandledRef.current = true;
-      handleOnSuccess(status.statusData.transactionReceipts[0]);
+      const receipt = status.statusData.transactionReceipts?.[0];
+      // Normalize receipt to ensure transactionHash is accessible across all wallet types
+      const normalizedReceipt = normalizeTransactionReceipt(receipt);
+      handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess]);
 

@@ -7,6 +7,7 @@ import { formatProductionRate, formatLifetimeProduction } from '@/lib/utils';
 import BuildingClaimTransaction from '@/components/transactions/building-claim-transaction';
 import { toast } from 'react-hot-toast';
 import { StandardContainer } from '@/components/ui/pixel-container';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 interface ProductionPanelProps {
   building: BuildingData;
@@ -75,8 +76,9 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
                 window.dispatchEvent(new Event('buildings:refresh'));
                 try {
                   const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
-                  if (tx?.transactionHash) {
-                    payload.proof = { txHash: tx.transactionHash };
+                  const txHash = extractTransactionHash(tx);
+                  if (txHash) {
+                    payload.proof = { txHash };
                   }
                   fetch('/api/gamification/missions', {
                     method: 'POST',

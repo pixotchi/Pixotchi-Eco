@@ -22,6 +22,7 @@ import { ToggleGroup } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Info } from 'lucide-react';
 import { StandardContainer } from '@/components/ui/pixel-container';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -465,8 +466,9 @@ export default function ItemDetailsPanel({
                     onPurchaseSuccess();
                     try {
                       const payload: Record<string, unknown> = { address, taskId: 's1_buy_shield' };
-                      if (tx?.transactionHash) {
-                        payload.proof = { txHash: tx.transactionHash };
+                      const txHash = extractTransactionHash(tx);
+                      if (txHash) {
+                        payload.proof = { txHash };
                       }
                       fetch('/api/gamification/missions', {
                         method: 'POST',
@@ -488,8 +490,9 @@ export default function ItemDetailsPanel({
                     onPurchaseSuccess();
                     try {
                       const payload: Record<string, unknown> = { address, taskId: 's1_buy_shield' };
-                      if (tx?.transactionHash) {
-                        payload.proof = { txHash: tx.transactionHash };
+                      const txHash = extractTransactionHash(tx);
+                      if (txHash) {
+                        payload.proof = { txHash };
                       }
                       fetch('/api/gamification/missions', {
                         method: 'POST',
@@ -514,8 +517,9 @@ export default function ItemDetailsPanel({
                     const post = async (currentTx: any, attempt = 0) => {
                       try {
                         const payload: Record<string, unknown> = { address, taskId: 's1_buy5_elements' };
-                        if (currentTx?.transactionHash) {
-                          payload.proof = { txHash: currentTx.transactionHash };
+                        const txHash = extractTransactionHash(currentTx);
+                        if (txHash) {
+                          payload.proof = { txHash };
                         }
                         const res = await fetch('/api/gamification/missions', {
                           method: 'POST',
