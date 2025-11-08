@@ -1,10 +1,9 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup } from '@/components/ui/toggle-group';
@@ -17,11 +16,29 @@ import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
 import type { TransactionReceipt } from 'viem';
 
+type DebugEntry = {
+  timestamp: string;
+  phase: string;
+  payload?: unknown;
+};
+
+function appendDebug(
+  setter: React.Dispatch<React.SetStateAction<DebugEntry[]>>,
+  phase: string,
+  payload?: unknown
+) {
+  setter(prev => [
+    { timestamp: new Date().toISOString(), phase, payload },
+    ...prev.slice(0, 19),
+  ]);
+}
+
 export default function SwapTab() {
   const { address } = useAccount();
   const fc = useFrameContext();
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const [swapView, setSwapView] = useState<'swap' | 'chart'>('swap');
+  const [debugEntries, setDebugEntries] = useState<DebugEntry[]>([]);
 
   const { ETH, SEED, USDC, SWAPPABLE } = useMemo(() => {
     const eth: Token = {
@@ -68,6 +85,7 @@ export default function SwapTab() {
 
     if (!hash) {
       console.warn('[SwapTab] Swap completed without transaction hash; skipping mission update');
+      appendDebug(setDebugEntries, 'mission-skip-nohash', { receipt });
       return;
     }
 
@@ -77,13 +95,28 @@ export default function SwapTab() {
         taskId: 's4_make_swap',
         proof: { txHash: hash },
       };
+      appendDebug(setDebugEntries, 'mission-dispatch', payload);
       fetch('/api/gamification/missions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }).catch((err) => console.warn('[SwapTab] Gamification tracking failed (non-critical):', err));
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            appendDebug(setDebugEntries, 'mission-error', { status: res.status, text });
+            console.warn('[SwapTab] Gamification tracking failed (non-critical):', res.status, text);
+          } else {
+            appendDebug(setDebugEntries, 'mission-success', { status: res.status });
+          }
+        })
+        .catch((err) => {
+          appendDebug(setDebugEntries, 'mission-network-fail', { error: err?.message || String(err) });
+          console.warn('[SwapTab] Gamification tracking failed (non-critical):', err);
+        });
     } catch (error) {
       console.warn('[SwapTab] Failed to dispatch gamification mission:', error);
+      appendDebug(setDebugEntries, 'mission-dispatch-exception', { error: (error as Error)?.message || String(error) });
     }
   }, [address]);
 
@@ -153,6 +186,35 @@ export default function SwapTab() {
           )}
         </CardContent>
       </Card>
+
+      {process.env.NEXT_PUBLIC_ENABLE_TASK_DEBUG === 'true' && debugEntries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Swap Task Debug</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-xs font-mono">
+              {debugEntries.map((entry, index) => (
+                <div key={`${entry.timestamp}-${index}`} className="border border-border/40 rounded p-2 bg-muted/40">
+                  <div className="text-muted-foreground">{entry.timestamp}</div>
+                  <div className="font-semibold text-foreground">{entry.phase}</div>
+                  {entry.payload !== undefined && (
+                    <pre className="whitespace-pre-wrap break-words text-[11px] mt-1 opacity-80">
+                      {(() => {
+                        try {
+                          return JSON.stringify(entry.payload, null, 2);
+                        } catch {
+                          return String(entry.payload);
+                        }
+                      })()}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tokenomics Section */}
       <Card>
