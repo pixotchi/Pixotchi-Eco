@@ -16,11 +16,10 @@ const primaryRpcEndpoint = rpcConfig.endpoints[0] || 'https://mainnet.base.org';
 export const wagmiWebOnchainkitConfig = createConfig({
   chains: [base],
   transports: {
-    [base.id]: http(primaryRpcEndpoint, {
-      pollingInterval: 500, // Poll every 500ms for Base's ~2s block times (much faster than default 4s)
-    }),
+    [base.id]: http(primaryRpcEndpoint),
   },
   connectors,
+  pollingInterval: 500, // Faster polling to match Base block times (~2s)
   ssr: true,
 });
 
