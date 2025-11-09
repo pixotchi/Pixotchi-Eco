@@ -69,10 +69,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       console.log('User successfully logged out from Privy');
       // Post-logout cleanup handled in handleDisconnect
     },
-    onError: (error) => {
-      console.error('Privy logout failed:', error);
-      toast.error('Failed to logout from Privy. Please try again.');
-    }
   });
   const chainId = useChainId();
   const { context } = useMiniKit(); // Get MiniKit context (Coinbase)
@@ -317,12 +313,11 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       if (privyReady && privyAuthenticated && logout) {
         try {
           // Privy logout will clear user state and delete persisted session
-          // The onSuccess/onError callbacks from useLogout will handle notifications
           await logout();
           privyLogoutSucceeded = true;
         } catch (logoutError) {
-          // Error already handled by useLogout's onError callback
-          console.warn('Privy logout error (handled by callback):', logoutError);
+          console.error('Privy logout failed:', logoutError);
+          toast.error('Failed to logout from Privy. Please try again.');
           privyLogoutSucceeded = false;
         }
       }
