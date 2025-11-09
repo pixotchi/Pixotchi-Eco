@@ -13,7 +13,9 @@ export const wagmiMiniAppConfig = createConfig({
   chains: [base],
   connectors: [miniAppConnector()],
   transports: {
-    [base.id]: http(primaryRpcEndpoint),
+    [base.id]: http(primaryRpcEndpoint, {
+      pollingInterval: 500, // Poll every 500ms for Base's ~2s block times (much faster than default 4s)
+    }),
   },
   ssr: true,
 });

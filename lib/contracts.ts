@@ -231,6 +231,7 @@ const createResilientTransport = (endpoints: string[]) => {
       retryCount: 2,        // Reduced per-endpoint retries (Viem will handle failover)
       retryDelay: 500,      // Faster retry for individual endpoints
       timeout: 10000,       // 10 second timeout per request
+      pollingInterval: 500, // Poll every 500ms for Base's ~2s block times (much faster than default 4s)
     });
     // Initialize diagnostics record
     if (!rpcDiagnostics[url]) rpcDiagnostics[url] = { url, ok: 0, fail: 0 };
