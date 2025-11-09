@@ -39,8 +39,6 @@ export function FrameProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
     (async () => {
       try {
-        // Signal readiness; tolerate multiple calls across app
-        await sdk.actions.ready();
         // Small delay to ensure stable UI before reading context
         await new Promise((r) => setTimeout(r, 60));
 
@@ -68,6 +66,9 @@ export function FrameProvider({ children }: { children: React.ReactNode }) {
 
         // Apply safe-area insets globally if available
         try {
+          if (typeof document === "undefined") {
+            throw new Error("No document available");
+          }
           const insets: SafeAreaInsets | undefined = (context as any)?.client?.safeAreaInsets;
           if (insets) {
             const root = document.documentElement;
@@ -83,7 +84,6 @@ export function FrameProvider({ children }: { children: React.ReactNode }) {
         if (isMounted) {
           const ctx = (context as MiniAppContext) ?? null;
           setValue({ context: ctx, isInMiniApp });
-          try { (window as any).__pixotchi_frame_context__ = { context: ctx, isInMiniApp }; } catch {}
         }
       } catch {
         if (isMounted) setValue({ context: { error: 'Failed to initialize' } as any, isInMiniApp: false });

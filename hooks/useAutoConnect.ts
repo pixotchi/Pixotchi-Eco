@@ -6,8 +6,13 @@ export function useAutoConnect() {
   const { isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const fc = useFrameContext();
+  const shouldForceMiniAppAutoconnect = process.env.NEXT_PUBLIC_MINIKIT_FORCE_AUTOCONNECT === 'true';
 
   useEffect(() => {
+    if (!shouldForceMiniAppAutoconnect) {
+      return;
+    }
+
     if (!fc?.isInMiniApp || isConnected || !connectors || connectors.length === 0) {
       return;
     }
@@ -25,5 +30,5 @@ export function useAutoConnect() {
             console.warn("Farcaster auto-connect failed", error)
         }
     }
-  }, [fc?.isInMiniApp, isConnected, connectors, connect]);
+  }, [fc?.isInMiniApp, isConnected, connectors, connect, shouldForceMiniAppAutoconnect]);
 }

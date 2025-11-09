@@ -22,6 +22,7 @@ import { getFriendlyErrorMessage } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
+import { useFrameContext } from '@/lib/frame-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import MintTransaction from '@/components/transactions/mint-transaction';
 import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
@@ -48,6 +49,15 @@ export default function MintTab() {
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
+  const frameContext = useFrameContext();
+  const farcasterUser =
+    typeof frameContext?.context === 'object'
+      ? (frameContext.context as any)?.user
+      : undefined;
+  const farcasterClient =
+    typeof frameContext?.context === 'object'
+      ? (frameContext.context as any)?.client
+      : undefined;
 
   // Resolve basename/ENS for share functionality
   const { name: primaryName } = usePrimaryName(address ?? undefined);
@@ -288,9 +298,8 @@ export default function MintTab() {
                       setShowShareModal(true);
                     }
                     try {
-                      const fx = (window as any)?.__pixotchi_frame_context__;
-                      const fid = fx?.context?.user?.fid;
-                      const notificationDetails = fx?.context?.client?.notificationDetails;
+                      const fid = farcasterUser?.fid;
+                      const notificationDetails = farcasterClient?.notificationDetails;
                       if (fid) {
                         fetch('/api/notify', {
                           method: 'POST',
