@@ -1,6 +1,7 @@
 import { sendFrameNotification } from "@/lib/notification-client";
 import { NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
+import type { FrameNotificationDetails } from "@/lib/types";
 
 const SECRET_HEADER = "x-notification-secret";
 const GLOBAL_RATE_LIMIT = { limit: 50, windowSeconds: 300 }; // 50 requests per 5 minutes
@@ -26,7 +27,17 @@ async function checkRateLimit(key: string, limit: number, windowSeconds: number)
   }
 }
 
-function validatePayload(body: unknown) {
+type ValidatedPayload = {
+  fid: number;
+  notification: {
+    title: string;
+    body: string;
+    notificationDetails?: FrameNotificationDetails | null;
+  };
+  type: string;
+};
+
+function validatePayload(body: unknown): ValidatedPayload {
   if (typeof body !== "object" || body === null) {
     throw new Error("Invalid request body");
   }
@@ -48,8 +59,25 @@ function validatePayload(body: unknown) {
   if (typeof messageBody !== "string" || messageBody.trim().length === 0) {
     throw new Error("Notification body is required");
   }
-  if (notificationDetails && typeof notificationDetails !== "object") {
-    throw new Error("Invalid notificationDetails");
+
+  let validNotificationDetails: FrameNotificationDetails | null | undefined = undefined;
+  if (notificationDetails != null) {
+    if (typeof notificationDetails !== "object") {
+      throw new Error("Invalid notificationDetails");
+    }
+
+    const { url, token } = notificationDetails as Record<string, unknown>;
+    if (typeof url !== "string" || url.trim().length === 0) {
+      throw new Error("notificationDetails.url must be a non-empty string");
+    }
+    if (typeof token !== "string" || token.trim().length === 0) {
+      throw new Error("notificationDetails.token must be a non-empty string");
+    }
+
+    validNotificationDetails = {
+      url: url.trim(),
+      token: token.trim(),
+    };
   }
 
   if (typeof type !== "string") {
@@ -61,7 +89,7 @@ function validatePayload(body: unknown) {
     notification: {
       title: title.trim(),
       body: messageBody.trim(),
-      notificationDetails,
+      notificationDetails: validNotificationDetails,
     },
     type: type.trim() || "custom",
   };
