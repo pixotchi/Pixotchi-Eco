@@ -40,7 +40,7 @@ import { openExternalUrl } from "@/lib/open-external";
 import { base } from "viem/chains";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { StandardContainer } from "./ui/pixel-container";
-import { usePrivy, useLogin } from "@privy-io/react-auth";
+import { usePrivy, useLogin, useLogout } from "@privy-io/react-auth";
 import type { WalletWithMetadata } from "@privy-io/react-auth";
 import { clearAppCaches } from "@/lib/cache-utils";
 import { Skeleton } from "./ui/skeleton";
@@ -56,13 +56,20 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const { address, isConnected, connector } = useAccount();
   const { disconnect } = useDisconnect();
   const {
-    logout,
     ready: privyReady,
     authenticated: privyAuthenticated,
     user: privyUser,
     exportWallet,
   } = usePrivy();
   const { login } = useLogin();
+  
+  // Use useLogout hook with callbacks as recommended by Privy guidelines
+  const { logout } = useLogout({
+    onSuccess: () => {
+      console.log('User successfully logged out from Privy');
+      // Post-logout cleanup handled in handleDisconnect
+    },
+  });
   const chainId = useChainId();
   const { context } = useMiniKit(); // Get MiniKit context (Coinbase)
   const fc = useFrameContext();     // Farcaster context provider
@@ -299,18 +306,25 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       // First, close the dialog to provide immediate feedback
       onOpenChange(false);
       
-      // Disconnect wagmi connection
-      disconnect();
+      let privyLogoutSucceeded = true;
       
-      // Then attempt to logout from Privy if available
-      if (logout) {
+      // According to Privy guidelines: logout Privy first, then disconnect Wagmi
+      // This ensures proper session cleanup before disconnecting the wallet connection
+      if (privyReady && privyAuthenticated && logout) {
         try {
+          // Privy logout will clear user state and delete persisted session
           await logout();
+          privyLogoutSucceeded = true;
         } catch (logoutError) {
-          console.warn('Privy logout failed:', logoutError);
-          // Don't show error to user as disconnect still worked
+          console.error('Privy logout failed:', logoutError);
+          toast.error('Failed to logout from Privy. Please try again.');
+          privyLogoutSucceeded = false;
         }
       }
+      
+      // Disconnect wagmi connection after Privy logout
+      // This ensures wallet disconnection happens after session cleanup
+      disconnect();
       
       // Clear auth surface preference to reset state
       try {
@@ -328,8 +342,11 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         window.history.replaceState({}, '', url.pathname);
       }
       
-      // Show success message
-      toast.success("Wallet disconnected");
+      // Show success message only if Privy logout succeeded or wasn't needed
+      // If Privy logout failed, onError callback already showed error toast
+      if (privyLogoutSucceeded) {
+        toast.success("Wallet disconnected");
+      }
       
       // Clear caches asynchronously to avoid blocking UI
       setTimeout(() => {

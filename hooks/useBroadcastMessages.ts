@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
+import { useFrameContext } from '@/lib/frame-context';
 
 const POLL_INTERVAL = 30000; // 30 seconds
 const STORAGE_KEY = 'pixotchi:dismissed-broadcasts';
@@ -25,6 +26,7 @@ function isTutorialCompleted(): boolean {
 export function useBroadcastMessages() {
   const { address, isConnected } = useAccount();
   const { user, authenticated } = usePrivy();
+  const frameContext = useFrameContext();
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(() => {
@@ -47,15 +49,16 @@ export function useBroadcastMessages() {
 
   // Build a cross-session identity for server-side dismissal when wallet is unavailable
   const identity = useMemo(() => {
+    const fid =
+      typeof frameContext?.context === 'object'
+        ? (frameContext.context as any)?.user?.fid
+        : undefined;
+
     if (address) return `addr:${address.toLowerCase()}`;
     if (authenticated && user?.id) return `privy:${user.id}`;
-    try {
-      // Fallback: Farcaster Mini App fid if present
-      const fid = (window as any)?.__pixotchi_frame_context__?.context?.user?.fid;
-      if (typeof fid === 'number' && fid > 0) return `fid:${fid}`;
-    } catch {}
+    if (typeof fid === 'number' && fid > 0) return `fid:${fid}`;
     return undefined;
-  }, [address, authenticated, user?.id]);
+  }, [address, authenticated, user?.id, frameContext?.context]);
 
   // Local dismissed IDs are loaded synchronously in state initializer
 

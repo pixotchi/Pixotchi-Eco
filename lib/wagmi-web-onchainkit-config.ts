@@ -19,6 +19,7 @@ export const wagmiWebOnchainkitConfig = createConfig({
     [base.id]: http(primaryRpcEndpoint),
   },
   connectors,
+  pollingInterval: 500, // Faster polling to match Base block times (~2s)
   ssr: true,
 });
 

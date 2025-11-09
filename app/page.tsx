@@ -138,7 +138,12 @@ export default function App() {
   
   // Custom hooks for logic separation
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
-  useFarcaster();
+  const readyBlocker =
+    isConnected &&
+    INVITE_CONFIG.SYSTEM_ENABLED &&
+    (checkingValidation || !userValidated);
+
+  useFarcaster({ readyBlocker });
   useAutoConnect();
 
   // Broadcast messages system
@@ -168,28 +173,6 @@ export default function App() {
     }
   });
   
-  // Farcaster splash-screen: call ready() once UI is stable
-  const readyCalledRef = useRef(false);
-  useEffect(() => {
-    (async () => {
-      if (readyCalledRef.current) return;
-      try {
-        // Only call inside Mini App environments
-        const inMini = await sdk.isInMiniApp();
-        if (!inMini) return;
-
-        // Avoid calling during invite validation blocking state when system enabled
-        const uiBlockedByInvite = isConnected && INVITE_CONFIG.SYSTEM_ENABLED && (checkingValidation || !userValidated);
-        if (uiBlockedByInvite) return;
-
-        await sdk.actions.ready();
-        readyCalledRef.current = true;
-      } catch (error) {
-        console.warn('Failed to call sdk.actions.ready():', error);
-      }
-    })();
-  }, [isConnected, checkingValidation, userValidated]);
-
   // Back navigation control: enable web navigation integration inside Mini App
   useEffect(() => {
     (async () => {
@@ -258,7 +241,7 @@ export default function App() {
     
     (async () => {
       try {
-        const fid = (window as any)?.__pixotchi_frame_context__?.context?.user?.fid;
+        const fid = typeof fc?.context === 'object' ? (fc?.context as any)?.user?.fid : undefined;
         if (!fid || !address || !mounted) return;
         
         const controller = new AbortController();
@@ -283,7 +266,7 @@ export default function App() {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [address]);
+  }, [address, fc?.context]);
 
   // Nudge UI forward immediately after a successful connection
   useEffect(() => {

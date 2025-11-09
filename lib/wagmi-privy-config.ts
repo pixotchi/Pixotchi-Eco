@@ -22,6 +22,7 @@ export const wagmiPrivyConfig = createConfig({
   },
   // Expose common external connectors so OnchainKit ConnectWallet can attach in web mode
   connectors,
+  pollingInterval: 500, // Faster polling to match Base block times (~2s)
   ssr: true,
 });
 

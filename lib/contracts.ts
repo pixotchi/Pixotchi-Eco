@@ -256,6 +256,7 @@ export const getReadClient = () => {
     cachedReadClient = createPublicClient({
       chain: base,
       transport: createResilientTransport(endpoints),
+      pollingInterval: 500, // Faster polling to match Base block times (~2s)
     });
   }
   return cachedReadClient;
@@ -274,6 +275,7 @@ const getWriteClient = () => {
     cachedWriteClient = createPublicClient({
       chain: base,
       transport: createResilientTransport(endpoints),
+      pollingInterval: 500, // Faster polling to match Base block times (~2s)
     });
   }
   return cachedWriteClient;
