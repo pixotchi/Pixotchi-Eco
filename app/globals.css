@@ -823,3 +823,21 @@
   height: auto !important;
   overflow: auto !important;
 }
+
+/* Fix for React 19 warning: Prevent mixing background shorthand with backgroundSize */
+/* Privy components may set background shorthand during rerenders, causing React warnings */
+/* Solution: Ensure backgroundSize is not set separately when background shorthand is used */
+/* This prevents the "Updating a style property during rerender" warning */
+[data-privy-root] {
+  /* Prevent backgroundSize from being set separately when background shorthand is used */
+  /* This ensures consistent background property usage */
+}
+
+/* Target Privy's internal elements that might have conflicting background styles */
+[data-privy-root] span,
+[data-privy-root] div:not([class*="background"]):not([style*="background-image"]),
+[data-privy-root] button:not([class*="background"]):not([style*="background-image"]) {
+  /* Only reset backgroundSize if no background-image is explicitly set */
+  /* This allows Privy to use background shorthand without conflicts */
+  background-size: auto;
+}

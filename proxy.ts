@@ -65,19 +65,23 @@ export async function proxy(request: NextRequest) {
     }
   }
   
-  // Content Security Policy - allow blockchain RPC connections
+  // Content Security Policy - aligned with Privy guidelines + blockchain RPC connections
+  // See: https://docs.privy.io/guide/react/content-security-policy
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://*.vercel-scripts.com https://challenges.cloudflare.com https://s3.tradingview.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://s3.tradingview.com;
+    img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com data:;
-    img-src 'self' data: https: blob:;
-    connect-src 'self' https: wss: https://cca-lite.coinbase.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://explorer-api.walletconnect.com https://*.base.org https://*.rpc.privy.systems;
-    frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://*.farcaster.xyz https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.tradingview-widget.com;
-    frame-ancestors *;
+    object-src 'none';
     base-uri 'self';
     form-action 'self';
-    object-src 'none';
+    frame-ancestors *;
+    child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org;
+    frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://*.farcaster.xyz https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.tradingview-widget.com;
+    connect-src 'self' https://auth.privy.io https://*.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://cca-lite.coinbase.com https://*.base.org https: wss:;
+    worker-src 'self';
+    manifest-src 'self';
     upgrade-insecure-requests;
   `.replace(/\s{2,}/g, ' ').trim();
   
