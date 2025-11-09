@@ -19,7 +19,7 @@
     "@farcaster/miniapp-sdk": "0.2.1",
     "@farcaster/miniapp-node": "0.1.11",
     "@farcaster/miniapp-wagmi-connector": "1.1.0",
-    "@privy-io/react-auth": "3.6.0",
+    "@privy-io/react-auth": "3.6.1",
     "@privy-io/wagmi": "2.0.2",
     "wagmi": "2.19.2",
     "viem": "2.38.6",
