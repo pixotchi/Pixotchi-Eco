@@ -65,6 +65,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
           <StandardContainer className="flex items-center justify-between p-2 rounded-lg border bg-card">
             <div className="text-xs sm:text-sm text-muted-foreground">Collect accumulated production into Warehouse</div>
             <BuildingClaimTransaction
+              key={`${landId.toString()}-${building.id}`}
               landId={landId}
               buildingId={building.id}
               buttonText="Collect"

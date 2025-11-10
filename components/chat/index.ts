@@ -4,3 +4,4 @@ export { default as ChatInput } from './chat-input';
 export { default as ChatMessage } from './chat-message';
 export { default as ChatMessages } from './chat-messages';
 export { default as AITypingIndicator } from './ai-typing-indicator';
+export { default as ChatProfileDialog } from './chat-profile-dialog';

@@ -21,12 +21,10 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-[1200] bg-black/80",
-      // Fade overlay in/out using Radix data-state
+       "fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm",
       "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      // Remove overlay fade/animate when motion-off is present
-      "motion-off:bg-black/80",
+      "motion-off:bg-black/75 motion-off:backdrop-blur-none",
       className
     )}
     aria-hidden="true"
@@ -58,9 +56,8 @@ const DialogContent = React.forwardRef<
     >
       <div
         className={cn(
-          // Panel styles live here; consumer sizing classes applied here
-          "relative w-full max-w-md border border-border bg-background p-6 shadow-lg rounded-xl",
-          "max-h-[90dvh] overflow-auto",
+       "relative w-full max-w-md rounded-2xl border border-border bg-background p-6 shadow-[0_32px_64px_-24px_rgba(15,23,42,0.45)]",
+          "max-h-[90dvh] flex flex-col overflow-hidden",
           className
         )}
         style={{ contentVisibility: 'auto' as any }}

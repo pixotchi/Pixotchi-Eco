@@ -604,7 +604,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom" role="navigation" aria-label="Main navigation">
+              <nav className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button

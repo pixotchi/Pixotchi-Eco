@@ -249,3 +249,75 @@ export async function fetchMemoryWalletProfile(
   }
 }
 
+export interface MemoryTwitterPostsResult {
+  status: string;
+  timestamp?: string | null;
+  posts: any[];
+  profile?: any;
+}
+
+export async function fetchMemoryTwitterPosts(
+  username: string,
+  options?: { limit?: number; signal?: AbortSignal },
+): Promise<MemoryTwitterPostsResult | null> {
+  const { apiKey, baseUrl } = getMemoryConfig();
+
+  if (!apiKey) {
+    console.warn('[Memory] Missing MEMORY_API_KEY; skipping twitter posts fetch');
+    return null;
+  }
+
+  if (!username) {
+    return null;
+  }
+
+  const limit = Math.min(Math.max(options?.limit ?? 6, 1), 100);
+  const endpoint = new URL('/twitter/posts', baseUrl);
+  endpoint.searchParams.set('username', username);
+  endpoint.searchParams.set('limit', String(limit));
+
+  const response = await fetch(endpoint.toString(), {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    signal: options?.signal,
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => response.statusText || 'Memory twitter posts request failed');
+    const normalizedMessage = (message || '').toString();
+
+    // Treat common recoverable errors (queued jobs, invalid identifiers, rate limits) as soft failures.
+    const isRecoverable =
+      response.status === 429 ||
+      (response.status >= 400 && response.status < 500) ||
+      normalizedMessage.toLowerCase().includes('custom ids cannot be integers');
+
+    if (isRecoverable) {
+      console.warn('[Memory] twitter posts fetch returned recoverable error', {
+        username,
+        status: response.status,
+        message: normalizedMessage,
+      });
+      return null;
+    }
+
+    throw new MemoryServiceError(normalizedMessage || 'Memory twitter posts request failed', response.status);
+  }
+
+  const json = await response.json();
+
+  return {
+    status: json?.status ?? 'unknown',
+    timestamp: json?.timestamp ?? null,
+    posts: json?.data?.posts ?? [],
+    profile: json?.data?.profile ?? null,
+  };
+}
+

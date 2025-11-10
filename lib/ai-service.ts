@@ -16,8 +16,13 @@ const MAX_AI_MESSAGE_LENGTH = 300;
 const MIN_AI_MESSAGE_LENGTH = 3;
 
 // AI Provider Interface
+type PromptData = 
+  | string 
+  | { system: string; userContent: string }
+  | { systemBlocks?: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>; userContent: string };
+
 interface IAIProvider {
-  sendMessage(promptData: { system: string; userContent: string } | string): Promise<{ response: string; tokensUsed: number }>;
+  sendMessage(promptData: PromptData): Promise<{ response: string; tokensUsed: number }>;
   getModelName(): string;
 }
 
@@ -34,7 +39,7 @@ class OpenAIProvider implements IAIProvider {
     this.maxTokens = config.maxTokens;
   }
 
-  async sendMessage(promptData: { system: string; userContent: string } | string): Promise<{ response: string; tokensUsed: number }> {
+  async sendMessage(promptData: PromptData): Promise<{ response: string; tokensUsed: number }> {
     if (!this.apiKey) {
       throw new Error('OpenAI API key not configured');
     }
@@ -45,10 +50,17 @@ class OpenAIProvider implements IAIProvider {
     if (typeof promptData === 'string') {
       // Legacy format - treat entire prompt as user message
       messages = [{ role: 'user', content: promptData }];
+    } else if ('systemBlocks' in promptData) {
+      // For OpenAI, reconstruct system string from blocks (ignore cache_control)
+      const systemText = promptData.systemBlocks?.map(block => block.text).join('\n\n') || '';
+      messages = [
+        { role: 'system', content: systemText },
+        { role: 'user', content: promptData.userContent }
+      ];
     } else {
       // New structured format - use system message for OpenAI
       messages = [
-        { role: 'system', content: promptData.system },
+        { role: 'system', content: (promptData as any).system },
         { role: 'user', content: promptData.userContent }
       ];
     }
@@ -135,7 +147,7 @@ class ClaudeProvider implements IAIProvider {
     this.maxTokens = config.maxTokens;
   }
 
-  async sendMessage(promptData: { system: string; userContent: string } | string): Promise<{ response: string; tokensUsed: number }> {
+  async sendMessage(promptData: PromptData): Promise<{ response: string; tokensUsed: number }> {
     if (!this.apiKey) {
       throw new Error('Anthropic API key not configured');
     }
@@ -149,20 +161,25 @@ class ClaudeProvider implements IAIProvider {
         model: this.model,
         max_tokens: this.maxTokens,
         messages: [{ role: 'user', content: promptData }],
-        temperature: 0.2,
-        top_p: 0.9,
-        stop_sequences: [],
+        temperature: 0.2, // ✅ Only temperature (Haiku 4.5 doesn't allow temperature + top_p)
       };
-    } else {
-      // New structured format - use proper system parameter
+    } else if ('systemBlocks' in promptData && promptData.systemBlocks) {
+      // New cached format with prompt caching enabled
       requestBody = {
         model: this.model,
         max_tokens: this.maxTokens,
-        system: promptData.system, // PROPER: Use system parameter for instructions
+        system: promptData.systemBlocks, // PROPER: Use system parameter with cache_control blocks
         messages: [{ role: 'user', content: promptData.userContent }], // PROPER: Only user content in messages
-        temperature: 0.2,
-        top_p: 0.9,
-        stop_sequences: [],
+        temperature: 0.2, // ✅ Only temperature (Haiku 4.5 doesn't allow temperature + top_p)
+      };
+    } else {
+      // Fallback structured format without caching
+      requestBody = {
+        model: this.model,
+        max_tokens: this.maxTokens,
+        system: (promptData as any).system, // Legacy system string
+        messages: [{ role: 'user', content: promptData.userContent }],
+        temperature: 0.2, // ✅ Only temperature (Haiku 4.5 doesn't allow temperature + top_p
       };
     }
 
@@ -173,7 +190,7 @@ class ClaudeProvider implements IAIProvider {
         headers: {
           'x-api-key': this.apiKey,
           'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
+          'anthropic-version': '2023-06-01', 
         },
         body: JSON.stringify(requestBody),
       });
@@ -200,7 +217,7 @@ class ClaudeProvider implements IAIProvider {
     
     // Debug logging in development only
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Claude API Response Debug (NEW STRUCTURE):', {
+      console.log('🔍 Claude API Response Debug (WITH PROMPT CACHING):', {
         hasContent: !!data.content,
         contentLength: data.content?.length,
         firstContentType: data.content?.[0]?.type,
@@ -211,15 +228,32 @@ class ClaudeProvider implements IAIProvider {
         model: data.model,
         maxTokensRequested: this.maxTokens,
         stopReason: data.stop_reason,
-        requestStructure: typeof promptData === 'string' ? 'LEGACY' : 'PROPER_SYSTEM_PARAM',
-        systemTokensSeparated: typeof promptData !== 'string' ? 'YES' : 'NO'
+        requestStructure: typeof promptData === 'string' ? 'LEGACY' : ('systemBlocks' in promptData ? 'CACHED_BLOCKS' : 'SYSTEM_PARAM'),
+        cacheInfo: {
+          cacheCreationTokens: data.usage?.cache_creation_input_tokens || 0,
+          cacheReadTokens: data.usage?.cache_read_input_tokens || 0,
+          regularInputTokens: data.usage?.input_tokens || 0,
+          totalInputTokens: (data.usage?.cache_read_input_tokens || 0) + (data.usage?.cache_creation_input_tokens || 0) + (data.usage?.input_tokens || 0),
+          cacheSavingsPercent: data.usage?.cache_read_input_tokens ? Math.round((data.usage.cache_read_input_tokens / ((data.usage?.cache_read_input_tokens || 0) + (data.usage?.cache_creation_input_tokens || 0) + (data.usage?.input_tokens || 0))) * 100) : 0
+        }
       });
     }
     
     const responseText = data.content[0]?.text || 'Sorry, I could not generate a response.';
     
-    // Log response length in all environments for debugging
-    console.log(`🤖 Claude Response: ${responseText.length} characters, ${(data.usage?.output_tokens || 0)} tokens`);
+    // Log response length with cache metrics
+    const cacheReadTokens = data.usage?.cache_read_input_tokens || 0;
+    const cacheWriteTokens = data.usage?.cache_creation_input_tokens || 0;
+    const regularTokens = data.usage?.input_tokens || 0;
+    const outputTokens = data.usage?.output_tokens || 0;
+    
+    if (cacheReadTokens > 0) {
+      console.log(`💾 Claude Response (CACHE HIT): ${responseText.length} chars | Cache hit: ${cacheReadTokens.toLocaleString()} tokens (90% savings!) | Write: ${cacheWriteTokens} | Regular: ${regularTokens} | Output: ${outputTokens}`);
+    } else if (cacheWriteTokens > 0) {
+      console.log(`💾 Claude Response (CACHE WRITE): ${responseText.length} chars | Writing to cache: ${cacheWriteTokens.toLocaleString()} tokens | Regular: ${regularTokens} | Output: ${outputTokens}`);
+    } else {
+      console.log(`🤖 Claude Response: ${responseText.length} characters, ${(data.usage?.output_tokens || 0)} tokens`);
+    }
     
     // Check for unexpected stop reasons
     if (data.stop_reason && data.stop_reason !== 'end_turn' && data.stop_reason !== 'max_tokens') {
@@ -496,18 +530,38 @@ export async function sendAIMessage(address: string, message: string): Promise<{
   const userMessage = await storeAIMessage(address, message, 'user', conversationId);
 
   try {
-    // Log prompt details
-    console.log('📝 AI Prompt Info (NEW STRUCTURE + USER STATS):', {
-      systemLength: promptData.system.length,
-      userContentLength: promptData.userContent.length,
-      hasUserStats: !!userStats,
-      userStatsLength: userStats?.length || 0,
-      totalTokensSaved: `~${Math.floor((promptData.system.length + promptData.userContent.length) / 4)}`,
+    // Log prompt details with caching strategy
+    const promptInfo = typeof promptData === 'string'
+      ? {
+          format: 'LEGACY_STRING',
+          cacheStrategy: 'DISABLED - Legacy string format'
+        }
+      : 'systemBlocks' in promptData 
+      ? {
+          systemBlocksCount: promptData.systemBlocks?.length || 0,
+          staticContextLength: promptData.systemBlocks?.reduce((sum, block) => sum + block.text.length, 0) || 0,
+          hasCacheControl: promptData.systemBlocks?.some(block => !!block.cache_control) || false,
+          userContentLength: promptData.userContent.length,
+          hasUserStats: !!userStats,
+          userStatsLength: userStats?.length || 0,
+          cacheStrategy: 'ENABLED - Static context (system + knowledge) cached, dynamic content (stats + history) uncached'
+        }
+      : {
+          systemLength: (promptData as any).system?.length || 0,
+          userContentLength: (promptData as any).userContent?.length || 0,
+          hasUserStats: !!userStats,
+          userStatsLength: userStats?.length || 0,
+          cacheStrategy: 'DISABLED - Standard system format'
+        };
+    
+    console.log('📝 AI Prompt Info (WITH CACHING STRATEGY):', {
+      ...promptInfo,
       messageLength: message.length,
       hasHistory: !!conversationHistory,
       provider: getCurrentAIProvider(),
       model: getCurrentModelConfig().model,
-      maxTokens: getCurrentModelConfig().maxTokens
+      maxTokens: getCurrentModelConfig().maxTokens,
+      estimatedCacheSavings: 'First request writes ~2500 tokens to cache; subsequent requests read from cache at 90% savings'
     });
 
     // Get AI response using new structured format

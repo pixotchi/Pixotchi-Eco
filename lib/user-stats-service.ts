@@ -153,8 +153,6 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     }
   }
 
-  console.log(`🔄 Fetching fresh user stats for ${address.slice(0, 6)}...`);
-
   try {
     // Fetch all user data in parallel
     const [plants, lands, seedBalance, leafBalance] = await Promise.all([
@@ -409,7 +407,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
 
     // Identify plants needing care (format time exactly as countdown timer shows)
     const plantsNeedingCare = plants
-      .filter(p => p.status > 0) // Exclude dead plants
+      .filter(p => p.status >= 2 && p.status <= 3) // Dry or Dying plants
       .map(p => {
         const now = Math.floor(Date.now() / 1000);
         const timeLeft = p.timeUntilStarving - now;
@@ -417,6 +415,12 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         let urgency: 'critical' | 'warning' | 'ok' = 'ok';
         let timeDisplay = '';
         
+        if (p.status >= 3) {
+          urgency = 'critical';
+        } else if (p.status === 2) {
+          urgency = 'warning';
+        }
+
         if (timeLeft <= 0) {
           timeDisplay = "00h:00m:00s";
           urgency = 'critical';
@@ -455,6 +459,12 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       let urgency: 'critical' | 'warning' | 'ok' = 'ok';
       let timeDisplay = '';
       
+      if (p.status >= 3) {
+        urgency = 'critical';
+      } else if (p.status === 2) {
+        urgency = 'warning';
+      }
+
       if (timeLeft <= 0) {
         timeDisplay = "00h:00m:00s";
         urgency = 'critical';
@@ -566,14 +576,6 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       }
     }
 
-    console.log(`✅ User stats fetched for ${address.slice(0, 6)}:`, {
-      plants: totalPlants,
-      lands: totalLands,
-      seedBalance: formattedSeedBalance,
-      leafBalance: formattedLeafBalance,
-      plantsNeedingCare: plantsNeedingCare.length
-    });
-
     return stats;
 
   } catch (error) {
@@ -584,17 +586,33 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
 
 // Helper function to format stats for AI context
 export function formatStatsForAI(stats: UserGameStats): string {
-  // Create a more readable format for AI with land-by-land breakdown
+  const formatInteger = (value: number): string =>
+    value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+  const formatDecimal = (value: number, fractionDigits = 2): string =>
+    value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: fractionDigits });
+
+  const formatFromWei = (raw: number, fractionDigits = 2): string =>
+    (raw / 1e18).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: fractionDigits });
+
+  const formatHoursFromWeiSeconds = (raw: number, fractionDigits = 2): string => {
+    const hours = (raw / 1e18) / 3600;
+    return `${hours.toFixed(fractionDigits)} hours`;
+  };
+
+  const formatHoursFromSeconds = (seconds: number, fractionDigits = 2): string =>
+    `${(seconds / 3600).toFixed(fractionDigits)} hours`;
+
   const readableStats = {
     // Plant Summary
     plantSummary: {
-      totalPlants: stats.totalPlants,
-      healthyPlants: stats.healthyPlants,
-      dyingPlants: stats.dyingPlants,
-      totalPTS: stats.totalPTS,
-      totalRewards: stats.totalRewards,
-      totalStars: stats.totalStars,
-      avgLevel: stats.avgLevel
+      totalPlants: formatInteger(stats.totalPlants),
+      healthyPlants: formatInteger(stats.healthyPlants),
+      dyingPlants: formatInteger(stats.dyingPlants),
+      totalPTS: formatDecimal(stats.totalPTS, 2),
+      totalRewards: formatDecimal(stats.totalRewards, 4),
+      totalStars: formatInteger(stats.totalStars),
+      avgLevel: stats.totalPlants > 0 ? stats.avgLevel.toFixed(2) : "0.00"
     },
     
     // Individual Plants (complete details for each plant)
@@ -618,10 +636,10 @@ export function formatStatsForAI(stats: UserGameStats): string {
     
     // Land Summary
     landSummary: {
-      totalLands: stats.totalLands,
-      totalLandXP: stats.totalLandXP,
-      totalStoredPTS: stats.totalStoredPTS,
-      totalStoredTOD: stats.totalStoredTOD
+      totalLands: formatInteger(stats.totalLands),
+      totalLandXP: formatInteger(stats.totalLandXP / 1e18),
+      totalStoredPTS: formatFromWei(stats.totalStoredPTS, 2),
+      totalStoredTOD: formatHoursFromWeiSeconds(stats.totalStoredTOD)
     },
     
     // Detailed Land Information (each land with its buildings)
@@ -629,37 +647,47 @@ export function formatStatsForAI(stats: UserGameStats): string {
       name: land.name,
       tokenId: land.tokenId,
       coordinates: `(${land.coordinates.x}, ${land.coordinates.y})`,
-      experiencePoints: land.experiencePoints,
-      storedPTS: land.storedPTS,
-      storedTOD: `${(land.storedTOD / 3600).toFixed(2)} hours`, // Convert seconds to hours
+      experiencePoints: formatInteger(land.experiencePoints),
+      storedPTS: formatDecimal(land.storedPTS, 2),
+      storedTOD: formatHoursFromSeconds(land.storedTOD),
       villageBuildings: land.villageBuildings.length > 0 ? 
         land.villageBuildings.map(building => ({
-          ...building,
+          type: building.type,
+          level: building.level,
+          dailyPTSProduction: formatDecimal(building.dailyPTSProduction, 2),
           dailyTODProduction: building.dailyTODProduction > 0 ? 
             `${(building.dailyTODProduction / 3600).toFixed(2)} hours/day` : 
-            building.dailyTODProduction,
+            "0 hours/day",
+          unclaimedPTS: formatDecimal(building.unclaimedPTS, 2),
           unclaimedTOD: building.unclaimedTOD > 0 ? 
-            `${(building.unclaimedTOD / 3600).toFixed(2)} hours` : 
-            building.unclaimedTOD
+            formatHoursFromSeconds(building.unclaimedTOD) : 
+            "0 hours"
         })) : "No village buildings built",
       townBuildings: land.townBuildings.length > 0 ? 
         land.townBuildings.map(building => ({
-          ...building,
+          type: building.type,
+          level: building.level,
+          dailyPTSProduction: building.dailyPTSProduction > 0 ?
+            formatDecimal(building.dailyPTSProduction, 2) :
+            "0",
           dailyTODProduction: building.dailyTODProduction > 0 ? 
             `${(building.dailyTODProduction / 3600).toFixed(2)} hours/day` : 
-            building.dailyTODProduction,
+            "0 hours/day",
+          unclaimedPTS: building.unclaimedPTS > 0 ?
+            formatDecimal(building.unclaimedPTS, 2) :
+            "0",
           unclaimedTOD: building.unclaimedTOD > 0 ? 
-            `${(building.unclaimedTOD / 3600).toFixed(2)} hours` : 
-            building.unclaimedTOD
+            formatHoursFromSeconds(building.unclaimedTOD) : 
+            "0 hours"
         })) : "Only prebuilt Stake House and Warehouse"
     })),
     
     // Production Summary
     productionSummary: {
-      totalDailyPTSProduction: stats.totalDailyPTSProduction,
+      totalDailyPTSProduction: formatDecimal(stats.totalDailyPTSProduction, 2),
       totalDailyTODProduction: `${(stats.totalDailyTODProduction / 3600).toFixed(2)} hours/day`,
-      unclaimedPTS: stats.unclaimedPTS,
-      unclaimedTOD: `${(stats.unclaimedTOD / 3600).toFixed(2)} hours`
+      unclaimedPTS: formatDecimal(stats.unclaimedPTS, 2),
+      unclaimedTOD: formatHoursFromSeconds(stats.unclaimedTOD)
     },
     
     // Financial Status

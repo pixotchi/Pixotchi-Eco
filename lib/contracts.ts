@@ -658,10 +658,16 @@ export const getStakeInfo = async (address: string): Promise<{ staked: bigint; r
 // Optimized composite fetch for staking-specific data only (no balance duplication)
 export const getStakeComposite = async (
   ownerAddress: string
-): Promise<{ stake: { staked: bigint; rewards: bigint } | null; approved: boolean }> => {
+): Promise<{
+  stake: { staked: bigint; rewards: bigint } | null;
+  approved: boolean;
+  rewardRatio: { numerator: bigint; denominator: bigint } | null;
+  timeUnit: bigint | null;
+  totalStaked: bigint | null;
+}> => {
   const readClient = getReadClient();
   try {
-    const [stakeRes, allowanceRes] = await retryWithBackoff(async () => {
+    const [stakeRes, allowanceRes, rewardRatioRes, timeUnitRes, totalStakedRes] = await retryWithBackoff(async () => {
       const results = await readClient.multicall({
         contracts: [
           {
@@ -675,6 +681,24 @@ export const getStakeComposite = async (
             abi: PIXOTCHI_TOKEN_ABI,
             functionName: 'allowance',
             args: [ownerAddress as `0x${string}`, STAKE_CONTRACT_ADDRESS],
+          },
+          {
+            address: STAKE_CONTRACT_ADDRESS,
+            abi: stakingAbi,
+            functionName: 'getRewardRatio',
+            args: [],
+          },
+          {
+            address: STAKE_CONTRACT_ADDRESS,
+            abi: stakingAbi,
+            functionName: 'getTimeUnit',
+            args: [],
+          },
+          {
+            address: STAKE_CONTRACT_ADDRESS,
+            abi: stakingAbi,
+            functionName: 'stakingTokenBalance',
+            args: [],
           },
         ],
         allowFailure: true,
@@ -693,10 +717,45 @@ export const getStakeComposite = async (
     const allowance = (allowanceRes?.result ?? BigInt(0)) as bigint;
     const approved = allowance > BigInt(0);
 
-    return { stake, approved };
+    let rewardRatio: { numerator: bigint; denominator: bigint } | null = null;
+    const rr = rewardRatioRes?.result as any;
+    const numerator = rr?.numerator ?? rr?.[0];
+    const denominator = rr?.denominator ?? rr?.[1];
+    if (typeof numerator !== 'undefined' && typeof denominator !== 'undefined') {
+      try {
+        rewardRatio = {
+          numerator: BigInt(numerator),
+          denominator: BigInt(denominator),
+        };
+      } catch {
+        rewardRatio = null;
+      }
+    }
+
+    let timeUnit: bigint | null = null;
+    const timeUnitResult = timeUnitRes?.result as any;
+    if (typeof timeUnitResult !== 'undefined' && timeUnitResult !== null) {
+      try {
+        timeUnit = BigInt(timeUnitResult);
+      } catch {
+        timeUnit = null;
+      }
+    }
+
+    let totalStaked: bigint | null = null;
+    const totalStakedRaw = totalStakedRes?.result as any;
+    if (typeof totalStakedRaw !== 'undefined' && totalStakedRaw !== null) {
+      try {
+        totalStaked = BigInt(totalStakedRaw);
+      } catch {
+        totalStaked = null;
+      }
+    }
+
+    return { stake, approved, rewardRatio, timeUnit, totalStaked };
   } catch (e) {
     console.warn('getStakeComposite failed:', e);
-    return { stake: null, approved: false };
+    return { stake: null, approved: false, rewardRatio: null, timeUnit: null, totalStaked: null };
   }
 };
 

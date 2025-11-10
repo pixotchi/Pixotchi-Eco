@@ -106,8 +106,6 @@ export function useBroadcastMessages() {
     lastFetchRef.current = now;
     fetchCountRef.current += 1;
 
-    console.log(`[Broadcast] Fetching messages (count: ${fetchCountRef.current})`);
-
     try {
       const url = identity ? `/api/broadcast/active?address=${encodeURIComponent(identity)}` : '/api/broadcast/active';
 
@@ -128,7 +126,6 @@ export function useBroadcastMessages() {
         );
         
         setMessages(activeMessages);
-        console.log(`[Broadcast] Found ${activeMessages.length} active messages`);
       }
     } catch (error) {
       console.error('[Broadcast] Failed to fetch messages:', error);
@@ -188,15 +185,12 @@ export function useBroadcastMessages() {
   // Initial fetch and setup polling - run once on mount
   useEffect(() => {
     mountedRef.current = true;
-    console.log('[Broadcast] Initializing polling system');
-    
     // Initial fetch
     fetchMessages();
 
     // Set up polling interval (only once)
     pollingIntervalRef.current = setInterval(() => {
       if (mountedRef.current) {
-        console.log('[Broadcast] Polling interval triggered');
         fetchMessages();
       }
     }, POLL_INTERVAL);

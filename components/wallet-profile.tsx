@@ -396,7 +396,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   return (
     <React.Fragment>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl w-[min(92vw,32rem)]">
         <DialogHeader>
           <div className="flex items-center space-x-2">
             <Wallet className="w-6 h-6 text-primary" />
@@ -407,6 +407,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto pr-1">
         <div className="p-4 space-y-6">
                     {/* MiniKit Context Info */}
           {isInFrame && (
@@ -651,8 +652,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               </Button>
             )}
           </div>
- </div>
- </DialogContent>
+        </div>
+      </div>
+    </DialogContent>
     </Dialog>
     <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />
     <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
