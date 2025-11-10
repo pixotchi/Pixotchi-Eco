@@ -2,6 +2,8 @@
   "name": "Pixotchi Mini",
   "short_name": "Pixotchi",
   "display": "standalone",
+  "description": "Tamagotchi-style onchain farming game on Base.",
+  "iconPath": "PixotchiKit/Logonotext.svg",
   "orientation": "portrait",
   "theme_color": "#2d3c53",
   "background_color": "#2d3c53",

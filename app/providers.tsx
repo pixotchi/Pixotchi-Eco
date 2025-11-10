@@ -15,6 +15,7 @@ import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
+import { wagmiSafeConfig, safeConnector } from "@/lib/wagmi-safe-config";
 import { FrameProvider } from "@/lib/frame-context";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
@@ -110,14 +111,33 @@ export function Providers(props: { children: ReactNode }) {
 
   function WagmiRouter({ children }: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
+    const [isSafeApp, setIsSafeApp] = useState<boolean>(false);
     const [surface, setSurface] = useState<'privy' | 'coinbase'>('privy'); // Default to privy instead of null
     const [isInitialized, setIsInitialized] = useState(false);
+    const [safeReady, setSafeReady] = useState(false);
+
+    const { connect, connectors } = useConnect();
     
     useEffect(() => {
       let mounted = true;
       let cancelToken = false;
       
       const initializeRouter = async () => {
+        try {
+          // Step 0: Detect Safe App environment
+          const safe = await safeConnector.isSafeApp();
+          if (cancelToken || !mounted) return;
+          
+          if (safe) {
+            setIsSafeApp(true);
+            setIsInitialized(true);
+            setSafeReady(true);
+            return;
+          }
+        } catch (error) {
+          console.warn('Safe App detection failed:', error);
+        }
+
         try {
           // Sequential initialization with cancellation checks
           // Step 1: Check if we're in a MiniApp
@@ -194,6 +214,28 @@ export function Providers(props: { children: ReactNode }) {
     // Show loading state until initialization is complete
     if (!isInitialized) {
       return <div>Loading...</div>;
+    }
+
+    useEffect(() => {
+      if (!isSafeApp || !safeReady) return;
+      const safeConnectorInstance = connectors.find((c) => c.id === safeConnector.id && c.ready);
+      if (safeConnectorInstance) {
+        connect({ connector: safeConnectorInstance });
+      }
+    }, [isSafeApp, safeReady, connect, connectors]);
+
+    if (isSafeApp) {
+      return (
+        <CoreWagmiProvider config={wagmiSafeConfig}>
+          <TransactionProvider 
+            defaultChainId={8453}
+            paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+          >
+            {children}
+            <TransactionModalWrapper className="!z-[1300]" />
+          </TransactionProvider>
+        </CoreWagmiProvider>
+      );
     }
 
     // Mini App: use Farcaster connector.
