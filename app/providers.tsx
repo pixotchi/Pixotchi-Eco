@@ -235,7 +235,7 @@ export function Providers(props: { children: ReactNode }) {
 
     useEffect(() => {
       if (!isSafeApp || !safeReady || safeConnected) return;
-      const safeConnectorInstance = connectors.find((c) => c.id === safeConnector.id && c.ready);
+      const safeConnectorInstance = connectors.find((c) => c.id === "safe" && c.ready);
       if (safeConnectorInstance) {
         connect({ connector: safeConnectorInstance });
         setSafeConnected(true);

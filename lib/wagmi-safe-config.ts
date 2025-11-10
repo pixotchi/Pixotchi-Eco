@@ -8,12 +8,13 @@ import { getRpcConfig } from "./env-config";
 const rpcConfig = getRpcConfig();
 const primaryRpcEndpoint = rpcConfig.endpoints[0] || "https://mainnet.base.org";
 
-export const safeConnector = new SafeConnector({
-  chains: [base],
-  options: {
-    debug: false,
-  },
-});
+export const safeConnector = () =>
+  new SafeConnector({
+    chains: [base],
+    options: {
+      debug: false,
+    },
+  });
 
 export const wagmiSafeConfig = createConfig({
   chains: [base],
