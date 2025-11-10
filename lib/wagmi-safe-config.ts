@@ -2,7 +2,7 @@
 
 import { createConfig, http } from "wagmi";
 import { base } from "viem/chains";
-import { SafeConnector } from "@safe-global/safe-apps-wagmi";
+import { SafeConnector } from "@gnosis.pm/safe-apps-wagmi";
 import { getRpcConfig } from "./env-config";
 
 const rpcConfig = getRpcConfig();
