@@ -32,7 +32,13 @@ export async function GET(request: NextRequest) {
         staked: stakingData.stake.staked.toString(),
         rewards: stakingData.stake.rewards.toString()
       } : null,
-      approved: stakingData.approved
+      approved: stakingData.approved,
+      rewardRatio: stakingData.rewardRatio ? {
+        numerator: stakingData.rewardRatio.numerator.toString(),
+        denominator: stakingData.rewardRatio.denominator.toString()
+      } : null,
+      timeUnit: stakingData.timeUnit ? stakingData.timeUnit.toString() : null,
+      totalStaked: stakingData.totalStaked ? stakingData.totalStaked.toString() : null
     };
 
     return NextResponse.json(responseData);

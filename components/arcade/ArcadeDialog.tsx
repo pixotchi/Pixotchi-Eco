@@ -823,10 +823,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-md w-[min(92vw,28rem)]">
         <DialogHeader>
           <DialogTitle>Arcade</DialogTitle>
         </DialogHeader>
+        <div className="flex-1 overflow-y-auto pr-1">
         <div className="space-y-4 mt-4">
           <GameSelector selected={selectedGame} onSelect={setSelectedGame} />
 
@@ -1052,6 +1053,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               </ul>
             </div>
           )}
+        </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -19,11 +19,17 @@ import type { Plant } from '@/lib/types';
 import { fetchEfpStats, type EthFollowStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
 import { FollowButton, useTransactions } from 'ethereum-identity-kit';
+import { Avatar } from '@coinbase/onchainkit/identity';
+import { base } from 'viem/chains';
 
 interface PlantProfileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  plant: Plant & { rank?: number } | null;
+  plant: (Plant & { rank?: number }) | null;
+  variant?: 'plant' | 'wallet';
+  walletAddressOverride?: string | null;
+  walletNameOverride?: string | null;
+  primaryPlantLoading?: boolean;
 }
 
 interface OwnerStats {
@@ -35,7 +41,7 @@ interface OwnerStats {
 interface CachedOwnerData {
   stats: OwnerStats;
   timestamp: number;
-  plantId: number;
+  plantId?: number;
 }
 
 interface CachedEFPData {
@@ -97,7 +103,7 @@ const getIdentityUrl = (platform: string, value: string, existingUrl?: string | 
   if (existingUrl) return existingUrl;
   const lower = platform.toLowerCase();
   if (lower === 'ethereum' && value.startsWith('0x')) {
-    return `https://basescan.org/address/${value}`;
+    return `https://base.blockscout.com/address/${value}`;
   }
   if (lower === 'solana') {
     return `https://solscan.io/account/${value}`;
@@ -105,7 +111,15 @@ const getIdentityUrl = (platform: string, value: string, existingUrl?: string | 
   return null;
 };
 
-export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantProfileDialogProps) {
+export default function PlantProfileDialog({
+  open,
+  onOpenChange,
+  plant,
+  variant = 'plant',
+  walletAddressOverride = null,
+  walletNameOverride = null,
+  primaryPlantLoading = false,
+}: PlantProfileDialogProps) {
   const [ownerStats, setOwnerStats] = useState<OwnerStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [efpStats, setEfpStats] = useState<EthFollowStats | null>(null);
@@ -116,6 +130,12 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
 
   // Get connected wallet address
   const { address: connectedAddress } = useAccount();
+  const isWalletVariant = variant === 'wallet';
+  const ownerAddress = useMemo<string | null>(() => {
+    if (plant?.owner) return plant.owner;
+    return walletAddressOverride ?? null;
+  }, [plant?.owner, walletAddressOverride]);
+  const plantId = plant?.id ?? null;
   
   // Get TransactionModal state to detect when it's open/closed
   const { txModalOpen } = useTransactions();
@@ -128,8 +148,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [txModalOpen, open, onOpenChange]);
 
   // Resolve ENS/Basename using shared resolver
-  const { name: ownerName, loading: isNameLoading } = usePrimaryName(plant?.owner);
-  const ownerAddress = plant?.owner ?? null;
+  const { name: ownerNameDerived, loading: isNameLoading } = usePrimaryName(ownerAddress);
+  const ownerName = walletNameOverride ?? ownerNameDerived ?? null;
   const socialIdentifier = ownerName || ownerAddress || null;
   const {
     data: socialProfile,
@@ -290,7 +310,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   }, [otherWallets, otherBasenames, primaryIdentity, identitySummary?.handles]);
 
   useEffect(() => {
-    if (!plant || !open) {
+    if (!open || !ownerAddress) {
       setOwnerStats(null);
       return;
     }
@@ -298,40 +318,41 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
     let cancelled = false;
 
     // Check cache first
-    const cacheKey = plant.owner.toLowerCase();
+    const cacheKey = ownerAddress.toLowerCase();
     const cached = ownerStatsCache.get(cacheKey);
     const now = Date.now();
 
-    if (cached && (now - cached.timestamp) < CACHE_DURATION && cached.plantId === plant.id) {
-      // Use cached data
+    if (
+      cached &&
+      (now - cached.timestamp) < CACHE_DURATION &&
+      (plantId == null || cached.plantId === plantId)
+    ) {
       setOwnerStats(cached.stats);
       setLoading(false);
       return;
     }
 
-    // Fetch fresh data
     setLoading(true);
 
     Promise.all([
-      getUserGameStats(plant.owner),
-      getStakeInfo(plant.owner)
+      getUserGameStats(ownerAddress),
+      getStakeInfo(ownerAddress)
     ])
       .then(([stats, stake]) => {
         if (cancelled) return;
-        
+
         const ownerData: OwnerStats = {
           totalPlants: stats.totalPlants,
           totalLands: stats.totalLands,
           stakedSeed: stake?.staked || BigInt(0)
         };
-        
+
         setOwnerStats(ownerData);
-        
-        // Cache the data
+
         ownerStatsCache.set(cacheKey, {
           stats: ownerData,
           timestamp: now,
-          plantId: plant.id
+          plantId: plantId ?? undefined
         });
       })
       .catch((err) => {
@@ -346,11 +367,11 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
     return () => {
       cancelled = true;
     };
-  }, [plant?.id, plant?.owner, open]);
+  }, [plantId, ownerAddress, open]);
 
   // Fetch EFP stats (followers/following)
   useEffect(() => {
-    if (!plant || !open) {
+    if (!open || !ownerAddress) {
       setEfpStats(null);
       setEfpError(null);
       return;
@@ -358,12 +379,10 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
 
     let cancelled = false;
 
-    // Check cache first - use timestamp-based TTL
-    const cacheKey = plant.owner.toLowerCase();
+    const cacheKey = ownerAddress.toLowerCase();
     const cached = efpStatsCache.get(cacheKey);
     const now = Date.now();
 
-    // Use cache if it's fresh (within CACHE_DURATION) and we haven't manually refreshed
     if (cached && (now - cached.timestamp) < CACHE_DURATION && efpRefreshKey === 0) {
       setEfpStats(cached.stats);
       setEfpError(null);
@@ -371,20 +390,16 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
       return;
     }
 
-    // Fetch fresh EFP data
     setEfpLoading(true);
     setEfpError(null);
 
-    const addressForEfp = plant.owner;
-
-    fetchEfpStats(addressForEfp)
+    fetchEfpStats(ownerAddress)
       .then((stats) => {
         if (cancelled) return;
-        
+
         if (stats) {
           setEfpStats(stats);
           setEfpError(null);
-          // Cache the data
           efpStatsCache.set(cacheKey, {
             stats,
             timestamp: now,
@@ -408,7 +423,7 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
     return () => {
       cancelled = true;
     };
-  }, [plant?.owner, ownerName, open, efpRefreshKey]);
+  }, [ownerAddress, open, efpRefreshKey]);
 
   // Function to refresh EFP stats after follow/unfollow
   const refreshEfpStats = useCallback(() => {
@@ -420,10 +435,10 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
   const lastViewedOwnerRef = React.useRef<string | null>(null);
 
   useEffect(() => {
-    if (plant?.owner) {
-      lastViewedOwnerRef.current = plant.owner.toLowerCase();
+    if (ownerAddress) {
+      lastViewedOwnerRef.current = ownerAddress.toLowerCase();
     }
-  }, [plant?.owner]);
+  }, [ownerAddress]);
   
   // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
   useEffect(() => {
@@ -442,59 +457,100 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
     }
   }, [open]);
 
-  if (!plant) return null;
+  if (!ownerAddress) return null;
+
+  const truncatedOwnerAddress = ownerAddress ? formatAddress(ownerAddress, 6, 4) : '';
+  const hasPlant = Boolean(plant);
+  const showPrimaryLoading = primaryPlantLoading && !hasPlant;
+  const displayTitle = isWalletVariant
+    ? (ownerName ?? truncatedOwnerAddress)
+    : hasPlant && plant
+      ? (plant.name ? `${plant.name} (#${plant.id})` : `Plant #${plant.id}`)
+      : ownerName ?? truncatedOwnerAddress;
+  const displaySubtitle = !isWalletVariant && hasPlant && plant
+    ? `Level ${plant.level}${plant.rank ? ` · Rank #${plant.rank}` : ''}`
+    : undefined;
 
   const handleCopyAddress = () => {
-    navigator.clipboard.writeText(plant.owner);
+    if (!ownerAddress) return;
+    navigator.clipboard.writeText(ownerAddress);
     toast.success('Address copied to clipboard');
   };
 
-  const handleViewOnBaseScan = async () => {
-    await openExternalUrl(`https://basescan.org/address/${plant.owner}`);
+  const handleViewOnBlockscout = async () => {
+    if (!ownerAddress) return;
+    await openExternalUrl(`https://base.blockscout.com/address/${ownerAddress}`);
   };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-[440px]">
-          {/* Header with Plant Image */}
-          <div className="relative -mt-6 -mx-6 mb-4">
-            <div className="h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-background rounded-t-xl" />
-            <div className="absolute inset-x-6 top-8 flex items-start justify-between text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              <span className="pt-1">Powered by:</span>
-              <div className="flex flex-col items-end gap-1">
-                <button
-                  type="button"
-                  onClick={() => openExternalUrl('https://efp.app')}
-                  className="flex items-center gap-2 transition hover:text-foreground normal-case text-xs font-medium"
-                >
-                  <Image src="/icons/efp-logo.svg" alt="EFP" width={16} height={16} />
-                  Ethereum Follow Protocol
-                </button>
-                <div className="flex items-center gap-2 normal-case text-xs font-medium">
-                  <Image src="/icons/memory.png" alt="Memory" width={16} height={16} />
-                  Memory Protocol
+        <DialogContent className="max-w-[440px] p-0">
+          <div className="flex flex-col overflow-y-auto overflow-x-hidden">
+            <div className="relative">
+              <div className="h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
+              <div className="absolute inset-x-6 top-8 flex items-start justify-between text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="pt-1">Powered by:</span>
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openExternalUrl('https://efp.app')}
+                    className="flex items-center gap-2 transition hover:text-foreground normal-case text-xs font-medium"
+                  >
+                    <Image src="/icons/efp-logo.svg" alt="EFP" width={16} height={16} />
+                    Ethereum Follow Protocol
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openExternalUrl('https://memoryprotocol.xyz')}
+                    className="flex items-center gap-2 transition hover:text-foreground normal-case text-xs font-medium"
+                  >
+                    <Image src="/icons/memory.png" alt="Memory" width={16} height={16} />
+                    Memory Protocol
+                  </button>
+                </div>
+              </div>
+              <div className="absolute -bottom-8 left-6">
+                <div className="relative">
+                  <div className="w-24 h-24 rounded-xl border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center">
+                    {showPrimaryLoading ? (
+                      <Skeleton className="h-full w-full" />
+                    ) : isWalletVariant ? (
+                      ownerAddress ? (
+                        <Avatar
+                          address={ownerAddress as `0x${string}`}
+                          chain={base}
+                          className="w-full h-full"
+                          style={{ width: '100%', height: '100%' }}
+                        />
+                      ) : (
+                        <div className="text-xs text-muted-foreground">No wallet</div>
+                      )
+                    ) : hasPlant && plant ? (
+                      <PlantImage
+                        selectedPlant={plant}
+                        width={96}
+                        height={96}
+                      />
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No plant</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="absolute -bottom-14 left-6">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-xl border-4 border-background bg-background overflow-hidden shadow-lg">
-                  <PlantImage selectedPlant={plant} width={96} height={96} />
-                </div>
-              </div>
-            </div>
-          </div>
-
+            <div className="flex flex-col gap-1 px-6 pb-5 pt-6">
           {/* Plant Info */}
-          <div className="mt-14 mb-4">
+          <div className="mt-6 mb-2">
             <DialogTitle className="text-2xl font-bold truncate">
-              {plant.name ? `${plant.name} (#${plant.id})` : `Plant #${plant.id}`}
+              {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
             </DialogTitle>
-            <DialogDescription className="text-sm mt-1">
-              Level {plant.level} {plant.rank && `· Rank #${plant.rank}`}
-            </DialogDescription>
-            {plant.timePlantBorn && (
+            {displaySubtitle && !showPrimaryLoading && (
+              <DialogDescription className="text-sm mt-1">
+                {displaySubtitle}
+              </DialogDescription>
+            )}
+            {hasPlant && plant?.timePlantBorn && !showPrimaryLoading && !isWalletVariant && (
               <div className="text-xs text-muted-foreground mt-1">
                 Planted on {new Date(Number(plant.timePlantBorn) * 1000).toLocaleDateString()}
               </div>
@@ -502,17 +558,22 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           </div>
 
           {/* Plant & Owner Stats Row */}
-          <div className="mb-5 flex flex-col gap-3 text-sm">
+          <div className="mb-3 flex flex-col gap-2.5 text-sm">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Game Stats</span>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <div className="flex items-center gap-1.5">
-                <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} />
-                <span className="font-semibold">{plant.stars}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
-                <span className="text-xs text-muted-foreground uppercase">Rewards</span>
-              </div>
+              {hasPlant && plant && (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} />
+                    <span className="font-semibold">{plant.stars}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                    <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
+                    <span className="text-xs text-muted-foreground uppercase">Rewards</span>
+                  </div>
+                </>
+              )}
               {loading ? (
                 <>
                   <div className="flex items-center gap-1.5">
@@ -548,7 +609,9 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
               ) : null}
             </div>
             {combinedSocialHandles.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="mt-3 flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Social Info</span>
+                <div className="flex flex-wrap items-center gap-2">
                 {combinedSocialHandles.map((handle) => {
                   const Icon = getPlatformIcon(handle.platform);
                   const url = getIdentityUrl(handle.platform, handle.value, handle.url);
@@ -568,15 +631,13 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
                     </button>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Conditional Content: Main Profile Only */}
-          {/* Main Profile View */}
           <>
-            {/* Owner Section */}
-            <div className="space-y-3 mb-5">
+            <div className="space-y-2.5 mb-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
                 <div className="flex items-center gap-2">
@@ -595,15 +656,17 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
                 size="sm"
                 onClick={handleCopyAddress}
                 className="flex-1 h-10 font-mono text-sm justify-between"
+                disabled={!ownerAddress}
               >
-                <span className="truncate">{formatAddress(plant.owner, 6, 4)}</span>
+                <span className="truncate">{ownerAddress ? formatAddress(ownerAddress, 6, 4) : '—'}</span>
                 <Copy className="w-4 h-4 flex-shrink-0" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleViewOnBaseScan}
+                onClick={handleViewOnBlockscout}
                 className="h-10 w-10 p-0"
+                disabled={!ownerAddress}
               >
                 <ExternalLink className="w-4 h-4" />
               </Button>
@@ -621,8 +684,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           </div>
 
           {/* EFP Social Stats - Followers/Following */}
-          <div className="flex flex-col items-center gap-2 py-3 border-t border-border">
-            <div className="flex items-center justify-center gap-6">
+          <div className="flex flex-col items-center gap-1.5 py-3 border-t border-border">
+            <div className="flex items-center justify-center gap-3">
             {efpLoading ? (
               <>
                 <div className="flex flex-col items-center">
@@ -654,13 +717,13 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           </div>
 
           {/* Follow Button Section */}
-          {connectedAddress && 
-           plant?.owner && 
-           connectedAddress.toLowerCase() !== plant.owner.toLowerCase() && (
+          {connectedAddress &&
+           ownerAddress &&
+           connectedAddress.toLowerCase() !== ownerAddress.toLowerCase() && (
             <div className="flex justify-center pt-4 border-t border-border">
               <div className="w-full">
                 <FollowButton
-                  lookupAddress={plant.owner as `0x${string}`}
+                  lookupAddress={ownerAddress as `0x${string}`}
                   connectedAddress={connectedAddress}
                   onDisconnectedClick={() => {
                     toast.error('Please connect your wallet to follow users');
@@ -672,6 +735,8 @@ export default function PlantProfileDialog({ open, onOpenChange, plant }: PlantP
           )}
 
           </>
+          </div>
+        </div>
         </DialogContent>
       </Dialog>
       <Dialog open={otherDialogOpen} onOpenChange={setOtherDialogOpen}>

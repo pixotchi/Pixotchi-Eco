@@ -25,6 +25,50 @@ type StakingDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+type BalanceApiResponse = {
+  success: boolean;
+  balance: string;
+  error?: string;
+};
+
+type StakingApiResponse = {
+  success: boolean;
+  stake: { staked: string; rewards: string } | null;
+  approved: boolean;
+  rewardRatio?: { numerator: string; denominator: string } | null;
+  timeUnit?: string | null;
+  totalStaked?: string | null;
+  error?: string;
+};
+
+const getPeriodLabel = (seconds: number): string => {
+  const day = 86400;
+  const hour = 3600;
+  const minute = 60;
+
+  if (seconds === day) return "day";
+  if (seconds === hour) return "hour";
+  if (seconds === minute) return "minute";
+  if (seconds === 7 * day) return "7 days";
+  if (seconds === 30 * day) return "30 days";
+  if (seconds % day === 0) return `${seconds / day} days`;
+  if (seconds % hour === 0) return `${seconds / hour} hours`;
+  if (seconds % minute === 0) return `${seconds / minute} minutes`;
+  if (seconds === 1) return "second";
+  return `${seconds} seconds`;
+};
+
+const formatRewardDisplay = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value < 0.0001) return "<0.0001";
+  const minimumFractionDigits = value >= 1 ? 2 : 0;
+  const maximumFractionDigits = value < 1 ? 4 : 2;
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits,
+    maximumFractionDigits,
+  });
+};
+
 function formatToken(amount?: bigint): string {
   if (!amount) return "0";
   const formatted = formatUnits(amount, 18);
@@ -40,6 +84,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const [amount, setAmount] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [mode, setMode] = useState<"stake" | "unstake">("stake");
+  const [rewardRatio, setRewardRatio] = useState<{ numerator: bigint; denominator: bigint } | null>(null);
+  const [rewardTimeUnit, setRewardTimeUnit] = useState<bigint | null>(null);
+  const [totalStaked, setTotalStaked] = useState<bigint | null>(null);
 
   const refresh = async () => {
     if (!address) return;
@@ -59,8 +106,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     try {
       // Use API routes for consistent RPC handling
       const [balanceResponse, stakingResponse] = await Promise.all([
-        fetch(`/api/staking/balance?address=${address}`).then(r => r.json()),
-        fetch(`/api/staking/info?address=${address}`).then(r => r.json())
+        fetch(`/api/staking/balance?address=${address}`).then(r => r.json() as Promise<BalanceApiResponse>),
+        fetch(`/api/staking/info?address=${address}`).then(r => r.json() as Promise<StakingApiResponse>)
       ]);
       
       if (!balanceResponse.success) {
@@ -78,12 +125,49 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
         rewards: BigInt(stakingResponse.stake.rewards)
       } : null);
       setApproved(stakingResponse.approved);
+
+      const ratioPayload = stakingResponse.rewardRatio ?? null;
+      if (ratioPayload?.numerator && ratioPayload?.denominator) {
+        try {
+          setRewardRatio({
+            numerator: BigInt(ratioPayload.numerator),
+            denominator: BigInt(ratioPayload.denominator),
+          });
+        } catch {
+          setRewardRatio(null);
+        }
+      } else {
+        setRewardRatio(null);
+      }
+
+      if (stakingResponse.timeUnit) {
+        try {
+          setRewardTimeUnit(BigInt(stakingResponse.timeUnit));
+        } catch {
+          setRewardTimeUnit(null);
+        }
+      } else {
+        setRewardTimeUnit(null);
+      }
+
+      if (stakingResponse.totalStaked) {
+        try {
+          setTotalStaked(BigInt(stakingResponse.totalStaked));
+        } catch {
+          setTotalStaked(null);
+        }
+      } else {
+        setTotalStaked(null);
+      }
     } catch (error) {
       console.error('❌ Failed to refresh staking data:', error);
       // Set safe defaults on error
       setSeedBalance(BigInt(0));
       setStakeInfo(null);
       setApproved(false);
+      setRewardRatio(null);
+      setRewardTimeUnit(null);
+      setTotalStaked(null);
     } finally {
       setLoading(false);
       refreshingRef.current = false;
@@ -148,6 +232,50 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     ? "Enter a valid amount (max 18 decimals)"
     : (exceedsStake ? "Amount exceeds wallet balance" : (exceedsUnstake ? "Amount exceeds staked balance" : ""));
 
+  const rewardRateInfo = useMemo(() => {
+    if (!rewardRatio || rewardRatio.denominator === 0n || !rewardTimeUnit || rewardTimeUnit <= 0n) {
+      return null;
+    }
+
+    const numeratorNumber = Number(rewardRatio.numerator);
+    const denominatorNumber = Number(rewardRatio.denominator);
+    if (!Number.isFinite(numeratorNumber) || !Number.isFinite(denominatorNumber) || denominatorNumber === 0) {
+      return null;
+    }
+
+    const ratePerPeriod = numeratorNumber / denominatorNumber;
+    if (!Number.isFinite(ratePerPeriod) || ratePerPeriod < 0) {
+      return null;
+    }
+
+    const periodSeconds = Number(rewardTimeUnit);
+    if (!Number.isFinite(periodSeconds) || periodSeconds <= 0) {
+      return null;
+    }
+
+    const periodLabel = getPeriodLabel(periodSeconds);
+
+    let stakedTokens = 0;
+    if (stakeInfo?.staked) {
+      const stakedAsNumber = Number(formatUnits(stakeInfo.staked, 18));
+      if (Number.isFinite(stakedAsNumber)) {
+        stakedTokens = stakedAsNumber;
+      }
+    }
+
+    const estimated = stakedTokens * ratePerPeriod;
+
+    return {
+      ratePerUnit: ratePerPeriod,
+      periodLabel,
+      estimated,
+      totalStaked:
+        totalStaked !== null
+          ? Number(formatUnits(totalStaked, 18))
+          : null,
+    };
+  }, [rewardRatio, rewardTimeUnit, stakeInfo?.staked, totalStaked]);
+
   const { isSponsored } = usePaymaster();
   const refreshingRef = useRef<boolean>(false);
   const lastRefreshTime = useRef<number>(0);
@@ -155,7 +283,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md w-[min(92vw,28rem)] p-4">
+      <DialogContent className="max-w-md w-[min(92vw,28rem)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={20} height={20} />
@@ -166,6 +294,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto pr-1">
         {/* Mode switch placed below description with positive spacing */}
         <div className="mt-2 mb-3 flex items-center justify-between">
           <ToggleGroup
@@ -189,7 +318,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           </Button>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-5 pb-2">
           {mode === 'stake' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div className="p-3 rounded-lg border border-border bg-card">
@@ -222,6 +351,38 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                   Unclaimed LEAF
                 </div>
                 <div className="mt-1 text-base font-semibold tabular-nums">{loading ? "…" : formatToken(stakeInfo?.rewards)}</div>
+              </div>
+            </div>
+          )}
+
+          {rewardRateInfo && (
+            <div className="rounded-lg border border-border bg-card p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Reward Rate <span className="font-normal text-muted-foreground">(rate varies based on total staked amount)</span>
+                </span>
+              </div>
+              <div className="mt-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Per SEED</span>
+                  <span className="font-semibold">
+                    {formatRewardDisplay(rewardRateInfo.ratePerUnit)} LEAF / {rewardRateInfo.periodLabel}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Your rewards</span>
+                  <span className="font-semibold">
+                    {formatRewardDisplay(rewardRateInfo.estimated)} LEAF / {rewardRateInfo.periodLabel}
+                  </span>
+                </div>
+                {typeof rewardRateInfo.totalStaked === 'number' && rewardRateInfo.totalStaked >= 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Total SEED staked</span>
+                    <span className="font-semibold">
+                      {rewardRateInfo.totalStaked.toLocaleString(undefined, { maximumFractionDigits: 2 })} SEED
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -328,8 +489,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             />
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </DialogContent>
+  </Dialog>
   );
 }
 

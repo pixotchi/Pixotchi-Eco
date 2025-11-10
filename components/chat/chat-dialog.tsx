@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ChatProvider, useChat } from './chat-context';
 import ChatMessages from './chat-messages';
@@ -12,6 +12,7 @@ import Image from 'next/image';
 import AgentPermissionsPanel from './AgentPermissionsPanel';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useFrameContext } from '@/lib/frame-context';
+import { useTransactions } from 'ethereum-identity-kit';
 
 interface ChatDialogProps {
   open: boolean;
@@ -62,11 +63,11 @@ function ChatDialogContent() {
         )}
       </DialogHeader>
 
-      <div className="flex-grow overflow-y-auto space-y-3">
+      <div className="flex-grow overflow-hidden">
         <ChatMessages />
       </div>
 
-      <DialogFooter className="border-t border-border">
+      <DialogFooter className="border-t border-border pt-3">
         <div className="w-full space-y-2">
             {isAITyping && <AITypingIndicator />}
             <ChatInput />
@@ -77,6 +78,14 @@ function ChatDialogContent() {
 }
 
 export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
+  const { txModalOpen } = useTransactions();
+
+  useEffect(() => {
+    if (txModalOpen && open) {
+      onOpenChange(false);
+    }
+  }, [txModalOpen, open, onOpenChange]);
+
   return (
     <ChatProvider>
       <Dialog open={open} onOpenChange={onOpenChange}>

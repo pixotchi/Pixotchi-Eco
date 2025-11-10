@@ -29,6 +29,34 @@ export const stakingAbi = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getRewardRatio",
+    "outputs": [
+      { "internalType": "uint256", "name": "numerator", "type": "uint256" },
+      { "internalType": "uint256", "name": "denominator", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getTimeUnit",
+    "outputs": [
+      { "internalType": "uint80", "name": "timeUnit", "type": "uint80" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "stakingTokenBalance",
+    "outputs": [
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
 

@@ -15,11 +15,15 @@ export const AI_CONFIG = {
         'claude-3-sonnet-20240229', 
         'claude-3-5-sonnet-20240620',
         'claude-3-5-haiku-20241022',
-        'claude-sonnet-4-20250514'
+        'claude-haiku-4-5-20251001'
       ],
-      defaultModel: 'claude-sonnet-4-20250514',
-      maxTokens: 600,
-      costPerToken: 0.00025 / 1000, // Approximate cost per token
+      defaultModel: 'claude-3-5-haiku-20241022', // ✅ Changed to Haiku 4.5 (was Sonnet 4)
+      maxTokens: 1024, // ✅ Increased from 600 (Haiku has 200k context window)
+      costPerToken: 1 / 1_000_000, // ✅ Haiku 4.5: $1 per million input tokens
+      // Prompt caching pricing:
+      // - Cache writes (5-min): $1.25 / MTok (1.25x)
+      // - Cache reads: $0.10 / MTok (90% savings!)
+      // - Output tokens: $5 / MTok
       endpoint: 'https://api.anthropic.com/v1/messages',
     }
   },
