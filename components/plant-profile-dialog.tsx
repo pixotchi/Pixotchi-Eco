@@ -5,7 +5,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StandardContainer } from '@/components/ui/pixel-container';
-import { Copy, ExternalLink, Globe as GlobeIcon, Mail as MailIcon } from 'lucide-react';
+import {
+  Copy,
+  ExternalLink,
+  Globe as GlobeIcon,
+  Mail as MailIcon,
+  Heart,
+  Repeat2,
+  MessageCircle,
+  Bookmark,
+  Quote,
+  ImageIcon,
+} from 'lucide-react';
 import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
 import { getUserGameStats } from '@/lib/user-stats-service';
@@ -21,6 +32,29 @@ import { useAccount } from 'wagmi';
 import { FollowButton, useTransactions } from 'ethereum-identity-kit';
 import { Avatar } from '@coinbase/onchainkit/identity';
 import { base } from 'viem/chains';
+import { formatDistanceToNow } from 'date-fns';
+
+type TwitterMediaLite = { type?: string | null; url?: string | null };
+type TwitterPostLite = {
+  id: string;
+  text: string;
+  createdAt?: string | null;
+  url?: string | null;
+  metrics?: {
+    likes?: number;
+    reposts?: number;
+    quotes?: number;
+    replies?: number;
+    bookmarks?: number;
+  };
+  media?: (TwitterMediaLite | null | undefined)[] | null;
+};
+type TwitterDataLite = {
+  username?: string;
+  status?: string;
+  fetchedAt?: number | null;
+  posts?: TwitterPostLite[];
+};
 
 interface PlantProfileDialogProps {
   open: boolean;
@@ -126,6 +160,7 @@ export default function PlantProfileDialog({
   const [efpLoading, setEfpLoading] = useState(false);
   const [efpError, setEfpError] = useState<string | null>(null);
   const [otherDialogOpen, setOtherDialogOpen] = useState(false);
+  const [postsDialogOpen, setPostsDialogOpen] = useState(false);
   const [efpRefreshKey, setEfpRefreshKey] = useState(0);
 
   // Get connected wallet address
@@ -162,6 +197,42 @@ export default function PlantProfileDialog({
   });
   const identitySummary = socialProfile?.identitySummary;
   const platformHighlights = identitySummary?.platforms.slice(0, 3) ?? [];
+  const twitterHandle = useMemo(() => {
+    return identitySummary?.handles?.find(
+      (handle) => handle.platform?.toLowerCase?.() === 'twitter' && handle.value
+    ) ?? null;
+  }, [identitySummary]);
+  const twitterData = (socialProfile as { twitter?: TwitterDataLite } | null)?.twitter ?? null;
+  const twitterUsername = twitterData?.username ?? twitterHandle?.value ?? null;
+  const twitterPosts: TwitterPostLite[] = twitterData?.posts ?? [];
+  const twitterStatus = twitterData?.status ?? null;
+  const twitterLastUpdated = useMemo(() => {
+    if (!twitterData?.fetchedAt) return null;
+    const date = new Date(twitterData.fetchedAt);
+    if (Number.isNaN(date.getTime())) return null;
+    try {
+      return formatDistanceToNow(date, { addSuffix: true });
+    } catch {
+      return date.toLocaleString();
+    }
+  }, [twitterData?.fetchedAt]);
+  const canShowPostsButton = Boolean(socialProfile?.memoryProfile && twitterUsername);
+  const formatTwitterPostAge = useCallback((value?: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    try {
+      return formatDistanceToNow(date, { addSuffix: true });
+    } catch {
+      return date.toLocaleString();
+    }
+  }, []);
+  const twitterStatusLabel = useMemo(() => {
+    if (!twitterStatus) return null;
+    return twitterStatus.replace(/_/g, ' ');
+  }, [twitterStatus]);
   const primaryIdentities = useMemo(() => {
     if (!identitySummary?.handles) return [];
     const handles = identitySummary.handles;
@@ -512,7 +583,11 @@ export default function PlantProfileDialog({
               </div>
               <div className="absolute -bottom-8 left-6">
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-xl border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center">
+                  <div
+                    className={`w-24 h-24 border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center ${
+                      isWalletVariant ? 'rounded-full' : 'rounded-xl'
+                    }`}
+                  >
                     {showPrimaryLoading ? (
                       <Skeleton className="h-full w-full" />
                     ) : isWalletVariant ? (
@@ -541,19 +616,31 @@ export default function PlantProfileDialog({
             </div>
             <div className="flex flex-col gap-1 px-6 pb-5 pt-6">
           {/* Plant Info */}
-          <div className="mt-6 mb-2">
-            <DialogTitle className="text-2xl font-bold truncate">
-              {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
-            </DialogTitle>
-            {displaySubtitle && !showPrimaryLoading && (
-              <DialogDescription className="text-sm mt-1">
-                {displaySubtitle}
-              </DialogDescription>
-            )}
-            {hasPlant && plant?.timePlantBorn && !showPrimaryLoading && !isWalletVariant && (
-              <div className="text-xs text-muted-foreground mt-1">
-                Planted on {new Date(Number(plant.timePlantBorn) * 1000).toLocaleDateString()}
-              </div>
+          <div className="mt-6 mb-2 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle className="text-2xl font-bold truncate">
+                {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
+              </DialogTitle>
+              {displaySubtitle && !showPrimaryLoading && (
+                <DialogDescription className="text-sm mt-1">
+                  {displaySubtitle}
+                </DialogDescription>
+              )}
+              {hasPlant && plant?.timePlantBorn && !showPrimaryLoading && !isWalletVariant && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Planted on {new Date(Number(plant.timePlantBorn) * 1000).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+            {canShowPostsButton && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 px-3"
+                onClick={() => setPostsDialogOpen(true)}
+              >
+                View X posts{twitterPosts.length > 0 ? ` (${twitterPosts.length})` : ''}
+              </Button>
             )}
           </div>
 
@@ -737,6 +824,111 @@ export default function PlantProfileDialog({
           </>
           </div>
         </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={postsDialogOpen} onOpenChange={setPostsDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Recent posts</DialogTitle>
+            <DialogDescription>
+              {twitterUsername
+                ? `Latest ${twitterPosts.length || 10} posts from @${twitterUsername} via Memory Protocol${
+                    twitterLastUpdated ? ` • updated ${twitterLastUpdated}` : ''
+                  }.`
+                : `Latest ${twitterPosts.length || 10} posts via Memory Protocol.`}
+            </DialogDescription>
+          </DialogHeader>
+          {twitterPosts.length > 0 ? (
+            <>
+              <div className="mb-3 text-xs text-muted-foreground">
+                <span>
+                  Showing {twitterPosts.length} cached post{twitterPosts.length === 1 ? '' : 's'}.
+                </span>
+                {twitterLastUpdated ? (
+                  <span className="ml-1">
+                    Last updated {twitterLastUpdated}.
+                  </span>
+                ) : null}
+              </div>
+              <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+              {twitterPosts.map((post: TwitterPostLite) => {
+                const postAge = formatTwitterPostAge(post.createdAt);
+                const metrics = [
+                  { key: 'likes', label: 'Likes', value: post.metrics?.likes, icon: Heart },
+                  { key: 'reposts', label: 'Reposts', value: post.metrics?.reposts, icon: Repeat2 },
+                  { key: 'quotes', label: 'Quotes', value: post.metrics?.quotes, icon: Quote },
+                  { key: 'replies', label: 'Replies', value: post.metrics?.replies, icon: MessageCircle },
+                  { key: 'bookmarks', label: 'Bookmarks', value: post.metrics?.bookmarks, icon: Bookmark },
+                ].filter((metric) => typeof metric.value === 'number' && (metric.value ?? 0) > 0);
+                const mediaCount = Array.isArray(post.media)
+                  ? post.media.filter((item: TwitterMediaLite | null | undefined) => item?.url).length
+                  : 0;
+                return (
+                  <div
+                    key={post.id}
+                    className="rounded-xl border border-border/60 bg-background/95 p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md"
+                  >
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                      {post.text || '(No text)'}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      {postAge ? <span>{postAge}</span> : null}
+                      {post.url ? (
+                        <>
+                          <span className="opacity-60">•</span>
+                          <a
+                            href={post.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" aria-hidden />
+                            Open on X
+                          </a>
+                        </>
+                      ) : null}
+                    </div>
+                    {metrics.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {metrics.map((metric) => {
+                          const Icon = metric.icon;
+                          return (
+                            <span
+                              key={metric.key}
+                              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground"
+                            >
+                              <Icon className="h-3.5 w-3.5 text-primary" aria-hidden />
+                              <span>{metric.value}</span>
+                              <span className="sr-only">{metric.label}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {mediaCount > 0 && (
+                      <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                        <ImageIcon className="h-3.5 w-3.5" aria-hidden />
+                        <span>
+                          {mediaCount} attachment{mediaCount > 1 ? 's' : ''} available on X
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            </>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+              {twitterStatus === 'in_progress'
+                ? 'Posts are syncing from Memory Protocol. Please check back in a few minutes.'
+                : twitterStatus === 'queued'
+                  ? 'Post sync has been queued. Try again shortly.'
+                  : twitterStatusLabel
+                    ? `No cached posts yet (status: ${twitterStatusLabel}).`
+                    : 'No cached posts are available yet.'}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
       <Dialog open={otherDialogOpen} onOpenChange={setOtherDialogOpen}>

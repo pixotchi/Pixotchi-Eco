@@ -360,7 +360,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             <div className="rounded-lg border border-border bg-card p-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Reward Rate <span className="font-normal text-muted-foreground">(rate varies based on total staked amount)</span>
+                  Reward Rate 
                 </span>
               </div>
               <div className="mt-2 space-y-1.5">

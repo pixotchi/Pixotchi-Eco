@@ -153,8 +153,6 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     }
   }
 
-  console.log(`🔄 Fetching fresh user stats for ${address.slice(0, 6)}...`);
-
   try {
     // Fetch all user data in parallel
     const [plants, lands, seedBalance, leafBalance] = await Promise.all([
@@ -577,14 +575,6 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         console.error('Error caching user stats:', error);
       }
     }
-
-    console.log(`✅ User stats fetched for ${address.slice(0, 6)}:`, {
-      plants: totalPlants,
-      lands: totalLands,
-      seedBalance: formattedSeedBalance,
-      leafBalance: formattedLeafBalance,
-      plantsNeedingCare: plantsNeedingCare.length
-    });
 
     return stats;
 
