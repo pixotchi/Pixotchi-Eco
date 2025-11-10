@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
         });
         const twitterResponse = await fetchMemoryTwitterPosts(twitterHandle.value, { limit: 10 });
         if (twitterResponse) {
-          const posts: TwitterPost[] = Array.isArray(twitterResponse.posts)
+          const posts = Array.isArray(twitterResponse.posts)
             ? twitterResponse.posts.slice(0, 10).map((post: any) => {
                 const id = post?.id ?? post?.post_id ?? post?.tweet_id;
                 if (!id) {
