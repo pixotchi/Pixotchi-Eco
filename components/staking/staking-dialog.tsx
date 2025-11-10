@@ -233,7 +233,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     : (exceedsStake ? "Amount exceeds wallet balance" : (exceedsUnstake ? "Amount exceeds staked balance" : ""));
 
   const rewardRateInfo = useMemo(() => {
-    if (!rewardRatio || rewardRatio.denominator === 0n || !rewardTimeUnit || rewardTimeUnit <= 0n) {
+    const zero = BigInt(0);
+    if (!rewardRatio || rewardRatio.denominator === zero || !rewardTimeUnit || rewardTimeUnit <= zero) {
       return null;
     }
 

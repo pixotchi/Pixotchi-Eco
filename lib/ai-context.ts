@@ -294,7 +294,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 ### Daily Streaks
 - Streak increases when at least one tracked action is logged on a new UTC day (mission completion, chat activity, etc.).
 - Missing a full UTC day resets the current streak but keeps the all-time best value.
-- Current streak, best streak, daily mission score (out of 80), and lifetime Rocks points are shown in the About tab under “Farmer's Tasks”.
+- Current streak, best streak, daily mission score (out of 80), and lifetime Rocks points are shown in the Abwhout tab under “Farmer's Tasks”.
 
 ---
 
