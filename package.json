@@ -20,7 +20,7 @@
     "@farcaster/miniapp-node": "0.1.11",
     "@farcaster/miniapp-wagmi-connector": "1.1.0",
     "@safe-global/safe-apps-sdk": "9.1.0",
-    "@safe-global/safe-apps-wagmi": "latest",
+    "@gnosis.pm/safe-apps-wagmi": "2.1.0",
     "@privy-io/react-auth": "3.6.1",
     "@privy-io/wagmi": "2.0.2",
     "wagmi": "2.19.2",
