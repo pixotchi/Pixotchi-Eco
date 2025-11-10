@@ -280,7 +280,7 @@ export default function LandsView() {
 
   if (error) {
     return (
-      <Card>
+      <Card className="rounded-2xl">
         <CardContent className="py-4 text-center text-destructive">{error}</CardContent>
       </Card>
     );
@@ -308,7 +308,7 @@ export default function LandsView() {
         {/* StatusBar replaces BalanceCard globally under header */}
 
         {lands.length > 1 && (
-          <Card>
+          <Card className="rounded-2xl">
             <CardHeader><CardTitle>Select Land</CardTitle></CardHeader>
             <CardContent>
               <DropdownMenu>
@@ -341,7 +341,7 @@ export default function LandsView() {
 
       {selectedLand && (
         <>
-          <Card>
+          <Card className="rounded-2xl">
             <CardContent className="space-y-3">
               <div className="relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-2 gap-2 text-sm font-bold text-foreground/80 z-20">
@@ -425,7 +425,7 @@ export default function LandsView() {
           </Card>
 
           {/* Building Management Section */}
-        <Card>
+        <Card className="rounded-2xl">
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="font-pixel">Buildings</CardTitle>

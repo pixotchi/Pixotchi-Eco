@@ -51,39 +51,41 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   // ETH balance display removed to prioritize SEED and LEAF
 
   return (
-    <div className="w-full" role="region" aria-label="Account balance and staking">
-      <div className="flex items-center justify-between gap-3 px-4 py-1.5 border-b border-border bg-card/90 backdrop-blur-sm">
-        <div className="flex items-center gap-4 min-w-0" role="group" aria-label="Token balances">
-          <div className="flex items-center gap-1.5 min-w-0" aria-label={`Seed balance: ${seedText} SEED`}>
-            <img src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
-            <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{seedText}</span>
+    <div className="w-full bg-background" role="region" aria-label="Account balance and staking">
+      <div className="rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-4 min-w-0" role="group" aria-label="Token balances">
+            <div className="flex items-center gap-1.5 min-w-0" aria-label={`Seed balance: ${seedText} SEED`}>
+              <img src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
+              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{seedText}</span>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0" aria-label={`Leaf balance: ${leafText} LEAF`}>
+              <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
+              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 min-w-0" aria-label={`Leaf balance: ${leafText} LEAF`}>
-            <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
-            <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
+          <div className="shrink-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTasksOpen(true)}
+              className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+              aria-label="Open tasks"
+              aria-expanded={tasksOpen}
+              aria-haspopup="dialog"
+            >
+              Tasks
+            </button>
+            <button
+              type="button"
+              onClick={() => setStakingOpen(true)}
+              className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+              aria-label="Open staking dialog"
+              aria-expanded={stakingOpen}
+              aria-haspopup="dialog"
+            >
+              Stake
+            </button>
           </div>
-        </div>
-        <div className="shrink-0 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTasksOpen(true)}
-            className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
-            aria-label="Open tasks"
-            aria-expanded={tasksOpen}
-            aria-haspopup="dialog"
-          >
-            Tasks
-          </button>
-          <button
-            type="button"
-            onClick={() => setStakingOpen(true)}
-            className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
-            aria-label="Open staking dialog"
-            aria-expanded={stakingOpen}
-            aria-haspopup="dialog"
-          >
-            Stake
-          </button>
         </div>
       </div>
       <StakingDialog open={stakingOpen} onOpenChange={setStakingOpen} />
