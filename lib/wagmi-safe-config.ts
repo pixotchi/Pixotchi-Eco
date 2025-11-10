@@ -15,7 +15,7 @@ type ConnectorChains = Parameters<CreateConnectorFn>[0]["chains"];
 
 export const createSafeConnectorInstance = (chains: ConnectorChains) =>
   new SafeConnector({
-    chains,
+    chains: [...chains],
     options: {
       debug: false,
     },
