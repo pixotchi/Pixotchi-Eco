@@ -51,8 +51,8 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 - Staking: 0xF15D93c3617525054aF05338CC6Ccf18886BD03A
 - LP (BaseSwap): 0xAA6a81A7df94DAb346e2d677225caD47220540C5
 
-## How it works (at a glance)
-1. Connect a wallet (or use an embedded wallet).  
+## How it works
+1. Connect a wallet (Autoconnects if in Mini app).  
 2. Mint your first plant/land with SEED.  
 3. Check in daily to grow your plants, upgrade buildings, and complete missions.  
 4. Chat, trade, stake SEED, and compete for ETH rewards as you climb the leaderboard.  
@@ -85,7 +85,7 @@ npm run lint    # run ESLint
 - **Farcaster/Base app users** who want a native, mobile‑friendly Mini App experience.  
 - **Builders** who want to explore or extend a production‑ready Next.js/React onchain game.
 
-## For developers (lightweight)
+## For developers
 Pixotchi uses Next.js + React with Tailwind, and integrates wallets and Base L2. The codebase is organized in `app/`, `components/`, and `lib/`. You can explore features like chat, staking, swapping, missions, and notifications directly in the repository.
 
 ## Contributing
