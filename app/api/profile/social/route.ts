@@ -114,43 +114,43 @@ export async function GET(request: NextRequest) {
         });
         const twitterResponse = await fetchMemoryTwitterPosts(twitterHandle.value, { limit: 10 });
         if (twitterResponse) {
-          const posts = Array.isArray(twitterResponse.posts)
-            ? twitterResponse.posts.slice(0, 10).map((post: any) => {
-                const id = post?.id ?? post?.post_id ?? post?.tweet_id;
-                if (!id) {
-                  return null;
-                }
-                const text = typeof post?.text === 'string' ? post.text : '';
-                const url =
-                  post?.url ||
-                  (typeof id === 'string' || typeof id === 'number'
-                    ? `https://x.com/i/web/status/${id}`
-                    : null);
-                const metrics = {
-                  likes: typeof post?.likesCount === 'number' ? post.likesCount : undefined,
-                  reposts: typeof post?.repostCount === 'number' ? post.repostCount : undefined,
-                  quotes: typeof post?.quoteCount === 'number' ? post.quoteCount : undefined,
-                  replies: typeof post?.replyCount === 'number' ? post.replyCount : undefined,
-                  bookmarks: typeof post?.bookmarkCount === 'number' ? post.bookmarkCount : undefined,
-                };
-                const media = Array.isArray(post?.media)
-                  ? post.media.map((item: any) => ({
-                      type: item?.type ?? null,
-                      url: item?.url ?? null,
-                    }))
-                  : undefined;
+          const posts: TwitterPost[] = [];
 
-                return {
-                  id: String(id),
-                  text,
-                  createdAt: normalizePostDate(post),
-                  url: url ?? null,
-                  metrics,
-                  media,
-                } satisfies TwitterPost;
-              })
-                .filter((post): post is TwitterPost => Boolean(post))
-            : [];
+          if (Array.isArray(twitterResponse.posts)) {
+            for (const rawPost of twitterResponse.posts.slice(0, 10)) {
+              const id = rawPost?.id ?? rawPost?.post_id ?? rawPost?.tweet_id;
+              if (!id) continue;
+
+              const text = typeof rawPost?.text === 'string' ? rawPost.text : '';
+              const url =
+                rawPost?.url ||
+                (typeof id === 'string' || typeof id === 'number'
+                  ? `https://x.com/i/web/status/${id}`
+                  : null);
+              const metrics = {
+                likes: typeof rawPost?.likesCount === 'number' ? rawPost.likesCount : undefined,
+                reposts: typeof rawPost?.repostCount === 'number' ? rawPost.repostCount : undefined,
+                quotes: typeof rawPost?.quoteCount === 'number' ? rawPost.quoteCount : undefined,
+                replies: typeof rawPost?.replyCount === 'number' ? rawPost.replyCount : undefined,
+                bookmarks: typeof rawPost?.bookmarkCount === 'number' ? rawPost.bookmarkCount : undefined,
+              };
+              const media = Array.isArray(rawPost?.media)
+                ? rawPost.media.map((item: any) => ({
+                    type: item?.type ?? null,
+                    url: item?.url ?? null,
+                  }))
+                : undefined;
+
+              posts.push({
+                id: String(id),
+                text,
+                createdAt: normalizePostDate(rawPost) ?? null,
+                url: url ?? null,
+                metrics,
+                media,
+              });
+            }
+          }
 
           twitterData = {
             username: twitterResponse.profile?.username ?? twitterHandle.value,
