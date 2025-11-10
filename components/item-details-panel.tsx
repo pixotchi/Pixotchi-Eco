@@ -538,7 +538,7 @@ export default function ItemDetailsPanel({
                   } catch {}
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Buy Accessory"
+                buttonText="Buy Item"
                 buttonClassName="w-full"
                 disabled={selectedPlant.status === 4 || hasInsufficientFunds}
               />

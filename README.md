@@ -1,6 +1,10 @@
-## Pixotchi Ecosystem App
+<p align="center">
+  <img src="https://mini.pixotchi.tech/ecologo.png" alt="Pixotchi Logo" width="180">
+</p>
 
-Production-ready, Farcaster client compatible and web application deployed on Base Network. Provides onchain asset management for NFT-based plants and lands with smart wallet support, autonomous agent actions via Coinbase CDP Spend Permissions, real-time chat infrastructure, and comprehensive reliability features.
+## Pixotchi Ecosystem
+
+Pixotchi is a P2E onchain game. Grow a playful onchain garden on Base. Mint and care for NFT plants and lands, complete daily missions, climb leaderboards, chat with the community, and earn in‑game rewards. Runs on the web and as a Farcaster/Base Mini App.
 
 <!-- Badges -->
 
@@ -12,270 +16,84 @@ Production-ready, Farcaster client compatible and web application deployed on Ba
 [![Farcaster MiniApp](https://img.shields.io/badge/Farcaster-MiniApp-6f3aff?style=flat-square)](https://www.farcaster.xyz/)
 [![Base Network](https://img.shields.io/badge/Base-Mainnet-0052FF?logo=coinbase&logoColor=white&style=flat-square)](https://www.base.org/)
 
-## Architecture Overview
-- **Platform**: Dual-deployment architecture supporting Farcaster Mini App and standalone web application.
-- **Agent System**: Coinbase CDP Smart Account implementation with Spend Permissions for delegated transaction execution and comprehensive permission validation.
-- **Blockchain Integration**: Viem-based transaction layer with Uniswap V2-compatible swap routing on Base Network.
-- **Frontend Stack**: React 19 with Next.js 15 App Router, Tailwind CSS 4, Radix UI primitives, WCAG 2.1 accessibility compliance.
-- **Authentication**: Multi-provider wallet support (Privy embedded wallets, EOA, Farcaster embedded), Wagmi hooks, OnchainKit MiniKit integration, ERC-4337 smart wallet detection, optional paymaster sponsorship.
-- **Gamification Engine**: Daily mission tracking, streak persistence, monthly leaderboard aggregation with admin reset capabilities.
-- **Communication Infrastructure**: Redis-backed public chat with rate limiting and spam detection, OpenAI-powered AI assistant, Agent mode with tool-calling capabilities, administrative moderation interface.
-- **Security Architecture**: Multi-endpoint RPC failover, Content Security Policy enforcement, CORS with origin validation, IP-based rate limiting with timing-attack mitigation, structured audit logging.
-- **Notification System**: Farcaster Mini App push notifications via Neynar v2 API for transaction confirmations and time-sensitive alerts.
+## What is Pixotchi?
+- **Grow & earn**: Grow your garden and compete for ETH rewards.
+- **Compete**: Daily missions and monthly leaderboards reward consistency.
+- **SEED token**: Used for minting, upgrades, and staking.
+- **Social by default**: Public chat and a friendly community.
+- **Mobile‑first**: Designed for phones; works great inside Farcaster.
+- **Wallet‑friendly**: Supports EOAs, embedded wallets, and smart accounts.
+- **Notifications**: Get reminders when your plants need attention.
+- **AI integrated**: Get assistance from Neural Seed on learning the gameplay and for questions.
+- **Agent mode**: Executes approved actions via delegated permissions.
 
-## Tech Stack
-- **Framework**: Next.js 16, React 19.2
-- **UI**: Tailwind CSS 4.1, Radix UI, Lucide React, custom pixel art icons
-- **Web3**: Viem, Wagmi, Coinbase OnchainKit, Coinbase CDP SDK
-- **AI**: Vercel AI SDK 4.3.19, `@ai-sdk/openai`, optional Anthropic/Claude
-- **Data**: Redis/KV (Upstash compatible) for invites, chat, usage, audit logs, feedback, broadcasts
-- **Mini App**: `@farcaster/miniapp-sdk` with manifest and notifications (Neynar v2 delivery)
-- **Scheduler**: Upstash QStash (HTTP cron) to trigger backend checks
-- **Analytics**: Vercel Analytics, Vercel Speed Insights
-- **Authentication**: Privy, Coinbase Wallet SDK
+## Why open source?
+Pixotchi is maintained by our team and open‑sourced for transparency and long‑term credibility.
 
-## Project Structure
-Key directories and files:
-- `app/`: Next.js routes (pages + API)
-  - `app/.well-known/farcaster.json/route.ts`: Farcaster Mini App manifest (icon/hero/splash, embeds, webhook, association)
-  - `app/admin/*`: Admin dashboard (invites, chat moderation, AI moderation, gamification)
-  - `app/api/*`: Server routes for chat, AI, agent, invites, staking, swap, notify, webhook, gamification, notifications cron/admin, feedback, broadcast
-- `components/`: UI, transactions, chat, tutorial, dialogs, loaders, theme, feedback, broadcast
-- `hooks/`: UX and platform hooks (Farcaster, keyboard, countdown, auto‑connect)
-- `lib/`: Core logic (contracts, env, AI, invites, gamification, redis, logger, wallet contexts)
-- `public/`: Static assets (icons, fonts, ABIs, images)
-- `middleware.ts`: Global CORS, CSP, and security headers
+## Try it
+- **Play now**: [mini.pixotchi.tech](https://mini.pixotchi.tech)
+- **Farcaster/Base App**: Available as a Mini App. (Search Pixotchi Mini in Apps)
 
-## Core Features
-### Blockchain Transaction Layer
-- Resilient Viem transport configuration with multi-endpoint RPC failover and exponential backoff retry logic.
-- Contract interface abstractions in `lib/contracts.ts`:
-  - `PIXOTCHI_NFT_ADDRESS` (ERC-721), `PIXOTCHI_TOKEN_ADDRESS` (SEED ERC-20), `LEAF` (ERC-20), `STAKE` (staking contract), `UNISWAP_ROUTER_ADDRESS` (AMM integration)
-- Transaction helpers: NFT minting, token approvals, staking operations, marketplace item purchases, land/building management, token swaps, activity logging.
-- **Asset Transfer System**: Bulk transfer capabilities for plants and lands with batch router integration for efficient multi-NFT transfers.
+## Integrations
+- **Base** – Layer 2 network where Pixotchi runs.
+- **Paymaster** - Gas sponsorship compatibility
+- **Farcaster Mini App** – Native, mobile‑friendly in‑app experience.
+- **Coinbase OnchainKit & CDP** – Wallets, AI Agents and smart account capabilities.
+- **EFP** – Onchain Social Graph by Ethereum Follow Protocol.
+- **Memory Protocol** – Onchain Social Identities Graph.
+- **Neynar** - Notifications infra
 
-### Autonomous Agent System (CDP Spend Permissions)
-- Coinbase CDP Smart Account with ERC-7715 Spend Permission delegation for autonomous transaction execution.
-- Supported operations: ZEST strain minting (strain ID 4, 10 SEED per NFT, maximum 5 NFTs per transaction).
-- API surface `/api/agent/*`:
-  - `GET|POST /api/agent/wallet` – Smart Account initialization and wallet bootstrap
-  - `GET /api/agent/config` – Agent configuration and operational parameters
-  - `GET /api/agent/config/suggest-allowance` – Permission allowance calculation
-  - `GET /api/agent/permission/summary?address=0x..` – Permission enumeration and status
-  - `POST /api/agent/permission/validate` – Pre-execution permission validation
-  - `POST /api/agent/mint` – Atomic approve-mint-transfer transaction sequence
-  - `POST /api/agent/chat` – LLM-driven tool-calling interface with estimation and confirmation flow
-  - `POST /api/agent/test-conversation` – Integration testing endpoint
-- Client implementation: `components/chat/AgentPermissionsPanel.tsx` for permission management interface.
+## Smart contracts (Base Mainnet)
+- Plant (ERC‑721): 0xeb4e16c804ae9275a655abbc20cd0658a91f9235
+- Land (ERC‑721): 0x3f1F8F0C4BE4bCeB45E6597AFe0dE861B8c3278c
+- SEED (ERC‑20): 0x546D239032b24eCEEE0cb05c92FC39090846adc7
+- LEAF (ERC‑20): 0xE78ee52349D7b031E2A6633E07c037C3147DB116
+- Staking: 0xF15D93c3617525054aF05338CC6Ccf18886BD03A
+- LP (BaseSwap): 0xAA6a81A7df94DAb346e2d677225caD47220540C5
 
-### Access Control System
-- Invite code generation and validation with daily issuance caps, expiration enforcement, self-invite prevention, and user validation pipeline.
-- Administrative interface for code lifecycle management, statistical analysis, bulk generation, cleanup operations, and audit trail persistence.
+## How it works
+1. Connect a wallet (Autoconnects if in Mini app).  
+2. Mint your first plant/land with SEED.  
+3. Check in daily to grow your plants, upgrade buildings, and complete missions.  
+4. Chat, trade, stake SEED, and compete for ETH rewards as you climb the leaderboard.  
 
-### Public Chat Infrastructure
-- Redis-backed message persistence with per-address rate limiting and duplicate message detection.
-- Administrative moderation dashboard with message listing, selective/bulk deletion, and usage analytics.
+Built on Base and designed to be fast, simple, and fun.
 
-### AI Assistant
-- Multi-provider architecture (OpenAI/Anthropic) with runtime model selection, automatic retry with exponential backoff, request timeout enforcement, and usage/cost tracking.
-- Conversation management with persistent history, automatic title generation, administrative list/fetch/delete operations, and aggregated usage metrics.
+## Getting started (local)
+**Prerequisites**: Node.js 18+ and npm or pnpm. Redis (or a Redis‑compatible service) is recommended for chat and persistence.
 
-### Gamification System
-- Daily mission completion tracking with point attribution, consecutive day streak persistence, and monthly leaderboard aggregation.
-- Administrative reset endpoints with granular scope (streaks/missions/all) and real-time leaderboard visualization dashboard.
-
-### DeFi Features
-- SEED token staking with approve-stake-claim workflow, marketplace order creation and fulfillment with dynamic price quotes, land building upgrades (LEAF cost), production acceleration (SEED cost), yield claiming, and quest progression.
-
-### Farcaster Platform Integration
-- Manifest at `/.well-known/farcaster.json` with metadata, embed URL allowlist, and webhook configuration. OpenGraph and `fc:miniapp`/`fc:frame` metadata in `app/layout.tsx`.
-- Push notification delivery via `/api/notify` endpoint; token lifecycle management via `/api/webhook` with signature verification (Farcaster JSON signatures and HMAC fallback). Delivery orchestrated through Neynar v2 API.
-- **Enhanced Context Handling**: Comprehensive Farcaster context extraction with proper null/undefined handling, safe-area insets application, and platform detection.
-
-### User Experience Features
-- **Interactive Tutorial System**: Slideshow-based onboarding with step-by-step guidance for new users.
-- **Theme System**: 8 customizable themes (light, dark, green, yellow, red, pink, blue, violet) with persistent user preferences.
-- **Mobile Optimization**: Keyboard-aware UI, viewport height management, and touch-friendly navigation.
-- **Error Boundaries**: Comprehensive error handling with graceful fallbacks and user-friendly error messages.
-- **Performance Optimizations**: Code splitting, intelligent tab prefetching, and optimized asset loading.
-
-### Feedback & Communication System
-- **User Feedback Collection**: In-app feedback submission with Farcaster context capture, wallet type detection, and 90-day data retention.
-- **Broadcast Message System**: Admin-controlled in-app messaging with priority levels, expiration settings, and engagement tracking.
-- **Enhanced Chat Infrastructure**: Multi-mode chat system (public, AI assistant, agent mode) with improved moderation tools.
-
-### User Interface & Experience
-- **Tab-Based Navigation**: 6 main tabs (Farm, Mint, Activity, Ranking, Swap, About) with intelligent prefetching and code splitting.
-- **Plant & Land Management**: Comprehensive NFT management with shop items, garden accessories, building upgrades, and quest systems.
-- **Real-Time Status Bar**: Global balance display (SEED, LEAF, ETH) with staking integration and transaction status.
-- **Wallet Profile System**: Detailed wallet information display with Farcaster context, smart wallet status, and transaction history.
-- **Responsive Design**: Mobile-first approach with keyboard awareness, viewport optimization, and touch-friendly interactions.
-
-## Security & Reliability
-### RPC Resilience
-- Centralized RPC configuration in `lib/env-config.ts#getRpcConfig()` with multi-endpoint fallback transport, automatic endpoint rotation, and exponential backoff on failures.
-
-### Rate Limiting & Abuse Prevention
-- Per-address rate limiting on public and AI chat endpoints with Redis-backed token buckets and duplicate message detection.
-- Administrative endpoint protection: IP-based rate limiting (10 attempts per 15-minute window) with constant-time comparison (`crypto.timingSafeEqual`) to prevent timing attacks.
-
-### CORS & Content Security Policy
-- Dynamic CORS configuration in `middleware.ts` with origin-specific policies for public APIs and strict admin endpoint allowlist. Global OPTIONS handler for preflight requests.
-- Content Security Policy with explicit host allowlisting for scripts, styles, connect sources, and frame ancestors. Additional security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy.
-
-### Data Layer & Observability
-- Redis client with JSON serialization safety, key namespace prefixing, and non-blocking connectivity validation.
-- Structured logging infrastructure with request correlation IDs, administrative audit logs with Time-To-Live expiration, and rolling history retention.
-- Notification dashboard aggregates delivery metrics, batch history, eligible user counts, and scheduled cron execution timestamps.
-- Backend scheduled tasks use dedicated public Base RPC endpoints to isolate from application RPC pools.
-
-## APIs
-All routes are under `/api/*`.
-
-### Invite
-- `POST /api/invite/generate` – Generate invite code with expiration and usage limits
-- `POST /api/invite/validate` – Validate invite code without consumption
-- `POST /api/invite/use` – Consume invite code and mark user as validated
-- `GET|POST /api/invite/stats` – Retrieve user statistics and invite history
-- `POST /api/invite/user-codes` – List invite codes created by specific user
-- Admin (Bearer `ADMIN_INVITE_KEY`, allowed origin):
-  - `GET /api/invite/admin/stats` – Global invite system statistics
-  - `GET /api/invite/admin/list` – List all invite codes with filters
-  - `POST /api/invite/admin/generate` – Administrative bulk code generation
-  - `POST /api/invite/admin/cleanup` – Cleanup expired or invalid codes
-
-### Chat (Public)
-- `GET /api/chat/messages?limit=50` – Retrieve recent public chat messages
-- `POST /api/chat/send` – Send message to public chat with rate limiting
-- Admin:
-  - `GET /api/chat/admin/messages` – List all messages with metadata
-  - `DELETE /api/chat/admin/delete` – Delete specific or all messages
-
-### AI Chat
-- `GET /api/chat/ai/messages?address=0x..[&conversationId=..][&limit=50]` – Retrieve conversation messages for address
-- `POST /api/chat/ai/send` – Send message to AI assistant with context
-- Admin:
-  - `GET /api/chat/ai/admin/conversations?includeStats=true` – List all conversations with usage statistics
-  - `GET /api/chat/ai/admin/messages?conversationId=..[&limit=100]` – Retrieve messages from specific conversation
-  - `DELETE /api/chat/ai/admin/conversations?conversationId=..` – Delete conversation and associated messages
-
-### Agent (Spend Permissions)
-- `GET|POST /api/agent/wallet` – Initialize or retrieve agent Smart Account wallet
-- `GET /api/agent/config` – Retrieve agent configuration and operational parameters
-- `GET /api/agent/config/suggest-allowance?mintsPerDay=10&strainId=4` – Calculate suggested allowance for permission grant
-- `GET /api/agent/permission/summary?address=0x..` – Enumerate all permissions granted to agent by address
-- `POST /api/agent/permission/validate` – Validate permission allowance and time window constraints
-- `POST /api/agent/mint` – Execute atomic approve-mint-transfer transaction sequence
-- `POST /api/agent/chat` – LLM-driven conversation interface with tool-calling (estimate, confirm, execute)
-- `POST /api/agent/test-conversation` – End-to-end integration test for agent workflow
-
-### Gamification
-- `GET|POST /api/gamification/missions` – Retrieve or update daily mission progress
-- `GET|POST /api/gamification/streak` – Retrieve or update consecutive day streak
-- Admin (Bearer `ADMIN_INVITE_KEY`, allowed origin):
-  - `GET /api/gamification/leaderboards` – Retrieve monthly leaderboard rankings
-  - `POST /api/gamification/admin/reset` – Reset user data (scope: `streaks|missions|all`)
-
-### Staking
-- `GET /api/staking/balance?address=0x..` – Retrieve staked SEED token balance
-- `GET /api/staking/info?address=0x..` – Retrieve staking position details and rewards
-
-### Swap
-- `POST /api/swap` – Execute token swap or retrieve quote (`{ action: 'quote'|'execute', ethAmount, userAddress }`)
-
-### Notifications & Webhooks
-- `POST /api/notify` – Send per-user Farcaster Mini App notification with type-specific metrics
-- `POST /api/webhook` – Process Farcaster Mini App webhook events (token add/remove) with signature verification
-- `GET|POST /api/notifications/cron/plant-care` – Scheduled task to check plant health and send batch alerts (invoked by QStash/Vercel Cron)
-- Admin:
-  - `GET /api/admin/notifications` – Retrieve notification delivery statistics
-  - `DELETE /api/admin/notifications/reset?scope=all|fid|plant[&fid=..][&plantId=..]` – Reset notification tracking data
-
-### Feedback System
-- `POST /api/feedback/submit` – Submit user feedback with context capture and validation
-- Admin:
-  - `GET /api/admin/feedback/list` – Retrieve all feedback submissions with metadata
-  - `POST /api/admin/feedback/delete` – Delete individual or all feedback entries
-
-### Broadcast Messages
-- `GET /api/broadcast/active` – Retrieve active broadcast messages for display
-- `POST /api/broadcast/impression` – Track message impression for analytics
-- `POST /api/broadcast/dismiss` – Dismiss specific broadcast message
-- Admin:
-  - `GET /api/admin/broadcast` – List all broadcast messages with statistics
-  - `POST /api/admin/broadcast` – Create new broadcast message
-  - `PUT /api/admin/broadcast` – Update existing broadcast message
-  - `DELETE /api/admin/broadcast` – Delete broadcast message
-  - `POST /api/admin/broadcast/cleanup` – Cleanup expired messages
-
-### Farcaster Manifest
-- `GET /.well-known/farcaster.json` – Serve Farcaster Mini App manifest (metadata, icons, webhooks)
-
-## Environment Configuration
-Centralized in `lib/env-config.ts` and specific routes.
-
-
-## Development Setup
-**Prerequisites**: Node.js 18+, npm or pnpm, Redis-compatible database (Upstash recommended).
-
-### Installation
 ```bash
 npm install
+npm run dev
 ```
 
-### Environment Configuration
-Create `.env.local` with required variables:
-- Base Network RPC endpoints
-- Redis connection URL
-- `ADMIN_INVITE_KEY` for administrative access
-- Optional: CDP credentials (`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`) for Agent Mode
-- Optional: Privy credentials for embedded wallet support
+Create an `.env.local` with the basics:
+- Base RPC endpoint(s)
+- Redis URL (if using chat and persistence locally)
+- Admin key for the dashboard (for admin features)
+- Credentials for embedded wallets or the automation agent (if enabled)
 
-### Available Commands
+Common scripts:
 ```bash
-npm run dev    # Start Next.js development server with hot reload
-npm run build  # Generate production build with optimization
-npm run start  # Start production server (requires build)
-npm run lint   # Run ESLint static analysis
+npm run build   # production build
+npm run start   # start production server (after build)
+npm run lint    # run ESLint
 ```
 
-## Admin Dashboard
-- Path: `/admin/invite`
-- Auth: Bearer key (`ADMIN_INVITE_KEY`) with constant-time comparison, IP-based rate limiting (10 attempts/15min)
-- **Enhanced Tabs**: Overview, Codes, Users, Chat moderation, AI Chat moderation, Cleanup, Gamification (leaderboards + resets), RPC Status, Notifications, **Feedback Management**, **Broadcast Messages**
-- **Feedback Management**: View, filter, and delete user feedback submissions with detailed context information and 90-day retention tracking.
-- **Broadcast System**: Create, edit, and manage in-app broadcast messages with priority levels, expiration settings, and engagement analytics.
-- Architecture: Request cancellation via AbortController, fail-closed rate limiting on Redis unavailability, structured error handling with detailed logging
+## Who is this for?
+- **Players** who enjoy a cozy, streak‑based onchain game.  
+- **Farcaster/Base app users** who want a native, mobile‑friendly Mini App experience.  
+- **Builders** who want to explore or extend a production‑ready Next.js/React onchain game.
 
-## Agent Mode Integration
-### Configuration
-1. Configure environment variables:
-   - Server-side: `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`
-   - Client-side (optional): `NEXT_PUBLIC_CDP_CLIENT_API_KEY` for UI integration
-2. Start application and navigate to Chat interface, enable Agent mode.
-3. Grant Spend Permission through the permission management panel, authorizing the agent's Smart Account to spend SEED tokens.
+## For developers
+Pixotchi uses Next.js + React with Tailwind, and integrates wallets and Base L2. The codebase is organized in `app/`, `components/`, and `lib/`. You can explore features like chat, staking, swapping, missions, and notifications directly in the repository.
 
-### Operation
-4. Initiate minting request through natural language interface (e.g., "mint 1 ZEST").
-5. System provides cost estimation (10 SEED per NFT).
-6. Upon user confirmation, agent executes transaction sequence via `/api/agent/mint` endpoint and transfers NFT to user wallet.
-
-### Diagnostics
-Troubleshooting endpoints:
-- `GET /api/agent/permission/summary?address=0x..` – Permission status verification
-- `POST /api/agent/permission/validate` – Pre-execution validation
-- `POST /api/agent/test-conversation` – End-to-end integration test
-
-## Configuration Notes
-- Strict CSP/security headers live in `proxy.ts` (previously middleware.ts). If embedding new iframes/RPC domains, update CSP and CORS accordingly.
-- Prefer private Base RPCs with multiple endpoints for automatic failover.
-- If using the paymaster, ensure `_PUBLIC_CDP_*` are set; the app runs without it if omitted.
-
-
+## Contributing
+Issues and pull requests are welcome. Please keep discussions constructive and respectful. If you encounter a security concern, avoid sharing sensitive details publicly and submit a minimal report via issues so we can follow up.
 
 ## License
-Licensed under the MIT License. See the `LICENSE` file at the project root for complete terms and conditions.
+MIT License. See `LICENSE` at the project root.
 
 ---
 
-**Built with ❤️ for the Pixotchi community**
+Built with ❤️ for the Pixotchi community

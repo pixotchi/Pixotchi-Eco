@@ -81,7 +81,7 @@ export function BuyGardenItemTransaction({
   itemId,
   onSuccess,
   onError,
-  buttonText = "Buy Accessory",
+  buttonText = "Buy Item",
   buttonClassName,
   disabled = false
 }: BuyGardenItemTransactionProps) {
