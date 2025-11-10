@@ -16,7 +16,6 @@ import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { wagmiSafeConfig, safeConnector } from "@/lib/wagmi-safe-config";
-import { isSafeApp } from "@safe-global/safe-apps-wagmi";
 import { FrameProvider } from "@/lib/frame-context";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
@@ -127,7 +126,23 @@ export function Providers(props: { children: ReactNode }) {
       const initializeRouter = async () => {
         try {
           // Step 0: Detect Safe App environment
-          const safe = await isSafeApp();
+          let safe = false;
+          try {
+            const detector = (safeConnector as unknown as { isSafeApp?: () => Promise<boolean> }).isSafeApp;
+            if (typeof detector === "function") {
+              safe = Boolean(await detector.call(safeConnector));
+            }
+          } catch (err) {
+            console.warn('Safe App detector unavailable:', err);
+          }
+
+          if (!safe && typeof window !== 'undefined') {
+            try {
+              safe = window.parent !== window && /\bsafe-app\b/i.test(window.name || '');
+            } catch {
+              safe = false;
+            }
+          }
           if (cancelToken || !mounted) return;
           
           if (safe) {
