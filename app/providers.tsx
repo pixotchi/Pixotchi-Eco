@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState, useRef } from "react";
 import { base } from "wagmi/chains";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import { Toaster } from "react-hot-toast";
@@ -15,7 +15,7 @@ import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
-import { wagmiSafeConfig, safeConnector } from "@/lib/wagmi-safe-config";
+import { wagmiSafeConfig, SAFE_CONNECTOR_ID, createSafeConnectorInstance } from "@/lib/wagmi-safe-config";
 import { FrameProvider } from "@/lib/frame-context";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
@@ -118,6 +118,7 @@ export function Providers(props: { children: ReactNode }) {
     const [safeConnected, setSafeConnected] = useState(false);
 
     const { connect, connectors } = useConnect();
+    const safeConnectorRef = useRef<ReturnType<typeof createSafeConnectorInstance> | null>(null);
     
     useEffect(() => {
       let mounted = true;
@@ -128,9 +129,12 @@ export function Providers(props: { children: ReactNode }) {
           // Step 0: Detect Safe App environment
           let safe = false;
           try {
-            const detector = (safeConnector as unknown as { isSafeApp?: () => Promise<boolean> }).isSafeApp;
+            if (!safeConnectorRef.current) {
+              safeConnectorRef.current = createSafeConnectorInstance(wagmiSafeConfig.chains);
+            }
+            const detector = (safeConnectorRef.current as unknown as { isSafeApp?: () => Promise<boolean> }).isSafeApp;
             if (typeof detector === "function") {
-              safe = Boolean(await detector.call(safeConnector));
+              safe = Boolean(await detector.call(safeConnectorRef.current));
             }
           } catch (err) {
             console.warn('Safe App detector unavailable:', err);
@@ -235,7 +239,7 @@ export function Providers(props: { children: ReactNode }) {
 
     useEffect(() => {
       if (!isSafeApp || !safeReady || safeConnected) return;
-      const safeConnectorInstance = connectors.find((c) => c.id === "safe" && c.ready);
+      const safeConnectorInstance = connectors.find((c) => c.id === SAFE_CONNECTOR_ID && c.ready);
       if (safeConnectorInstance) {
         connect({ connector: safeConnectorInstance });
         setSafeConnected(true);

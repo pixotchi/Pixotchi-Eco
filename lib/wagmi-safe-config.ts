@@ -11,13 +11,18 @@ const primaryRpcEndpoint = rpcConfig.endpoints[0] || "https://mainnet.base.org";
 
 export const SAFE_CONNECTOR_ID = "safe";
 
-const createSafeConnector: CreateConnectorFn = (config) =>
+type ConnectorChains = Parameters<CreateConnectorFn>[0]["chains"];
+
+export const createSafeConnectorInstance = (chains: ConnectorChains) =>
   new SafeConnector({
-    chains: config.chains,
+    chains,
     options: {
       debug: false,
     },
-  }) as unknown as ReturnType<CreateConnectorFn>;
+  });
+
+const createSafeConnector: CreateConnectorFn = (config) =>
+  createSafeConnectorInstance(config.chains) as unknown as ReturnType<CreateConnectorFn>;
 
 export const wagmiSafeConfig = createConfig({
   chains: [base],
