@@ -16,6 +16,7 @@ import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { wagmiSafeConfig, safeConnector } from "@/lib/wagmi-safe-config";
+import { isSafeApp } from "@safe-global/safe-apps-wagmi";
 import { FrameProvider } from "@/lib/frame-context";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
@@ -115,6 +116,7 @@ export function Providers(props: { children: ReactNode }) {
     const [surface, setSurface] = useState<'privy' | 'coinbase'>('privy'); // Default to privy instead of null
     const [isInitialized, setIsInitialized] = useState(false);
     const [safeReady, setSafeReady] = useState(false);
+    const [safeConnected, setSafeConnected] = useState(false);
 
     const { connect, connectors } = useConnect();
     
@@ -125,7 +127,7 @@ export function Providers(props: { children: ReactNode }) {
       const initializeRouter = async () => {
         try {
           // Step 0: Detect Safe App environment
-          const safe = await safeConnector.isSafeApp();
+          const safe = await isSafeApp();
           if (cancelToken || !mounted) return;
           
           if (safe) {
@@ -217,12 +219,13 @@ export function Providers(props: { children: ReactNode }) {
     }
 
     useEffect(() => {
-      if (!isSafeApp || !safeReady) return;
+      if (!isSafeApp || !safeReady || safeConnected) return;
       const safeConnectorInstance = connectors.find((c) => c.id === safeConnector.id && c.ready);
       if (safeConnectorInstance) {
         connect({ connector: safeConnectorInstance });
+        setSafeConnected(true);
       }
-    }, [isSafeApp, safeReady, connect, connectors]);
+    }, [isSafeApp, safeReady, safeConnected, connect, connectors]);
 
     if (isSafeApp) {
       return (
