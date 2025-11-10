@@ -10,7 +10,7 @@ import { SmartWalletProvider } from "@/lib/smart-wallet-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
 // Privy wagmi will be scoped locally where needed (login UI) to avoid intercepting OnchainKit
-import { WagmiProvider as CoreWagmiProvider } from "wagmi";
+import { WagmiProvider as CoreWagmiProvider, useConnect } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
