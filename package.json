@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.5.31",
+  "version": "1.5.32",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -21,7 +21,7 @@
     "@farcaster/miniapp-wagmi-connector": "1.1.0",
     "@privy-io/react-auth": "3.6.1",
     "@privy-io/wagmi": "2.0.2",
-    "wagmi": "2.19.2",
+    "wagmi": "2.19.3",
     "viem": "2.38.6",
     "permissionless": "0.2.57",
     "next": "16.0.1",

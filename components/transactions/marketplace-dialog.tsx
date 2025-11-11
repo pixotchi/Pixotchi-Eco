@@ -324,7 +324,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
           <DialogTitle className="text-lg font-semibold">Marketplace (Experimental)</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto pr-1">
+          <div className="space-y-4 pb-4">
           {/* Top bar with mid price and quick actions */}
           <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -736,6 +737,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             </div>
           </div>
 
+          </div>
         </div>
       </DialogContent>
     </Dialog>
