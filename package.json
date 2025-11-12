@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.5.32",
+  "version": "1.5.34",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -22,8 +22,8 @@
     "@privy-io/react-auth": "3.6.1",
     "@privy-io/wagmi": "2.0.2",
     "wagmi": "2.19.3",
-    "viem": "2.38.6",
-    "permissionless": "0.2.57",
+    "viem": "2.39.0",
+    "permissionless": "0.3.0",
     "next": "16.0.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -37,7 +37,7 @@
     "tailwind-merge": "3.4.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "@tanstack/react-query": "5.90.7",
+    "@tanstack/react-query": "5.90.8",
     "zod": "3.25.76",
     "nanoid": "5.1.6",
     "date-fns": "4.1.0",
@@ -50,9 +50,9 @@
     "ethereum-identity-kit": "0.2.61"
   },
   "devDependencies": {
-    "@types/node": "24.10.0",
-    "@types/react": "19.2.2",
-    "@types/react-dom": "19.2.2",
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.3",
+    "@types/react-dom": "19.2.3",
     "eslint": "9.39.1",
     "eslint-config-next": "16.0.1",
     "eslint-config-prettier": "10.1.8",
