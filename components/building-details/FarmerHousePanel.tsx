@@ -19,7 +19,7 @@ interface FarmerHousePanelProps {
 
 // Rewards wallet that funds farmer quests
 const QUEST_REWARDS_WALLET = '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB' as const;
-const MIN_SEED_BALANCE = parseUnits('200', 18); 
+const MIN_SEED_BALANCE = parseUnits('300', 18); 
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
@@ -129,6 +129,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     }
   }
 
+  const isRewardsDepleted = rewardsWalletBalance < MIN_SEED_BALANCE;
+
   return (
     <div className="space-y-3 pt-2">
       <h4 className="font-semibold text-sm text-center">Quests</h4>
@@ -136,12 +138,15 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
         <div className="text-center text-muted-foreground text-sm">Loading…</div>
       ) : error ? (
         <div className="text-center text-destructive text-sm">{error}</div>
-      ) : rewardsWalletBalance < MIN_SEED_BALANCE ? (
-        <div className="text-center py-8 text-muted-foreground text-sm">
-          Farmer House is temporarily closed. All quest functions are temporarily unavailable until the quest rewards pool is refilled..
-        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2">
+        <>
+          {isRewardsDepleted && (
+            <div className="rounded-md border border-amber-300 bg-amber-100/60 px-3 py-2 text-xs text-amber-900">
+              Farmer House rewards wallet is being refilled. Starting new quests is paused to prevent failed transactions,
+              but you can still finish any farmers who are already out on quests.
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-2">
           {slots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
             <div key={idx} className="flex flex-col gap-2 rounded-md border bg-card p-3">
               <div className="flex items-center justify-between">
@@ -182,46 +187,54 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                 </div>
               </div>
               {statusOf(s) === 'Available' && (
-                <div className="grid gap-2 sm:grid-cols-[1fr,auto] items-center rounded-md border bg-background/50 p-2">
-                  <div className="overflow-x-auto sm:overflow-visible">
-                    <ToggleGroup
-                      value={String(difficulty[idx] ?? 0)}
-                      onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
-                      options={[
-                        { value: '0', label: <span>Easy <span className="text-xs text-muted-foreground">(3h)</span></span> },
-                        { value: '1', label: <span>Med <span className="text-xs text-muted-foreground">(6h)</span></span> },
-                        { value: '2', label: <span>Hard <span className="text-xs text-muted-foreground">(12h)</span></span> },
-                      ]}
-                      className="bg-muted/50 border-primary/20"
-                      getButtonClassName={(val, selected) => (
-                        val === '0' ? (selected ? 'bg-green-600/20 text-green-700' : 'text-green-700') :
-                        val === '1' ? (selected ? 'bg-amber-600/20 text-amber-700' : 'text-amber-700') :
-                        (selected ? 'bg-red-600/20 text-red-700' : 'text-red-700')
-                      )}
+                <>
+                  <div className="grid gap-2 sm:grid-cols-[1fr,auto] items-center rounded-md border bg-background/50 p-2">
+                    <div className="overflow-x-auto sm:overflow-visible">
+                      <ToggleGroup
+                        value={String(difficulty[idx] ?? 0)}
+                        onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
+                        options={[
+                          { value: '0', label: <span>Easy <span className="text-xs text-muted-foreground">(3h)</span></span> },
+                          { value: '1', label: <span>Med <span className="text-xs text-muted-foreground">(6h)</span></span> },
+                          { value: '2', label: <span>Hard <span className="text-xs text-muted-foreground">(12h)</span></span> },
+                        ]}
+                        className="bg-muted/50 border-primary/20"
+                        getButtonClassName={(val, selected) => (
+                          val === '0' ? (selected ? 'bg-green-600/20 text-green-700' : 'text-green-700') :
+                          val === '1' ? (selected ? 'bg-amber-600/20 text-amber-700' : 'text-amber-700') :
+                          (selected ? 'bg-red-600/20 text-red-700' : 'text-red-700')
+                        )}
+                      />
+                    </div>
+                    <SponsoredTransaction
+                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
+                      buttonText="Start"
+                      buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
+                      hideStatus
+                      disabled={isRewardsDepleted}
+                      onSuccess={(tx: any) => {
+                        handleSuccess();
+                        try {
+                          const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
+                          const txHash = extractTransactionHash(tx);
+                          if (txHash) {
+                            payload.proof = { txHash };
+                          }
+                          fetch('/api/gamification/missions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                          });
+                        } catch {}
+                      }}
                     />
                   </div>
-                  <SponsoredTransaction
-                    calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
-                    buttonText="Start"
-                    buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
-                    hideStatus
-                    onSuccess={(tx: any) => {
-                      handleSuccess();
-                      try {
-                        const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
-                        const txHash = extractTransactionHash(tx);
-                        if (txHash) {
-                          payload.proof = { txHash };
-                        }
-                        fetch('/api/gamification/missions', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(payload)
-                        });
-                      } catch {}
-                    }}
-                  />
-                </div>
+                  {isRewardsDepleted && (
+                    <p className="text-xs text-amber-800 sm:col-span-2">
+                      Rewards pool is low—please wait for it to refill before sending new quests.
+                    </p>
+                  )}
+                </>
               )}
               {statusOf(s) === 'In progress' && (
                 <div className="space-y-1">
@@ -236,7 +249,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
           {slots.length === 0 && (
             <div className="text-center text-sm text-muted-foreground">No quest slots available.</div>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
