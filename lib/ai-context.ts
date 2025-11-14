@@ -208,15 +208,15 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 #### Village Buildings (PTS/TOD Generation)
 
 **Solar Panels (ID 0)** – PTS production
-- Level 1: ~50 PTS/day | Level 2: ~100 PTS/day | Level 3: ~150 PTS/day
-- Upgrade Cost: 800K LEAF (36h) → 4.5M LEAF (48h) → 19M LEAF (78h)
+- Level 1: ~10 PTS/day | Level 2: ~25 PTS/day | Level 3: ~50 PTS/day
+- Upgrade Cost: 400K LEAF (36h) → 2.5M LEAF (48h) → 10M LEAF (78h)
 
 **Soil Factory (ID 3)** – Enhanced PTS output
-- Level 1: ~70 PTS/day | Level 2: ~150 PTS/day | Level 3: ~300 PTS/day
-- Upgrade Cost: 750K LEAF (24h) → 5M LEAF (60h) → 20M LEAF (96h)
+- Level 1: ~25 PTS/day | Level 2: ~50 PTS/day | Level 3: ~95 PTS/day
+- Upgrade Cost: 750K LEAF (24h) → 5M LEAF (60h) → 17M LEAF (96h)
 
 **Bee Farm (ID 5)** – TOD extension (pollination)
-- Level 1: ~3h TOD/day | Level 2: ~6h TOD/day | Level 3: ~9h TOD/day
+- Level 1: ~2h TOD/day | Level 2: ~5h TOD/day | Level 3: ~8h TOD/day
 - Upgrade Cost: 500K LEAF (6h) → 2.5M LEAF (18h) → 12.5M LEAF (30h)
 
 #### Town Buildings (Utility & Special)

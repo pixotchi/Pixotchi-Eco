@@ -19,37 +19,37 @@ const buildingInfo = {
     name: "Solar Panels",
     description: "Generates Plant Points over time for your plants.",
     production: {
-      level1: "~50 PTS/day",
-      level2: "~100 PTS/day", 
-      level3: "~150 PTS/day"
+      level1: "~10 PTS/day",
+      level2: "~25 PTS/day", 
+      level3: "~50 PTS/day"
     },
     upgradeCosts: {
-      level1: "800K LEAF (36h)",
-      level2: "4.5M LEAF (48h)",
-      level3: "19M LEAF (78h)"
+      level1: "400K LEAF (36h)",
+      level2: "2.5M LEAF (48h)",
+      level3: "10M LEAF (78h)"
     }
   },
   "village-3": { // Soil Factory
     name: "Soil Factory", 
     description: "Generates PTS daily for your plants.",
     production: {
-      level1: "~70 PTS/day",
-      level2: "~150 PTS/day",
-      level3: "~300 PTS/day"
+      level1: "~25 PTS/day",
+      level2: "~50 PTS/day",
+      level3: "~95 PTS/day"
     },
     upgradeCosts: {
       level1: "750K LEAF (24h)",
       level2: "5M LEAF (60h)", 
-      level3: "20M LEAF (96h)"
+      level3: "17M LEAF (96h)"
     }
   },
   "village-5": { // Bee Farm
     name: "Bee Farm",
     description: "Generates Plant Lifetime (TOD) for your plants.",
     production: {
-      level1: "~3 hours/day",
-      level2: "~6 hours/day",
-      level3: "~9 hours/day"
+      level1: "~2 hours/day",
+      level2: "~5 hours/day",
+      level3: "~8 hours/day"
     },
     upgradeCosts: {
       level1: "500K LEAF (6h)",
