@@ -1,3 +1,14 @@
+const SERVER_EXTERNAL_PACKAGES = [
+  "pino",
+  "thread-stream",
+  "pino-elasticsearch",
+  "fastbench",
+  "tap",
+  "tape",
+  "desm",
+  "why-is-node-running",
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {},
@@ -8,7 +19,7 @@ const nextConfig = {
     return config;
   },
   // External packages for server components
-  serverExternalPackages: [],
+  serverExternalPackages: SERVER_EXTERNAL_PACKAGES,
   // Configure Next.js Image optimization qualities
   images: {
     qualities: [75, 80, 85, 90],
