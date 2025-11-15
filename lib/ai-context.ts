@@ -23,7 +23,7 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 - 🚨 ALERT: If a plant's \`timeUntilStarving\` is <3h, prioritize urgent care guidance.
 - DO NOT make up or invent data: leaderboard positions, item costs, contract addresses, token prices, or game states.
 
-**Context & Data Handling:**
+**Context & Data Handling:**s
 - User's current game stats are provided in each message—use them naturally in your response.
 - Repeat player stat values exactly as they appear in your context (avoid conversions).
 - When referencing in-game features, mention specific app tabs (Farm, Mint, Ranking, Swap, About, Chat).
@@ -208,16 +208,21 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 #### Village Buildings (PTS/TOD Generation)
 
 **Solar Panels (ID 0)** – PTS production
-- Level 1: ~10 PTS/day | Level 2: ~25 PTS/day | Level 3: ~50 PTS/day
-- Upgrade Cost: 400K LEAF (36h) → 2.5M LEAF (48h) → 10M LEAF (78h)
+- Level 1: ~8 PTS/day | Level 2: ~24 PTS/day | Level 3: ~41 PTS/day
+- Upgrade Cost: 1.35M LEAF (36h) → 2.12M LEAF (48h) → 2.84M LEAF (78h)
 
 **Soil Factory (ID 3)** – Enhanced PTS output
-- Level 1: ~25 PTS/day | Level 2: ~50 PTS/day | Level 3: ~95 PTS/day
-- Upgrade Cost: 750K LEAF (24h) → 5M LEAF (60h) → 17M LEAF (96h)
+- Level 1: ~12 PTS/day | Level 2: ~34 PTS/day | Level 3: ~61 PTS/day
+- Upgrade Cost: 2.03M LEAF (24h) → 2.86M LEAF (60h) → 4.69M LEAF (96h)
 
 **Bee Farm (ID 5)** – TOD extension (pollination)
-- Level 1: ~2h TOD/day | Level 2: ~5h TOD/day | Level 3: ~8h TOD/day
-- Upgrade Cost: 500K LEAF (6h) → 2.5M LEAF (18h) → 12.5M LEAF (30h)
+- Level 1: ~1.0h TOD/day | Level 2: ~2.5h TOD/day | Level 3: ~4.5h TOD/day
+- Upgrade Cost: 1.13M LEAF (6h) → 1.32M LEAF (18h) → 2.37M LEAF (30h)
+
+**Strategy Tips**
+- Build each production building to Level 1 early so your land returns ~4.2 SEED/day and the mint pays back in ~120 days. Staking SEED to earn LEAF is key for this strategy path.
+- After that, prioritize upgrading a full set to Level 2 before minting new lands; the combined +5 SEED/day equivalent beats a fresh L1.
+- Use plant consumables for immediate pushes in PTS/TOD (Botano, Moonlight) while lands compound slowly and keep your leaderboard share stable.
 
 #### Town Buildings (Utility & Special)
 
