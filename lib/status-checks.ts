@@ -133,7 +133,7 @@ async function checkAppReachability(): Promise<StatusService> {
 
   return {
     id: 'app',
-    label: 'Mini App & API',
+    label: 'Ecosystem App',
     status,
     latencyMs: ms,
     details: error ? (error?.message || 'Unreachable') : 'Reachable',
