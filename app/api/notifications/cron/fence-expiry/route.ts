@@ -373,8 +373,8 @@ export async function GET(req: NextRequest) {
 
     const warnResponseV2 = await publishToFids(
       warnFidsV2,
-      '🛡️ Fence V2 expiring soon',
-      'Your Fence V2 protection has less than 2 hours left. Extend it to stay protected.',
+      '🛡️ Fence expiring soon',
+      'Your Fence protection has less than 2 hours left. Extend it to stay protected.',
     );
     if (!warnResponseV2.ok && warnFidsV2.length > 0) {
       return NextResponse.json({ success: false, error: warnResponseV2.json || 'warn_v2_publish_failed' }, { status: 500 });
@@ -391,8 +391,8 @@ export async function GET(req: NextRequest) {
 
     const expireResponseV2 = await publishToFids(
       expireFidsV2,
-      '⚠️ Fence V2 protection ended',
-      'Your Fence V2 protection has expired. Renew it to stay protected.',
+      '⚠️ Fence protection ended',
+      'Your Fence protection has expired. Renew it to stay protected.',
     );
     if (!expireResponseV2.ok && expireFidsV2.length > 0) {
       return NextResponse.json({ success: false, error: expireResponseV2.json || 'expire_v2_publish_failed' }, { status: 500 });
