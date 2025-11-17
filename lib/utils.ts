@@ -481,8 +481,8 @@ export const getFenceStatus = (plant: Plant): {
 /**
  * Get array of active fences for display (handles both V1 and V2, respects mirroring)
  */
-export const getActiveFences = (plant: Plant): Array<{ type: 'Fence V1' | 'Fence V2'; effectUntil: number }> => {
-  const active: Array<{ type: 'Fence V1' | 'Fence V2'; effectUntil: number }> = [];
+export const getActiveFences = (plant: Plant): Array<{ type: 'Fence V1' | 'Fence'; effectUntil: number }> => {
+  const active: Array<{ type: 'Fence V1' | 'Fence'; effectUntil: number }> = [];
   const now = Math.floor(Date.now() / 1000);
 
   const fenceV2State = plant.fenceV2 ?? null;
@@ -512,7 +512,7 @@ export const getActiveFences = (plant: Plant): Array<{ type: 'Fence V1' | 'Fence
 
   // Check V2 fence
   if (fenceV2Active) {
-    active.push({ type: 'Fence V2', effectUntil: fenceV2EffectUntil });
+    active.push({ type: 'Fence', effectUntil: fenceV2EffectUntil });
   }
 
   // Sort by expiry time (soonest first)

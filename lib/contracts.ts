@@ -1462,7 +1462,7 @@ export const executeSwap = async (walletClient: WalletClient, ethAmount: string)
   });
 };
 
-// -------------------- FENCE V2 HELPERS --------------------
+// -------------------- Fence HELPERS --------------------
 
 export type FenceV2Config = {
   pricePerDay: bigint;

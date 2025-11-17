@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.5.42",
+  "version": "1.5.43",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -37,7 +37,7 @@
     "tailwind-merge": "3.4.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "@tanstack/react-query": "5.90.9",
+    "@tanstack/react-query": "5.90.10",
     "zod": "3.25.76",
     "nanoid": "5.1.6",
     "date-fns": "4.1.0",

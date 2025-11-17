@@ -105,7 +105,7 @@ export default function ItemDetailsPanel({
           });
         }
       } catch (error) {
-        console.error('Failed to load Fence V2 config:', error);
+        console.error('Failed to load Fence config:', error);
       }
     };
 
@@ -128,7 +128,7 @@ export default function ItemDetailsPanel({
         }
       } catch (error) {
         if (!cancelled) {
-          console.error('Failed to quote Fence V2:', error);
+          console.error('Failed to quote Fence:', error);
           setFenceV2Quote(BigInt(0));
         }
       } finally {
