@@ -14,18 +14,18 @@ const nextConfig = {
     qualities: [75, 80, 85, 90],
   },
   async redirects() {
-    const redirects = [
-      {
-        source: '/status',
-        destination: 'https://status.pixotchi.tech',
-        permanent: false,
-      },
-    ];
+    const redirects = [];
 
     if (process.env.NEXT_PUBLIC_STATUS_ONLY === 'true') {
       redirects.push({
         source: '/',
         destination: '/status',
+        permanent: false,
+      });
+    } else {
+      redirects.push({
+        source: '/status',
+        destination: 'https://status.pixotchi.tech',
         permanent: false,
       });
     }
