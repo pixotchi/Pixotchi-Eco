@@ -17,11 +17,7 @@ const nextConfig = {
     const redirects = [];
 
     if (process.env.NEXT_PUBLIC_STATUS_ONLY === 'true') {
-      redirects.push({
-        source: '/',
-        destination: '/status',
-        permanent: false,
-      });
+      // When serving the standalone status app, no external redirects needed.
     } else {
       redirects.push({
         source: '/status',
@@ -31,6 +27,17 @@ const nextConfig = {
     }
 
     return redirects;
+  },
+  async rewrites() {
+    if (process.env.NEXT_PUBLIC_STATUS_ONLY === 'true') {
+      return [
+        {
+          source: '/',
+          destination: '/status',
+        },
+      ];
+    }
+    return [];
   },
 };
 
