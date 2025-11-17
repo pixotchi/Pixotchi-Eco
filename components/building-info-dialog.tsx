@@ -17,16 +17,18 @@ const buildingInfo = {
   // Village Buildings (Production-Focused)
   "village-0": { // Solar Panels
     name: "Solar Panels",
-    description: "Generates Plant Points over time for your plants.",
+    description: "Generates Plant Points over time for your plants. At Level 4 it upgrades into a hybrid that also delivers Plant Lifetime (TOD).",
     production: {
       level1: "~8 PTS/day",
       level2: "~24 PTS/day", 
-      level3: "~41 PTS/day"
+      level3: "~41 PTS/day",
+      level4: "~85 PTS/day + ~3.56h TOD/day"
     },
     upgradeCosts: {
       level1: "1.35M LEAF (36h)",
       level2: "2.12M LEAF (48h)",
-      level3: "2.84M LEAF (78h)"
+      level3: "2.84M LEAF (78h)",
+      level4: "6.5M LEAF (93.6h)"
     }
   },
   "village-3": { // Soil Factory
@@ -118,6 +120,20 @@ export default function BuildingInfoDialog({
 
   const isProductionBuilding = buildingType === 'village' && 'production' in info;
   const isUtilityBuilding = buildingType === 'town' && 'features' in info;
+  const productionEntries = isProductionBuilding && 'production' in info
+    ? Object.entries(info.production as Record<string, string>)
+    : null;
+  const upgradeEntries = 'upgradeCosts' in info && info.upgradeCosts
+    ? Object.entries(info.upgradeCosts as Record<string, string>)
+    : null;
+
+  const formatLevelLabel = (key: string) => {
+    if (key.toLowerCase().startsWith('level')) {
+      const levelNumber = key.replace(/[^0-9]/g, '');
+      return `Level ${levelNumber || key.slice(5)}`;
+    }
+    return key;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,22 +146,16 @@ export default function BuildingInfoDialog({
         </DialogHeader>
         
         <div className="space-y-3">
-          {isProductionBuilding && 'production' in info && (
+          {isProductionBuilding && productionEntries && (
             <div className="bg-muted/30 rounded-lg p-3">
               <h4 className="font-semibold text-sm mb-2 text-foreground">Production Rates</h4>
               <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Level 1:</span>
-                  <span className="font-medium text-primary">{info.production.level1}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Level 2:</span>
-                  <span className="font-medium text-primary">{info.production.level2}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Level 3:</span>
-                  <span className="font-medium text-primary">{info.production.level3}</span>
-                </div>
+                {productionEntries.map(([levelKey, value]) => (
+                  <div key={levelKey} className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{formatLevelLabel(levelKey)}:</span>
+                    <span className="font-medium text-primary">{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -164,22 +174,16 @@ export default function BuildingInfoDialog({
             </div>
           )}
 
-          {'upgradeCosts' in info && info.upgradeCosts && (
+          {upgradeEntries && (
             <div className="bg-muted/30 rounded-lg p-3">
               <h4 className="font-semibold text-sm mb-2 text-foreground">Upgrade Costs</h4>
               <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Level 1:</span>
-                  <span className="font-medium text-amber-600">{info.upgradeCosts.level1}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Level 2:</span>
-                  <span className="font-medium text-amber-600">{info.upgradeCosts.level2}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Level 3:</span>
-                  <span className="font-medium text-amber-600">{info.upgradeCosts.level3}</span>
-                </div>
+                {upgradeEntries.map(([levelKey, value]) => (
+                  <div key={levelKey} className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{formatLevelLabel(levelKey)}:</span>
+                    <span className="font-medium text-amber-600">{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
