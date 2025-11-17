@@ -5,6 +5,12 @@ import { INVITE_CONFIG } from '@/lib/invite-utils';
 export async function proxy(request: NextRequest) {
   // Get the pathname of the request
   const pathname = request.nextUrl.pathname;
+  const statusOnly = process.env.NEXT_PUBLIC_STATUS_ONLY === 'true';
+
+  if (statusOnly && pathname === '/') {
+    const url = new URL('/status', request.url);
+    return NextResponse.rewrite(url);
+  }
   
   // Server-side invite validation for protected routes (excluding API and auth routes)
   if (INVITE_CONFIG.SYSTEM_ENABLED && !pathname.startsWith('/api/') && !pathname.startsWith('/_next') && pathname === '/') {
