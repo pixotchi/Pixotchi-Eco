@@ -2575,7 +2575,7 @@ export default function AdminInviteDashboard() {
                     {notifFenceV2Stats && (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence V2 Alerts (2h warning)</h3>
+                          <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence Alerts (2h warning)</h3>
                         </div>
                         <Card>
                           <CardContent className="space-y-2">
@@ -2587,7 +2587,7 @@ export default function AdminInviteDashboard() {
                               <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
                               <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
                                 {(notifFenceV2Stats?.warn.recent || []).length === 0 ? (
-                                  <div className="text-muted-foreground">No Fence V2 warn notifications sent yet.</div>
+                                  <div className="text-muted-foreground">No Fence warn notifications sent yet.</div>
                                 ) : (
                                   (notifFenceV2Stats?.warn.recent || []).map((entry: any, idx: number) => (
                                     <div key={idx} className="flex items-center justify-between p-2 rounded border">
@@ -2602,7 +2602,7 @@ export default function AdminInviteDashboard() {
                         </Card>
 
                         <div className="flex items-center justify-between">
-                          <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence V2 Alerts (expired)</h3>
+                          <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence Alerts (expired)</h3>
                         </div>
                         <Card>
                           <CardContent className="space-y-2">
@@ -2614,7 +2614,7 @@ export default function AdminInviteDashboard() {
                               <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
                               <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
                                 {(notifFenceV2Stats?.expire.recent || []).length === 0 ? (
-                                  <div className="text-muted-foreground">No Fence V2 expiry notifications sent yet.</div>
+                                  <div className="text-muted-foreground">No Fence expiry notifications sent yet.</div>
                                 ) : (
                                   (notifFenceV2Stats?.expire.recent || []).map((entry: any, idx: number) => (
                                     <div key={idx} className="flex items-center justify-between p-2 rounded border">
@@ -2631,7 +2631,7 @@ export default function AdminInviteDashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <Card>
                             <CardHeader>
-                              <CardTitle className="text-sm">Last Fence V2 Cron Run</CardTitle>
+                              <CardTitle className="text-sm">Last Fence Cron Run</CardTitle>
                             </CardHeader>
                             <CardContent>
                               <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">{notifFenceV2Stats?.lastRun ? JSON.stringify(notifFenceV2Stats.lastRun, null, 2) : 'No runs yet.'}</pre>
@@ -2639,7 +2639,7 @@ export default function AdminInviteDashboard() {
                           </Card>
                           <Card>
                             <CardHeader>
-                              <CardTitle className="text-sm">Run History (Fence V2)</CardTitle>
+                              <CardTitle className="text-sm">Run History (Fence)</CardTitle>
                             </CardHeader>
                             <CardContent>
                               <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">

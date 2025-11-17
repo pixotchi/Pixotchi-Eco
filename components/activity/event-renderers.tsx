@@ -10,7 +10,7 @@ import { ITEM_ICONS } from '@/lib/constants';
 import { LAND_EVENT_ICONS } from '@/lib/constants';
 
 const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
-  '1': { name: 'Fence V2', icon: '/icons/Fence.png' },
+  '1': { name: 'Fence', icon: '/icons/Fence.png' },
 };
 import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward } from '@/lib/utils';
 import { 
