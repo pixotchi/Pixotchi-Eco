@@ -13,6 +13,25 @@ const nextConfig = {
   images: {
     qualities: [75, 80, 85, 90],
   },
+  async redirects() {
+    const redirects = [
+      {
+        source: '/status',
+        destination: 'https://status.pixotchi.tech',
+        permanent: false,
+      },
+    ];
+
+    if (process.env.NEXT_PUBLIC_STATUS_ONLY === 'true') {
+      redirects.push({
+        source: '/',
+        destination: '/status',
+        permanent: false,
+      });
+    }
+
+    return redirects;
+  },
 };
 
 export default nextConfig;
