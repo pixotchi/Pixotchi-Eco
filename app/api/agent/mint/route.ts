@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { parseUnits, encodeFunctionData, maxUint256, createPublicClient, http } from 'viem';
+import { parseUnits, encodeFunctionData, maxUint256, createPublicClient } from 'viem';
 import { base as baseChain } from 'viem/chains';
 import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
-import { getRpcConfig } from '@/lib/env-config';
+import { createResilientTransport } from '@/lib/rpc-transport';
 
 // Create a single CDP client instance per runtime
 let cdp: CdpClient | null = null;
@@ -168,9 +168,7 @@ export async function POST(req: NextRequest) {
     // Parse minted tokenIds (Transfer event from 0x0 -> agent)
     let mintedTokenIds: bigint[] = [];
     try {
-      const rpc = getRpcConfig();
-      const rpcUrl = rpc.endpoints[0] || 'https://mainnet.base.org';
-      const client = createPublicClient({ chain: baseChain, transport: http(rpcUrl) });
+      const client = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
       const txReceipt = await client.waitForTransactionReceipt({ hash: mintReceipt.transactionHash as `0x${string}` });
       const TRANSFER_SIG = EVM_EVENT_SIGNATURES.ERC20_TRANSFER;
       const zeroAddressTopic = EVM_TOPICS.ZERO_ADDRESS_TOPIC;

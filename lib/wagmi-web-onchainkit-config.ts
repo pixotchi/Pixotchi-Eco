@@ -1,22 +1,21 @@
 "use client";
 
-import { createConfig, http } from "wagmi";
+import { createConfig } from "wagmi";
 import { coinbaseWallet } from "wagmi/connectors";
 import { base } from "viem/chains";
-import { getRpcConfig } from "./env-config";
+import { createResilientTransport } from "./rpc-transport";
 
 const connectors = [
   // Follow OnchainKit guide: prefer Coinbase Wallet connector for ConnectWallet
   coinbaseWallet({ appName: "Pixotchi Mini" }),
 ];
 
-const rpcConfig = getRpcConfig();
-const primaryRpcEndpoint = rpcConfig.endpoints[0] || 'https://mainnet.base.org';
+const transport = createResilientTransport();
 
 export const wagmiWebOnchainkitConfig = createConfig({
   chains: [base],
   transports: {
-    [base.id]: http(primaryRpcEndpoint),
+    [base.id]: transport,
   },
   connectors,
   pollingInterval: 500, // Faster polling to match Base block times (~2s)

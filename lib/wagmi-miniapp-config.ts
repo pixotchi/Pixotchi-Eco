@@ -1,19 +1,18 @@
 "use client";
 
-import { createConfig, http } from "wagmi";
+import { createConfig } from "wagmi";
 import { base } from "viem/chains";
 import { farcasterMiniApp as miniAppConnector } from "@farcaster/miniapp-wagmi-connector";
-import { getRpcConfig } from "./env-config";
+import { createResilientTransport } from "./rpc-transport";
 
 // Wagmi config for Farcaster Mini App context using official Farcaster connector
-const rpcConfig = getRpcConfig();
-const primaryRpcEndpoint = rpcConfig.endpoints[0] || 'https://mainnet.base.org';
+const transport = createResilientTransport();
 
 export const wagmiMiniAppConfig = createConfig({
   chains: [base],
   connectors: [miniAppConnector()],
   transports: {
-    [base.id]: http(primaryRpcEndpoint),
+    [base.id]: transport,
   },
   pollingInterval: 500, // Faster polling to match Base block times (~2s)
   ssr: true,
