@@ -207,9 +207,9 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 #### Village Buildings (PTS/TOD Generation)
 
-**Solar Panels (ID 0)** – PTS production
-- Level 1: ~8 PTS/day | Level 2: ~24 PTS/day | Level 3: ~41 PTS/day
-- Upgrade Cost: 1.35M LEAF (36h) → 2.12M LEAF (48h) → 2.84M LEAF (78h)
+**Solar Panels (ID 0)** – PTS production (hybrid at Level 4)
+- Level 1: ~8 PTS/day | Level 2: ~24 PTS/day | Level 3: ~41 PTS/day | Level 4: ~85 PTS/day + ~3.56h TOD/day
+- Upgrade Cost: 1.35M LEAF (36h) → 2.12M LEAF (48h) → 2.84M LEAF (78h) → 6.5M LEAF (93.6h)
 
 **Soil Factory (ID 3)** – Enhanced PTS output
 - Level 1: ~12 PTS/day | Level 2: ~34 PTS/day | Level 3: ~61 PTS/day
@@ -242,7 +242,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 ### Upgrading Buildings
 - **Cost:** LEAF (checked at in-game rates).
-- **Max Level:** 3 for production buildings; 1 for special buildings.
+- **Max Level:** Production buildings generally cap at Level 3; Solar Panels now extend to Level 4 (hybrid PTS + TOD). Town utility buildings remain single-level or up to 3.
 - **Speed Up:** Use SEED to reduce upgrade timer.
 - **Warehouse Claim:** Must manually claim production, then apply to plants.
 
