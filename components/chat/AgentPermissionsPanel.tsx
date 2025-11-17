@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAccount } from 'wagmi';
 import { createBaseAccountSDK } from '@base-org/account';
-import { getRpcConfig } from '@/lib/env-config';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
-import { createPublicClient, http, parseUnits } from 'viem';
+import { createPublicClient, parseUnits } from 'viem';
 import { base as baseChain } from 'viem/chains';
+import { createResilientTransport } from '@/lib/rpc-transport';
 
 type PermissionSummary = { 
   token?: string; 
@@ -42,9 +42,7 @@ export default function AgentPermissionsPanel() {
 
   async function getTokenDecimals(token: `0x${string}`): Promise<number> {
     try {
-      const { endpoints } = getRpcConfig();
-      const rpcUrl = endpoints[0] || 'https://mainnet.base.org';
-      const client = createPublicClient({ chain: baseChain, transport: http(rpcUrl) });
+      const client = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
       const decimals = await client.readContract({ address: token, abi: erc20Abi, functionName: 'decimals' });
       return Number(decimals);
     } catch {

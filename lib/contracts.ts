@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, custom, WalletClient, getAddress, parseUnits, formatUnits, fallback, PublicClient } from 'viem';
+import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
 import UniswapAbi from '@/public/abi/Uniswap.json';
@@ -6,7 +6,9 @@ import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
-import { CLIENT_ENV, getRpcConfig } from './env-config';
+import { CLIENT_ENV } from './env-config';
+import { createResilientTransport, getRpcEndpoints } from './rpc-transport';
+export { getRpcDiagnostics } from './rpc-transport';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
 export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);
@@ -202,46 +204,6 @@ export const SPIN_GAME_ABI = [
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
-
-// Simple in-memory RPC diagnostics: counts & last error per endpoint
-type RpcDiag = { url: string; ok: number; fail: number; lastError?: string };
-const rpcDiagnostics: Record<string, RpcDiag> = {};
-export const getRpcDiagnostics = (): RpcDiag[] => Object.values(rpcDiagnostics);
-
-// Get all RPC URLs from environment variables using centralized config
-const getRpcEndpoints = (): string[] => {
-  const { endpoints } = getRpcConfig();
-  
-  // Only log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`🔗 Configured ${endpoints.length} RPC endpoint(s)`);
-  }
-  return endpoints;
-};
-
-// Create resilient transport with automatic failover
-const createResilientTransport = (endpoints: string[]) => {
-  const transports = endpoints.map((url, index) => {
-    // Only log endpoint details in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🔗 RPC Endpoint ${index + 1}: ${url}`);
-    }
-    // Wrap the transport to record request outcomes
-    const t = http(url, {
-      retryCount: 2,        // Reduced per-endpoint retries (Viem will handle failover)
-      retryDelay: 500,      // Faster retry for individual endpoints
-      timeout: 10000,       // 10 second timeout per request
-    });
-    // Initialize diagnostics record
-    if (!rpcDiagnostics[url]) rpcDiagnostics[url] = { url, ok: 0, fail: 0 };
-    // Viem's http transport returns a function; we can intercept fetch via experimental hooks by monkey-patching
-    // Instead, track at read helpers via retryWithBackoff; here we just return the transport
-    return t;
-  });
-
-  // Use single transport if only one endpoint, fallback transport for multiple
-  return endpoints.length === 1 ? transports[0] : fallback(transports);
-};
 
 // Create optimized read client for data fetching
 export const getReadClient = () => {
@@ -811,7 +773,7 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
 
 // Explicit public-RPC variant (used by notification cron to avoid internal RPC pool)
 export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): Promise<Plant[]> => {
-  const readClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
+  const readClient = createPublicClient({ chain: base, transport: createResilientTransport([rpcUrl]) });
   const plants = await readClient.readContract({
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
