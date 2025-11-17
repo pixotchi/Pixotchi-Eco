@@ -69,29 +69,31 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-card/90 px-4 py-3 backdrop-blur-sm">
-        <div className="mx-auto grid w-full max-w-5xl gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi logo" width={28} height={28} priority />
             <p className="font-pixel text-base tracking-wide text-foreground">PIXOTCHI STATUS</p>
           </div>
-          <div className="flex flex-col text-sm text-muted-foreground md:text-right">
-            <span>Last updated</span>
-            <span className="font-medium text-foreground">
-              {new Date(snapshot.generatedAt).toLocaleString(undefined, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </span>
-            <span className="text-xs">Auto-refresh: every {refreshMinutes || 15} min</span>
-          </div>
-          <div className="flex items-center justify-end gap-3">
-            <ThemeSelector />
-            {showManualRefresh && (
-              <Button onClick={refresh} disabled={isPending} variant="outline" className="gap-2">
-                <RefreshCcw className={isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-                Refresh
-              </Button>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+            <div className="text-left text-sm text-muted-foreground sm:text-right">
+              <span className="block">Last updated</span>
+              <span className="font-medium text-foreground">
+                {new Date(snapshot.generatedAt).toLocaleString(undefined, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </span>
+              <span className="block text-xs">Auto-refresh: every {refreshMinutes || 15} min</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <ThemeSelector />
+              {showManualRefresh && (
+                <Button onClick={refresh} disabled={isPending} variant="outline" className="gap-2">
+                  <RefreshCcw className={isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                  Refresh
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </header>
