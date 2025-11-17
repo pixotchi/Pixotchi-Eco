@@ -21,6 +21,8 @@ export interface StatusSnapshot {
 const DEFAULT_TIMEOUT_MS = Number(process.env.STATUS_CHECK_TIMEOUT_MS || 6000);
 const APP_HEALTH_URL = process.env.STATUS_APP_HEALTH_URL || CLIENT_ENV.APP_URL;
 const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
+const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
+const BASE_STATUS_URL = process.env.STATUS_BASE_STATUS_URL || 'https://status.base.org/api/v2/summary.json';
 
 const normalizeUrl = (url?: string | null) => {
   if (!url) return null;
@@ -92,7 +94,7 @@ async function checkRpcCluster(): Promise<StatusService> {
 
   return {
     id: 'rpc',
-    label: 'Base RPC Cluster',
+    label: 'RPC Cluster',
     status,
     latencyMs: avgHealthyLatency,
     details: `${healthy}/${results.length || 1} endpoints responsive`,
@@ -182,7 +184,7 @@ async function checkRedis(): Promise<StatusService> {
   if (!redis) {
     return {
       id: 'redis',
-      label: 'Redis / Upstash',
+      label: 'Database',
       status: 'unknown',
       details: 'Redis not configured',
     };
@@ -206,7 +208,7 @@ async function checkRedis(): Promise<StatusService> {
 
   return {
     id: 'redis',
-    label: 'Redis / Upstash',
+    label: 'Database',
     status,
     latencyMs: ms,
     details: error ? (error?.message || 'Ping failed') : 'Ping successful',
@@ -288,13 +290,123 @@ async function checkFarcasterMiniApp(): Promise<StatusService> {
   };
 }
 
+async function checkStakeApp(): Promise<StatusService> {
+  const target = normalizeUrl(STAKE_APP_URL);
+  if (!target) {
+    return {
+      id: 'stake-app',
+      label: 'Staking App',
+      status: 'unknown',
+      details: 'Stake app URL not configured',
+    };
+  }
+
+  const { error, ms } = await measure(async () => {
+    const response = await withTimeout((signal) => fetch(target, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal,
+    }), DEFAULT_TIMEOUT_MS);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  });
+
+  const status: StatusLevel = error
+    ? (error?.name === 'AbortError' ? 'outage' : 'degraded')
+    : 'operational';
+
+  return {
+    id: 'stake-app',
+    label: 'Staking App',
+    status,
+    latencyMs: ms,
+    details: error ? (error?.message || 'Unreachable') : 'Reachable',
+  };
+}
+
+const statuspageToStatusLevel = (status?: string): StatusLevel => {
+  switch (status) {
+    case 'operational':
+      return 'operational';
+    case 'degraded_performance':
+      return 'degraded';
+    case 'partial_outage':
+      return 'degraded';
+    case 'major_outage':
+      return 'outage';
+    case 'under_maintenance':
+      return 'degraded';
+    default:
+      return 'unknown';
+  }
+};
+
+async function checkBaseMainnet(): Promise<StatusService> {
+  const url = BASE_STATUS_URL.trim();
+  if (!url) {
+    return {
+      id: 'base-mainnet',
+      label: 'Base Mainnet',
+      status: 'unknown',
+      details: 'Base status URL not configured',
+    };
+  }
+
+  const { error, result, ms } = await measure(async () => {
+    const response = await withTimeout((signal) => fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      signal,
+    }), DEFAULT_TIMEOUT_MS);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return response.json();
+  });
+
+  if (error || !result) {
+    return {
+      id: 'base-mainnet',
+      label: 'Base Mainnet',
+      status: error?.name === 'AbortError' ? 'outage' : 'degraded',
+      latencyMs: ms,
+      details: error?.message || 'Unable to fetch Base status',
+    };
+  }
+
+  const components = Array.isArray(result?.components) ? result.components : [];
+  const mainnetComponent = components.find((component: any) =>
+    typeof component?.name === 'string' &&
+    component.name.toLowerCase().includes('mainnet') &&
+    !component.name.toLowerCase().includes('testnet')
+  );
+
+  const status = statuspageToStatusLevel(mainnetComponent?.status);
+  return {
+    id: 'base-mainnet',
+    label: 'Base Mainnet',
+    status,
+    latencyMs: ms,
+    details: mainnetComponent?.status
+      ? `Statuspage: ${mainnetComponent.status.replace('_', ' ')}`
+      : 'Component not found',
+    metrics: {
+      last_status_change: mainnetComponent?.updated_at,
+      raw_status: mainnetComponent?.status,
+    },
+  };
+}
+
 const checks = [
   checkAppReachability,
+  checkStakeApp,
   checkRpcCluster,
   checkIndexer,
   checkRedis,
   checkNotifications,
   checkFarcasterMiniApp,
+  checkBaseMainnet,
 ];
 
 export const runStatusChecks = async (): Promise<StatusSnapshot> => {

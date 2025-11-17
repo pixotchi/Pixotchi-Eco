@@ -6,10 +6,13 @@ import { StatusBadge } from "./StatusBadge";
 import { StatusCard } from "./StatusCard";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw } from "lucide-react";
+import { ThemeSelector } from "@/components/theme-selector";
+import Image from "next/image";
 
 interface StatusPageClientProps {
   initialSnapshot: StatusSnapshot;
   refreshMinutes: number;
+  showManualRefresh: boolean;
 }
 
 const statusCopy: Record<StatusLevel, { headline: string; description: string }> = {
@@ -31,7 +34,7 @@ const statusCopy: Record<StatusLevel, { headline: string; description: string }>
   },
 };
 
-export function StatusPageClient({ initialSnapshot, refreshMinutes }: StatusPageClientProps) {
+export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRefresh }: StatusPageClientProps) {
   const [snapshot, setSnapshot] = useState<StatusSnapshot>(initialSnapshot);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -64,38 +67,41 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes }: StatusPage
   const summary = useMemo(() => statusCopy[snapshot.overall] ?? statusCopy.unknown, [snapshot.overall]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 px-4 py-12 text-foreground">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8">
-        <section className="rounded-3xl border border-border/70 bg-card/70 p-6 shadow-md backdrop-blur">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-2">
-              <StatusBadge status={snapshot.overall} />
-              <h1 className="text-3xl font-semibold tracking-tight">{summary.headline}</h1>
-              <p className="text-base text-muted-foreground">{summary.description}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-sm text-muted-foreground">
-                <p>Last updated</p>
-                <p className="font-medium text-foreground">
-                  {new Date(snapshot.generatedAt).toLocaleString(undefined, {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </p>
-                <p className="text-xs">Auto-refresh: every {refreshMinutes || 15} min</p>
-              </div>
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground">
+      <header className="sticky top-0 z-30 border-b border-border bg-card/90 px-4 py-3 backdrop-blur-sm">
+        <div className="mx-auto grid w-full max-w-5xl gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+          <div className="flex items-center gap-2">
+            <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi logo" width={28} height={28} priority />
+            <p className="font-pixel text-base tracking-wide text-foreground">PIXOTCHI STATUS</p>
+          </div>
+          <div className="flex flex-col text-sm text-muted-foreground md:text-right">
+            <span>Last updated</span>
+            <span className="font-medium text-foreground">
+              {new Date(snapshot.generatedAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+            <span className="text-xs">Auto-refresh: every {refreshMinutes || 15} min</span>
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            <ThemeSelector />
+            {showManualRefresh && (
               <Button onClick={refresh} disabled={isPending} variant="outline" className="gap-2">
                 <RefreshCcw className={isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
                 Refresh
               </Button>
-            </div>
+            )}
           </div>
-          {error && (
-            <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-              {error}
-            </p>
-          )}
-        </section>
+        </div>
+      </header>
+
+      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12">
+        {error && (
+          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            {error}
+          </p>
+        )}
 
         <section className="grid gap-4 md:grid-cols-2">
           {snapshot.services.map((service: StatusService) => (
