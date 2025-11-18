@@ -27,15 +27,17 @@ export async function POST(req: NextRequest) {
       reason: z.string().optional().describe('Reason for listing strains')
     });
 
+    const listStrainsExecute = async (args: z.infer<typeof listStrainsParams>) => {
+      // Return centralized strain dataset
+      // Use explicit type casting to avoid union type complexities in inference
+      const strains = HARDCODED_STRAINS.map(s => ({ id: Number(s.id), name: String(s.name), mintPriceSeed: Number(s.mintPriceSeed) }));
+      return strains;
+    };
+
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
       parameters: listStrainsParams,
-      execute: async (args: z.infer<typeof listStrainsParams>) => {
-        // Return centralized strain dataset
-        // Use explicit type casting to avoid union type complexities in inference
-        const strains = HARDCODED_STRAINS.map(s => ({ id: Number(s.id), name: String(s.name), mintPriceSeed: Number(s.mintPriceSeed) }));
-        return strains;
-      }
+      execute: listStrainsExecute as any
     });
 
     const mintPlants = tool({
