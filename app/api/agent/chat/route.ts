@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { generateText, tool } from 'ai';
+import { generateText, tool, stepCountIs } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 // Use centralized strain data for Agent
 import { z } from 'zod';
@@ -91,6 +91,19 @@ export async function POST(req: NextRequest) {
             }),
           });
 
+          // Check if response is JSON before parsing
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            return {
+              error: true,
+              message: `Mint endpoint returned non-JSON response (${response.status}): ${text.substring(0, 200)}`,
+              strainId: chosen?.id,
+              strainName: chosen?.name,
+              totalSeedRequired: total,
+            };
+          }
+
           const result = await response.json();
           
           if (!response.ok) {
@@ -176,7 +189,8 @@ export async function POST(req: NextRequest) {
       model: openai('gpt-4o-mini'),
       system: systemPrompt,
       tools: toolBundle,
-      prompt: enhancedPrompt
+      prompt: enhancedPrompt,
+      stopWhen: stepCountIs(5), // Enable multi-step calls so model generates text after tool results
     });
 
     return new Response(
