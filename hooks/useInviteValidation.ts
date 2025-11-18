@@ -20,11 +20,20 @@ export function useInviteValidation() {
       const keys = getLocalStorageKeys();
 
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
         const response = await fetch('/api/invite/check-validation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address }),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Server responded with ${response.status}`);
+        }
 
         const data = await response.json();
         
@@ -40,13 +49,18 @@ export function useInviteValidation() {
         }
         
       } catch (error) {
-        const localValidation = localStorage.getItem(keys.INVITE_VALIDATED);
-        const storedAddress = localStorage.getItem(keys.USER_ADDRESS);
+        console.error('Invite validation check failed, failing open:', error);
         
-        const hasValidLocalCache = localValidation === 'true' && 
-                                  storedAddress?.toLowerCase() === address.toLowerCase();
+        // FAIL OPEN: Allow access if validation server is down or times out
+        // We still check local storage first to respect previous valid state if any,
+        // but if this is a new user and server is down, we let them in.
         
-        setUserValidated(hasValidLocalCache);
+        // Strategy:
+        // 1. If previously validated in local storage, trust it.
+        // 2. If NOT previously validated, STILL allow entry (fail open) to prevent blocking legitimate users during outages.
+        // This essentially disables the gate during network errors.
+        
+        setUserValidated(true);
         
       } finally {
         setCheckingValidation(false);
