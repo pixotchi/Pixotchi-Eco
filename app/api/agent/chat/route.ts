@@ -36,19 +36,18 @@ export async function POST(req: NextRequest) {
 
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
-      parameters: listStrainsParams,
-      execute: listStrainsExecute as any
+      inputSchema: listStrainsParams,
+      execute: listStrainsExecute
     });
 
-    const mintPlants = tool({
-      description: 'Mint Pixotchi plants for the user. Use execute=false for estimates, execute=true when user confirms.',
-      parameters: z.object({
-        count: z.number().int().min(1).max(5).describe('Number of plants to mint'),
-        strain: z.number().int().min(2).max(5).optional().describe('Strain ID (2-5)'),
-        userAddress: z.string().optional().describe('User wallet address - use the one from context'),
-        execute: z.boolean().default(false).describe('false=estimate only, true=actually execute the mint'),
-      }),
-      execute: async ({ count, strain, strainName, userAddress: toolUserAddress, execute = false }: { count: number; strain?: number; strainName?: string; userAddress?: string; execute?: boolean }) => {
+    const mintPlantsParams = z.object({
+      count: z.number().int().min(1).max(5).describe('Number of plants to mint'),
+      strain: z.number().int().min(2).max(5).optional().describe('Strain ID (2-5)'),
+      userAddress: z.string().optional().describe('User wallet address - use the one from context'),
+      execute: z.boolean().default(false).describe('false=estimate only, true=actually execute the mint'),
+    });
+
+    const mintPlantsExecute = async ({ count, strain, strainName, userAddress: toolUserAddress, execute = false }: { count: number; strain?: number; strainName?: string; userAddress?: string; execute?: boolean }) => {
         // Use userAddress from tool parameter or fallback to the one from request body
         const effectiveUserAddress = toolUserAddress || userAddress;
         // Use hardcoded strains dataset
@@ -124,7 +123,12 @@ export async function POST(req: NextRequest) {
             totalSeedRequired: total,
           };
         }
-      }
+      };
+
+    const mintPlants = tool({
+      description: 'Mint Pixotchi plants for the user. Use execute=false for estimates, execute=true when user confirms.',
+      inputSchema: mintPlantsParams,
+      execute: mintPlantsExecute
     });
 
     const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
