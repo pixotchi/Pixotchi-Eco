@@ -64,10 +64,32 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
     return () => clearInterval(id);
   }, [refreshMinutes, refresh]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+
+    html.style.overflow = "auto";
+    body.style.overflow = "auto";
+    html.style.overscrollBehavior = "auto";
+    body.style.overscrollBehavior = "auto";
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+    };
+  }, []);
+
   const summary = useMemo(() => statusCopy[snapshot.overall] ?? statusCopy.unknown, [snapshot.overall]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground overflow-y-auto">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-card/90 px-4 py-3 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -98,7 +120,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12">
+      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12 pb-24">
         {error && (
           <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
             {error}
