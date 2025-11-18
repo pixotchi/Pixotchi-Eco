@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StandardContainer } from '@/components/ui/pixel-container';
 import {
   Copy,
   ExternalLink,
@@ -33,6 +32,7 @@ import { FollowButton, useTransactions } from 'ethereum-identity-kit';
 import { Avatar } from '@coinbase/onchainkit/identity';
 import { base } from 'viem/chains';
 import { formatDistanceToNow } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
 
 type TwitterMediaLite = { type?: string | null; url?: string | null };
 type TwitterPostLite = {
@@ -72,20 +72,6 @@ interface OwnerStats {
   stakedSeed: bigint;
 }
 
-interface CachedOwnerData {
-  stats: OwnerStats;
-  timestamp: number;
-  plantId?: number;
-}
-
-interface CachedEFPData {
-  stats: EthFollowStats;
-  timestamp: number;
-}
-
-// Cache owner stats to prevent excessive RPC calls
-const ownerStatsCache = new Map<string, CachedOwnerData>();
-const efpStatsCache = new Map<string, CachedEFPData>();
 const CACHE_DURATION = 120000; // 2 minutes
 
 const formatStaked = (amount: bigint) => formatTokenAmount(amount, 18);
@@ -154,11 +140,6 @@ export default function PlantProfileDialog({
   walletNameOverride = null,
   primaryPlantLoading = false,
 }: PlantProfileDialogProps) {
-  const [ownerStats, setOwnerStats] = useState<OwnerStats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [efpStats, setEfpStats] = useState<EthFollowStats | null>(null);
-  const [efpLoading, setEfpLoading] = useState(false);
-  const [efpError, setEfpError] = useState<string | null>(null);
   const [otherDialogOpen, setOtherDialogOpen] = useState(false);
   const [postsDialogOpen, setPostsDialogOpen] = useState(false);
   const [efpRefreshKey, setEfpRefreshKey] = useState(0);
@@ -196,7 +177,6 @@ export default function PlantProfileDialog({
     identifier: socialIdentifier,
   });
   const identitySummary = socialProfile?.identitySummary;
-  const platformHighlights = identitySummary?.platforms.slice(0, 3) ?? [];
   const twitterHandle = useMemo(() => {
     return identitySummary?.handles?.find(
       (handle) => handle.platform?.toLowerCase?.() === 'twitter' && handle.value
@@ -259,7 +239,7 @@ export default function PlantProfileDialog({
     return selections.slice(0, 5);
   }, [identitySummary]);
   const primaryIdentity = primaryIdentities[0] ?? null;
-  const secondaryIdentities = primaryIdentity ? primaryIdentities.slice(1) : primaryIdentities;
+  
   const socialIconHandles = useMemo(() => {
     const handles = identitySummary?.handles ?? [];
     const order = ['farcaster', 'twitter', 'github', 'zora', 'talent-protocol', 'email', 'website'];
@@ -380,121 +360,35 @@ export default function PlantProfileDialog({
     return totalWalletHandles > 1 || totalBasenameHandles > 1;
   }, [otherWallets, otherBasenames, primaryIdentity, identitySummary?.handles]);
 
-  useEffect(() => {
-    if (!open || !ownerAddress) {
-      setOwnerStats(null);
-      return;
-    }
+  // React Query for Owner Stats
+  const { data: ownerStats, isLoading: loading } = useQuery({
+    queryKey: ['ownerStats', ownerAddress, plantId],
+    queryFn: async () => {
+      if (!ownerAddress) return null;
+      const [stats, stake] = await Promise.all([
+        getUserGameStats(ownerAddress),
+        getStakeInfo(ownerAddress)
+      ]);
+      return {
+        totalPlants: stats.totalPlants,
+        totalLands: stats.totalLands,
+        stakedSeed: stake?.staked || BigInt(0)
+      };
+    },
+    enabled: !!ownerAddress && open,
+    staleTime: CACHE_DURATION,
+  });
 
-    let cancelled = false;
-
-    // Check cache first
-    const cacheKey = ownerAddress.toLowerCase();
-    const cached = ownerStatsCache.get(cacheKey);
-    const now = Date.now();
-
-    if (
-      cached &&
-      (now - cached.timestamp) < CACHE_DURATION &&
-      (plantId == null || cached.plantId === plantId)
-    ) {
-      setOwnerStats(cached.stats);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    Promise.all([
-      getUserGameStats(ownerAddress),
-      getStakeInfo(ownerAddress)
-    ])
-      .then(([stats, stake]) => {
-        if (cancelled) return;
-
-        const ownerData: OwnerStats = {
-          totalPlants: stats.totalPlants,
-          totalLands: stats.totalLands,
-          stakedSeed: stake?.staked || BigInt(0)
-        };
-
-        setOwnerStats(ownerData);
-
-        ownerStatsCache.set(cacheKey, {
-          stats: ownerData,
-          timestamp: now,
-          plantId: plantId ?? undefined
-        });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error('Error fetching owner stats:', err);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [plantId, ownerAddress, open]);
-
-  // Fetch EFP stats (followers/following)
-  useEffect(() => {
-    if (!open || !ownerAddress) {
-      setEfpStats(null);
-      setEfpError(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    const cacheKey = ownerAddress.toLowerCase();
-    const cached = efpStatsCache.get(cacheKey);
-    const now = Date.now();
-
-    if (cached && (now - cached.timestamp) < CACHE_DURATION && efpRefreshKey === 0) {
-      setEfpStats(cached.stats);
-      setEfpError(null);
-      setEfpLoading(false);
-      return;
-    }
-
-    setEfpLoading(true);
-    setEfpError(null);
-
-    fetchEfpStats(ownerAddress)
-      .then((stats) => {
-        if (cancelled) return;
-
-        if (stats) {
-          setEfpStats(stats);
-          setEfpError(null);
-          efpStatsCache.set(cacheKey, {
-            stats,
-            timestamp: now,
-          });
-        } else {
-          setEfpStats(null);
-          setEfpError(null);
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error('Error fetching EFP stats:', err);
-        setEfpStats(null);
-        setEfpError('Failed to load follow stats');
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setEfpLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ownerAddress, open, efpRefreshKey]);
+  // React Query for EFP Stats
+  const { data: efpStats, isLoading: efpLoading } = useQuery({
+    queryKey: ['efpStats', ownerAddress, efpRefreshKey],
+    queryFn: async () => {
+      if (!ownerAddress) return null;
+      return fetchEfpStats(ownerAddress);
+    },
+    enabled: !!ownerAddress && open,
+    staleTime: CACHE_DURATION,
+  });
 
   // Function to refresh EFP stats after follow/unfollow
   const refreshEfpStats = useCallback(() => {
@@ -519,14 +413,6 @@ export default function PlantProfileDialog({
     }
     prevTxModalOpenRef.current = txModalOpen;
   }, [txModalOpen, refreshEfpStats]);
-
-  // Reset view when dialog closes
-  useEffect(() => {
-    if (!open) {
-      // setViewingENSDetails(false); // Removed
-      // setEnsData(null); // Removed
-    }
-  }, [open]);
 
   if (!ownerAddress) return null;
 
@@ -737,6 +623,7 @@ export default function PlantProfileDialog({
                   )}
                 </div>
               </div>
+            </div>
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
@@ -768,7 +655,6 @@ export default function PlantProfileDialog({
                 </Button>
               )}
             </div>
-          </div>
 
           {/* EFP Social Stats - Followers/Following */}
           <div className="flex flex-col items-center gap-1.5 py-3 border-t border-border">
@@ -996,4 +882,3 @@ export default function PlantProfileDialog({
     </>
   );
 }
-

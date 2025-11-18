@@ -23,12 +23,18 @@ export async function POST(req: NextRequest) {
     // Use centralized strains (mintPriceSeed in SEED units)
     const HARDCODED_STRAINS = PLANT_STRAINS;
 
+    const listStrainsParams = z.object({
+      reason: z.string().optional().describe('Reason for listing strains')
+    });
+
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
-      parameters: z.object({}),
-      execute: async () => {
+      parameters: listStrainsParams,
+      execute: async (args: z.infer<typeof listStrainsParams>) => {
         // Return centralized strain dataset
-        return HARDCODED_STRAINS.map(s => ({ id: s.id, name: s.name, mintPriceSeed: s.mintPriceSeed }));
+        // Use explicit type casting to avoid union type complexities in inference
+        const strains = HARDCODED_STRAINS.map(s => ({ id: Number(s.id), name: String(s.name), mintPriceSeed: Number(s.mintPriceSeed) }));
+        return strains;
       }
     });
 
@@ -164,7 +170,6 @@ export async function POST(req: NextRequest) {
       model: openai('gpt-4o-mini'),
       system: systemPrompt,
       tools: toolBundle,
-      maxSteps: 5,
       prompt: enhancedPrompt
     });
 
