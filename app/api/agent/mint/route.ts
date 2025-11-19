@@ -78,6 +78,11 @@ export async function POST(req: NextRequest) {
           value: c.value ? (typeof c.value === 'string' ? BigInt(c.value) : BigInt(c.value)) : BigInt(0),
           data: (c.data || '0x') as `0x${string}`,
         }));
+
+        // Validate preCalls before proceeding
+        if (preCalls.length === 0) {
+            throw new Error('preparedSpendCalls converted to empty preCalls array');
+        }
         
         console.log('[AGENT_MINT] Converted preCalls:', {
           count: preCalls.length,
