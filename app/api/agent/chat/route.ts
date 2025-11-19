@@ -1,9 +1,11 @@
 import { NextRequest } from 'next/server';
 import { generateText, tool, stepCountIs } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createAnthropic } from '@ai-sdk/anthropic';
 // Use centralized strain data for Agent
 import { z } from 'zod';
 import { PLANT_STRAINS } from '@/lib/constants';
+import { getAgentAIProvider, getAgentModelConfig } from '@/lib/ai-config';
 // Removed generic AgentKit/Vercel AI tools to avoid requiring RPC URLs in this route
 
 export const dynamic = 'force-dynamic';
@@ -175,7 +177,9 @@ export async function POST(req: NextRequest) {
       execute: mintPlantsExecute
     });
 
+    const agentProvider = getAgentAIProvider();
     const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const systemPrompt = `You are an Neural Seed Agent. Currently you can only mint plants using SEED tokens via spend permissions. With time, you will be able to do more things.
     ${userAddress ? `User wallet: ${userAddress}` : 'User wallet not provided.'}
 
@@ -223,8 +227,13 @@ export async function POST(req: NextRequest) {
       hasUserAddress: !!userAddress
     });
 
+    const agentModelConfig = getAgentModelConfig();
+    const model = agentProvider === 'claude'
+      ? anthropic(agentModelConfig.model)
+      : openai(agentModelConfig.model);
+
     const { text, toolResults } = await generateText({
-      model: openai('gpt-4o-mini'),
+      model,
       system: systemPrompt,
       tools: toolBundle,
       prompt: enhancedPrompt,

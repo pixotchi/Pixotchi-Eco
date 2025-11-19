@@ -191,6 +191,13 @@ export function Providers(props: { children: ReactNode }) {
       };
     }, []);
 
+    useEffect(() => {
+      if (typeof document === 'undefined') return;
+      const miniTitle = "Pixotchi Mini - Your pocket farm on Base!";
+      const webTitle = "Pixotchi - Your pocket farm on Base!";
+      document.title = isMiniApp ? miniTitle : webTitle;
+    }, [isMiniApp]);
+
     // Show loading state until initialization is complete
     if (!isInitialized) {
       return <div>Loading...</div>;

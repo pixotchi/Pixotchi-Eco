@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!message || !address) {
+      console.warn('[AI_CHAT] Missing message or address', { hasMessage: Boolean(message), hasAddress: Boolean(address) });
       return NextResponse.json(
         { error: 'Message and address are required' },
         { status: 400 }
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
     // Validate message content
     const messageError = validateAIMessage(message);
     if (messageError) {
+      console.warn('[AI_CHAT] Message validation failed', { address, messageLength: message?.length, error: messageError });
       return NextResponse.json(
         { error: messageError },
         { status: 400 }
@@ -30,6 +32,7 @@ export async function POST(request: NextRequest) {
 
     // Basic address validation
     if (!isValidEthereumAddressFormat(address)) {
+      console.warn('[AI_CHAT] Invalid address format', { address });
       return NextResponse.json(
         { error: 'Invalid wallet address format' },
         { status: 400 }
