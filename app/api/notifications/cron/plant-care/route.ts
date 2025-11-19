@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { CLIENT_ENV, SERVER_ENV } from '@/lib/env-config';
 import { getPlantsByOwnerWithRpc } from '@/lib/contracts';
+import { z } from 'zod';
+import { differenceInSeconds } from 'date-fns';
+
+// Validation Schemas
+const QuerySchema = z.object({
+  debug: z.enum(['0', '1', 'true', 'false']).optional().transform(val => val === '1' || val === 'true'),
+});
 
 type PublishBody = {
   target_fids: number[];
@@ -70,14 +77,15 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const debug = url.searchParams.get('debug') === '1';
+    const queryResult = QuerySchema.safeParse(Object.fromEntries(url.searchParams.entries()));
+    const debug = queryResult.success ? queryResult.data.debug : false;
 
     const { fids } = await fetchEnabledFids();
     if (!debug) { try { for (const fid of fids) { await (redis as any)?.sadd?.('notif:eligible:fids', String(fid)); } } catch {} }
 
     const startedAt = Date.now();
     const rpcUrl = 'https://base-rpc.publicnode.com';
-    const nowSec = Math.floor(Date.now() / 1000);
+    const now = new Date();
 
     let resolved = 0;
     let skippedNoAddress = 0;
@@ -115,14 +123,17 @@ export async function GET(req: NextRequest) {
       if (!debug) {
         for (const p of plants || []) {
           const t = Number(p.timeUntilStarving ?? 0);
-          const left = t - nowSec;
+          const plantDate = new Date(t * 1000);
+          // Calculate difference in seconds using date-fns
+          const left = differenceInSeconds(plantDate, now);
           if (left > 3600) { await clearPlantEpisode(fid, Number(p.id)); }
         }
       }
 
       const due = (plants || []).filter(p => {
         const t = Number(p.timeUntilStarving ?? 0);
-        const left = t - nowSec;
+        const plantDate = new Date(t * 1000);
+        const left = differenceInSeconds(plantDate, now);
         return left > 0 && left <= 3600;
       });
 
@@ -131,7 +142,9 @@ export async function GET(req: NextRequest) {
       if (due.length === 0) {
         skippedNoDue++;
         for (const p of plants || []) {
-          const t = Number(p.timeUntilStarving ?? 0); const left = t - nowSec;
+          const t = Number(p.timeUntilStarving ?? 0); 
+          const plantDate = new Date(t * 1000);
+          const left = differenceInSeconds(plantDate, now);
           const plantThrottled = false;
           plantDebug.push({ id: Number(p.id), timestamp: t, left, due: left > 0 && left <= 3600, plantThrottled });
         }
@@ -145,12 +158,16 @@ export async function GET(req: NextRequest) {
         const plantThrottled = debug ? false : await shouldThrottlePlant(fid, pid);
         if (plantThrottled) { if (!debug) skippedThrottled++; }
         else { hasAny = true; plantEpisodes++; }
-        const t = Number(p.timeUntilStarving ?? 0); const left = t - nowSec;
+        const t = Number(p.timeUntilStarving ?? 0); 
+        const plantDate = new Date(t * 1000);
+        const left = differenceInSeconds(plantDate, now);
         plantDebug.push({ id: pid, timestamp: t, left, due: true, plantThrottled });
       }
       // include non-due plants in debug too
       for (const p of (plants || []).filter(pp => due.every(d => Number(d.id) !== Number(pp.id)))) {
-        const t = Number(p.timeUntilStarving ?? 0); const left = t - nowSec;
+        const t = Number(p.timeUntilStarving ?? 0); 
+        const plantDate = new Date(t * 1000);
+        const left = differenceInSeconds(plantDate, now);
         plantDebug.push({ id: Number(p.id), timestamp: t, left, due: false, plantThrottled: false });
       }
 
@@ -185,7 +202,7 @@ export async function GET(req: NextRequest) {
       plantEpisodes,
       notified: fidsToNotify.length,
       skipped: { noAddress: skippedNoAddress, noDue: skippedNoDue, throttled: skippedThrottled },
-      debug: { nowSec, details },
+      debug: { nowSec: Math.floor(now.getTime() / 1000), details },
     } as const;
 
     try {

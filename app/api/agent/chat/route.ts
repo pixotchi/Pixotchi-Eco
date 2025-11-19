@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { generateText, tool } from 'ai';
+import { generateText, tool, stepCountIs } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 // Use centralized strain data for Agent
 import { z } from 'zod';
@@ -23,26 +23,37 @@ export async function POST(req: NextRequest) {
     // Use centralized strains (mintPriceSeed in SEED units)
     const HARDCODED_STRAINS = PLANT_STRAINS;
 
-    const listStrains = tool({
-      description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
-      parameters: z.object({}),
-      execute: async () => {
-        // Return centralized strain dataset
-        return HARDCODED_STRAINS.map(s => ({ id: s.id, name: s.name, mintPriceSeed: s.mintPriceSeed }));
-      }
+    const listStrainsParams = z.object({
+      reason: z.string().optional().describe('Reason for listing strains')
     });
 
-    const mintPlants = tool({
-      description: 'Mint Pixotchi plants for the user. Use execute=false for estimates, execute=true when user confirms.',
-      parameters: z.object({
-        count: z.number().int().min(1).max(5).describe('Number of plants to mint'),
-        strain: z.number().int().min(2).max(5).optional().describe('Strain ID (2-5)'),
-        userAddress: z.string().optional().describe('User wallet address - use the one from context'),
-        execute: z.boolean().default(false).describe('false=estimate only, true=actually execute the mint'),
-      }),
-      execute: async ({ count, strain, strainName, userAddress: toolUserAddress, execute = false }: { count: number; strain?: number; strainName?: string; userAddress?: string; execute?: boolean }) => {
+    const listStrainsExecute = async (args: z.infer<typeof listStrainsParams>) => {
+      // Return centralized strain dataset
+      // Use explicit type casting to avoid union type complexities in inference
+      const strains = HARDCODED_STRAINS.map(s => ({ id: Number(s.id), name: String(s.name), mintPriceSeed: Number(s.mintPriceSeed) }));
+      return strains;
+    };
+
+    const listStrains = tool({
+      description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
+      inputSchema: listStrainsParams,
+      execute: listStrainsExecute
+    });
+
+    const mintPlantsParams = z.object({
+      count: z.number().int().min(1).max(5).describe('Number of plants to mint'),
+      strain: z.number().int().min(2).max(5).optional().describe('Strain ID (2-5)'),
+      userAddress: z.string().optional().describe('User wallet address - use the one from context'),
+      execute: z.boolean().default(false).describe('false=estimate only, true=actually execute the mint'),
+    });
+
+    const mintPlantsExecute = async ({ count, strain, strainName, userAddress: toolUserAddress, execute = false }: { count: number; strain?: number; strainName?: string; userAddress?: string; execute?: boolean }) => {
+        console.log('[MINT_TOOL] Tool called with:', { count, strain, strainName, toolUserAddress, execute, bodyUserAddress: userAddress });
+        
         // Use userAddress from tool parameter or fallback to the one from request body
         const effectiveUserAddress = toolUserAddress || userAddress;
+        console.log('[MINT_TOOL] Effective user address:', effectiveUserAddress);
+        
         // Use hardcoded strains dataset
         const strains = HARDCODED_STRAINS;
         let chosen: typeof HARDCODED_STRAINS[number] = strains[0];
@@ -55,9 +66,12 @@ export async function POST(req: NextRequest) {
         }
         const unit = chosen?.mintPriceSeed || 0;
         const total = unit * count;
+        
+        console.log('[MINT_TOOL] Selected strain:', { id: chosen?.id, name: chosen?.name, unitPrice: unit, total });
 
         // If execute is false, just return estimate
         if (!execute || !effectiveUserAddress) {
+          console.log('[MINT_TOOL] Returning estimate only:', { execute, hasAddress: !!effectiveUserAddress });
           return {
             strainId: chosen?.id,
             strainName: chosen?.name,
@@ -69,24 +83,54 @@ export async function POST(req: NextRequest) {
         }
 
         // Actually execute the mint
+        console.log('[MINT_TOOL] Executing mint...');
         try {
           const origin = (() => { try { return new URL(req.url).origin; } catch { return ''; } })();
           const base = process.env.NEXT_PUBLIC_URL || origin;
-          const response = await fetch(`${base}/api/agent/mint`, {
+          const mintUrl = `${base}/api/agent/mint`;
+          const requestBody = {
+            userAddress: effectiveUserAddress,
+            count,
+            strainId: chosen?.id,
+            totalSeedRequired: total,
+            preparedSpendCalls: Array.isArray((preparedSpendCalls as any)) ? preparedSpendCalls : undefined,
+          };
+          
+          console.log('[MINT_TOOL] Fetching:', { url: mintUrl, base, origin, body: requestBody });
+          
+          const response = await fetch(mintUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userAddress: effectiveUserAddress,
-              count,
-              strainId: chosen?.id,
-              totalSeedRequired: total,
-              preparedSpendCalls: Array.isArray((preparedSpendCalls as any)) ? preparedSpendCalls : undefined,
-            }),
+            body: JSON.stringify(requestBody),
           });
 
+          console.log('[MINT_TOOL] Response received:', { 
+            status: response.status, 
+            statusText: response.statusText,
+            ok: response.ok,
+            contentType: response.headers.get('content-type'),
+            headers: Object.fromEntries(response.headers.entries())
+          });
+
+          // Check if response is JSON before parsing
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('[MINT_TOOL] Non-JSON response:', { status: response.status, contentType, textPreview: text.substring(0, 500) });
+            return {
+              error: true,
+              message: `Mint endpoint returned non-JSON response (${response.status}): ${text.substring(0, 200)}`,
+              strainId: chosen?.id,
+              strainName: chosen?.name,
+              totalSeedRequired: total,
+            };
+          }
+
           const result = await response.json();
+          console.log('[MINT_TOOL] Parsed JSON result:', JSON.stringify(result, null, 2));
           
           if (!response.ok) {
+            console.error('[MINT_TOOL] Response not OK:', { status: response.status, result });
             return {
               error: true,
               message: result.error || 'Failed to execute mint',
@@ -96,18 +140,25 @@ export async function POST(req: NextRequest) {
             };
           }
 
+          console.log('[MINT_TOOL] Mint successful:', { transactionHash: result.spendTransactionHash || result.result?.transactionHash, message: result.message });
           return {
             success: true,
             strainId: chosen?.id,
             strainName: chosen?.name,
             plantsMinited: count,
             seedSpent: total,
-            transactionHash: result.spendTransactionHash,
+            transactionHash: result.spendTransactionHash || result.result?.transactionHash,
             message: result.message,
             executed: true,
           };
 
         } catch (error: any) {
+          console.error('[MINT_TOOL] Error during mint execution:', {
+            error: error.message,
+            stack: error.stack,
+            name: error.name,
+            cause: error.cause
+          });
           return {
             error: true,
             message: error.message || 'Network error during mint execution',
@@ -116,7 +167,12 @@ export async function POST(req: NextRequest) {
             totalSeedRequired: total,
           };
         }
-      }
+      };
+
+    const mintPlants = tool({
+      description: 'Mint Pixotchi plants for the user. Use execute=false for estimates, execute=true when user confirms.',
+      inputSchema: mintPlantsParams,
+      execute: mintPlantsExecute
     });
 
     const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -160,12 +216,35 @@ export async function POST(req: NextRequest) {
 
     const toolBundle: Record<string, any> = { list_strains: listStrains, mint_plants: mintPlants };
 
+    console.log('[AGENT_CHAT] Starting generateText with:', {
+      hasTools: !!toolBundle,
+      toolNames: Object.keys(toolBundle),
+      promptLength: enhancedPrompt.length,
+      hasUserAddress: !!userAddress
+    });
+
     const { text, toolResults } = await generateText({
       model: openai('gpt-4o-mini'),
       system: systemPrompt,
       tools: toolBundle,
-      maxSteps: 5,
-      prompt: enhancedPrompt
+      prompt: enhancedPrompt,
+      stopWhen: stepCountIs(5), // Enable multi-step calls so model generates text after tool results
+    });
+
+    console.log('[AGENT_CHAT] GenerateText completed:', {
+      textLength: text?.length || 0,
+      textPreview: text?.substring(0, 200),
+      toolResultsCount: toolResults?.length || 0,
+      toolResults: toolResults?.map(tr => {
+        const output = tr.output as any;
+        return {
+          toolName: tr.toolName,
+          hasError: output?.error,
+          errorMessage: output?.error ? output.message : undefined,
+          success: output?.success,
+          outputPreview: JSON.stringify(tr.output).substring(0, 200)
+        };
+      })
     });
 
     return new Response(
@@ -173,7 +252,13 @@ export async function POST(req: NextRequest) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (e: any) {
-    console.error('Agent chat error:', e?.message || e);
+    console.error('[AGENT_CHAT] Error:', {
+      message: e?.message,
+      stack: e?.stack,
+      name: e?.name,
+      cause: e?.cause,
+      error: e
+    });
     return new Response(JSON.stringify({ error: e?.message || 'Agent error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }

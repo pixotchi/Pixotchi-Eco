@@ -4,6 +4,7 @@ import { formatUnits } from "viem";
 import { ADDRESS_REGEX } from "./contracts";
 import { ADDRESS_TRUNCATION } from "./constants";
 import { type Plant } from "./types";
+import { formatDuration as formatDurationDateFns, intervalToDuration } from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -68,32 +69,35 @@ export function formatEthShort(wei: number | bigint): string {
 export function formatDuration(seconds: number): string {
   if (seconds === 0) return '0s';
 
-  const d = Math.floor(seconds / (3600 * 24));
-  const h = Math.floor((seconds % (3600 * 24)) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
+  const duration = intervalToDuration({ start: 0, end: seconds * 1000 });
+  
+  // Custom formatting to match previous output style: "2d 4h", "30m"
+  // date-fns formatDuration is a bit verbose ("2 days 4 hours"), so we manually construct short strings
+  // from the duration object for consistency with UI.
+  
+  const d = duration.days || 0;
+  const h = duration.hours || 0;
+  const m = duration.minutes || 0;
+  const s = duration.seconds || 0;
 
   let result = '';
   if (d > 0) result += `${d}d `;
   if (h > 0) result += `${h}h `;
-  if (m > 0 && d === 0) result += `${m}m `; // Show minutes only if no days
-  if (s > 0 && h === 0 && d === 0) result += `${s}s`; // Show seconds only if no hours/days
+  if (m > 0 && d === 0) result += `${m}m `; 
+  if (s > 0 && h === 0 && d === 0) result += `${s}s`;
 
   return result.trim() || '0s';
 }
 
 // Format time components
 export function formatTime(seconds: number): [string, string, string, string] {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
+  const duration = intervalToDuration({ start: 0, end: seconds * 1000 });
   
   return [
-    days.toString().padStart(2, '0'),
-    hours.toString().padStart(2, '0'), 
-    minutes.toString().padStart(2, '0'),
-    secs.toString().padStart(2, '0')
+    (duration.days || 0).toString().padStart(2, '0'),
+    (duration.hours || 0).toString().padStart(2, '0'), 
+    (duration.minutes || 0).toString().padStart(2, '0'),
+    (duration.seconds || 0).toString().padStart(2, '0')
   ];
 }
 
@@ -338,13 +342,14 @@ export function calculateTimeLeft(building: any, currentBlock: bigint): string {
   
   if (secondsLeft <= 0) return "Complete";
   
-  const hours = Math.floor(secondsLeft / 3600);
-  const minutes = Math.floor((secondsLeft % 3600) / 60);
+  const duration = intervalToDuration({ start: 0, end: secondsLeft * 1000 });
+  const h = duration.hours || 0;
+  const m = duration.minutes || 0;
   
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+  if (h > 0) {
+    return `${h}h ${m}m`;
   } else {
-    return `${minutes}m`;
+    return `${m}m`;
   }
 }
 
@@ -518,4 +523,4 @@ export const getActiveFences = (plant: Plant): Array<{ type: 'Fence V1' | 'Fence
   // Sort by expiry time (soonest first)
   active.sort((a, b) => a.effectUntil - b.effectUntil);
   return active;
-}; 
+};
