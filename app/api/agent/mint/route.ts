@@ -24,7 +24,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { userAddress, count, strainId, totalSeedRequired, preparedSpendCalls } = body;
 
+    console.log('[AGENT_MINT] Request received:', {
+      userAddress,
+      count,
+      strainId,
+      totalSeedRequired,
+      hasPreparedSpendCalls: Array.isArray(preparedSpendCalls) && preparedSpendCalls.length > 0,
+      preparedSpendCallsCount: Array.isArray(preparedSpendCalls) ? preparedSpendCalls.length : 0
+    });
+
     if (!userAddress || !count || !totalSeedRequired) {
+      console.error('[AGENT_MINT] Missing required parameters:', { userAddress: !!userAddress, count: !!count, totalSeedRequired: !!totalSeedRequired });
       return NextResponse.json({ 
         error: 'Missing required parameters: userAddress, count, totalSeedRequired' 
       }, { status: 400 });
@@ -146,19 +156,48 @@ export async function POST(req: NextRequest) {
       args: [BigInt(strainId || 1)],
     });
 
-    const mintOp = await client.evm.sendUserOperation({
-      smartAccount: agentSmartAccount,
-      // Force correct network to avoid mismatches in env config
+    console.log('[AGENT_MINT] Preparing user operation:', {
+      agentSmartAccount: agentSmartAccount.address,
       network: 'base',
-      // Intentionally omit paymasterUrl to avoid estimation issues; Agent SA has ETH
-      calls: [
-        // If present, execute prepared spend calls first (Base Account stack)
-        ...preCalls,
-        { to: PIXOTCHI_TOKEN_ADDRESS, value: BigInt(0), data: approveData },
-        // Mint "count" times
-        ...Array.from({ length: Number(count || 1) }, () => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: mintData })),
-      ],
+      preCallsCount: preCalls.length,
+      callsCount: preCalls.length + 1 + count, // preCalls + approve + mints
+      strainId,
+      count,
+      totalSeedRequired,
+      userAddress: effectiveUserAddress || userAddress
     });
+
+    let mintOp;
+    try {
+      mintOp = await client.evm.sendUserOperation({
+        smartAccount: agentSmartAccount,
+        // Force correct network to avoid mismatches in env config
+        network: 'base',
+        // Intentionally omit paymasterUrl to avoid estimation issues; Agent SA has ETH
+        calls: [
+          // If present, execute prepared spend calls first (Base Account stack)
+          ...preCalls,
+          { to: PIXOTCHI_TOKEN_ADDRESS, value: BigInt(0), data: approveData },
+          // Mint "count" times
+          ...Array.from({ length: Number(count || 1) }, () => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: mintData })),
+        ],
+      });
+      console.log('[AGENT_MINT] User operation sent successfully:', { hash: mintOp.hash });
+    } catch (opError: any) {
+      console.error('[AGENT_MINT] Failed to send user operation:', {
+        error: opError?.message,
+        errorName: opError?.name,
+        errorStack: opError?.stack,
+        errorCause: opError?.cause,
+        errorDetails: opError,
+        calls: [
+          ...preCalls.map(c => ({ to: c.to, value: c.value.toString(), data: c.data.substring(0, 20) + '...' })),
+          { to: PIXOTCHI_TOKEN_ADDRESS, action: 'approve', data: approveData.substring(0, 20) + '...' },
+          ...Array.from({ length: Number(count || 1) }, () => ({ to: PIXOTCHI_NFT_ADDRESS, action: 'mint', strainId, data: mintData.substring(0, 20) + '...' }))
+        ]
+      });
+      throw opError;
+    }
 
     const mintReceipt = await agentSmartAccount.waitForUserOperation(mintOp);
     if (mintReceipt.status !== 'complete') {
@@ -235,9 +274,30 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Agent mint error:', error);
+    console.error('[AGENT_MINT] Error:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack,
+      cause: error?.cause,
+      error: error,
+      errorString: String(error),
+      errorJSON: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+    
+    // Try to extract more detailed error information
+    let errorMessage = error?.message || 'Failed to execute mint transaction';
+    
+    // Check for common error patterns
+    if (errorMessage.includes('execution reverted')) {
+      errorMessage = `Transaction would fail: ${errorMessage}. This could be due to insufficient SEED balance, invalid spend permissions, or contract state issues.`;
+    } else if (errorMessage.includes('insufficient funds') || errorMessage.includes('insufficient balance')) {
+      errorMessage = 'Insufficient SEED balance to complete the mint.';
+    } else if (errorMessage.includes('spend permission')) {
+      errorMessage = 'Spend permission issue: ' + errorMessage;
+    }
+    
     return NextResponse.json({ 
-      error: error.message || 'Failed to execute mint transaction' 
+      error: errorMessage
     }, { status: 500 });
   }
 }
