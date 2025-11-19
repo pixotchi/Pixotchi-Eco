@@ -145,7 +145,7 @@ export function Providers(props: { children: ReactNode }) {
             if (urlSurface === 'privy' || urlSurface === 'base') {
               // Store the surface preference using centralized manager
               try {
-                await sessionStorageManager.setAuthSurface(urlSurface as 'privy' | 'base');
+                await sessionStorageManager.setAuthSurface(urlSurface as any);
               } catch (e) {
                 console.error('Failed to store surface preference:', e);
               }
@@ -160,7 +160,10 @@ export function Providers(props: { children: ReactNode }) {
                 
                 // Check again before state update
                 if (cancelToken || !mounted) return;
-                setSurface(stored || 'privy');
+
+                // Map 'coinbase' to 'base' for backward compatibility
+                const effectiveSurface = stored === 'coinbase' ? 'base' : stored;
+                setSurface(effectiveSurface || 'privy');
               } catch (e) {
                 console.error('Failed to read surface preference:', e);
                 if (cancelToken || !mounted) return;
