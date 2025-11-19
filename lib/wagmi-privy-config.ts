@@ -1,13 +1,14 @@
 "use client";
 
 import { createConfig } from "@privy-io/wagmi";
-import { injected, coinbaseWallet } from "wagmi/connectors";
+import { injected } from "wagmi/connectors";
 import { base } from "viem/chains";
 import { createResilientTransport } from "./rpc-transport";
+import { baseAccountConnector } from "./base-account-connector";
 
-// Expose external EOAs and Coinbase Wallet popup under Privy wagmi so the blue button always sees a connector
+// Expose external EOAs and Base Account under Privy wagmi so the blue button always sees a connector
 const connectors = [
-  coinbaseWallet({ appName: "Pixotchi Mini" }),
+  baseAccountConnector({ displayName: "Sign in with Base" }),
   injected(),
 ];
 

@@ -1,7 +1,7 @@
 // Centralized sessionStorage manager to prevent race conditions
 // Provides thread-safe access to sessionStorage with proper error handling
 
-type AuthSurface = 'privy' | 'coinbase' | null;
+type AuthSurface = 'privy' | 'base' | null;
 
 class SessionStorageManager {
   private static instance: SessionStorageManager;
@@ -24,7 +24,7 @@ class SessionStorageManager {
     
     try {
       const stored = sessionStorage.getItem(this.KEY_AUTH_SURFACE);
-      if (stored === 'privy' || stored === 'coinbase') {
+      if (stored === 'privy' || stored === 'base') {
         return stored as AuthSurface;
       }
       return null;
@@ -35,7 +35,7 @@ class SessionStorageManager {
   }
 
   // Thread-safe setter for auth surface
-  async setAuthSurface(surface: 'privy' | 'coinbase'): Promise<void> {
+  async setAuthSurface(surface: 'privy' | 'base'): Promise<void> {
     // Chain operations to prevent race conditions
     this.lock = this.lock.then(async () => {
       if (typeof window === 'undefined') return;
@@ -52,12 +52,12 @@ class SessionStorageManager {
   }
 
   // Thread-safe getter for autologin flag
-  getAutologin(): 'privy' | 'coinbase' | null {
+  getAutologin(): 'privy' | 'base' | null {
     if (typeof window === 'undefined') return null;
     
     try {
       const stored = sessionStorage.getItem(this.KEY_AUTOLOGIN);
-      if (stored === 'privy' || stored === 'coinbase') {
+      if (stored === 'privy' || stored === 'base') {
         return stored;
       }
       return null;
@@ -68,7 +68,7 @@ class SessionStorageManager {
   }
 
   // Thread-safe setter for autologin flag
-  async setAutologin(surface: 'privy' | 'coinbase'): Promise<void> {
+  async setAutologin(surface: 'privy' | 'base'): Promise<void> {
     this.lock = this.lock.then(async () => {
       if (typeof window === 'undefined') return;
       
@@ -99,7 +99,7 @@ class SessionStorageManager {
   }
 
   // Batch set both auth surface and autologin atomically
-  async setAuthSurfaceAndAutologin(surface: 'privy' | 'coinbase'): Promise<void> {
+  async setAuthSurfaceAndAutologin(surface: 'privy' | 'base'): Promise<void> {
     this.lock = this.lock.then(async () => {
       if (typeof window === 'undefined') return;
       

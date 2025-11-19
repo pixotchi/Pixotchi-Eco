@@ -1,13 +1,13 @@
 "use client";
 
 import { createConfig } from "wagmi";
-import { coinbaseWallet } from "wagmi/connectors";
 import { base } from "viem/chains";
 import { createResilientTransport } from "./rpc-transport";
+import { baseAccountConnector } from "./base-account-connector";
 
 const connectors = [
-  // Follow OnchainKit guide: prefer Coinbase Wallet connector for ConnectWallet
-  coinbaseWallet({ appName: "Pixotchi Mini" }),
+  // Prefer Base Account SDK for dedicated Base sign-in flows
+  baseAccountConnector({ displayName: "Sign in with Base" }),
 ];
 
 const transport = createResilientTransport();
