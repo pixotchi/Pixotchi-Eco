@@ -52,19 +52,50 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // If client provided prepared spend calls (Base Account stack), prefer them.
-    // Otherwise, fall back to CDP useSpendPermission flow.
+    // NOTE: preparedSpendCalls from Base Account SDK are designed to execute from USER's account
+    // via spend permission. However, we're executing from AGENT account server-side with CDP.
+    // This might cause issues. We'll log the calls and attempt execution, but if it fails,
+    // we should fall back to CDP's useSpendPermission flow which is designed for server-side.
     let preCalls: Array<{ to: `0x${string}`; value: bigint; data: `0x${string}` }> = [];
+    let usingPreparedSpendCalls = false;
 
     if (Array.isArray(preparedSpendCalls) && preparedSpendCalls.length > 0) {
+      usingPreparedSpendCalls = true;
+      console.log('[AGENT_MINT] Using preparedSpendCalls from Base Account:', {
+        count: preparedSpendCalls.length,
+        calls: preparedSpendCalls.map((c: any, i: number) => ({
+          index: i,
+          to: c.to,
+          value: c.value,
+          dataLength: c.data?.length || 0,
+          dataPreview: c.data?.substring(0, 50) || 'no data'
+        }))
+      });
+      
       try {
         preCalls = preparedSpendCalls.map((c: any) => ({
           to: c.to as `0x${string}`,
-          value: c.value ? BigInt(c.value) : BigInt(0),
+          value: c.value ? (typeof c.value === 'string' ? BigInt(c.value) : BigInt(c.value)) : BigInt(0),
           data: (c.data || '0x') as `0x${string}`,
         }));
-      } catch (e) {
-        return NextResponse.json({ error: 'Invalid preparedSpendCalls format' }, { status: 400 });
+        
+        console.log('[AGENT_MINT] Converted preCalls:', {
+          count: preCalls.length,
+          calls: preCalls.map((c, i) => ({
+            index: i,
+            to: c.to,
+            value: c.value.toString(),
+            dataLength: c.data.length,
+            dataPreview: c.data.substring(0, 50)
+          }))
+        });
+      } catch (e: any) {
+        console.error('[AGENT_MINT] Error converting preparedSpendCalls:', {
+          error: e?.message,
+          stack: e?.stack,
+          preparedSpendCalls
+        });
+        return NextResponse.json({ error: `Invalid preparedSpendCalls format: ${e?.message}` }, { status: 400 });
       }
     } else {
       // Legacy flow: pull via CDP spend permissions
@@ -159,12 +190,21 @@ export async function POST(req: NextRequest) {
     console.log('[AGENT_MINT] Preparing user operation:', {
       agentSmartAccount: agentSmartAccount.address,
       network: 'base',
+      usingPreparedSpendCalls,
       preCallsCount: preCalls.length,
       callsCount: preCalls.length + 1 + count, // preCalls + approve + mints
       strainId,
       count,
       totalSeedRequired,
-      userAddress: effectiveUserAddress || userAddress
+      userAddress: userAddress,
+      preCallsDetails: preCalls.map((c, i) => ({
+        index: i,
+        to: c.to,
+        value: c.value.toString(),
+        isZeroValue: c.value === BigInt(0),
+        dataLength: c.data.length,
+        dataStartsWith: c.data.substring(0, 10)
+      }))
     });
 
     let mintOp;
