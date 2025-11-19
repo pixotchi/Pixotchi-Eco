@@ -235,13 +235,16 @@ export async function POST(req: NextRequest) {
       textLength: text?.length || 0,
       textPreview: text?.substring(0, 200),
       toolResultsCount: toolResults?.length || 0,
-      toolResults: toolResults?.map(tr => ({
-        toolName: tr.toolName,
-        hasError: tr.output?.error,
-        errorMessage: tr.output?.error ? tr.output.message : undefined,
-        success: tr.output?.success,
-        outputPreview: JSON.stringify(tr.output).substring(0, 200)
-      }))
+      toolResults: toolResults?.map(tr => {
+        const output = tr.output as any;
+        return {
+          toolName: tr.toolName,
+          hasError: output?.error,
+          errorMessage: output?.error ? output.message : undefined,
+          success: output?.success,
+          outputPreview: JSON.stringify(tr.output).substring(0, 200)
+        };
+      })
     });
 
     return new Response(
