@@ -70,6 +70,31 @@ export function getCurrentModelConfig() {
   };
 }
 
+export function getAgentAIProvider(): AIProvider {
+  const provider = process.env.AGENT_AI_PROVIDER;
+  if (provider === 'claude' || provider === 'anthropic') {
+    return 'claude';
+  }
+  if (provider === 'openai') {
+    return 'openai';
+  }
+  return getCurrentAIProvider();
+}
+
+export function getAgentModelConfig() {
+  const provider = getAgentAIProvider();
+  const config = AI_CONFIG.providers[provider];
+  const model = process.env.AGENT_AI_MODEL || config.defaultModel;
+
+  return {
+    provider,
+    model,
+    maxTokens: parseInt(process.env.AGENT_AI_MAX_TOKENS || '') || config.maxTokens,
+    costPerToken: config.costPerToken,
+    endpoint: config.endpoint,
+  };
+}
+
 // Validate environment variables
 export function validateAIConfig(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];

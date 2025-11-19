@@ -110,7 +110,7 @@ export function Providers(props: { children: ReactNode }) {
 
   function WagmiRouter({ children }: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
-    const [surface, setSurface] = useState<'privy' | 'coinbase'>('privy'); // Default to privy instead of null
+    const [surface, setSurface] = useState<'privy' | 'base'>('privy'); // Default to privy instead of null
     const [isInitialized, setIsInitialized] = useState(false);
     
     useEffect(() => {
@@ -142,17 +142,17 @@ export function Providers(props: { children: ReactNode }) {
             const params = new URLSearchParams(window.location.search);
             const urlSurface = params.get('surface');
             
-            if (urlSurface === 'privy' || urlSurface === 'coinbase') {
+            if (urlSurface === 'privy' || urlSurface === 'base') {
               // Store the surface preference using centralized manager
               try {
-                await sessionStorageManager.setAuthSurface(urlSurface as 'privy' | 'coinbase');
+                await sessionStorageManager.setAuthSurface(urlSurface as 'privy' | 'base');
               } catch (e) {
                 console.error('Failed to store surface preference:', e);
               }
               
               // Check again before state update
               if (cancelToken || !mounted) return;
-              setSurface(urlSurface as 'privy' | 'coinbase');
+              setSurface(urlSurface as 'privy' | 'base');
             } else {
               // Try to get stored preference using centralized manager, fallback to 'privy'
               try {
@@ -191,6 +191,13 @@ export function Providers(props: { children: ReactNode }) {
       };
     }, []);
 
+    useEffect(() => {
+      if (typeof document === 'undefined') return;
+      const miniTitle = "Pixotchi Mini - Your pocket farm on Base!";
+      const webTitle = "Pixotchi - Your pocket farm on Base!";
+      document.title = isMiniApp ? miniTitle : webTitle;
+    }, [isMiniApp]);
+
     // Show loading state until initialization is complete
     if (!isInitialized) {
       return <div>Loading...</div>;
@@ -212,7 +219,7 @@ export function Providers(props: { children: ReactNode }) {
     }
     
     // Web: choose a single provider per session based on selected surface
-    if (surface === 'coinbase') {
+    if (surface === 'base') {
       return (
         <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>
           <TransactionProvider 

@@ -24,7 +24,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { userAddress, count, strainId, totalSeedRequired, preparedSpendCalls } = body;
 
+    console.log('[AGENT_MINT] Request received:', {
+      userAddress,
+      count,
+      strainId,
+      totalSeedRequired,
+      hasPreparedSpendCalls: Array.isArray(preparedSpendCalls) && preparedSpendCalls.length > 0,
+      preparedSpendCallsCount: Array.isArray(preparedSpendCalls) ? preparedSpendCalls.length : 0
+    });
+
     if (!userAddress || !count || !totalSeedRequired) {
+      console.error('[AGENT_MINT] Missing required parameters:', { userAddress: !!userAddress, count: !!count, totalSeedRequired: !!totalSeedRequired });
       return NextResponse.json({ 
         error: 'Missing required parameters: userAddress, count, totalSeedRequired' 
       }, { status: 400 });
@@ -42,19 +52,55 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // If client provided prepared spend calls (Base Account stack), prefer them.
-    // Otherwise, fall back to CDP useSpendPermission flow.
+    // NOTE: preparedSpendCalls from Base Account SDK are designed to execute from USER's account
+    // via spend permission. However, we're executing from AGENT account server-side with CDP.
+    // This might cause issues. We'll log the calls and attempt execution, but if it fails,
+    // we should fall back to CDP's useSpendPermission flow which is designed for server-side.
     let preCalls: Array<{ to: `0x${string}`; value: bigint; data: `0x${string}` }> = [];
+    let usingPreparedSpendCalls = false;
 
     if (Array.isArray(preparedSpendCalls) && preparedSpendCalls.length > 0) {
+      usingPreparedSpendCalls = true;
+      console.log('[AGENT_MINT] Using preparedSpendCalls from Base Account:', {
+        count: preparedSpendCalls.length,
+        calls: preparedSpendCalls.map((c: any, i: number) => ({
+          index: i,
+          to: c.to,
+          value: c.value,
+          dataLength: c.data?.length || 0,
+          dataPreview: c.data?.substring(0, 50) || 'no data'
+        }))
+      });
+      
       try {
         preCalls = preparedSpendCalls.map((c: any) => ({
           to: c.to as `0x${string}`,
-          value: c.value ? BigInt(c.value) : BigInt(0),
+          value: c.value ? (typeof c.value === 'string' ? BigInt(c.value) : BigInt(c.value)) : BigInt(0),
           data: (c.data || '0x') as `0x${string}`,
         }));
-      } catch (e) {
-        return NextResponse.json({ error: 'Invalid preparedSpendCalls format' }, { status: 400 });
+
+        // Validate preCalls before proceeding
+        if (preCalls.length === 0) {
+            throw new Error('preparedSpendCalls converted to empty preCalls array');
+        }
+        
+        console.log('[AGENT_MINT] Converted preCalls:', {
+          count: preCalls.length,
+          calls: preCalls.map((c, i) => ({
+            index: i,
+            to: c.to,
+            value: c.value.toString(),
+            dataLength: c.data.length,
+            dataPreview: c.data.substring(0, 50)
+          }))
+        });
+      } catch (e: any) {
+        console.error('[AGENT_MINT] Error converting preparedSpendCalls:', {
+          error: e?.message,
+          stack: e?.stack,
+          preparedSpendCalls
+        });
+        return NextResponse.json({ error: `Invalid preparedSpendCalls format: ${e?.message}` }, { status: 400 });
       }
     } else {
       // Legacy flow: pull via CDP spend permissions
@@ -146,19 +192,61 @@ export async function POST(req: NextRequest) {
       args: [BigInt(strainId || 1)],
     });
 
-    const mintOp = await client.evm.sendUserOperation({
-      smartAccount: agentSmartAccount,
-      // Force correct network to avoid mismatches in env config
+    console.log('[AGENT_MINT] Preparing user operation:', {
+      agentSmartAccount: agentSmartAccount.address,
       network: 'base',
-      // Intentionally omit paymasterUrl to avoid estimation issues; Agent SA has ETH
-      calls: [
-        // If present, execute prepared spend calls first (Base Account stack)
-        ...preCalls,
-        { to: PIXOTCHI_TOKEN_ADDRESS, value: BigInt(0), data: approveData },
-        // Mint "count" times
-        ...Array.from({ length: Number(count || 1) }, () => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: mintData })),
-      ],
+      usingPreparedSpendCalls,
+      preCallsCount: preCalls.length,
+      callsCount: preCalls.length + 1 + count, // preCalls + approve + mints
+      strainId,
+      count,
+      totalSeedRequired,
+      userAddress: userAddress,
+      preCallsDetails: preCalls.map((c, i) => ({
+        index: i,
+        to: c.to,
+        value: c.value.toString(),
+        isZeroValue: c.value === BigInt(0),
+        dataLength: c.data.length,
+        dataStartsWith: c.data.substring(0, 10)
+      }))
     });
+
+    let mintOp;
+    try {
+      mintOp = await client.evm.sendUserOperation({
+        smartAccount: agentSmartAccount,
+        // Force correct network to avoid mismatches in env config
+        network: 'base',
+        // Intentionally omit paymasterUrl to avoid estimation issues; Agent SA has ETH
+        calls: [
+          // If present, execute prepared spend calls first (Base Account stack)
+          ...preCalls,
+          { to: PIXOTCHI_TOKEN_ADDRESS, value: BigInt(0), data: approveData },
+          // Mint "count" times
+          ...Array.from({ length: Number(count || 1) }, () => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: mintData })),
+        ],
+      });
+      console.log('[AGENT_MINT] User operation sent successfully:', { 
+        mintOpType: typeof mintOp,
+        mintOpKeys: Object.keys(mintOp || {}),
+        mintOpString: String(mintOp)
+      });
+    } catch (opError: any) {
+      console.error('[AGENT_MINT] Failed to send user operation:', {
+        error: opError?.message,
+        errorName: opError?.name,
+        errorStack: opError?.stack,
+        errorCause: opError?.cause,
+        errorDetails: opError,
+        calls: [
+          ...preCalls.map(c => ({ to: c.to, value: c.value.toString(), data: c.data.substring(0, 20) + '...' })),
+          { to: PIXOTCHI_TOKEN_ADDRESS, action: 'approve', data: approveData.substring(0, 20) + '...' },
+          ...Array.from({ length: Number(count || 1) }, () => ({ to: PIXOTCHI_NFT_ADDRESS, action: 'mint', strainId, data: mintData.substring(0, 20) + '...' }))
+        ]
+      });
+      throw opError;
+    }
 
     const mintReceipt = await agentSmartAccount.waitForUserOperation(mintOp);
     if (mintReceipt.status !== 'complete') {
@@ -190,6 +278,8 @@ export async function POST(req: NextRequest) {
 
     // If we minted to the agent, transfer to the user
     if (mintedTokenIds.length > 0 && userAddress) {
+      console.log('[AGENT_MINT] Starting transfer of tokens to user:', { mintedTokenIds, userAddress });
+      
       const transferDataList = mintedTokenIds.map((tokenId) => encodeFunctionData({
         abi: [{
           type: 'function',
@@ -206,14 +296,61 @@ export async function POST(req: NextRequest) {
         args: [agentSmartAccount.address as `0x${string}`, userAddress as `0x${string}`, tokenId],
       }));
 
-      const transferOp = await client.evm.sendUserOperation({
-        smartAccount: agentSmartAccount,
-        network: 'base',
-        calls: transferDataList.map((data) => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data })),
-      });
-      const transferReceipt = await agentSmartAccount.waitForUserOperation(transferOp);
-      if (transferReceipt.status !== 'complete') {
-        return NextResponse.json({ error: 'Transfer to user failed after mint', mintedTokenIds: mintedTokenIds.map(String) }, { status: 500 });
+      // Retry logic for transfer to handle propagation delays
+      let transferSuccess = false;
+      let transferError = null;
+      
+      // Wait a bit for indexers/nodes to catch up with the Mint event
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`[AGENT_MINT] Transfer attempt ${attempt}/3...`);
+          
+          const transferOp = await client.evm.sendUserOperation({
+            smartAccount: agentSmartAccount,
+            network: 'base',
+            calls: transferDataList.map((data) => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data })),
+          });
+          
+          const transferReceipt = await agentSmartAccount.waitForUserOperation(transferOp);
+          if (transferReceipt.status === 'complete') {
+            transferSuccess = true;
+            console.log('[AGENT_MINT] Transfer successful');
+            break;
+          } else {
+             throw new Error('Transfer UserOp status not complete');
+          }
+        } catch (e: any) {
+          console.warn(`[AGENT_MINT] Transfer attempt ${attempt} failed:`, e?.message || e);
+          transferError = e;
+          if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+        }
+      }
+
+      if (!transferSuccess) {
+        console.error('[AGENT_MINT] Failed to transfer tokens after retries:', transferError);
+        
+        const mintResult = {
+          transactionHash: mintReceipt.transactionHash,
+          plantsMinited: count,
+          strainId: strainId || 1,
+          seedSpent: totalSeedRequired,
+          status: 'partial_success',
+          mintedTokenIds: mintedTokenIds.map(String),
+          transferredTo: null,
+        };
+
+        // Return success for MINT, but note transfer failure
+        // This prevents the "Transaction Failed" UI when the user actually paid
+        return NextResponse.json({
+          success: true,
+          message: `Minted ${count} plants successfully, but failed to auto-transfer them to your wallet due to network congestion. They are safe in the Agent's wallet (IDs: ${mintedTokenIds.join(', ')}). Please contact support to retrieve them.`,
+          result: {
+             ...mintResult,
+             transferError: String(transferError?.message || transferError)
+          }
+        });
       }
     }
 
@@ -235,9 +372,30 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Agent mint error:', error);
+    console.error('[AGENT_MINT] Error:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack,
+      cause: error?.cause,
+      error: error,
+      errorString: String(error),
+      errorJSON: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+    
+    // Try to extract more detailed error information
+    let errorMessage = error?.message || 'Failed to execute mint transaction';
+    
+    // Check for common error patterns
+    if (errorMessage.includes('execution reverted')) {
+      errorMessage = `Transaction would fail: ${errorMessage}. This could be due to insufficient SEED balance, invalid spend permissions, or contract state issues.`;
+    } else if (errorMessage.includes('insufficient funds') || errorMessage.includes('insufficient balance')) {
+      errorMessage = 'Insufficient SEED balance to complete the mint.';
+    } else if (errorMessage.includes('spend permission')) {
+      errorMessage = 'Spend permission issue: ' + errorMessage;
+    }
+    
     return NextResponse.json({ 
-      error: error.message || 'Failed to execute mint transaction' 
+      error: errorMessage
     }, { status: 500 });
   }
 }

@@ -273,16 +273,18 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const getWalletProviderName = () => {
     if (!connector) return "Unknown";
 
-    // In frame context, it's likely Coinbase Wallet via Farcaster
+    // In frame context, it's likely Base Account via Farcaster
     if (isInFrame) {
-      return "Coinbase Wallet (Frame)";
+      return "Base Account (Frame)";
     }
 
     switch (connector.name.toLowerCase()) {
       case "privy":
         return "Privy";
-      case "coinbase wallet":
-        return "Coinbase Wallet";
+      case "sign in with base":
+      case "baseaccount":
+      case "base account":
+        return "Base Account";
       case "metamask":
         return "MetaMask";
       case "walletconnect":

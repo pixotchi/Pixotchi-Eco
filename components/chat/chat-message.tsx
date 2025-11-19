@@ -140,11 +140,6 @@ export default function ChatMessageComponent({
             {isAIMessage ? formatAIMessage(message.message) : message.message}
           </div>
           
-          {isAIMessage && 'tokensUsed' in message && (message.tokensUsed || 0) > 0 && process.env.NODE_ENV === 'development' && (
-            <div className="text-xs text-blue-700 dark:text-blue-300 mt-1 opacity-70">
-              {message.tokensUsed} tokens
-            </div>
-          )}
         </div>
       </div>
 

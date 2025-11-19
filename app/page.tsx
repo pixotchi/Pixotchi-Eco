@@ -20,6 +20,7 @@ import InviteGate from "@/components/invite-gate";
 import { ChatButton } from "@/components/chat";
 import StatusBar from "@/components/status-bar";
 import { usePrivy, useWallets, useLogin } from "@privy-io/react-auth";
+import { SignInWithBaseButton } from "@base-org/account-ui/react";
 import { clearAppCaches } from "@/lib/cache-utils";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
@@ -162,7 +163,7 @@ export default function App() {
   const { connect, connectors } = useConnect();
   
   // Read selected surface synchronously on initialization to avoid race conditions
-  const [surface, setSurface] = useState<'privy' | 'coinbase' | null>(() => {
+  const [surface, setSurface] = useState<'privy' | 'base' | null>(() => {
     if (typeof window === 'undefined') return null;
     try {
       const stored = sessionStorageManager.getAuthSurface();
@@ -200,11 +201,11 @@ export default function App() {
         if (auto === 'privy' && surface === 'privy' && privyReady) {
           await sessionStorageManager.removeAutologin();
           if (mounted) login();
-        } else if (auto === 'coinbase' && surface === 'coinbase') {
-          const cb = (connectors || []).find((c: any) => `${c.name}`.toLowerCase().includes('coinbase')) || (connectors || [])[0];
-          if (cb) {
+        } else if (auto === 'base' && surface === 'base') {
+          const base = (connectors || []).find((c: any) => c.id === 'baseAccount') || (connectors || [])[0];
+          if (base) {
             await sessionStorageManager.removeAutologin();
-            if (mounted) connect({ connector: cb as any });
+            if (mounted) connect({ connector: base as any });
           }
         }
       } catch (error) {
@@ -290,60 +291,33 @@ export default function App() {
     }
   };
 
-  // Render a web-only Coinbase Connect using the app-level wagmi provider
-  function CoinbaseConnectOnlyButton() {
-    const { connect, connectors, isPending } = useConnect();
-    const cbConnector = useMemo(() =>
-      connectors.find((c: any) => `${c.name}`.toLowerCase().includes('coinbase')) || connectors[0],
-      [connectors]
-    );
+  // Render a web-only Base Account connect using the official Base UI component
+  function BaseAccountButton() {
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    const label = isPending ? 'Connecting…' : 'Coinbase Wallet';
-    // Keep the option available unless no connector exists; some environments may mark
-    // a generic connect as pending due to other providers. We still allow user action.
-    const disabled = !cbConnector;
-
-    // Button state is managed by the component logic above
-
-    const handleClick = async () => {
-      try {
-        // Set preferences first using centralized manager
-        await sessionStorageManager.setAuthSurfaceAndAutologin('coinbase');
-        
-        // Wait a tick to ensure storage operations complete
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
-        // Update URL and reload
-        const url = new URL(window.location.href);
-        url.searchParams.set('surface', 'coinbase');
-        window.location.replace(url.toString());
-      } catch (error) {
-        console.error('Failed to switch to Coinbase surface:', error);
-        // Fallback: try direct connection without reload
-        if (cbConnector) {
-          connect({ connector: cbConnector as any });
+    const handleClick = () => {
+      if (isProcessing) return;
+      setIsProcessing(true);
+      (async () => {
+        try {
+          await sessionStorageManager.setAuthSurfaceAndAutologin("base");
+          const url = new URL(window.location.href);
+          url.searchParams.set("surface", "base");
+          window.location.replace(url.toString());
+        } catch (error) {
+          console.error("Failed to switch to Base surface:", error);
+          setIsProcessing(false);
         }
-      }
+      })();
     };
 
     return (
-      <Button
-        className="w-full rounded-md mt-1 h-11 text-base font-semibold text-white bg-[#0000FF] hover:bg-[#335CFF] active:bg-[#0016B3] transition-colors focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0000FF] disabled:opacity-60 disabled:cursor-not-allowed"
-        style={{ backgroundColor: '#0000FF' }}
-        variant="default"
-        aria-busy={isPending}
-        aria-live="polite"
-        disabled={false}
+      <SignInWithBaseButton
+        align="center"
+        variant="solid"
+        colorScheme="light"
         onClick={handleClick}
-      >
-        <span className="flex items-center justify-center gap-2">
-          {isPending && (
-            <span className="inline-block h-4 w-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
-          )}
-          <Image src="/icons/Base_square_white.png" alt="Base" width={16} height={16} className="w-4 h-4" />
-          <span>{label}</span>
-        </span>
-      </Button>
+      />
     );
   }
 
@@ -354,7 +328,7 @@ export default function App() {
       setFrameAdded(true);
       return;
     } catch (e) {
-      // Fallback to Coinbase MiniKit if Farcaster add flow is not available
+      // Fallback to Base MiniKit if Farcaster add flow is not available
       const result = await addFrame();
       setFrameAdded(Boolean(result));
     }
@@ -572,7 +546,7 @@ export default function App() {
                   </Button>
                 ) : null}
                 {!fc?.isInMiniApp ? (
-                  <CoinbaseConnectOnlyButton />
+                  <BaseAccountButton />
                 ) : (
                   <div className="text-muted-foreground text-sm">Connecting…</div>
                 )}

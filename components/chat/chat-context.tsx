@@ -361,7 +361,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           console.log('Request was cancelled');
           setMessages(prev => prev.filter(m => m.id !== optimisticId));
         } else {
-          setError(err.message || 'An unexpected error occurred.');
+          const friendlyMessage = err.message || 'An unexpected error occurred.';
+          setError(friendlyMessage);
+          toast.error(friendlyMessage);
           setMessages(prev => prev.filter(m => m.id !== optimisticId));
         }
     } finally {

@@ -16,7 +16,7 @@ const AI_USAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 // Rate limiting configuration
 const AI_RATE_LIMIT_WINDOW = 10; // 10 seconds between AI messages
 const MAX_AI_MESSAGE_LENGTH = 300;
-const MIN_AI_MESSAGE_LENGTH = 3;
+const MIN_AI_MESSAGE_LENGTH = 2;
 
 // Provider instances
 const openai = createOpenAI({
