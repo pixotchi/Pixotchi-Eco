@@ -167,7 +167,8 @@ export default function App() {
     if (typeof window === 'undefined') return null;
     try {
       const stored = sessionStorageManager.getAuthSurface();
-      return stored;
+      // Map 'coinbase' to 'base' for backward compatibility
+      return stored === 'coinbase' ? 'base' : stored;
     } catch (error) {
       console.warn('Failed to read surface on mount:', error);
       return null;
@@ -195,8 +196,11 @@ export default function App() {
     
     const handleAutologin = async () => {
       try {
-        const auto = sessionStorageManager.getAutologin();
-        if (!auto) return;
+        const storedAuto = sessionStorageManager.getAutologin();
+        if (!storedAuto) return;
+        
+        // Map 'coinbase' to 'base'
+        const auto = storedAuto === 'coinbase' ? 'base' : storedAuto;
         
         if (auto === 'privy' && surface === 'privy' && privyReady) {
           await sessionStorageManager.removeAutologin();
