@@ -222,7 +222,11 @@ export async function POST(req: NextRequest) {
           ...Array.from({ length: Number(count || 1) }, () => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: mintData })),
         ],
       });
-      console.log('[AGENT_MINT] User operation sent successfully:', { hash: mintOp.hash });
+      console.log('[AGENT_MINT] User operation sent successfully:', { 
+        mintOpType: typeof mintOp,
+        mintOpKeys: Object.keys(mintOp || {}),
+        mintOpString: String(mintOp)
+      });
     } catch (opError: any) {
       console.error('[AGENT_MINT] Failed to send user operation:', {
         error: opError?.message,
