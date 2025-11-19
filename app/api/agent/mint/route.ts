@@ -273,6 +273,8 @@ export async function POST(req: NextRequest) {
 
     // If we minted to the agent, transfer to the user
     if (mintedTokenIds.length > 0 && userAddress) {
+      console.log('[AGENT_MINT] Starting transfer of tokens to user:', { mintedTokenIds, userAddress });
+      
       const transferDataList = mintedTokenIds.map((tokenId) => encodeFunctionData({
         abi: [{
           type: 'function',
@@ -289,14 +291,61 @@ export async function POST(req: NextRequest) {
         args: [agentSmartAccount.address as `0x${string}`, userAddress as `0x${string}`, tokenId],
       }));
 
-      const transferOp = await client.evm.sendUserOperation({
-        smartAccount: agentSmartAccount,
-        network: 'base',
-        calls: transferDataList.map((data) => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data })),
-      });
-      const transferReceipt = await agentSmartAccount.waitForUserOperation(transferOp);
-      if (transferReceipt.status !== 'complete') {
-        return NextResponse.json({ error: 'Transfer to user failed after mint', mintedTokenIds: mintedTokenIds.map(String) }, { status: 500 });
+      // Retry logic for transfer to handle propagation delays
+      let transferSuccess = false;
+      let transferError = null;
+      
+      // Wait a bit for indexers/nodes to catch up with the Mint event
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`[AGENT_MINT] Transfer attempt ${attempt}/3...`);
+          
+          const transferOp = await client.evm.sendUserOperation({
+            smartAccount: agentSmartAccount,
+            network: 'base',
+            calls: transferDataList.map((data) => ({ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data })),
+          });
+          
+          const transferReceipt = await agentSmartAccount.waitForUserOperation(transferOp);
+          if (transferReceipt.status === 'complete') {
+            transferSuccess = true;
+            console.log('[AGENT_MINT] Transfer successful');
+            break;
+          } else {
+             throw new Error('Transfer UserOp status not complete');
+          }
+        } catch (e: any) {
+          console.warn(`[AGENT_MINT] Transfer attempt ${attempt} failed:`, e?.message || e);
+          transferError = e;
+          if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+        }
+      }
+
+      if (!transferSuccess) {
+        console.error('[AGENT_MINT] Failed to transfer tokens after retries:', transferError);
+        
+        const mintResult = {
+          transactionHash: mintReceipt.transactionHash,
+          plantsMinited: count,
+          strainId: strainId || 1,
+          seedSpent: totalSeedRequired,
+          status: 'partial_success',
+          mintedTokenIds: mintedTokenIds.map(String),
+          transferredTo: null,
+        };
+
+        // Return success for MINT, but note transfer failure
+        // This prevents the "Transaction Failed" UI when the user actually paid
+        return NextResponse.json({
+          success: true,
+          message: `Minted ${count} plants successfully, but failed to auto-transfer them to your wallet due to network congestion. They are safe in the Agent's wallet (IDs: ${mintedTokenIds.join(', ')}). Please contact support to retrieve them.`,
+          result: {
+             ...mintResult,
+             transferError: String(transferError?.message || transferError)
+          }
+        });
       }
     }
 
