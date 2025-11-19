@@ -8,7 +8,7 @@ const nextConfig = {
     return config;
   },
   // External packages for server components
-  serverExternalPackages: [],
+  serverExternalPackages: ["pino", "pino-pretty", "thread-stream", "lokijs", "encoding"],
   // Configure Next.js Image optimization qualities
   images: {
     qualities: [75, 80, 85, 90],
