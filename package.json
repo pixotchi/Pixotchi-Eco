@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.5.55",
+  "version": "1.5.54",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -48,7 +48,7 @@
     "@upstash/redis": "1.35.6",
     "@react-native-async-storage/async-storage": "2.2.0",
     "ethereum-identity-kit": "0.2.61",
-    "@reown/appkit": "1.8.14",
+    "@reown/appkit": "1.8.14",	
     "@walletconnect/ethereum-provider": "2.23.0",
     "pino": "10.1.0",
     "thread-stream": "3.1.0"

@@ -12,9 +12,9 @@ export type FenceV2State = {
 export type Plant = {
   id: number;
   name: string;
-  score: bigint;
+  score: number;
   status: number;
-  rewards: bigint;
+  rewards: number;
   level: number;
   timeUntilStarving: number;
   stars: number;

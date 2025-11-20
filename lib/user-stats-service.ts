@@ -166,8 +166,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     const totalPlants = plants.length;
     const healthyPlants = plants.filter(p => p.status <= 1).length; // Great (0) or Okay (1)
     const dyingPlants = plants.filter(p => p.status >= 2).length; // Dry (2), Dying (3), Dead (4)
-    const totalPTS = plants.reduce((sum, p) => sum + (Number(p.score) / 1e12), 0); // Plant scores use 12 decimals
-    const totalRewards = plants.reduce((sum, p) => sum + (Number(p.rewards) / 1e18), 0); // Rewards use 18 decimals (ETH)
+    const totalPTS = plants.reduce((sum, p) => sum + (p.score / 1e12), 0); // Plant scores use 12 decimals
+    const totalRewards = plants.reduce((sum, p) => sum + (p.rewards / 1e18), 0); // Rewards use 18 decimals (ETH)
     const totalStars = plants.reduce((sum, p) => sum + p.stars, 0);
     const avgLevel = totalPlants > 0 ? plants.reduce((sum, p) => sum + p.level, 0) / totalPlants : 0;
 
@@ -512,9 +512,9 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         level: p.level,
         status: p.status,
         statusText: getPlantStatusText(p.status),
-        score: Number(p.score),
+        score: p.score,
         formattedScore: formatScore(p.score),
-        rewards: Number(p.rewards),
+        rewards: p.rewards,
         formattedRewards: formatTokenAmount(BigInt(p.rewards), 18) + ' ETH',
         stars: p.stars,
         timeUntilStarving: p.timeUntilStarving,

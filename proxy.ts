@@ -15,9 +15,10 @@ export async function proxy(request: NextRequest) {
   // Server-side invite validation for protected routes (excluding API and auth routes)
   if (INVITE_CONFIG.SYSTEM_ENABLED && !pathname.startsWith('/api/') && !pathname.startsWith('/_next') && pathname === '/') {
     try {
-      // Validated silently
+
+      console.log('[Middleware] Invite system active - client-side enforcement in place');
     } catch (error) {
-      // Silently ignore validation errors in middleware to prevent log spam
+      console.warn('[Middleware] Invite validation check failed:', error);
     }
   }
   

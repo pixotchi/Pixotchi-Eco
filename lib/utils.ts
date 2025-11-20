@@ -26,10 +26,8 @@ export function calculateImageLevel(level: number): number {
 }
 
 // Format score into points. The base unit for score is 1e12.
-export function formatScore(score: number | bigint): string {
-  const scoreBig = typeof score === 'bigint' ? score : BigInt(Math.floor(score));
-  const formatted = formatUnits(scoreBig, 12);
-  const points = parseFloat(formatted);
+export function formatScore(score: number): string {
+  const points = score / 1e12;
   return points.toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
