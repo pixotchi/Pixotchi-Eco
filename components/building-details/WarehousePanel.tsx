@@ -106,7 +106,7 @@ export default function WarehousePanel({
             <Button variant="outline" className="w-full justify-between h-12 text-sm">
               {selectedPlantId ? (
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <PlantImage selectedPlant={{ id: selectedPlantId, name: '', level: 0, score: 0, status: 0, rewards: 0, stars: 0, strain: 1, timeUntilStarving: 0, timePlantBorn: '0', lastAttackUsed: '0', lastAttacked: '0', statusStr: '', owner: address || '0x', extensions: [] }} width={20} height={20} />
+                  <PlantImage selectedPlant={{ id: selectedPlantId, name: '', level: 0, score: BigInt(0), status: 0, rewards: BigInt(0), stars: 0, strain: 1, timeUntilStarving: 0, timePlantBorn: '0', lastAttackUsed: '0', lastAttacked: '0', statusStr: '', owner: address || '0x', extensions: [] }} width={20} height={20} />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{plants.find(pl => pl.id === selectedPlantId)?.name || `Plant #${selectedPlantId}`}</div>
                     <div className="text-xs text-muted-foreground">#{selectedPlantId}</div>
