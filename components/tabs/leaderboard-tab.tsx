@@ -134,7 +134,11 @@ export default function LeaderboardTab() {
       
       // Sort by score (highest first) and add ranking
       const sortedPlants = plantsData
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => {
+            if (b.score > a.score) return 1;
+            if (b.score < a.score) return -1;
+            return 0;
+        })
         .map((plant, index) => ({
           ...plant,
           rank: index + 1,

@@ -50,7 +50,11 @@ export default function ChatProfileDialog({
       .then((plants) => {
         if (cancelled) return;
         if (Array.isArray(plants) && plants.length > 0) {
-          const sorted = [...plants].sort((a, b) => b.score - a.score);
+          const sorted = [...plants].sort((a, b) => {
+            if (b.score > a.score) return 1;
+            if (b.score < a.score) return -1;
+            return 0;
+          });
           const selected = sorted[0] ?? null;
           setPlant(selected);
           cacheRef.current.set(cacheKey, { plant: selected, timestamp: now });
