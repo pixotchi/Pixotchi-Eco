@@ -12,7 +12,6 @@ import Image from 'next/image';
 import AgentPermissionsPanel from './AgentPermissionsPanel';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useFrameContext } from '@/lib/frame-context';
-import { useTransactions } from 'ethereum-identity-kit';
 
 interface ChatDialogProps {
   open: boolean;
@@ -78,14 +77,6 @@ function ChatDialogContent() {
 }
 
 export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
-  const { txModalOpen } = useTransactions();
-
-  useEffect(() => {
-    if (txModalOpen && open) {
-      onOpenChange(false);
-    }
-  }, [txModalOpen, open, onOpenChange]);
-
   return (
     <ChatProvider>
       <Dialog open={open} onOpenChange={onOpenChange}>

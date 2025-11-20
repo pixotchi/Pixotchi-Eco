@@ -28,7 +28,7 @@ import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum-identity-kit';
-import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
+// ... removed TransactionModalWrapper import ...
 import { SafeArea } from "@coinbase/onchainkit/minikit";
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
@@ -215,7 +215,6 @@ export function Providers(props: { children: ReactNode }) {
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
           >
             {children}
-            <TransactionModalWrapper className="!z-[1300]" />
           </TransactionProvider>
         </CoreWagmiProvider>
       );
@@ -230,7 +229,6 @@ export function Providers(props: { children: ReactNode }) {
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
           >
             {children}
-            <TransactionModalWrapper className="!z-[1300]" />
           </TransactionProvider>
         </CoreWagmiProvider>
       );
@@ -244,7 +242,6 @@ export function Providers(props: { children: ReactNode }) {
           paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
         >
           {children}
-          <TransactionModalWrapper className="!z-[1300]" />
         </TransactionProvider>
       </PrivyWagmiProvider>
     );

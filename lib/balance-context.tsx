@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWatchContractEvent } from 'wagmi';
 import { usePublicClient } from 'wagmi';
+import { parseAbiItem } from 'viem';
 import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { leafAbi } from '@/public/abi/leaf-abi'; 
 
@@ -11,6 +12,7 @@ interface BalanceContextType {
   leafBalance: bigint;
   loading: boolean;
   refreshBalances: () => Promise<void>;
+  optimisticUpdate: (seedDelta: bigint, leafDelta: bigint) => void;
 }
 
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined);
@@ -247,11 +249,51 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
     };
   }, [debouncedRefresh, immediateRefresh]);
 
+  // Watch for SEED transfers (outgoing)
+  useWatchContractEvent({
+    address: PIXOTCHI_TOKEN_ADDRESS,
+    abi: [parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')],
+    eventName: 'Transfer',
+    args: { from: address },
+    onLogs: () => fetchBalances(true, false),
+  });
+  
+  // Watch for SEED transfers (incoming)
+  useWatchContractEvent({
+    address: PIXOTCHI_TOKEN_ADDRESS,
+    abi: [parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')],
+    eventName: 'Transfer',
+    args: { to: address },
+    onLogs: () => fetchBalances(true, false),
+  });
+
+  // Watch for LEAF transfers (outgoing)
+  useWatchContractEvent({
+    address: LEAF_CONTRACT_ADDRESS,
+    abi: [parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')],
+    eventName: 'Transfer',
+    args: { from: address },
+    onLogs: () => fetchBalances(true, false),
+  });
+  
+  // Watch for LEAF transfers (incoming)
+  useWatchContractEvent({
+    address: LEAF_CONTRACT_ADDRESS,
+    abi: [parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')],
+    eventName: 'Transfer',
+    args: { to: address },
+    onLogs: () => fetchBalances(true, false),
+  });
+
   const value = {
     seedBalance,
     leafBalance,
     loading,
     refreshBalances: () => fetchBalances(true, false), // Direct calls bypass throttling but allow deduplication
+    optimisticUpdate: (seedDelta: bigint, leafDelta: bigint) => {
+      setSeedBalance(prev => prev + seedDelta);
+      setLeafBalance(prev => prev + leafDelta);
+    }
   };
 
   return (

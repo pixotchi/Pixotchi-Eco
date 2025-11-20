@@ -1,5 +1,4 @@
 import "@coinbase/onchainkit/styles.css";
-import "ethereum-identity-kit/css";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";

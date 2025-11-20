@@ -28,7 +28,6 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats, type EthFollowStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
-import { FollowButton, useTransactions } from 'ethereum-identity-kit';
 import { Avatar } from '@coinbase/onchainkit/identity';
 import { base } from 'viem/chains';
 import { formatDistanceToNow } from 'date-fns';
@@ -153,16 +152,6 @@ export default function PlantProfileDialog({
   }, [plant?.owner, walletAddressOverride]);
   const plantId = plant?.id ?? null;
   
-  // Get TransactionModal state to detect when it's open/closed
-  const { txModalOpen } = useTransactions();
-  
-  // Close plant profile dialog when TransactionModal opens
-  useEffect(() => {
-    if (txModalOpen && open) {
-      onOpenChange(false);
-    }
-  }, [txModalOpen, open, onOpenChange]);
-
   // Resolve ENS/Basename using shared resolver
   const { name: ownerNameDerived, loading: isNameLoading } = usePrimaryName(ownerAddress);
   const ownerName = walletNameOverride ?? ownerNameDerived ?? null;
@@ -396,7 +385,6 @@ export default function PlantProfileDialog({
   }, []);
 
   // Track previous TransactionModal state to detect when it closes
-  const prevTxModalOpenRef = React.useRef(txModalOpen);
   const lastViewedOwnerRef = React.useRef<string | null>(null);
 
   useEffect(() => {
@@ -404,15 +392,6 @@ export default function PlantProfileDialog({
       lastViewedOwnerRef.current = ownerAddress.toLowerCase();
     }
   }, [ownerAddress]);
-  
-  // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
-  useEffect(() => {
-    // If TransactionModal was open and now it's closed, refresh stats
-    if (prevTxModalOpenRef.current && !txModalOpen) {
-      refreshEfpStats();
-    }
-    prevTxModalOpenRef.current = txModalOpen;
-  }, [txModalOpen, refreshEfpStats]);
 
   if (!ownerAddress) return null;
 
@@ -689,20 +668,13 @@ export default function PlantProfileDialog({
             </div>
           </div>
 
-          {/* Follow Button Section */}
+          {/* Follow Button Section Removed - Custom Implementation Required */}
           {connectedAddress &&
            ownerAddress &&
            connectedAddress.toLowerCase() !== ownerAddress.toLowerCase() && (
             <div className="flex justify-center pt-4 border-t border-border">
-              <div className="w-full">
-                <FollowButton
-                  lookupAddress={ownerAddress as `0x${string}`}
-                  connectedAddress={connectedAddress}
-                  onDisconnectedClick={() => {
-                    toast.error('Please connect your wallet to follow users');
-                  }}
-                  className="w-full h-10 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                />
+              <div className="text-xs text-muted-foreground">
+                Following coming soon with OnchainKit
               </div>
             </div>
           )}

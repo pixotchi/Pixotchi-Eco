@@ -5,7 +5,7 @@ import { sdk } from "@farcaster/miniapp-sdk";
 import { useFrameContext } from "@/lib/frame-context";
 import { Wallet } from "@coinbase/onchainkit/wallet";
 import { useAccount, useConnect } from "wagmi";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { PageLoader, BasePageLoader } from "@/components/ui/loading";
 import { Tab } from "@/lib/types";
@@ -539,10 +539,12 @@ export default function App() {
                     console.error(`Error in ${activeTab} tab:`, { error, errorInfo });
                   }}
                 >
-                  {(() => {
-                    const ActiveTabComponent = tabComponents[activeTab];
-                    return ActiveTabComponent ? <ActiveTabComponent /> : null;
-                  })()}
+                  <Suspense fallback={<BasePageLoader />}>
+                    {(() => {
+                      const ActiveTabComponent = tabComponents[activeTab];
+                      return ActiveTabComponent ? <ActiveTabComponent /> : null;
+                    })()}
+                  </Suspense>
                 </ErrorBoundary>
               </div>
 
