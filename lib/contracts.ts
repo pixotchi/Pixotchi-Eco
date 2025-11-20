@@ -752,9 +752,9 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
       return {
         id: plantId,
         name: plant.name || '',
-        score: Number(plant.score),
+        score: plant.score,
         status: Number(plant.status),
-        rewards: Number(plant.rewards),
+        rewards: plant.rewards,
         level: Number(plant.level),
         timeUntilStarving: Number(plant.timeUntilStarving),
         stars: Number(plant.stars),
@@ -798,9 +798,9 @@ export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): 
     return {
       id: plantId,
       name: plant.name || '',
-      score: Number(plant.score),
+      score: plant.score,
       status: Number(plant.status),
-      rewards: Number(plant.rewards),
+      rewards: plant.rewards,
       level: Number(plant.level),
       timeUntilStarving: Number(plant.timeUntilStarving),
       stars: Number(plant.stars),
@@ -1469,28 +1469,34 @@ const getFenceV2StatesInternal = async (
 ): Promise<Record<number, FenceV2State | null>> => {
   if (plantIds.length === 0) return {};
 
-  // Use fenceV2GetPurchaseStats which returns everything we need in one call
-  const calls = plantIds.map((id) => ({
-    address: FENCE_V2_EXTENSION_ADDRESS,
-    abi: fenceV2Abi,
-    functionName: 'fenceV2GetPurchaseStats' as const,
-    args: [BigInt(id)],
-  }));
-
-  const responses = await retryWithBackoff(async () => {
-    return client.multicall({ contracts: calls, allowFailure: true });
-  });
-
   const result: Record<number, FenceV2State | null> = {};
-  for (let index = 0; index < plantIds.length; index++) {
-    const stats = responses[index]?.result as any;
-    if (stats) {
-      const effectUntilRes = stats[1]; // activeUntil
-      const isActiveRes = stats[1] && Number(stats[1]) > Math.floor(Date.now() / 1000); // Check if activeUntil is in future
-      const hasV1Res = stats[3]; // fenceV1Active
-      result[plantIds[index]] = computeFenceV2State(effectUntilRes, isActiveRes, hasV1Res);
-    } else {
-      result[plantIds[index]] = null;
+  const chunkSize = 100; // Reasonable batch size for multicall
+
+  for (let i = 0; i < plantIds.length; i += chunkSize) {
+    const chunk = plantIds.slice(i, i + chunkSize);
+    
+    // Use fenceV2GetPurchaseStats which returns everything we need in one call
+    const calls = chunk.map((id) => ({
+      address: FENCE_V2_EXTENSION_ADDRESS,
+      abi: fenceV2Abi,
+      functionName: 'fenceV2GetPurchaseStats' as const,
+      args: [BigInt(id)],
+    }));
+
+    const responses = await retryWithBackoff(async () => {
+      return client.multicall({ contracts: calls, allowFailure: true });
+    });
+
+    for (let index = 0; index < chunk.length; index++) {
+      const stats = responses[index]?.result as any;
+      if (stats) {
+        const effectUntilRes = stats[1]; // activeUntil
+        const isActiveRes = stats[1] && Number(stats[1]) > Math.floor(Date.now() / 1000); // Check if activeUntil is in future
+        const hasV1Res = stats[3]; // fenceV1Active
+        result[chunk[index]] = computeFenceV2State(effectUntilRes, isActiveRes, hasV1Res);
+      } else {
+        result[chunk[index]] = null;
+      }
     }
   }
   return result;
@@ -1854,9 +1860,9 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
       return {
         id: plantId,
         name: plant.name || '',
-        score: Number(plant.score),
+        score: plant.score,
         status: Number(plant.status),
-        rewards: Number(plant.rewards),
+        rewards: plant.rewards,
         level: Number(plant.level),
         timeUntilStarving: Number(plant.timeUntilStarving),
         stars: Number(plant.stars),

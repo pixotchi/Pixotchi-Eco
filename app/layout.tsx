@@ -174,27 +174,8 @@ export default function RootLayout({
           }}
         />
         {/* Prevent theme flash (FOUC) by applying theme before first paint */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  const theme = localStorage.getItem('pixotchi-theme') || 'light';
-                  const validThemes = ['light', 'dark', 'green', 'yellow', 'red', 'pink', 'blue', 'violet'];
-                  if (validThemes.includes(theme)) {
-                    const root = document.documentElement;
-                    const existing = new Set((root.className || '').split(/\s+/).filter(Boolean));
-                    validThemes.forEach((t) => existing.delete(t));
-                    existing.add(theme);
-                    root.className = Array.from(existing).join(' ');
-                  }
-                } catch (e) {
-                  console.warn('Theme initialization failed:', e);
-                }
-              })();
-            `,
-          }}
-        />
+        {/* Theme initialization handled by next-themes via ServerThemeProvider */}
+        
         {/* Structured Data */}
         <script
           type="application/ld+json"
