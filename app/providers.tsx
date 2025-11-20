@@ -28,7 +28,7 @@ import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum-identity-kit';
-// ... removed TransactionModalWrapper import ...
+import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 import { SafeArea } from "@coinbase/onchainkit/minikit";
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
@@ -110,7 +110,7 @@ export function Providers(props: { children: ReactNode }) {
 
   function WagmiRouter({ children }: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
-    const [surface, setSurface] = useState<'privy' | 'base' | null>(null); // Initialize as null to avoid hydration mismatch
+    const [surface, setSurface] = useState<'privy' | 'base'>('privy'); // Default to privy instead of null
     const [isInitialized, setIsInitialized] = useState(false);
     
     useEffect(() => {
@@ -215,6 +215,7 @@ export function Providers(props: { children: ReactNode }) {
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
           >
             {children}
+            <TransactionModalWrapper className="!z-[1300]" />
           </TransactionProvider>
         </CoreWagmiProvider>
       );
@@ -229,6 +230,7 @@ export function Providers(props: { children: ReactNode }) {
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
           >
             {children}
+            <TransactionModalWrapper className="!z-[1300]" />
           </TransactionProvider>
         </CoreWagmiProvider>
       );
@@ -242,6 +244,7 @@ export function Providers(props: { children: ReactNode }) {
           paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
         >
           {children}
+          <TransactionModalWrapper className="!z-[1300]" />
         </TransactionProvider>
       </PrivyWagmiProvider>
     );

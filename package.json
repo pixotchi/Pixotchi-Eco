@@ -47,6 +47,7 @@
     "@vercel/speed-insights": "1.2.0",
     "@upstash/redis": "1.35.6",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "ethereum-identity-kit": "0.2.61",
     "@reown/appkit": "1.8.14",	
     "@walletconnect/ethereum-provider": "2.23.0",
     "pino": "10.1.0",

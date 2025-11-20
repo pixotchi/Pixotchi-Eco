@@ -12,6 +12,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
   
+  // Server-side invite validation for protected routes (excluding API and auth routes)
+  if (INVITE_CONFIG.SYSTEM_ENABLED && !pathname.startsWith('/api/') && !pathname.startsWith('/_next') && pathname === '/') {
+    try {
+
+      console.log('[Middleware] Invite system active - client-side enforcement in place');
+    } catch (error) {
+      console.warn('[Middleware] Invite validation check failed:', error);
+    }
+  }
+  
   // Create response
   const response = NextResponse.next();
   

@@ -66,27 +66,13 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   React.useEffect(() => {
     fetchSlots();
     fetchRewardsBalance();
+    // Refresh balance every 30 seconds to stay up-to-date
+    const interval = setInterval(fetchRewardsBalance, 30000);
+    return () => clearInterval(interval);
   }, [fetchSlots, fetchRewardsBalance]);
 
-  // Watch for Transfer events to/from the rewards wallet to update balance automatically
-  useWatchContractEvent({
-    address: PIXOTCHI_TOKEN_ADDRESS,
-    abi: [parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')],
-    eventName: 'Transfer',
-    args: { from: QUEST_REWARDS_WALLET },
-    onLogs: () => fetchRewardsBalance(),
-  });
-  
-  useWatchContractEvent({
-    address: PIXOTCHI_TOKEN_ADDRESS,
-    abi: [parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')],
-    eventName: 'Transfer',
-    args: { to: QUEST_REWARDS_WALLET },
-    onLogs: () => fetchRewardsBalance(),
-  });
-
-  // Initialize and watch the current block number (default polling)
-  const { data: liveBlock } = useBlockNumber({ watch: true });
+  // Initialize and watch the current block number immediately to avoid transient wrong UI
+  const { data: liveBlock } = useBlockNumber({ watch: true, query: { refetchInterval: 1000 } });
   React.useEffect(() => {
     if (typeof liveBlock === 'bigint' && liveBlock > BigInt(0)) setCurrentBlock(liveBlock);
   }, [liveBlock]);

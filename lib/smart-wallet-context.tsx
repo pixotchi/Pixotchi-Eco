@@ -145,25 +145,7 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     }
 
     const runDetection = async () => {
-      // Check sessionStorage cache first
-      const cacheKey = `smart-wallet-detection-${address}`;
-      try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          // Use cache if it's less than 24 hours old
-          if (parsed.lastChecked && Date.now() - parsed.lastChecked < 86400000) {
-             if (mountedRef.current) {
-               setDetection(parsed);
-               return;
-             }
-          }
-        }
-      } catch (e) {
-        // Ignore cache errors
-      }
-
-      // Skip if recently checked in memory (within last 30 seconds)
+      // Skip if recently checked (within last 30 seconds)
       if (mountedRef.current) {
         setDetection(prev => {
           if (prev.lastChecked && Date.now() - prev.lastChecked < 30000) {
@@ -175,13 +157,6 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
       
       const result = await detectSmartWallet();
       
-      // Save to sessionStorage
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(result));
-      } catch (e) {
-        // Ignore storage errors
-      }
-
       // Only update state if component is still mounted
       if (mountedRef.current) {
         setDetection({ ...result, isLoading: false });

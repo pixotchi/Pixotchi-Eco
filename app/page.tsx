@@ -5,7 +5,7 @@ import { sdk } from "@farcaster/miniapp-sdk";
 import { useFrameContext } from "@/lib/frame-context";
 import { Wallet } from "@coinbase/onchainkit/wallet";
 import { useAccount, useConnect } from "wagmi";
-import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { PageLoader, BasePageLoader } from "@/components/ui/loading";
 import { Tab } from "@/lib/types";
@@ -57,30 +57,65 @@ const tabComponents = {
   }),
 };
 
-// Tab prefetching logic - Interaction based
-const useTabPrefetch = () => {
+// Tab prefetching logic with de-duplication
+const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
   const loadedTabs = useRef(new Set<string>());
   const prefetchingTabs = useRef(new Set<string>());
+  const prefetchPromises = useRef<Map<string, Promise<void>>>(new Map());
 
-  const prefetchTab = useCallback((tab: Tab) => {
-    const key = String(tab);
-    if (loadedTabs.current.has(key) || prefetchingTabs.current.has(key)) return;
-    
-    prefetchingTabs.current.add(key);
-    
-    import(`@/components/tabs/${tab}-tab`)
-      .then(() => {
-        loadedTabs.current.add(key);
-      })
-      .catch((err) => {
-        console.warn(`Failed to prefetch tab ${tab}:`, err);
-      })
-      .finally(() => {
-        prefetchingTabs.current.delete(key);
+  useEffect(() => {
+    if (!isConnected) return;
+
+    // Define tab navigation patterns for prefetching
+    const tabOrder: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
+    const currentIndex = tabOrder.indexOf(activeTab);
+
+    // Prefetch adjacent tabs (next and previous)
+    const prefetchTabs = [currentIndex - 1, currentIndex + 1]
+      .filter(index => index >= 0 && index < tabOrder.length)
+      .map(index => tabOrder[index]);
+
+    // Prefetch frequently accessed tabs
+    const frequentlyAccessedTabs: Tab[] = ["dashboard", "mint", "swap"];
+
+    const tabsToPrefetch = [...new Set([...prefetchTabs, ...frequentlyAccessedTabs])]
+      .filter((tab): tab is Tab => tab !== activeTab);
+
+    // Use requestIdleCallback for non-blocking prefetching, avoid duplicates
+    if ('requestIdleCallback' in window) {
+      const idleCallbackId = (window as any).requestIdleCallback?.(() => {
+        tabsToPrefetch.forEach((tab) => {
+          const key = String(tab);
+          if (key === activeTab) return;
+          if (loadedTabs.current.has(key) || prefetchingTabs.current.has(key)) return;
+          prefetchingTabs.current.add(key);
+          
+          const prefetchPromise = import(`@/components/tabs/${tab}-tab`)
+            .finally(() => {
+              prefetchingTabs.current.delete(key);
+              loadedTabs.current.add(key);
+              prefetchPromises.current.delete(key);
+            });
+          
+          prefetchPromises.current.set(key, prefetchPromise);
+        });
       });
-  }, []);
 
-  return prefetchTab;
+      // Cleanup function to clear pending prefetches on unmount
+      return () => {
+        if (idleCallbackId && typeof idleCallbackId === 'number') {
+          (window as any).cancelIdleCallback?.(idleCallbackId);
+        }
+        prefetchingTabs.current.clear();
+        prefetchPromises.current.clear();
+      };
+    }
+
+    return () => {
+      prefetchingTabs.current.clear();
+      prefetchPromises.current.clear();
+    };
+  }, [activeTab, isConnected]);
 };
 
 import { useSlideshow } from "@/components/tutorial";
@@ -99,8 +134,8 @@ export default function App() {
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const lastDismissedRef = useRef<string | null>(null);
 
-  // Enable intelligent tab prefetching (interaction based)
-  const prefetchTab = useTabPrefetch();
+  // Enable intelligent tab prefetching
+  useTabPrefetching(activeTab, isConnected);
   
   // Custom hooks for logic separation
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
@@ -539,12 +574,10 @@ export default function App() {
                     console.error(`Error in ${activeTab} tab:`, { error, errorInfo });
                   }}
                 >
-                  <Suspense fallback={<BasePageLoader />}>
-                    {(() => {
-                      const ActiveTabComponent = tabComponents[activeTab];
-                      return ActiveTabComponent ? <ActiveTabComponent /> : null;
-                    })()}
-                  </Suspense>
+                  {(() => {
+                    const ActiveTabComponent = tabComponents[activeTab];
+                    return ActiveTabComponent ? <ActiveTabComponent /> : null;
+                  })()}
                 </ErrorBoundary>
               </div>
 
@@ -555,9 +588,7 @@ export default function App() {
                     <Button
                       key={tab.id}
                       variant="ghost"
-                      onClick={() => setActiveTab(tab.id)}
-                      onMouseEnter={() => prefetchTab(tab.id)}
-                      onTouchStart={() => prefetchTab(tab.id)}
+                       onClick={() => setActiveTab(tab.id)}
                       className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                         activeTab === tab.id
                           ? "bg-primary/10 text-primary border border-primary/20"

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo } from 'react';
-import Image from 'next/image';
 import { Land, BuildingType, BuildingData } from '@/lib/types';
 import { getBuildingName } from '@/lib/utils';
 
@@ -11,7 +10,7 @@ interface LandImageProps {
   villageBuildings?: BuildingData[];
   townBuildings?: BuildingData[];
   className?: string;
-  priority?: boolean;
+  priority?: boolean; // Will be used for preloading, not directly on the div
 }
 
 // Mapping of building names to their layer image files
@@ -29,11 +28,11 @@ const LandImage = ({
   villageBuildings = [],
   townBuildings = [],
   className = "",
-  priority = false 
+  priority = false // Keep prop for potential future use (e.g., preloading)
 }: LandImageProps) => {
 
-  const layers = useMemo(() => {
-    if (!selectedLand) return [];
+  const backgroundStyle = useMemo(() => {
+    if (!selectedLand) return {};
 
     const baseImageUrl = buildingType === 'village' 
       ? '/icons/village-start.png' 
@@ -46,36 +45,39 @@ const LandImage = ({
       building.level > 1 || (building.level === 1 && !building.isUpgrading)
     );
 
-    const layerImages = completedBuildings
+    const layerImageUrls = completedBuildings
       .map(building => {
         const buildingName = getBuildingName(building.id, buildingType === 'town');
         const layerImage = BUILDING_LAYERS[buildingName as keyof typeof BUILDING_LAYERS];
-        return layerImage ? `/icons/${layerImage}` : null;
+        return layerImage ? `url(/icons/${layerImage})` : null;
       })
-      .filter((img): img is string => Boolean(img));
+      .filter(Boolean); // Remove nulls for buildings without layers
 
-    return [baseImageUrl, ...layerImages];
+    const allImageUrls = [...layerImageUrls, `url(${baseImageUrl})`];
+
+    return {
+      backgroundImage: allImageUrls.join(', '),
+      backgroundSize: 'contain',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      width: '100%',
+      height: '100%',
+    };
   }, [selectedLand, buildingType, villageBuildings, townBuildings]);
   
   if (!selectedLand) {
     return null;
   }
 
+  // The `priority` prop could be used with <link rel="preload"> in the parent component if needed
   return (
-    <div className={`relative w-full h-full ${className}`}>
-      {layers.map((src, index) => (
-        <Image
-          key={src}
-          src={src}
-          alt={index === 0 ? (selectedLand.name || `Land #${selectedLand.tokenId}`) : "Building Layer"}
-          fill
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          priority={priority && index === 0} // Priority for base layer
-          className="object-contain object-center"
-        />
-      ))}
-    </div>
+    <div 
+      className={className} 
+      style={backgroundStyle}
+      role="img"
+      aria-label={selectedLand?.name || `Land #${selectedLand?.tokenId}`}
+    />
   );
 };
 
-export default React.memo(LandImage);
+export default React.memo(LandImage); 

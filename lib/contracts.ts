@@ -204,7 +204,6 @@ export const SPIN_GAME_ABI = [
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
-const rpcClientCache = new Map<string, any>();
 
 // Create optimized read client for data fetching
 export const getReadClient = () => {
@@ -774,11 +773,7 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
 
 // Explicit public-RPC variant (used by notification cron to avoid internal RPC pool)
 export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): Promise<Plant[]> => {
-  let readClient = rpcClientCache.get(rpcUrl);
-  if (!readClient) {
-    readClient = createPublicClient({ chain: base, transport: createResilientTransport([rpcUrl]) });
-    rpcClientCache.set(rpcUrl, readClient);
-  }
+  const readClient = createPublicClient({ chain: base, transport: createResilientTransport([rpcUrl]) });
   const plants = await readClient.readContract({
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
