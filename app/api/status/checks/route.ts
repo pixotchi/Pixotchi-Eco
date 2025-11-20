@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { runStatusChecks } from '@/lib/status-checks';
+import { logger } from '@/lib/logger';
 
 export const revalidate = 0;
 
@@ -12,6 +13,7 @@ export async function GET() {
       },
     });
   } catch (error: any) {
+    logger.error('Failed to run status checks', error);
     return NextResponse.json({
       error: 'Failed to run status checks',
       message: error?.message || 'Unexpected error',

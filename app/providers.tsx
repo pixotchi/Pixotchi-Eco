@@ -110,7 +110,7 @@ export function Providers(props: { children: ReactNode }) {
 
   function WagmiRouter({ children }: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
-    const [surface, setSurface] = useState<'privy' | 'base'>('privy'); // Default to privy instead of null
+    const [surface, setSurface] = useState<'privy' | 'base' | null>(null); // Initialize as null to avoid hydration mismatch
     const [isInitialized, setIsInitialized] = useState(false);
     
     useEffect(() => {
