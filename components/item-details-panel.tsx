@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { ShopItem, GardenItem, Plant } from '@/lib/types';
-import { buyShopItem, buyGardenItem, getTokenBalance, quoteFenceV2, buildFenceV2PurchaseCall, getFenceV2Config } from '@/lib/contracts';
+import { buyShopItem, buyGardenItem, getTokenBalance, quoteFenceV2, buildFenceV2PurchaseCall, getFenceV2Config, checkTokenApproval, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { formatTokenAmount, formatDuration, getFriendlyErrorMessage } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
@@ -20,6 +20,7 @@ import SponsoredTransaction from '@/components/transactions/sponsored-transactio
 import type { FenceV2Config } from '@/lib/contracts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import ApproveTransaction from '@/components/transactions/approve-transaction';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -46,6 +47,7 @@ export default function ItemDetailsPanel({
   const [fenceV2Days, setFenceV2Days] = useState<number>(1);
   const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
   const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
+  const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
 
   const fenceItemName = selectedItem?.name?.toLowerCase() || '';
   const isFenceItem = fenceItemName.includes('fence') || fenceItemName.includes('shield');
@@ -87,6 +89,32 @@ export default function ItemDetailsPanel({
     };
 
     fetchBalance();
+  }, [address]);
+
+  // Fetch SEED approval for Pixotchi NFT contract
+  useEffect(() => {
+    let cancelled = false;
+    const fetchApproval = async () => {
+      if (!address) {
+        setNeedsSeedApproval(true);
+        return;
+      }
+      try {
+        const hasApproval = await checkTokenApproval(address);
+        if (!cancelled) {
+          setNeedsSeedApproval(!hasApproval);
+        }
+      } catch (error) {
+        console.error('Failed to fetch SEED approval status:', error);
+        if (!cancelled) {
+          setNeedsSeedApproval(true);
+        }
+      }
+    };
+    fetchApproval();
+    return () => {
+      cancelled = true;
+    };
   }, [address]);
 
   useEffect(() => {
@@ -361,7 +389,23 @@ export default function ItemDetailsPanel({
             <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
           
-          {disabledMessage ? (
+          {needsSeedApproval ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground text-center">
+                Approve SEED spending once to unlock shop and garden purchases.
+              </p>
+              <ApproveTransaction
+                spenderAddress={PIXOTCHI_NFT_ADDRESS}
+                onSuccess={() => {
+                  toast.success('SEED approval successful!');
+                  setNeedsSeedApproval(false);
+                }}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                buttonText="Approve SEED"
+                buttonClassName="w-full"
+              />
+            </div>
+          ) : disabledMessage ? (
             <DisabledTransaction
               buttonText={disabledMessage}
               buttonClassName="w-full"
@@ -427,7 +471,7 @@ export default function ItemDetailsPanel({
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Buy Item"
                   buttonClassName="w-full"
-                  disabled={true}
+                  disabled={selectedPlant.status === 4 || hasInsufficientFunds}
                 />
               )
             ) : (

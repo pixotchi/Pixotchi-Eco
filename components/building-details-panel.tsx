@@ -24,6 +24,8 @@ interface BuildingDetailsPanelProps {
   currentBlock: bigint;
   needsLeafApproval?: boolean;
   onLeafApprovalSuccess?: () => void;
+  needsSeedApproval?: boolean;
+  onSeedApprovalSuccess?: () => void;
   warehousePoints?: bigint;
   warehouseLifetime?: bigint;
 }
@@ -36,6 +38,8 @@ function BuildingDetailsPanel({
   currentBlock,
   needsLeafApproval = false,
   onLeafApprovalSuccess,
+  needsSeedApproval = false,
+  onSeedApprovalSuccess,
   warehousePoints,
   warehouseLifetime
 }: BuildingDetailsPanelProps) {
@@ -160,6 +164,8 @@ function BuildingDetailsPanel({
             needsLeafApproval={needsLeafApproval}
             onUpgradeSuccess={onUpgradeSuccess}
             onLeafApprovalSuccess={onLeafApprovalSuccess || (() => {})}
+            needsSeedApproval={needsSeedApproval}
+            onSeedApprovalSuccess={onSeedApprovalSuccess || (() => {})}
           />
         )}
         
