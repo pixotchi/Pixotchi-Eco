@@ -13,6 +13,8 @@ import LeafApproveTransaction from '@/components/transactions/leaf-approve-trans
 import { toast } from 'react-hot-toast';
 import { StandardContainer } from '@/components/ui/pixel-container';
 import { useBalances } from '@/lib/balance-context';
+import ApproveTransaction from '@/components/transactions/approve-transaction';
+import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 interface UpgradePanelProps {
   building: BuildingData;
@@ -22,6 +24,8 @@ interface UpgradePanelProps {
   needsLeafApproval: boolean;
   onUpgradeSuccess: () => void;
   onLeafApprovalSuccess: () => void;
+  needsSeedApproval: boolean;
+  onSeedApprovalSuccess: () => void;
 }
 
 export default function UpgradePanel({
@@ -32,6 +36,8 @@ export default function UpgradePanel({
   needsLeafApproval,
   onUpgradeSuccess,
   onLeafApprovalSuccess,
+  needsSeedApproval,
+  onSeedApprovalSuccess,
 }: UpgradePanelProps) {
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
@@ -94,7 +100,21 @@ export default function UpgradePanel({
         {isMaxLevel ? (
           <DisabledTransaction buttonText="Max Level Reached" buttonClassName="w-full" />
         ) : building.isUpgrading ? (
-          hasInsufficientSeed ? (
+          needsSeedApproval ? (
+            <div className="space-y-2">
+              <div className="text-sm text-center text-muted-foreground">Approve SEED spending to use speed ups</div>
+              <ApproveTransaction
+                spenderAddress={LAND_CONTRACT_ADDRESS}
+                onSuccess={() => {
+                  toast.success('SEED approval successful!');
+                  onSeedApprovalSuccess();
+                }}
+                onError={(error) => toast.error(`Approval failed: ${error.message}`)}
+                buttonText="Approve SEED"
+                buttonClassName="w-full"
+              />
+            </div>
+          ) : hasInsufficientSeed ? (
             <DisabledTransaction buttonText="Insufficient SEED Balance" buttonClassName="w-full" />
           ) : (
             <BuildingSpeedUpTransaction

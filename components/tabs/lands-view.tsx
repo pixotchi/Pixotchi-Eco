@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Land, BuildingData, BuildingType } from "@/lib/types";
-import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById } from "@/lib/contracts";
+import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandTokenApproval } from "@/lib/contracts";
 import { formatTokenAmount, formatAddress, formatXP } from "@/lib/utils";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
@@ -41,21 +41,28 @@ export default function LandsView() {
   // Remember last selected building id to persist across land switches
   const lastSelectedBuildingIdRef = useRef<number | null>(null);
 
-  // LEAF approval state
+  // Token approval state for land interactions
   const [needsLeafApproval, setNeedsLeafApproval] = useState<boolean>(true);
+  const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
 
-  // Fetch LEAF approval status
+  // Fetch land contract approval status (LEAF + SEED)
   const fetchApprovalStatus = useCallback(async () => {
     if (!address) {
       setNeedsLeafApproval(true);
+      setNeedsSeedApproval(true);
       return;
     }
     try {
-      const hasLeafApproval = await checkLeafTokenApproval(address);
+      const [hasLeafApproval, hasSeedApproval] = await Promise.all([
+        checkLeafTokenApproval(address),
+        checkLandTokenApproval(address),
+      ]);
       setNeedsLeafApproval(!hasLeafApproval);
+      setNeedsSeedApproval(!hasSeedApproval);
     } catch (error) {
-      console.error("Failed to fetch LEAF approval status:", error);
+      console.error("Failed to fetch land token approval status:", error);
       setNeedsLeafApproval(true);
+      setNeedsSeedApproval(true);
     }
   }, [address]);
 
@@ -472,6 +479,8 @@ export default function LandsView() {
                   currentBlock={currentBlock}
                   needsLeafApproval={needsLeafApproval}
                   onLeafApprovalSuccess={() => setNeedsLeafApproval(false)}
+                  needsSeedApproval={needsSeedApproval}
+                  onSeedApprovalSuccess={() => setNeedsSeedApproval(false)}
                   warehousePoints={selectedLand.accumulatedPlantPoints}
                   warehouseLifetime={selectedLand.accumulatedPlantLifetime}
                 />
