@@ -4,6 +4,14 @@
 
 This document outlines the current blueprint for our $PIXOTCHI Creator Coin launch. These plans are not finalized and may change at any time if we determine it necessary. Some aspects are beyond our control. We are sharing this internally to gather additional feedback.
 
+
+---
+
+## Pixotchi in a Nutshell
+
+Pixotchi is an onchain Tamagotchi-style game where your NFT starts as a pot and grows into a plant through care and attention. Players water, fertilize, and nurture their plants to earn points, which directly translate to Ethereum rewards from a 2% trading volume pool. The game includes a broader ecosystem with lands, staking, arcade mini-games, quests, competitive leaderboards, and strategic gameplay mechanics. Players can stake SEED tokens to earn LEAF (a non-tradable ERC-20 token) used to upgrade land buildings and unlock production capabilities—all built around the core loop of nurturing your plant over time and earning rewards for your effort and consistency over time.
+
+
 ---
 
 ## Purpose of This Launch
