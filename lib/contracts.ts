@@ -243,11 +243,6 @@ const getWriteClient = () => {
   return cachedWriteClient;
 };
 
-// Legacy function for backward compatibility - now uses read client
-const getPublicClient = () => {
-  return getReadClient();
-};
-
 // Retry logic for rate limiting and network issues
 export const retryWithBackoff = async <T>(
   fn: () => Promise<T>,

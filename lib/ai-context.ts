@@ -363,7 +363,7 @@ Easter egg that is activated by finding the secret pattern/key in game.
 | **Staking** | 0xF15D93c3617525054aF05338CC6Ccf18886BD03A |
 | **LEAF (ERC-20)** | 0xE78ee52349D7b031E2A6633E07c037C3147DB116 |
 | **SEED (ERC-20)** | 0x546D239032b24eCEEE0cb05c92FC39090846adc7 |
-| **LP (Uniswap V3)** | 0xAA6a81A7df94DAb346e2d677225caD47220540C5 |
+| **LP (BaseSwap)** | 0xAA6a81A7df94DAb346e2d677225caD47220540C5 |
 
 ### Official Links & Resources
 
@@ -431,13 +431,6 @@ export function buildAIPrompt(userMessage: string, conversationHistory?: string,
     systemBlocks,
     userContent
   };
-}
-
-// Legacy function for backward compatibility (remove after migration)
-export function buildAIPromptLegacy(userMessage: string, conversationHistory?: string): string {
-  const { systemBlocks, userContent } = buildAIPrompt(userMessage, conversationHistory);
-  const system = systemBlocks.map(block => block.text).join('\n\n');
-  return system + '\n\n' + userContent;
 }
 
 export function generateConversationTitle(firstMessage: string): string {
