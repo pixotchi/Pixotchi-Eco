@@ -1868,8 +1868,27 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
   });
 }; 
 
+// Get specific land owner
+export const getLandOwner = async (landId: number): Promise<string | null> => {
+  const readClient = getReadClient();
+  try {
+    const owner = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: landAbi,
+        functionName: 'ownerOf',
+        args: [BigInt(landId)],
+      });
+    });
+    return owner as string;
+  } catch (error) {
+    console.warn(`Failed to fetch owner for land ${landId}`, error);
+    return null;
+  }
+};
+
 // Fetch Lands leaderboard across full supply range
-export type LandLeaderboardEntry = { landId: number; experiencePoints: bigint; name: string };
+export type LandLeaderboardEntry = { landId: number; experiencePoints: bigint; name: string; owner: string };
 
 export const getLandLeaderboard = async (): Promise<LandLeaderboardEntry[]> => {
   const readClient = getReadClient();
@@ -1892,6 +1911,7 @@ export const getLandLeaderboard = async (): Promise<LandLeaderboardEntry[]> => {
       landId: Number(entry.landId ?? entry[0] ?? 0),
       experiencePoints: BigInt(entry.experiencePoints ?? entry[1] ?? 0),
       name: String(entry.name ?? entry[2] ?? ''),
+      owner: String(entry.owner ?? entry[3] ?? ''), // Explicitly use entry[3] as fallback if named property missing
     }));
   });
 };
