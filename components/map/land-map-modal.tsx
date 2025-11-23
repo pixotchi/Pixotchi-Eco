@@ -317,32 +317,23 @@ export function LandMapModal({
                         {tappedLandId <= totalSupply ? (
                              /* MINTED LAND STATS - Simplified */
                              <div className="flex items-center justify-between gap-2 mt-1">
-                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                    <span className="text-[10px] text-muted-foreground uppercase font-medium whitespace-nowrap">Owner:</span>
-                                    <span className="text-xs font-bold truncate font-mono">
+                                 <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+                                     <span className="text-[10px] text-muted-foreground uppercase font-medium">Owner</span>
+                                     <span className="text-xs font-bold font-mono break-all">
                                         {isOwnerLoading || isNameLoading ? (
                                             <span className="animate-pulse text-muted-foreground">Loading...</span>
                                         ) : (
                                             displayName
                                         )}
                                     </span>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-4 w-4 ml-0.5 opacity-50 hover:opacity-100 transition-opacity"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            copyAddress(ownerAddress);
-                                        }}
-                                    >
-                                        {copied ? <span className="text-[8px]">✓</span> : <Copy className="w-2.5 h-2.5" />}
-                                    </Button>
                                 </div>
                                 
                                 {ownerAddress && (
-                                    <button 
+                                    <button
+                                        type="button"
                                         onClick={() => setProfileOpen(true)}
-                                        className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium transition-colors whitespace-nowrap"
+                                        className="inline-flex items-center justify-center gap-1 px-2 py-0.5 text-[10px] leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                                        aria-label="Open owner profile"
                                     >
                                         Profile <User className="w-3 h-3" />
                                     </button>

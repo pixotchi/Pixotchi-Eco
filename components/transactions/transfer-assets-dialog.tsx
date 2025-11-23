@@ -5,12 +5,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount, useWalletClient } from "wagmi";
-import { getPlantsByOwner, getLandsByOwner, transferAllAssets, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
+import { getPlantsByOwner, getLandsByOwner, transferPlants, transferLands, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
 import { isAddress, getAddress } from "viem";
 import { toast } from "react-hot-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePublicClient } from "wagmi";
 import { useDebounce } from "@/hooks/useDebounce";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
+import { Land, Plant } from "@/lib/types";
 
 interface TransferAssetsDialogProps {
   open: boolean;
@@ -29,6 +32,10 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   const [ack, setAck] = useState(false);
   const [approvals, setApprovals] = useState<{ plants: boolean; lands: boolean }>({ plants: false, lands: false });
   const routerAvailable = Boolean(BATCH_ROUTER_ADDRESS);
+  const [plantsList, setPlantsList] = useState<Plant[]>([]);
+  const [landsList, setLandsList] = useState<Land[]>([]);
+  const [selectedPlantIds, setSelectedPlantIds] = useState<number[]>([]);
+  const [selectedLandIds, setSelectedLandIds] = useState<string[]>([]);
 
   // ENS resolution state
   const debouncedDest = useDebounce(destination, 400);
@@ -39,7 +46,16 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   useEffect(() => {
     let active = true;
     const loadCounts = async () => {
-      if (!open || !address) return;
+      if (!open || !address) {
+        if (active) {
+          setCounts({ plants: 0, lands: 0 });
+          setPlantsList([]);
+          setLandsList([]);
+          setSelectedPlantIds([]);
+          setSelectedLandIds([]);
+        }
+        return;
+      }
       setFetchingCounts(true);
       try {
         const [plants, lands] = await Promise.all([
@@ -48,6 +64,10 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
         ]);
         if (!active) return;
         setCounts({ plants: plants.length, lands: lands.length });
+        setPlantsList(plants);
+        setLandsList(lands);
+        setSelectedPlantIds(plants.map((p) => p.id));
+        setSelectedLandIds(lands.map((l) => l.tokenId.toString()));
         // Check router approvals when available
         if (routerAvailable && publicClient) {
           try {
@@ -71,6 +91,10 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       } catch (e) {
         if (!active) return;
         setCounts({ plants: 0, lands: 0 });
+        setPlantsList([]);
+        setLandsList([]);
+        setSelectedPlantIds([]);
+        setSelectedLandIds([]);
       } finally {
         if (active) setFetchingCounts(false);
       }
@@ -96,14 +120,17 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   }, [isValidAddress, resolvedAddress]);
 
   const hasAnythingToTransfer = counts.plants + counts.lands > 0;
+  const selectedPlantsCount = selectedPlantIds.length;
+  const selectedLandsCount = selectedLandIds.length;
+  const hasSelectedAnything = selectedPlantsCount + selectedLandsCount > 0;
 
   // If router is configured, require approvals for any collection that has items
   const needsApprovals = useMemo(() => {
     if (!routerAvailable) return false;
-    const needPlants = counts.plants > 0 && !approvals.plants;
-    const needLands = counts.lands > 0 && !approvals.lands;
+    const needPlants = selectedPlantIds.length > 0 && !approvals.plants;
+    const needLands = selectedLandIds.length > 0 && !approvals.lands;
     return needPlants || needLands;
-  }, [routerAvailable, counts, approvals]);
+  }, [routerAvailable, selectedPlantIds, selectedLandIds, approvals]);
 
   // Resolve ENS names (simple public API fallback)
   useEffect(() => {
@@ -151,8 +178,8 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       toast.error("Destination unresolved");
       return;
     }
-    if (!hasAnythingToTransfer) {
-      toast.error("No assets to transfer");
+    if (!hasSelectedAnything) {
+      toast.error("Select at least one asset to transfer");
       return;
     }
     if (needsApprovals) {
@@ -166,15 +193,23 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     if (!walletClient || !address) return;
     setLoading(true);
     try {
+      const wantsPlants = selectedPlantIds.length > 0;
+      const wantsLands = selectedLandIds.length > 0;
+      const canUseRouter = routerAvailable &&
+        (wantsPlants ? approvals.plants : true) &&
+        (wantsLands ? approvals.lands : true);
+
       // If router configured and approvals granted, use single-tx batch path
-      if (routerAvailable && approvals.plants && approvals.lands) {
+      if (canUseRouter) {
         // Fetch current ids (fresh) to avoid stale view
         const [plants, lands] = await Promise.all([
           getPlantsByOwner(address),
           getLandsByOwner(address),
         ]);
-        const plantIds = plants.map(p => p.id);
-        const landIds = lands.map(l => l.tokenId);
+        const selectedPlantSet = new Set(selectedPlantIds);
+        const selectedLandSet = new Set(selectedLandIds);
+        const plantIds = plants.filter(p => selectedPlantSet.has(p.id)).map(p => p.id);
+        const landIds = lands.filter(l => selectedLandSet.has(l.tokenId.toString())).map(l => l.tokenId);
         if (plantIds.length === 0 && landIds.length === 0) {
           toast.error('No assets to transfer');
         } else {
@@ -186,16 +221,27 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           }
         }
       } else {
-        // Fallback to per-token loop
-        const res = await transferAllAssets(walletClient, address, targetAddress);
-        const summary = `Plants: ${res.plants.success}/${res.plants.total}, Lands: ${res.lands.success}/${res.lands.total}`;
-        if ((res.plants.failed + res.lands.failed) === 0) {
-          toast.success(`All assets transferred. ${summary}`);
-        } else if ((res.plants.success + res.lands.success) === 0) {
-          toast.error(`Transfers failed. ${summary}`);
+        // Fallback to per-token loop for selected assets
+        const plantIds = selectedPlantIds;
+        const landIds = selectedLandIds.map((id) => BigInt(id));
+        if (plantIds.length === 0 && landIds.length === 0) {
+          toast.error('No assets to transfer');
         } else {
-          toast("Some transfers succeeded", { icon: "⚠️" });
-          toast.success(summary);
+          const [plantRes, landRes] = await Promise.all([
+            plantIds.length ? transferPlants(walletClient, targetAddress, plantIds) : Promise.resolve({ successIds: [], failedIds: [] }),
+            landIds.length ? transferLands(walletClient, targetAddress, landIds) : Promise.resolve({ successIds: [], failedIds: [] }),
+          ]);
+          const summary = `Plants: ${plantRes.successIds.length}/${plantIds.length}, Lands: ${landRes.successIds.length}/${landIds.length}`;
+          const totalFailed = plantRes.failedIds.length + landRes.failedIds.length;
+          const totalSuccess = plantRes.successIds.length + landRes.successIds.length;
+          if (totalFailed === 0) {
+            toast.success(`Assets transferred. ${summary}`);
+          } else if (totalSuccess === 0) {
+            toast.error(`Transfers failed. ${summary}`);
+          } else {
+            toast("Some transfers succeeded", { icon: "⚠️" });
+            toast.success(summary);
+          }
         }
       }
       onOpenChange(false);
@@ -254,6 +300,88 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
               {fetchingCounts ? <Skeleton className="h-4 w-10"/> : <span className="font-medium">{counts.lands}</span>}
             </div>
           </div>
+
+          {(plantsList.length > 0 || landsList.length > 0) && (
+            <div className="space-y-3 rounded-lg border border-border/60 p-3">
+              <p className="text-xs text-muted-foreground">Choose which assets to send.</p>
+              {plantsList.length > 0 && (
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>Plants selected</span>
+                    <span className="text-xs text-muted-foreground">{selectedPlantsCount}/{plantsList.length}</span>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between">
+                        <span>{selectedPlantsCount > 0 ? `${selectedPlantsCount} selected` : 'Select plants'}</span>
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+                      {plantsList.map((plant) => (
+                        <DropdownMenuCheckboxItem
+                          key={plant.id}
+                          checked={selectedPlantIds.includes(plant.id)}
+                          onCheckedChange={(checked) => {
+                            const isChecked = checked === true;
+                            setSelectedPlantIds((prev) => {
+                              if (isChecked) {
+                                if (prev.includes(plant.id)) return prev;
+                                return [...prev, plant.id];
+                              }
+                              return prev.filter((id) => id !== plant.id);
+                            });
+                          }}
+                        >
+                          {plant.name || `Plant #${plant.id}`}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+
+              {landsList.length > 0 && (
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>Lands selected</span>
+                    <span className="text-xs text-muted-foreground">{selectedLandsCount}/{landsList.length}</span>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between">
+                        <span>{selectedLandsCount > 0 ? `${selectedLandsCount} selected` : 'Select lands'}</span>
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+                      {landsList.map((land) => {
+                        const id = land.tokenId.toString();
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={id}
+                            checked={selectedLandIds.includes(id)}
+                            onCheckedChange={(checked) => {
+                              const isChecked = checked === true;
+                              setSelectedLandIds((prev) => {
+                                if (isChecked) {
+                                  if (prev.includes(id)) return prev;
+                                  return [...prev, id];
+                                }
+                                return prev.filter((item) => item !== id);
+                              });
+                            }}
+                          >
+                            {land.name || `Land #${id}`}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ENS resolution result */}
           {(resolvingEns || resolvedAddress || ensError) && (
@@ -344,7 +472,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           <Button
             className="w-full"
             onClick={onTransfer}
-            disabled={loading || !isValidRecipient || !hasAnythingToTransfer || needsApprovals}
+            disabled={loading || !isValidRecipient || !hasSelectedAnything || needsApprovals}
           >
             Continue
           </Button>
@@ -368,11 +496,11 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           <div className="space-y-1 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Plants</span>
-              <span className="font-medium">{counts.plants}</span>
+              <span className="font-medium">{selectedPlantsCount} / {counts.plants}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Lands</span>
-              <span className="font-medium">{counts.lands}</span>
+              <span className="font-medium">{selectedLandsCount} / {counts.lands}</span>
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm">
