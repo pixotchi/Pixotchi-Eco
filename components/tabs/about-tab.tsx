@@ -485,13 +485,23 @@ export default function AboutTab() {
             brings an enhanced experience using latest Base features, designed for Base app.
           </p>
           <div className="space-y-3">
-            <Button 
-              variant="secondary" 
-              onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
-            >
-              <Book className="w-4 h-4 mr-2" />
-              Documentation
-            </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button 
+                variant="secondary" 
+                onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
+                className="w-full"
+              >
+                <Book className="w-4 h-4 mr-2" />
+                Documentation
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => openExternalUrl('https://status.pixotchi.tech')}
+                className="w-full"
+              >
+                Status
+              </Button>
+            </div>
             {enabled && (
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={() => start({ reset: true })}>
