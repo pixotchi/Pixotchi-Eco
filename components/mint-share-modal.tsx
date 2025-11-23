@@ -23,8 +23,6 @@ interface MintShareModalProps {
   data: MintShareData | null;
 }
 
-const OG_BASE = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
-
 // Plant images matching strain IDs
 const PLANT_IMAGES: Record<number, string> = {
   1: '/icons/plant1.svg',   // Flora

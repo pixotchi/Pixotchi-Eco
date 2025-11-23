@@ -10,8 +10,6 @@ import {
 } from '@coinbase/onchainkit/transaction';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
-import { usePaymaster } from '@/lib/paymaster-context';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 
 const PIXOTCHI_NFT_ABI = [
@@ -45,9 +43,6 @@ export default function ClaimRewardsTransaction({
   disabled = false,
   minimal = false
 }: ClaimRewardsTransactionProps) {
-  const { isSponsored } = usePaymaster();
-  const { isSmartWallet } = useSmartWallet();
-
   const calls = [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,

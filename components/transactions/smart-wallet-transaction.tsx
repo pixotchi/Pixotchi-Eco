@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   Transaction,
   TransactionButton,
@@ -10,9 +10,7 @@ import {
 } from '@coinbase/onchainkit/transaction';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
-import { useAccount } from 'wagmi';
 import { usePaymaster } from '@/lib/paymaster-context';
-import { sdk } from '@farcaster/miniapp-sdk';
 import type { TransactionCall } from '@/lib/types';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 
