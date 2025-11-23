@@ -291,7 +291,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   const byName = STRAINS.find(s => lower.includes(String(s.name || '').toLowerCase()));
                   if (byName) chosen = byName as typeof STRAINS[number];
                 }
-                const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10); // SEED units
+                const seedToken = PIXOTCHI_TOKEN_ADDRESS.toLowerCase();
+                const paymentToken = (chosen?.paymentToken || '').toLowerCase();
+                const isSeedPayment = paymentToken === '' || paymentToken === seedToken;
+                if (!isSeedPayment) {
+                  chosen = STRAINS.find(s => s.id === 4) || chosen;
+                }
+                const unit = chosen?.mintPrice || (STRAINS.find(s => s.id === 4)?.mintPrice || 10); // Units in SEED for agent mode
                 const total = unit * inferredCount;
                 const requiredWei = viem.parseUnits(total.toFixed(6), 18);
                 const spendCalls = await spendMod.prepareSpendCallData(seedPerm, requiredWei).catch(() => []);

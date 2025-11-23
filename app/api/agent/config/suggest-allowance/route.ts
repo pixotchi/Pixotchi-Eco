@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStrainInfo } from '@/lib/contracts';
-import { parseUnits } from 'viem';
+import { formatUnits } from 'viem';
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,44 +8,50 @@ export async function GET(req: NextRequest) {
     const mintsPerDay = parseInt(searchParams.get('mintsPerDay') || '10');
     const strainId = parseInt(searchParams.get('strainId') || '1');
     
-    // Get strain information to calculate costs
     const strains = await getStrainInfo();
     const strain = strains.find(s => s.id === strainId) || strains[0];
-    
+
     if (!strain) {
       return NextResponse.json({ error: 'Strain not found' }, { status: 404 });
     }
 
-    // Calculate recommended allowance
-    const unitPrice = strain.mintPrice || 0;
-    const dailyMintCost = unitPrice * mintsPerDay;
-    
-    // Add 20% buffer for safety
-    const recommendedAllowance = Math.ceil(dailyMintCost * 1.2);
-    
-    // Parse to proper units (18 decimals for SEED)
-    const allowanceInWei = parseUnits(recommendedAllowance.toString(), 18);
+    const unitPriceWei = strain.mintPriceWei || BigInt(0);
+    const decimals = strain.tokenDecimals ?? 18;
+    const symbol = strain.tokenSymbol || 'TOKEN';
+
+    const dailyMintCostWei = unitPriceWei * BigInt(Math.max(0, mintsPerDay));
+    const bufferPercentage = 20;
+    const recommendedAllowanceWei = dailyMintCostWei * BigInt(100 + bufferPercentage) / BigInt(100);
+
+    const conservativeAllowanceWei = dailyMintCostWei * BigInt(150) / BigInt(100);
+    const aggressiveAllowanceWei = dailyMintCostWei * BigInt(110) / BigInt(100);
+
+    const unitPriceFormatted = formatUnits(unitPriceWei, decimals);
+    const dailyMintCostFormatted = formatUnits(dailyMintCostWei, decimals);
+    const allowanceFormatted = formatUnits(recommendedAllowanceWei, decimals);
 
     return NextResponse.json({
       success: true,
       strain: {
         id: strain.id,
         name: strain.name,
-        unitPrice: unitPrice,
+        tokenSymbol: symbol,
+        paymentToken: strain.paymentToken,
+        unitPriceFormatted,
       },
       calculations: {
         mintsPerDay,
-        unitPrice,
-        dailyMintCost,
-        bufferPercentage: 20,
-        recommendedAllowance,
+        unitPriceFormatted,
+        dailyMintCostFormatted,
+        bufferPercentage,
+        recommendedAllowanceFormatted: allowanceFormatted,
       },
-      allowanceInWei: allowanceInWei.toString(),
-      allowanceFormatted: recommendedAllowance.toString(),
+      allowanceInWei: recommendedAllowanceWei.toString(),
+      allowanceFormatted,
       recommendation: {
-        message: `For ${mintsPerDay} mints per day of ${strain.name}, we recommend ${recommendedAllowance} SEED allowance (includes 20% buffer).`,
-        conservative: Math.ceil(dailyMintCost * 1.5), // 50% buffer
-        aggressive: Math.ceil(dailyMintCost * 1.1),   // 10% buffer
+        message: `For ${mintsPerDay} mints per day of ${strain.name}, we recommend ${allowanceFormatted} ${symbol} allowance (includes ${bufferPercentage}% buffer).`,
+        conservative: formatUnits(conservativeAllowanceWei, decimals),
+        aggressive: formatUnits(aggressiveAllowanceWei, decimals),
       }
     });
 

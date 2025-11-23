@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getFormattedTokenBalance, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice, getErc20Balance, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { useBalances } from '@/lib/balance-context';
 import { Strain } from '@/lib/types';
 import { formatNumber, formatTokenAmount } from '@/lib/utils';
@@ -62,10 +62,10 @@ export default function MintTab() {
   // Resolve basename/ENS for share functionality
   const { name: primaryName } = usePrimaryName(address ?? undefined);
 
-  const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
   const [needsApproval, setNeedsApproval] = useState<boolean>(true);
+  const [tokenBalanceRaw, setTokenBalanceRaw] = useState<bigint>(BigInt(0));
   const [loading, setLoading] = useState(true);
   const [mintType, setMintType] = useState<'plant' | 'land'>('plant');
   const [landBalance, setLandBalance] = useState(0);
@@ -84,10 +84,13 @@ export default function MintTab() {
     txHash?: string;
   } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const normalizedSeedToken = PIXOTCHI_TOKEN_ADDRESS.toLowerCase();
 
   const incrementForcedFetch = () => {
     setForcedFetchCount(prev => prev + 1);
   };
+
+  const hasSufficientBalance = selectedStrain ? tokenBalanceRaw >= selectedStrain.mintPriceWei : false;
 
   const fetchData = async () => {
     if (!address) return;
@@ -95,13 +98,7 @@ export default function MintTab() {
     setLoading(true);
     try {
       if (mintType === 'plant') {
-        const [balance, strainsData, hasApproval] = await Promise.allSettled([
-          getFormattedTokenBalance(address),
-          getStrainInfo(),
-          checkTokenApproval(address),
-        ]);
-
-        if (balance.status === 'fulfilled') setTokenBalance(balance.value);
+        const [strainsData] = await Promise.allSettled([getStrainInfo()]);
         if (strainsData.status === 'fulfilled') {
           const availableStrains = strainsData.value.filter(s => s.maxSupply - s.totalMinted > 0);
           setStrains(strainsData.value);
@@ -109,7 +106,6 @@ export default function MintTab() {
             setSelectedStrain(availableStrains[0]);
           }
         }
-        if (hasApproval.status === 'fulfilled') setNeedsApproval(!hasApproval.value);
       } else {
         if (!chainId || !address) return; // Guard against undefined chainId or address
         const [lands, supply, status, landApproval, price] = await Promise.all([
@@ -142,6 +138,65 @@ export default function MintTab() {
     
     fetchData();
   }, [address, forcedFetchCount, mintType, chainId]);
+
+  useEffect(() => {
+    if (!address || !selectedStrain) {
+      setNeedsApproval(true);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const approved = await checkTokenApproval(address, selectedStrain.paymentToken as `0x${string}`);
+        if (!cancelled) {
+          setNeedsApproval(!approved);
+        }
+      } catch (error) {
+        console.warn('Failed to check token approval', error);
+        if (!cancelled) {
+          setNeedsApproval(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, selectedStrain]);
+
+  useEffect(() => {
+    if (!address || !selectedStrain) {
+      setTokenBalanceRaw(BigInt(0));
+      return;
+    }
+
+    const selectedToken = selectedStrain.paymentToken?.toLowerCase?.() || normalizedSeedToken;
+
+    if (selectedToken === normalizedSeedToken) {
+      setTokenBalanceRaw(seedBalanceRaw);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const balance = await getErc20Balance(selectedStrain.paymentToken as `0x${string}`, address);
+        if (!cancelled) {
+          setTokenBalanceRaw(balance);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch payment token balance', error);
+        if (!cancelled) {
+          setTokenBalanceRaw(BigInt(0));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, selectedStrain, seedBalanceRaw, forcedFetchCount]);
 
   const renderPlantMinting = () => (
     <>
@@ -202,8 +257,8 @@ export default function MintTab() {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Price</span>
               <div className="flex items-center space-x-1 font-semibold">
-                <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                <span>{formatNumber(selectedStrain.mintPrice)} SEED</span>
+                <Image src="/PixotchiKit/COIN.svg" alt="Token" width={16} height={16} />
+                <span>{formatTokenAmount(selectedStrain.mintPriceWei, selectedStrain.tokenDecimals)} {selectedStrain.tokenSymbol}</span>
               </div>
             </div>
             <div className="flex justify-between items-center">
@@ -229,6 +284,7 @@ export default function MintTab() {
               return useBundle ? (
               <ApproveMintBundle
                 strain={selectedStrain.id}
+                tokenAddress={selectedStrain.paymentToken as `0x${string}`}
                 onSuccess={() => {
                   toast.success('Approved and minted successfully!');
                   setNeedsApproval(false);
@@ -250,19 +306,20 @@ export default function MintTab() {
                   }
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Approve + Mint"
+                buttonText={`Approve ${selectedStrain.tokenSymbol} + Mint`}
                 buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
               />
               ) : (
               <ApproveTransaction
                 spenderAddress={PIXOTCHI_NFT_ADDRESS}
+                tokenAddress={selectedStrain.paymentToken as `0x${string}`}
                 onSuccess={() => {
                   toast.success('Token approval successful!');
                   setNeedsApproval(false);
                   incrementForcedFetch();
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Approve SEED"
+                buttonText={`Approve ${selectedStrain.tokenSymbol}`}
                 buttonClassName="w-full"
               />
               );
@@ -319,11 +376,11 @@ export default function MintTab() {
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Mint Plant"
                   buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={needsApproval || seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))}
+                  disabled={needsApproval || !hasSufficientBalance}
                 />
-                {!needsApproval && seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)) && (
+                {!needsApproval && selectedStrain && !hasSufficientBalance && (
                   <p className="text-xs text-destructive text-center mt-2">
-                    Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatNumber(selectedStrain.mintPrice)} SEED
+                    Not enough {selectedStrain.tokenSymbol}. Balance: {formatTokenAmount(tokenBalanceRaw, selectedStrain.tokenDecimals)} {selectedStrain.tokenSymbol} • Required: {formatTokenAmount(selectedStrain.mintPriceWei, selectedStrain.tokenDecimals)} {selectedStrain.tokenSymbol}
                   </p>
                 )}
               </>

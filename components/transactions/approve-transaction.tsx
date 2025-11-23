@@ -19,6 +19,7 @@ const PIXOTCHI_TOKEN_ABI = [
 
 interface ApproveTransactionProps {
   spenderAddress: `0x${string}`;
+  tokenAddress?: `0x${string}`;
   onSuccess?: (tx: any) => void;
   onError?: (error: any) => void;
   buttonText?: string;
@@ -28,6 +29,7 @@ interface ApproveTransactionProps {
 
 export default function ApproveTransaction({
   spenderAddress,
+  tokenAddress,
   onSuccess,
   onError,
   buttonText = "Approve SEED",
@@ -37,9 +39,11 @@ export default function ApproveTransaction({
   
   // Max approval amount
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
+
+  const approvalToken = tokenAddress ?? PIXOTCHI_TOKEN_ADDRESS;
   
   const calls = [{
-    address: PIXOTCHI_TOKEN_ADDRESS,
+    address: approvalToken,
     abi: PIXOTCHI_TOKEN_ABI,
     functionName: 'approve',
     args: [spenderAddress, maxApproval], 

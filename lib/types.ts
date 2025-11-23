@@ -65,6 +65,7 @@ export type Strain = {
   id: number;
   name: string;
   mintPrice: number;
+  mintPriceWei: bigint;
   totalSupply: number;
   totalMinted: number;
   maxSupply: number;
@@ -73,6 +74,9 @@ export type Strain = {
   strainInitialTOD: number;
   description?: string;
   imageUrl?: string;
+  paymentToken: string;
+  tokenSymbol: string;
+  tokenDecimals: number;
 };
 
 // UI state types

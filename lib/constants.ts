@@ -1,10 +1,10 @@
-// Plant strain definitions (mint prices in SEED units)
+// Plant strain definitions (prices + payment tokens for informational use)
 export const PLANT_STRAINS = [
-  { id: 1, name: 'Flora', mintPriceSeed: 10 },
-  { id: 2, name: 'Taki', mintPriceSeed: 20 },
-  { id: 3, name: 'Rosa', mintPriceSeed: 40 },
-  { id: 4, name: 'Zest', mintPriceSeed: 10 },
-  { id: 5, name: 'TYJ', mintPriceSeed: 500 },
+  { id: 1, name: 'Flora', mintPrice: 10, tokenSymbol: 'SEED', paymentToken: '0x546D239032b24eCEEE0cb05c92FC39090846adc7' },
+  { id: 2, name: 'Taki', mintPrice: 20, tokenSymbol: 'SEED', paymentToken: '0x546D239032b24eCEEE0cb05c92FC39090846adc7' },
+  { id: 3, name: 'Rosa', mintPrice: 40, tokenSymbol: 'SEED', paymentToken: '0x546D239032b24eCEEE0cb05c92FC39090846adc7' },
+  { id: 4, name: 'Zest', mintPrice: 10, tokenSymbol: 'SEED', paymentToken: '0x546D239032b24eCEEE0cb05c92FC39090846adc7' },
+  { id: 5, name: 'TYJ', mintPrice: 500, tokenSymbol: 'JESSE', paymentToken: '0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59' },
 ] as const;
 
 // Plant strain index for quick lookups
