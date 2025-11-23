@@ -19,6 +19,12 @@ function toMonth(day: GmDay): string {
   return day.replace(/\-/g, '').slice(0, 6); // YYYYMM
 }
 
+function isCombinedMonth(month?: string | null): boolean {
+  if (!month) return true;
+  const normalized = month.toLowerCase();
+  return normalized === 'all' || normalized === 'combined' || normalized === 'lifetime';
+}
+
 function createInitialMissionDay(day: GmDay): GmMissionDay {
   return {
     date: day,
@@ -288,26 +294,86 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
   throw new Error(`Failed to update mission progress after retries${lastError ? `: ${String(lastError)}` : ''}`);
 }
 
+async function getCombinedMissionLeaderboard(limit: number = 50): Promise<GmLeaderEntry[]> {
+  if (!redis) return [];
+  const totals = new Map<string, number>();
+  const missionKeys = await redisKeys(`${PX}missions:leaderboard:*`);
+  if (!missionKeys.length) return [];
+
+  for (const rawKey of missionKeys) {
+    const prefixedKey = rawKey.startsWith(PX) ? rawKey : withPrefix(rawKey);
+    try {
+      const entries = (await (redis as any)?.zrange?.(prefixedKey, 0, -1, { withScores: true })) || [];
+      if (!Array.isArray(entries)) continue;
+      for (let i = 0; i < entries.length; i += 2) {
+        const address = typeof entries[i] === 'string' ? entries[i].toLowerCase() : String(entries[i] || '').toLowerCase();
+        const value = Number(entries[i + 1]);
+        if (!address || !Number.isFinite(value)) continue;
+        totals.set(address, (totals.get(address) || 0) + value);
+      }
+    } catch (error) {
+      console.warn('Failed to aggregate mission leaderboard key:', prefixedKey, error);
+    }
+  }
+
+  return Array.from(totals.entries())
+    .map(([address, value]) => ({ address, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit);
+}
+
+function convertZRangeResponse(arr: any[]): GmLeaderEntry[] {
+  if (!Array.isArray(arr)) return [];
+  const out: GmLeaderEntry[] = [];
+  for (let i = 0; i < arr.length; i += 2) {
+    const address = arr[i];
+    const value = Number(arr[i + 1]);
+    if (typeof address === 'string' && Number.isFinite(value)) {
+      out.push({ address, value });
+    }
+  }
+  return out;
+}
+
+async function getMonthlyMissionLeaderboard(yyyymm: string): Promise<GmLeaderEntry[]> {
+  if (!redis) return [];
+  const raw = (await (redis as any)?.zrange?.(withPrefix(keys.missionsLeaderboard(yyyymm)), 0, 49, { rev: true, withScores: true })) || [];
+  return convertZRangeResponse(raw as any);
+}
+
+async function getCombinedMissionScore(address: string): Promise<number> {
+  if (!redis || !address) return 0;
+  const normalized = address.toLowerCase();
+  const missionKeys = await redisKeys(`${PX}missions:leaderboard:*`);
+  if (!missionKeys.length) return 0;
+
+  let total = 0;
+  await Promise.all(
+    missionKeys.map(async (rawKey) => {
+      const prefixedKey = rawKey.startsWith(PX) ? rawKey : withPrefix(rawKey);
+      try {
+        const rawScore = await (redis as any)?.zscore?.(prefixedKey, normalized);
+        const score = Number(rawScore);
+        if (Number.isFinite(score)) total += score;
+      } catch (error) {
+        console.warn('Failed to read mission score for key:', prefixedKey, error);
+      }
+    }),
+  );
+  return total;
+}
+
 export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLeaderEntry[]; missionTop: GmLeaderEntry[] }> {
   const d = getTodayDateString();
-  const yyyymm = month || toMonth(d);
+  const yyyymm = month && !isCombinedMonth(month) ? month : toMonth(d);
   const sKey = keys.streakLeaderboard(yyyymm);
-  const mKey = keys.missionsLeaderboard(yyyymm);
 
-  const [s, m] = await Promise.all([
-    (redis as any)?.zrange?.(withPrefix(sKey), 0, 49, { rev: true, withScores: true }) || [],
-    (redis as any)?.zrange?.(withPrefix(mKey), 0, 49, { rev: true, withScores: true }) || [],
-  ]);
+  const streakPromise = (redis as any)?.zrange?.(withPrefix(sKey), 0, 49, { rev: true, withScores: true }) || [];
+  const missionPromise = isCombinedMonth(month) ? getCombinedMissionLeaderboard() : getMonthlyMissionLeaderboard(yyyymm);
 
-  const convert = (arr: any[]): GmLeaderEntry[] => {
-    const out: GmLeaderEntry[] = [];
-    for (let i = 0; i < arr.length; i += 2) {
-      out.push({ address: arr[i], value: Number(arr[i + 1]) });
-    }
-    return out;
-  };
+  const [streakRaw, missionTop] = await Promise.all([streakPromise, missionPromise]);
 
-  return { streakTop: convert(s as any), missionTop: convert(m as any) };
+  return { streakTop: convertZRangeResponse(streakRaw as any), missionTop };
 }
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
@@ -329,6 +395,9 @@ export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise
 
 export async function getMissionScore(address: string, month?: string): Promise<number> {
   if (!address) return 0;
+  if (isCombinedMonth(month)) {
+    return getCombinedMissionScore(address);
+  }
   const d = getTodayDateString();
   const yyyymm = month || toMonth(d);
   const key = withPrefix(keys.missionsLeaderboard(yyyymm));

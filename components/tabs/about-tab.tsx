@@ -467,7 +467,7 @@ export default function AboutTab() {
               <div>
                 <p className="text-sm text-muted-foreground">Today's Rock</p>
                 <p className="text-2xl font-bold">{missionPts ?? 0} / 80</p>
-                <p className="text-xs text-muted-foreground mt-1">Total Rocks: {missionTotal}</p>
+                <p className="text-xs text-muted-foreground mt-1">Lifetime Rocks: {missionTotal}</p>
               </div>
               <Image src="/icons/Volcanic_Rock.svg" alt="Rock" width={24} height={24} className="w-6 h-6" />
             </div>

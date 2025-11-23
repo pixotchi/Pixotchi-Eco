@@ -2307,7 +2307,8 @@ export default function AdminInviteDashboard() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Leaderboards (Current Month)</CardTitle>
+                <CardTitle>Leaderboards</CardTitle>
+                <CardDescription>Streaks reset monthly; Rocks accumulate across all months</CardDescription>
               </CardHeader>
               <CardContent>
                 {!gmLb ? (
@@ -2315,7 +2316,7 @@ export default function AdminInviteDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="font-medium mb-2">Streaks</h4>
+                      <h4 className="font-medium mb-2">Streaks (Current Month)</h4>
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.streakTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
@@ -2328,7 +2329,7 @@ export default function AdminInviteDashboard() {
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Missions (Points)</h4>
+                      <h4 className="font-medium mb-2">Missions (Rocks · All-Time)</h4>
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.missionTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
