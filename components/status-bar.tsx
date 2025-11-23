@@ -48,6 +48,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
 
   const seedText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(seed);
   const leafText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(leaf);
+  const ccText = loading ? <Skeleton className="h-5 w-12" /> : "TBA";
   // ETH balance display removed to prioritize SEED and LEAF
 
   return (
@@ -62,6 +63,10 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
             <div className="flex items-center gap-1.5 min-w-0" aria-label={`Leaf balance: ${leafText} LEAF`}>
               <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0" aria-label="CC balance: coming soon">
+              <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
+              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ccText}</span>
             </div>
           </div>
           <div className="shrink-0 flex items-center gap-2">

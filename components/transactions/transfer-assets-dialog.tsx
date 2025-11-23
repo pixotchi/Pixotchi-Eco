@@ -310,7 +310,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     <span>Plants selected</span>
                     <span className="text-xs text-muted-foreground">{selectedPlantsCount}/{plantsList.length}</span>
                   </div>
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="w-full justify-between">
                         <span>{selectedPlantsCount > 0 ? `${selectedPlantsCount} selected` : 'Select plants'}</span>
@@ -347,7 +347,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     <span>Lands selected</span>
                     <span className="text-xs text-muted-foreground">{selectedLandsCount}/{landsList.length}</span>
                   </div>
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="w-full justify-between">
                         <span>{selectedLandsCount > 0 ? `${selectedLandsCount} selected` : 'Select lands'}</span>
