@@ -3,7 +3,6 @@
 import { useMiniKit, useAddFrame } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useFrameContext } from "@/lib/frame-context";
-import { Wallet } from "@coinbase/onchainkit/wallet";
 import { useAccount, useConnect } from "wagmi";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";

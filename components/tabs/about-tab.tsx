@@ -467,7 +467,7 @@ export default function AboutTab() {
               <div>
                 <p className="text-sm text-muted-foreground">Today's Rock</p>
                 <p className="text-2xl font-bold">{missionPts ?? 0} / 80</p>
-                <p className="text-xs text-muted-foreground mt-1">Total Rocks: {missionTotal}</p>
+                <p className="text-xs text-muted-foreground mt-1">Lifetime Rocks: {missionTotal}</p>
               </div>
               <Image src="/icons/Volcanic_Rock.svg" alt="Rock" width={24} height={24} className="w-6 h-6" />
             </div>
@@ -485,13 +485,23 @@ export default function AboutTab() {
             brings an enhanced experience using latest Base features, designed for Base app.
           </p>
           <div className="space-y-3">
-            <Button 
-              variant="secondary" 
-              onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
-            >
-              <Book className="w-4 h-4 mr-2" />
-              Documentation
-            </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button 
+                variant="secondary" 
+                onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
+                className="w-full"
+              >
+                <Book className="w-4 h-4 mr-2" />
+                Documentation
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => openExternalUrl('https://status.pixotchi.tech')}
+                className="w-full"
+              >
+                Status
+              </Button>
+            </div>
             {enabled && (
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={() => start({ reset: true })}>

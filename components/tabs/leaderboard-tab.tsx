@@ -25,6 +25,8 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
+import { Avatar } from "@coinbase/onchainkit/identity";
+import { base } from "viem/chains";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -38,10 +40,18 @@ type StakeLeaderboardEntry = {
   ensName?: string;
 };
 
+type RocksLeaderboardEntry = {
+  rank: number;
+  address: string;
+  rocks: number;
+  name?: string | null;
+};
+
 const ITEMS_PER_PAGE = 12;
 
 // Client-side cache duration for stake data (24 hours since cron runs once at midnight)
 const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export default function LeaderboardTab() {
   const { address } = useAccount();
@@ -50,9 +60,12 @@ export default function LeaderboardTab() {
   const [plants, setPlants] = useState<LeaderboardPlant[]>([]);
   const [landRows, setLandRows] = useState<Array<{ rank: number; landId: number; name: string; exp: number }>>([]);
   const [stakeRows, setStakeRows] = useState<StakeLeaderboardEntry[]>([]);
+  const [rocksRows, setRocksRows] = useState<RocksLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [stakeLoading, setStakeLoading] = useState(false);
+  const [rocksLoading, setRocksLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rocksError, setRocksError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [myPlants, setMyPlants] = useState<Plant[]>([]);
   const [attackDialogOpen, setAttackDialogOpen] = useState(false);
@@ -66,13 +79,18 @@ export default function LeaderboardTab() {
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [filterMode, setFilterMode] = useState<'all' | 'attackable'>('all');
   const publicClient = usePublicClient();
-  const [boardType, setBoardType] = useState<'plants' | 'lands' | 'stake'>('plants');
+  const [boardType, setBoardType] = useState<'plants' | 'lands' | 'stake' | 'rocks'>('plants');
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
 
   // Client-side cache for stake data to avoid re-fetches on tab toggles
   const stakeDataCacheRef = useRef<{
     data: StakeLeaderboardEntry[] | null;
+    timestamp: number;
+  }>({ data: null, timestamp: 0 });
+
+  const rocksDataCacheRef = useRef<{
+    data: RocksLeaderboardEntry[] | null;
     timestamp: number;
   }>({ data: null, timestamp: 0 });
 
@@ -214,12 +232,48 @@ export default function LeaderboardTab() {
     }
   }, []);
 
+  const fetchRocksLeaderboard = useCallback(async () => {
+    const now = Date.now();
+    const cacheAge = now - rocksDataCacheRef.current.timestamp;
+
+    if (rocksDataCacheRef.current.data && cacheAge < ROCKS_CACHE_DURATION) {
+      setRocksRows(rocksDataCacheRef.current.data);
+      return;
+    }
+
+    setRocksLoading(true);
+    setRocksError(null);
+    try {
+      const res = await fetch('/api/leaderboard/rocks');
+      if (!res.ok) {
+        throw new Error(`Failed to fetch rocks leaderboard (${res.status})`);
+      }
+      const payload = await res.json();
+      const entries = Array.isArray(payload.leaderboard) ? payload.leaderboard : [];
+      const mapped: RocksLeaderboardEntry[] = entries.map((entry: any, index: number) => ({
+        rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
+        address: entry.address,
+        rocks: Number(entry.rocks) || 0,
+        name: entry.name ?? null,
+      }));
+      rocksDataCacheRef.current = { data: mapped, timestamp: now };
+      setRocksRows(mapped);
+    } catch (fetchError) {
+      console.error('❌ [Rocks] Error fetching rocks leaderboard:', fetchError);
+      setRocksError('Failed to load Rocks leaderboard. Please try again.');
+    } finally {
+      setRocksLoading(false);
+    }
+  }, []);
+
   // Fetch stake data when switching to stake tab
   useEffect(() => {
     if (boardType === 'stake') {
       fetchStakeLeaderboard();
+    } else if (boardType === 'rocks') {
+      fetchRocksLeaderboard();
     }
-  }, [boardType, fetchStakeLeaderboard]);
+  }, [boardType, fetchStakeLeaderboard, fetchRocksLeaderboard]);
 
   // Reset pagination when switching board type
   useEffect(() => {
@@ -346,6 +400,12 @@ export default function LeaderboardTab() {
   const startStakeIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endStakeIndex = startStakeIndex + ITEMS_PER_PAGE;
   const currentStakes = stakeRows.slice(startStakeIndex, endStakeIndex);
+
+  const totalRockItems = rocksRows.length;
+  const totalRockPages = Math.ceil(totalRockItems / ITEMS_PER_PAGE) || 1;
+  const startRockIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endRockIndex = startRockIndex + ITEMS_PER_PAGE;
+  const currentRocks = rocksRows.slice(startRockIndex, endRockIndex);
 
   const renderContent = () => {
     if (loading) {
@@ -547,7 +607,7 @@ export default function LeaderboardTab() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>
-                Leaderboard
+                Ranking
               </CardTitle>
               <ToggleGroup
                 value={boardType}
@@ -556,6 +616,7 @@ export default function LeaderboardTab() {
                   { value: 'plants', label: 'Plants' },
                   { value: 'lands', label: 'Lands' },
                   { value: 'stake', label: 'Stake' },
+                  { value: 'rocks', label: 'Rocks' },
                 ]}
               />
             </div>
@@ -642,7 +703,7 @@ export default function LeaderboardTab() {
                   )}
                 </div>
               )
-            ) : (
+            ) : boardType === 'stake' ? (
               stakeLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
@@ -728,6 +789,100 @@ export default function LeaderboardTab() {
                           size="sm"
                           onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalStakePages))}
                           disabled={currentPage === totalStakePages}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            ) : (
+              rocksLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
+                </div>
+              ) : rocksError ? (
+                <Alert variant="destructive" className="mt-4">
+                  <Terminal className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{rocksError}</AlertDescription>
+                </Alert>
+              ) : (
+                <div className="space-y-2 divide-y divide-border -mx-4 px-4">
+                  {totalRockItems === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">No rock earners found.</div>
+                  )}
+                  {currentRocks.map((row) => {
+                    const isCurrentUser = address && row.address?.toLowerCase() === address.toLowerCase();
+                    return (
+                      <div
+                        key={row.address || `rock-${row.rank}`}
+                        className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center justify-center w-8">
+                            <div className={`flex items-center ${getRankColor(row.rank)}`}>
+                              {row.rank <= 3 ? (
+                                getRankIcon(row.rank)
+                              ) : (
+                                <span className="text-sm font-semibold">#{row.rank}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {row.address ? (
+                              <Avatar
+                                address={row.address as `0x${string}`}
+                                chain={base}
+                                className="w-10 h-10 rounded-full"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-muted" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-base truncate pr-6">
+                              {row.name || (row.address ? formatAddress(row.address) : 'Unknown')}
+                              {isCurrentUser && (
+                                <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                              )}
+                            </h4>
+                            {row.name && row.address && (
+                              <span className="text-xs text-muted-foreground font-mono">
+                                {formatAddress(row.address)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-2 text-right">
+                            <div className="flex items-center space-x-1">
+                              <Image src="/icons/Volcanic_Rock.svg" alt="Rocks" width={16} height={16} />
+                              <span className="text-base font-bold">{row.rocks.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {totalRockPages > 1 && (
+                    <div className="flex justify-center items-center pt-4">
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Back
+                        </Button>
+                        <span className="flex items-center px-3 text-sm">
+                          Page {currentPage} of {totalRockPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalRockPages))}
+                          disabled={currentPage === totalRockPages}
                         >
                           Next
                         </Button>

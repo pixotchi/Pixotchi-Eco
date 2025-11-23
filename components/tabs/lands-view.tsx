@@ -22,11 +22,17 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import { LandPlot, Hash, Star, MapPin, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import LandImage from "../LandImage";
 import { EditLandName } from "@/components/edit-land-name";
+import { LandMapModal } from "@/components/map/land-map-modal";
+import { useLandMap } from "@/hooks/useLandMap";
 
 export default function LandsView() {
   const { address } = useAccount();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  
+  // Map data hook
+  const { totalSupply, neighborData } = useLandMap(lands);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -359,14 +365,20 @@ export default function LandsView() {
                     </div>
                   </div>
                   <div className="flex justify-end">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    <button 
+                      onClick={() => setIsMapOpen(true)}
+                      className="flex items-center gap-1 bg-background/50 hover:bg-background/70 transition-colors backdrop-blur-sm px-2 py-0.5 rounded-full cursor-pointer"
+                    >
                       <Image src="/icons/location.svg" alt="Coordinates" width={16} height={16} className="w-4 h-4" />
                       <span>({selectedLand.coordinateX.toString()}, {selectedLand.coordinateY.toString()})</span>
-                    </div>
+                    </button>
                   </div>
                 </div>
                 
-                <div className="absolute inset-0 md:inset-8 flex items-center justify-center z-10">
+                <div 
+                  className="absolute inset-0 md:inset-8 flex items-center justify-center z-10 cursor-pointer"
+                  onClick={() => setIsMapOpen(true)}
+                >
                   <LandImage 
                     selectedLand={selectedLand} 
                     buildingType={buildingType}
@@ -489,6 +501,21 @@ export default function LandsView() {
           </CardContent>
         </Card>
         </>
+      )}
+      {/* Map Modal */}
+      {selectedLand && (
+        <LandMapModal
+          isOpen={isMapOpen}
+          onClose={() => setIsMapOpen(false)}
+          userLands={lands}
+          selectedLand={selectedLand}
+          onSelectLand={(land) => {
+            setSelectedLand(land);
+            setIsMapOpen(false);
+          }}
+          totalSupply={totalSupply}
+          neighborData={neighborData}
+        />
       )}
     </div>
   );
