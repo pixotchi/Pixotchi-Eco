@@ -31,6 +31,8 @@ export function LandMapCanvas({
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const dragDistanceRef = useRef(0);
+  const didDragRef = useRef(false);
   
   // Image assets
   const [sprites, setSprites] = useState<{
@@ -52,6 +54,11 @@ export function LandMapCanvas({
   // Constants for rendering
   const TILE_SIZE = 40; // Base size of a tile in pixels
   const GAP = 0; // No gap for sprites
+  const DRAG_CANCEL_THRESHOLD = 5; // Pixels of movement before we treat it as a drag
+
+  const ownedTokenIds = useMemo(() => {
+    return new Set(userLands.map((land) => Number(land.tokenId)));
+  }, [userLands]);
   
   // Load sprites on mount
   useEffect(() => {
@@ -197,7 +204,7 @@ export function LandMapCanvas({
             
             // Determine Status
             const isMinted = tokenId <= totalSupply;
-            const isUserOwned = userLands.some(l => Number(l.tokenId) === tokenId);
+            const isUserOwned = ownedTokenIds.has(tokenId);
             const isSelected = selectedLand && Number(selectedLand.tokenId) === tokenId;
             const neighbor = neighborData[tokenId];
             
@@ -310,12 +317,14 @@ export function LandMapCanvas({
       }
     }
     
-  }, [dimensions, center, zoom, userLands, selectedLand, totalSupply, sprites, neighborData]);
+  }, [dimensions, center, zoom, ownedTokenIds, selectedLand, totalSupply, sprites, neighborData]);
 
   // Interaction Handlers
   const handlePointerDown = (e: React.PointerEvent) => {
     setIsDragging(true);
     setLastPos({ x: e.clientX, y: e.clientY });
+    dragDistanceRef.current = 0;
+    didDragRef.current = false;
     canvasRef.current?.setPointerCapture(e.pointerId);
   };
   
@@ -324,6 +333,12 @@ export function LandMapCanvas({
     
     const dx = e.clientX - lastPos.x;
     const dy = e.clientY - lastPos.y;
+
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    dragDistanceRef.current += distance;
+    if (dragDistanceRef.current > DRAG_CANCEL_THRESHOLD) {
+      didDragRef.current = true;
+    }
     
     // Convert pixel delta to coordinate delta
     const effectiveTileSize = TILE_SIZE * zoom;
@@ -344,6 +359,12 @@ export function LandMapCanvas({
   };
   
   const handleClick = (e: React.MouseEvent) => {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      dragDistanceRef.current = 0;
+      return;
+    }
+
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
