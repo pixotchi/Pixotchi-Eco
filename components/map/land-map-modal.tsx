@@ -342,7 +342,7 @@ export function LandMapModal({
                         ) : (
                             /* UNMINTED LAND STATS (Simplified) */
                             <div className="flex items-center mt-1">
-                                <span className="text-[10px] text-muted-foreground italic">Available for minting</span>
+                                <span className="text-[10px] text-muted-foreground italic">This is where DEAD plants are buried</span>
                             </div>
                         )}
                     </div>
