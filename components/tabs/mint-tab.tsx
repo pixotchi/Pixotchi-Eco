@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getFormattedTokenBalance, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { getFormattedTokenBalance, getFormattedTokenBalanceForToken, getTokenBalanceForToken, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice, getTokenSymbol, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
 import { useBalances } from '@/lib/balance-context';
 import { Strain } from '@/lib/types';
 import { formatNumber, formatTokenAmount } from '@/lib/utils';
@@ -67,6 +67,8 @@ export default function MintTab() {
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
   const [needsApproval, setNeedsApproval] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
+  const [paymentTokenSymbol, setPaymentTokenSymbol] = useState<string>('SEED');
+  const [paymentTokenBalance, setPaymentTokenBalance] = useState<bigint>(BigInt(0));
   const [mintType, setMintType] = useState<'plant' | 'land'>('plant');
   const [landBalance, setLandBalance] = useState(0);
   const [landSupply, setLandSupply] = useState<{ totalSupply: number; maxSupply: number; } | null>(null);
@@ -89,16 +91,33 @@ export default function MintTab() {
     setForcedFetchCount(prev => prev + 1);
   };
 
+  // Helper function to get token logo path
+  const getTokenLogo = (tokenAddress: `0x${string}` | undefined): string => {
+    if (!tokenAddress) return '/PixotchiKit/COIN.svg';
+    if (tokenAddress.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase()) {
+      return '/icons/jessetoken.png';
+    }
+    return '/PixotchiKit/COIN.svg'; // Default to SEED logo
+  };
+
+  // Helper function to format token symbol (add $ prefix for JESSE)
+  const formatTokenSymbol = (symbol: string, tokenAddress: `0x${string}` | undefined): string => {
+    if (!tokenAddress) return symbol;
+    if (tokenAddress.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase()) {
+      return '$JESSE';
+    }
+    return symbol;
+  };
+
   const fetchData = async () => {
     if (!address) return;
     
     setLoading(true);
     try {
       if (mintType === 'plant') {
-        const [balance, strainsData, hasApproval] = await Promise.allSettled([
+        const [balance, strainsData] = await Promise.allSettled([
           getFormattedTokenBalance(address),
           getStrainInfo(),
-          checkTokenApproval(address),
         ]);
 
         if (balance.status === 'fulfilled') setTokenBalance(balance.value);
@@ -109,7 +128,6 @@ export default function MintTab() {
             setSelectedStrain(availableStrains[0]);
           }
         }
-        if (hasApproval.status === 'fulfilled') setNeedsApproval(!hasApproval.value);
       } else {
         if (!chainId || !address) return; // Guard against undefined chainId or address
         const [lands, supply, status, landApproval, price] = await Promise.all([
@@ -133,6 +151,67 @@ export default function MintTab() {
       setLoading(false);
     }
   };
+
+  // Fetch payment token info when selected strain changes
+  useEffect(() => {
+    if (!address || !selectedStrain || mintType !== 'plant') return;
+
+    // Immediately format symbol based on payment token address
+    const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+    if (paymentToken.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase()) {
+      setPaymentTokenSymbol('$JESSE');
+    } else {
+      // Will be updated with actual symbol from contract below
+      setPaymentTokenSymbol('SEED');
+    }
+
+    const fetchPaymentTokenInfo = async () => {
+      try {
+        // Determine payment token (use paymentToken if available, otherwise default to SEED)
+        const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+        const paymentPrice = selectedStrain.paymentPrice;
+
+        // Fetch token symbol and balance in parallel
+        const [symbol, rawBalance] = await Promise.allSettled([
+          getTokenSymbol(paymentToken),
+          getTokenBalanceForToken(address, paymentToken),
+        ]);
+
+        // Always format symbol based on payment token address first
+        // This ensures "$JESSE" is shown for JESSE token regardless of contract symbol case
+        if (symbol.status === 'fulfilled') {
+          const finalSymbol = formatTokenSymbol(symbol.value, paymentToken);
+          setPaymentTokenSymbol(finalSymbol);
+        } else {
+          // If symbol fetch fails, still format based on token address
+          const fallbackSymbol = paymentToken.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase() 
+            ? '$JESSE' 
+            : 'SEED';
+          setPaymentTokenSymbol(fallbackSymbol);
+        }
+        
+        if (rawBalance.status === 'fulfilled') {
+          setPaymentTokenBalance(rawBalance.value);
+        }
+
+        // Check approval for the payment token
+        const hasApproval = await checkTokenApproval(address, paymentToken);
+        setNeedsApproval(!hasApproval);
+      } catch (error) {
+        console.error('Error fetching payment token info:', error);
+        // Fallback to SEED token on error
+        const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+        const formattedSymbol = formatTokenSymbol('SEED', paymentToken);
+        setPaymentTokenSymbol(formattedSymbol);
+        const balance = await getFormattedTokenBalance(address);
+        setPaymentTokenBalance(BigInt(Math.floor(balance * 1e18)));
+        const hasApproval = await checkTokenApproval(address);
+        setNeedsApproval(!hasApproval);
+      }
+    };
+
+    fetchPaymentTokenInfo();
+  }, [selectedStrain, address, mintType]);
 
   useEffect(() => {
     if (!address) {
@@ -202,8 +281,18 @@ export default function MintTab() {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Price</span>
               <div className="flex items-center space-x-1 font-semibold">
-                <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                <span>{formatNumber(selectedStrain.mintPrice)} SEED</span>
+                <Image 
+                  src={getTokenLogo(selectedStrain.paymentToken)} 
+                  alt={paymentTokenSymbol} 
+                  width={16} 
+                  height={16} 
+                />
+                <span>
+                  {selectedStrain.paymentPrice 
+                    ? formatTokenAmount(selectedStrain.paymentPrice)
+                    : formatNumber(selectedStrain.mintPrice)
+                  } {paymentTokenSymbol}
+                </span>
               </div>
             </div>
             <div className="flex justify-between items-center">
@@ -225,10 +314,13 @@ export default function MintTab() {
             </div>
             {/* If smart wallet + sponsored, offer bundled Approve + Mint */}
             {(() => {
-              const useBundle = isSmartWallet && isSponsored && !!selectedStrain;
+              if (!selectedStrain) return null;
+              const useBundle = isSmartWallet && isSponsored;
+              const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
               return useBundle ? (
               <ApproveMintBundle
                 strain={selectedStrain.id}
+                tokenAddress={paymentToken}
                 onSuccess={() => {
                   toast.success('Approved and minted successfully!');
                   setNeedsApproval(false);
@@ -250,19 +342,20 @@ export default function MintTab() {
                   }
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Approve + Mint"
+                buttonText={`Approve + Mint`}
                 buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
               />
               ) : (
               <ApproveTransaction
                 spenderAddress={PIXOTCHI_NFT_ADDRESS}
+                tokenAddress={paymentToken}
                 onSuccess={() => {
                   toast.success('Token approval successful!');
                   setNeedsApproval(false);
                   incrementForcedFetch();
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Approve SEED"
+                buttonText={`Approve ${paymentTokenSymbol}`}
                 buttonClassName="w-full"
               />
               );
@@ -319,11 +412,11 @@ export default function MintTab() {
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Mint Plant"
                   buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={needsApproval || seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))}
+                  disabled={needsApproval || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
                 />
-                {!needsApproval && seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)) && (
+                {!needsApproval && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
                   <p className="text-xs text-destructive text-center mt-2">
-                    Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatNumber(selectedStrain.mintPrice)} SEED
+                    Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
                   </p>
                 )}
               </>

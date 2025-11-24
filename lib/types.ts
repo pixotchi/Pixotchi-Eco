@@ -73,6 +73,8 @@ export type Strain = {
   strainInitialTOD: number;
   description?: string;
   imageUrl?: string;
+  paymentToken?: `0x${string}`; // Token address for payment (if different from SEED)
+  paymentPrice?: bigint; // Price in the payment token (raw bigint for precision)
 };
 
 // UI state types

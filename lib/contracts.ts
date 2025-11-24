@@ -15,6 +15,8 @@ export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS
 export const STAKE_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.STAKE_CONTRACT_ADDRESS);
 export const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
 export const PIXOTCHI_TOKEN_ADDRESS = getAddress('0x546D239032b24eCEEE0cb05c92FC39090846adc7');
+// Known token addresses for reference
+export const JESSE_TOKEN_ADDRESS = getAddress('0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59');
 export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;
 export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
 export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
@@ -85,6 +87,20 @@ export const ERC20_APPROVE_ABI = [
       { name: 'spender', type: 'address' }
     ],
     outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'symbol',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'string' }]
+  },
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }]
   }
 ] as const;
 
@@ -341,6 +357,16 @@ const PIXOTCHI_NFT_ABI = [
     type: 'function',
   },
   {
+    inputs: [{ name: 'strainId', type: 'uint256' }],
+    name: 'getStrainPaymentInfo',
+    outputs: [
+      { name: 'token', type: 'address' },
+      { name: 'price', type: 'uint256' }
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [],
     name: 'shopGetAllItems',
     outputs: [{ name: '', type: 'tuple[]', components: [
@@ -478,6 +504,20 @@ const PIXOTCHI_TOKEN_ABI = [
     name: 'approve',
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'symbol',
+    outputs: [{ name: '', type: 'string' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ name: '', type: 'uint8' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
@@ -1030,13 +1070,14 @@ export const transferAllAssets = async (
 };
 
 // Token balance (returns raw bigint for precision)
-export const getTokenBalance = async (address: string): Promise<bigint> => {
+// Get token balance for any ERC20 token
+export const getTokenBalanceForToken = async (address: string, tokenAddress: `0x${string}`): Promise<bigint> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
     const balance = await readClient.readContract({
-      address: PIXOTCHI_TOKEN_ADDRESS,
-      abi: PIXOTCHI_TOKEN_ABI,
+      address: tokenAddress,
+      abi: PIXOTCHI_TOKEN_ABI, // ERC20 ABI is standard
       functionName: 'balanceOf',
       args: [address as `0x${string}`],
     }) as bigint;
@@ -1045,10 +1086,51 @@ export const getTokenBalance = async (address: string): Promise<bigint> => {
   });
 };
 
+export const getTokenBalance = async (address: string): Promise<bigint> => {
+  return getTokenBalanceForToken(address, PIXOTCHI_TOKEN_ADDRESS);
+};
+
 // Helper function for formatted token balance
 export const getFormattedTokenBalance = async (address: string): Promise<number> => {
   const balance = await getTokenBalance(address);
   return Number(balance) / 1e18; // Convert from wei to token units
+};
+
+// Get formatted token balance for any ERC20 token
+export const getFormattedTokenBalanceForToken = async (address: string, tokenAddress: `0x${string}`): Promise<number> => {
+  const balance = await getTokenBalanceForToken(address, tokenAddress);
+  // Try to get decimals, default to 18
+  let decimals = 18;
+  try {
+    const readClient = getReadClient();
+    decimals = await readClient.readContract({
+      address: tokenAddress,
+      abi: PIXOTCHI_TOKEN_ABI,
+      functionName: 'decimals',
+    }) as number;
+  } catch {
+    // Default to 18 if decimals call fails
+  }
+  return Number(balance) / (10 ** decimals);
+};
+
+// Get token symbol
+export const getTokenSymbol = async (tokenAddress: `0x${string}`): Promise<string> => {
+  const readClient = getReadClient();
+  
+  return retryWithBackoff(async () => {
+    try {
+      const symbol = await readClient.readContract({
+        address: tokenAddress,
+        abi: PIXOTCHI_TOKEN_ABI,
+        functionName: 'symbol',
+      }) as string;
+      return symbol;
+    } catch {
+      // Fallback to truncated address if symbol fetch fails
+      return `${tokenAddress.slice(0, 6)}...${tokenAddress.slice(-4)}`;
+    }
+  });
 };
 
 // Raw SEED allowance for Land contract interactions (e.g., marketplace)
@@ -1081,20 +1163,30 @@ export const getLeafAllowanceForLand = async (ownerAddress: string): Promise<big
   });
 };
 
-// Check token approval
-export const checkTokenApproval = async (address: string): Promise<boolean> => {
+// Check token approval for a specific token and spender
+export const checkTokenApprovalForToken = async (
+  address: string,
+  tokenAddress: `0x${string}`,
+  spenderAddress: `0x${string}`
+): Promise<boolean> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
     const allowance = await readClient.readContract({
-      address: PIXOTCHI_TOKEN_ADDRESS,
-      abi: PIXOTCHI_TOKEN_ABI,
+      address: tokenAddress,
+      abi: PIXOTCHI_TOKEN_ABI, // ERC20 ABI is standard
       functionName: 'allowance',
-      args: [address as `0x${string}`, PIXOTCHI_NFT_ADDRESS],
+      args: [address as `0x${string}`, spenderAddress],
     }) as bigint;
 
     return allowance > BigInt(0);
   });
+};
+
+// Check token approval (backward compatible, defaults to SEED token)
+export const checkTokenApproval = async (address: string, tokenAddress?: `0x${string}`): Promise<boolean> => {
+  const token = tokenAddress || PIXOTCHI_TOKEN_ADDRESS;
+  return checkTokenApprovalForToken(address, token, PIXOTCHI_NFT_ADDRESS);
 };
 
 export const checkLandTokenApproval = async (address: string): Promise<boolean> => {
@@ -1128,6 +1220,25 @@ export const checkLeafTokenApproval = async (address: string): Promise<boolean> 
   });
 };
 
+// Get payment info for a specific strain
+export const getStrainPaymentInfo = async (strainId: number): Promise<{ token: `0x${string}`; price: bigint }> => {
+  const readClient = getReadClient();
+  
+  return retryWithBackoff(async () => {
+    const result = await readClient.readContract({
+      address: PIXOTCHI_NFT_ADDRESS,
+      abi: PIXOTCHI_NFT_ABI,
+      functionName: 'getStrainPaymentInfo',
+      args: [BigInt(strainId)],
+    }) as [string, bigint];
+
+    return {
+      token: getAddress(result[0]),
+      price: result[1],
+    };
+  });
+};
+
 // Get strain information (following main app pattern)
 export const getStrainInfo = async (): Promise<Strain[]> => {
   const readClient = getReadClient();
@@ -1140,17 +1251,39 @@ export const getStrainInfo = async (): Promise<Strain[]> => {
       args: [],
     }) as any[];
 
-    return strains.map((strain: any) => ({
-      id: Number(strain.id),
-      name: strain.name || '',
-      mintPrice: Number(strain.mintPrice) / 1e18, // Convert from wei
-      totalSupply: Number(strain.totalSupply),
-      totalMinted: Number(strain.totalMinted),
-      maxSupply: Number(strain.maxSupply),
-      isActive: Boolean(strain.isActive),
-      getStrainTotalLeft: Number(strain.getStrainTotalLeft),
-      strainInitialTOD: Number(strain.strainInitialTOD),
-    }));
+    // Fetch payment info for each strain in parallel
+    const strainsWithPaymentInfo = await Promise.all(
+      strains.map(async (strain: any) => {
+        const strainId = Number(strain.id);
+        let paymentToken: `0x${string}` | undefined;
+        let paymentPrice: bigint | undefined;
+
+        try {
+          const paymentInfo = await getStrainPaymentInfo(strainId);
+          paymentToken = paymentInfo.token;
+          paymentPrice = paymentInfo.price;
+        } catch (error) {
+          // If payment info fetch fails, fall back to default SEED token
+          console.warn(`Failed to fetch payment info for strain ${strainId}:`, error);
+        }
+
+        return {
+          id: strainId,
+          name: strain.name || '',
+          mintPrice: Number(strain.mintPrice) / 1e18, // Convert from wei
+          totalSupply: Number(strain.totalSupply),
+          totalMinted: Number(strain.totalMinted),
+          maxSupply: Number(strain.maxSupply),
+          isActive: Boolean(strain.isActive),
+          getStrainTotalLeft: Number(strain.getStrainTotalLeft),
+          strainInitialTOD: Number(strain.strainInitialTOD),
+          paymentToken,
+          paymentPrice,
+        };
+      })
+    );
+
+    return strainsWithPaymentInfo;
   });
 };
 
