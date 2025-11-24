@@ -13,7 +13,7 @@ import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
 import type { LifecycleStatus } from '@coinbase/onchainkit/swap';
-import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
 import type { TransactionReceipt } from 'viem';
 
@@ -28,7 +28,7 @@ export default function SwapTab() {
   // Track OnchainKit's internal token state to detect when toggle happens
   const lastKnownStateRef = useRef<{ from: string; to: string }>({ from: 'ETH', to: 'SEED' });
 
-  const { ETH, SEED, USDC } = useMemo(() => {
+  const { ETH, SEED, USDC, JESSE } = useMemo(() => {
     const eth: Token = {
       address: "", // Empty string for native ETH (per OnchainKit guidelines)
       chainId: 8453,
@@ -56,25 +56,49 @@ export default function SwapTab() {
       image: "https://dynamic-assets.coinbase.com/3c15df5e2ac7d4abbe9499ed9335041f00c620f28e8de2f93474a9f432058742cdf4674bd43f309e69778a26969372310135be97eb183d91c492154176d455b8/asset_icons/9d67b728b6c8f457717154b3a35f9ddc702eae7e76c4684ee39302c4d7fd0bb8.png",
     };
 
+    const jesse: Token = {
+      address: JESSE_TOKEN_ADDRESS,
+      chainId: 8453,
+      decimals: 18,
+      name: "JESSE",
+      symbol: "$JESSE",
+      image: "/icons/jessetoken.png",
+    };
+
     return {
       ETH: eth,
       SEED: seed,
       USDC: usdc,
+      JESSE: jesse,
     };
   }, []);
 
-  // SEED must always be part of the swap
-  // If "to" is SEED, "from" can be ETH or USDC
-  // If "to" is ETH or USDC, "from" must be SEED
+  // SEED or JESSE must always be part of the swap
+  // If "to" is SEED or JESSE, "from" can be ETH, USDC, SEED, or JESSE (but not same as "to")
+  // If "to" is ETH or USDC, "from" must be SEED or JESSE
   const fromSwappable = useMemo(() => {
-    return toTokenSymbol === 'SEED' ? [ETH, USDC] : [SEED];
-  }, [toTokenSymbol, ETH, USDC, SEED]);
+    if (toTokenSymbol === 'SEED') {
+      return [ETH, USDC, JESSE];
+    } else if (toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE') {
+      return [ETH, USDC, SEED];
+    } else {
+      // "to" is ETH or USDC, so "from" must be SEED or JESSE
+      return [SEED, JESSE];
+    }
+  }, [toTokenSymbol, ETH, USDC, SEED, JESSE]);
 
-  // If "from" is SEED, "to" can be ETH or USDC
-  // If "from" is ETH or USDC, "to" must be SEED
+  // If "from" is SEED or JESSE, "to" can be ETH, USDC, SEED, or JESSE (but not same as "from")
+  // If "from" is ETH or USDC, "to" must be SEED or JESSE
   const toSwappable = useMemo(() => {
-    return fromTokenSymbol === 'SEED' ? [ETH, USDC] : [SEED];
-  }, [fromTokenSymbol, ETH, USDC, SEED]);
+    if (fromTokenSymbol === 'SEED') {
+      return [ETH, USDC, JESSE];
+    } else if (fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE') {
+      return [ETH, USDC, SEED];
+    } else {
+      // "from" is ETH or USDC, so "to" must be SEED or JESSE
+      return [SEED, JESSE];
+    }
+  }, [fromTokenSymbol, ETH, USDC, SEED, JESSE]);
 
   const handleSuccess = useCallback((receipt: TransactionReceipt) => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
@@ -174,17 +198,27 @@ export default function SwapTab() {
                 onError={handleError}
                 onStatus={handleStatus}
               >
-                {/* SEED must always be part of the swap - only show valid token pairs */}
+                {/* SEED or JESSE must always be part of the swap - only show valid token pairs */}
                 <SwapAmountInput 
                   label="Sell" 
-                  token={fromTokenSymbol === 'ETH' ? ETH : fromTokenSymbol === 'USDC' ? USDC : SEED}
+                  token={
+                    fromTokenSymbol === 'ETH' ? ETH 
+                    : fromTokenSymbol === 'USDC' ? USDC 
+                    : fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE' ? JESSE
+                    : SEED
+                  }
                   swappableTokens={fromSwappable}
                   type="from"
                 />
                 <SwapToggleButton />
                 <SwapAmountInput 
                   label="Buy" 
-                  token={toTokenSymbol === 'ETH' ? ETH : toTokenSymbol === 'USDC' ? USDC : SEED}
+                  token={
+                    toTokenSymbol === 'ETH' ? ETH 
+                    : toTokenSymbol === 'USDC' ? USDC 
+                    : toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE' ? JESSE
+                    : SEED
+                  }
                   swappableTokens={toSwappable}
                   type="to"
                 />

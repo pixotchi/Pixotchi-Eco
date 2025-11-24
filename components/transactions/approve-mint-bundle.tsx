@@ -29,6 +29,7 @@ const NFT_ABI = [
 
 export default function ApproveMintBundle({
   strain,
+  tokenAddress,
   onSuccess,
   onTransactionComplete,
   onError,
@@ -37,6 +38,7 @@ export default function ApproveMintBundle({
   disabled = false,
 }: {
   strain: number;
+  tokenAddress?: `0x${string}`; // Optional: defaults to SEED token
   onSuccess?: (tx: any) => void;
   onTransactionComplete?: (tx: any) => void;
   onError?: (error: any) => void;
@@ -46,10 +48,13 @@ export default function ApproveMintBundle({
 }) {
   // Unlimited approval followed by mint call
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
+  
+  // Use provided token address or default to SEED
+  const token = tokenAddress || PIXOTCHI_TOKEN_ADDRESS;
 
   const calls = [
     {
-      address: PIXOTCHI_TOKEN_ADDRESS,
+      address: token,
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
