@@ -50,8 +50,6 @@ export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 export const SYSTEM_ADDRESS = '0x0000000000000000000000000000000000000001';
 export const USDC_ADDRESS = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913');
 
-const tokenMetadataCache = new Map<string, { symbol: string; decimals: number }>();
-
 // EVM event signatures for log parsing
 export const EVM_EVENT_SIGNATURES = {
   // ERC20 Transfer(address indexed from, address indexed to, uint256 value)
@@ -95,23 +93,6 @@ export const ERC20_BALANCE_ABI = [
     inputs: [{ name: 'account', type: 'address' }],
     name: 'balanceOf',
     outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
-
-export const ERC20_METADATA_ABI = [
-  {
-    inputs: [],
-    name: 'decimals',
-    outputs: [{ name: '', type: 'uint8' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'symbol',
-    outputs: [{ name: '', type: 'string' }],
     stateMutability: 'view',
     type: 'function',
   },
@@ -356,13 +337,6 @@ const PIXOTCHI_NFT_ABI = [
       { name: 'getStrainTotalLeft', type: 'uint256' },
       { name: 'strainInitialTOD', type: 'uint256' }
     ]}],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'strain', type: 'uint256' }],
-    name: 'strainPaymentToken',
-    outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
   },
@@ -1055,63 +1029,20 @@ export const transferAllAssets = async (
   };
 };
 
-export const getErc20Balance = async (tokenAddress: `0x${string}`, ownerAddress: string): Promise<bigint> => {
-  if (!ownerAddress) return BigInt(0);
-  const readClient = getReadClient();
-  return retryWithBackoff(async () => {
-    return await readClient.readContract({
-      address: tokenAddress,
-      abi: ERC20_BALANCE_ABI,
-      functionName: 'balanceOf',
-      args: [ownerAddress as `0x${string}`],
-    }) as bigint;
-  });
-};
-
 // Token balance (returns raw bigint for precision)
 export const getTokenBalance = async (address: string): Promise<bigint> => {
-  return getErc20Balance(PIXOTCHI_TOKEN_ADDRESS, address);
-};
-
-export const getTokenMetadata = async (tokenAddress: `0x${string}`): Promise<{ symbol: string; decimals: number }> => {
-  const normalized = tokenAddress.toLowerCase();
-  if (tokenMetadataCache.has(normalized)) {
-    return tokenMetadataCache.get(normalized)!;
-  }
-
   const readClient = getReadClient();
+  
+  return retryWithBackoff(async () => {
+    const balance = await readClient.readContract({
+      address: PIXOTCHI_TOKEN_ADDRESS,
+      abi: PIXOTCHI_TOKEN_ABI,
+      functionName: 'balanceOf',
+      args: [address as `0x${string}`],
+    }) as bigint;
 
-  const [decimalsRaw, symbolRaw] = await Promise.all([
-    retryWithBackoff(async () => {
-      return await readClient.readContract({
-        address: tokenAddress,
-        abi: ERC20_METADATA_ABI,
-        functionName: 'decimals',
-        args: [],
-      }) as number | bigint;
-    }).catch(() => 18),
-    retryWithBackoff(async () => {
-      return await readClient.readContract({
-        address: tokenAddress,
-        abi: ERC20_METADATA_ABI,
-        functionName: 'symbol',
-        args: [],
-      }) as string;
-    }).catch(() => 'TOKEN'),
-  ]);
-
-  const decimals =
-    typeof decimalsRaw === 'number'
-      ? decimalsRaw
-      : typeof decimalsRaw === 'bigint'
-        ? Number(decimalsRaw)
-        : 18;
-
-  const symbol = typeof symbolRaw === 'string' && symbolRaw.length > 0 ? symbolRaw : 'TOKEN';
-
-  const metadata = { symbol, decimals };
-  tokenMetadataCache.set(normalized, metadata);
-  return metadata;
+    return balance; // Return raw bigint for precision
+  });
 };
 
 // Helper function for formatted token balance
@@ -1151,19 +1082,15 @@ export const getLeafAllowanceForLand = async (ownerAddress: string): Promise<big
 };
 
 // Check token approval
-export const checkTokenApproval = async (
-  address: string,
-  tokenAddress: `0x${string}` = PIXOTCHI_TOKEN_ADDRESS,
-  spenderAddress: `0x${string}` = PIXOTCHI_NFT_ADDRESS,
-): Promise<boolean> => {
+export const checkTokenApproval = async (address: string): Promise<boolean> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
     const allowance = await readClient.readContract({
-      address: tokenAddress,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'allowance',
-      args: [address as `0x${string}`, spenderAddress],
+      args: [address as `0x${string}`, PIXOTCHI_NFT_ADDRESS],
     }) as bigint;
 
     return allowance > BigInt(0);
@@ -1206,69 +1133,24 @@ export const getStrainInfo = async (): Promise<Strain[]> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
-    const strainStructs = await readClient.readContract({
+    const strains = await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getAllStrainInfo',
       args: [],
     }) as any[];
-    
-    const paymentTokens = await Promise.all(
-      strainStructs.map((strain: any) =>
-        retryWithBackoff(async () => {
-          return await readClient.readContract({
-            address: PIXOTCHI_NFT_ADDRESS,
-            abi: PIXOTCHI_NFT_ABI,
-            functionName: 'strainPaymentToken',
-            args: [BigInt(strain.id)],
-          }) as string;
-        }).catch(() => ZERO_ADDRESS),
-      ),
-    );
 
-    const normalizedTokens = paymentTokens.map((token) => {
-      if (!token || token === ZERO_ADDRESS) {
-        return PIXOTCHI_TOKEN_ADDRESS;
-      }
-      try {
-        return getAddress(token);
-      } catch {
-        return PIXOTCHI_TOKEN_ADDRESS;
-      }
-    });
-
-    const uniqueTokens = Array.from(new Set(normalizedTokens.map((addr) => addr.toLowerCase())));
-    const metadataEntries = await Promise.all(
-      uniqueTokens.map((token) => getTokenMetadata(token as `0x${string}`)),
-    );
-    const metadataMap = new Map<string, { symbol: string; decimals: number }>();
-    uniqueTokens.forEach((token, index) => {
-      metadataMap.set(token, metadataEntries[index]);
-    });
-
-    return strainStructs.map((strain: any, index: number) => {
-      const paymentToken = normalizedTokens[index];
-      const metadata = metadataMap.get(paymentToken.toLowerCase()) || { symbol: 'TOKEN', decimals: 18 };
-      const mintPriceRaw = BigInt(strain.mintPrice ?? 0);
-      const formatted = parseFloat(formatUnits(mintPriceRaw, metadata.decimals));
-      const mintPrice = Number.isFinite(formatted) ? formatted : 0;
-
-      return {
-        id: Number(strain.id),
-        name: strain.name || '',
-        mintPrice,
-        mintPriceWei: mintPriceRaw,
-        totalSupply: Number(strain.totalSupply),
-        totalMinted: Number(strain.totalMinted),
-        maxSupply: Number(strain.maxSupply),
-        isActive: Boolean(strain.isActive),
-        getStrainTotalLeft: Number(strain.getStrainTotalLeft),
-        strainInitialTOD: Number(strain.strainInitialTOD),
-        paymentToken,
-        tokenSymbol: metadata.symbol,
-        tokenDecimals: metadata.decimals,
-      } as Strain;
-    });
+    return strains.map((strain: any) => ({
+      id: Number(strain.id),
+      name: strain.name || '',
+      mintPrice: Number(strain.mintPrice) / 1e18, // Convert from wei
+      totalSupply: Number(strain.totalSupply),
+      totalMinted: Number(strain.totalMinted),
+      maxSupply: Number(strain.maxSupply),
+      isActive: Boolean(strain.isActive),
+      getStrainTotalLeft: Number(strain.getStrainTotalLeft),
+      strainInitialTOD: Number(strain.strainInitialTOD),
+    }));
   });
 };
 

@@ -5,7 +5,6 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 // Use centralized strain data for Agent
 import { z } from 'zod';
 import { PLANT_STRAINS } from '@/lib/constants';
-import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getAgentAIProvider, getAgentModelConfig } from '@/lib/ai-config';
 // Removed generic AgentKit/Vercel AI tools to avoid requiring RPC URLs in this route
 
@@ -23,7 +22,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Missing prompt' }), { status: 400 });
     }
 
-    // Use centralized strains metadata for pricing guidance
+    // Use centralized strains (mintPriceSeed in SEED units)
     const HARDCODED_STRAINS = PLANT_STRAINS;
 
     const listStrainsParams = z.object({
@@ -33,13 +32,7 @@ export async function POST(req: NextRequest) {
     const listStrainsExecute = async (args: z.infer<typeof listStrainsParams>) => {
       // Return centralized strain dataset
       // Use explicit type casting to avoid union type complexities in inference
-      const strains = HARDCODED_STRAINS.map(s => ({
-        id: Number(s.id),
-        name: String(s.name),
-        mintPrice: Number(s.mintPrice),
-        tokenSymbol: s.tokenSymbol,
-        paymentToken: s.paymentToken,
-      }));
+      const strains = HARDCODED_STRAINS.map(s => ({ id: Number(s.id), name: String(s.name), mintPriceSeed: Number(s.mintPriceSeed) }));
       return strains;
     };
 
@@ -73,19 +66,7 @@ export async function POST(req: NextRequest) {
           const byName = strains.find(s => `${s.name}`.toLowerCase() === `${strainName}`.toLowerCase());
           if (byName) chosen = byName as typeof HARDCODED_STRAINS[number];
         }
-        const unit = chosen?.mintPrice || 0;
-        const tokenSymbol = chosen?.tokenSymbol || 'SEED';
-        const paymentToken = (chosen?.paymentToken || '').toLowerCase();
-        const seedToken = PIXOTCHI_TOKEN_ADDRESS.toLowerCase();
-        const supportsToken = paymentToken === '' || paymentToken === seedToken;
-        if (!supportsToken) {
-          return {
-            error: true,
-            message: `Agent can only mint SEED-based strains. ${chosen?.name} uses ${tokenSymbol}. Please use the Mint tab instead.`,
-            strainId: chosen?.id,
-            strainName: chosen?.name,
-          };
-        }
+        const unit = chosen?.mintPriceSeed || 0;
         const total = unit * count;
         
         console.log('[MINT_TOOL] Selected strain:', { id: chosen?.id, name: chosen?.name, unitPrice: unit, total });
@@ -96,11 +77,8 @@ export async function POST(req: NextRequest) {
           return {
             strainId: chosen?.id,
             strainName: chosen?.name,
-            unitPrice: unit,
-            unitTokenSymbol: tokenSymbol,
-            unitSeedPrice: tokenSymbol === 'SEED' ? unit : undefined,
-            totalTokenRequired: total,
-            totalSeedRequired: tokenSymbol === 'SEED' ? total : undefined,
+            unitSeedPrice: unit,
+            totalSeedRequired: total,
             estimateOnly: true,
             next: 'To execute: provide your wallet address and confirm execution.'
           };
@@ -117,7 +95,6 @@ export async function POST(req: NextRequest) {
             count,
             strainId: chosen?.id,
             totalSeedRequired: total,
-            tokenSymbol,
             preparedSpendCalls: Array.isArray((preparedSpendCalls as any)) ? preparedSpendCalls : undefined,
           };
           
@@ -147,8 +124,7 @@ export async function POST(req: NextRequest) {
               message: `Mint endpoint returned non-JSON response (${response.status}): ${text.substring(0, 200)}`,
               strainId: chosen?.id,
               strainName: chosen?.name,
-              totalTokenRequired: total,
-              totalSeedRequired: tokenSymbol === 'SEED' ? total : undefined,
+              totalSeedRequired: total,
             };
           }
 
@@ -162,8 +138,7 @@ export async function POST(req: NextRequest) {
               message: result.error || 'Failed to execute mint',
               strainId: chosen?.id,
               strainName: chosen?.name,
-              totalTokenRequired: total,
-              totalSeedRequired: tokenSymbol === 'SEED' ? total : undefined,
+              totalSeedRequired: total,
             };
           }
 
@@ -191,8 +166,7 @@ export async function POST(req: NextRequest) {
             message: error.message || 'Network error during mint execution',
             strainId: chosen?.id,
             strainName: chosen?.name,
-            totalTokenRequired: total,
-            totalSeedRequired: tokenSymbol === 'SEED' ? total : undefined,
+            totalSeedRequired: total,
           };
         }
       };
