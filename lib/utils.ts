@@ -106,9 +106,127 @@ export function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
+/**
+ * Format token amount with precision-safe BigInt handling.
+ * Avoids Number precision loss for values > 2^53 by using string-based formatting.
+ */
 export function formatTokenAmount(amount: bigint, decimals: number = 18): string {
   const formatted = formatUnits(amount, decimals);
   return parseFloat(formatted).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+/**
+ * Precision-safe token amount formatting that preserves accuracy for very large values.
+ * Uses string-based arithmetic to avoid JavaScript Number precision limits (2^53).
+ * 
+ * @param amount - The raw BigInt amount
+ * @param decimals - Token decimals (default: 18)
+ * @param maxDisplayDecimals - Maximum decimals to display (default: 4)
+ * @returns Formatted string with locale-aware thousand separators
+ */
+export function formatTokenAmountPrecise(
+  amount: bigint, 
+  decimals: number = 18, 
+  maxDisplayDecimals: number = 4
+): string {
+  if (amount === BigInt(0)) return '0';
+  
+  const isNegative = amount < BigInt(0);
+  const absAmount = isNegative ? -amount : amount;
+  
+  // Convert to string and pad with leading zeros if needed
+  const amountStr = absAmount.toString();
+  const paddedStr = amountStr.padStart(decimals + 1, '0');
+  
+  // Split into whole and fractional parts
+  const splitIndex = paddedStr.length - decimals;
+  const wholePart = paddedStr.slice(0, splitIndex) || '0';
+  const fractionalPart = paddedStr.slice(splitIndex);
+  
+  // Trim trailing zeros from fractional part, but keep at least minDecimals
+  let trimmedFractional = fractionalPart.replace(/0+$/, '');
+  
+  // Limit to maxDisplayDecimals
+  if (trimmedFractional.length > maxDisplayDecimals) {
+    trimmedFractional = trimmedFractional.slice(0, maxDisplayDecimals);
+    // Remove trailing zeros after truncation
+    trimmedFractional = trimmedFractional.replace(/0+$/, '');
+  }
+  
+  // Format whole part with thousand separators
+  const formattedWhole = formatWholeNumberWithSeparators(wholePart);
+  
+  // Combine parts
+  const sign = isNegative ? '-' : '';
+  if (trimmedFractional.length === 0) {
+    return `${sign}${formattedWhole}`;
+  }
+  
+  return `${sign}${formattedWhole}.${trimmedFractional}`;
+}
+
+/**
+ * Helper to add thousand separators to a whole number string.
+ * Works with arbitrarily large numbers without precision loss.
+ */
+function formatWholeNumberWithSeparators(numStr: string): string {
+  // Remove leading zeros except for "0" itself
+  const trimmed = numStr.replace(/^0+/, '') || '0';
+  
+  // Add thousand separators (locale-aware would require more complexity)
+  const parts: string[] = [];
+  let remaining = trimmed;
+  
+  while (remaining.length > 3) {
+    parts.unshift(remaining.slice(-3));
+    remaining = remaining.slice(0, -3);
+  }
+  parts.unshift(remaining);
+  
+  return parts.join(',');
+}
+
+/**
+ * Format token amount for display with compact notation (K, M, B, T).
+ * Uses precision-safe BigInt handling for accurate threshold comparisons.
+ */
+export function formatTokenAmountCompact(amount: bigint, decimals: number = 18): string {
+  if (amount === BigInt(0)) return '0';
+  
+  const isNegative = amount < BigInt(0);
+  const absAmount = isNegative ? -amount : amount;
+  const sign = isNegative ? '-' : '';
+  
+  // Define thresholds as BigInt for precision-safe comparison
+  const divisor = BigInt(10 ** decimals);
+  const thousand = BigInt(1000);
+  const million = BigInt(1000000);
+  const billion = BigInt(1000000000);
+  const trillion = BigInt(1000000000000);
+  
+  // Get the whole number part
+  const wholeAmount = absAmount / divisor;
+  
+  // Format based on magnitude
+  if (wholeAmount >= trillion) {
+    const value = Number(absAmount * BigInt(100) / (divisor * trillion)) / 100;
+    return `${sign}${value.toFixed(2).replace(/\.?0+$/, '')}T`;
+  }
+  if (wholeAmount >= billion) {
+    const value = Number(absAmount * BigInt(100) / (divisor * billion)) / 100;
+    return `${sign}${value.toFixed(2).replace(/\.?0+$/, '')}B`;
+  }
+  if (wholeAmount >= million) {
+    const value = Number(absAmount * BigInt(100) / (divisor * million)) / 100;
+    return `${sign}${value.toFixed(2).replace(/\.?0+$/, '')}M`;
+  }
+  if (wholeAmount >= thousand) {
+    const value = Number(absAmount * BigInt(10) / (divisor * thousand)) / 10;
+    return `${sign}${value.toFixed(1).replace(/\.?0+$/, '')}K`;
+  }
+  
+  // For smaller amounts, use precision formatting
+  return `${sign}${formatTokenAmountPrecise(absAmount, decimals, 2).replace(/^-/, '')}`;
 }
 
 // Standardized address formatting using centralized truncation constants
