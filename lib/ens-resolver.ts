@@ -1,19 +1,18 @@
-import { createPublicClient, isAddress, namehash } from 'viem';
+import { createPublicClient, isAddress, type PublicClient, type Transport } from 'viem';
 import { base, mainnet } from 'viem/chains';
-import { normalize } from 'viem/ens';
 import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
 import { createResilientTransport, createMainnetResilientTransport } from './rpc-transport';
 
 // L2 Resolver address on Base for Basenames
 const L2_RESOLVER_ADDRESS = '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD' as const;
-const BASENAME_SUFFIX = '.base.eth';
 
 // Create clients with our resilient RPC transport
-let baseClient: ReturnType<typeof createPublicClient> | null = null;
-let mainnetClient: ReturnType<typeof createPublicClient> | null = null;
+// Using 'any' for client storage to avoid chain-specific type conflicts between Base and Mainnet
+let baseClient: PublicClient<Transport, typeof base> | null = null;
+let mainnetClient: PublicClient<Transport, typeof mainnet> | null = null;
 
-function getBaseClient() {
+function getBaseClient(): PublicClient<Transport, typeof base> {
   if (!baseClient) {
     baseClient = createPublicClient({
       chain: base,
@@ -23,7 +22,7 @@ function getBaseClient() {
   return baseClient;
 }
 
-function getMainnetClient() {
+function getMainnetClient(): PublicClient<Transport, typeof mainnet> {
   if (!mainnetClient) {
     mainnetClient = createPublicClient({
       chain: mainnet,
