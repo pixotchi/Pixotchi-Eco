@@ -1,8 +1,37 @@
-import { getName, getNames } from '@coinbase/onchainkit/identity';
-import { isAddress } from 'viem';
-import { base } from 'viem/chains';
+import { createPublicClient, isAddress, namehash } from 'viem';
+import { base, mainnet } from 'viem/chains';
+import { normalize } from 'viem/ens';
 import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
+import { createResilientTransport, createMainnetResilientTransport } from './rpc-transport';
+
+// L2 Resolver address on Base for Basenames
+const L2_RESOLVER_ADDRESS = '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD' as const;
+const BASENAME_SUFFIX = '.base.eth';
+
+// Create clients with our resilient RPC transport
+let baseClient: ReturnType<typeof createPublicClient> | null = null;
+let mainnetClient: ReturnType<typeof createPublicClient> | null = null;
+
+function getBaseClient() {
+  if (!baseClient) {
+    baseClient = createPublicClient({
+      chain: base,
+      transport: createResilientTransport(),
+    });
+  }
+  return baseClient;
+}
+
+function getMainnetClient() {
+  if (!mainnetClient) {
+    mainnetClient = createPublicClient({
+      chain: mainnet,
+      transport: createMainnetResilientTransport(),
+    });
+  }
+  return mainnetClient;
+}
 
 async function readCache(key: string): Promise<string | null> {
   if (!redis) return null;
@@ -56,8 +85,52 @@ function sanitiseResolvedName(address: `0x${string}`, value: string | null | und
 }
 
 /**
+ * Resolve Basename using L2 Resolver on Base chain
+ * This uses our custom RPC transport instead of OnchainKit's default
+ */
+async function resolveBasename(address: `0x${string}`): Promise<string | null> {
+  const client = getBaseClient();
+  
+  try {
+    // First try to get the primary name from the L2 resolver's reverse lookup
+    const reverseNode = `${address.slice(2).toLowerCase()}.addr.reverse`;
+    
+    // Use getEnsName which handles the reverse resolution
+    const name = await client.getEnsName({
+      address,
+      universalResolverAddress: L2_RESOLVER_ADDRESS,
+    });
+    
+    return name;
+  } catch (error) {
+    // L2 resolver might not support this, try alternative approach
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Identity Resolver] L2 reverse lookup failed, trying ENS mainnet', error);
+    }
+    return null;
+  }
+}
+
+/**
+ * Resolve ENS name from Ethereum mainnet using our custom RPC transport
+ */
+async function resolveEnsName(address: `0x${string}`): Promise<string | null> {
+  const client = getMainnetClient();
+  
+  try {
+    const name = await client.getEnsName({ address });
+    return name;
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Identity Resolver] ENS mainnet lookup failed', error);
+    }
+    return null;
+  }
+}
+
+/**
  * Resolve a single address to its Basename (Base network) or ENS name
- * Follows OnchainKit's getName() pattern but uses Base chain for Basename resolution
+ * Uses custom RPC transport with fallbacks instead of OnchainKit defaults
  */
 export async function resolvePrimaryName(
   address: string,
@@ -77,8 +150,14 @@ export async function resolvePrimaryName(
   }
 
   try {
-    // Resolve Basename on Base chain (follows OnchainKit guide with chain parameter)
-    const rawName = await getName({ address: normalised, chain: base });
+    // Try Basename first (Base L2), then fall back to ENS mainnet
+    let rawName = await resolveBasename(normalised);
+    
+    // If no Basename found, try ENS on mainnet
+    if (!rawName) {
+      rawName = await resolveEnsName(normalised);
+    }
+    
     const name = sanitiseResolvedName(normalised, rawName ?? null);
     await writeCache(cacheKey, name);
     return name;
@@ -87,14 +166,15 @@ export async function resolvePrimaryName(
       address: normalised,
       error: error instanceof Error ? error.message : String(error),
     });
+    // Cache the failure to avoid repeated failed lookups
+    await writeCache(cacheKey, null);
     return null;
   }
 }
 
 /**
  * Resolve multiple addresses to their Basenames (Base network) in batch
- * Follows OnchainKit's getNames() pattern but uses Base chain
- * More efficient than calling resolvePrimaryName multiple times
+ * Uses custom RPC transport with fallbacks
  */
 export async function resolvePrimaryNames(
   addresses: string[],
@@ -129,32 +209,25 @@ export async function resolvePrimaryNames(
   });
 
   if (addressesToFetch.length > 0) {
-    try {
-      // Batch resolve Basenames on Base chain (follows OnchainKit guide)
-      const fetchedNames = await getNames({ addresses: addressesToFetch, chain: base });
-
-      addressesToFetch.forEach((address, index) => {
-        const rawName = Array.isArray(fetchedNames) ? fetchedNames[index] : null;
-        const name = sanitiseResolvedName(address, rawName ?? null);
-        resultMap.set(address, name);
-        writeCache(`${ENS_CONFIG.CACHE_PREFIX}${address}`, name).catch((error) => {
-          console.warn('[Identity Resolver] Failed to write cache for batch item', { address, error });
-        });
-      });
-    } catch (error) {
-      console.warn('[Identity Resolver] Failed batch name lookup', {
-        addresses: addressesToFetch,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      // Fallback: resolve individually
-      await Promise.all(
-        addressesToFetch.map(async (address) => {
-          const name = await resolvePrimaryName(address, options);
-          resultMap.set(address, name);
-        }),
-      );
-    }
+    // Resolve all addresses in parallel using our custom resolver
+    const results = await Promise.allSettled(
+      addressesToFetch.map(async (address) => {
+        const name = await resolvePrimaryName(address, options);
+        return { address, name };
+      })
+    );
+    
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        resultMap.set(result.value.address, result.value.name);
+      } else {
+        // Find the address that failed (by index)
+        const index = results.indexOf(result);
+        if (index >= 0 && addressesToFetch[index]) {
+          resultMap.set(addressesToFetch[index], null);
+        }
+      }
+    });
   }
 
   return resultMap;
