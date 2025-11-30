@@ -71,6 +71,18 @@
     "typescript": "5.9.3"
   },
   "overrides": {
+    "@solana-program/compute-budget": {
+      "@solana/kit": "2.3.0"
+    },
+    "@solana-program/token": {
+      "@solana/kit": "2.3.0"
+    },
+    "@solana-program/token-2022": {
+      "@solana/kit": "2.3.0"
+    },
+    "x402": {
+      "@solana/kit": "2.3.0"
+    },
     "pino": "10.1.0",
     "thread-stream": "3.1.0"
   }
