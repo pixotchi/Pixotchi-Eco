@@ -62,6 +62,7 @@ export const getRpcConfig = () => {
   return { endpoints, wssEndpoints };
 };
 
+// Ethereum Mainnet RPC configuration (for ENS/Basename CCIP-Read verification)
 export const getMainnetRpcConfig = () => {
   const endpoints = [
     process.env.MAINNET_RPC_URL,
@@ -72,6 +73,15 @@ export const getMainnetRpcConfig = () => {
     process.env.NEXT_PUBLIC_MAINNET_RPC,
     process.env.NEXT_PUBLIC_MAINNET_RPC_FALLBACK,
   ].filter((endpoint): endpoint is string => Boolean(endpoint));
+
+  // If no endpoints configured, use reliable public mainnet RPCs
+  // These are needed for ENS resolution which requires Ethereum mainnet
+  if (endpoints.length === 0) {
+    console.warn('[Mainnet RPC] No custom endpoints configured, using public fallbacks');
+    endpoints.push('https://eth.llamarpc.com');
+    endpoints.push('https://ethereum-rpc.publicnode.com');
+    endpoints.push('https://cloudflare-eth.com');
+  }
 
   const fallback = process.env.MAINNET_RPC_URL_DEFAULT || 'https://eth.llamarpc.com';
 

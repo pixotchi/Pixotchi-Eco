@@ -1,8 +1,8 @@
 "use client";
 
 import { createConfig } from "wagmi";
-import { base } from "viem/chains";
-import { createResilientTransport } from "./rpc-transport";
+import { base, mainnet } from "viem/chains";
+import { createResilientTransport, createMainnetResilientTransport } from "./rpc-transport";
 import { baseAccountConnector } from "./base-account-connector";
 
 const connectors = [
@@ -10,12 +10,18 @@ const connectors = [
   baseAccountConnector({ displayName: "Sign in with Base" }),
 ];
 
-const transport = createResilientTransport();
+// Base chain transport with fallbacks from env config
+const baseTransport = createResilientTransport();
+
+// Mainnet transport for ENS/Basename resolution (CCIP-Read requires mainnet calls)
+// Uses the same resilient fallback system as Base RPC
+const mainnetTransport = createMainnetResilientTransport();
 
 export const wagmiWebOnchainkitConfig = createConfig({
-  chains: [base],
+  chains: [base, mainnet],
   transports: {
-    [base.id]: transport,
+    [base.id]: baseTransport,
+    [mainnet.id]: mainnetTransport,
   },
   connectors,
   pollingInterval: 500, // Faster polling to match Base block times (~2s)
