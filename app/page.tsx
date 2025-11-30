@@ -34,26 +34,84 @@ import { sessionStorageManager } from "@/lib/session-storage-manager";
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
 
-// Tab content components with optimized code splitting
+// Tab load error fallback component
+function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+      <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+        <Info className="w-6 h-6 text-destructive" />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-destructive">Failed to load {tabName}</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Please check your connection and try again
+        </p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onRetry || (() => window.location.reload())}
+      >
+        <Repeat className="w-4 h-4 mr-2" />
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+// Factory function to create dynamic imports with error handling
+const createDynamicTab = (
+  importFn: () => Promise<any>,
+  tabName: string,
+  chunkName: string
+) => {
+  return dynamic(
+    () => importFn().catch((error) => {
+      console.error(`Failed to load ${tabName} tab:`, error);
+      // Return a module with default export as the error component
+      return {
+        default: () => <TabLoadError tabName={tabName} />
+      };
+    }),
+    {
+      loading: () => <BasePageLoader />,
+      ssr: false // Disable SSR for tab components to avoid hydration issues
+    }
+  );
+};
+
+// Tab content components with optimized code splitting and error handling
 const tabComponents = {
-  dashboard: dynamic(() => import(/* webpackChunkName: "dashboard-tab" */ "@/components/tabs/dashboard-tab"), {
-    loading: () => <BasePageLoader />
-  }),
-  mint: dynamic(() => import(/* webpackChunkName: "mint-tab" */ "@/components/tabs/mint-tab"), {
-    loading: () => <BasePageLoader />
-  }),
-  about: dynamic(() => import(/* webpackChunkName: "about-tab" */ "@/components/tabs/about-tab"), {
-    loading: () => <BasePageLoader />
-  }),
-  swap: dynamic(() => import(/* webpackChunkName: "swap-tab" */ "@/components/tabs/swap-tab"), {
-    loading: () => <BasePageLoader />
-  }),
-  activity: dynamic(() => import(/* webpackChunkName: "activity-tab" */ "@/components/tabs/activity-tab"), {
-    loading: () => <BasePageLoader />
-  }),
-  leaderboard: dynamic(() => import(/* webpackChunkName: "leaderboard-tab" */ "@/components/tabs/leaderboard-tab"), {
-    loading: () => <BasePageLoader />
-  }),
+  dashboard: createDynamicTab(
+    () => import(/* webpackChunkName: "dashboard-tab" */ "@/components/tabs/dashboard-tab"),
+    "Farm",
+    "dashboard-tab"
+  ),
+  mint: createDynamicTab(
+    () => import(/* webpackChunkName: "mint-tab" */ "@/components/tabs/mint-tab"),
+    "Mint",
+    "mint-tab"
+  ),
+  about: createDynamicTab(
+    () => import(/* webpackChunkName: "about-tab" */ "@/components/tabs/about-tab"),
+    "About",
+    "about-tab"
+  ),
+  swap: createDynamicTab(
+    () => import(/* webpackChunkName: "swap-tab" */ "@/components/tabs/swap-tab"),
+    "Swap",
+    "swap-tab"
+  ),
+  activity: createDynamicTab(
+    () => import(/* webpackChunkName: "activity-tab" */ "@/components/tabs/activity-tab"),
+    "Activity",
+    "activity-tab"
+  ),
+  leaderboard: createDynamicTab(
+    () => import(/* webpackChunkName: "leaderboard-tab" */ "@/components/tabs/leaderboard-tab"),
+    "Ranking",
+    "leaderboard-tab"
+  ),
 };
 
 // Tab prefetching logic with de-duplication
@@ -161,18 +219,26 @@ export default function App() {
   const { wallets } = useWallets();
   const { connect, connectors } = useConnect();
   
-  // Read selected surface synchronously on initialization to avoid race conditions
-  const [surface, setSurface] = useState<'privy' | 'base' | null>(() => {
-    if (typeof window === 'undefined') return null;
+  // Initialize surface as null on server to avoid SSR hydration mismatch
+  // sessionStorage doesn't exist on server, so we populate this on client mount
+  const [surface, setSurface] = useState<'privy' | 'base' | null>(null);
+  const [surfaceInitialized, setSurfaceInitialized] = useState(false);
+  
+  // Populate surface from sessionStorage on client mount only
+  useEffect(() => {
+    if (surfaceInitialized) return;
+    
     try {
       const stored = sessionStorageManager.getAuthSurface();
       // Map 'coinbase' to 'base' for backward compatibility
-      return stored === 'coinbase' ? 'base' : stored;
+      const effectiveSurface = stored === 'coinbase' ? 'base' : stored;
+      setSurface(effectiveSurface);
     } catch (error) {
       console.warn('Failed to read surface on mount:', error);
-      return null;
     }
-  });
+    
+    setSurfaceInitialized(true);
+  }, [surfaceInitialized]);
   
   // Back navigation control: enable web navigation integration inside Mini App
   useEffect(() => {

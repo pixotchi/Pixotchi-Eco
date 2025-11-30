@@ -146,7 +146,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 | Taki | 20 | ✅ Available |
 | Rosa | 40 | ✅ Available |
 | Zest | 10 | ✅ Available (cheapest) |
-| TYJ | 500 | ✅ Limited Edition (Thank You Jesse) |
+| TYJ | 500 | ✅ Limited Edition (Thank You Jesse), ONLY mintable with JESSE token |
 
 ### Plant Health Status (Based on TOD)
 

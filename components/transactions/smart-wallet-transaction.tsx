@@ -43,9 +43,24 @@ export default function SmartWalletTransaction({
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
   }, [onSuccess]);
 
-  // Ensure success is handled once per transaction lifecycle
+  // Track transaction lifecycle to prevent race conditions where onError is called after success
   const successHandledRef = useRef(false);
+  
+  // Wrap onError to ignore errors after success has been handled
+  // This fixes OnchainKit race condition where onError can fire after successful tx
+  const handleOnError = useCallback((error: any) => {
+    if (successHandledRef.current) {
+      console.log('Ignoring post-success error callback from OnchainKit:', error);
+      return;
+    }
+    onError?.(error);
+  }, [onError]);
+
   const handleOnStatus = useCallback((status: LifecycleStatus) => {
+    // Reset the success flag when a new transaction starts
+    if (status.statusName === 'transactionPending') {
+      successHandledRef.current = false;
+    }
     if (status.statusName === 'success' && !successHandledRef.current) {
       successHandledRef.current = true;
       const receipt = status.statusData.transactionReceipts?.[0];
@@ -59,7 +74,7 @@ export default function SmartWalletTransaction({
     <Transaction
       onStatus={handleOnStatus}
       calls={calls}
-      onError={onError}
+      onError={handleOnError}
       isSponsored={isSponsored}
     >
       <TransactionButton 
