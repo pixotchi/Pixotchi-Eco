@@ -5,6 +5,11 @@ const nextConfig = {
   // https://github.com/WalletConnect/walletconnect-monorepo/issues/1908
   webpack: (config) => {
     config.externals.push("pino-pretty", "lokijs", "encoding");
+    // Resolve @solana/kit to a single version to avoid nested dependency issues
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@solana/kit": require.resolve("@solana/kit"),
+    };
     return config;
   },
   // External packages for server components
