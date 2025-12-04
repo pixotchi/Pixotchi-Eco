@@ -365,19 +365,27 @@ export default function LandsView() {
                     </div>
                   </div>
                   <div className="flex justify-end">
-                    <button 
-                      onClick={() => setIsMapOpen(true)}
-                      className="flex items-center gap-1 bg-background/50 hover:bg-background/70 transition-colors backdrop-blur-sm px-2 py-0.5 rounded-full cursor-pointer"
+                    <div 
+                      className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full"
                     >
                       <Image src="/icons/location.svg" alt="Coordinates" width={16} height={16} className="w-4 h-4" />
                       <span>({selectedLand.coordinateX.toString()}, {selectedLand.coordinateY.toString()})</span>
-                    </button>
+                    </div>
                   </div>
+                </div>
+
+                <div className="absolute bottom-3 left-3 z-20">
+                  <button
+                    onClick={() => setIsMapOpen(true)}
+                    className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                    aria-label="Open map"
+                  >
+                    MAP
+                  </button>
                 </div>
                 
                 <div 
-                  className="absolute inset-0 md:inset-8 flex items-center justify-center z-10 cursor-pointer"
-                  onClick={() => setIsMapOpen(true)}
+                  className="absolute inset-0 md:inset-8 flex items-center justify-center z-10"
                 >
                   <LandImage 
                     selectedLand={selectedLand} 
