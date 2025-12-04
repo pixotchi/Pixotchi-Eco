@@ -4,8 +4,19 @@ import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
 import { createResilientTransport } from './rpc-transport';
 
-// L2 Resolver address on Base for Basenames
-const L2_RESOLVER_ADDRESS = '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD' as const;
+// Base ENS Registrar contract - resolves addresses to .base.eth names
+const BASE_ENS_REGISTRAR = '0x0000000000D8e504002cC26E3Ec46D81971C1664' as const;
+
+// ABI for the nameForAddr function
+const BASE_ENS_REGISTRAR_ABI = [
+  {
+    inputs: [{ name: 'addr', type: 'address' }],
+    name: 'nameForAddr',
+    outputs: [{ name: 'name', type: 'string' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
 
 // Create client with our resilient RPC transport (uses app's RPC system)
 let baseClient: PublicClient<Transport, typeof base> | null = null;
@@ -72,20 +83,23 @@ function sanitiseResolvedName(address: `0x${string}`, value: string | null | und
 }
 
 /**
- * Resolve Basename using L2 Resolver on Base chain
+ * Resolve Basename using the Base ENS Registrar contract
+ * Calls nameForAddr(address) which returns the .base.eth name
  * Uses the app's custom RPC transport with fallbacks
  */
 async function resolveBasename(address: `0x${string}`): Promise<string | null> {
   const client = getBaseClient();
   
   try {
-    // Use getEnsName with the Base L2 resolver for Basename resolution
-    const name = await client.getEnsName({
-      address,
-      universalResolverAddress: L2_RESOLVER_ADDRESS,
+    const name = await client.readContract({
+      address: BASE_ENS_REGISTRAR,
+      abi: BASE_ENS_REGISTRAR_ABI,
+      functionName: 'nameForAddr',
+      args: [address],
     });
     
-    return name;
+    // Return null if empty string
+    return name && name.length > 0 ? name : null;
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
       console.log('[Identity Resolver] Basename lookup failed', error);
