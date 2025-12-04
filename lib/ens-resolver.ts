@@ -1,16 +1,14 @@
 import { createPublicClient, isAddress, type PublicClient, type Transport } from 'viem';
-import { base, mainnet } from 'viem/chains';
+import { base } from 'viem/chains';
 import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
-import { createResilientTransport, createMainnetResilientTransport } from './rpc-transport';
+import { createResilientTransport } from './rpc-transport';
 
 // L2 Resolver address on Base for Basenames
 const L2_RESOLVER_ADDRESS = '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD' as const;
 
-// Create clients with our resilient RPC transport
-// Using 'any' for client storage to avoid chain-specific type conflicts between Base and Mainnet
+// Create client with our resilient RPC transport (uses app's RPC system)
 let baseClient: PublicClient<Transport, typeof base> | null = null;
-let mainnetClient: PublicClient<Transport, typeof mainnet> | null = null;
 
 function getBaseClient(): PublicClient<Transport, typeof base> {
   if (!baseClient) {
@@ -20,16 +18,6 @@ function getBaseClient(): PublicClient<Transport, typeof base> {
     });
   }
   return baseClient;
-}
-
-function getMainnetClient(): PublicClient<Transport, typeof mainnet> {
-  if (!mainnetClient) {
-    mainnetClient = createPublicClient({
-      chain: mainnet,
-      transport: createMainnetResilientTransport(),
-    });
-  }
-  return mainnetClient;
 }
 
 async function readCache(key: string): Promise<string | null> {
@@ -85,16 +73,13 @@ function sanitiseResolvedName(address: `0x${string}`, value: string | null | und
 
 /**
  * Resolve Basename using L2 Resolver on Base chain
- * This uses our custom RPC transport instead of OnchainKit's default
+ * Uses the app's custom RPC transport with fallbacks
  */
 async function resolveBasename(address: `0x${string}`): Promise<string | null> {
   const client = getBaseClient();
   
   try {
-    // First try to get the primary name from the L2 resolver's reverse lookup
-    const reverseNode = `${address.slice(2).toLowerCase()}.addr.reverse`;
-    
-    // Use getEnsName which handles the reverse resolution
+    // Use getEnsName with the Base L2 resolver for Basename resolution
     const name = await client.getEnsName({
       address,
       universalResolverAddress: L2_RESOLVER_ADDRESS,
@@ -102,34 +87,16 @@ async function resolveBasename(address: `0x${string}`): Promise<string | null> {
     
     return name;
   } catch (error) {
-    // L2 resolver might not support this, try alternative approach
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Identity Resolver] L2 reverse lookup failed, trying ENS mainnet', error);
+      console.log('[Identity Resolver] Basename lookup failed', error);
     }
     return null;
   }
 }
 
 /**
- * Resolve ENS name from Ethereum mainnet using our custom RPC transport
- */
-async function resolveEnsName(address: `0x${string}`): Promise<string | null> {
-  const client = getMainnetClient();
-  
-  try {
-    const name = await client.getEnsName({ address });
-    return name;
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Identity Resolver] ENS mainnet lookup failed', error);
-    }
-    return null;
-  }
-}
-
-/**
- * Resolve a single address to its Basename (Base network) or ENS name
- * Uses custom RPC transport with fallbacks instead of OnchainKit defaults
+ * Resolve a single address to its Basename (Base network)
+ * Uses the app's custom RPC transport with fallbacks
  */
 export async function resolvePrimaryName(
   address: string,
@@ -149,14 +116,8 @@ export async function resolvePrimaryName(
   }
 
   try {
-    // Try Basename first (Base L2), then fall back to ENS mainnet
-    let rawName = await resolveBasename(normalised);
-    
-    // If no Basename found, try ENS on mainnet
-    if (!rawName) {
-      rawName = await resolveEnsName(normalised);
-    }
-    
+    // Resolve Basename using Base L2 resolver (uses app's RPC system)
+    const rawName = await resolveBasename(normalised);
     const name = sanitiseResolvedName(normalised, rawName ?? null);
     await writeCache(cacheKey, name);
     return name;
