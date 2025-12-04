@@ -22,7 +22,7 @@
     "@privy-io/wagmi": "2.1.0",
     "@solana/kit": "5.0.0",
     "wagmi": "2.19.4",
-    "viem": "2.41.2",
+    "viem": "2.40.4",
     "permissionless": "0.3.2",
     "next": "16.0.7",
     "react": "19.2.1",
@@ -91,6 +91,7 @@
       }
     },
     "pino": "10.1.0",
-    "thread-stream": "3.1.0"
+    "thread-stream": "3.1.0",
+    "viem": "2.40.4"
   }
 }
