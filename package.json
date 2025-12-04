@@ -91,6 +91,7 @@
       }
     },
     "pino": "10.1.0",
-    "thread-stream": "3.1.0"
+    "thread-stream": "3.1.0",
+    "viem": "2.40.4"
   }
 }
