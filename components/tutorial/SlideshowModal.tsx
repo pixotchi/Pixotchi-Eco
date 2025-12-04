@@ -94,7 +94,7 @@ export default function SlideshowModal() {
         <div className="px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between safe-area-top">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi" width={20} height={20} />
-            <span className="font-pixel text-sm">PIXOTCHI MINI</span>
+            <span className="font-pixel text-sm">TUTORIAL</span>
           </div>
           <button onClick={close} className="text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md px-2 py-1">Skip</button>
         </div>
