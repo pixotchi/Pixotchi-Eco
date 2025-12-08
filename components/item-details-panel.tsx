@@ -21,6 +21,9 @@ import type { FenceV2Config } from '@/lib/contracts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
+import { useIsSolanaWallet, SolanaNotSupported } from '@/components/solana';
+import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
+import { formatWsol } from '@/lib/solana-quote';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -41,6 +44,7 @@ export default function ItemDetailsPanel({
   const { data: walletClient } = useWalletClient();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, walletType, isLoading: smartWalletLoading } = useSmartWallet();
+  const isSolana = useIsSolanaWallet();
   const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
@@ -48,6 +52,7 @@ export default function ItemDetailsPanel({
   const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
   const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
   const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
+  const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
 
   const fenceItemName = selectedItem?.name?.toLowerCase() || '';
   const isFenceItem = fenceItemName.includes('fence') || fenceItemName.includes('shield');
@@ -60,9 +65,12 @@ export default function ItemDetailsPanel({
   const hasQuantitySelected = itemType === 'garden' ? quantity > 0 : true;
   
   // Check if user has insufficient funds
-  const hasInsufficientFunds = isFenceItem
-    ? fenceV2Quote > userSeedBalance
-    : totalCost > userSeedBalance;
+  // For Solana users, skip this check - they pay with SOL and the quote system handles validation
+  const hasInsufficientFunds = isSolana
+    ? false
+    : isFenceItem
+      ? fenceV2Quote > userSeedBalance
+      : totalCost > userSeedBalance;
   
   // Bundle transactions are only available for garden items and Smart Wallets
   const canBundle = itemType === 'garden' && quantity > 1;
@@ -300,7 +308,17 @@ export default function ItemDetailsPanel({
                   : 'Cost:'}
             </span>
             <div className="font-semibold text-destructive flex items-center gap-2">
-              {isFenceItem ? (
+              {isSolana ? (
+                solanaQuote ? (
+                  solanaQuote.error ? (
+                    <span className="text-amber-500">Quote error</span>
+                  ) : (
+                    `${formatWsol(solanaQuote.wsolAmount)} SOL`
+                  )
+                ) : (
+                  <Skeleton className="h-4 w-24" />
+                )
+              ) : isFenceItem ? (
                 fenceV2QuoteLoading ? (
                   <Skeleton className="h-4 w-20" />
                 ) : (
@@ -389,7 +407,39 @@ export default function ItemDetailsPanel({
             <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
           
-          {needsSeedApproval ? (
+          {/* Solana users: Gate fence items and bundle transactions */}
+          {isSolana && isFenceItem ? (
+            <SolanaNotSupported feature="Fence protection" />
+          ) : isSolana && canBundle && quantity > 1 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground text-center">
+                Solana bridge supports one item at a time. Select quantity of 1.
+              </p>
+              <DisabledTransaction
+                buttonText="Bundle Not Available via Bridge"
+                buttonClassName="w-full"
+              />
+            </div>
+          ) : isSolana ? (
+            // Solana bridge transaction for shop/garden items
+            <SolanaBridgeButton
+              actionType={itemType === 'shop' ? 'shopItem' : 'gardenItem'}
+              plantId={selectedPlant?.id}
+              itemId={selectedItem?.id}
+              buttonText="Buy Item via Bridge"
+              buttonClassName="w-full"
+              onQuote={setSolanaQuote}
+              disabled={!selectedPlant || !selectedItem || selectedPlant.status === 4 || (itemType === 'garden' && !hasQuantitySelected)}
+              onSuccess={(signature) => {
+                onPurchaseSuccess();
+                toast.success('Purchase submitted via bridge!');
+              }}
+              onError={(error) => {
+                const message = error instanceof Error ? error.message : String(error);
+                toast.error(getFriendlyErrorMessage(message));
+              }}
+            />
+          ) : needsSeedApproval ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground text-center">
                 Approve SEED spending once to unlock shop and garden purchases.

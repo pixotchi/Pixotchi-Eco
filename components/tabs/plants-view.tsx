@@ -48,10 +48,19 @@ import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-tra
 import ArcadeDialog from "@/components/arcade/ArcadeDialog";
 import { Gamepad2 } from "lucide-react";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
+import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
+import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 export default function PlantsView() {
-  const { address } = useAccount();
+  const { address: evmAddress } = useAccount();
+  
+  // Solana wallet support - use Twin address for Solana users
+  const isSolana = useIsSolanaWallet();
+  const twinAddress = useTwinAddress();
+  
+  // Use Twin address for Solana users, EVM address otherwise
+  const address = evmAddress || (isSolana && twinAddress ? twinAddress as `0x${string}` : undefined);
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -414,22 +423,41 @@ export default function PlantsView() {
               <div className="flex items-center gap-3 pt-2">
                 <Button variant="outline" className="flex-1" onClick={() => setClaimOpen(false)}>No</Button>
                 <div className="flex-1">
-                  <ClaimRewardsTransaction
-                    plantId={selectedPlant.id}
-                    buttonText="Yes, Claim"
-                    buttonClassName="w-full"
-                    disabled={Number(selectedPlant.rewards) <= 0}
-                    minimal
-                    onSuccess={() => {
-                      setClaimOpen(false);
-                      toast.success('Rewards claimed!');
-                      fetchData();
-                      window.dispatchEvent(new Event('balances:refresh'));
-                    }}
-                    onError={() => {
-                      toast.error('Claim failed');
-                    }}
-                  />
+                  {isSolana ? (
+                    <SolanaBridgeButton
+                      actionType="claimRewards"
+                      plantId={selectedPlant.id}
+                      buttonText="Yes, Claim"
+                      buttonClassName="w-full"
+                      disabled={Number(selectedPlant.rewards) <= 0}
+                      onSuccess={() => {
+                        setClaimOpen(false);
+                        toast.success('Rewards claimed via bridge!');
+                        fetchData();
+                        window.dispatchEvent(new Event('balances:refresh'));
+                      }}
+                      onError={() => {
+                        toast.error('Claim failed');
+                      }}
+                    />
+                  ) : (
+                    <ClaimRewardsTransaction
+                      plantId={selectedPlant.id}
+                      buttonText="Yes, Claim"
+                      buttonClassName="w-full"
+                      disabled={Number(selectedPlant.rewards) <= 0}
+                      minimal
+                      onSuccess={() => {
+                        setClaimOpen(false);
+                        toast.success('Rewards claimed!');
+                        fetchData();
+                        window.dispatchEvent(new Event('balances:refresh'));
+                      }}
+                      onError={() => {
+                        toast.error('Claim failed');
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             </DialogContent>

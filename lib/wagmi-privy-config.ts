@@ -3,7 +3,8 @@
 import { createConfig } from "@privy-io/wagmi";
 import { injected } from "wagmi/connectors";
 import { base } from "viem/chains";
-import { createResilientTransport } from "./rpc-transport";
+import { createPublicHealthTransport, getPublicHealthRpc } from "./rpc-transport";
+import { getRpcConfig } from "./env-config";
 import { baseAccountConnector } from "./base-account-connector";
 
 // Expose external EOAs and Base Account under Privy wagmi so the blue button always sees a connector
@@ -12,17 +13,28 @@ const connectors = [
   injected(),
 ];
 
-// Base chain transport with fallbacks from env config
-const baseTransport = createResilientTransport();
+const healthRpc = getPublicHealthRpc();
+const baseWithHealth = {
+  ...base,
+  rpcUrls: {
+    default: { http: [healthRpc] },
+    public: { http: [healthRpc] },
+  },
+};
+
+// Public-only transport so WalletConnect/health checks never hit custom RPCs
+const baseTransport = createPublicHealthTransport();
 
 export const wagmiPrivyConfig = createConfig({
-  chains: [base],
+  chains: [baseWithHealth],
   transports: {
     [base.id]: baseTransport,
   },
   // Expose common external connectors so OnchainKit ConnectWallet can attach in web mode
   connectors,
-  pollingInterval: 500, // Faster polling to match Base block times (~2s)
+  // Match production behavior: rely on viem defaults for chain RPC list and keep modest polling
+  // Lower frequency to reduce background health probes (5 minutes)
+  pollingInterval: 300_000,
   ssr: true,
 });
 

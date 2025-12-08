@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -31,6 +31,10 @@ import { ToggleGroup } from '@/components/ui/toggle-group';
 import LandMintTransaction from '../transactions/land-mint-transaction';
 import { MintShareModal } from '@/components/mint-share-modal';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
+import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported, useSolanaBridge, useSolanaWallet } from '@/components/solana';
+import { usePrivy } from '@privy-io/react-auth';
+import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
+import { Transaction } from '@solana/web3.js';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
@@ -45,11 +49,19 @@ const PLANT_STATIC_IMAGES = [
 ];
 
 export default function MintTab() {
-  const { address, chainId } = useAccount();
+  const { address: evmAddress, chainId } = useAccount();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
   const frameContext = useFrameContext();
+  
+  // Solana wallet support
+  const isSolana = useIsSolanaWallet();
+  const twinAddress = useTwinAddress();
+  
+  // Use Twin address for Solana users, EVM address otherwise
+  const address = evmAddress || (isSolana && twinAddress ? twinAddress as `0x${string}` : undefined);
+  const isConnected = !!evmAddress || isSolana;
   const farcasterUser =
     typeof frameContext?.context === 'object'
       ? (frameContext.context as any)?.user
@@ -222,7 +234,733 @@ export default function MintTab() {
     fetchData();
   }, [address, forcedFetchCount, mintType, chainId]);
 
-  const renderPlantMinting = () => (
+  // Solana bridge minting (only used when isSolana is true)
+  const bridge = useSolanaBridge();
+  const { needsSetup } = bridge;
+  const solanaWalletHook = useSolanaWallet();
+  // Use Solana-specific hooks from @privy-io/react-auth/solana
+  const { wallets: solanaWallets } = useSolanaWallets();
+  const { user, authenticated } = usePrivy();
+  const { signAndSendTransaction: privySignAndSendTransaction } = useSignAndSendTransaction();
+  
+  // Find Solana wallet from connected wallets
+  const solanaWallet = useMemo(() => {
+    if (!isSolana) {
+      return null;
+    }
+    
+    // Debug: log all Solana wallets
+    console.log('[SolanaMint] Looking for Solana wallet:', {
+      authenticated,
+      solanaWalletsCount: solanaWallets?.length || 0,
+      linkedAccountsCount: user?.linkedAccounts?.length || 0,
+    });
+    
+    // Use the first Solana wallet from the Solana-specific hook
+    if (solanaWallets && solanaWallets.length > 0) {
+      console.log('[SolanaMint] Available Solana wallets:', solanaWallets.map(w => ({
+        address: w.address,
+      })));
+      
+      // Return the first Solana wallet
+      const wallet = solanaWallets[0];
+      console.log('[SolanaMint] Using Solana wallet:', wallet.address);
+      return wallet;
+    }
+    
+    // Fallback: Check user's linked accounts for Solana wallet info
+    if (user?.linkedAccounts) {
+      console.log('[SolanaMint] Checking linked accounts:', user.linkedAccounts.map(a => ({
+        type: a.type,
+        address: 'address' in a ? a.address : undefined,
+        chainType: 'chainType' in a ? (a as any).chainType : undefined,
+      })));
+      
+      for (const account of user.linkedAccounts) {
+        if (account.type === 'wallet' && 'chainType' in account && (account as any).chainType === 'solana') {
+          console.log('[SolanaMint] Found Solana wallet in linked accounts:', (account as any).address);
+          return account as any;
+        }
+      }
+    }
+    
+    console.log('[SolanaMint] No Solana wallet found');
+    return null;
+  }, [isSolana, solanaWallets, user, authenticated]);
+  
+  const [solanaMintLoading, setSolanaMintLoading] = useState(false);
+  const [solQuote, setSolQuote] = useState<{ wsolAmount: bigint; seedAmount: bigint } | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const { getQuote } = bridge;
+  
+  // Fetch SOL quote when strain is selected (for Solana users only)
+  useEffect(() => {
+    if (!isSolana || !selectedStrain) {
+      setSolQuote(null);
+      setQuoteError(null);
+      return;
+    }
+    
+    let cancelled = false;
+    
+    const fetchQuote = async () => {
+      setQuoteLoading(true);
+      setQuoteError(null);
+      try {
+        console.log('[SolanaMint] Fetching quote for strain:', selectedStrain.id);
+        // Use the bridge hook's getQuote method
+        const quote = await getQuote('mint', { strain: selectedStrain.id });
+        if (!cancelled && quote) {
+          // Debug: log the quote structure
+          console.log('[SolanaMint] Quote received:', {
+            wsolAmount: quote.wsolAmount,
+            wsolAmountType: typeof quote.wsolAmount,
+            seedAmount: quote.seedAmount,
+            seedAmountType: typeof quote.seedAmount,
+            error: quote.error,
+            route: quote.route,
+          });
+          
+          // Ensure we're comparing BigInt values (handle string conversion if needed)
+          const wsolAmount = typeof quote.wsolAmount === 'bigint' 
+            ? quote.wsolAmount 
+            : BigInt(quote.wsolAmount || 0);
+          const seedAmount = typeof quote.seedAmount === 'bigint' 
+            ? quote.seedAmount 
+            : BigInt(quote.seedAmount || 0);
+          
+          // Only treat as error if quote data is invalid (no valid amounts)
+          // Even if there's an error field, if we have valid quote data, use it
+          const hasValidQuoteData = wsolAmount > BigInt(0) && seedAmount > BigInt(0);
+          
+          console.log('[SolanaMint] Quote validation:', {
+            hasValidQuoteData,
+            wsolAmount: wsolAmount.toString(),
+            seedAmount: seedAmount.toString(),
+            hasError: !!quote.error,
+          });
+          
+          if (hasValidQuoteData) {
+            // Use the quote even if there's an error field (might be a warning)
+            // Always prioritize valid data over error messages
+            setSolQuote({
+              wsolAmount,
+              seedAmount,
+            });
+            setQuoteError(null); // Clear any previous errors
+            console.log('[SolanaMint] Quote accepted and stored:', {
+              wsolAmount: Number(wsolAmount) / 1e9,
+              seedAmount: Number(seedAmount) / 1e18,
+              route: quote.route,
+              storedSolQuote: { wsolAmount: wsolAmount.toString(), seedAmount: seedAmount.toString() },
+            });
+          } else {
+            // No valid data - show error
+            console.error('[SolanaMint] Quote validation failed:', {
+              wsolAmount: wsolAmount.toString(),
+              seedAmount: seedAmount.toString(),
+              wsolAmountIsZero: wsolAmount === BigInt(0),
+              seedAmountIsZero: seedAmount === BigInt(0),
+              originalQuote: {
+                wsolAmount: quote.wsolAmount?.toString(),
+                seedAmount: quote.seedAmount?.toString(),
+                minSeedOut: quote.minSeedOut?.toString(),
+                error: quote.error,
+                route: quote.route,
+              },
+            });
+            setSolQuote(null);
+            // Provide more specific error message
+            let errorMessage = quote.error || 'Failed to get quote';
+            if (wsolAmount === BigInt(0) && seedAmount === BigInt(0)) {
+              errorMessage = quote.error || 'Quote returned zero amounts. Please try again.';
+            } else if (wsolAmount === BigInt(0)) {
+              errorMessage = 'Quote returned zero wSOL amount. Please try again.';
+            } else if (seedAmount === BigInt(0)) {
+              errorMessage = 'Quote returned zero SEED amount. Please try again.';
+            }
+            setQuoteError(errorMessage);
+          }
+        } else if (!cancelled && !quote) {
+          setQuoteError('Failed to get quote');
+        }
+      } catch (err) {
+        console.error('[SolanaMint] Quote fetch failed:', err);
+        if (!cancelled) {
+          setSolQuote(null);
+          setQuoteError(err instanceof Error ? err.message : 'Quote failed');
+        }
+      } finally {
+        if (!cancelled) {
+          setQuoteLoading(false);
+        }
+      }
+    };
+    
+    fetchQuote();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [isSolana, selectedStrain, getQuote]);
+
+  const handleSolanaSetup = async () => {
+    if (!solanaWallet) {
+      toast.error('Please connect your Solana wallet');
+      return;
+    }
+    
+    if (!privySignAndSendTransaction) {
+      toast.error('Transaction signing not available.');
+      return;
+    }
+
+    setSolanaMintLoading(true);
+    try {
+      console.log('[SolanaMint] Preparing setup transaction...');
+      const tx = await bridge.prepareSetup();
+      
+      if (!tx) {
+        const errorMsg = bridge.state.error || 'Failed to prepare setup transaction';
+        throw new Error(errorMsg);
+      }
+
+      console.log('[SolanaMint] Setup transaction prepared. Signing and sending...');
+      
+      // Import the bridge implementation to build the actual Solana transaction
+      const { solanaBridgeImplementation } = await import('@/lib/solana-bridge-implementation');
+      const { PublicKey } = await import('@solana/web3.js');
+      const { SOLANA_BRIDGE_CONFIG } = await import('@/lib/solana-constants');
+      
+      // Build the Solana transaction
+      const walletPubkey = new PublicKey(solanaWalletHook.solanaAddress!);
+      const asset = {
+        symbol: 'sol',
+        label: 'SOL',
+        type: 'sol' as const,
+        decimals: 9,
+        remoteAddress: SOLANA_BRIDGE_CONFIG.base.wrappedSOL.toLowerCase(),
+      };
+      
+      const callOptions = tx.params.call ? {
+        type: 'call' as const,
+        target: tx.params.call.target,
+        data: tx.params.call.data,
+        value: '0',
+      } : undefined;
+      
+      const solanaTransaction = await solanaBridgeImplementation.createBridgeTransaction({
+        walletAddress: walletPubkey,
+        amount: tx.params.solAmount,
+        destinationAddress: tx.params.twinAddress,
+        asset,
+        call: callOptions,
+        gasLimit: tx.params.gasLimit,
+      });
+      
+      // Serialize for Privy
+      const transactionBytes = solanaTransaction.serialize({
+        requireAllSignatures: false,
+        verifySignatures: false,
+      });
+      
+      console.log('[SolanaMint] Calling Privy signAndSendTransaction...');
+      const result = await privySignAndSendTransaction({
+        transaction: new Uint8Array(transactionBytes),
+        wallet: solanaWallet,
+      });
+      
+      console.log('[SolanaMint] Transaction sent! Signature:', result.signature);
+      
+      if (result.signature) {
+        toast.success('Bridge setup initiated! Waiting for relay to Base...');
+        window.dispatchEvent(new Event('balances:refresh'));
+        
+        // Bridge relay can take 15-60+ seconds depending on Solana finality and relayer speed
+        // Poll for setup completion with increasing intervals
+        console.log('[SolanaMint] Waiting for bridge relay to Base...');
+        
+        let setupComplete = false;
+        const pollIntervals = [5000, 10000, 15000, 20000, 30000]; // 5s, 10s, 15s, 20s, 30s
+        
+        for (let i = 0; i < pollIntervals.length && !setupComplete; i++) {
+          const delay = pollIntervals[i];
+          console.log(`[SolanaMint] Polling for setup status in ${delay/1000}s (attempt ${i + 1}/${pollIntervals.length})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          try {
+            await solanaWalletHook.refresh();
+            // Check if setup is now complete (needsSetup should become false)
+            // We need to check the fresh value, so we'll check in next render
+            // For now, we just refresh and hope it updated
+            console.log('[SolanaMint] Refreshed Twin info, checking status...');
+            setupComplete = true; // Exit after one successful refresh post-relay
+          } catch (refreshError) {
+            console.warn('[SolanaMint] Refresh failed, will retry:', refreshError);
+          }
+        }
+        
+        if (setupComplete) {
+          toast.success('Bridge setup complete! You can now mint.');
+          console.log('[SolanaMint] Setup complete! UI should update.');
+        } else {
+          toast('Setup transaction sent. Please refresh in a minute if button doesn\'t update.', { icon: 'ℹ️' });
+        }
+      }
+    } catch (error) {
+      console.error('[SolanaMint] Setup error:', error);
+      toast.error(error instanceof Error ? error.message : 'Setup failed');
+    } finally {
+      setSolanaMintLoading(false);
+      bridge.reset();
+    }
+  };
+
+  const handleSolanaMint = async () => {
+    if (!selectedStrain || !solanaWallet) {
+      toast.error('Please connect your Solana wallet');
+      return;
+    }
+
+    if (needsSetup) {
+      await handleSolanaSetup();
+      return;
+    }
+    
+    // Check if Privy's signAndSendTransaction hook is available
+    if (!privySignAndSendTransaction) {
+      toast.error('Transaction signing not available. Please ensure your wallet is connected.');
+      return;
+    }
+    
+    setSolanaMintLoading(true);
+    try {
+      // V2: Check if we have a valid quote (no swap data needed - contract does on-chain swap)
+      if (!bridge.state.quote || !bridge.state.quote.wsolAmount || bridge.state.quote.wsolAmount <= BigInt(0)) {
+        console.warn('[SolanaMint] No valid quote, fetching new quote...');
+        const freshQuote = await bridge.getQuote('mint', { strain: selectedStrain.id });
+        if (!freshQuote || !freshQuote.wsolAmount || freshQuote.wsolAmount <= BigInt(0)) {
+          const errorMsg = freshQuote?.error || 'Failed to get quote. Please try again.';
+          console.error('[SolanaMint] Fresh quote fetch failed:', {
+            hasQuote: !!freshQuote,
+            wsolAmount: freshQuote?.wsolAmount?.toString(),
+            error: freshQuote?.error,
+          });
+          throw new Error(errorMsg);
+        }
+        console.log('[SolanaMint] Fresh quote obtained (V2):', {
+          wsolAmount: freshQuote.wsolAmount?.toString(),
+          minSeedOut: freshQuote.minSeedOut?.toString(),
+        });
+      }
+      
+      // Prepare the mint transaction (V2 - on-chain swap)
+      console.log('[SolanaMint] Preparing mint transaction...', {
+        currentBridgeState: {
+          status: bridge.state.status,
+          error: bridge.state.error,
+          hasQuote: !!bridge.state.quote,
+          hasTransaction: !!bridge.state.transaction,
+        },
+      });
+      
+      // Capture error state before calling prepareMint
+      const errorStateBefore = bridge.state.error;
+      
+      const tx = await bridge.prepareMint(selectedStrain.id);
+      
+      // Wait a tick to ensure state has updated, then check again
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      if (!tx) {
+        // Check both before and after state
+        const errorMsg = bridge.state.error || errorStateBefore || 'Failed to prepare mint transaction';
+        
+        console.error('[SolanaMint] prepareMint returned null:', {
+          errorBefore: errorStateBefore,
+          errorAfter: bridge.state.error,
+          finalError: errorMsg,
+          bridgeState: {
+            status: bridge.state.status,
+            error: bridge.state.error,
+            hasQuote: !!bridge.state.quote,
+            hasTransaction: !!bridge.state.transaction,
+          },
+          quoteState: bridge.state.quote ? {
+            wsolAmount: bridge.state.quote.wsolAmount?.toString(),
+            seedAmount: bridge.state.quote.seedAmount?.toString(),
+            minSeedOut: bridge.state.quote.minSeedOut?.toString(),
+            error: bridge.state.quote.error,
+            route: bridge.state.quote.route,
+          } : 'no quote',
+        });
+        
+        // Ensure we always have a meaningful error message
+        if (!errorMsg || errorMsg === 'Failed to prepare mint transaction') {
+          throw new Error('Transaction preparation failed. Please check console for details and try again.');
+        }
+        
+        throw new Error(errorMsg);
+      }
+      
+      console.log('[SolanaMint] Transaction prepared successfully:', {
+        hasTransaction: !!tx,
+        actionType: tx.actionType,
+        description: tx.description,
+      });
+      
+      // Show quote info
+      if (bridge.state.quote) {
+        const wsolNeeded = Number(bridge.state.quote.wsolAmount) / 1e9;
+        console.log(`[SolanaMint] Will spend ~${wsolNeeded.toFixed(4)} SOL for ${selectedStrain.mintPrice} SEED`);
+      }
+      
+      // Build and send the bridge transaction using Privy
+      console.log('[SolanaMint] Building Solana bridge transaction...');
+      
+      // Import the bridge implementation to build the actual Solana transaction
+      const { solanaBridgeImplementation } = await import('@/lib/solana-bridge-implementation');
+      const { PublicKey } = await import('@solana/web3.js');
+      const { SOLANA_BRIDGE_CONFIG } = await import('@/lib/solana-constants');
+      
+      // Build the Solana transaction
+      const walletPubkey = new PublicKey(solanaWalletHook.solanaAddress!);
+      const asset = {
+        symbol: 'sol',
+        label: 'SOL',
+        type: 'sol' as const,
+        decimals: 9,
+        remoteAddress: SOLANA_BRIDGE_CONFIG.base.wrappedSOL.toLowerCase(),
+      };
+      
+      const callOptions = tx.params.call ? {
+        type: 'call' as const,
+        target: tx.params.call.target,
+        data: tx.params.call.data,
+        value: '0',
+      } : undefined;
+      
+      console.log('[SolanaMint] Creating bridge transaction with params:', {
+        walletAddress: walletPubkey.toBase58(),
+        amount: tx.params.solAmount.toString(),
+        destinationAddress: tx.params.twinAddress,
+        hasCall: !!callOptions,
+        callTarget: callOptions?.target,
+        callDataLength: callOptions?.data?.length || 0,
+      });
+      
+      const solanaTransaction = await solanaBridgeImplementation.createBridgeTransaction({
+        walletAddress: walletPubkey,
+        amount: tx.params.solAmount,
+        destinationAddress: tx.params.twinAddress,
+        asset,
+        call: callOptions,
+        gasLimit: tx.params.gasLimit,
+      });
+      
+      // Debug transaction before serialization
+      console.log('[SolanaMint] Transaction created:', {
+        numInstructions: solanaTransaction.instructions?.length,
+        feePayer: solanaTransaction.feePayer?.toBase58(),
+        hasBlockhash: !!solanaTransaction.recentBlockhash,
+        instructionDataLengths: solanaTransaction.instructions?.map(ix => ix.data?.length),
+      });
+      
+      // Serialize for Privy
+      let transactionBytes: Uint8Array;
+      try {
+        transactionBytes = solanaTransaction.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        });
+      } catch (serializeError) {
+        console.error('[SolanaMint] Serialization error:', serializeError);
+        
+        // If error is RangeError, it might be because the transaction is missing required fields
+        // Try alternative serialization method
+        try {
+          console.log('[SolanaMint] Trying alternative serialization...');
+          const message = solanaTransaction.compileMessage();
+          const compiledTransaction = new (await import('@solana/web3.js')).VersionedTransaction(message);
+          transactionBytes = compiledTransaction.serialize();
+          console.log('[SolanaMint] Alternative serialization successful');
+        } catch (altError) {
+          console.error('[SolanaMint] Alternative serialization failed:', altError);
+          
+          console.error('[SolanaMint] Raw instruction details:', 
+            solanaTransaction.instructions?.map((ix, i) => ({
+              index: i,
+              programId: ix.programId?.toBase58(),
+              dataLength: ix.data?.length,
+              dataType: typeof ix.data,
+              isBuffer: ix.data instanceof Uint8Array || (ix.data && 'buffer' in ix.data),
+            }))
+          );
+          throw new Error(`Transaction serialization failed: ${serializeError instanceof Error ? serializeError.message : String(serializeError)}`);
+        }
+      }
+      
+      console.log('[SolanaMint] Signing and sending transaction with Privy:', {
+        transactionSize: transactionBytes.length,
+        walletAddress: solanaWallet.address,
+      });
+      
+      // Check if transaction is too large for Solana (max 1232 bytes)
+      if (transactionBytes.length > 1232) {
+        console.warn('[SolanaMint] Transaction may be too large:', transactionBytes.length, 'bytes');
+      }
+      
+      // Sign and send using Privy's hook
+      const result = await privySignAndSendTransaction({
+        transaction: new Uint8Array(transactionBytes),
+        wallet: solanaWallet,
+      });
+      
+      console.log('[SolanaMint] Transaction sent! Signature:', result.signature);
+      
+      if (result.signature) {
+        toast.success('Plant minted successfully via Solana bridge!');
+        incrementForcedFetch();
+        window.dispatchEvent(new Event('balances:refresh'));
+      }
+    } catch (error) {
+      console.error('[SolanaMint] Error:', error);
+      toast.error(error instanceof Error ? error.message : 'Mint failed');
+    } finally {
+      setSolanaMintLoading(false);
+      bridge.reset();
+    }
+  };
+
+  const renderPlantMinting = () => {
+    // For Solana users, show bridge minting UI
+    if (isSolana) {
+      const isLoading = solanaMintLoading || ['building', 'quoting', 'signing', 'bridging'].includes(bridge.state.status);
+      const statusText: Record<string, string> = {
+        quoting: 'Getting SOL quote...',
+        building: 'Building transaction...',
+        signing: 'Sign in your wallet...',
+        bridging: 'Bridging to Base...',
+        confirming: 'Confirming...',
+      };
+      const currentStatusText = statusText[bridge.state.status] || '';
+
+      return (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Choose a Strain</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between">
+                    {selectedStrain ? (
+                      <div className="flex items-center space-x-2">
+                        <Image src={PLANT_STATIC_IMAGES[selectedStrain.id -1]} alt={selectedStrain.name} width={24} height={24} />
+                        <span>{selectedStrain.name}</span>
+                      </div>
+                    ) : (
+                      'Select a Strain'
+                    )}
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                  {strains.map(strain => {
+                    const isSoldOut = strain.maxSupply - strain.totalMinted <= 0;
+                    return (
+                      <DropdownMenuItem 
+                        key={strain.id} 
+                        onSelect={() => !isSoldOut && setSelectedStrain(strain)}
+                        disabled={isSoldOut}
+                        className={isSoldOut ? 'text-muted-foreground' : ''}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <div className={`flex items-center space-x-2 ${isSoldOut ? 'line-through' : ''}`}>
+                            <Image src={PLANT_STATIC_IMAGES[strain.id - 1]} alt={strain.name} width={24} height={24} />
+                            <span>{strain.name}</span>
+                          </div>
+                          {isSoldOut && (
+                            <span className="text-xs font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full">
+                              SOLD OUT
+                            </span>
+                          )}
+                        </div>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </CardContent>
+          </Card>
+
+          {selectedStrain && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Price</span>
+                  <div className="flex items-center space-x-1 font-semibold">
+                    <Image 
+                      src={getTokenLogo(selectedStrain.paymentToken)} 
+                      alt={paymentTokenSymbol} 
+                      width={16} 
+                      height={16} 
+                    />
+                    <span>
+                      {selectedStrain.paymentPrice 
+                        ? formatTokenAmount(selectedStrain.paymentPrice)
+                        : formatNumber(selectedStrain.mintPrice)
+                      } {paymentTokenSymbol}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Available</span>
+                  <span className="font-semibold">{formatNumber(selectedStrain.maxSupply - selectedStrain.totalMinted)} / {formatNumber(selectedStrain.maxSupply)}</span>
+                </div>
+                {quoteLoading && (
+                  <div className="flex justify-between items-center border-t pt-3 mt-3">
+                    <span className="text-muted-foreground">Est. SOL Cost</span>
+                    <span className="text-sm text-muted-foreground animate-pulse">Loading...</span>
+                  </div>
+                )}
+                {!quoteLoading && solQuote && solQuote.wsolAmount > BigInt(0) && (
+                  <div className="flex justify-between items-center border-t pt-3 mt-3">
+                    <span className="text-muted-foreground">Est. SOL Cost</span>
+                    <div className="flex items-center space-x-1 font-semibold text-purple-400">
+                      <Image src="/icons/solana.svg" alt="SOL" width={16} height={16} />
+                      <span>~{(Number(solQuote.wsolAmount) / 1e9).toFixed(4)} SOL</span>
+                    </div>
+                  </div>
+                )}
+                {!quoteLoading && quoteError && (
+                  <div className="flex justify-between items-center border-t pt-3 mt-3">
+                    <span className="text-muted-foreground">Est. SOL Cost</span>
+                    <span className="text-xs text-red-400">Error: {quoteError}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Solana Bridge Minting */}
+          <Card className="border-purple-500/30 bg-purple-500/5">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">🌉</div>
+                <div>
+                  <h3 className="text-lg font-semibold text-purple-400">Mint via Solana Bridge</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Your SOL will be bridged and swapped to SEED automatically
+                  </p>
+                </div>
+              </div>
+              
+              {/* Status message */}
+              {currentStatusText && (
+                <div className="flex items-center gap-2 text-sm text-purple-400">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  {currentStatusText}
+                </div>
+              )}
+              
+              {/* Error message */}
+              {bridge.state.error && (
+                <div className="text-sm text-red-400 bg-red-500/10 p-2 rounded">
+                  {bridge.state.error}
+                </div>
+              )}
+              
+              {/* Success message */}
+              {bridge.state.status === 'success' && bridge.state.signature && (
+                <div className="text-sm text-green-400 bg-green-500/10 p-2 rounded">
+                  ✅ Mint successful!{' '}
+                  <a 
+                    href={`https://explorer.solana.com/tx/${bridge.state.signature}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    View on Solana Explorer
+                  </a>
+                </div>
+              )}
+              
+              {/* Debug info - shows wallet detection status */}
+              {isSolana && (
+                <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded mb-2">
+                  <div>🔗 Solana Address: {solanaWalletHook.solanaAddress?.slice(0, 8)}...{solanaWalletHook.solanaAddress?.slice(-4) || 'Not found'}</div>
+                  <div>🏠 Twin Address: {twinAddress?.slice(0, 8)}...{twinAddress?.slice(-4) || 'Not found'}</div>
+                  <div>💼 Wallet object: {solanaWallet ? '✅ Found' : '❌ Not found'} (from {solanaWallets?.length || 0} Solana wallets)</div>
+                  <div>🔧 Setup Status: {needsSetup ? '❌ Needs Setup' : '✅ Ready'} | Twin Deployed: {solanaWalletHook.twinInfo?.isDeployed ? '✅' : '❌'}</div>
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={async () => {
+                        console.log('[SolanaMint] Manual refresh triggered');
+                        await solanaWalletHook.refresh();
+                        console.log('[SolanaMint] Manual refresh complete, isTwinSetup:', solanaWalletHook.isTwinSetup);
+                      }}
+                      className="text-xs underline text-blue-400 hover:text-blue-300"
+                    >
+                      🔄 Refresh Status
+                    </button>
+                  </div>
+                  {!solanaWallet && (
+                    <div className="text-yellow-500 mt-1">
+                      ⚠️ Cannot sign transactions - wallet object not available
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <Button 
+                onClick={handleSolanaMint}
+                disabled={!selectedStrain || isLoading || !solanaWallet || (!needsSetup && (quoteLoading || !solQuote))}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    {currentStatusText || 'Processing...'}
+                  </span>
+                ) : !selectedStrain ? (
+                  'Select a Strain'
+                ) : quoteLoading ? (
+                  'Loading quote...'
+                ) : !solQuote ? (
+                  'Quote unavailable'
+                ) : !solanaWallet ? (
+                  'Wallet not ready'
+                ) : needsSetup ? (
+                  'Setup Bridge Access'
+                ) : (
+                  `Mint ${selectedStrain.name} for ~${(Number(solQuote.wsolAmount) / 1e9).toFixed(4)} SOL`
+                )}
+              </Button>
+              
+              <p className="text-xs text-muted-foreground text-center">
+                Twin Address: {twinAddress ? `${twinAddress.slice(0, 6)}...${twinAddress.slice(-4)}` : 'Loading...'}
+              </p>
+            </CardContent>
+          </Card>
+        </>
+      );
+    }
+
+    // Regular EVM wallet minting
+    return (
     <>
       <Card>
         <CardHeader>
@@ -431,6 +1169,7 @@ export default function MintTab() {
       </div>
     </>
   );
+  };
 
   const renderLandMinting = () => (
     <>
@@ -511,7 +1250,7 @@ export default function MintTab() {
   );
 
   const renderContent = () => {
-  if (!address) {
+  if (!isConnected) {
     return (
         <Card className="text-center p-6">
           <h3 className="text-lg font-semibold mb-2">Connect Wallet</h3>
@@ -528,6 +1267,9 @@ export default function MintTab() {
         )
   }
 
+  // Solana users can only mint plants, not lands
+  const showLandOption = !isSolana;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -542,20 +1284,37 @@ export default function MintTab() {
                   ? 'Plant your SEED and mint your very own Pixotchi Plant NFT. Each strain has a unique look and feel.'
                   : 'Expand your onchain farm by minting a new land plot. Lands unlock new buildings and opportunities.'}
               </p>
+              {isSolana && (
+                <p className="text-xs text-purple-400">
+                  🌐 Connected via Solana Bridge
+                </p>
+              )}
             </div>
-            <ToggleGroup
-              value={mintType}
-              onValueChange={(v) => setMintType(v as 'plant' | 'land')}
-              options={[
-                { value: 'plant', label: 'Plants' },
-                { value: 'land', label: 'Lands' },
-              ]}
-            />
+            {showLandOption ? (
+              <ToggleGroup
+                value={mintType}
+                onValueChange={(v) => setMintType(v as 'plant' | 'land')}
+                options={[
+                  { value: 'plant', label: 'Plants' },
+                  { value: 'land', label: 'Lands' },
+                ]}
+              />
+            ) : (
+              // Solana users only see Plants tab
+              <div className="text-xs text-muted-foreground">
+                Plants only
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {mintType === 'plant' ? renderPlantMinting() : renderLandMinting()}
+      {/* Show land not supported for Solana users if they somehow got to land view */}
+      {mintType === 'land' && isSolana ? (
+        <SolanaNotSupported feature="Land minting" />
+      ) : (
+        mintType === 'plant' ? renderPlantMinting() : renderLandMinting()
+      )}
 
       <MintShareModal
         open={showShareModal}

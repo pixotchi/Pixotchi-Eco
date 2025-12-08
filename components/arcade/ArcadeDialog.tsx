@@ -16,6 +16,7 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { keccak256, encodePacked, toHex, hexToBytes, parseAbiItem, RpcRequestError } from "viem";
+import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
 
 type ArcadeDialogProps = {
   open: boolean;
@@ -140,6 +141,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const publicClient = usePublicClient();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
+  const isSolana = useIsSolanaWallet();
   const [selectedGame, setSelectedGame] = useState<GameId>("box");
   const [seed, setSeed] = useState<number | null>(null);
   const [withStar, setWithStar] = useState(false);
@@ -820,6 +822,22 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   const currentCooldown = withStar ? cooldown.star : cooldown.normal;
   const disabled = !seed || !address || currentCooldown > 0;
+
+  // Gate arcade games for Solana users
+  if (isSolana) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md w-[min(92vw,28rem)]">
+          <DialogHeader>
+            <DialogTitle>Arcade</DialogTitle>
+          </DialogHeader>
+          <div className="py-6">
+            <SolanaNotSupported feature="Arcade games" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

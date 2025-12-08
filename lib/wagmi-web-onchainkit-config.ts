@@ -2,7 +2,7 @@
 
 import { createConfig } from "wagmi";
 import { base } from "viem/chains";
-import { createResilientTransport } from "./rpc-transport";
+import { createPublicHealthTransport, getPublicHealthRpc } from "./rpc-transport";
 import { baseAccountConnector } from "./base-account-connector";
 
 const connectors = [
@@ -10,16 +10,26 @@ const connectors = [
   baseAccountConnector({ displayName: "Sign in with Base" }),
 ];
 
-// Base chain transport with fallbacks from env config
-const baseTransport = createResilientTransport();
+const healthRpc = getPublicHealthRpc();
+const baseWithHealth = {
+  ...base,
+  rpcUrls: {
+    default: { http: [healthRpc] },
+    public: { http: [healthRpc] },
+  },
+};
+
+// Public-only transport so health checks stay off custom RPCs
+const baseTransport = createPublicHealthTransport();
 
 export const wagmiWebOnchainkitConfig = createConfig({
-  chains: [base],
+  chains: [baseWithHealth],
   transports: {
     [base.id]: baseTransport,
   },
   connectors,
-  pollingInterval: 500, // Faster polling to match Base block times (~2s)
+  // Reduce health/polling frequency (5 minutes)
+  pollingInterval: 300_000,
   ssr: true,
 });
 

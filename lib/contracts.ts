@@ -7,7 +7,7 @@ import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { CLIENT_ENV } from './env-config';
-import { createResilientTransport, getRpcEndpoints } from './rpc-transport';
+import { createResilientTransport, getPublicHealthRpc } from './rpc-transport';
 export { getRpcDiagnostics } from './rpc-transport';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
@@ -222,19 +222,22 @@ let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
 
 // Create optimized read client for data fetching
+const healthRpc = getPublicHealthRpc();
+const baseWithHealth = {
+  ...base,
+  rpcUrls: {
+    default: { http: [healthRpc] },
+    public: { http: [healthRpc] },
+  },
+};
+
 export const getReadClient = () => {
   if (!cachedReadClient) {
-    const endpoints = getRpcEndpoints();
-    
-    // Only log in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔗 Creating READ client with configured RPC endpoints');
-    }
-    
     cachedReadClient = createPublicClient({
-      chain: base,
-      transport: createResilientTransport(endpoints),
-      pollingInterval: 500, // Faster polling to match Base block times (~2s)
+      chain: baseWithHealth,
+      transport: createResilientTransport([healthRpc]),
+      // Slow polling to minimize background health checks; explicit calls still work immediately
+      pollingInterval: 300_000,
     });
   }
   return cachedReadClient;
@@ -243,17 +246,10 @@ export const getReadClient = () => {
 // Create optimized write client for transactions
 const getWriteClient = () => {
   if (!cachedWriteClient) {
-    const endpoints = getRpcEndpoints();
-    
-    // Only log in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔗 Creating WRITE client with configured RPC endpoints');
-    }
-    
     cachedWriteClient = createPublicClient({
-      chain: base,
-      transport: createResilientTransport(endpoints),
-      pollingInterval: 500, // Faster polling to match Base block times (~2s)
+      chain: baseWithHealth,
+      transport: createResilientTransport([healthRpc]),
+      pollingInterval: 300_000,
     });
   }
   return cachedWriteClient;

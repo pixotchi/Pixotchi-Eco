@@ -24,8 +24,19 @@ import LandImage from "../LandImage";
 import { EditLandName } from "@/components/edit-land-name";
 import { LandMapModal } from "@/components/map/land-map-modal";
 import { useLandMap } from "@/hooks/useLandMap";
+import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
 
 export default function LandsView() {
+  // Gate: Solana wallets cannot use Land features
+  const isSolana = useIsSolanaWallet();
+  
+  if (isSolana) {
+    return (
+      <div className="p-4">
+        <SolanaNotSupported feature="Land NFTs and building management" />
+      </div>
+    );
+  }
   const { address } = useAccount();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);

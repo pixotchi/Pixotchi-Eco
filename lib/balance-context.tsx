@@ -4,7 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode,
 import { useAccount } from 'wagmi';
 import { usePublicClient } from 'wagmi';
 import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
-import { leafAbi } from '@/public/abi/leaf-abi'; 
+import { leafAbi } from '@/public/abi/leaf-abi';
+import { useSolanaWalletContext } from '@/lib/solana-wallet-context';
 
 interface BalanceContextType {
   seedBalance: bigint;
@@ -34,11 +35,18 @@ function debounce<T extends (...args: any[]) => any>(
 }
 
 export function BalanceProvider({ children }: { children: ReactNode }) {
-  const { address, isConnected } = useAccount();
+  const { address: evmAddress, isConnected: isEvmConnected } = useAccount();
   const publicClient = usePublicClient();
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [leafBalance, setLeafBalance] = useState<bigint>(BigInt(0));
   const [loading, setLoading] = useState(true);
+  
+  // Get Solana wallet info - use Twin address for balance queries
+  const { twinAddress, isConnected: isSolanaConnected } = useSolanaWalletContext();
+  
+  // Use EVM address for EVM wallets, Twin address for Solana wallets
+  const address = evmAddress || (isSolanaConnected ? twinAddress as `0x${string}` : undefined);
+  const isConnected = isEvmConnected || isSolanaConnected;
   
   // Request deduplication (only for concurrent requests, not for login)
   const pendingRequestRef = useRef<Promise<void> | null>(null);

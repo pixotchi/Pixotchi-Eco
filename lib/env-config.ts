@@ -35,6 +35,14 @@ export const CLIENT_ENV = {
 
   // Optional: Batch router for bulk ERC-721 transfers
   BATCH_ROUTER_ADDRESS: process.env.NEXT_PUBLIC_BATCH_ROUTER_ADDRESS,
+  
+  // Solana Bridge Configuration
+  SOLANA_ENABLED: process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true',
+  SOLANA_NETWORK: (process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'mainnet') as 'mainnet' | 'devnet',
+  SOLANA_TWIN_ADAPTER: process.env.NEXT_PUBLIC_SOLANA_TWIN_ADAPTER || '',
+  SOLANA_TWIN_ADAPTER_TESTNET: process.env.NEXT_PUBLIC_SOLANA_TWIN_ADAPTER_TESTNET || '',
+  // Optional: Custom Solana RPC (uses public endpoint if not set)
+  SOLANA_RPC_URL: process.env.NEXT_PUBLIC_SOLANA_RPC_URL || '',
 } as const;
 
 // RPC configuration with fallback handling

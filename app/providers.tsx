@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState, useMemo } from "react";
 import { base } from "wagmi/chains";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import { Toaster } from "react-hot-toast";
@@ -30,6 +30,44 @@ import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum-identity-kit';
 import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 import { SafeArea } from "@coinbase/onchainkit/minikit";
+import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
+import { installRpcDebugLogger } from "@/lib/rpc-debug";
+
+// Surface types for auth provider selection
+type AuthSurface = 'privy' | 'base' | 'privysolana';
+
+// Solana RPC config for Privy - mainnet only
+const getSolanaRpcConfig = () => {
+  if (typeof window === 'undefined' || !isSolanaEnabled()) return undefined;
+  
+  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+  
+  // Return simple RPC config for Privy (not @solana/kit format)
+  return {
+    mainnet: rpcUrl,
+  };
+};
+
+// Get Solana connectors for Privy
+// Using dynamic import to avoid build issues when Solana is not enabled
+const getSolanaConnectors = () => {
+  if (!isSolanaEnabled()) return undefined;
+  
+  try {
+    // Import Solana wallet connectors from Privy
+    const privySolana = require('@privy-io/react-auth/solana');
+    if (privySolana?.toSolanaWalletConnectors) {
+      return privySolana.toSolanaWalletConnectors({ 
+        shouldAutoConnect: true 
+      });
+    }
+    return undefined;
+  } catch (error) {
+    console.warn('[Providers] Failed to load Solana connectors:', error);
+    return undefined;
+  }
+};
+
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
@@ -66,10 +104,46 @@ export function Providers(props: { children: ReactNode }) {
     return envAppId;
   })();
 
+  // ===== EARLY SURFACE DETECTION =====
+  // Determine surface BEFORE rendering PrivyProvider so we can configure it correctly
+  const [authSurface, setAuthSurface] = useState<AuthSurface>('privy');
+  const [surfaceInitialized, setSurfaceInitialized] = useState(false);
+  
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setSurfaceInitialized(true);
+      return;
+    }
+    
+    // Check URL param first
+    const params = new URLSearchParams(window.location.search);
+    const urlSurface = params.get('surface');
+    
+    if (urlSurface === 'privy' || urlSurface === 'base' || urlSurface === 'privysolana') {
+      sessionStorageManager.setAuthSurface(urlSurface);
+      setAuthSurface(urlSurface);
+    } else {
+      // Get from storage
+      const stored = sessionStorageManager.getAuthSurface();
+      // Map 'coinbase' to 'base' for backward compatibility
+      const effective = stored === 'coinbase' ? 'base' : (stored || 'privy');
+      setAuthSurface(effective as AuthSurface);
+    }
+    
+    setSurfaceInitialized(true);
+  }, []);
+
   // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const CACHE_VERSION = '2025-08-privy-v2';
+    // Development-only RPC debug hook to identify net_listening callers
+    if (process.env.NODE_ENV === 'development') {
+      installRpcDebugLogger({
+        filterMethods: ['net_listening'],
+        enable: true,
+      });
+    }
+    const CACHE_VERSION = '2025-08-privy-v3-solana';
     try {
       if (needsCacheMigration(CACHE_VERSION)) {
         // Soft clear without unregistering SW, no reload
@@ -108,9 +182,50 @@ export function Providers(props: { children: ReactNode }) {
     }
   }, []);
 
+  // Determine PrivyProvider wallet config based on surface
+  const privyWalletConfig = useMemo(() => {
+    const isSolanaMode = authSurface === 'privysolana';
+    const solanaEnabled = isSolanaEnabled();
+    
+    // Solana-only mode: only show Solana wallets
+    if (isSolanaMode && solanaEnabled) {
+      const solanaConnectors = getSolanaConnectors();
+      const solanaRpcs = getSolanaRpcConfig();
+
+      // Safety check: connectors must be present for Solana mode
+      if (solanaConnectors) {
+        return {
+          walletChainType: 'solana-only' as const,
+          // Show popular Solana wallets
+          walletList: ['phantom', 'solflare', 'backpack', 'detected_solana_wallets'] as any,
+          externalWallets: {
+            solana: {
+              connectors: solanaConnectors,
+            },
+          },
+          // Privy Solana RPC config (mainnet only)
+          solana: solanaRpcs ? {
+            rpcUrl: solanaRpcs.mainnet,
+          } : undefined,
+        };
+      }
+      
+      console.warn('[Providers] Solana enabled but connectors failed to load. Falling back to EVM-only mode.');
+    }
+    
+    // EVM-only mode (default): only show Ethereum wallets
+    // This runs if not Solana mode OR if Solana mode failed to load connectors
+    return {
+      walletChainType: 'ethereum-only' as const,
+      walletList: ['detected_ethereum_wallets'],
+      externalWallets: undefined,
+      solana: undefined,
+    };
+  }, [authSurface]);
+
   function WagmiRouter({ children }: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
-    const [surface, setSurface] = useState<'privy' | 'base'>('privy'); // Default to privy instead of null
+    const [surface, setSurface] = useState<AuthSurface>('privy');
     const [isInitialized, setIsInitialized] = useState(false);
     
     useEffect(() => {
@@ -119,67 +234,29 @@ export function Providers(props: { children: ReactNode }) {
       
       const initializeRouter = async () => {
         try {
-          // Sequential initialization with cancellation checks
           // Step 1: Check if we're in a MiniApp
           const flag = await sdk.isInMiniApp();
           
-          // Check if component unmounted or cancelled before proceeding
           if (cancelToken || !mounted) return;
           
           setIsMiniApp(Boolean(flag));
           
-          // If we're in a MiniApp, we can initialize immediately
           if (Boolean(flag)) {
             if (cancelToken || !mounted) return;
             setIsInitialized(true);
             return;
           }
           
-          // Step 2: Determine selected auth surface (only if not MiniApp)
+          // Step 2: Use the already-determined auth surface
           if (cancelToken || !mounted) return;
+          setSurface(authSurface);
           
-          if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const urlSurface = params.get('surface');
-            
-            if (urlSurface === 'privy' || urlSurface === 'base') {
-              // Store the surface preference using centralized manager
-              try {
-                await sessionStorageManager.setAuthSurface(urlSurface as any);
-              } catch (e) {
-                console.error('Failed to store surface preference:', e);
-              }
-              
-              // Check again before state update
-              if (cancelToken || !mounted) return;
-              setSurface(urlSurface as 'privy' | 'base');
-            } else {
-              // Try to get stored preference using centralized manager, fallback to 'privy'
-              try {
-                const stored = sessionStorageManager.getAuthSurface();
-                
-                // Check again before state update
-                if (cancelToken || !mounted) return;
-
-                // Map 'coinbase' to 'base' for backward compatibility
-                const effectiveSurface = stored === 'coinbase' ? 'base' : stored;
-                setSurface(effectiveSurface || 'privy');
-              } catch (e) {
-                console.error('Failed to read surface preference:', e);
-                if (cancelToken || !mounted) return;
-                setSurface('privy');
-              }
-            }
-          }
-          
-          // Final initialization check
+          // Final initialization
           if (cancelToken || !mounted) return;
           setIsInitialized(true);
           
         } catch (error) {
           console.error('Failed to initialize router:', error);
-          
-          // Safe fallback on error
           if (cancelToken || !mounted) return;
           setSurface('privy');
           setIsInitialized(true);
@@ -192,7 +269,7 @@ export function Providers(props: { children: ReactNode }) {
         cancelToken = true;
         mounted = false;
       };
-    }, []);
+    }, [authSurface]);
 
     useEffect(() => {
       if (typeof document === 'undefined') return;
@@ -221,7 +298,7 @@ export function Providers(props: { children: ReactNode }) {
       );
     }
     
-    // Web: choose a single provider per session based on selected surface
+    // Web: choose provider based on surface
     if (surface === 'base') {
       return (
         <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>
@@ -236,7 +313,8 @@ export function Providers(props: { children: ReactNode }) {
       );
     }
     
-    // default & 'privy'
+    // 'privy' and 'privysolana' both use PrivyWagmiProvider
+    // (Solana doesn't use wagmi, so same provider works)
     return (
       <PrivyWagmiProvider config={wagmiPrivyConfig}>
         <TransactionProvider 
@@ -247,6 +325,15 @@ export function Providers(props: { children: ReactNode }) {
           <TransactionModalWrapper className="!z-[1300]" />
         </TransactionProvider>
       </PrivyWagmiProvider>
+    );
+  }
+
+  // Don't render until surface is determined (to configure PrivyProvider correctly)
+  if (!surfaceInitialized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-pulse">Loading...</div>
+      </div>
     );
   }
 
@@ -264,19 +351,36 @@ export function Providers(props: { children: ReactNode }) {
         <PrivyProvider
           appId={privyAppId}
           config={{
-            // Keep config minimal and safe; can be extended via env flags later
+            // Dynamic config based on selected surface (privy vs privysolana)
             appearance: {
               theme: 'light',
-              walletList: ['detected_ethereum_wallets', 'base_account'],
+              walletChainType: privyWalletConfig.walletChainType,
+              // Specify walletList based on mode
+              ...(privyWalletConfig.walletList && {
+                walletList: privyWalletConfig.walletList,
+              }),
             },
             defaultChain: base,
             supportedChains: [base],
             loginMethods: ['wallet', 'email'],
             // Avoid session race conditions by not auto-connecting until hooks report ready
-        embeddedWallets: {
-          // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
-          ethereum: { createOnLogin: 'off' },
-        },
+            embeddedWallets: {
+              // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
+              ethereum: { createOnLogin: 'off' },
+            },
+            // Solana RPC config (only when in Solana mode)
+            ...(privyWalletConfig.solana && {
+              solanaClusters: [
+                {
+                  name: 'mainnet-beta',
+                  rpcUrl: privyWalletConfig.solana.rpcUrl || 'https://api.mainnet-beta.solana.com',
+                },
+              ],
+            }),
+            // External Solana wallet connectors (only when in Solana mode)
+            ...(privyWalletConfig.externalWallets && {
+              externalWallets: privyWalletConfig.externalWallets,
+            }),
           }}
         >
           <QueryClientProvider client={queryClient}>
@@ -302,6 +406,7 @@ export function Providers(props: { children: ReactNode }) {
                 <SafeArea>
                   <FrameProvider>
                     <SmartWalletProvider>
+                      <SolanaWalletProvider>
                       <BalanceProvider>
                         <LoadingProvider>
                           <TutorialBundle>
@@ -343,6 +448,7 @@ export function Providers(props: { children: ReactNode }) {
                           <SecretGardenListener />
                         </LoadingProvider>
                       </BalanceProvider>
+                      </SolanaWalletProvider>
                     </SmartWalletProvider>
                   </FrameProvider>
                 </SafeArea>
