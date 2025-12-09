@@ -48,6 +48,7 @@ import { useBalances } from "@/lib/balance-context";
 import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useIsSolanaWallet, useSolanaWallet, SolanaBridgeBadge } from "@/components/solana";
+import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana";
 import { isSolanaEnabled } from "@/lib/solana-constants";
 
 interface WalletProfileProps {
@@ -92,6 +93,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   // Solana wallet state
   const isSolana = useIsSolanaWallet();
   const { solanaAddress, twinAddress, isTwinSetup, isLoading: solanaLoading } = useSolanaWallet();
+  const { wallets: solanaPrivyWallets } = useSolanaPrivyWallets();
 
   const { loading, refreshBalances } = useBalances();
   const [showFullAddress, setShowFullAddress] = useState(false);
@@ -276,8 +278,16 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     return <CheckCircle className={`w-4 h-4 ${color}`} />;
   };
 
-  // Wallet provider info with MiniKit awareness
+  // Wallet provider info with MiniKit awareness and Solana support
   const getWalletProviderName = () => {
+    if (isSolana) {
+      const solWallet = solanaPrivyWallets?.[0];
+      const solName =
+        (solWallet as any)?.name ||
+        (solWallet as any)?.standardWallet?.name ||
+        (solWallet as any)?.walletClientType;
+      return solName || "Solana Wallet";
+    }
     if (!connector) return "Unknown";
 
     // In frame context, it's likely Base Account via Farcaster
@@ -495,6 +505,13 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <div className="flex items-center space-x-1">
                   {smartWalletLoading ? (
                     <Skeleton className="h-4 w-32" />
+                  ) : isSolana ? (
+                    <div className="flex items-center space-x-1">
+                      <Wallet className="w-3 h-3 text-purple-500" />
+                      <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
+                        Solana Twin (Smart Wallet)
+                      </span>
+                    </div>
                   ) : isSmartWallet ? (
                     <div className="flex items-center space-x-1">
                       <CheckCircle className="w-3 h-3 text-green-500" />
