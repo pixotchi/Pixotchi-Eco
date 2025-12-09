@@ -12,6 +12,8 @@ import { getTwinAddress, getTwinAddressInfo, isTwinSetup, type TwinAddressInfo }
 import { getPixotchiSolanaConfig, isSolanaEnabled, SOLANA_BRIDGE_CONFIG } from './solana-constants';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
+const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
+
 // ============ Types ============
 
 export interface SolanaWalletState {
@@ -82,8 +84,10 @@ export function SolanaWalletProvider({
     
     try {
       const config = getPixotchiSolanaConfig();
-      console.log('[SolanaWalletContext] Fetching Twin info for:', solanaAddress);
-      console.log('[SolanaWalletContext] TwinAdapter address:', config.twinAdapter);
+      if (SOLANA_DEBUG) {
+        console.log('[SolanaWalletContext] Fetching Twin info for:', solanaAddress);
+        console.log('[SolanaWalletContext] TwinAdapter address:', config.twinAdapter);
+      }
       
       // Fetch SOL balance from Solana
       try {
@@ -91,38 +95,52 @@ export function SolanaWalletProvider({
         const walletPubkey = new PublicKey(solanaAddress);
         const balance = await connection.getBalance(walletPubkey);
         setSolBalance(BigInt(balance));
-        console.log('[SolanaWalletContext] SOL balance:', balance / LAMPORTS_PER_SOL, 'SOL');
+        if (SOLANA_DEBUG) {
+          console.log('[SolanaWalletContext] SOL balance:', balance / LAMPORTS_PER_SOL, 'SOL');
+        }
       } catch (balErr) {
-        console.warn('[SolanaWalletContext] Failed to fetch SOL balance:', balErr);
+        if (SOLANA_DEBUG) {
+          console.warn('[SolanaWalletContext] Failed to fetch SOL balance:', balErr);
+        }
         setSolBalance(BigInt(0));
       }
       
       // Get Twin address (mainnet only)
       const address = await getTwinAddress(solanaAddress);
       setTwinAddress(address);
-      console.log('[SolanaWalletContext] Twin address:', address);
+      if (SOLANA_DEBUG) {
+        console.log('[SolanaWalletContext] Twin address:', address);
+      }
       
       // Get full Twin info (mainnet only)
       const info = await getTwinAddressInfo(solanaAddress);
       setTwinInfo(info);
-      console.log('[SolanaWalletContext] Twin info:', {
-        isDeployed: info.isDeployed,
-        wsolBalance: info.wsolBalance?.toString(),
-        seedBalance: info.seedBalance?.toString(),
-      });
+      if (SOLANA_DEBUG) {
+        console.log('[SolanaWalletContext] Twin info:', {
+          isDeployed: info.isDeployed,
+          wsolBalance: info.wsolBalance?.toString(),
+          seedBalance: info.seedBalance?.toString(),
+        });
+      }
       
       // Check if Twin is set up (has wSOL approval)
       if (config.twinAdapter) {
         const setup = await isTwinSetup(address, config.twinAdapter);
-        console.log('[SolanaWalletContext] isTwinSetup result:', setup);
+        if (SOLANA_DEBUG) {
+          console.log('[SolanaWalletContext] isTwinSetup result:', setup);
+        }
         setTwinSetup(setup);
       } else {
-        console.warn('[SolanaWalletContext] No twinAdapter configured, cannot check setup status');
+        if (SOLANA_DEBUG) {
+          console.warn('[SolanaWalletContext] No twinAdapter configured, cannot check setup status');
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch Twin info';
       setError(message);
-      console.error('[SolanaWalletContext] Error fetching Twin info:', err);
+      if (SOLANA_DEBUG) {
+        console.error('[SolanaWalletContext] Error fetching Twin info:', err);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -37,6 +37,11 @@ import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@priv
 import { Transaction } from '@solana/web3.js';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
+const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
+const solLog = (...args: any[]) => { if (SOLANA_DEBUG) console.log(...args); };
+const solWarn = (...args: any[]) => { if (SOLANA_DEBUG) console.warn(...args); };
+const solError = (...args: any[]) => { if (SOLANA_DEBUG) console.error(...args); };
+
 const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
 
 // Placeholder for plant images, assuming you might have them
@@ -250,7 +255,7 @@ export default function MintTab() {
     }
     
     // Debug: log all Solana wallets
-    console.log('[SolanaMint] Looking for Solana wallet:', {
+    solLog('[SolanaMint] Looking for Solana wallet:', {
       authenticated,
       solanaWalletsCount: solanaWallets?.length || 0,
       linkedAccountsCount: user?.linkedAccounts?.length || 0,
@@ -258,19 +263,19 @@ export default function MintTab() {
     
     // Use the first Solana wallet from the Solana-specific hook
     if (solanaWallets && solanaWallets.length > 0) {
-      console.log('[SolanaMint] Available Solana wallets:', solanaWallets.map(w => ({
+      solLog('[SolanaMint] Available Solana wallets:', solanaWallets.map(w => ({
         address: w.address,
       })));
       
       // Return the first Solana wallet
       const wallet = solanaWallets[0];
-      console.log('[SolanaMint] Using Solana wallet:', wallet.address);
+      solLog('[SolanaMint] Using Solana wallet:', wallet.address);
       return wallet;
     }
     
     // Fallback: Check user's linked accounts for Solana wallet info
     if (user?.linkedAccounts) {
-      console.log('[SolanaMint] Checking linked accounts:', user.linkedAccounts.map(a => ({
+      solLog('[SolanaMint] Checking linked accounts:', user.linkedAccounts.map(a => ({
         type: a.type,
         address: 'address' in a ? a.address : undefined,
         chainType: 'chainType' in a ? (a as any).chainType : undefined,
@@ -278,13 +283,13 @@ export default function MintTab() {
       
       for (const account of user.linkedAccounts) {
         if (account.type === 'wallet' && 'chainType' in account && (account as any).chainType === 'solana') {
-          console.log('[SolanaMint] Found Solana wallet in linked accounts:', (account as any).address);
+          solLog('[SolanaMint] Found Solana wallet in linked accounts:', (account as any).address);
           return account as any;
         }
       }
     }
     
-    console.log('[SolanaMint] No Solana wallet found');
+    solLog('[SolanaMint] No Solana wallet found');
     return null;
   }, [isSolana, solanaWallets, user, authenticated]);
   
@@ -309,12 +314,12 @@ export default function MintTab() {
       setQuoteLoading(true);
       setQuoteError(null);
       try {
-        console.log('[SolanaMint] Fetching quote for strain:', selectedStrain.id);
+        solLog('[SolanaMint] Fetching quote for strain:', selectedStrain.id);
         // Use the bridge hook's getQuote method
         const quote = await getQuote('mint', { strain: selectedStrain.id });
         if (!cancelled && quote) {
           // Debug: log the quote structure
-          console.log('[SolanaMint] Quote received:', {
+          solLog('[SolanaMint] Quote received:', {
             wsolAmount: quote.wsolAmount,
             wsolAmountType: typeof quote.wsolAmount,
             seedAmount: quote.seedAmount,
@@ -335,7 +340,7 @@ export default function MintTab() {
           // Even if there's an error field, if we have valid quote data, use it
           const hasValidQuoteData = wsolAmount > BigInt(0) && seedAmount > BigInt(0);
           
-          console.log('[SolanaMint] Quote validation:', {
+          solLog('[SolanaMint] Quote validation:', {
             hasValidQuoteData,
             wsolAmount: wsolAmount.toString(),
             seedAmount: seedAmount.toString(),
@@ -350,7 +355,7 @@ export default function MintTab() {
               seedAmount,
             });
             setQuoteError(null); // Clear any previous errors
-            console.log('[SolanaMint] Quote accepted and stored:', {
+            solLog('[SolanaMint] Quote accepted and stored:', {
               wsolAmount: Number(wsolAmount) / 1e9,
               seedAmount: Number(seedAmount) / 1e18,
               route: quote.route,
@@ -358,7 +363,7 @@ export default function MintTab() {
             });
           } else {
             // No valid data - show error
-            console.error('[SolanaMint] Quote validation failed:', {
+            solError('[SolanaMint] Quote validation failed:', {
               wsolAmount: wsolAmount.toString(),
               seedAmount: seedAmount.toString(),
               wsolAmountIsZero: wsolAmount === BigInt(0),
@@ -387,7 +392,7 @@ export default function MintTab() {
           setQuoteError('Failed to get quote');
         }
       } catch (err) {
-        console.error('[SolanaMint] Quote fetch failed:', err);
+        solError('[SolanaMint] Quote fetch failed:', err);
         if (!cancelled) {
           setSolQuote(null);
           setQuoteError(err instanceof Error ? err.message : 'Quote failed');
@@ -419,7 +424,7 @@ export default function MintTab() {
 
     setSolanaMintLoading(true);
     try {
-      console.log('[SolanaMint] Preparing setup transaction...');
+      solLog('[SolanaMint] Preparing setup transaction...');
       const tx = await bridge.prepareSetup();
       
       if (!tx) {
@@ -427,7 +432,7 @@ export default function MintTab() {
         throw new Error(errorMsg);
       }
 
-      console.log('[SolanaMint] Setup transaction prepared. Signing and sending...');
+      solLog('[SolanaMint] Setup transaction prepared. Signing and sending...');
       
       // Import the bridge implementation to build the actual Solana transaction
       const { solanaBridgeImplementation } = await import('@/lib/solana-bridge-implementation');
@@ -465,13 +470,13 @@ export default function MintTab() {
         verifySignatures: false,
       });
       
-      console.log('[SolanaMint] Calling Privy signAndSendTransaction...');
+      solLog('[SolanaMint] Calling Privy signAndSendTransaction...');
       const result = await privySignAndSendTransaction({
         transaction: new Uint8Array(transactionBytes),
         wallet: solanaWallet,
       });
       
-      console.log('[SolanaMint] Transaction sent! Signature:', result.signature);
+      solLog('[SolanaMint] Transaction sent! Signature:', result.signature);
       
       if (result.signature) {
         toast.success('Bridge setup initiated! Waiting for relay to Base...');
@@ -479,14 +484,14 @@ export default function MintTab() {
         
         // Bridge relay can take 15-60+ seconds depending on Solana finality and relayer speed
         // Poll for setup completion with increasing intervals
-        console.log('[SolanaMint] Waiting for bridge relay to Base...');
+        solLog('[SolanaMint] Waiting for bridge relay to Base...');
         
         let setupComplete = false;
         const pollIntervals = [5000, 10000, 15000, 20000, 30000]; // 5s, 10s, 15s, 20s, 30s
         
         for (let i = 0; i < pollIntervals.length && !setupComplete; i++) {
           const delay = pollIntervals[i];
-          console.log(`[SolanaMint] Polling for setup status in ${delay/1000}s (attempt ${i + 1}/${pollIntervals.length})...`);
+          solLog(`[SolanaMint] Polling for setup status in ${delay/1000}s (attempt ${i + 1}/${pollIntervals.length})...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           
           try {
@@ -494,22 +499,22 @@ export default function MintTab() {
             // Check if setup is now complete (needsSetup should become false)
             // We need to check the fresh value, so we'll check in next render
             // For now, we just refresh and hope it updated
-            console.log('[SolanaMint] Refreshed Twin info, checking status...');
+            solLog('[SolanaMint] Refreshed Twin info, checking status...');
             setupComplete = true; // Exit after one successful refresh post-relay
           } catch (refreshError) {
-            console.warn('[SolanaMint] Refresh failed, will retry:', refreshError);
+            solWarn('[SolanaMint] Refresh failed, will retry:', refreshError);
           }
         }
         
         if (setupComplete) {
           toast.success('Bridge setup complete! You can now mint.');
-          console.log('[SolanaMint] Setup complete! UI should update.');
+          solLog('[SolanaMint] Setup complete! UI should update.');
         } else {
           toast('Setup transaction sent. Please refresh in a minute if button doesn\'t update.', { icon: 'ℹ️' });
         }
       }
     } catch (error) {
-      console.error('[SolanaMint] Setup error:', error);
+      solError('[SolanaMint] Setup error:', error);
       toast.error(error instanceof Error ? error.message : 'Setup failed');
     } finally {
       setSolanaMintLoading(false);
@@ -538,25 +543,25 @@ export default function MintTab() {
     try {
       // V2: Check if we have a valid quote (no swap data needed - contract does on-chain swap)
       if (!bridge.state.quote || !bridge.state.quote.wsolAmount || bridge.state.quote.wsolAmount <= BigInt(0)) {
-        console.warn('[SolanaMint] No valid quote, fetching new quote...');
+        solWarn('[SolanaMint] No valid quote, fetching new quote...');
         const freshQuote = await bridge.getQuote('mint', { strain: selectedStrain.id });
         if (!freshQuote || !freshQuote.wsolAmount || freshQuote.wsolAmount <= BigInt(0)) {
           const errorMsg = freshQuote?.error || 'Failed to get quote. Please try again.';
-          console.error('[SolanaMint] Fresh quote fetch failed:', {
+          solError('[SolanaMint] Fresh quote fetch failed:', {
             hasQuote: !!freshQuote,
             wsolAmount: freshQuote?.wsolAmount?.toString(),
             error: freshQuote?.error,
           });
           throw new Error(errorMsg);
         }
-        console.log('[SolanaMint] Fresh quote obtained (V2):', {
+        solLog('[SolanaMint] Fresh quote obtained (V2):', {
           wsolAmount: freshQuote.wsolAmount?.toString(),
           minSeedOut: freshQuote.minSeedOut?.toString(),
         });
       }
       
       // Prepare the mint transaction (V2 - on-chain swap)
-      console.log('[SolanaMint] Preparing mint transaction...', {
+      solLog('[SolanaMint] Preparing mint transaction...', {
         currentBridgeState: {
           status: bridge.state.status,
           error: bridge.state.error,
@@ -577,7 +582,7 @@ export default function MintTab() {
         // Check both before and after state
         const errorMsg = bridge.state.error || errorStateBefore || 'Failed to prepare mint transaction';
         
-        console.error('[SolanaMint] prepareMint returned null:', {
+        solError('[SolanaMint] prepareMint returned null:', {
           errorBefore: errorStateBefore,
           errorAfter: bridge.state.error,
           finalError: errorMsg,
@@ -604,7 +609,7 @@ export default function MintTab() {
         throw new Error(errorMsg);
       }
       
-      console.log('[SolanaMint] Transaction prepared successfully:', {
+      solLog('[SolanaMint] Transaction prepared successfully:', {
         hasTransaction: !!tx,
         actionType: tx.actionType,
         description: tx.description,
@@ -613,11 +618,11 @@ export default function MintTab() {
       // Show quote info
       if (bridge.state.quote) {
         const wsolNeeded = Number(bridge.state.quote.wsolAmount) / 1e9;
-        console.log(`[SolanaMint] Will spend ~${wsolNeeded.toFixed(4)} SOL for ${selectedStrain.mintPrice} SEED`);
+        solLog(`[SolanaMint] Will spend ~${wsolNeeded.toFixed(4)} SOL for ${selectedStrain.mintPrice} SEED`);
       }
       
       // Build and send the bridge transaction using Privy
-      console.log('[SolanaMint] Building Solana bridge transaction...');
+      solLog('[SolanaMint] Building Solana bridge transaction...');
       
       // Import the bridge implementation to build the actual Solana transaction
       const { solanaBridgeImplementation } = await import('@/lib/solana-bridge-implementation');
@@ -641,7 +646,7 @@ export default function MintTab() {
         value: '0',
       } : undefined;
       
-      console.log('[SolanaMint] Creating bridge transaction with params:', {
+      solLog('[SolanaMint] Creating bridge transaction with params:', {
         walletAddress: walletPubkey.toBase58(),
         amount: tx.params.solAmount.toString(),
         destinationAddress: tx.params.twinAddress,
@@ -659,7 +664,7 @@ export default function MintTab() {
       });
       
       // Debug transaction before serialization
-      console.log('[SolanaMint] Transaction created:', {
+      solLog('[SolanaMint] Transaction created:', {
         numInstructions: solanaTransaction.instructions?.length,
         feePayer: solanaTransaction.feePayer?.toBase58(),
         hasBlockhash: !!solanaTransaction.recentBlockhash,
@@ -674,20 +679,20 @@ export default function MintTab() {
           verifySignatures: false,
         });
       } catch (serializeError) {
-        console.error('[SolanaMint] Serialization error:', serializeError);
+        solError('[SolanaMint] Serialization error:', serializeError);
         
         // If error is RangeError, it might be because the transaction is missing required fields
         // Try alternative serialization method
         try {
-          console.log('[SolanaMint] Trying alternative serialization...');
+          solLog('[SolanaMint] Trying alternative serialization...');
           const message = solanaTransaction.compileMessage();
           const compiledTransaction = new (await import('@solana/web3.js')).VersionedTransaction(message);
           transactionBytes = compiledTransaction.serialize();
-          console.log('[SolanaMint] Alternative serialization successful');
+          solLog('[SolanaMint] Alternative serialization successful');
         } catch (altError) {
-          console.error('[SolanaMint] Alternative serialization failed:', altError);
+          solError('[SolanaMint] Alternative serialization failed:', altError);
           
-          console.error('[SolanaMint] Raw instruction details:', 
+          solError('[SolanaMint] Raw instruction details:', 
             solanaTransaction.instructions?.map((ix, i) => ({
               index: i,
               programId: ix.programId?.toBase58(),
@@ -700,14 +705,14 @@ export default function MintTab() {
         }
       }
       
-      console.log('[SolanaMint] Signing and sending transaction with Privy:', {
+      solLog('[SolanaMint] Signing and sending transaction with Privy:', {
         transactionSize: transactionBytes.length,
         walletAddress: solanaWallet.address,
       });
       
       // Check if transaction is too large for Solana (max 1232 bytes)
       if (transactionBytes.length > 1232) {
-        console.warn('[SolanaMint] Transaction may be too large:', transactionBytes.length, 'bytes');
+        solWarn('[SolanaMint] Transaction may be too large:', transactionBytes.length, 'bytes');
       }
       
       // Sign and send using Privy's hook
@@ -716,7 +721,7 @@ export default function MintTab() {
         wallet: solanaWallet,
       });
       
-      console.log('[SolanaMint] Transaction sent! Signature:', result.signature);
+      solLog('[SolanaMint] Transaction sent! Signature:', result.signature);
       
       if (result.signature) {
         toast.success('Plant minted successfully via Solana bridge!');
@@ -724,7 +729,7 @@ export default function MintTab() {
         window.dispatchEvent(new Event('balances:refresh'));
       }
     } catch (error) {
-      console.error('[SolanaMint] Error:', error);
+      solError('[SolanaMint] Error:', error);
       toast.error(error instanceof Error ? error.message : 'Mint failed');
     } finally {
       setSolanaMintLoading(false);
@@ -909,9 +914,9 @@ export default function MintTab() {
                   <div className="flex gap-2 mt-1">
                     <button
                       onClick={async () => {
-                        console.log('[SolanaMint] Manual refresh triggered');
+                        solLog('[SolanaMint] Manual refresh triggered');
                         await solanaWalletHook.refresh();
-                        console.log('[SolanaMint] Manual refresh complete, isTwinSetup:', solanaWalletHook.isTwinSetup);
+                        solLog('[SolanaMint] Manual refresh complete, isTwinSetup:', solanaWalletHook.isTwinSetup);
                       }}
                       className="text-xs underline text-blue-400 hover:text-blue-300"
                     >

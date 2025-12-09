@@ -22,6 +22,8 @@ import { toast } from 'react-hot-toast';
 import { solanaBridgeImplementation } from '@/lib/solana-bridge-implementation';
 import { SOLANA_BRIDGE_CONFIG } from '@/lib/solana-constants';
 
+const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
+
 // ============ Types ============
 
 export type SolanaBridgeActionType = 'setup' | 'shopItem' | 'gardenItem' | 'setName' | 'claimRewards' | 'attack';
@@ -313,7 +315,7 @@ export default function SolanaBridgeButton({
         try {
           await connection.confirmTransaction(signatureStr, 'confirmed');
         } catch (err) {
-          console.warn('[SolanaBridgeButton] confirmTransaction websocket error, falling back to HTTP polling:', err);
+          if (SOLANA_DEBUG) console.warn('[SolanaBridgeButton] confirmTransaction websocket error, falling back to HTTP polling:', err);
           try {
             const start = Date.now();
             const timeoutMs = 30_000;
@@ -328,7 +330,7 @@ export default function SolanaBridgeButton({
             }
             throw new Error('Timeout waiting for Solana confirmation');
           } catch (pollErr) {
-            console.warn('[SolanaBridgeButton] HTTP polling confirmation warning:', pollErr);
+            if (SOLANA_DEBUG) console.warn('[SolanaBridgeButton] HTTP polling confirmation warning:', pollErr);
           }
         }
       };
@@ -364,7 +366,7 @@ export default function SolanaBridgeButton({
   const isDisabled = disabled || !isConnected || isLoading || (requiresQuote && isQuoteLoading && localQuote === null);
   
   // Debug logging - remove after fixing
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === 'development' || SOLANA_DEBUG) {
     console.log('[SolanaBridgeButton] State:', {
       actionType,
       itemId,
