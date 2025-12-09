@@ -156,23 +156,23 @@ export function EditPlantName({
           <div className="space-y-3">
             {!isSolana && (
               <>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Your SEED Balance:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                    <span className={isLoadingBalance ? 'animate-pulse' : ''}>
-                      {isLoadingBalance ? '...' : parseFloat(formatUnits(seedBalance, 18)).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span>Cost:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                    <span className="font-medium">{NAME_CHANGE_COST.toLocaleString()}</span>
-                  </div>
-                </div>
+            <div className="flex items-center justify-between text-sm">
+              <span>Your SEED Balance:</span>
+              <div className="flex items-center space-x-1">
+                <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
+                <span className={isLoadingBalance ? 'animate-pulse' : ''}>
+                  {isLoadingBalance ? '...' : parseFloat(formatUnits(seedBalance, 18)).toLocaleString()}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between text-sm">
+              <span>Cost:</span>
+              <div className="flex items-center space-x-1">
+                <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
+                <span className="font-medium">{NAME_CHANGE_COST.toLocaleString()}</span>
+              </div>
+            </div>
               </>
             )}
 

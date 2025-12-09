@@ -490,10 +490,14 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
     
-    updateState({ status: 'quoting', error: null });
+    // Reuse existing valid quote if present; otherwise fetch a fresh one
+    const existingQuote = state.quote;
+    const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
+
+    updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
     
     try {
-      const quote = await quoteShopItemCost(itemId);
+      const quote = hasValidExistingQuote ? existingQuote! : await quoteShopItemCost(itemId);
       
       if (!isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from BaseSwap');
@@ -509,7 +513,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: message });
       return null;
     }
-  }, [solanaAddress, needsSetup, updateState]);
+  }, [solanaAddress, needsSetup, updateState, state.quote]);
   
   // Prepare garden item transaction
   const prepareGardenItem = useCallback(async (
@@ -526,10 +530,14 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
     
-    updateState({ status: 'quoting', error: null });
+    // Reuse existing valid quote if present; otherwise fetch a fresh one
+    const existingQuote = state.quote;
+    const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
+
+    updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
     
     try {
-      const quote = await quoteGardenItemCost(itemId);
+      const quote = hasValidExistingQuote ? existingQuote! : await quoteGardenItemCost(itemId);
       
       if (!isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from BaseSwap');
@@ -545,7 +553,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: message });
       return null;
     }
-  }, [solanaAddress, needsSetup, updateState]);
+  }, [solanaAddress, needsSetup, updateState, state.quote]);
   
   // Prepare box game transaction
   const prepareBoxGame = useCallback(async (plantId: number): Promise<BridgeTransaction | null> => {
@@ -645,10 +653,14 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
     
-    updateState({ status: 'quoting', error: null });
+    // Reuse existing valid quote if present; otherwise fetch a fresh one
+    const existingQuote = state.quote;
+    const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
+
+    updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
     
     try {
-      const quote = await quoteNameChangeCost();
+      const quote = hasValidExistingQuote ? existingQuote! : await quoteNameChangeCost();
       
       // Name change might be free
       if (quote.seedAmount > BigInt(0) && !isQuoteValid(quote)) {
@@ -665,7 +677,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: message });
       return null;
     }
-  }, [solanaAddress, needsSetup, updateState]);
+  }, [solanaAddress, needsSetup, updateState, state.quote]);
   
   // Execute prepared transaction
   const execute = useCallback(async (

@@ -305,12 +305,34 @@ export default function SolanaBridgeButton({
         options: { skipPreflight: false },
       });
       
-      setStatusText('Transaction sent! Confirming...');
-      
-      // Wait for confirmation
       const connection = solanaBridgeImplementation.getConnection();
       const signatureStr = typeof signature === 'string' ? signature : bs58.encode(signature);
-      await connection.confirmTransaction(signatureStr, 'confirmed');
+      
+      // Fire-and-forget confirmation; if websocket subscriptions are blocked, fallback to HTTP polling
+      const confirmBackground = async () => {
+        try {
+          await connection.confirmTransaction(signatureStr, 'confirmed');
+        } catch (err) {
+          console.warn('[SolanaBridgeButton] confirmTransaction websocket error, falling back to HTTP polling:', err);
+          try {
+            const start = Date.now();
+            const timeoutMs = 30_000;
+            while (Date.now() - start < timeoutMs) {
+              const statuses = await connection.getSignatureStatuses([signatureStr]);
+              const status = statuses?.value?.[0];
+              if (status?.err) throw new Error('Transaction failed on Solana');
+              if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+                return;
+              }
+              await new Promise(res => setTimeout(res, 1500));
+            }
+            throw new Error('Timeout waiting for Solana confirmation');
+          } catch (pollErr) {
+            console.warn('[SolanaBridgeButton] HTTP polling confirmation warning:', pollErr);
+          }
+        }
+      };
+      confirmBackground().catch(() => {});
       
       setStatusText(null);
       toast.success('Transaction submitted! Bridge processing...');

@@ -29,6 +29,7 @@ import {
 } from "@/components/activity";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
+import { useIsSolanaWallet, useTwinAddress } from "@/components/solana";
 
 type ActivityView = "all" | "my";
 type ItemMap = { [key: string]: string };
@@ -38,6 +39,10 @@ const ITEMS_PER_PAGE = 12;
 
 export default function ActivityTab() {
   const { address, isConnected } = useAccount();
+  const isSolana = useIsSolanaWallet();
+  const twinAddress = useTwinAddress();
+  const myAddress = isSolana ? twinAddress : address;
+  const isWalletConnected = isConnected || (isSolana && !!twinAddress);
   const [allActivities, setAllActivities] = useState<ProcessedActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,8 +102,8 @@ export default function ActivityTab() {
       
       let recentActivities: ActivityEvent[] = [];
 
-      if (view === "my" && address) {
-        recentActivities = await getMyActivity(address);
+      if (view === "my" && myAddress) {
+        recentActivities = await getMyActivity(myAddress);
       } else {
         recentActivities = await getAllActivity();
       }
@@ -112,15 +117,15 @@ export default function ActivityTab() {
     } finally {
       setLoading(false);
     }
-  }, [view, address, shopItems, gardenItems]);
+  }, [view, myAddress, shopItems, gardenItems]);
 
   useEffect(() => {
-    if (view === 'my' && !isConnected) {
+    if (view === 'my' && (!isWalletConnected || !myAddress)) {
       setView('all');
     } else {
       fetchActivities();
     }
-  }, [view, isConnected, fetchActivities]);
+  }, [view, isWalletConnected, myAddress, fetchActivities]);
 
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {
@@ -188,7 +193,7 @@ export default function ActivityTab() {
       );
     }
 
-    if (view === 'my' && !isConnected) {
+    if (view === 'my' && !isWalletConnected) {
       return (
           <div className="text-center py-8 text-muted-foreground">
               <p>Connect your wallet to see your activity.</p>
