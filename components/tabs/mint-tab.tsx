@@ -457,7 +457,6 @@ export default function MintTab() {
         destinationAddress: tx.params.twinAddress,
         asset,
         call: callOptions,
-        gasLimit: tx.params.gasLimit,
       });
       
       // Serialize for Privy
@@ -657,7 +656,6 @@ export default function MintTab() {
         destinationAddress: tx.params.twinAddress,
         asset,
         call: callOptions,
-        gasLimit: tx.params.gasLimit,
       });
       
       // Debug transaction before serialization
@@ -771,21 +769,27 @@ export default function MintTab() {
                 <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
                   {strains.map(strain => {
                     const isSoldOut = strain.maxSupply - strain.totalMinted <= 0;
+                    const isBaseOnly = isSolana && ['FLORA', 'TYJ'].includes(strain.name?.toUpperCase?.() || '');
                     return (
                       <DropdownMenuItem 
                         key={strain.id} 
-                        onSelect={() => !isSoldOut && setSelectedStrain(strain)}
-                        disabled={isSoldOut}
-                        className={isSoldOut ? 'text-muted-foreground' : ''}
+                        onSelect={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
+                        disabled={isSoldOut || isBaseOnly}
+                        className={isSoldOut || isBaseOnly ? 'text-muted-foreground' : ''}
                       >
                         <div className="flex items-center justify-between w-full">
-                          <div className={`flex items-center space-x-2 ${isSoldOut ? 'line-through' : ''}`}>
+                          <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
                             <Image src={PLANT_STATIC_IMAGES[strain.id - 1]} alt={strain.name} width={24} height={24} />
                             <span>{strain.name}</span>
                           </div>
                           {isSoldOut && (
                             <span className="text-xs font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full">
                               SOLD OUT
+                            </span>
+                          )}
+                          {isBaseOnly && !isSoldOut && (
+                            <span className="text-xs font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full">
+                              ON BASE
                             </span>
                           )}
                         </div>
@@ -853,7 +857,7 @@ export default function MintTab() {
           <Card className="border-purple-500/30 bg-purple-500/5">
             <CardContent className="p-6 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="text-3xl">🌉</div>
+                <Image src="/icons/solana.svg" alt="Solana" width={28} height={28} />
                 <div>
                   <h3 className="text-lg font-semibold text-purple-400">Mint via Solana Bridge</h3>
                   <p className="text-xs text-muted-foreground">
@@ -883,7 +887,7 @@ export default function MintTab() {
               {/* Success message */}
               {bridge.state.status === 'success' && bridge.state.signature && (
                 <div className="text-sm text-green-400 bg-green-500/10 p-2 rounded">
-                  ✅ Mint successful!{' '}
+                  Mint successful!{' '}
                   <a 
                     href={`https://explorer.solana.com/tx/${bridge.state.signature}`}
                     target="_blank"
@@ -898,10 +902,10 @@ export default function MintTab() {
               {/* Debug info - shows wallet detection status */}
               {isSolana && (
                 <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded mb-2">
-                  <div>🔗 Solana Address: {solanaWalletHook.solanaAddress?.slice(0, 8)}...{solanaWalletHook.solanaAddress?.slice(-4) || 'Not found'}</div>
-                  <div>🏠 Twin Address: {twinAddress?.slice(0, 8)}...{twinAddress?.slice(-4) || 'Not found'}</div>
-                  <div>💼 Wallet object: {solanaWallet ? '✅ Found' : '❌ Not found'} (from {solanaWallets?.length || 0} Solana wallets)</div>
-                  <div>🔧 Setup Status: {needsSetup ? '❌ Needs Setup' : '✅ Ready'} | Twin Deployed: {solanaWalletHook.twinInfo?.isDeployed ? '✅' : '❌'}</div>
+                  <div> Solana Address: {solanaWalletHook.solanaAddress?.slice(0, 8)}...{solanaWalletHook.solanaAddress?.slice(-4) || 'Not found'}</div>
+                  <div> Twin Address: {twinAddress?.slice(0, 8)}...{twinAddress?.slice(-4) || 'Not found'}</div>
+                  <div> Wallet object: {solanaWallet ? '✅ Found' : '❌ Not found'} (from {solanaWallets?.length || 0} Solana wallets)</div>
+                  <div> Setup Status: {needsSetup ? '❌ Needs Setup' : '✅ Ready'} | Twin Deployed: {solanaWalletHook.twinInfo?.isDeployed ? '✅' : '❌'}</div>
                   <div className="flex gap-2 mt-1">
                     <button
                       onClick={async () => {
@@ -984,21 +988,27 @@ export default function MintTab() {
             <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
               {strains.map(strain => {
                 const isSoldOut = strain.maxSupply - strain.totalMinted <= 0;
+                const isBaseOnly = isSolana && ['FLORA', 'TYJ'].includes(strain.name?.toUpperCase?.() || '');
                 return (
                   <DropdownMenuItem 
                     key={strain.id} 
-                    onSelect={() => !isSoldOut && setSelectedStrain(strain)}
-                    disabled={isSoldOut}
-                    className={isSoldOut ? 'text-muted-foreground' : ''}
+                    onSelect={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
+                    disabled={isSoldOut || isBaseOnly}
+                    className={isSoldOut || isBaseOnly ? 'text-muted-foreground' : ''}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <div className={`flex items-center space-x-2 ${isSoldOut ? 'line-through' : ''}`}>
+                      <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
                         <Image src={PLANT_STATIC_IMAGES[strain.id - 1]} alt={strain.name} width={24} height={24} />
                         <span>{strain.name}</span>
                       </div>
                       {isSoldOut && (
                         <span className="text-xs font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full">
                           SOLD OUT
+                        </span>
+                      )}
+                      {isBaseOnly && !isSoldOut && (
+                        <span className="text-xs font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full">
+                          ON BASE
                         </span>
                       )}
                     </div>
@@ -1286,7 +1296,7 @@ export default function MintTab() {
               </p>
               {isSolana && (
                 <p className="text-xs text-purple-400">
-                  🌐 Connected via Solana Bridge
+                   Connected via Solana Bridge
                 </p>
               )}
             </div>
