@@ -27,6 +27,8 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
 import { Avatar } from "@coinbase/onchainkit/identity";
 import { base } from "viem/chains";
+import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
+import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -54,9 +56,14 @@ const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export default function LeaderboardTab() {
-  const { address } = useAccount();
+  const { address: evmAddress } = useAccount();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
+  const isSolana = useIsSolanaWallet();
+  const twinAddress = useTwinAddress();
+  
+  // Use Twin address for Solana users, EVM address otherwise
+  const address = isSolana && twinAddress ? twinAddress as `0x${string}` : evmAddress;
   const [plants, setPlants] = useState<LeaderboardPlant[]>([]);
   const [landRows, setLandRows] = useState<Array<{ rank: number; landId: number; name: string; exp: number }>>([]);
   const [stakeRows, setStakeRows] = useState<StakeLeaderboardEntry[]>([]);
@@ -947,13 +954,35 @@ export default function LeaderboardTab() {
               <div className="pt-2 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Confirm Attack</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet} />
+                  <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
                 </div>
                 {targetPlant && selectedAttackerId !== null ? (
                   (() => {
                     const attacker = myPlants.find(p => p.id === selectedAttackerId) as Plant | undefined;
                     const eligible = attacker && targetPlant ? canAttackWith(attacker, targetPlant) : false;
-                    return (
+                    return isSolana ? (
+                  <SolanaBridgeButton
+                    actionType="attack"
+                    plantId={selectedAttackerId}
+                    targetId={targetPlant.id}
+                    buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
+                    buttonClassName="w-full"
+                    disabled={isSubmitting || !eligible}
+                    onSuccess={() => {
+                      setIsSubmitting(false);
+                      setPendingHash(null);
+                      setAttackDialogOpen(false);
+                      setSelectedAttackerId(null);
+                      fetchLeaderboardData();
+                      void fetchMyPlants();
+                      toast.success('Attack submitted via bridge!');
+                    }}
+                    onError={() => {
+                      setIsSubmitting(false);
+                      toast.error('Attack failed');
+                    }}
+                  />
+                    ) : (
                   <AttackTransaction
                     attackerId={selectedAttackerId}
                     targetId={targetPlant.id}
@@ -1052,9 +1081,11 @@ export default function LeaderboardTab() {
               <div className="pt-2 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Confirm Kill</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet} />
+                  <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
                 </div>
-                {targetPlant && selectedKillerId !== null ? (
+                {isSolana ? (
+                  <SolanaNotSupported feature="Kill action" />
+                ) : targetPlant && selectedKillerId !== null ? (
                   <KillTransaction
                     deadId={targetPlant.id}
                     tokenId={selectedKillerId}
@@ -1104,9 +1135,11 @@ export default function LeaderboardTab() {
               <div className="pt-2 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Confirm Revive</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet} />
+                  <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
                 </div>
-                {(() => {
+                {isSolana ? (
+                  <SolanaNotSupported feature="Revive action" />
+                ) : (() => {
                   const REVIVE_COST_WEI = BigInt(100) * (BigInt(10) ** BigInt(18));
                   const hasEnough = seedBalance > REVIVE_COST_WEI;
                   return (

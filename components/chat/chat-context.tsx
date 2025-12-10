@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { getReadClient } from '@/lib/contracts';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { PLANT_STRAINS } from '@/lib/constants';
+import { useIsSolanaWallet, useSolanaWallet } from '@/components/solana';
 
 // Combined message type for simplicity in the context
 type AnyChatMessage = ChatMessage | AIChatMessage;
@@ -31,6 +32,9 @@ const ChatContext = createContext<ChatContextState | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { address } = useAccount();
+  const isSolana = useIsSolanaWallet();
+  const { effectiveAddress } = useSolanaWallet();
+  const chatAddress = isSolana ? effectiveAddress : address;
   const [messages, setMessages] = useState<AnyChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,10 +136,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const next = data.messages || [];
         setMessages(next);
         messageCacheRef.current.public = next;
-      } else if (requestedMode === 'ai' && address) {
+      } else if (requestedMode === 'ai' && chatAddress) {
         // Fetch AI messages using the API endpoint like the original
         const params = new URLSearchParams({
-          address,
+          address: chatAddress,
           limit: '50'
         });
         
@@ -156,19 +160,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (data.conversationId && !conversationId) {
           setConversationId(data.conversationId);
         }
-      } else if (requestedMode === 'agent' && address) {
+      } else if (requestedMode === 'agent' && chatAddress) {
         const agentCache = messageCacheRef.current['agent'] || [];
         setMessages(agentCache);
       } else {
         setMessages([]);
       }
-    } catch (err) {
+        } catch (err) {
       setError('Failed to fetch message history.');
       console.error(err);
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [mode, conversationId, address]);
+  }, [mode, conversationId, chatAddress]);
 
   // Original behavior: set up polling regardless of dialog visibility
   useEffect(() => {
@@ -182,7 +186,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           abortControllerRef.current.abort();
         }
       };
-    } else if (mode === 'ai' && address) {
+    } else if (mode === 'ai' && chatAddress) {
       fetchHistory(true, 'ai');
       return () => {
         // Abort any pending fetch requests
@@ -195,10 +199,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const agentCache = messageCacheRef.current['agent'] || [];
       setMessages(agentCache);
     }
-  }, [mode, address, fetchHistory]);
+  }, [mode, chatAddress, fetchHistory]);
 
   const sendMessage = async (messageText: string) => {
-    if (!address || !messageText.trim()) return;
+    if (!chatAddress || !messageText.trim()) return;
 
     // Cancel any previous request
     if (abortControllerRef.current) {
@@ -216,8 +220,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     
     const optimisticId = `optimistic-${Date.now()}`;
     const optimisticUserMessage: AnyChatMessage = mode === 'ai'
-    ? { id: optimisticId, address, message: messageText, timestamp: Date.now(), type: 'user', model: '', displayName: 'You', conversationId: conversationId || '' }
-    : { id: optimisticId, address, message: messageText, timestamp: Date.now(), displayName: 'You' };
+    ? { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), type: 'user', model: '', displayName: 'You', conversationId: conversationId || '' }
+    : { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), displayName: 'You' };
     
     setMessages(prev => {
       const next = [...prev, optimisticUserMessage];
@@ -307,7 +311,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               prompt: messageText,
-              userAddress: address, // Pass user address for spend permission validation
+              userAddress: chatAddress, // Use effective (Twin) address for spend permission validation
               conversationHistory, // Pass conversation context
               preparedSpendCalls
             }),
@@ -330,7 +334,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           const response = await fetch(endpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: messageText, address, conversationId }),
+              body: JSON.stringify({ message: messageText, address: chatAddress, conversationId }),
               signal
           });
   

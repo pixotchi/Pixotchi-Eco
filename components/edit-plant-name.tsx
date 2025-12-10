@@ -18,6 +18,9 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { useBalances } from '@/lib/balance-context';
 import { formatUnits } from "viem";
+import { useIsSolanaWallet } from '@/components/solana';
+import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
+import { formatWsol } from '@/lib/solana-quote';
 
 interface EditPlantNameProps {
   plant: Plant;
@@ -37,6 +40,8 @@ export function EditPlantName({
 }: EditPlantNameProps) {
   const { address } = useAccount();
   const { seedBalance, loading: isLoadingBalance } = useBalances();
+  const isSolana = useIsSolanaWallet();
+  const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [newName, setNewName] = useState(plant.name || '');
   const [isTransactionPending, setIsTransactionPending] = useState(false);
@@ -149,6 +154,8 @@ export function EditPlantName({
 
           {/* Balance and cost info */}
           <div className="space-y-3">
+            {!isSolana && (
+              <>
             <div className="flex items-center justify-between text-sm">
               <span>Your SEED Balance:</span>
               <div className="flex items-center space-x-1">
@@ -166,6 +173,21 @@ export function EditPlantName({
                 <span className="font-medium">{NAME_CHANGE_COST.toLocaleString()}</span>
               </div>
             </div>
+              </>
+            )}
+
+            {isSolana && (
+              <div className="flex items-center justify-between text-sm">
+                <span>Est. cost (SOL):</span>
+                <div className="font-medium">
+                  {solanaQuote
+                    ? solanaQuote.error
+                      ? <span className="text-amber-500">Quote error</span>
+                      : `${formatWsol(solanaQuote.wsolAmount)} SOL`
+                    : '...'}
+                </div>
+              </div>
+            )}
 
             {!canAffordNameChange && !isLoadingBalance && (
               <p className="text-sm text-red-500">
@@ -175,7 +197,32 @@ export function EditPlantName({
           </div>
 
           {/* Transaction Button */}
-          {canSubmit ? (
+          {isSolana ? (
+            // Solana bridge transaction for name change
+            <SolanaBridgeButton
+              actionType="setName"
+              plantId={plant.id}
+              name={newName.trim()}
+              buttonText={`Change Name (via Bridge)`}
+              buttonClassName="w-full"
+              onQuote={setSolanaQuote}
+              disabled={!isNameValid || isTransactionPending}
+              onSuccess={(signature) => {
+                toast.success(`Plant name changed to "${newName.trim()}"!`);
+                setIsTransactionPending(false);
+                if (onNameChanged) {
+                  onNameChanged(plant.id, newName.trim());
+                }
+                window.dispatchEvent(new Event('balances:refresh'));
+                setTimeout(() => setIsOpen(false), 1000);
+              }}
+              onError={(error) => {
+                console.error('Name change transaction failed:', error);
+                toast.error('Failed to change plant name. Please try again.');
+                setIsTransactionPending(false);
+              }}
+            />
+          ) : canSubmit ? (
             <div onClick={handleTransactionStart}>
               <PlantNameTransaction
                 plantId={plant.id}

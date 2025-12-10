@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import ChatDialog from "./chat-dialog";
+import { useIsSolanaWallet, useSolanaWallet } from "@/components/solana";
 
 interface ChatButtonProps {
   className?: string;
@@ -12,10 +13,12 @@ interface ChatButtonProps {
 
 export default function ChatButton({ className = "" }: ChatButtonProps) {
   const { isConnected } = useAccount();
+  const isSolana = useIsSolanaWallet();
+  const { solanaAddress } = useSolanaWallet();
   const [showChat, setShowChat] = useState(false);
 
   // Only show chat button when wallet is connected
-  if (!isConnected) {
+  if (!isConnected && !(isSolana && solanaAddress)) {
     return null;
   }
 

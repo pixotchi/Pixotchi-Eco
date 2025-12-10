@@ -47,6 +47,10 @@ import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useIsSolanaWallet, useSolanaWallet, SolanaBridgeBadge } from "@/components/solana";
+import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana";
+import { isSolanaEnabled } from "@/lib/solana-constants";
+
 interface WalletProfileProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -85,6 +89,11 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
 
   const { name, loading: isNameLoading } = usePrimaryName(address ?? undefined);
+  
+  // Solana wallet state
+  const isSolana = useIsSolanaWallet();
+  const { solanaAddress, twinAddress, isTwinSetup, isLoading: solanaLoading } = useSolanaWallet();
+  const { wallets: solanaPrivyWallets } = useSolanaPrivyWallets();
 
   const { loading, refreshBalances } = useBalances();
   const [showFullAddress, setShowFullAddress] = useState(false);
@@ -269,8 +278,16 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     return <CheckCircle className={`w-4 h-4 ${color}`} />;
   };
 
-  // Wallet provider info with MiniKit awareness
+  // Wallet provider info with MiniKit awareness and Solana support
   const getWalletProviderName = () => {
+    if (isSolana) {
+      const solWallet = solanaPrivyWallets?.[0];
+      const solName =
+        (solWallet as any)?.name ||
+        (solWallet as any)?.standardWallet?.name ||
+        (solWallet as any)?.walletClientType;
+      return solName || "Solana Wallet";
+    }
     if (!connector) return "Unknown";
 
     // In frame context, it's likely Base Account via Farcaster
@@ -393,7 +410,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     setSelectedEmbeddedAddress(event.target.value);
   };
 
-  if (!address || !isConnected) return null;
+  // For EVM wallets, check address. For Solana, check solanaAddress
+  const hasWallet = address || solanaAddress;
+  if (!hasWallet && !isSolana) return null;
 
   return (
     <React.Fragment>
@@ -486,6 +505,13 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <div className="flex items-center space-x-1">
                   {smartWalletLoading ? (
                     <Skeleton className="h-4 w-32" />
+                  ) : isSolana ? (
+                    <div className="flex items-center space-x-1">
+                      <Wallet className="w-3 h-3 text-purple-500" />
+                      <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
+                        Solana Twin (Smart Wallet)
+                      </span>
+                    </div>
                   ) : isSmartWallet ? (
                     <div className="flex items-center space-x-1">
                       <CheckCircle className="w-3 h-3 text-green-500" />
@@ -551,7 +577,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               )}
 
                             {/* Smart Wallet Recommendation for Regular Wallets */}
-              {!smartWalletLoading && !isSmartWallet && (
+              {!smartWalletLoading && !isSmartWallet && !isSolana && (
                 <div className="flex items-start space-x-2">
                   <Lightbulb className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
                   <span className="text-xs text-muted-foreground">
@@ -562,7 +588,96 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   </StandardContainer>
  </div>
 
-          {/* Wallet Address */}
+          {/* Solana Bridge Info (only shown for Solana wallets) */}
+          {isSolana && isSolanaEnabled() && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                  Solana Bridge
+                </h3>
+                <SolanaBridgeBadge />
+              </div>
+              <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">Solana Address</span>
+                  <div className="flex items-center gap-1">
+                    {solanaLoading ? (
+                      <Skeleton className="h-4 w-24" />
+                    ) : solanaAddress ? (
+                      <>
+                        <span className="text-xs font-mono">
+                          {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => copyToClipboard(solanaAddress, "Solana address")}
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">Twin Address (Base)</span>
+                  <div className="flex items-center gap-1">
+                    {solanaLoading ? (
+                      <Skeleton className="h-4 w-24" />
+                    ) : twinAddress ? (
+                      <>
+                        <span className="text-xs font-mono">
+                          {twinAddress.slice(0, 6)}...{twinAddress.slice(-4)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => copyToClipboard(twinAddress, "Twin address")}
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">Bridge Setup</span>
+                  <div className="flex items-center space-x-1">
+                    {solanaLoading ? (
+                      <Skeleton className="h-4 w-16" />
+                    ) : isTwinSetup ? (
+                      <>
+                        <CheckCircle className="w-3 h-3 text-green-500" />
+                        <span className="text-xs font-semibold text-green-600 dark:text-green-400">Ready</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-3 h-3 text-yellow-500" />
+                        <span className="text-xs font-semibold text-yellow-600 dark:text-yellow-400">Setup Required</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="pt-2 mt-2 border-t border-border">
+                  <div className="flex items-start space-x-2">
+                    <Info className="w-3 h-3 text-purple-400 mt-0.5 flex-shrink-0" />
+                    <span className="text-xs text-muted-foreground">
+                      Your plants are owned by your Twin address on Base. Some features like Land NFTs are not available with Solana wallets.
+                    </span>
+                  </div>
+                </div>
+              </StandardContainer>
+            </div>
+          )}
+
+          {/* Wallet Address - Only shown for EVM wallets */}
+          {address && (
 	<div className="space-y-2">
 	<h3 className="text-sm font-medium text-muted-foreground">
 	            Identity
@@ -605,6 +720,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
  </div>
   </StandardContainer>
  </div>
+          )}
 
           {/* Balances (consolidated) */}
           <BalanceCard variant="wallet-profile" />

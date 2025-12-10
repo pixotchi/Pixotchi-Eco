@@ -9,6 +9,8 @@ import { RefreshCw } from "lucide-react";
 import { formatTokenAmount, formatNumber, formatLargeNumber } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
+import { useIsSolanaWallet, useSolanaWallet } from "@/components/solana";
+import { formatSolAmount } from "@/lib/solana-bridge-executor";
 
 import { StandardContainer } from "./ui/pixel-container";
 
@@ -26,26 +28,28 @@ export default function BalanceCard({ className = "", variant = "default", onRef
     loading, 
     refreshBalances 
   } = useBalances();
+  const isSolana = useIsSolanaWallet();
+  const { solBalance, twinInfo, isLoading: solanaLoading } = useSolanaWallet();
 
-  // ETH balance for wallet profile variant
+  // ETH balance for wallet profile variant (EVM only)
   const {
     data: ethBalance,
     isLoading: ethLoading,
     refetch: refetchEthBalance,
   } = useBalance({
     address: address as `0x${string}`,
-    query: { enabled: !!address && variant === "wallet-profile" }
+    query: { enabled: !!address && variant === "wallet-profile" && !isSolana }
   });
 
   const handleRefresh = async () => {
-    if (variant === "wallet-profile") {
+    if (variant === "wallet-profile" && !isSolana) {
       refetchEthBalance();
     }
     await refreshBalances();
     if (onRefresh) onRefresh();
   };
 
-  if (!address) return null;
+  if (!address && !isSolana) return null;
 
   if (variant === "wallet-profile") {
     return (
@@ -72,22 +76,69 @@ export default function BalanceCard({ className = "", variant = "default", onRef
 
         {/* Single consolidated container listing ETH, SEED, LEAF */}
         <StandardContainer className="p-4 space-y-3 rounded-lg border bg-card">
-          {/* ETH */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span className="text-lg">Ξ</span>
-              <span className="text-sm font-medium">ETH</span>
-            </div>
-            <div className="text-right">
-              {ethLoading ? (
-                <Skeleton className="h-5 w-32" />
-              ) : (
-                <div className="text-sm font-mono">
-                  {ethBalance ? parseFloat(ethBalance.formatted).toFixed(6) : "0.000000"}
+          {/* Network-specific balances */}
+          {isSolana ? (
+            <>
+              {/* Native SOL */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Image src="/icons/solana.svg" alt="SOL" width={20} height={20} />
+                  <span className="text-sm font-medium">SOL</span>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="text-right">
+                  {solanaLoading ? (
+                    <Skeleton className="h-5 w-32" />
+                  ) : (
+                    <div className="text-sm font-mono">
+                      {solBalance !== undefined ? formatSolAmount(solBalance) : "0"}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-px bg-border" />
+
+              {/* wSOL on Base (Twin) */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Image src="/icons/solana.svg" alt="wSOL" width={20} height={20} />
+                  <span className="text-sm font-medium">SOL (Base)</span>
+                </div>
+                <div className="text-right">
+                  {solanaLoading ? (
+                    <Skeleton className="h-5 w-32" />
+                  ) : (
+                    <div className="text-sm font-mono">
+                      {twinInfo?.wsolBalance !== undefined ? formatSolAmount(twinInfo.wsolBalance) : "0"}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-px bg-border" />
+            </>
+          ) : (
+            <>
+              {/* ETH */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-lg">Ξ</span>
+                  <span className="text-sm font-medium">ETH</span>
+                </div>
+                <div className="text-right">
+                  {ethLoading ? (
+                    <Skeleton className="h-5 w-32" />
+                  ) : (
+                    <div className="text-sm font-mono">
+                      {ethBalance ? parseFloat(ethBalance.formatted).toFixed(6) : "0.000000"}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-px bg-border" />
+            </>
+          )}
 
           <div className="h-px bg-border" />
 

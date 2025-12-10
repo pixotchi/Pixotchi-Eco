@@ -183,13 +183,32 @@ import { useKeyboardAware, useViewportHeight, useKeyboardNavigation } from "@/ho
 export default function App() {
   const { context } = useMiniKit();
   const fc = useFrameContext();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected: isEvmConnected } = useAccount();
   const { theme } = useTheme();
   const { startIfFirstVisit } = useSlideshow();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const lastDismissedRef = useRef<string | null>(null);
+
+  // Privy state for debug + button readiness + Solana wallet check
+  const { ready: privyReady, authenticated, user } = usePrivy();
+  
+  // Check if user has a Solana wallet connected via Privy
+  const hasSolanaWallet = useMemo(() => {
+    if (!authenticated || !user) return false;
+    // Check linked accounts for Solana wallets
+    return user.linkedAccounts?.some(
+      (account: any) => account.type === 'wallet' && account.chainType === 'solana'
+    ) ?? false;
+  }, [authenticated, user]);
+  
+  // Combined connection check: EVM wallet OR Solana wallet
+  const isConnected = isEvmConnected || hasSolanaWallet;
+  
+  // For Solana users, use their Twin address as the "address" for the app
+  // This will be populated by the SolanaWalletContext
+  const effectiveAddress = address; // EVM address or undefined for Solana users
 
   // Enable intelligent tab prefetching
   useTabPrefetching(activeTab, isConnected);
@@ -213,15 +232,14 @@ export default function App() {
   const viewportHeight = useViewportHeight();
   const isKeyboardNavigation = useKeyboardNavigation();
 
-  // Privy state for debug + button readiness
-  const { ready: privyReady, authenticated } = usePrivy();
+  // Additional Privy/Wagmi hooks
   const { login } = useLogin();
   const { wallets } = useWallets();
   const { connect, connectors } = useConnect();
   
   // Initialize surface as null on server to avoid SSR hydration mismatch
   // sessionStorage doesn't exist on server, so we populate this on client mount
-  const [surface, setSurface] = useState<'privy' | 'base' | null>(null);
+  const [surface, setSurface] = useState<'privy' | 'base' | 'privysolana' | null>(null);
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
   
   // Populate surface from sessionStorage on client mount only
@@ -231,7 +249,7 @@ export default function App() {
     try {
       const stored = sessionStorageManager.getAuthSurface();
       // Map 'coinbase' to 'base' for backward compatibility
-      const effectiveSurface = stored === 'coinbase' ? 'base' : stored;
+      const effectiveSurface = stored === 'coinbase' ? 'base' : (stored as 'privy' | 'base' | 'privysolana' | null);
       setSurface(effectiveSurface);
     } catch (error) {
       console.warn('Failed to read surface on mount:', error);
@@ -267,7 +285,12 @@ export default function App() {
         // Map 'coinbase' to 'base'
         const auto = storedAuto === 'coinbase' ? 'base' : storedAuto;
         
+        // Handle Privy surfaces (both EVM and Solana)
         if (auto === 'privy' && surface === 'privy' && privyReady) {
+          await sessionStorageManager.removeAutologin();
+          if (mounted) login();
+        } else if (auto === 'privysolana' && surface === 'privysolana' && privyReady) {
+          // Solana surface - trigger Privy login (will show Solana wallets only)
           await sessionStorageManager.removeAutologin();
           if (mounted) login();
         } else if (auto === 'base' && surface === 'base') {
@@ -387,6 +410,54 @@ export default function App() {
         colorScheme="light"
         onClick={handleClick}
       />
+    );
+  }
+
+  // Render Solana wallet login button (switches to solana-only Privy mode)
+  function SolanaLoginButton() {
+    const [isProcessing, setIsProcessing] = useState(false);
+    const isSolanaEnabled = process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true';
+
+    if (!isSolanaEnabled) return null;
+
+    const handleClick = () => {
+      if (isProcessing) return;
+      setIsProcessing(true);
+      (async () => {
+        try {
+          await sessionStorageManager.setAuthSurfaceAndAutologin("privysolana");
+          const url = new URL(window.location.href);
+          url.searchParams.set("surface", "privysolana");
+          window.location.replace(url.toString());
+        } catch (error) {
+          console.error("Failed to switch to Solana surface:", error);
+          setIsProcessing(false);
+        }
+      })();
+    };
+
+    return (
+      <Button
+        className="w-full rounded-md text-base font-semibold text-white h-11 bg-gradient-to-r from-[#9945FF] to-[#14F195] hover:from-[#8833EE] hover:to-[#0DE084] active:from-[#9945FF] active:to-[#14F195] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+        variant="default"
+        onClick={handleClick}
+        disabled={isProcessing}
+      >
+        {isProcessing ? (
+          'Loading...'
+        ) : (
+          <span className="flex items-center gap-2">
+            <Image 
+              src="/icons/solana.svg" 
+              alt="Solana" 
+              width={20} 
+              height={20}
+              className="w-5 h-5"
+            />
+            Continue with Solana
+          </span>
+        )}
+      </Button>
     );
   }
 
@@ -511,7 +582,7 @@ export default function App() {
 
               <ChatButton />
               
-              {isConnected && address ? (
+              {isConnected ? (
                 <Button
                   variant="outline"
                   size="icon"
@@ -615,7 +686,20 @@ export default function App() {
                   </Button>
                 ) : null}
                 {!fc?.isInMiniApp ? (
-                  <BaseAccountButton />
+                  <>
+                    <BaseAccountButton />
+                    {/* Solana Bridge option - connects via Base-Solana bridge */}
+                    {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
+                      <>
+                        <div className="flex items-center gap-2 my-2">
+                          <div className="flex-1 h-px bg-border" />
+                          <span className="text-xs text-muted-foreground">or bridge from Solana</span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                        <SolanaLoginButton />
+                      </>
+                    )}
+                  </>
                 ) : (
                   <div className="text-muted-foreground text-sm">Connecting…</div>
                 )}

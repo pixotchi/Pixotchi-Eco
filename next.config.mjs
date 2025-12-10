@@ -5,6 +5,16 @@ const nextConfig = {
   // https://github.com/WalletConnect/walletconnect-monorepo/issues/1908
   webpack: (config) => {
     config.externals.push("pino-pretty", "lokijs", "encoding");
+    
+    // Solana/Privy: Add webpack externals for Yarn compatibility
+    // See: https://docs.privy.io/basics/react/setup#solana
+    if (process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true') {
+      config.externals['@solana/kit'] = 'commonjs @solana/kit';
+      config.externals['@solana-program/memo'] = 'commonjs @solana-program/memo';
+      config.externals['@solana-program/system'] = 'commonjs @solana-program/system';
+      config.externals['@solana-program/token'] = 'commonjs @solana-program/token';
+    }
+    
     // Resolve @solana/kit to a single version to avoid nested dependency issues
     config.resolve.alias = {
       ...config.resolve.alias,
