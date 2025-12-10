@@ -22,6 +22,7 @@ export const viewport: Viewport = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const baseURL = process.env.NEXT_PUBLIC_URL || "https://mini.pixotchi.tech";
+  // Farcaster miniapp/frame artwork (unchanged)
   const miniAppEmbed = {
     version: "1",
     imageUrl: process.env.NEXT_PUBLIC_APP_HERO_IMAGE || `${baseURL}/og-image.png`,
@@ -100,7 +101,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description: "Mint, grow, and care for your onchain plants in this Tamagotchi-style game on Base blockchain. Buy items, level up your plants, and earn rewards.",
       images: [
         {
-          url: process.env.NEXT_PUBLIC_APP_HERO_IMAGE || `${baseURL}/og-image.png`,
+          url: `${baseURL}/og-image-ig.png`,
           width: 1200,
           height: 630,
           alt: "Pixotchi Mini - Your pocket farm on Base!",
@@ -114,7 +115,7 @@ export async function generateMetadata(): Promise<Metadata> {
       creator: "@pixotchi", 
       title: "Pixotchi Mini - Onchain Tamagotchi Game",
       description: "Mint, grow, and care for your onchain plants on Base blockchain. The ultimate Web3 pet simulation game.",
-      images: [process.env.NEXT_PUBLIC_APP_HERO_IMAGE || `${baseURL}/og-image.png`],
+      images: [`${baseURL}/og-image-ig.png`],
     },
     robots: {
       index: true,
