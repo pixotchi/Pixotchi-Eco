@@ -31,7 +31,6 @@ import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum
 import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 import { SafeArea } from "@coinbase/onchainkit/minikit";
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
-import { installRpcDebugLogger } from "@/lib/rpc-debug";
 
 // Surface types for auth provider selection
 type AuthSurface = 'privy' | 'base' | 'privysolana';
@@ -136,13 +135,6 @@ export function Providers(props: { children: ReactNode }) {
   // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Development-only RPC debug hook to identify net_listening callers
-    if (process.env.NODE_ENV === 'development') {
-      installRpcDebugLogger({
-        filterMethods: ['net_listening'],
-        enable: true,
-      });
-    }
     const CACHE_VERSION = '2025-08-privy-v3-solana';
     try {
       if (needsCacheMigration(CACHE_VERSION)) {

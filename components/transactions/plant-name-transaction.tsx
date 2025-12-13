@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   Transaction,
   TransactionButton,
@@ -14,6 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -51,12 +52,21 @@ export function PlantNameTransaction({
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   
-  const calls = [{
+  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
+  const builderCapabilities = getBuilderCapabilities();
+  
+  const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'setPlantName',
     args: [BigInt(plantId), newName], 
-  }];
+  }], [plantId, newName]);
+  
+  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  const transformedCalls = useMemo(() => 
+    transformCallsWithBuilderCode(calls as any[]), 
+    [calls]
+  );
 
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Plant name change transaction successful:', tx);
@@ -77,10 +87,11 @@ export function PlantNameTransaction({
       </div>
       
       <Transaction
-        calls={calls}
+        calls={transformedCalls}
         onError={onError}
         onStatus={handleOnStatus}
         isSponsored={isSponsored}
+        capabilities={builderCapabilities}
       >
         <TransactionButton
           text={buttonText}

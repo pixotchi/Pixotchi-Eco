@@ -868,19 +868,16 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 }
 
 /* Fix for React 19 warning: Prevent mixing background shorthand with backgroundSize */
-/* Privy components may set background shorthand during rerenders, causing React warnings */
-/* Solution: Ensure backgroundSize is not set separately when background shorthand is used */
-/* This prevents the "Updating a style property during rerender" warning */
-[data-privy-root] {
-  /* Prevent backgroundSize from being set separately when background shorthand is used */
-  /* This ensures consistent background property usage */
-}
-
-/* Target Privy's internal elements that might have conflicting background styles */
+/* This warning comes from Privy's internal components setting both background shorthand */
+/* and backgroundSize separately during rerenders. This is a known Privy library issue. */
+/* The warning is harmless but annoying. We can't fix it without modifying Privy's code. */
+/* Note: This CSS rule attempts to mitigate but may not fully resolve the issue */
 [data-privy-root] span,
-[data-privy-root] div:not([class*="background"]):not([style*="background-image"]),
-[data-privy-root] button:not([class*="background"]):not([style*="background-image"]) {
-  /* Only reset backgroundSize if no background-image is explicitly set */
-  /* This allows Privy to use background shorthand without conflicts */
+[data-privy-root] div,
+[data-privy-root] button {
+  /* Use longhand properties to avoid conflicts with background shorthand */
+  /* This helps but won't completely eliminate the warning if Privy sets inline styles */
   background-size: auto;
+  background-position: center;
+  background-repeat: no-repeat;
 }

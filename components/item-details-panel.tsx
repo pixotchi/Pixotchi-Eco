@@ -181,6 +181,50 @@ export default function ItemDetailsPanel({
     };
   }, [isFenceItem, fenceV2Days]);
 
+  // Calculate fence-related values (must be before any early returns to comply with Rules of Hooks)
+  const currentTimeSec = Math.floor(Date.now() / 1000);
+  const fenceV2State = selectedPlant?.fenceV2 ?? null;
+  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > currentTimeSec);
+  const fenceV2MirroringV1 = Boolean(fenceV2State?.isMirroringV1);
+  const fenceV2EffectUntil = Number(fenceV2State?.activeUntil || 0);
+  const fenceV2BlockedByV1 = Boolean(fenceV2State?.v1Active);
+
+  const plantTimeUntilStarving = Number(selectedPlant?.timeUntilStarving || 0);
+  const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
+  const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
+  const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
+  
+  // These useMemo hooks must be called unconditionally (before any early returns)
+  const fenceV2Bounds = useMemo(() => {
+    const minFromConfig = fenceV2Config ? Math.max(1, fenceV2Config.minDurationDays || 1) : 1;
+    const maxFromConfig = fenceV2Config ? fenceV2Config.maxDurationDays || 30 : 30;
+    const todLimitedMax = plantTodDaysCap > 0 ? Math.min(maxFromConfig, plantTodDaysCap) : plantTodDaysCap;
+    const todCapBreached = todLimitedMax < minFromConfig;
+    const max = todCapBreached ? minFromConfig : Math.max(minFromConfig, todLimitedMax);
+    return { min: minFromConfig, max, todCapBreached };
+  }, [fenceV2Config, plantTodDaysCap]);
+
+  const fenceV2Calls = useMemo(() => {
+    if (!selectedPlant) return [];
+    return [buildFenceV2PurchaseCall(selectedPlant.id, fenceV2Days)];
+  }, [selectedPlant, fenceV2Days]);
+
+  const fenceButtonText = fenceV2Active
+    ? `Extend Fence (+${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`
+    : `Buy Fence (${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`;
+
+  // This useEffect must also be before any early returns
+  useEffect(() => {
+    if (!isFenceItem) return;
+    if (fenceV2Bounds.todCapBreached) return;
+    if (fenceV2Days > fenceV2Bounds.max) {
+      setFenceV2Days(fenceV2Bounds.max);
+    } else if (fenceV2Days < fenceV2Bounds.min) {
+      setFenceV2Days(fenceV2Bounds.min);
+    }
+  }, [isFenceItem, fenceV2Bounds, fenceV2Days]);
+
+  // Early return AFTER all hooks have been called
   if (!selectedItem || !selectedPlant) {
     return (
       <Card>
@@ -196,44 +240,6 @@ export default function ItemDetailsPanel({
       </Card>
     );
   }
-
-  const currentTimeSec = Math.floor(Date.now() / 1000);
-  const fenceV2State = selectedPlant.fenceV2 ?? null;
-  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > currentTimeSec);
-  const fenceV2MirroringV1 = Boolean(fenceV2State?.isMirroringV1);
-  const fenceV2EffectUntil = Number(fenceV2State?.activeUntil || 0);
-  const fenceV2BlockedByV1 = Boolean(fenceV2State?.v1Active);
-
-  const plantTimeUntilStarving = Number(selectedPlant.timeUntilStarving || 0);
-  const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
-  const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
-  const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
-  const fenceV2Bounds = useMemo(() => {
-    const minFromConfig = fenceV2Config ? Math.max(1, fenceV2Config.minDurationDays || 1) : 1;
-    const maxFromConfig = fenceV2Config ? fenceV2Config.maxDurationDays || 30 : 30;
-    const todLimitedMax = plantTodDaysCap > 0 ? Math.min(maxFromConfig, plantTodDaysCap) : plantTodDaysCap;
-    const todCapBreached = todLimitedMax < minFromConfig;
-    const max = todCapBreached ? minFromConfig : Math.max(minFromConfig, todLimitedMax);
-    return { min: minFromConfig, max, todCapBreached };
-  }, [fenceV2Config, plantTodDaysCap]);
-
-  const fenceV2Calls = useMemo(() => {
-    return [buildFenceV2PurchaseCall(selectedPlant.id, fenceV2Days)];
-  }, [selectedPlant.id, fenceV2Days]);
-
-  const fenceButtonText = fenceV2Active
-    ? `Extend Fence (+${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`
-    : `Buy Fence (${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`;
-
-  useEffect(() => {
-    if (!isFenceItem) return;
-    if (fenceV2Bounds.todCapBreached) return;
-    if (fenceV2Days > fenceV2Bounds.max) {
-      setFenceV2Days(fenceV2Bounds.max);
-    } else if (fenceV2Days < fenceV2Bounds.min) {
-      setFenceV2Days(fenceV2Bounds.min);
-    }
-  }, [isFenceItem, fenceV2Bounds, fenceV2Days]);
 
   const disabledMessage = (() => {
     if (!hasQuantitySelected && itemType === 'garden') return 'Select quantity above';

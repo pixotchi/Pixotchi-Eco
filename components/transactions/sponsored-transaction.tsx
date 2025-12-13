@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
   Transaction,
   TransactionButton,
@@ -14,6 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -43,7 +44,15 @@ export default function SponsoredTransaction({
   const { isSponsored } = usePaymaster();
   const { address } = useAccount();
   
-  // Sponsored transaction with paymaster integration
+  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
+  const builderCapabilities = getBuilderCapabilities();
+  
+  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  // This ensures builder attribution works across ALL wallet types
+  const transformedCalls = useMemo(() => 
+    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[], 
+    [calls]
+  );
   
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Sponsored transaction successful');
@@ -90,9 +99,10 @@ export default function SponsoredTransaction({
   return (
     <Transaction
       onStatus={handleOnStatus}
-      calls={calls}
+      calls={transformedCalls}
       onError={handleOnError}
       isSponsored={isSponsored}
+      capabilities={builderCapabilities}
     >
       <TransactionButton 
         text={buttonText} 

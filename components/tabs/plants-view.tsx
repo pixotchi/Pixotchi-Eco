@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -44,6 +44,7 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import { StandardContainer } from "@/components/ui/pixel-container";
 import EditPlantName from "@/components/edit-plant-name";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
 import ArcadeDialog from "@/components/arcade/ArcadeDialog";
 import { Gamepad2 } from "lucide-react";
@@ -60,7 +61,10 @@ export default function PlantsView() {
   const twinAddress = useTwinAddress();
   
   // Use Twin address for Solana users, EVM address otherwise
-  const address = evmAddress || (isSolana && twinAddress ? twinAddress as `0x${string}` : undefined);
+  // Memoize to prevent unnecessary re-renders when dependencies haven't actually changed
+  const address = useMemo(() => {
+    return evmAddress || (isSolana && twinAddress ? twinAddress as `0x${string}` : undefined);
+  }, [evmAddress, isSolana, twinAddress]);
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -74,6 +78,13 @@ export default function PlantsView() {
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
   const [claimOpen, setClaimOpen] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
+  const [claimConfirmationText, setClaimConfirmationText] = useState("");
+
+  // Use ref to track selected plant ID without causing re-renders or re-fetches
+  const selectedPlantIdRef = useRef<number | null>(null);
+  
+  // Request deduplication ref to prevent multiple simultaneous calls
+  const fetchDataPendingRef = useRef<string | null>(null);
 
   const fenceStatuses = useMemo(() => {
     if (!selectedPlant) return [];
@@ -108,7 +119,17 @@ export default function PlantsView() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!address) return;
+    if (!address) {
+      fetchDataPendingRef.current = null;
+      return;
+    }
+
+    // Prevent duplicate calls for the same address
+    if (fetchDataPendingRef.current === address) {
+      return;
+    }
+
+    fetchDataPendingRef.current = address;
 
     try {
       // Keep loading spinner for refetches
@@ -117,24 +138,46 @@ export default function PlantsView() {
 
       const plantsData = await getPlantsByOwner(address);
 
-      setPlants(plantsData);
-      
-      // After refetching, try to find the previously selected plant in the new data
-      if (plantsData.length > 0) {
-        const currentSelectedId = selectedPlant?.id;
-        const newSelectedPlant = plantsData.find(p => p.id === currentSelectedId);
-        setSelectedPlant(newSelectedPlant || plantsData[0]);
-      } else {
-        setSelectedPlant(null);
+      // Only update if address hasn't changed during the fetch
+      if (fetchDataPendingRef.current === address) {
+        setPlants(plantsData);
+        
+        // After refetching, try to find the previously selected plant in the new data
+        // Use ref to get the current selected ID without causing dependency issues
+        if (plantsData.length > 0) {
+          const currentSelectedId = selectedPlantIdRef.current;
+          const newSelectedPlant = currentSelectedId 
+            ? plantsData.find(p => p.id === currentSelectedId)
+            : null;
+          // Always update with fresh data - either preserve selection or select first
+          const plantToSelect = newSelectedPlant || plantsData[0];
+          setSelectedPlant(plantToSelect);
+          // Update ref to match the selected plant
+          selectedPlantIdRef.current = plantToSelect.id;
+        } else {
+          setSelectedPlant(null);
+          selectedPlantIdRef.current = null;
+        }
       }
-
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
-      setError("Failed to load dashboard data. Please refresh.");
+      // Only set error if address hasn't changed
+      if (fetchDataPendingRef.current === address) {
+        setError("Failed to load dashboard data. Please refresh.");
+      }
     } finally {
-      setLoading(false);
+      // Clear pending flag only if address hasn't changed
+      if (fetchDataPendingRef.current === address) {
+        setLoading(false);
+        fetchDataPendingRef.current = null;
+      }
     }
-  }, [address, selectedPlant?.id]); // Only depend on address and selected plant ID
+  }, [address]); // Only depend on address - selectedPlant is handled via ref
+
+  // Sync ref when selectedPlant changes (so ref is always up to date)
+  useEffect(() => {
+    selectedPlantIdRef.current = selectedPlant?.id ?? null;
+  }, [selectedPlant?.id]);
 
   // Set default selected item when catalogs are loaded
   useEffect(() => {
@@ -149,12 +192,12 @@ export default function PlantsView() {
     }
   }, [selectedItem, gardenItems, shopItems]);
 
+  // Fetch data when address changes - properly include fetchData in deps
   useEffect(() => {
-    if(address) {
+    if (address) {
       fetchData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]);
+  }, [address, fetchData]);
 
   const onPurchaseSuccess = useCallback(() => {
     console.log("Purchase successful, refetching data...");
@@ -408,7 +451,12 @@ export default function PlantsView() {
           </Card>
 
           {/* Claim Rewards Dialog */}
-          <Dialog open={claimOpen} onOpenChange={setClaimOpen}>
+          <Dialog open={claimOpen} onOpenChange={(open) => {
+            setClaimOpen(open);
+            if (!open) {
+              setClaimConfirmationText(""); // Reset confirmation text when dialog closes
+            }
+          }}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Claim ETH Rewards?</DialogTitle>
@@ -419,9 +467,22 @@ export default function PlantsView() {
                   <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
                   <span>{formatEth(selectedPlant.rewards)} ETH</span>
                 </div>
+                <div className="space-y-2 pt-2">
+                  <p className="text-sm font-medium text-foreground">Type <strong>CONFIRM</strong> to claim:</p>
+                  <Input
+                    value={claimConfirmationText}
+                    onChange={(e) => setClaimConfirmationText(e.target.value)}
+                    placeholder="CONFIRM"
+                    className="font-mono"
+                    autoFocus
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-3 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => setClaimOpen(false)}>No</Button>
+                <Button variant="outline" className="flex-1" onClick={() => {
+                  setClaimOpen(false);
+                  setClaimConfirmationText("");
+                }}>Cancel</Button>
                 <div className="flex-1">
                   {isSolana ? (
                     <SolanaBridgeButton
@@ -429,9 +490,10 @@ export default function PlantsView() {
                       plantId={selectedPlant.id}
                       buttonText="Yes, Claim"
                       buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0}
+                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                       onSuccess={() => {
                         setClaimOpen(false);
+                        setClaimConfirmationText("");
                         toast.success('Rewards claimed via bridge!');
                         fetchData();
                         window.dispatchEvent(new Event('balances:refresh'));
@@ -445,10 +507,11 @@ export default function PlantsView() {
                       plantId={selectedPlant.id}
                       buttonText="Yes, Claim"
                       buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0}
+                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                       minimal
                       onSuccess={() => {
                         setClaimOpen(false);
+                        setClaimConfirmationText("");
                         toast.success('Rewards claimed!');
                         fetchData();
                         window.dispatchEvent(new Event('balances:refresh'));

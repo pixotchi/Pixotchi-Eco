@@ -1,4 +1,5 @@
-import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient } from 'viem';
+import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
+import { appendBuilderSuffix } from './builder-code';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
 import UniswapAbi from '@/public/abi/Uniswap.json';
@@ -45,6 +46,51 @@ const getMaxFenceEffectUntil = (extensions: any[]): number => {
     }
   }
   return max;
+};
+
+// Derive Fence V2 state from extensions (since Fence V2 writes to the same storage)
+// This eliminates the need for a separate RPC call to fenceV2GetPurchaseStats
+const deriveFenceV2StateFromExtensions = (extensions: any[]): FenceV2State | null => {
+  if (!Array.isArray(extensions)) return null;
+  
+  const nowSec = Math.floor(Date.now() / 1000);
+  let maxEffectUntil = 0;
+  let hasActiveFence = false;
+  
+  // Find the fence with the latest expiry time
+  for (const extension of extensions) {
+    const owned = extension?.shopItemOwned || [];
+    if (!Array.isArray(owned)) continue;
+    for (const item of owned) {
+      if (!isFenceItemName(item?.name)) continue;
+      const effectUntil = Number(item?.effectUntil ?? 0);
+      if (!Number.isFinite(effectUntil) || effectUntil <= 0) continue;
+      
+      if (effectUntil > maxEffectUntil) {
+        maxEffectUntil = effectUntil;
+      }
+      
+      // Check if this fence is currently active
+      if (item?.effectIsOngoingActive && effectUntil > nowSec) {
+        hasActiveFence = true;
+      }
+    }
+  }
+  
+  if (maxEffectUntil === 0) return null;
+  
+  const secondsRemaining = Math.max(0, maxEffectUntil - nowSec);
+  const totalDaysPurchased = secondsRemaining > 0 ? Math.ceil(secondsRemaining / (24 * 60 * 60)) : 0;
+  const isActive = hasActiveFence && maxEffectUntil > nowSec;
+  
+  return {
+    activeUntil: maxEffectUntil,
+    isActive,
+    v1Active: false, // V1 is deprecated, all fences in extensions are V2
+    totalDaysPurchased,
+    quotedDays: null,
+    isMirroringV1: false,
+  };
 };
 
 // Common constants
@@ -764,21 +810,14 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
       args: [address as `0x${string}`],
     }) as any[];
 
-    const fenceV2Map = await attachFenceV2State(readClient, plants);
+    // Fence V2 writes to the same extensions storage, so derive it from extensions
+    // No need for separate RPC call to fenceV2GetPurchaseStats
 
     return plants.map((plant: any) => {
       const plantId = Number(plant.id);
       const extensions = plant.extensions || [];
-      const fenceV1EffectUntil = getMaxFenceEffectUntil(extensions);
-      const baseFenceV2 = fenceV2Map[plantId] ?? null;
-      const isMirroring = baseFenceV2?.isActive && fenceV1EffectUntil > 0 && approxTimestampEqual(fenceV1EffectUntil, Number(baseFenceV2?.activeUntil ?? 0));
-      const fenceV2 = baseFenceV2
-        ? {
-            ...baseFenceV2,
-            v1Active: isMirroring ? false : baseFenceV2.v1Active,
-            isMirroringV1: Boolean(isMirroring),
-          }
-        : null;
+      // Derive Fence V2 state directly from extensions (same storage)
+      const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
       return {
         id: plantId,
@@ -811,20 +850,14 @@ export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): 
     functionName: 'getPlantsByOwnerExtended',
     args: [address as `0x${string}`],
   }) as any[];
-  const fenceV2Map = await attachFenceV2State(readClient as any, plants);
+  // Fence V2 writes to the same extensions storage, so derive it from extensions
+  // No need for separate RPC call to fenceV2GetPurchaseStats
+  
   return plants.map((plant: any) => {
     const plantId = Number(plant.id);
     const extensions = plant.extensions || [];
-    const fenceV1EffectUntil = getMaxFenceEffectUntil(extensions);
-    const baseFenceV2 = fenceV2Map[plantId] ?? null;
-    const isMirroring = baseFenceV2?.isActive && fenceV1EffectUntil > 0 && approxTimestampEqual(fenceV1EffectUntil, Number(baseFenceV2?.activeUntil ?? 0));
-    const fenceV2 = baseFenceV2
-      ? {
-          ...baseFenceV2,
-          v1Active: isMirroring ? false : baseFenceV2.v1Active,
-          isMirroringV1: Boolean(isMirroring),
-        }
-      : null;
+    // Derive Fence V2 state directly from extensions (same storage)
+    const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
     return {
       id: plantId,
@@ -984,11 +1017,17 @@ export const transferPlants = async (
 
   for (const id of plantIds) {
     try {
-      const hash = await walletClient.writeContract({
-        address: PIXOTCHI_NFT_ADDRESS,
+      // Encode function data and append builder code suffix for ERC-8021 attribution
+      const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, BigInt(id)],
+      });
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
+      
+      const hash = await walletClient.sendTransaction({
+        to: PIXOTCHI_NFT_ADDRESS,
+        data: dataWithSuffix,
         account: walletClient.account,
         chain: base,
       });
@@ -1021,11 +1060,17 @@ export const transferLands = async (
 
   for (const id of landTokenIds) {
     try {
-      const hash = await walletClient.writeContract({
-        address: LAND_CONTRACT_ADDRESS,
+      // Encode function data and append builder code suffix for ERC-8021 attribution
+      const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, id],
+      });
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
+      
+      const hash = await walletClient.sendTransaction({
+        to: LAND_CONTRACT_ADDRESS,
+        data: dataWithSuffix,
         account: walletClient.account,
         chain: base,
       });
@@ -1952,28 +1997,21 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
-    const plants = await readClient.readContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'getPlantsInfoExtended',
-      args: [tokenIds.map(id => BigInt(id))],
-    }) as any[];
+  const plants = await readClient.readContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'getPlantsInfoExtended',
+    args: [tokenIds.map(id => BigInt(id))],
+  }) as any[];
 
-    const fenceV2Map = await attachFenceV2State(readClient, plants);
+  // Fence V2 writes to the same extensions storage, so derive it from extensions
+  // No need for separate RPC call to fenceV2GetPurchaseStats
 
-    return plants.map((plant: any) => {
-      const plantId = Number(plant.id);
-      const extensions = plant.extensions || [];
-    const fenceV1EffectUntil = getMaxFenceEffectUntil(extensions);
-    const baseFenceV2 = fenceV2Map[plantId] ?? null;
-    const isMirroring = baseFenceV2?.isActive && fenceV1EffectUntil > 0 && approxTimestampEqual(fenceV1EffectUntil, Number(baseFenceV2?.activeUntil ?? 0));
-    const fenceV2 = baseFenceV2
-      ? {
-          ...baseFenceV2,
-          v1Active: isMirroring ? false : baseFenceV2.v1Active,
-          isMirroringV1: Boolean(isMirroring),
-        }
-      : null;
+  return plants.map((plant: any) => {
+    const plantId = Number(plant.id);
+    const extensions = plant.extensions || [];
+    // Derive Fence V2 state directly from extensions (same storage)
+    const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
       return {
         id: plantId,
@@ -2062,6 +2100,8 @@ export const routerBatchTransfer = async (
   const hasLands = landIds.length > 0;
 
   let hash: `0x${string}`;
+  let encodedData: `0x${string}`;
+  
   if (hasPlants && hasLands) {
     // Single tx for both collections
     const tokens = [PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS] as const;
@@ -2069,35 +2109,36 @@ export const routerBatchTransfer = async (
       plantIds.map((id) => BigInt(id)),
       landIds
     ];
-    hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_ADDRESS,
+    encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721Multi',
       args: [tokens as unknown as `0x${string}`[], to, tokenIdsPerToken],
-      account: walletClient.account,
-      chain: base,
     });
   } else if (hasPlants) {
-    hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_ADDRESS,
+    encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721',
       args: [PIXOTCHI_NFT_ADDRESS, to, plantIds.map((id) => BigInt(id))],
-      account: walletClient.account,
-      chain: base,
     });
   } else if (hasLands) {
-    hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_ADDRESS,
+    encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721',
       args: [LAND_CONTRACT_ADDRESS, to, landIds],
-      account: walletClient.account,
-      chain: base,
     });
   } else {
     throw new Error('No assets to transfer');
   }
+  
+  // Append builder code suffix for ERC-8021 attribution
+  const dataWithSuffix = appendBuilderSuffix(encodedData);
+  
+  hash = await walletClient.sendTransaction({
+    to: BATCH_ROUTER_ADDRESS,
+    data: dataWithSuffix,
+    account: walletClient.account,
+    chain: base,
+  });
 
   const writeClient = getWriteClient();
   const receipt = await writeClient.waitForTransactionReceipt({ hash });

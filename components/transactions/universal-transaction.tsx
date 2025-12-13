@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { 
   Transaction, 
   TransactionButton,
@@ -12,6 +12,7 @@ import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
@@ -39,7 +40,14 @@ export default function UniversalTransaction({
   // Determine if this transaction should be sponsored
   const isSponsored = forceUnsponsored ? false : paymasterEnabled;
   
-  // Transaction sponsorship determined by paymaster context and forceUnsponsored flag
+  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
+  const builderCapabilities = getBuilderCapabilities();
+  
+  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  const transformedCalls = useMemo(() => 
+    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[], 
+    [calls]
+  );
   
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Universal transaction successful:', tx);
@@ -75,9 +83,10 @@ export default function UniversalTransaction({
   return (
     <Transaction
       onStatus={handleOnStatus}
-      calls={calls}
+      calls={transformedCalls}
       onError={handleOnError}
       isSponsored={isSponsored}
+      capabilities={builderCapabilities}
     >
       <TransactionButton 
         text={buttonText} 
