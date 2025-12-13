@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   Transaction,
   TransactionButton,
@@ -11,6 +11,7 @@ import {
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -43,12 +44,21 @@ export default function ClaimRewardsTransaction({
   disabled = false,
   minimal = false
 }: ClaimRewardsTransactionProps) {
-  const calls = [{
+  const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'redeem',
     args: [BigInt(plantId)],
-  }];
+  }], [plantId]);
+
+  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
+  const builderCapabilities = getBuilderCapabilities();
+  
+  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  const transformedCalls = useMemo(() => 
+    transformCallsWithBuilderCode(calls as any[]), 
+    [calls]
+  );
 
   const handleOnSuccess = useCallback((tx: any) => {
     onSuccess?.(tx);
@@ -69,10 +79,11 @@ export default function ClaimRewardsTransaction({
       )}
 
       <Transaction
-        calls={calls}
+        calls={transformedCalls}
         onError={onError}
         onStatus={handleOnStatus}
         isSponsored={false}
+        capabilities={builderCapabilities}
       >
         <TransactionButton
           text={buttonText}

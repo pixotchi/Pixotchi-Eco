@@ -1,4 +1,5 @@
-import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient } from 'viem';
+import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
+import { appendBuilderSuffix } from './builder-code';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
 import UniswapAbi from '@/public/abi/Uniswap.json';
@@ -984,11 +985,17 @@ export const transferPlants = async (
 
   for (const id of plantIds) {
     try {
-      const hash = await walletClient.writeContract({
-        address: PIXOTCHI_NFT_ADDRESS,
+      // Encode function data and append builder code suffix for ERC-8021 attribution
+      const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, BigInt(id)],
+      });
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
+      
+      const hash = await walletClient.sendTransaction({
+        to: PIXOTCHI_NFT_ADDRESS,
+        data: dataWithSuffix,
         account: walletClient.account,
         chain: base,
       });
@@ -1021,11 +1028,17 @@ export const transferLands = async (
 
   for (const id of landTokenIds) {
     try {
-      const hash = await walletClient.writeContract({
-        address: LAND_CONTRACT_ADDRESS,
+      // Encode function data and append builder code suffix for ERC-8021 attribution
+      const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, id],
+      });
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
+      
+      const hash = await walletClient.sendTransaction({
+        to: LAND_CONTRACT_ADDRESS,
+        data: dataWithSuffix,
         account: walletClient.account,
         chain: base,
       });
@@ -2062,6 +2075,8 @@ export const routerBatchTransfer = async (
   const hasLands = landIds.length > 0;
 
   let hash: `0x${string}`;
+  let encodedData: `0x${string}`;
+  
   if (hasPlants && hasLands) {
     // Single tx for both collections
     const tokens = [PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS] as const;
@@ -2069,35 +2084,36 @@ export const routerBatchTransfer = async (
       plantIds.map((id) => BigInt(id)),
       landIds
     ];
-    hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_ADDRESS,
+    encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721Multi',
       args: [tokens as unknown as `0x${string}`[], to, tokenIdsPerToken],
-      account: walletClient.account,
-      chain: base,
     });
   } else if (hasPlants) {
-    hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_ADDRESS,
+    encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721',
       args: [PIXOTCHI_NFT_ADDRESS, to, plantIds.map((id) => BigInt(id))],
-      account: walletClient.account,
-      chain: base,
     });
   } else if (hasLands) {
-    hash = await walletClient.writeContract({
-      address: BATCH_ROUTER_ADDRESS,
+    encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721',
       args: [LAND_CONTRACT_ADDRESS, to, landIds],
-      account: walletClient.account,
-      chain: base,
     });
   } else {
     throw new Error('No assets to transfer');
   }
+  
+  // Append builder code suffix for ERC-8021 attribution
+  const dataWithSuffix = appendBuilderSuffix(encodedData);
+  
+  hash = await walletClient.sendTransaction({
+    to: BATCH_ROUTER_ADDRESS,
+    data: dataWithSuffix,
+    account: walletClient.account,
+    chain: base,
+  });
 
   const writeClient = getWriteClient();
   const receipt = await writeClient.waitForTransactionReceipt({ hash });

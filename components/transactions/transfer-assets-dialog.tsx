@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount, useWalletClient } from "wagmi";
 import { getPlantsByOwner, getLandsByOwner, transferPlants, transferLands, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
-import { isAddress, getAddress } from "viem";
+import { isAddress, getAddress, encodeFunctionData } from "viem";
 import { toast } from "react-hot-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePublicClient } from "wagmi";
@@ -14,6 +14,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
 import { Land, Plant } from "@/lib/types";
+import { appendBuilderSuffix } from "@/lib/builder-code";
 
 interface TransferAssetsDialogProps {
   open: boolean;
@@ -411,11 +412,17 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     if (!walletClient || !address) return;
                     try {
                       setLoading(true);
-                      const hash = await walletClient.writeContract({
-                        address: PIXOTCHI_NFT_ADDRESS,
-                        abi: [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }],
+                      // Encode function data and append builder code suffix for ERC-8021 attribution
+                      const abi = [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }] as const;
+                      const encodedData = encodeFunctionData({
+                        abi,
                         functionName: 'setApprovalForAll',
                         args: [BATCH_ROUTER_ADDRESS, true],
+                      });
+                      const dataWithSuffix = appendBuilderSuffix(encodedData);
+                      const hash = await walletClient.sendTransaction({
+                        to: PIXOTCHI_NFT_ADDRESS,
+                        data: dataWithSuffix,
                         account: walletClient.account!,
                         chain: undefined,
                       });
@@ -441,11 +448,17 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     if (!walletClient || !address) return;
                     try {
                       setLoading(true);
-                      const hash = await walletClient.writeContract({
-                        address: LAND_CONTRACT_ADDRESS,
-                        abi: [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }],
+                      // Encode function data and append builder code suffix for ERC-8021 attribution
+                      const abi = [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }] as const;
+                      const encodedData = encodeFunctionData({
+                        abi,
                         functionName: 'setApprovalForAll',
                         args: [BATCH_ROUTER_ADDRESS, true],
+                      });
+                      const dataWithSuffix = appendBuilderSuffix(encodedData);
+                      const hash = await walletClient.sendTransaction({
+                        to: LAND_CONTRACT_ADDRESS,
+                        data: dataWithSuffix,
                         account: walletClient.account!,
                         chain: undefined,
                       });

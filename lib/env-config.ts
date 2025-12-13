@@ -36,6 +36,10 @@ export const CLIENT_ENV = {
   // Optional: Batch router for bulk ERC-721 transfers
   BATCH_ROUTER_ADDRESS: process.env.NEXT_PUBLIC_BATCH_ROUTER_ADDRESS,
   
+  // Builder Codes (ERC-8021) - for onchain activity attribution
+  // Register at https://base.dev to get your builder code
+  BUILDER_CODE: process.env.NEXT_PUBLIC_BUILDER_CODE || '',
+  
   // Solana Bridge Configuration
   SOLANA_ENABLED: process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true',
   SOLANA_NETWORK: (process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'mainnet') as 'mainnet' | 'devnet',
