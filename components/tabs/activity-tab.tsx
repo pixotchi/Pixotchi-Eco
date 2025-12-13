@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,9 @@ export default function ActivityTab() {
   const [currentPage, setCurrentPage] = useState(1);
   const { shopItems, gardenItems, isLoading: catalogsLoading } = useItemCatalogs();
 
+  // Request deduplication ref to prevent multiple simultaneous calls
+  const fetchActivitiesPendingRef = useRef<string | null>(null);
+
   const bundleItemConsumedEvents = (activities: ActivityEvent[]): ProcessedActivityEvent[] => {
     const bundledMap = new Map<string, BundledItemConsumedEvent>();
     const otherEvents: Exclude<ActivityEvent, ItemConsumedEvent>[] = [];
@@ -84,6 +87,16 @@ export default function ActivityTab() {
   };
 
   const fetchActivities = useCallback(async () => {
+    // Create a unique key for this fetch based on parameters
+    const fetchKey = `${view}-${myAddress || 'all'}-${shopItems.length}-${gardenItems.length}`;
+
+    // Prevent duplicate calls with the same parameters
+    if (fetchActivitiesPendingRef.current === fetchKey) {
+      return;
+    }
+
+    fetchActivitiesPendingRef.current = fetchKey;
+
     try {
       setLoading(true);
       setError(null);
@@ -108,14 +121,24 @@ export default function ActivityTab() {
         recentActivities = await getAllActivity();
       }
       
-      const processedActivities = bundleItemConsumedEvents(recentActivities);
-      setAllActivities(processedActivities);
-      setCurrentPage(1); // Reset to first page when activities change
+      // Only update if parameters haven't changed during the fetch
+      if (fetchActivitiesPendingRef.current === fetchKey) {
+        const processedActivities = bundleItemConsumedEvents(recentActivities);
+        setAllActivities(processedActivities);
+        setCurrentPage(1); // Reset to first page when activities change
+      }
     } catch (err) {
-      setError("Failed to load activities. Please try again later.");
       console.error(err);
+      // Only set error if parameters haven't changed
+      if (fetchActivitiesPendingRef.current === fetchKey) {
+        setError("Failed to load activities. Please try again later.");
+      }
     } finally {
-      setLoading(false);
+      // Clear pending flag only if parameters haven't changed
+      if (fetchActivitiesPendingRef.current === fetchKey) {
+        setLoading(false);
+        fetchActivitiesPendingRef.current = null;
+      }
     }
   }, [view, myAddress, shopItems, gardenItems]);
 

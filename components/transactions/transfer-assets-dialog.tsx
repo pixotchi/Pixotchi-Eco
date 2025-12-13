@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,9 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   const [selectedPlantIds, setSelectedPlantIds] = useState<number[]>([]);
   const [selectedLandIds, setSelectedLandIds] = useState<string[]>([]);
 
+  // Request deduplication ref to prevent multiple simultaneous calls
+  const loadCountsPendingRef = useRef<string | null>(null);
+
   // ENS resolution state
   const debouncedDest = useDebounce(destination, 400);
   const [resolvingEns, setResolvingEns] = useState(false);
@@ -55,54 +58,83 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           setSelectedPlantIds([]);
           setSelectedLandIds([]);
         }
+        loadCountsPendingRef.current = null;
         return;
       }
+
+      // Prevent duplicate calls for the same address
+      if (loadCountsPendingRef.current === address) {
+        return;
+      }
+
+      loadCountsPendingRef.current = address;
       setFetchingCounts(true);
+
       try {
         const [plants, lands] = await Promise.all([
           getPlantsByOwner(address),
           getLandsByOwner(address),
         ]);
         if (!active) return;
-        setCounts({ plants: plants.length, lands: lands.length });
-        setPlantsList(plants);
-        setLandsList(lands);
-        setSelectedPlantIds(plants.map((p) => p.id));
-        setSelectedLandIds(lands.map((l) => l.tokenId.toString()));
-        // Check router approvals when available
-        if (routerAvailable && publicClient) {
-          try {
-            const [ap1, ap2] = await Promise.all([
-              publicClient.readContract({
-                address: PIXOTCHI_NFT_ADDRESS,
-                abi: [{ inputs: [{name:'owner',type:'address'},{name:'operator',type:'address'}], name:'isApprovedForAll', outputs:[{name:'',type:'bool'}], stateMutability:'view', type:'function' }],
-                functionName: 'isApprovedForAll',
-                args: [address as `0x${string}`, BATCH_ROUTER_ADDRESS],
-              }) as Promise<boolean>,
-              publicClient.readContract({
-                address: LAND_CONTRACT_ADDRESS,
-                abi: [{ inputs: [{name:'owner',type:'address'},{name:'operator',type:'address'}], name:'isApprovedForAll', outputs:[{name:'',type:'bool'}], stateMutability:'view', type:'function' }],
-                functionName: 'isApprovedForAll',
-                args: [address as `0x${string}`, BATCH_ROUTER_ADDRESS],
-              }) as Promise<boolean>,
-            ]);
-            if (active) setApprovals({ plants: ap1, lands: ap2 });
-          } catch {}
+        // Only update if address hasn't changed during the fetch
+        if (loadCountsPendingRef.current === address) {
+          setCounts({ plants: plants.length, lands: lands.length });
+          setPlantsList(plants);
+          setLandsList(lands);
+          setSelectedPlantIds(plants.map((p) => p.id));
+          setSelectedLandIds(lands.map((l) => l.tokenId.toString()));
+          // Check router approvals when available
+          if (routerAvailable && publicClient) {
+            try {
+              const [ap1, ap2] = await Promise.all([
+                publicClient.readContract({
+                  address: PIXOTCHI_NFT_ADDRESS,
+                  abi: [{ inputs: [{name:'owner',type:'address'},{name:'operator',type:'address'}], name:'isApprovedForAll', outputs:[{name:'',type:'bool'}], stateMutability:'view', type:'function' }],
+                  functionName: 'isApprovedForAll',
+                  args: [address as `0x${string}`, BATCH_ROUTER_ADDRESS],
+                }) as Promise<boolean>,
+                publicClient.readContract({
+                  address: LAND_CONTRACT_ADDRESS,
+                  abi: [{ inputs: [{name:'owner',type:'address'},{name:'operator',type:'address'}], name:'isApprovedForAll', outputs:[{name:'',type:'bool'}], stateMutability:'view', type:'function' }],
+                  functionName: 'isApprovedForAll',
+                  args: [address as `0x${string}`, BATCH_ROUTER_ADDRESS],
+                }) as Promise<boolean>,
+              ]);
+              if (active && loadCountsPendingRef.current === address) {
+                setApprovals({ plants: ap1, lands: ap2 });
+              }
+            } catch {}
+          }
         }
       } catch (e) {
         if (!active) return;
-        setCounts({ plants: 0, lands: 0 });
-        setPlantsList([]);
-        setLandsList([]);
-        setSelectedPlantIds([]);
-        setSelectedLandIds([]);
+        // Only set error if address hasn't changed
+        if (loadCountsPendingRef.current === address) {
+          setCounts({ plants: 0, lands: 0 });
+          setPlantsList([]);
+          setLandsList([]);
+          setSelectedPlantIds([]);
+          setSelectedLandIds([]);
+        }
       } finally {
-        if (active) setFetchingCounts(false);
+        if (active) {
+          // Clear pending flag only if address hasn't changed
+          if (loadCountsPendingRef.current === address) {
+            setFetchingCounts(false);
+            loadCountsPendingRef.current = null;
+          }
+        }
       }
     };
     loadCounts();
-    return () => { active = false; };
-  }, [open, address]);
+    return () => { 
+      active = false;
+      // Clear pending flag on cleanup
+      if (loadCountsPendingRef.current === address) {
+        loadCountsPendingRef.current = null;
+      }
+    };
+  }, [open, address, routerAvailable, publicClient]);
 
   const isValidAddress = useMemo(() => {
     try {

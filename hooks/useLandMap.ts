@@ -8,6 +8,9 @@ let cachedLeaderboard: LandLeaderboardEntry[] = [];
 let lastFetchTime = 0;
 const CACHE_DURATION = 60000; // 1 minute
 
+// Request deduplication - prevent multiple simultaneous fetches
+let fetchPending = false;
+
 export function useLandMap(initialUserLands: Land[]) {
   const [totalSupply, setTotalSupply] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,10 +23,20 @@ export function useLandMap(initialUserLands: Land[]) {
     let mounted = true;
     
     const fetchData = async () => {
+      // Prevent duplicate simultaneous calls
+      if (fetchPending) {
+        return;
+      }
+
+      fetchPending = true;
+
       try {
         // 1. Get Total Supply
         const { totalSupply: supply } = await getLandSupply();
-        if (!mounted) return;
+        if (!mounted) {
+          fetchPending = false;
+          return;
+        }
         setTotalSupply(supply);
         
         // 2. Get Neighbor Data (using leaderboard cache)
@@ -57,6 +70,8 @@ export function useLandMap(initialUserLands: Land[]) {
           setTotalSupply(Math.max(500, maxUserTokenId));
           setIsLoading(false);
         }
+      } finally {
+        fetchPending = false;
       }
     };
 

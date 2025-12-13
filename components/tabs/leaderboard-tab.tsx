@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,7 +63,10 @@ export default function LeaderboardTab() {
   const twinAddress = useTwinAddress();
   
   // Use Twin address for Solana users, EVM address otherwise
-  const address = isSolana && twinAddress ? twinAddress as `0x${string}` : evmAddress;
+  // Memoize to prevent unnecessary re-renders when dependencies haven't actually changed
+  const address = useMemo(() => {
+    return isSolana && twinAddress ? twinAddress as `0x${string}` : evmAddress;
+  }, [isSolana, twinAddress, evmAddress]);
   const [plants, setPlants] = useState<LeaderboardPlant[]>([]);
   const [landRows, setLandRows] = useState<Array<{ rank: number; landId: number; name: string; exp: number }>>([]);
   const [stakeRows, setStakeRows] = useState<StakeLeaderboardEntry[]>([]);
@@ -100,6 +103,17 @@ export default function LeaderboardTab() {
     data: RocksLeaderboardEntry[] | null;
     timestamp: number;
   }>({ data: null, timestamp: 0 });
+
+  // Cache for land leaderboard data (5 minutes)
+  const landDataCacheRef = useRef<{
+    data: Array<{ rank: number; landId: number; name: string; exp: number }> | null;
+    timestamp: number;
+  }>({ data: null, timestamp: 0 });
+  const LAND_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  // Request deduplication refs to prevent multiple simultaneous calls
+  const fetchLeaderboardDataPendingRef = useRef<boolean>(false);
+  const fetchMyPlantsPendingRef = useRef<string | null>(null);
 
   const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
     if (!hash || !publicClient) return;
@@ -147,6 +161,12 @@ export default function LeaderboardTab() {
   };
 
   const fetchLeaderboardData = useCallback(async () => {
+    // Prevent duplicate simultaneous calls
+    if (fetchLeaderboardDataPendingRef.current) {
+      return;
+    }
+    
+    fetchLeaderboardDataPendingRef.current = true;
     setLoading(true);
     setError(null);
     
@@ -167,18 +187,26 @@ export default function LeaderboardTab() {
         }));
       
       setPlants(sortedPlants);
-      // Fetch lands leaderboard as well
+      // Fetch lands leaderboard as well (with caching)
       try {
-        const lands = await getLandLeaderboard();
-        const sortedLands = [...lands]
-          .sort((a, b) => Number(b.experiencePoints - a.experiencePoints))
-          .map((l, idx) => ({
-            rank: idx + 1,
-            landId: Number((l as any).landId ?? 0),
-            name: (l as any).name || `Land #${Number((l as any).landId ?? 0)}`,
-            exp: Number((l as any).experiencePoints ?? 0) / 1e18,
-          }));
-        setLandRows(sortedLands);
+        const now = Date.now();
+        const cacheAge = now - landDataCacheRef.current.timestamp;
+        
+        if (landDataCacheRef.current.data && cacheAge < LAND_CACHE_DURATION) {
+          setLandRows(landDataCacheRef.current.data);
+        } else {
+          const lands = await getLandLeaderboard();
+          const sortedLands = [...lands]
+            .sort((a, b) => Number(b.experiencePoints - a.experiencePoints))
+            .map((l, idx) => ({
+              rank: idx + 1,
+              landId: Number((l as any).landId ?? 0),
+              name: (l as any).name || `Land #${Number((l as any).landId ?? 0)}`,
+              exp: Number((l as any).experiencePoints ?? 0) / 1e18,
+            }));
+          landDataCacheRef.current = { data: sortedLands, timestamp: now };
+          setLandRows(sortedLands);
+        }
       } catch {}
       
       setCurrentPage(1); // Reset to first page when data changes
@@ -187,6 +215,7 @@ export default function LeaderboardTab() {
       setError('Failed to load leaderboard data. Please try again.');
     } finally {
       setLoading(false);
+      fetchLeaderboardDataPendingRef.current = false;
     }
   }, []);
 
@@ -291,13 +320,30 @@ export default function LeaderboardTab() {
   const fetchMyPlants = useCallback(async () => {
     if (!address) {
       setMyPlants([]);
+      fetchMyPlantsPendingRef.current = null;
       return;
     }
+    
+    // Prevent duplicate calls for the same address
+    if (fetchMyPlantsPendingRef.current === address) {
+      return;
+    }
+    
+    fetchMyPlantsPendingRef.current = address;
+    
     try {
       const owned = await getPlantsByOwner(address);
-      setMyPlants(owned);
+      // Only update if address hasn't changed during the fetch
+      if (fetchMyPlantsPendingRef.current === address) {
+        setMyPlants(owned);
+      }
     } catch (e) {
       // ignore
+    } finally {
+      // Clear pending flag only if address hasn't changed
+      if (fetchMyPlantsPendingRef.current === address) {
+        fetchMyPlantsPendingRef.current = null;
+      }
     }
   }, [address]);
 
@@ -434,6 +480,26 @@ export default function LeaderboardTab() {
     }
 
     if (totalItems === 0) {
+      // Check if user is in attackable mode and has no plants
+      if (filterMode === 'attackable' && address && myPlants.length === 0) {
+        return (
+          <div className="text-center py-8 space-y-2">
+            <p className="text-muted-foreground">Mint a plant first to attack other plants with it.</p>
+            <p className="text-sm text-muted-foreground">Go to the Mint tab to get started.</p>
+          </div>
+        );
+      }
+      
+      // Check if user is in attackable mode but has plants (just no attackable targets)
+      if (filterMode === 'attackable' && address && myPlants.length > 0) {
+        return (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No attackable plants found. All plants are either yours, dead, or protected by fences.</p>
+          </div>
+        );
+      }
+      
+      // Default message for 'all' mode or when not connected
       return (
         <div className="text-center py-8 text-muted-foreground">
           <p>No plants found in the leaderboard.</p>

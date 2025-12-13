@@ -58,6 +58,11 @@ export default function LandsView() {
   // Remember last selected building id to persist across land switches
   const lastSelectedBuildingIdRef = useRef<number | null>(null);
 
+  // Request deduplication refs to prevent multiple simultaneous calls
+  const fetchDataPendingRef = useRef<string | null>(null);
+  const fetchApprovalStatusPendingRef = useRef<string | null>(null);
+  const fetchBuildingDataPendingRef = useRef<bigint | null>(null);
+
   // Token approval state for land interactions
   const [needsLeafApproval, setNeedsLeafApproval] = useState<boolean>(true);
   const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
@@ -67,130 +72,190 @@ export default function LandsView() {
     if (!address) {
       setNeedsLeafApproval(true);
       setNeedsSeedApproval(true);
+      fetchApprovalStatusPendingRef.current = null;
       return;
     }
+
+    // Prevent duplicate calls for the same address
+    if (fetchApprovalStatusPendingRef.current === address) {
+      return;
+    }
+
+    fetchApprovalStatusPendingRef.current = address;
+
     try {
       const [hasLeafApproval, hasSeedApproval] = await Promise.all([
         checkLeafTokenApproval(address),
         checkLandTokenApproval(address),
       ]);
-      setNeedsLeafApproval(!hasLeafApproval);
-      setNeedsSeedApproval(!hasSeedApproval);
+      // Only update if address hasn't changed during the fetch
+      if (fetchApprovalStatusPendingRef.current === address) {
+        setNeedsLeafApproval(!hasLeafApproval);
+        setNeedsSeedApproval(!hasSeedApproval);
+      }
     } catch (error) {
       console.error("Failed to fetch land token approval status:", error);
-      setNeedsLeafApproval(true);
-      setNeedsSeedApproval(true);
+      // Only set error if address hasn't changed
+      if (fetchApprovalStatusPendingRef.current === address) {
+        setNeedsLeafApproval(true);
+        setNeedsSeedApproval(true);
+      }
+    } finally {
+      // Clear pending flag only if address hasn't changed
+      if (fetchApprovalStatusPendingRef.current === address) {
+        fetchApprovalStatusPendingRef.current = null;
+      }
     }
   }, [address]);
 
   const fetchData = useCallback(async () => {
-    if (!address) return;
+    if (!address) {
+      fetchDataPendingRef.current = null;
+      return;
+    }
+
+    // Prevent duplicate calls for the same address
+    if (fetchDataPendingRef.current === address) {
+      return;
+    }
+
+    fetchDataPendingRef.current = address;
     setLoading(true);
     setError(null);
+
     try {
       const landsData = await getLandsByOwner(address);
 
-      setLands(landsData);
+      // Only update if address hasn't changed during the fetch
+      if (fetchDataPendingRef.current === address) {
+        setLands(landsData);
 
-
-      if (landsData.length > 0) {
-        const currentSelectedId = selectedLand?.tokenId;
-        const newSelectedLand = landsData.find(p => p.tokenId === currentSelectedId);
-        setSelectedLand(newSelectedLand || landsData[0]);
-      } else {
-        setSelectedLand(null);
+        if (landsData.length > 0) {
+          const currentSelectedId = selectedLand?.tokenId;
+          const newSelectedLand = landsData.find(p => p.tokenId === currentSelectedId);
+          setSelectedLand(newSelectedLand || landsData[0]);
+        } else {
+          setSelectedLand(null);
+        }
       }
     } catch (err) {
       console.error("Error fetching lands data:", err);
-      setError("Failed to load your lands. Please try again.");
+      // Only set error if address hasn't changed
+      if (fetchDataPendingRef.current === address) {
+        setError("Failed to load your lands. Please try again.");
+      }
     } finally {
-      setLoading(false);
+      // Clear pending flag only if address hasn't changed
+      if (fetchDataPendingRef.current === address) {
+        setLoading(false);
+        fetchDataPendingRef.current = null;
+      }
     }
-  }, [address]);
+  }, [address, selectedLand?.tokenId]);
 
   const fetchBuildingData = useCallback(async () => {
     if (!selectedLand) {
       setVillageBuildings([]);
       setTownBuildings([]);
       setSelectedBuilding(null);
+      fetchBuildingDataPendingRef.current = null;
       return;
     }
 
+    const landId = selectedLand.tokenId;
+
+    // Prevent duplicate calls for the same land
+    if (fetchBuildingDataPendingRef.current === landId) {
+      return;
+    }
+
+    fetchBuildingDataPendingRef.current = landId;
     setBuildingsLoading(true);
+
     try {
       const [villageData, townData] = await Promise.all([
-        getVillageBuildingsByLandId(selectedLand.tokenId),
-        getTownBuildingsByLandId(selectedLand.tokenId)
+        getVillageBuildingsByLandId(landId),
+        getTownBuildingsByLandId(landId)
       ]);
 
-      setVillageBuildings(villageData || []);
-      
-      // Add prebuilt buildings to town data (Warehouse ID 3, Stake House ID 1)
-      const prebuiltBuildings = [
-        {
-          id: 1, // Stake House
-          level: 1,
-          maxLevel: 1,
-          productionRatePlantPointsPerDay: BigInt(0),
-          productionRatePlantLifetimePerDay: BigInt(0),
-          accumulatedPoints: BigInt(0),
-          accumulatedLifetime: BigInt(0),
-          levelUpgradeCostLeaf: BigInt(0),
-          levelUpgradeCostSeedInstant: BigInt(0),
-          levelUpgradeBlockInterval: BigInt(0),
-          isUpgrading: false,
-          blockHeightUpgradeInitiated: BigInt(0),
-          blockHeightUntilUpgradeDone: BigInt(0)
-        },
-        {
-          id: 3, // Warehouse
-          level: 1,
-          maxLevel: 1,
-          productionRatePlantPointsPerDay: BigInt(0),
-          productionRatePlantLifetimePerDay: BigInt(0),
-          accumulatedPoints: BigInt(0),
-          accumulatedLifetime: BigInt(0),
-          levelUpgradeCostLeaf: BigInt(0),
-          levelUpgradeCostSeedInstant: BigInt(0),
-          levelUpgradeBlockInterval: BigInt(0),
-          isUpgrading: false,
-          blockHeightUpgradeInitiated: BigInt(0),
-          blockHeightUntilUpgradeDone: BigInt(0)
+      // Only update if land hasn't changed during the fetch
+      if (fetchBuildingDataPendingRef.current === landId) {
+          setVillageBuildings(villageData || []);
+        
+        // Add prebuilt buildings to town data (Warehouse ID 3, Stake House ID 1)
+        const prebuiltBuildings = [
+          {
+            id: 1, // Stake House
+            level: 1,
+            maxLevel: 1,
+            productionRatePlantPointsPerDay: BigInt(0),
+            productionRatePlantLifetimePerDay: BigInt(0),
+            accumulatedPoints: BigInt(0),
+            accumulatedLifetime: BigInt(0),
+            levelUpgradeCostLeaf: BigInt(0),
+            levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeBlockInterval: BigInt(0),
+            isUpgrading: false,
+            blockHeightUpgradeInitiated: BigInt(0),
+            blockHeightUntilUpgradeDone: BigInt(0)
+          },
+          {
+            id: 3, // Warehouse
+            level: 1,
+            maxLevel: 1,
+            productionRatePlantPointsPerDay: BigInt(0),
+            productionRatePlantLifetimePerDay: BigInt(0),
+            accumulatedPoints: BigInt(0),
+            accumulatedLifetime: BigInt(0),
+            levelUpgradeCostLeaf: BigInt(0),
+            levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeBlockInterval: BigInt(0),
+            isUpgrading: false,
+            blockHeightUpgradeInitiated: BigInt(0),
+            blockHeightUntilUpgradeDone: BigInt(0)
+          }
+        ];
+        
+        // Combine prebuilt buildings with contract data, avoiding duplicates
+        const allTownBuildings = [...prebuiltBuildings];
+        if (townData) {
+          townData.forEach(building => {
+            // Only add if not already in prebuilt (avoid duplicates)
+            if (!prebuiltBuildings.some(prebuilt => prebuilt.id === building.id)) {
+              allTownBuildings.push(building);
+            }
+          });
         }
-      ];
-      
-      // Combine prebuilt buildings with contract data, avoiding duplicates
-      const allTownBuildings = [...prebuiltBuildings];
-      if (townData) {
-        townData.forEach(building => {
-          // Only add if not already in prebuilt (avoid duplicates)
-          if (!prebuiltBuildings.some(prebuilt => prebuilt.id === building.id)) {
-            allTownBuildings.push(building);
-          }
-        });
-      }
-      
-      setTownBuildings(allTownBuildings);
+        
+        setTownBuildings(allTownBuildings);
 
-      // Choose preferred building for the new land: try last selected id, else first
-      const currentBuildings = buildingType === 'village' ? (villageData || []) : allTownBuildings;
-      if (currentBuildings.length > 0) {
-        const preferredId = lastSelectedBuildingIdRef.current;
-        const preferred = preferredId != null ? currentBuildings.find(b => Number(b.id) === Number(preferredId)) : undefined;
-        if (preferred) {
-          if (!selectedBuilding || Number(selectedBuilding.id) !== Number(preferred.id)) {
-            setSelectedBuilding(preferred);
+        // Choose preferred building for the new land: try last selected id, else first
+        const currentBuildings = buildingType === 'village' ? (villageData || []) : allTownBuildings;
+        if (currentBuildings.length > 0) {
+          const preferredId = lastSelectedBuildingIdRef.current;
+          const preferred = preferredId != null ? currentBuildings.find(b => Number(b.id) === Number(preferredId)) : undefined;
+          if (preferred) {
+            if (!selectedBuilding || Number(selectedBuilding.id) !== Number(preferred.id)) {
+              setSelectedBuilding(preferred);
+            }
+          } else if (!selectedBuilding) {
+            setSelectedBuilding(currentBuildings[0]);
           }
-        } else if (!selectedBuilding) {
-          setSelectedBuilding(currentBuildings[0]);
         }
       }
     } catch (err) {
       console.error("Error fetching building data:", err);
-      setVillageBuildings([]);
-      setTownBuildings([]);
+      // Only set error if land hasn't changed
+      if (fetchBuildingDataPendingRef.current === landId) {
+        setVillageBuildings([]);
+        setTownBuildings([]);
+      }
     } finally {
-      setBuildingsLoading(false);
+      // Clear pending flag only if land hasn't changed
+      if (fetchBuildingDataPendingRef.current === landId) {
+        setBuildingsLoading(false);
+        fetchBuildingDataPendingRef.current = null;
+      }
     }
   }, [selectedLand, buildingType, selectedBuilding]);
 
