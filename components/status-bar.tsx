@@ -113,21 +113,22 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
             </div>
             )}
             {/* CC token - upcoming token (TBA) -> Creator Coin Launch */}
-            <button 
-              type="button"
-              className={cn(
-                "inline-flex items-center gap-1.5 px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md transition-all duration-300 btn-compact",
-                ccEligible 
-                  ? "bg-primary/10 text-primary font-bold hover:bg-primary/20 animate-pulse drop-shadow-[0_0_6px_rgba(var(--primary-rgb),0.5)] cursor-pointer hover:scale-105 active:scale-95" 
-                  : "opacity-70 cursor-default"
-              )}
-              onClick={() => ccEligible && setCcDialogOpen(true)}
-              disabled={!ccEligible}
-              aria-label="Creator Coin Status"
-            >
-              <img src="/icons/cc.png" alt="" width={14} height={14} aria-hidden="true" className={cn("w-3.5 h-3.5", ccEligible && "drop-shadow-md")} />
-              <span className="tabular-nums truncate">{ccText}</span>
-            </button>
+            {ccEligible ? (
+              <button 
+                type="button"
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md transition-all duration-300 btn-compact bg-primary/10 text-primary font-bold hover:bg-primary/20 animate-pulse drop-shadow-[0_0_6px_rgba(var(--primary-rgb),0.5)] cursor-pointer hover:scale-105 active:scale-95"
+                onClick={() => setCcDialogOpen(true)}
+                aria-label="Creator Coin Status"
+              >
+                <img src="/icons/cc.png" alt="" width={14} height={14} aria-hidden="true" className="w-3.5 h-3.5 drop-shadow-md" />
+                <span className="tabular-nums truncate">{ccText}</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 min-w-0" aria-label="CC balance: coming soon">
+                <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
+                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ccText}</span>
+              </div>
+            )}
           </div>
           <div className="shrink-0 flex items-center gap-2">
             {/* Show Solana badge when connected via Solana */}
