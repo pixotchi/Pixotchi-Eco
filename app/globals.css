@@ -684,6 +684,10 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 }
 @keyframes theme-transition { 0% { opacity: 1; transform: scale(1) } 50% { opacity: .8; transform: scale(1.02) } 100% { opacity: 1; transform: scale(1) } }
 @keyframes spin-slow { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+@keyframes coin-flip { 
+  0% { transform: rotateY(0deg); } 
+  100% { transform: rotateY(360deg); } 
+}
 
 @utility animate-accordion-down { animation: accordion-down .2s ease-out; }
 @utility animate-accordion-up { animation: accordion-up .2s ease-out; }
@@ -693,6 +697,7 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 @utility animate-theme-transition { animation: theme-transition .3s ease-in-out; }
 @utility animate-streak-colors { animation: streak-colors 1.2s linear infinite; }
 @utility animate-spin-slow { animation: spin-slow 5s linear infinite; }
+@utility animate-coin-flip { animation: coin-flip 3s linear infinite; }
 
 /* Ensure semantic color utilities exist even if Tailwind doesn't generate them */
 @utility bg-primary { background-color: var(--color-primary); }
