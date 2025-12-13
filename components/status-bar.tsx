@@ -52,6 +52,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   const leafText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(leaf);
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
+  const ccText = loading ? <Skeleton className="h-5 w-12" /> : "TBA";
 
   return (
     <div className="w-full bg-background" role="region" aria-label="Account balance and staking">
@@ -76,6 +77,11 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
             </div>
             )}
+            {/* CC token - upcoming token (TBA) */}
+            <div className="flex items-center gap-1.5 min-w-0" aria-label="CC balance: coming soon">
+              <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
+              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ccText}</span>
+            </div>
           </div>
           <div className="shrink-0 flex items-center gap-2">
             {/* Show Solana badge when connected via Solana */}
