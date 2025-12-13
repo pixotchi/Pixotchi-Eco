@@ -44,6 +44,7 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import { StandardContainer } from "@/components/ui/pixel-container";
 import EditPlantName from "@/components/edit-plant-name";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
 import ArcadeDialog from "@/components/arcade/ArcadeDialog";
 import { Gamepad2 } from "lucide-react";
@@ -74,6 +75,7 @@ export default function PlantsView() {
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
   const [claimOpen, setClaimOpen] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
+  const [claimConfirmationText, setClaimConfirmationText] = useState("");
 
   const fenceStatuses = useMemo(() => {
     if (!selectedPlant) return [];
@@ -408,7 +410,12 @@ export default function PlantsView() {
           </Card>
 
           {/* Claim Rewards Dialog */}
-          <Dialog open={claimOpen} onOpenChange={setClaimOpen}>
+          <Dialog open={claimOpen} onOpenChange={(open) => {
+            setClaimOpen(open);
+            if (!open) {
+              setClaimConfirmationText(""); // Reset confirmation text when dialog closes
+            }
+          }}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Claim ETH Rewards?</DialogTitle>
@@ -419,9 +426,22 @@ export default function PlantsView() {
                   <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
                   <span>{formatEth(selectedPlant.rewards)} ETH</span>
                 </div>
+                <div className="space-y-2 pt-2">
+                  <p className="text-sm font-medium text-foreground">Type <strong>CONFIRM</strong> to claim:</p>
+                  <Input
+                    value={claimConfirmationText}
+                    onChange={(e) => setClaimConfirmationText(e.target.value)}
+                    placeholder="CONFIRM"
+                    className="font-mono"
+                    autoFocus
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-3 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => setClaimOpen(false)}>No</Button>
+                <Button variant="outline" className="flex-1" onClick={() => {
+                  setClaimOpen(false);
+                  setClaimConfirmationText("");
+                }}>Cancel</Button>
                 <div className="flex-1">
                   {isSolana ? (
                     <SolanaBridgeButton
@@ -429,9 +449,10 @@ export default function PlantsView() {
                       plantId={selectedPlant.id}
                       buttonText="Yes, Claim"
                       buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0}
+                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                       onSuccess={() => {
                         setClaimOpen(false);
+                        setClaimConfirmationText("");
                         toast.success('Rewards claimed via bridge!');
                         fetchData();
                         window.dispatchEvent(new Event('balances:refresh'));
@@ -445,10 +466,11 @@ export default function PlantsView() {
                       plantId={selectedPlant.id}
                       buttonText="Yes, Claim"
                       buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0}
+                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                       minimal
                       onSuccess={() => {
                         setClaimOpen(false);
+                        setClaimConfirmationText("");
                         toast.success('Rewards claimed!');
                         fetchData();
                         window.dispatchEvent(new Event('balances:refresh'));
