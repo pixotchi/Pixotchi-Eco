@@ -36,8 +36,8 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     let active = true;
 
     const checkEligibility = async () => {
-      // Logic: Must have SEED > 0 AND >0 Plants AND >0 Lands
-      if (!address || seed <= BigInt(0)) {
+      // Logic: Must have SEED > 0 AND LEAF > 0 AND >0 Plants AND >0 Lands
+      if (!address || seed <= BigInt(0) || leaf <= BigInt(0)) {
         if (active) setCcEligible(false);
         return;
       }

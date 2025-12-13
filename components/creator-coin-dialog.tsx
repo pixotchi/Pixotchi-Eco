@@ -42,7 +42,7 @@ export function CreatorCoinDialog({ open, onOpenChange }: CreatorCoinDialogProps
             $PIXOTCHI Launch
           </DialogTitle>
           <DialogDescription className="text-foreground text-lg font-medium">
-            16th of December, 17:00 UTC
+            16th of December, ~16:00 UTC
             <br/>
             on{" "}
             <button 
