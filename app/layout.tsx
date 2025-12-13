@@ -54,7 +54,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: {
-      default: "Pixotchi Mini - Your pocket farm on Base!",
+      default: "Pixotchi Mini - Grow your farm, Earn rewards!",
       template: "%s | Pixotchi Mini"
     },
     description: "Mint, grow, and care for your onchain plants in this Tamagotchi-style game on Base blockchain. Buy items, level up your plants, and earn rewards in the ultimate onchain pet simulation.",
@@ -97,14 +97,14 @@ export async function generateMetadata(): Promise<Metadata> {
       locale: "en_US",
       url: baseURL,
       siteName: "Pixotchi Mini",
-      title: "Pixotchi Mini - Your pocket farm on Base!",
+      title: "Pixotchi Mini - Grow your farm, Earn rewards!",
       description: "Mint, grow, and care for your onchain plants in this Tamagotchi-style game on Base blockchain. Buy items, level up your plants, and earn rewards.",
       images: [
         {
           url: `${baseURL}/og-image-ig.png`,
           width: 1200,
           height: 630,
-          alt: "Pixotchi Mini - Your pocket farm on Base!",
+          alt: "Pixotchi Mini - Grow your farm, Earn rewards!",
           type: "image/png",
         }
       ],
