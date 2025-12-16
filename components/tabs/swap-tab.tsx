@@ -13,7 +13,7 @@ import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import type { Token } from '@coinbase/onchainkit/token';
 import type { LifecycleStatus } from '@coinbase/onchainkit/swap';
-import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS, JESSE_TOKEN_ADDRESS, CREATOR_TOKEN_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
 import type { TransactionReceipt } from 'viem';
 
@@ -28,7 +28,7 @@ export default function SwapTab() {
   // Track OnchainKit's internal token state to detect when toggle happens
   const lastKnownStateRef = useRef<{ from: string; to: string }>({ from: 'ETH', to: 'SEED' });
 
-  const { ETH, SEED, USDC, JESSE } = useMemo(() => {
+  const { ETH, SEED, USDC, JESSE, PIXOTCHI } = useMemo(() => {
     const eth: Token = {
       address: "", // Empty string for native ETH (per OnchainKit guidelines)
       chainId: 8453,
@@ -65,40 +65,54 @@ export default function SwapTab() {
       image: "/icons/jessetoken.png",
     };
 
+    const pixotchi: Token = {
+      address: CREATOR_TOKEN_ADDRESS,
+      chainId: 8453,
+      decimals: 18,
+      name: "PIXOTCHI",
+      symbol: "PIXOTCHI",
+      image: "/icons/cc.png",
+    };
+
     return {
       ETH: eth,
       SEED: seed,
       USDC: usdc,
       JESSE: jesse,
+      PIXOTCHI: pixotchi,
     };
   }, []);
 
-  // SEED or JESSE must always be part of the swap
-  // If "to" is SEED or JESSE, "from" can be ETH, USDC, SEED, or JESSE (but not same as "to")
-  // If "to" is ETH or USDC, "from" must be SEED or JESSE
+  // SEED or JESSE or PIXOTCHI must always be part of the swap
+  // If "to" is SEED or JESSE or PIXOTCHI, "from" can be ETH, USDC, SEED, JESSE, or PIXOTCHI (but not same as "to")
+  // If "to" is ETH or USDC, "from" must be SEED or JESSE or PIXOTCHI
   const fromSwappable = useMemo(() => {
     if (toTokenSymbol === 'SEED') {
-      return [ETH, USDC, JESSE];
+      return [ETH, USDC, JESSE, PIXOTCHI];
     } else if (toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE') {
-      return [ETH, USDC, SEED];
+      return [ETH, USDC, SEED, PIXOTCHI];
+    } else if (toTokenSymbol === 'PIXOTCHI') {
+      return [ETH, USDC, SEED, JESSE];
     } else {
-      // "to" is ETH or USDC, so "from" must be SEED or JESSE
-      return [SEED, JESSE];
+      // "to" is ETH or USDC, so "from" must be SEED or JESSE or PIXOTCHI
+      return [SEED, JESSE, PIXOTCHI];
     }
-  }, [toTokenSymbol, ETH, USDC, SEED, JESSE]);
+  }, [toTokenSymbol, ETH, USDC, SEED, JESSE, PIXOTCHI]);
 
-  // If "from" is SEED or JESSE, "to" can be ETH, USDC, SEED, or JESSE (but not same as "from")
-  // If "from" is ETH or USDC, "to" must be SEED or JESSE
+  // If "from" is SEED or JESSE or PIXOTCHI, "to" can be ETH, USDC, SEED, JESSE, or PIXOTCHI (but not same as "from")
+  // If "from" is ETH or USDC, "to" must be SEED or JESSE or PIXOTCHI
   const toSwappable = useMemo(() => {
     if (fromTokenSymbol === 'SEED') {
-      return [ETH, USDC, JESSE];
+      return [ETH, USDC, JESSE, PIXOTCHI];
     } else if (fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE') {
-      return [ETH, USDC, SEED];
+      return [ETH, USDC, SEED, PIXOTCHI];
+    } else if (fromTokenSymbol === 'PIXOTCHI') {
+      return [ETH, USDC, SEED, JESSE];
     } else {
-      // "from" is ETH or USDC, so "to" must be SEED or JESSE
-      return [SEED, JESSE];
+      // "from" is ETH or USDC, so "to" must be SEED or JESSE or PIXOTCHI
+      return [SEED, JESSE, PIXOTCHI];
     }
-  }, [fromTokenSymbol, ETH, USDC, SEED, JESSE]);
+  }, [fromTokenSymbol, ETH, USDC, SEED, JESSE, PIXOTCHI]);
 
   const handleSuccess = useCallback((receipt: TransactionReceipt) => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
@@ -198,13 +212,14 @@ export default function SwapTab() {
                 onError={handleError}
                 onStatus={handleStatus}
               >
-                {/* SEED or JESSE must always be part of the swap - only show valid token pairs */}
+                {/* SEED or JESSE or PIXOTCHI must always be part of the swap - only show valid token pairs */}
                 <SwapAmountInput 
                   label="Sell" 
                   token={
                     fromTokenSymbol === 'ETH' ? ETH 
                     : fromTokenSymbol === 'USDC' ? USDC 
                     : fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE' ? JESSE
+                    : fromTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
                     : SEED
                   }
                   swappableTokens={fromSwappable}
@@ -217,6 +232,7 @@ export default function SwapTab() {
                     toTokenSymbol === 'ETH' ? ETH 
                     : toTokenSymbol === 'USDC' ? USDC 
                     : toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE' ? JESSE
+                    : toTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
                     : SEED
                   }
                   swappableTokens={toSwappable}
