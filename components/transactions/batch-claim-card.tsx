@@ -30,6 +30,12 @@ interface ClaimableItem {
 
 const MIN_PIXOTCHI_REQUIRED = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MIN_TOKENS || 10);
 
+// Maximum calls per batch to avoid tx simulation failures
+// EIP-5792 + Smart Wallet practical limit: ~25-30 calls work reliably
+// Beyond this, RPC simulation may timeout or gas estimation may fail
+// Can be tuned via environment variable after testing with /api/admin/batch-limits
+const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 25);
+
 export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps) {
   const [loading, setLoading] = useState(false);
   const [claimableItems, setClaimableItems] = useState<ClaimableItem[]>([]);
@@ -102,6 +108,18 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lands]); // Re-bind if lands change, but scanLands uses current props/state
 
+  // Calculate batch info
+  const totalBatches = Math.ceil(claimableItems.length / MAX_BATCH_SIZE);
+  const hasMultipleBatches = claimableItems.length > MAX_BATCH_SIZE;
+  
+  // Current batch is always the first MAX_BATCH_SIZE items
+  // After each successful claim, we re-scan and the claimed items are removed
+  const currentBatchItems = useMemo(() => 
+    claimableItems.slice(0, MAX_BATCH_SIZE),
+    [claimableItems]
+  );
+
+  // Total points/lifetime across ALL items (for display)
   const totalPoints = useMemo(() => 
     claimableItems.reduce((acc, item) => acc + item.points, BigInt(0)), 
     [claimableItems]
@@ -112,14 +130,26 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
     [claimableItems]
   );
 
+  // Current batch points/lifetime (what will be claimed this tx)
+  const batchPoints = useMemo(() => 
+    currentBatchItems.reduce((acc, item) => acc + item.points, BigInt(0)), 
+    [currentBatchItems]
+  );
+
+  const batchLifetime = useMemo(() => 
+    currentBatchItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)), 
+    [currentBatchItems]
+  );
+
+  // Only create calls for current batch
   const calls = useMemo(() => 
-    claimableItems.map(item => ({
+    currentBatchItems.map(item => ({
       address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'villageClaimProduction',
       args: [item.landId, item.buildingId],
     })),
-    [claimableItems]
+    [currentBatchItems]
   );
 
   if (loading && claimableItems.length === 0) {
@@ -143,9 +173,17 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
       <CardContent className="p-4 space-y-3">
         <div className="flex justify-between items-center pb-2 border-b border-border/50">
           <span className="font-semibold">Batch Claim</span>
-          <span className="text-xs text-muted-foreground">{claimableItems.length} Buildings</span>
+          <div className="flex items-center gap-2">
+            {hasMultipleBatches && (
+              <span className="text-xs text-primary font-medium">
+                Batch 1/{totalBatches}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">{claimableItems.length} Buildings</span>
+          </div>
         </div>
 
+        {/* Show totals for all items */}
         <div className="flex items-center justify-between gap-4 text-sm">
           <div className="flex items-center gap-2">
             <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4" />
@@ -160,6 +198,19 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
             </span>
           </div>
         </div>
+
+        {/* Multi-batch info */}
+        {hasMultipleBatches && (
+          <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs">
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+              <span>
+                Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}. 
+                This batch: {currentBatchItems.length} buildings ({formatScore(Number(batchPoints))} PTS)
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Gating Logic */}
         {!isSmartWallet ? (
@@ -182,11 +233,19 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         ) : (
           <SmartWalletTransaction
             calls={calls}
-            buttonText="Claim All"
+            buttonText={hasMultipleBatches ? `Claim Batch (${currentBatchItems.length})` : "Claim All"}
             buttonClassName="w-full font-bold h-9 text-sm"
             onSuccess={(tx) => {
-              toast.success(`Claimed from ${claimableItems.length} buildings!`);
-              scanLands(); // Re-scan to clear the card
+              const claimedCount = currentBatchItems.length;
+              const remainingCount = claimableItems.length - claimedCount;
+              
+              if (remainingCount > 0) {
+                toast.success(`Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
+              } else {
+                toast.success(`Claimed from all ${claimedCount} buildings!`);
+              }
+              
+              scanLands(); // Re-scan to update remaining items
               if (onSuccess) onSuccess();
               window.dispatchEvent(new Event('balances:refresh'));
               window.dispatchEvent(new Event('buildings:refresh'));
