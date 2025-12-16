@@ -25,6 +25,7 @@ import { EditLandName } from "@/components/edit-land-name";
 import { LandMapModal } from "@/components/map/land-map-modal";
 import { useLandMap } from "@/hooks/useLandMap";
 import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
+import BatchClaimCard from "@/components/transactions/batch-claim-card";
 
 export default function LandsView() {
   // Gate: Solana wallets cannot use Land features
@@ -393,6 +394,22 @@ export default function LandsView() {
 
   return (
     <div className="space-y-4">
+      {/* Batch Claim Card - Only shows if there are claimable rewards */}
+      {lands.length > 0 && (
+        <BatchClaimCard 
+          lands={lands} 
+          onSuccess={() => {
+            fetchBuildingData(); // Refresh current land buildings
+            // Also refresh selected land to update warehouse numbers
+            if (selectedLand) {
+              getLandById(selectedLand.tokenId).then(latest => {
+                if (latest) setSelectedLand(latest);
+              });
+            }
+          }}
+        />
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* StatusBar replaces BalanceCard globally under header */}
 
