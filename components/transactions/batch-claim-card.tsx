@@ -173,7 +173,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
             <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
               <Lock className="w-3 h-3" />
-              {MIN_PIXOTCHI_REQUIRED} PIXOTCHI Required
+              {MIN_PIXOTCHI_REQUIRED} PIXOTCHI in wallet required to unlock batch claim.
             </div>
             <div className="text-[10px] font-mono text-muted-foreground">
               Balance: {pixotchiBalanceNum.toFixed(2)}
