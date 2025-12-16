@@ -16,6 +16,7 @@ export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS
 export const STAKE_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.STAKE_CONTRACT_ADDRESS);
 export const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
 export const PIXOTCHI_TOKEN_ADDRESS = getAddress('0x546D239032b24eCEEE0cb05c92FC39090846adc7');
+export const CREATOR_TOKEN_ADDRESS = getAddress('0xa2ef17bb7eea1143196678337069dfa24d37d2ac');
 // Known token addresses for reference
 export const JESSE_TOKEN_ADDRESS = getAddress('0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59');
 export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;

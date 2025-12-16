@@ -3,13 +3,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { usePublicClient } from 'wagmi';
-import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
+import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { leafAbi } from '@/public/abi/leaf-abi';
 import { useSolanaWalletContext } from '@/lib/solana-wallet-context';
 
 interface BalanceContextType {
   seedBalance: bigint;
   leafBalance: bigint;
+  pixotchiBalance: bigint;
   loading: boolean;
   refreshBalances: () => Promise<void>;
 }
@@ -39,6 +40,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const publicClient = usePublicClient();
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [leafBalance, setLeafBalance] = useState<bigint>(BigInt(0));
+  const [pixotchiBalance, setPixotchiBalance] = useState<bigint>(BigInt(0));
   const [loading, setLoading] = useState(true);
   
   // Get Solana wallet info - use Twin address for balance queries
@@ -59,6 +61,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
     if (!address || !publicClient) {
       setSeedBalance(BigInt(0));
       setLeafBalance(BigInt(0));
+      setPixotchiBalance(BigInt(0));
       setLoading(false);
       return;
     }
@@ -100,16 +103,23 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
                 functionName: 'balanceOf',
                 args: [fetchAddress],
               },
+              {
+                address: CREATOR_TOKEN_ADDRESS,
+                abi: ERC20_BALANCE_ABI,
+                functionName: 'balanceOf',
+                args: [fetchAddress],
+              },
             ],
             allowFailure: true,
           });
 
-          const [seedResult, leafResult] = results;
+          const [seedResult, leafResult, pixotchiResult] = results;
 
           // Only update state if address hasn't changed during fetch
           if (lastAddressRef.current === fetchAddress) {
             setSeedBalance(seedResult.status === 'success' ? (seedResult.result as bigint) : BigInt(0));
             setLeafBalance(leafResult.status === 'success' ? (leafResult.result as bigint) : BigInt(0));
+            setPixotchiBalance(pixotchiResult.status === 'success' ? (pixotchiResult.result as bigint) : BigInt(0));
           }
 
         } catch (error) {
@@ -118,6 +128,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
           if (lastAddressRef.current === fetchAddress) {
             setSeedBalance(BigInt(0));
             setLeafBalance(BigInt(0));
+            setPixotchiBalance(BigInt(0));
           }
         } finally {
           // Only update loading if address hasn't changed during fetch
@@ -225,6 +236,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
       if (mounted) {
         setSeedBalance(BigInt(0));
         setLeafBalance(BigInt(0));
+        setPixotchiBalance(BigInt(0));
         setLoading(false);
       }
       // Clear pending request
@@ -258,6 +270,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const value = {
     seedBalance,
     leafBalance,
+    pixotchiBalance,
     loading,
     refreshBalances: () => fetchBalances(true, false), // Direct calls bypass throttling but allow deduplication
   };
