@@ -28,7 +28,7 @@ interface ClaimableItem {
   lifetime: bigint;
 }
 
-const MIN_PIXOTCHI_REQUIRED = 10;
+const MIN_PIXOTCHI_REQUIRED = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MIN_TOKENS || 10);
 
 export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps) {
   const [loading, setLoading] = useState(false);
