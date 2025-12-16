@@ -8,8 +8,6 @@ import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import { formatUnits } from "viem";
 import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/components/solana";
-import { getPlantsByOwner, getLandsByOwner } from "@/lib/contracts";
-import { CreatorCoinDialog } from "@/components/creator-coin-dialog";
 import { cn } from "@/lib/utils";
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
@@ -21,45 +19,13 @@ function formatTokenShort(amount: bigint, decimals: number = 18): string {
 
 export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   const { address } = useAccount();
-  const { seedBalance: seed, leafBalance: leaf, loading, refreshBalances } = useBalances();
+  const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading, refreshBalances } = useBalances();
   const isSolana = useIsSolanaWallet();
   const { twinInfo, solBalance } = useSolanaWallet();
 
   const [stakingOpen, setStakingOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   
-  // Creator Coin Launch Logic
-  const [ccEligible, setCcEligible] = useState(false);
-  const [ccDialogOpen, setCcDialogOpen] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    const checkEligibility = async () => {
-      // Logic: Must have SEED > 0 AND LEAF > 0 AND >0 Plants AND >0 Lands
-      if (!address || seed <= BigInt(0) || leaf <= BigInt(0)) {
-        if (active) setCcEligible(false);
-        return;
-      }
-
-      try {
-        const [plants, lands] = await Promise.all([
-          getPlantsByOwner(address),
-          getLandsByOwner(address)
-        ]);
-        
-        if (active) {
-          setCcEligible(plants.length > 0 && lands.length > 0);
-        }
-      } catch (e) {
-        console.error("Failed to check CC eligibility", e);
-      }
-    };
-
-    checkEligibility();
-    return () => { active = false; };
-  }, [address, seed]);
-
   // Balance refreshes are handled automatically by balance-context.tsx via events
   // No need for manual refresh on every render or tab change
 
@@ -85,9 +51,9 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
 
   const seedText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(seed);
   const leafText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(leaf);
+  const pixotchiText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(pixotchi);
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
-  const ccText = loading ? <Skeleton className="h-5 w-12" /> : "TBA";
 
   return (
     <div className="w-full bg-background" role="region" aria-label="Account balance and staking">
@@ -112,23 +78,10 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
             </div>
             )}
-            {/* CC token - upcoming token (TBA) -> Creator Coin Launch */}
-            {ccEligible ? (
-              <button 
-                type="button"
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md transition-all duration-300 btn-compact bg-primary/10 text-primary font-bold hover:bg-primary/20 animate-pulse drop-shadow-[0_0_6px_rgba(var(--primary-rgb),0.5)] cursor-pointer hover:scale-105 active:scale-95"
-                onClick={() => setCcDialogOpen(true)}
-                aria-label="Creator Coin Status"
-              >
-                <img src="/icons/cc.png" alt="" width={14} height={14} aria-hidden="true" className="w-3.5 h-3.5 drop-shadow-md" />
-                <span className="tabular-nums truncate">{ccText}</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label="CC balance: coming soon">
-                <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
-                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ccText}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5 min-w-0" aria-label={`PIXOTCHI balance: ${pixotchiText}`}>
+              <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
+              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{pixotchiText}</span>
+            </div>
           </div>
           <div className="shrink-0 flex items-center gap-2">
             {/* Show Solana badge when connected via Solana */}
@@ -160,7 +113,6 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
         </div>
       </div>
       <StakingDialog open={stakingOpen} onOpenChange={setStakingOpen} />
-      <CreatorCoinDialog open={ccDialogOpen} onOpenChange={setCcDialogOpen} />
       {tasksOpen && (
         <div className="sr-only" aria-hidden />
       )}
