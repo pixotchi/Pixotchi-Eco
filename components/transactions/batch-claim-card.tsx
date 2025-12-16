@@ -4,8 +4,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Coins, Clock, AlertTriangle, Lock } from 'lucide-react';
 import { Land } from '@/lib/types';
-import { getLandBuildingsBatch, LAND_CONTRACT_ADDRESS, landAbi } from '@/lib/contracts';
-import { formatPlantPoints, formatPlantLifetime } from '@/lib/utils';
+import { formatScore, formatLifetimeProduction } from '@/lib/utils';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import SmartWalletTransaction from './smart-wallet-transaction';
 import { StandardContainer } from '@/components/ui/pixel-container';
 import { toast } from 'react-hot-toast';
@@ -154,7 +154,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               <Coins className="w-3 h-3" /> Total PTS
             </span>
             <span className="text-lg font-bold font-mono text-green-600 dark:text-green-400">
-              +{formatPlantPoints(totalPoints)}
+              +{formatScore(Number(totalPoints))}
             </span>
           </div>
           <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg">
@@ -162,7 +162,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               <Clock className="w-3 h-3" /> Total TOD
             </span>
             <span className="text-lg font-bold font-mono text-blue-600 dark:text-blue-400">
-              +{formatPlantLifetime(totalLifetime)}
+              +{formatLifetimeProduction(totalLifetime)}
             </span>
           </div>
         </div>
