@@ -138,32 +138,24 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   }
 
   return (
-    <Card className="rounded-2xl overflow-hidden border-2 border-primary/20">
-      <div className="bg-primary/5 px-4 py-3 border-b border-primary/10 flex justify-between items-center">
-        <h3 className="font-pixel text-sm font-bold flex items-center gap-2">
-          🌱 Harvest Ready
-        </h3>
-        <span className="text-xs font-mono text-muted-foreground bg-background/50 px-2 py-1 rounded">
-          {claimableItems.length} Sources
-        </span>
-      </div>
-      
-      <CardContent className="p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg">
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Coins className="w-3 h-3" /> Total PTS
-            </span>
-            <span className="text-lg font-bold font-mono text-green-600 dark:text-green-400">
-              +{formatScore(Number(totalPoints))}
+    <Card className="rounded-2xl border-2 border-primary/20">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex justify-between items-center pb-2 border-b border-border/50">
+          <span className="font-semibold">Harvest Ready</span>
+          <span className="text-xs text-muted-foreground">{claimableItems.length} Sources</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Coins className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <span className="font-semibold text-green-600 dark:text-green-400">
+              +{formatScore(Number(totalPoints))} PTS
             </span>
           </div>
-          <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg">
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Total TOD
-            </span>
-            <span className="text-lg font-bold font-mono text-blue-600 dark:text-blue-400">
-              +{formatLifetimeProduction(totalLifetime)}
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="font-semibold text-blue-600 dark:text-blue-400">
+              +{formatLifetimeProduction(totalLifetime)} TOD
             </span>
           </div>
         </div>
@@ -171,32 +163,26 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         {/* Gating Logic */}
         {!isSmartWallet ? (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
-              <Lock className="w-4 h-4" />
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+              <Lock className="w-3 h-3" />
               Smart Wallet Required
             </div>
-            <p className="text-xs text-muted-foreground">
-              Batch claiming is only available for Smart Wallets to ensure gas-efficient transactions.
-            </p>
           </div>
         ) : !hasEnoughTokens ? (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
-              <Lock className="w-4 h-4" />
-              Creator Coin Required
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+              <Lock className="w-3 h-3" />
+              {MIN_PIXOTCHI_REQUIRED} PIXOTCHI Required
             </div>
-            <p className="text-xs text-muted-foreground">
-              You need at least {MIN_PIXOTCHI_REQUIRED} PIXOTCHI tokens to use this premium feature.
-            </p>
-            <div className="text-xs font-mono text-muted-foreground">
-              Your balance: {pixotchiBalanceNum.toFixed(2)} PIXOTCHI
+            <div className="text-[10px] font-mono text-muted-foreground">
+              Balance: {pixotchiBalanceNum.toFixed(2)}
             </div>
           </div>
         ) : (
           <SmartWalletTransaction
             calls={calls}
-            buttonText={`Claim All to Warehouses`}
-            buttonClassName="w-full font-bold"
+            buttonText="Claim All"
+            buttonClassName="w-full font-bold h-9 text-sm"
             onSuccess={(tx) => {
               toast.success(`Claimed from ${claimableItems.length} buildings!`);
               scanLands(); // Re-scan to clear the card
@@ -207,10 +193,6 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
             onError={(e) => toast.error("Batch claim failed")}
           />
         )}
-        
-        <p className="text-[10px] text-center text-muted-foreground/60">
-          Claims production from Solar Panels, Soil Factories, and Bee Farms across all your lands.
-        </p>
       </CardContent>
     </Card>
   );
