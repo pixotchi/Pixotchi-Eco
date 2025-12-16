@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Coins, Clock, AlertTriangle, Lock } from 'lucide-react';
 import { Land } from '@/lib/types';
 import { formatScore, formatLifetimeProduction } from '@/lib/utils';
+import { getLandBuildingsBatch, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import SmartWalletTransaction from './smart-wallet-transaction';
 import { StandardContainer } from '@/components/ui/pixel-container';
