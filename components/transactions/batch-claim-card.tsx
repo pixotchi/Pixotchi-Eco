@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Image from 'next/image';
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Coins, Clock, AlertTriangle, Lock } from 'lucide-react';
+import { Loader2, AlertTriangle, Lock } from 'lucide-react';
 import { Land } from '@/lib/types';
 import { formatScore, formatLifetimeProduction } from '@/lib/utils';
 import { getLandBuildingsBatch, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
@@ -141,19 +142,19 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
     <Card className="rounded-2xl border-2 border-primary/20">
       <CardContent className="p-4 space-y-3">
         <div className="flex justify-between items-center pb-2 border-b border-border/50">
-          <span className="font-semibold">Harvest Ready</span>
-          <span className="text-xs text-muted-foreground">{claimableItems.length} Sources</span>
+          <span className="font-semibold">Batch Claim</span>
+          <span className="text-xs text-muted-foreground">{claimableItems.length} Buildings</span>
         </div>
 
         <div className="flex items-center justify-between gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4" />
             <span className="font-semibold text-green-600 dark:text-green-400">
               +{formatScore(Number(totalPoints))} PTS
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <Image src="/icons/tod.svg" alt="Time of Death" width={16} height={16} className="w-4 h-4" />
             <span className="font-semibold text-blue-600 dark:text-blue-400">
               +{formatLifetimeProduction(totalLifetime)} TOD
             </span>
