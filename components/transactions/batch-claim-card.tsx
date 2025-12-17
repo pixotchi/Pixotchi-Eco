@@ -30,23 +30,38 @@ interface ClaimableItem {
 
 const MIN_PIXOTCHI_REQUIRED = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MIN_TOKENS || 10);
 
+// Minimum accumulated amounts to include in batch claim
+// Buildings constantly produce, so after claiming they quickly have tiny amounts (0.01 PTS)
+// Filter out dust to avoid re-claiming immediately after a batch
+// Points are in 1e12 units (1 PTS = 1e12), Lifetime in seconds
+const MIN_POINTS_TO_CLAIM = BigInt(1e12); // 1 PTS minimum
+const MIN_LIFETIME_TO_CLAIM = BigInt(60); // 1 minute minimum
+
 // Maximum calls per batch to avoid tx simulation failures
 // 
-// Key constraints:
+// Key constraints (tested with /api/admin/batch-limits):
 // 1. Per-transaction gas limit: 16.77M (post-Fusaka EIP-7825 on Base)
-// 2. Each villageClaimProduction uses ~50-100k gas
+// 2. Each villageClaimProduction uses ~78,700 gas (empirically measured)
 // 3. Smart wallet bundler adds ~21k base + ~5k per call overhead
-// 4. Safe max = (16.77M - overhead) / gas_per_call ≈ 150-200 calls theoretically
-// 5. But RPC simulation often times out before gas limits hit (~50-100 calls)
+// 4. Gas math: 16.77M / 78.7k ≈ 213 calls max (hard limit)
+// 5. RPC simulation may timeout before gas limit is reached
 // 
-// Conservative default of 25 balances reliability vs UX
-// Can be tuned via environment variable after testing with /api/admin/batch-limits
-const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 25);
+// Testing progression:
+//   50 calls  = ~4M gas  (24%) - very safe
+//   100 calls = ~8M gas  (48%) - should work
+//   150 calls = ~12M gas (71%) - aggressive but possible
+//   200 calls = ~16M gas (95%) - max, risky
+// 
+// Default 100: balances UX (3-4 batches for whales) vs reliability
+// Tune via NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE if simulation fails
+const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 100);
 
 export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps) {
   const [loading, setLoading] = useState(false);
   const [claimableItems, setClaimableItems] = useState<ClaimableItem[]>([]);
   const [lastScannedLandIds, setLastScannedLandIds] = useState<string>("");
+  // Track total claimed across batches for progress display
+  const [totalClaimedThisSession, setTotalClaimedThisSession] = useState(0);
   const { isSmartWallet } = useSmartWallet();
   const { pixotchiBalance } = useBalances();
 
@@ -77,9 +92,13 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           const points = BigInt(b.accumulatedPoints || 0);
           const lifetime = BigInt(b.accumulatedLifetime || 0);
           
-          // Only include if there is something to claim
+          // Only include if there is meaningful amount to claim
           // We target IDs 0, 3, 5 specifically as they are the production buildings
-          if ((id === 0 || id === 3 || id === 5) && (points > BigInt(0) || lifetime > BigInt(0))) {
+          // Use minimum thresholds to filter out dust (buildings accumulate constantly)
+          const hasEnoughPoints = points >= MIN_POINTS_TO_CLAIM;
+          const hasEnoughLifetime = lifetime >= MIN_LIFETIME_TO_CLAIM;
+          
+          if ((id === 0 || id === 3 || id === 5) && (hasEnoughPoints || hasEnoughLifetime)) {
             items.push({
               landId: result.landId,
               buildingId: id,
@@ -103,6 +122,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
     // Only scan if land list has changed
     if (landIdsHash !== lastScannedLandIds) {
       scanLands();
+      setTotalClaimedThisSession(0); // Reset progress for new session
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landIdsHash]);
@@ -180,13 +200,15 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
       <CardContent className="p-4 space-y-3">
         <div className="flex justify-between items-center pb-2 border-b border-border/50">
           <span className="font-semibold">Batch Claim</span>
-          <div className="flex items-center gap-2">
-            {hasMultipleBatches && (
-              <span className="text-xs text-primary font-medium">
-                Batch 1/{totalBatches}
+          <div className="flex items-center gap-2 text-xs">
+            {totalClaimedThisSession > 0 && (
+              <span className="text-green-600 dark:text-green-400 font-medium">
+                ✓ {totalClaimedThisSession} claimed
               </span>
             )}
-            <span className="text-xs text-muted-foreground">{claimableItems.length} Buildings</span>
+            <span className="text-muted-foreground">
+              {claimableItems.length} remaining
+            </span>
           </div>
         </div>
 
@@ -245,11 +267,14 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
             onSuccess={(tx) => {
               const claimedCount = currentBatchItems.length;
               const remainingCount = claimableItems.length - claimedCount;
+              const newTotalClaimed = totalClaimedThisSession + claimedCount;
+              
+              setTotalClaimedThisSession(newTotalClaimed);
               
               if (remainingCount > 0) {
                 toast.success(`Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
               } else {
-                toast.success(`Claimed from all ${claimedCount} buildings!`);
+                toast.success(`Claimed all ${newTotalClaimed} buildings!`);
               }
               
               scanLands(); // Re-scan to update remaining items

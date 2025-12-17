@@ -37,8 +37,8 @@ const KNOWN_LIMITS = {
   smartWalletOverheadPerCall: 5_000,
   // RPC simulation typically times out around 100-200 calls
   rpcSimulationSafe: 100,
-  // Conservative recommendation based on gas limits
-  recommendedBatchSize: 25,
+  // Tested recommendation based on real 100+ land account
+  recommendedBatchSize: 50,
 };
 
 export async function GET(request: NextRequest) {
