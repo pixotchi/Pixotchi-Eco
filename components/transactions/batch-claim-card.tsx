@@ -31,11 +31,19 @@ interface ClaimableItem {
 const MIN_PIXOTCHI_REQUIRED = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MIN_TOKENS || 10);
 
 // Minimum accumulated amounts to include in batch claim
-// Buildings constantly produce, so after claiming they quickly have tiny amounts (0.01 PTS)
+// Buildings constantly produce, so after claiming they quickly have tiny amounts
 // Filter out dust to avoid re-claiming immediately after a batch
+//
+// Production rate math (from building-info-dialog.tsx):
+//   PTS: Solar Panels L4 = 85 PTS/day (max) → 0.059 PTS/minute
+//        Soil Factory L3 = 61 PTS/day → 0.042 PTS/minute
+//        Threshold 0.1 PTS → ~1.7 minutes minimum wait at max
+//   TOD: Bee Farm L3 = 4.5h/day = 16,200 sec/day → 11.25 sec/minute
+//        Threshold 15 sec → ~1.3 minutes minimum wait at max
+//
 // Points are in 1e12 units (1 PTS = 1e12), Lifetime in seconds
-const MIN_POINTS_TO_CLAIM = BigInt(1e12); // 1 PTS minimum
-const MIN_LIFETIME_TO_CLAIM = BigInt(60); // 1 minute minimum
+const MIN_POINTS_TO_CLAIM = BigInt(1e11); // 0.1 PTS minimum (~1.7 min for max producers)
+const MIN_LIFETIME_TO_CLAIM = BigInt(15); // 15 seconds of TOD minimum (~1.3 min for max)
 
 // Maximum calls per batch to avoid tx simulation failures
 // 
