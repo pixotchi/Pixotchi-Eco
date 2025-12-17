@@ -70,6 +70,8 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   const [lastScannedLandIds, setLastScannedLandIds] = useState<string>("");
   // Track total claimed across batches for progress display
   const [totalClaimedThisSession, setTotalClaimedThisSession] = useState(0);
+  // Key to force re-mount of Transaction component after each batch (resets button state)
+  const [txKey, setTxKey] = useState(0);
   const { isSmartWallet } = useSmartWallet();
   const { pixotchiBalance } = useBalances();
 
@@ -131,6 +133,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
     if (landIdsHash !== lastScannedLandIds) {
       scanLands();
       setTotalClaimedThisSession(0); // Reset progress for new session
+      setTxKey(0); // Reset transaction component key
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landIdsHash]);
@@ -269,6 +272,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           </div>
         ) : (
           <SmartWalletTransaction
+            key={txKey} // Force re-mount to reset button state after each batch
             calls={calls}
             buttonText={hasMultipleBatches ? `Claim Batch (${currentBatchItems.length})` : "Claim All"}
             buttonClassName="w-full font-bold h-9 text-sm"
@@ -278,6 +282,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               const newTotalClaimed = totalClaimedThisSession + claimedCount;
               
               setTotalClaimedThisSession(newTotalClaimed);
+              setTxKey(k => k + 1); // Increment key to reset Transaction component
               
               if (remainingCount > 0) {
                 toast.success(`Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
