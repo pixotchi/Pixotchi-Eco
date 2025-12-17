@@ -31,8 +31,15 @@ interface ClaimableItem {
 const MIN_PIXOTCHI_REQUIRED = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MIN_TOKENS || 10);
 
 // Maximum calls per batch to avoid tx simulation failures
-// EIP-5792 + Smart Wallet practical limit: ~25-30 calls work reliably
-// Beyond this, RPC simulation may timeout or gas estimation may fail
+// 
+// Key constraints:
+// 1. Per-transaction gas limit: 16.77M (post-Fusaka EIP-7825 on Base)
+// 2. Each villageClaimProduction uses ~50-100k gas
+// 3. Smart wallet bundler adds ~21k base + ~5k per call overhead
+// 4. Safe max = (16.77M - overhead) / gas_per_call ≈ 150-200 calls theoretically
+// 5. But RPC simulation often times out before gas limits hit (~50-100 calls)
+// 
+// Conservative default of 25 balances reliability vs UX
 // Can be tuned via environment variable after testing with /api/admin/batch-limits
 const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 25);
 
