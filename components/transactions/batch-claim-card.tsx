@@ -56,13 +56,13 @@ const MIN_LIFETIME_TO_CLAIM = BigInt(15); // 15 seconds of TOD minimum (~1.3 min
 // 
 // Testing progression:
 //   50 calls  = ~4M gas  (24%) - very safe
-//   100 calls = ~8M gas  (48%) - should work
-//   150 calls = ~12M gas (71%) - aggressive but possible
+//   100 calls = ~8M gas  (48%) - confirmed working
+//   150 calls = ~12M gas (71%) - current default
 //   200 calls = ~16M gas (95%) - max, risky
 // 
-// Default 100: balances UX (3-4 batches for whales) vs reliability
+// Default 150: balances UX (2-3 batches for whales) vs reliability
 // Tune via NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE if simulation fails
-const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 100);
+const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 150);
 
 export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps) {
   const [loading, setLoading] = useState(false);
