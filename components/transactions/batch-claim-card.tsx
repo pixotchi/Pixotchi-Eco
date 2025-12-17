@@ -15,6 +15,8 @@ import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useBalances } from '@/lib/balance-context';
 import { formatUnits } from 'viem';
 import { Button } from '@/components/ui/button';
+import { useAccount } from 'wagmi';
+import { extractTransactionHash } from '@/lib/transaction-utils';
 
 interface BatchClaimCardProps {
   lands: Land[];
@@ -74,6 +76,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   const [txKey, setTxKey] = useState(0);
   const { isSmartWallet } = useSmartWallet();
   const { pixotchiBalance } = useBalances();
+  const { address } = useAccount();
 
   const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
   const hasEnoughTokens = pixotchiBalanceNum >= MIN_PIXOTCHI_REQUIRED;
@@ -218,7 +221,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               </span>
             )}
             <span className="text-muted-foreground">
-              {claimableItems.length} building remaining
+              {claimableItems.length} buildings remaining
             </span>
           </div>
         </div>
@@ -294,6 +297,20 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               if (onSuccess) onSuccess();
               window.dispatchEvent(new Event('balances:refresh'));
               window.dispatchEvent(new Event('buildings:refresh'));
+              
+              // Trigger claim production task for gamification
+              try {
+                const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
+                const txHash = extractTransactionHash(tx);
+                if (txHash) {
+                  payload.proof = { txHash };
+                }
+                fetch('/api/gamification/missions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+              } catch {}
             }}
             onError={(e) => toast.error("Batch claim failed")}
           />
