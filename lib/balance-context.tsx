@@ -7,7 +7,7 @@ import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS, E
 import { leafAbi } from '@/public/abi/leaf-abi';
 import { useSolanaWalletContext } from '@/lib/solana-wallet-context';
 
-interface BalanceContextType {
+export interface BalanceContextType {
   seedBalance: bigint;
   leafBalance: bigint;
   pixotchiBalance: bigint;
