@@ -218,7 +218,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               </span>
             )}
             <span className="text-muted-foreground">
-              {claimableItems.length} remaining
+              {claimableItems.length} building remaining
             </span>
           </div>
         </div>
