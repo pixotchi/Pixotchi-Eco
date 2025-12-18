@@ -5,7 +5,9 @@ import {
   getLeafBalance,
   getVillageBuildingsByLandId,
   getTownBuildingsByLandId,
-  getLandBuildingsBatch
+  getLandBuildingsBatch,
+  getTokenBalanceForToken,
+  CREATOR_TOKEN_ADDRESS
 } from './contracts';
 import { 
   formatTokenAmount, 
@@ -120,6 +122,7 @@ export interface UserGameStats {
   // Financial Stats (formatted as shown to users)
   formattedSeedBalance: string;
   formattedLeafBalance: string;
+  formattedPixotchiBalance: string;
   
   // Additional context (legacy - now redundant with plantDetails)
   plantsNeedingCare: Array<{
@@ -155,11 +158,12 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
 
   try {
     // Fetch all user data in parallel
-    const [plants, lands, seedBalance, leafBalance] = await Promise.all([
+    const [plants, lands, seedBalance, leafBalance, pixotchiBalance] = await Promise.all([
       getPlantsByOwner(address),
       getLandsByOwner(address),
       getTokenBalance(address),
-      getLeafBalance(address)
+      getLeafBalance(address),
+      getTokenBalanceForToken(address, CREATOR_TOKEN_ADDRESS)
     ]);
 
     // Calculate plant stats
@@ -404,6 +408,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     // Format balances exactly as shown to users
     const formattedSeedBalance = formatLargeNumber(seedBalance);
     const formattedLeafBalance = formatLargeNumber(leafBalance);
+    const formattedPixotchiBalance = formatLargeNumber(pixotchiBalance);
 
     // Identify plants needing care (format time exactly as countdown timer shows)
     const plantsNeedingCare = plants
@@ -560,6 +565,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       // Financial Stats
       formattedSeedBalance,
       formattedLeafBalance,
+      formattedPixotchiBalance,
       
       // Additional context
       plantsNeedingCare,
@@ -693,7 +699,8 @@ export function formatStatsForAI(stats: UserGameStats): string {
     // Financial Status
     finances: {
       seedBalance: stats.formattedSeedBalance,
-      leafBalance: stats.formattedLeafBalance
+      leafBalance: stats.formattedLeafBalance,
+      pixotchiBalance: stats.formattedPixotchiBalance
     },
     
     // Plants Needing Attention
