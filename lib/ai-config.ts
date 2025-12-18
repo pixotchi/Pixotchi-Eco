@@ -25,6 +25,17 @@ export const AI_CONFIG = {
       // - Cache reads: $0.10 / MTok (90% savings!)
       // - Output tokens: $5 / MTok
       endpoint: 'https://api.anthropic.com/v1/messages',
+    },
+    google: {
+      models: [
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-2.0-flash'
+      ],
+      defaultModel: 'gemini-1.5-flash',
+      maxTokens: 2048,
+      costPerToken: 0.35 / 1_000_000, // Gemini 1.5 Flash is very cheap
+      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
     }
   },
   rateLimits: {
@@ -49,6 +60,10 @@ export function getCurrentAIProvider(): AIProvider {
   
   if (provider === 'openai') {
     return 'openai';
+  }
+  
+  if (provider === 'google') {
+    return 'google';
   }
   
   // Default fallback
@@ -77,6 +92,9 @@ export function getAgentAIProvider(): AIProvider {
   }
   if (provider === 'openai') {
     return 'openai';
+  }
+  if (provider === 'google') {
+    return 'google';
   }
   return getCurrentAIProvider();
 }
@@ -107,16 +125,21 @@ export function validateAIConfig(): { valid: boolean; errors: string[] } {
   if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
     errors.push('ANTHROPIC_API_KEY is required when using Claude provider');
   }
+
+  if (provider === 'google' && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    errors.push('GOOGLE_GENERATIVE_AI_API_KEY is required when using Google provider');
+  }
   
   const model = process.env.AI_MODEL;
   if (model) {
     const config = AI_CONFIG.providers[provider];
     const isValidModel = config.models.includes(model) || 
                         (provider === 'openai' && model.startsWith('gpt-')) ||
-                        (provider === 'claude' && model.startsWith('claude-'));
+                        (provider === 'claude' && model.startsWith('claude-')) ||
+                        (provider === 'google' && model.startsWith('gemini-'));
     
     if (!isValidModel) {
-      errors.push(`Invalid model ${model} for provider ${provider}. Expected models starting with ${provider === 'openai' ? 'gpt-' : 'claude-'}`);
+      errors.push(`Invalid model ${model} for provider ${provider}. Expected models starting with ${provider === 'openai' ? 'gpt-' : provider === 'claude' ? 'claude-' : 'gemini-'}`);
     }
   }
   

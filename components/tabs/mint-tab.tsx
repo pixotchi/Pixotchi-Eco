@@ -1070,34 +1070,47 @@ export default function MintTab() {
               if (!selectedStrain) return null;
               const useBundle = isSmartWallet && isSponsored;
               const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+              
+              const hasInsufficientBalance = selectedStrain.paymentPrice 
+                ? paymentTokenBalance < selectedStrain.paymentPrice 
+                : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18));
+
               return useBundle ? (
-              <ApproveMintBundle
-                strain={selectedStrain.id}
-                tokenAddress={paymentToken}
-                onSuccess={() => {
-                  toast.success('Approved and minted successfully!');
-                  setNeedsApproval(false);
-                  incrementForcedFetch();
-                  window.dispatchEvent(new Event('balances:refresh'));
-                }}
-                onTransactionComplete={(tx) => {
-                  if (address) {
-                    const mintedAt = new Date().toISOString();
-                    setShareData({
-                      address,
-                      basename: primaryName || undefined,
-                      strainName: selectedStrain.name,
-                      strainId: selectedStrain.id,
-                      mintedAt,
-                      txHash: tx?.transactionHash,
-                    });
-                    setShowShareModal(true);
-                  }
-                }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText={`Approve + Mint`}
-                buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-              />
+                <>
+                  <ApproveMintBundle
+                    strain={selectedStrain.id}
+                    tokenAddress={paymentToken}
+                    onSuccess={() => {
+                      toast.success('Approved and minted successfully!');
+                      setNeedsApproval(false);
+                      incrementForcedFetch();
+                      window.dispatchEvent(new Event('balances:refresh'));
+                    }}
+                    onTransactionComplete={(tx) => {
+                      if (address) {
+                        const mintedAt = new Date().toISOString();
+                        setShareData({
+                          address,
+                          basename: primaryName || undefined,
+                          strainName: selectedStrain.name,
+                          strainId: selectedStrain.id,
+                          mintedAt,
+                          txHash: tx?.transactionHash,
+                        });
+                        setShowShareModal(true);
+                      }
+                    }}
+                    onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                    buttonText={hasInsufficientBalance ? "Insufficient Balance" : "Approve + Mint"}
+                    buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                    disabled={hasInsufficientBalance}
+                  />
+                  {hasInsufficientBalance && (
+                    <p className="text-xs text-destructive text-center mt-2">
+                      Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
+                    </p>
+                  )}
+                </>
               ) : (
               <ApproveTransaction
                 spenderAddress={PIXOTCHI_NFT_ADDRESS}
