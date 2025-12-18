@@ -63,7 +63,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - **$SEED:** Main in-game token; used to buy items, speed upgrades, and trade for ETH/LEAF.
 - **$LEAF:** Currency used exclusively for building upgrades and given as staking rewards.
 - **$PIXOTCHI:** Pixotchi's Creator Token on Zora. Deployed in Decemeber 2025 to add a new layer of gamification and community engagement. It's only feature right now is the ability to batch claim production from your buildings (Need to hold 1M $PIXOTCHI in your wallet to unlock).
-- **ETH:** The native token of the Base network, tradeable for SEED via the Swap tab and rewarded to players for their PTS after each swap (2% of volume).
+- **$ETH:** The native token of the Base network, tradeable for SEED via the Swap tab and rewarded to players for their PTS after each swap (2% of volume).
 - **ERC-721:** NFT standard used for Plants and Lands (collectible digital assets).
 - **Smart Wallet:** Coinbase Smart Account offering gasless transactions; Base gas sponsored by Pixotchi.
 - **Shield/Fence:** The only way to protect your plants from being attacked by other players and to protect your PTS.
