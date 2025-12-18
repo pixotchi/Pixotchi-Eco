@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { generateText, tool, stepCountIs } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 // Use centralized strain data for Agent
 import { z } from 'zod';
 import { PLANT_STRAINS } from '@/lib/constants';
@@ -180,6 +181,7 @@ export async function POST(req: NextRequest) {
     const agentProvider = getAgentAIProvider();
     const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
     const systemPrompt = `You are an Neural Seed Agent. Currently you can only mint plants using SEED tokens via spend permissions. With time, you will be able to do more things.
     ${userAddress ? `User wallet: ${userAddress}` : 'User wallet not provided.'}
 
@@ -228,9 +230,15 @@ export async function POST(req: NextRequest) {
     });
 
     const agentModelConfig = getAgentModelConfig();
-    const model = agentProvider === 'claude'
-      ? anthropic(agentModelConfig.model)
-      : openai(agentModelConfig.model);
+    let model;
+    
+    if (agentProvider === 'claude') {
+      model = anthropic(agentModelConfig.model);
+    } else if (agentProvider === 'google') {
+      model = google(agentModelConfig.model);
+    } else {
+      model = openai(agentModelConfig.model);
+    }
 
     const { text, toolResults } = await generateText({
       model,

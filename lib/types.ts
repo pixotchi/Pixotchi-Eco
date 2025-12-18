@@ -477,7 +477,7 @@ export type AIConversation = {
   totalTokens: number;
 };
 
-export type AIProvider = 'openai' | 'claude';
+export type AIProvider = 'openai' | 'claude' | 'google';
 
 export type AIUsageStats = {
   totalConversations: number;

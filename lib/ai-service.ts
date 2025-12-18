@@ -8,6 +8,7 @@ import { getUserGameStats, formatStatsForAI } from './user-stats-service';
 import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 const AI_MESSAGE_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const AI_RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
@@ -27,6 +28,10 @@ const anthropic = createAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+});
+
 // Helper to get the SDK model instance
 function getSDKModel() {
   const providerName = getCurrentAIProvider();
@@ -38,6 +43,8 @@ function getSDKModel() {
     // Note: @ai-sdk/anthropic handles cache control automatically if headers/structured prompts are used,
     // but we will rely on its standard behavior for now.
     return anthropic(config.model);
+  } else if (providerName === 'google') {
+    return google(config.model);
   }
   throw new Error(`Unknown provider: ${providerName}`);
 }

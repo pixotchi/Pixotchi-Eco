@@ -49,7 +49,7 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 // Knowledge base content - organized for AI comprehension and accuracy
 const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
-**Context Updated:** November 2025
+**Context Updated:** December 2025
 **Real-time Data Handling:** User stats are provided with each request; use them directly.
 **Hallucination Risk Mitigation:** Do NOT invent prices, addresses, or game states not in this guide or user context.
 
@@ -60,9 +60,10 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 ### Key Terms Explained
 - **PTS:** Points used for leaderboard ranking and earning ETH rewards.
 - **TOD (Time of Death):** Hours remaining before a plant dies if not cared for.
-- **SEED:** Main in-game token; used to buy items, speed upgrades, and trade for ETH/LEAF.
-- **LEAF:** Currency used exclusively for building upgrades and given as staking rewards.
-- **ETH:** Real Ethereum, tradeable for SEED via the Swap tab.
+- **$SEED:** Main in-game token; used to buy items, speed upgrades, and trade for ETH/LEAF.
+- **$LEAF:** Currency used exclusively for building upgrades and given as staking rewards.
+- **$PIXOTCHI:** Pixotchi's Creator Token on Zora. Deployed in Decemeber 2025 to add a new layer of gamification and community engagement. It's only feature right now is the ability to batch claim production from your buildings (Need to hold 1M $PIXOTCHI in your wallet to unlock).
+- **$ETH:** The native token of the Base network, tradeable for SEED via the Swap tab and rewarded to players for their PTS after each swap (2% of volume).
 - **ERC-721:** NFT standard used for Plants and Lands (collectible digital assets).
 - **Smart Wallet:** Coinbase Smart Account offering gasless transactions; Base gas sponsored by Pixotchi.
 - **Shield/Fence:** The only way to protect your plants from being attacked by other players and to protect your PTS.
@@ -202,6 +203,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - Contain **Village** (production buildings) and **Town** (utility buildings).
 - Generate passive **PTS & TOD** for all your plants.
 - Upgraded using **LEAF**; speed up with **SEED**.
+- Batch Claim productions from your buildings (if own more than 1 land) with $PIXOTCHI (Need to hold 1M $PIXOTCHI in your wallet to unlock).
 
 ### Building Types & Production
 
@@ -256,7 +258,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 |-------|---------|-----------------|
 | **SEED** | Main currency; buy items, speed upgrades, trade for ETH/LEAF | Trade ETH, complete quests, finish Rocks missions |
 | **LEAF** | Building upgrade currency; staking rewards | Stake SEED, complete Farmer House quests |
-| **ETH** | Real Ethereum; trade for SEED via Swap | Win PTS rewards (distributed to wallet) |
+| **ETH** | Real Ethereum; trade for SEED via Swap | Rank up in leaderboard (PTS) (2$ of the volume is distributed to plants based on their PTS) |
 
 ### SEED Tokenomics (Static Reference)
 
@@ -272,6 +274,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 ### Earning LEAF
 1. **Stake SEED** → Staking app (tap "Stake" in status bar or visit Stakehouse building).
 2. **Complete Quests** → Farmer House on Lands (pay out LEAF + other rewards).
+3. **Arcade Games** → Play arcade mini-games to earn LEAF rewards. (SpinLeaf)
 
 ---
 
@@ -345,7 +348,7 @@ Easter egg that is activated by finding the secret pattern/key in game.
 - ❌ Financial projections or investment advice.
 
 **When to Defer:**
-- Token ratio questions → "Check the Staking app or About tab for the current ratio."
+- Staking and Token emission ratio questions → "Check the Staking section from Status bar to see the current ratio."
 - Price/market questions → "See Swap tab for live prices; I cannot predict future values."
 - Security/backup questions → "Contact team@pixotchi.tech or ask in Telegram for security concerns."
 - Technical bugs → "Report via About tab → Feedback or Telegram."
@@ -361,8 +364,9 @@ Easter egg that is activated by finding the secret pattern/key in game.
 | **Plant (ERC-721)** | 0xeb4e16c804ae9275a655abbc20cd0658a91f9235 |
 | **Land (ERC-721)** | 0x3f1F8F0C4BE4bCeB45E6597AFe0dE861B8c3278c |
 | **Staking** | 0xF15D93c3617525054aF05338CC6Ccf18886BD03A |
-| **LEAF (ERC-20)** | 0xE78ee52349D7b031E2A6633E07c037C3147DB116 |
-| **SEED (ERC-20)** | 0x546D239032b24eCEEE0cb05c92FC39090846adc7 |
+| **$LEAF (ERC-20)** | 0xE78ee52349D7b031E2A6633E07c037C3147DB116 |
+| **$SEED (ERC-20)** | 0x546D239032b24eCEEE0cb05c92FC39090846adc7 |
+| **$PIXOTCHI (ERC-20)** | 0xA2EF17bb7Eea1143196678337069dFa24D37d2ac |
 | **LP (BaseSwap)** | 0xAA6a81A7df94DAb346e2d677225caD47220540C5 |
 
 ### Official Links & Resources
