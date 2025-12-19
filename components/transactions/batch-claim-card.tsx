@@ -292,7 +292,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
              <div className="flex justify-between items-center text-xs px-1">
                <span className="text-muted-foreground">Cost:</span>
                <span className="font-mono text-amber-700 dark:text-amber-500">
-                 {BURN_AMOUNT_TOKENS} PIXOTCHI (Burn)
+                 {BURN_AMOUNT_TOKENS} PIXOTCHI
                </span>
              </div>
              <SmartWalletTransaction
