@@ -13,7 +13,7 @@ import { StandardContainer } from '@/components/ui/pixel-container';
 import { toast } from 'react-hot-toast';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useBalances } from '@/lib/balance-context';
-import { formatUnits } from 'viem';
+import { formatUnits, parseUnits, erc20Abi } from 'viem';
 import { Button } from '@/components/ui/button';
 import { useAccount } from 'wagmi';
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -30,7 +30,10 @@ interface ClaimableItem {
   lifetime: bigint;
 }
 
-const MIN_PIXOTCHI_REQUIRED = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MIN_TOKENS || 10);
+// Burn configuration
+const BURN_AMOUNT_TOKENS = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_BURN_AMOUNT || 500);
+const BURN_ADDRESS = '0x000000000000000000000000000000000000dEaD';
+const PIXOTCHI_TOKEN_ADDRESS = '0x546D239032b24eCEEE0cb05c92FC39090846adc7'; // Hardcoded or imported from contracts
 
 // Minimum accumulated amounts to include in batch claim
 // Buildings constantly produce, so after claiming they quickly have tiny amounts
@@ -79,7 +82,8 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   const { address } = useAccount();
 
   const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
-  const hasEnoughTokens = pixotchiBalanceNum >= MIN_PIXOTCHI_REQUIRED;
+  const burnAmountWei = parseUnits(BURN_AMOUNT_TOKENS.toString(), 18);
+  const hasEnoughTokens = pixotchiBalance >= burnAmountWei;
   
   // Memoize land IDs to detect changes
   const landIdsHash = useMemo(() => 
@@ -183,15 +187,25 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   );
 
   // Only create calls for current batch
-  const calls = useMemo(() => 
-    currentBatchItems.map(item => ({
+  const calls = useMemo(() => {
+    // 1. Burn transaction (First call in batch)
+    const burnCall = {
+      address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [BURN_ADDRESS as `0x${string}`, burnAmountWei],
+    };
+
+    // 2. Claim transactions
+    const claimCalls = currentBatchItems.map(item => ({
       address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'villageClaimProduction',
       args: [item.landId, item.buildingId],
-    })),
-    [currentBatchItems]
-  );
+    }));
+
+    return [burnCall, ...claimCalls];
+  }, [currentBatchItems, burnAmountWei]);
 
   if (loading && claimableItems.length === 0) {
     return (
@@ -267,53 +281,61 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
             <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
               <Lock className="w-3 h-3" />
-              {MIN_PIXOTCHI_REQUIRED} PIXOTCHI in wallet required to unlock batch claim.
+              Insufficient PIXOTCHI Balance
             </div>
             <div className="text-[10px] font-mono text-muted-foreground">
-              Balance: {pixotchiBalanceNum.toFixed(2)}
+              Required: {BURN_AMOUNT_TOKENS} to burn | Balance: {pixotchiBalanceNum.toFixed(2)}
             </div>
           </div>
         ) : (
-          <SmartWalletTransaction
-            key={txKey} // Force re-mount to reset button state after each batch
-            calls={calls}
-            buttonText={hasMultipleBatches ? `Claim Batch (${currentBatchItems.length})` : "Claim All"}
-            buttonClassName="w-full font-bold h-9 text-sm"
-            onSuccess={(tx) => {
-              const claimedCount = currentBatchItems.length;
-              const remainingCount = claimableItems.length - claimedCount;
-              const newTotalClaimed = totalClaimedThisSession + claimedCount;
-              
-              setTotalClaimedThisSession(newTotalClaimed);
-              setTxKey(k => k + 1); // Increment key to reset Transaction component
-              
-              if (remainingCount > 0) {
-                toast.success(`Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
-              } else {
-                toast.success(`Claimed all ${newTotalClaimed} buildings!`);
-              }
-              
-              scanLands(); // Re-scan to update remaining items
-              if (onSuccess) onSuccess();
-              window.dispatchEvent(new Event('balances:refresh'));
-              window.dispatchEvent(new Event('buildings:refresh'));
-              
-              // Trigger claim production task for gamification
-              try {
-                const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
-                const txHash = extractTransactionHash(tx);
-                if (txHash) {
-                  payload.proof = { txHash };
+          <div className="space-y-2">
+             <div className="flex justify-between items-center text-xs px-1">
+               <span className="text-muted-foreground">Cost:</span>
+               <span className="font-mono text-amber-600 dark:text-amber-500">
+                 {BURN_AMOUNT_TOKENS} PIXOTCHI (Burn)
+               </span>
+             </div>
+             <SmartWalletTransaction
+              key={txKey} // Force re-mount to reset button state after each batch
+              calls={calls}
+              buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
+              buttonClassName="w-full font-bold h-9 text-sm"
+              onSuccess={(tx) => {
+                const claimedCount = currentBatchItems.length;
+                const remainingCount = claimableItems.length - claimedCount;
+                const newTotalClaimed = totalClaimedThisSession + claimedCount;
+                
+                setTotalClaimedThisSession(newTotalClaimed);
+                setTxKey(k => k + 1); // Increment key to reset Transaction component
+                
+                if (remainingCount > 0) {
+                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
+                } else {
+                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed all ${newTotalClaimed} buildings!`);
                 }
-                fetch('/api/gamification/missions', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload)
-                });
-              } catch {}
-            }}
-            onError={(e) => toast.error("Batch claim failed")}
-          />
+                
+                scanLands(); // Re-scan to update remaining items
+                if (onSuccess) onSuccess();
+                window.dispatchEvent(new Event('balances:refresh'));
+                window.dispatchEvent(new Event('buildings:refresh'));
+                
+                // Trigger claim production task for gamification
+                try {
+                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
+                  const txHash = extractTransactionHash(tx);
+                  if (txHash) {
+                    payload.proof = { txHash };
+                  }
+                  fetch('/api/gamification/missions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                  });
+                } catch {}
+              }}
+              onError={(e) => toast.error("Batch claim failed")}
+            />
+          </div>
         )}
       </CardContent>
     </Card>
