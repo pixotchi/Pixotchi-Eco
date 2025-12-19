@@ -230,7 +230,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           <span className="font-semibold">Batch Claim</span>
           <div className="flex items-center gap-2 text-xs">
             {totalClaimedThisSession > 0 && (
-              <span className="text-green-600 dark:text-green-400 font-medium">
+              <span className="text-green-700 dark:text-green-400 font-medium">
                 ✓ {totalClaimedThisSession} claimed
               </span>
             )}
@@ -244,13 +244,13 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         <div className="flex items-center justify-between gap-4 text-sm">
           <div className="flex items-center gap-2">
             <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4" />
-            <span className="font-semibold text-green-600 dark:text-green-400">
+            <span className="font-semibold text-green-700 dark:text-green-400">
               +{formatScore(Number(totalPoints))} PTS
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Image src="/icons/tod.svg" alt="Time of Death" width={16} height={16} className="w-4 h-4" />
-            <span className="font-semibold text-blue-600 dark:text-blue-400">
+            <span className="font-semibold text-blue-700 dark:text-blue-400">
               +{formatLifetimeProduction(totalLifetime)} TOD
             </span>
           </div>
@@ -259,7 +259,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         {/* Multi-batch info */}
         {hasMultipleBatches && (
           <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs">
+            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>
                 Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}. 
@@ -272,14 +272,14 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         {/* Gating Logic */}
         {!isSmartWallet ? (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
               <Lock className="w-3 h-3" />
               Smart Wallet Required
             </div>
           </div>
         ) : !hasEnoughTokens ? (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
               <Lock className="w-3 h-3" />
               Insufficient PIXOTCHI Balance
             </div>
@@ -291,7 +291,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           <div className="space-y-2">
              <div className="flex justify-between items-center text-xs px-1">
                <span className="text-muted-foreground">Cost:</span>
-               <span className="font-mono text-amber-600 dark:text-amber-500">
+               <span className="font-mono text-amber-700 dark:text-amber-500">
                  {BURN_AMOUNT_TOKENS} PIXOTCHI (Burn)
                </span>
              </div>
