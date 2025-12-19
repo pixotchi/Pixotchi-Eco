@@ -295,46 +295,46 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
                  {BURN_AMOUNT_TOKENS} PIXOTCHI
                </span>
              </div>
-             <SmartWalletTransaction
-              key={txKey} // Force re-mount to reset button state after each batch
-              calls={calls}
+          <SmartWalletTransaction
+            key={txKey} // Force re-mount to reset button state after each batch
+            calls={calls}
               buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
-              buttonClassName="w-full font-bold h-9 text-sm"
-              onSuccess={(tx) => {
-                const claimedCount = currentBatchItems.length;
-                const remainingCount = claimableItems.length - claimedCount;
-                const newTotalClaimed = totalClaimedThisSession + claimedCount;
-                
-                setTotalClaimedThisSession(newTotalClaimed);
-                setTxKey(k => k + 1); // Increment key to reset Transaction component
-                
-                if (remainingCount > 0) {
+            buttonClassName="w-full font-bold h-9 text-sm"
+            onSuccess={(tx) => {
+              const claimedCount = currentBatchItems.length;
+              const remainingCount = claimableItems.length - claimedCount;
+              const newTotalClaimed = totalClaimedThisSession + claimedCount;
+              
+              setTotalClaimedThisSession(newTotalClaimed);
+              setTxKey(k => k + 1); // Increment key to reset Transaction component
+              
+              if (remainingCount > 0) {
                   toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
-                } else {
+              } else {
                   toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed all ${newTotalClaimed} buildings!`);
+              }
+              
+              scanLands(); // Re-scan to update remaining items
+              if (onSuccess) onSuccess();
+              window.dispatchEvent(new Event('balances:refresh'));
+              window.dispatchEvent(new Event('buildings:refresh'));
+              
+              // Trigger claim production task for gamification
+              try {
+                const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
+                const txHash = extractTransactionHash(tx);
+                if (txHash) {
+                  payload.proof = { txHash };
                 }
-                
-                scanLands(); // Re-scan to update remaining items
-                if (onSuccess) onSuccess();
-                window.dispatchEvent(new Event('balances:refresh'));
-                window.dispatchEvent(new Event('buildings:refresh'));
-                
-                // Trigger claim production task for gamification
-                try {
-                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
-                  const txHash = extractTransactionHash(tx);
-                  if (txHash) {
-                    payload.proof = { txHash };
-                  }
-                  fetch('/api/gamification/missions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                  });
-                } catch {}
-              }}
-              onError={(e) => toast.error("Batch claim failed")}
-            />
+                fetch('/api/gamification/missions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+              } catch {}
+            }}
+            onError={(e) => toast.error("Batch claim failed")}
+          />
           </div>
         )}
       </CardContent>

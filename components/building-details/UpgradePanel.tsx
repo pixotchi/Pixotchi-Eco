@@ -14,7 +14,7 @@ import { toast } from 'react-hot-toast';
 import { StandardContainer } from '@/components/ui/pixel-container';
 import { useBalances } from '@/lib/balance-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { LAND_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS } from '@/lib/contracts';
 
 interface UpgradePanelProps {
   building: BuildingData;
@@ -24,7 +24,7 @@ interface UpgradePanelProps {
   needsLeafApproval: boolean;
   onUpgradeSuccess: () => void;
   onLeafApprovalSuccess: () => void;
-  needsSeedApproval: boolean;
+  needsSeedApproval: boolean; // Now refers to PIXOTCHI approval
   onSeedApprovalSuccess: () => void;
 }
 
@@ -41,10 +41,11 @@ export default function UpgradePanel({
 }: UpgradePanelProps) {
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
-  const { seedBalance: userSeedBalance, leafBalance: userLeafBalance } = useBalances();
+  const { pixotchiBalance: userPixotchiBalance, leafBalance: userLeafBalance } = useBalances();
 
   const hasInsufficientLeaf = building.levelUpgradeCostLeaf > userLeafBalance;
-  const hasInsufficientSeed = building.levelUpgradeCostSeedInstant > userSeedBalance;
+  // Speedup cost is now in PIXOTCHI
+  const hasInsufficientPixotchi = building.levelUpgradeCostSeedInstant > userPixotchiBalance;
 
   const upgradeProgress = calculateUpgradeProgress(building, currentBlock);
   const timeLeft = calculateTimeLeft(building, currentBlock);
@@ -82,8 +83,8 @@ export default function UpgradePanel({
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Speed up with:</span>
-            <span className={`font-semibold ${hasInsufficientSeed ? 'text-destructive' : ''}`}>
-              {formatTokenAmount(building.levelUpgradeCostSeedInstant)} SEED
+            <span className={`font-semibold ${hasInsufficientPixotchi ? 'text-destructive' : ''}`}>
+              {formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI
             </span>
           </div>
         </div>
@@ -102,20 +103,21 @@ export default function UpgradePanel({
         ) : building.isUpgrading ? (
           needsSeedApproval ? (
             <div className="space-y-2">
-              <div className="text-sm text-center text-muted-foreground">Approve SEED spending to use speed ups</div>
+              <div className="text-sm text-center text-muted-foreground">Approve PIXOTCHI spending to use speed ups</div>
               <ApproveTransaction
                 spenderAddress={LAND_CONTRACT_ADDRESS}
+                tokenAddress={CREATOR_TOKEN_ADDRESS} // PIXOTCHI token
                 onSuccess={() => {
-                  toast.success('SEED approval successful!');
+                  toast.success('PIXOTCHI approval successful!');
                   onSeedApprovalSuccess();
                 }}
                 onError={(error) => toast.error(`Approval failed: ${error.message}`)}
-                buttonText="Approve SEED"
+                buttonText="Approve PIXOTCHI"
                 buttonClassName="w-full"
               />
             </div>
-          ) : hasInsufficientSeed ? (
-            <DisabledTransaction buttonText="Insufficient SEED Balance" buttonClassName="w-full" />
+          ) : hasInsufficientPixotchi ? (
+            <DisabledTransaction buttonText="Insufficient PIXOTCHI Balance" buttonClassName="w-full" />
           ) : (
             <BuildingSpeedUpTransaction
               building={building}
@@ -124,13 +126,14 @@ export default function UpgradePanel({
               onSuccess={() => {
                 toast.success('Building upgrade sped up!', { id: `speedup-${landId}-${building.id}` });
                 onUpgradeSuccess();
+                // Refresh both balances and buildings immediately
                 window.dispatchEvent(new Event('balances:refresh'));
-                try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
+                window.dispatchEvent(new Event('buildings:refresh'));
               }}
               onError={(error) => toast.error(`Speed up failed: ${error.message}`)}
-              buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} SEED)`}
+              buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI)`}
               buttonClassName="w-full"
-              disabled={hasInsufficientSeed}
+              disabled={hasInsufficientPixotchi}
             />
           )
         ) : needsLeafApproval ? (
@@ -154,8 +157,9 @@ export default function UpgradePanel({
               onSuccess={() => {
                 toast.success('Building upgrade started!', { id: `upgrade-${landId}-${building.id}` });
                 onUpgradeSuccess();
+                // Refresh both balances and buildings immediately
                 window.dispatchEvent(new Event('balances:refresh'));
-                try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
+                window.dispatchEvent(new Event('buildings:refresh'));
               }}
               onError={(error) => toast.error(`Upgrade failed: ${error.message}`)}
               buttonText={`${needsLeafApproval ? 'Step 2: ' : ''}Upgrade (${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF)`}
@@ -167,8 +171,8 @@ export default function UpgradePanel({
         {hasInsufficientLeaf && !building.isUpgrading && !isMaxLevel && (
           <p className="text-xs text-destructive text-center mt-2">Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} LEAF</p>
         )}
-        {hasInsufficientSeed && building.isUpgrading && (
-          <p className="text-xs text-destructive text-center mt-2">Not enough SEED for speed up. Balance: {formatTokenAmount(userSeedBalance)} SEED</p>
+        {hasInsufficientPixotchi && building.isUpgrading && (
+          <p className="text-xs text-destructive text-center mt-2">Not enough PIXOTCHI for speed up. Balance: {formatTokenAmount(userPixotchiBalance)} PIXOTCHI</p>
         )}
       </div>
     </div>
