@@ -244,13 +244,13 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         <div className="flex items-center justify-between gap-4 text-sm">
           <div className="flex items-center gap-2">
             <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4" />
-            <span className="font-semibold text-green-700 dark:text-green-400">
+            <span className="font-semibold text-primary">
               +{formatScore(Number(totalPoints))} PTS
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Image src="/icons/tod.svg" alt="Time of Death" width={16} height={16} className="w-4 h-4" />
-            <span className="font-semibold text-blue-700 dark:text-blue-400">
+            <span className="font-semibold text-primary">
               +{formatLifetimeProduction(totalLifetime)} TOD
             </span>
           </div>
