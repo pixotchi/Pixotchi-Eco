@@ -33,7 +33,7 @@ interface ClaimableItem {
 // Burn configuration
 const BURN_AMOUNT_TOKENS = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_BURN_AMOUNT || 500);
 const BURN_ADDRESS = '0x000000000000000000000000000000000000dEaD';
-const PIXOTCHI_TOKEN_ADDRESS = '0x546D239032b24eCEEE0cb05c92FC39090846adc7'; // Hardcoded or imported from contracts
+const PIXOTCHI_TOKEN_ADDRESS = '0xa2ef17bb7eea1143196678337069dfa24d37d2ac'; // PIXOTCHI Token (CREATOR_TOKEN_ADDRESS)
 
 // Minimum accumulated amounts to include in batch claim
 // Buildings constantly produce, so after claiming they quickly have tiny amounts
