@@ -1181,11 +1181,9 @@ export const getSeedAllowanceForLand = async (ownerAddress: string): Promise<big
   const readClient = getReadClient();
 
   return retryWithBackoff(async () => {
-    // Note: This now checks PIXOTCHI (Creator Token) allowance for Land, as speedups use PIXOTCHI
-    // We kept the function name `getSeedAllowanceForLand` to minimize refactoring churn in components
-    // that pass this into `needsSeedApproval`.
+    // Use consistent PIXOTCHI_TOKEN_ADDRESS
     return await readClient.readContract({
-      address: CREATOR_TOKEN_ADDRESS,
+      address: PIXOTCHI_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'allowance',
       args: [ownerAddress as `0x${string}`, LAND_CONTRACT_ADDRESS],
