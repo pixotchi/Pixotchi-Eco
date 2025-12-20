@@ -1,28 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateTraits } from '@/lib/trait-validator'; // We will create this helper
 import { redis } from '@/lib/redis';
+import { validateAction, type ExpectedTraits, validateTraits } from '@/lib/trait-validator';
 
-// Validate trait requirements match what backend expects
-// This prevents users from modifying trait requirements on the frontend
-const EXPECTED_TRAITS = {
-  // Example for X (Twitter)
-  'x': {
-    'verified': 'true',
-    // 'followers': 'gte:100' // Optional: Uncomment to enforce followers count
-  },
-  // Example for Coinbase
-  'coinbase': {
-    'coinbase_one_active': 'true'
-  },
-  // Example for Instagram
-  'instagram': {
-    'username': 'exists' // Check for account existence (custom logic maybe needed)
-  },
-  // Example for TikTok
-  'tiktok': {
-    'display_name': 'exists' 
-  }
+/**
+ * Expected traits for free plant claim verification.
+ * 
+ * Currently, we only require a linked X account (no specific traits).
+ * If you want to require specific traits (e.g., verified:true, followers:gte:100),
+ * add them here and they will be validated before calling Base Verify.
+ * 
+ * SECURITY: These must match what the frontend sends, but the backend
+ * is the source of truth. If a user modifies the frontend to send weaker
+ * requirements, this validation will reject the request.
+ */
+const EXPECTED_TRAITS: ExpectedTraits = {
+  // Uncomment these to require specific traits:
+  // 'verified': 'true',           // Require X blue checkmark
+  // 'followers': 'gte:100',       // Require at least 100 followers
 };
+
+/**
+ * The action name used for free plant claims.
+ * This must match what the frontend sends in the SIWE message.
+ */
+const EXPECTED_ACTION = 'claim_free_plant';
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,11 +34,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Validate traits in the message (Security)
-    // NOTE: For now, we only support basic verification check
-    // In a real implementation, you'd parse the SIWE message resources and match against EXPECTED_TRAITS
-    // For this MVP, we'll rely on Base Verify API's response, but verifying the message structure is best practice.
-    
+    // 1. SECURITY: Validate trait requirements in SIWE message match backend expectations
+    // This prevents users from modifying frontend to sign weaker requirements
+    const validation = Object.keys(EXPECTED_TRAITS).length > 0
+      ? validateTraits(message, provider, EXPECTED_TRAITS, EXPECTED_ACTION)
+      : validateAction(message, provider, EXPECTED_ACTION);
+
+    if (!validation.valid) {
+      console.warn('[VERIFY] Trait validation failed:', {
+        address,
+        provider,
+        error: validation.error,
+        parsedTraits: validation.parsedTraits,
+        parsedAction: validation.parsedAction,
+      });
+      return NextResponse.json({ 
+        error: 'Invalid trait requirements in message',
+        details: validation.error 
+      }, { status: 400 });
+    }
+
+    console.log('[VERIFY] Trait validation passed:', {
+      address,
+      provider,
+      action: validation.parsedAction,
+      traits: validation.parsedTraits,
+    });
+
     // 2. Call Base Verify API
     const verifyUrl = 'https://verify.base.dev/v1/base_verify_token';
     const secretKey = process.env.BASE_VERIFY_SECRET_KEY;
@@ -46,6 +69,8 @@ export async function POST(req: NextRequest) {
       console.error('BASE_VERIFY_SECRET_KEY is not set');
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
+
+    console.log('[VERIFY] Calling Base Verify for:', { address, provider });
 
     const response = await fetch(verifyUrl, {
       method: 'POST',
@@ -59,13 +84,19 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    console.log('[VERIFY] Base Verify API Response:', {
-      status: response.status,
-      statusText: response.statusText,
-    });
+    const responseBody = await response.text();
+    console.log('[VERIFY] Base Verify API Status:', response.status);
+    console.log('[VERIFY] Base Verify API Body:', responseBody);
+
+    let data;
+    try {
+      data = JSON.parse(responseBody);
+    } catch (e) {
+      console.error('[VERIFY] Failed to parse response body:', e);
+      return NextResponse.json({ error: 'Invalid response from upstream' }, { status: 500 });
+    }
 
     if (response.ok) {
-      const data = await response.json();
       const verificationToken = data.token;
 
       // Check if this token has already claimed a free plant
@@ -89,13 +120,12 @@ export async function POST(req: NextRequest) {
     } else if (response.status === 404) {
       return NextResponse.json({ verified: false, needsVerification: true }, { status: 404 });
     } else if (response.status === 400) {
-      const data = await response.json();
       if (data.message === 'verification_traits_not_satisfied') {
-        return NextResponse.json({ verified: false, traitsNotMet: true }, { status: 400 });
+        return NextResponse.json({ verified: false, traitsNotMet: true, details: data.details }, { status: 400 });
       }
       return NextResponse.json({ error: data.message || 'Verification failed' }, { status: 400 });
     } else {
-      console.error('Base Verify API error:', response.status, await response.text());
+      console.error('Base Verify API error:', response.status, data);
       return NextResponse.json({ error: 'Verification check failed upstream' }, { status: 500 });
     }
 
@@ -104,4 +134,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

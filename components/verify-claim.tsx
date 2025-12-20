@@ -7,7 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useSignMessage } from 'wagmi';
-import { SiweMessage } from 'siwe';
+import { SiweMessage, generateNonce } from 'siwe';
+
+// Base Verify requires specific configuration
+const BASE_VERIFY_CONFIG = {
+  // Must match the domain registered with Base Verify
+  appUrl: process.env.NEXT_PUBLIC_URL || 'https://mini.pixotchi.tech',
+  // Base Verify Mini App URL for redirects
+  miniAppUrl: 'https://verify.base.dev',
+  // Base mainnet chain ID - required by Base Verify
+  chainId: 8453,
+};
 
 interface VerifyClaimProps {
   onClaimSuccess: () => void;
@@ -15,7 +25,7 @@ interface VerifyClaimProps {
 }
 
 export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) {
-  const { address, chainId } = useAccount();
+  const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
   
   const [loading, setLoading] = useState(false);
@@ -26,7 +36,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
   const handleVerify = async () => {
-    if (!address || !chainId) {
+    if (!address) {
       toast.error('Please connect your wallet');
       return;
     }
@@ -37,28 +47,34 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
     try {
       // 1. Create SIWE message with required traits
-      // We check for X verification as primary example
-      const domain = window.location.host;
-      const origin = window.location.origin;
+      // Following Base Verify documentation exactly
+      const appUrl = BASE_VERIFY_CONFIG.appUrl;
+      const domain = new URL(appUrl).hostname;
       const statement = 'Verify ownership of your X account to claim a free plant.';
+      
+      // Build resources array per Base Verify spec
+      const resources = [
+        'urn:verify:provider:x',
+        // 'urn:verify:provider:x:verified:eq:true', // Disabled to allow any linked X account
+        'urn:verify:action:claim_free_plant' // Important for unique token generation
+      ];
       
       const message = new SiweMessage({
         domain,
         address,
         statement,
-        uri: origin,
+        uri: appUrl,
         version: '1',
-        chainId,
-        nonce: Math.random().toString(36).substring(2, 15), // Simple nonce
-        // MUST match Base Verify expected format exactly
-        resources: [
-          'urn:verify:provider:x',
-          'urn:verify:provider:x:verified:eq:true',
-          // 'urn:verify:provider:x:followers:gte:100' // Optional
-        ]
+        chainId: BASE_VERIFY_CONFIG.chainId, // Must be Base mainnet (8453)
+        nonce: generateNonce(),
+        issuedAt: new Date().toISOString(),
+        expirationTime: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // 6 hours
+        resources,
       });
 
       const messageText = message.prepareMessage();
+      console.log('[VERIFY] SIWE message:', { domain, uri: appUrl, chainId: BASE_VERIFY_CONFIG.chainId });
+      
       const signature = await signMessageAsync({ message: messageText });
 
       // 2. Check Verification via Backend
@@ -86,18 +102,31 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           await handleClaim(data.token);
         }
       } else if (response.status === 404) {
-        // Not verified -> Redirect to Base Verify
-        const verifyUrl = `https://verify.base.dev?redirect_uri=${encodeURIComponent(window.location.href)}&providers=x`;
-        // We use window.open or link
+        // Not verified -> Redirect to Base Verify Mini App
+        const redirectUri = BASE_VERIFY_CONFIG.appUrl;
+        const params = new URLSearchParams({
+          redirect_uri: redirectUri,
+          providers: 'x',
+        });
+        const miniAppUrl = `${BASE_VERIFY_CONFIG.miniAppUrl}?${params.toString()}`;
+        
+        // For Coinbase Wallet mini app, use deep link
+        const deepLink = `cbwallet://miniapp?url=${encodeURIComponent(miniAppUrl)}`;
+        
         setError(null); // Not an error, just need action
         toast((t) => (
           <div className="flex flex-col gap-2">
             <span>You need to verify your X account first.</span>
-            <Button size="sm" onClick={() => window.open(verifyUrl, '_blank')}>
-              Verify on Base
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => window.open(deepLink, '_blank')}>
+                Open in Wallet
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => window.open(miniAppUrl, '_blank')}>
+                Open in Browser
+              </Button>
+            </div>
           </div>
-        ), { duration: 5000 });
+        ), { duration: 8000 });
         setStep('idle');
       } else {
         throw new Error(data.error || 'Verification failed');
@@ -132,7 +161,15 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
       if (response.ok && data.success) {
         setStep('success');
-        toast.success('Free plant claimed successfully!');
+        
+        // Handle different success statuses
+        if (data.status === 'complete') {
+          toast.success('Free plant claimed and transferred successfully!');
+        } else if (data.status === 'partial') {
+          // Partial success - mint worked but transfer may have failed
+          toast.success(data.message || 'Plant minted! Check your wallet shortly.');
+        }
+        
         onClaimSuccess();
       } else {
         throw new Error(data.error || 'Claim failed');
@@ -197,4 +234,3 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
     </Card>
   );
 }
-
