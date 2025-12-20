@@ -3,6 +3,12 @@ import { redis } from '@/lib/redis';
 import { validateAction, type ExpectedTraits, validateTraits } from '@/lib/trait-validator';
 
 /**
+ * Feature toggle for Base Verify claims.
+ * Set NEXT_PUBLIC_VERIFY_CLAIM_ENABLED=true to enable both frontend UI and backend API.
+ */
+const VERIFY_CLAIM_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true';
+
+/**
  * Expected traits for free plant claim verification.
  * 
  * Currently, we only require a linked X account (no specific traits).
@@ -26,6 +32,13 @@ const EXPECTED_TRAITS: ExpectedTraits = {
 const EXPECTED_ACTION = 'claim_free_plant';
 
 export async function POST(req: NextRequest) {
+  // Check if feature is enabled
+  if (!VERIFY_CLAIM_ENABLED) {
+    return NextResponse.json({ 
+      error: 'Verification claims are currently disabled' 
+    }, { status: 503 });
+  }
+
   try {
     const body = await req.json();
     const { signature, message, address, provider } = body;

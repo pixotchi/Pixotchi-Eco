@@ -19,6 +19,9 @@ export const CLIENT_ENV = {
   // Feature flags
   INVITE_SYSTEM_ENABLED: process.env.NEXT_PUBLIC_INVITE_SYSTEM_ENABLED === 'true',
   PAYMASTER_ENABLED: process.env.NEXT_PUBLIC_PAYMASTER_ENABLED === 'true',
+  // Base Verify - Free plant claim for verified users
+  // Single toggle controls both frontend UI and backend API
+  VERIFY_CLAIM_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true',
   
   // UI configuration
   ICON_URL: process.env.NEXT_PUBLIC_ICON_URL,

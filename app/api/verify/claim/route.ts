@@ -6,6 +6,12 @@ import { encodeFunctionData, maxUint256, createPublicClient } from 'viem';
 import { base as baseChain } from 'viem/chains';
 import { createResilientTransport } from '@/lib/rpc-transport';
 
+/**
+ * Feature toggle for Base Verify claims.
+ * Set NEXT_PUBLIC_VERIFY_CLAIM_ENABLED=true to enable both frontend UI and backend API.
+ */
+const VERIFY_CLAIM_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true';
+
 // We reuse the CdpClient from agent mint logic if possible, or new instance
 let cdp: CdpClient | null = null;
 function getClient() {
@@ -31,6 +37,13 @@ const CLAIM_LOCK_PREFIX = 'claim_lock:';
 const ELIGIBLE_STRAINS = [1, 2, 3, 4];
 
 export async function POST(req: NextRequest) {
+  // Check if feature is enabled
+  if (!VERIFY_CLAIM_ENABLED) {
+    return NextResponse.json({ 
+      error: 'Verification claims are currently disabled' 
+    }, { status: 503 });
+  }
+
   try {
     const body = await req.json();
     const { userAddress, verificationToken, provider, strainId } = body;
@@ -256,7 +269,12 @@ export async function POST(req: NextRequest) {
         transferError: transferSuccess ? null : (transferError?.message || 'Unknown error'),
       };
 
+      // Store by verification token (primary - prevents same X account claiming twice)
       await redis?.set(claimKey, JSON.stringify(claimRecord));
+      
+      // Also store by wallet address (for quick UI lookup without requiring signature)
+      const walletClaimKey = `wallet_claims:${userAddress.toLowerCase()}`;
+      await redis?.set(walletClaimKey, JSON.stringify(claimRecord));
 
       if (transferSuccess) {
         return NextResponse.json({ 
