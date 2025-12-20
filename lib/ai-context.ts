@@ -62,7 +62,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - **PTS:** Points used for leaderboard ranking and earning ETH rewards.
 - **TOD (Time of Death):** Hours remaining before a plant dies if not cared for.
 - **$SEED:** Main in-game token; used to buy items, speed upgrades, and trade for ETH/LEAF.
-- **$LEAF:** Currency used exclusively for building upgrades and given as staking rewards.
+- **$LEAF:** Currency used exclusively for building upgrades and given as staking rewards. IT IS NOT SWAPPABLE. YOU CAN ONLY EARN IT BY STAKING SEED OR DOING ARCADE GAMES, QUESTS ETC or using MARKETPLACE OF LAND to trade against other user's orders.)
 - **$PIXOTCHI:** Pixotchi's Creator Token on Zora. Deployed in Decemeber 2025 to add a new layer of gamification and community engagement. It's only feature right now is the ability to batch claim production from your buildings (Need to hold 1M $PIXOTCHI in your wallet to unlock).
 - **$ETH:** The native token of the Base network, tradeable for SEED via the Swap tab and rewarded to players for their PTS after each swap (2% of volume).
 - **ERC-721:** NFT standard used for Plants and Lands (collectible digital assets).
