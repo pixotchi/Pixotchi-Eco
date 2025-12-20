@@ -271,8 +271,8 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
         {/* Gating Logic */}
         {!isSmartWallet ? (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg space-y-2">
+            <div className="flex items-center gap-2 text-primary font-bold text-xs">
               <Lock className="w-3 h-3" />
               Smart Wallet Required
             </div>
