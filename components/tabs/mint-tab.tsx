@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getFormattedTokenBalance, getFormattedTokenBalanceForToken, getTokenBalanceForToken, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandTokenApproval, getLandMintPrice, getTokenSymbol, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
+import { getFormattedTokenBalance, getFormattedTokenBalanceForToken, getTokenBalanceForToken, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandMintApproval, getLandMintPrice, getTokenSymbol, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
 import { useBalances } from '@/lib/balance-context';
 import { Strain } from '@/lib/types';
 import { formatNumber, formatTokenAmount } from '@/lib/utils';
@@ -151,7 +151,7 @@ export default function MintTab() {
           getLandBalance(address),
           getLandSupply(),
           getLandMintStatus(address),
-          checkLandTokenApproval(address),
+          checkLandMintApproval(address),
           getLandMintPrice()
         ]);
         setLandBalance(lands);
