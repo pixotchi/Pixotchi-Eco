@@ -1232,12 +1232,32 @@ export const checkTokenApproval = async (address: string, tokenAddress?: `0x${st
   return checkTokenApprovalForToken(address, token, PIXOTCHI_NFT_ADDRESS);
 };
 
-export const checkLandTokenApproval = async (address: string): Promise<boolean> => {
+// Check SEED approval for Land Minting
+export const checkLandMintApproval = async (address: string): Promise<boolean> => {
   const readClient = getReadClient();
   
   return retryWithBackoff(async () => {
+    // Check SEED (PIXOTCHI_TOKEN_ADDRESS) allowance for Land contract
     const allowance = await readClient.readContract({
-      address: CREATOR_TOKEN_ADDRESS, // Updated to PIXOTCHI (Creator Token) for Land interactions (Speed Ups)
+      address: PIXOTCHI_TOKEN_ADDRESS,
+      abi: PIXOTCHI_TOKEN_ABI,
+      functionName: 'allowance',
+      args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS],
+    }) as bigint;
+
+    // Use simple > 0 check for robustness (consistent with checkTokenApproval)
+    return allowance > BigInt(0);
+  });
+};
+
+// Check PIXOTCHI (Creator Token) approval for Land Building Speedups
+export const checkLandSpeedUpApproval = async (address: string): Promise<boolean> => {
+  const readClient = getReadClient();
+  
+  return retryWithBackoff(async () => {
+    // Check PIXOTCHI (CREATOR_TOKEN_ADDRESS) allowance for Land contract
+    const allowance = await readClient.readContract({
+      address: CREATOR_TOKEN_ADDRESS,
       abi: PIXOTCHI_TOKEN_ABI,
       functionName: 'allowance',
       args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS],

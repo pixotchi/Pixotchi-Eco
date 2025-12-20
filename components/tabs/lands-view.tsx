@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Land, BuildingData, BuildingType } from "@/lib/types";
-import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandTokenApproval } from "@/lib/contracts";
+import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandSpeedUpApproval } from "@/lib/contracts";
 import { formatTokenAmount, formatAddress, formatXP } from "@/lib/utils";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
@@ -87,7 +87,7 @@ export default function LandsView() {
     try {
       const [hasLeafApproval, hasSeedApproval] = await Promise.all([
         checkLeafTokenApproval(address),
-        checkLandTokenApproval(address),
+        checkLandSpeedUpApproval(address),
       ]);
       // Only update if address hasn't changed during the fetch
       if (fetchApprovalStatusPendingRef.current === address) {
