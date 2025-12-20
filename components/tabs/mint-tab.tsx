@@ -31,6 +31,7 @@ import { ToggleGroup } from '@/components/ui/toggle-group';
 import LandMintTransaction from '../transactions/land-mint-transaction';
 import { MintShareModal } from '@/components/mint-share-modal';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
+import { VerifyClaim } from '@/components/verify-claim';
 import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported, useSolanaBridge, useSolanaWallet } from '@/components/solana';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
@@ -971,6 +972,16 @@ export default function MintTab() {
     // Regular EVM wallet minting
     return (
     <>
+      <div className="mb-6">
+        <VerifyClaim 
+          strainId={4} // Force Zest strain (ID 4)
+          onClaimSuccess={() => {
+            incrementForcedFetch();
+            window.dispatchEvent(new Event('balances:refresh'));
+          }} 
+        />
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Choose a Strain</CardTitle>
