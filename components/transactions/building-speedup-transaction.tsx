@@ -1,16 +1,18 @@
 "use client";
 
-import React from "react";
-import SponsoredTransaction from "./sponsored-transaction";
-import { BuildingData, BuildingType } from "@/lib/types";
-import { landAbi } from "../../public/abi/pixotchi-v3-abi";
+import { formatTokenAmount } from '@/lib/utils';
+import { toast } from 'react-hot-toast';
+import { useAccount } from 'wagmi';
+import SponsoredTransaction from './sponsored-transaction';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
+import { BuildingData } from '@/lib/types';
 
 interface BuildingSpeedUpTransactionProps {
   building: BuildingData;
   landId: bigint;
-  buildingType: BuildingType;
-  onSuccess?: () => void;
+  buildingType: 'village' | 'town';
+  onSuccess?: (tx: any) => void;
   onError?: (error: any) => void;
   buttonText?: string;
   buttonClassName?: string;
@@ -23,11 +25,14 @@ export default function BuildingSpeedUpTransaction({
   buildingType,
   onSuccess,
   onError,
-  buttonText = "Speed Up with SEED",
+  buttonText = "Speed Up with PIXOTCHI",
   buttonClassName = "",
   disabled = false
 }: BuildingSpeedUpTransactionProps) {
   
+  // Note: Contract logic changed to use PIXOTCHI (Creator Token) instead of SEED
+  // The function names in the contract might still be `*SpeedUpWithSeed` if the ABI wasn't renamed,
+  // but the logic inside consumes PIXOTCHI.
   const functionName = buildingType === 'village' ? 'villageSpeedUpWithSeed' : 'townSpeedUpWithSeed';
   
   const calls = [{

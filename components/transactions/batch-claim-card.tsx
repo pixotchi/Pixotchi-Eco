@@ -13,7 +13,7 @@ import { StandardContainer } from '@/components/ui/pixel-container';
 import { toast } from 'react-hot-toast';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useBalances } from '@/lib/balance-context';
-import { formatUnits } from 'viem';
+import { formatUnits, parseUnits, erc20Abi } from 'viem';
 import { Button } from '@/components/ui/button';
 import { useAccount } from 'wagmi';
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -30,7 +30,10 @@ interface ClaimableItem {
   lifetime: bigint;
 }
 
-const MIN_PIXOTCHI_REQUIRED = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MIN_TOKENS || 10);
+// Burn configuration
+const BURN_AMOUNT_TOKENS = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_BURN_AMOUNT || 500);
+const BURN_ADDRESS = '0x000000000000000000000000000000000000dEaD';
+const PIXOTCHI_TOKEN_ADDRESS = '0xa2ef17bb7eea1143196678337069dfa24d37d2ac'; // PIXOTCHI Token (CREATOR_TOKEN_ADDRESS)
 
 // Minimum accumulated amounts to include in batch claim
 // Buildings constantly produce, so after claiming they quickly have tiny amounts
@@ -79,7 +82,8 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   const { address } = useAccount();
 
   const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
-  const hasEnoughTokens = pixotchiBalanceNum >= MIN_PIXOTCHI_REQUIRED;
+  const burnAmountWei = parseUnits(BURN_AMOUNT_TOKENS.toString(), 18);
+  const hasEnoughTokens = pixotchiBalance >= burnAmountWei;
   
   // Memoize land IDs to detect changes
   const landIdsHash = useMemo(() => 
@@ -183,15 +187,25 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   );
 
   // Only create calls for current batch
-  const calls = useMemo(() => 
-    currentBatchItems.map(item => ({
+  const calls = useMemo(() => {
+    // 1. Burn transaction (First call in batch)
+    const burnCall = {
+      address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [BURN_ADDRESS as `0x${string}`, burnAmountWei],
+    };
+
+    // 2. Claim transactions
+    const claimCalls = currentBatchItems.map(item => ({
       address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'villageClaimProduction',
       args: [item.landId, item.buildingId],
-    })),
-    [currentBatchItems]
-  );
+    }));
+
+    return [burnCall, ...claimCalls];
+  }, [currentBatchItems, burnAmountWei]);
 
   if (loading && claimableItems.length === 0) {
     return (
@@ -216,7 +230,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           <span className="font-semibold">Batch Claim</span>
           <div className="flex items-center gap-2 text-xs">
             {totalClaimedThisSession > 0 && (
-              <span className="text-green-600 dark:text-green-400 font-medium">
+              <span className="text-green-700 dark:text-green-400 font-medium">
                 ✓ {totalClaimedThisSession} claimed
               </span>
             )}
@@ -230,13 +244,13 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         <div className="flex items-center justify-between gap-4 text-sm">
           <div className="flex items-center gap-2">
             <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4" />
-            <span className="font-semibold text-green-600 dark:text-green-400">
+            <span className="font-semibold text-primary">
               +{formatScore(Number(totalPoints))} PTS
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Image src="/icons/tod.svg" alt="Time of Death" width={16} height={16} className="w-4 h-4" />
-            <span className="font-semibold text-blue-600 dark:text-blue-400">
+            <span className="font-semibold text-primary">
               +{formatLifetimeProduction(totalLifetime)} TOD
             </span>
           </div>
@@ -245,7 +259,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
         {/* Multi-batch info */}
         {hasMultipleBatches && (
           <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs">
+            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>
                 Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}. 
@@ -257,27 +271,34 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
         {/* Gating Logic */}
         {!isSmartWallet ? (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg space-y-2">
+            <div className="flex items-center gap-2 text-primary font-bold text-xs">
               <Lock className="w-3 h-3" />
               Smart Wallet Required
             </div>
           </div>
         ) : !hasEnoughTokens ? (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
               <Lock className="w-3 h-3" />
-              {MIN_PIXOTCHI_REQUIRED} PIXOTCHI in wallet required to unlock batch claim.
+              Insufficient PIXOTCHI Balance
             </div>
             <div className="text-[10px] font-mono text-muted-foreground">
-              Balance: {pixotchiBalanceNum.toFixed(2)}
+              Required: {BURN_AMOUNT_TOKENS} to burn | Balance: {pixotchiBalanceNum.toFixed(2)}
             </div>
           </div>
         ) : (
+          <div className="space-y-2">
+             <div className="flex justify-between items-center text-xs px-1">
+               <span className="text-muted-foreground">Cost:</span>
+               <span className="font-mono text-primary font-semibold">
+                 {BURN_AMOUNT_TOKENS} PIXOTCHI
+               </span>
+             </div>
           <SmartWalletTransaction
             key={txKey} // Force re-mount to reset button state after each batch
             calls={calls}
-            buttonText={hasMultipleBatches ? `Claim Batch (${currentBatchItems.length})` : "Claim All"}
+              buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
             buttonClassName="w-full font-bold h-9 text-sm"
             onSuccess={(tx) => {
               const claimedCount = currentBatchItems.length;
@@ -288,9 +309,9 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               setTxKey(k => k + 1); // Increment key to reset Transaction component
               
               if (remainingCount > 0) {
-                toast.success(`Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
+                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
               } else {
-                toast.success(`Claimed all ${newTotalClaimed} buildings!`);
+                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed all ${newTotalClaimed} buildings!`);
               }
               
               scanLands(); // Re-scan to update remaining items
@@ -314,6 +335,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
             }}
             onError={(e) => toast.error("Batch claim failed")}
           />
+          </div>
         )}
       </CardContent>
     </Card>
