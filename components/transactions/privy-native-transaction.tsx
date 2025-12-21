@@ -3,17 +3,17 @@
 /**
  * PrivyNativeTransaction - Transaction component for Privy embedded wallets
  * 
- * OnchainKit's Transaction component passes chain objects with formatters/serializers
- * that contain functions, which fail to serialize via postMessage to Privy's iframe.
+ * OnchainKit and even Privy's useSendTransaction both hit postMessage serialization
+ * errors because viem/wagmi adds chain.formatters/serializers (functions) internally.
  * 
- * This component uses Privy's native useSendTransaction hook for embedded wallets,
- * completely bypassing OnchainKit and wagmi's problematic serialization.
+ * This component creates a viem WalletClient with a STRIPPED chain object (no formatters)
+ * and sends transactions directly via the EIP1193 provider.
  */
 
 import React, { useState, useCallback } from 'react';
-import { useSendTransaction, useWallets } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth';
 import { useAccount } from 'wagmi';
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, createWalletClient, custom, type Hash } from 'viem';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
 import type { TransactionCall } from '@/lib/types';
@@ -30,6 +30,19 @@ interface PrivyNativeTransactionProps {
 
 type TxStatus = 'idle' | 'pending' | 'success' | 'error';
 
+// Create a minimal chain object without formatters/serializers
+// This avoids the postMessage serialization error
+const BASE_CHAIN_MINIMAL = {
+    id: 8453,
+    name: 'Base',
+    nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
+    rpcUrls: {
+        default: { http: ['https://mainnet.base.org'] },
+    },
+    // NO formatters - this is the key to avoiding the serialization error
+    // NO serializers - these contain functions that can't be cloned
+} as const;
+
 export default function PrivyNativeTransaction({
     calls,
     onSuccess,
@@ -41,7 +54,6 @@ export default function PrivyNativeTransaction({
 }: PrivyNativeTransactionProps) {
     const { address } = useAccount();
     const { wallets } = useWallets();
-    const { sendTransaction } = useSendTransaction();
     const [status, setStatus] = useState<TxStatus>('idle');
     const [txHash, setTxHash] = useState<string | null>(null);
 
@@ -65,8 +77,18 @@ export default function PrivyNativeTransaction({
         }
 
         try {
+            // Get the EIP1193 provider from the wallet
+            const provider = await wallet.getEthereumProvider();
+
+            // Create a viem WalletClient with the stripped chain (no formatters)
+            const walletClient = createWalletClient({
+                account: address,
+                chain: BASE_CHAIN_MINIMAL as any,
+                transport: custom(provider),
+            });
+
             // Process each call sequentially
-            let lastHash: string | null = null;
+            let lastHash: Hash | null = null;
 
             for (let i = 0; i < calls.length; i++) {
                 const call = calls[i];
@@ -84,35 +106,24 @@ export default function PrivyNativeTransaction({
                     data = (call as any).data || '0x';
                 }
 
-                // Prepare simple transaction object (no chain object!)
-                const txRequest = {
-                    to: call.address || (call as any).to,
-                    data,
-                    value: call.value ? Number(call.value) : undefined,
-                    chainId: 8453, // Base mainnet
-                };
-
-                console.log('[PrivyNative] Sending transaction via Privy:', {
+                console.log('[PrivyNative] Sending transaction via viem WalletClient:', {
                     callIndex: i + 1,
                     totalCalls: calls.length,
-                    to: txRequest.to,
-                    dataLength: txRequest.data?.length,
+                    to: call.address || (call as any).to,
+                    dataLength: data?.length,
                     walletAddress: wallet.address,
                 });
 
-                // Use Privy's useSendTransaction - bypasses wagmi entirely
-                const result = await sendTransaction(
-                    txRequest as any,
-                    {
-                        address: wallet.address,
-                        uiOptions: {
-                            showWalletUIs: true,
-                        },
-                    }
-                );
+                // Send transaction via viem WalletClient
+                // This uses the stripped chain object to avoid serialization issues
+                const hash = await walletClient.sendTransaction({
+                    to: (call.address || (call as any).to) as `0x${string}`,
+                    data,
+                    value: call.value,
+                });
 
-                lastHash = result.hash;
-                setTxHash(result.hash);
+                lastHash = hash;
+                setTxHash(hash);
 
                 if (i < calls.length - 1) {
                     // Wait a bit between transactions
@@ -143,7 +154,7 @@ export default function PrivyNativeTransaction({
 
             onError?.(error);
         }
-    }, [address, wallets, calls, sendTransaction, onSuccess, onError, showToast]);
+    }, [address, wallets, calls, onSuccess, onError, showToast]);
 
     return (
         <div className="flex flex-col gap-2">
