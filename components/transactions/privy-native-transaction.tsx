@@ -120,6 +120,7 @@ export default function PrivyNativeTransaction({
                     to: (call.address || (call as any).to) as `0x${string}`,
                     data,
                     value: call.value,
+                    chain: null, // Use the chain from walletClient
                 });
 
                 lastHash = hash;
