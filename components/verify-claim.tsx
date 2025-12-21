@@ -10,6 +10,7 @@ import { Loader2, CheckCircle2, AlertCircle, BadgeCheck } from 'lucide-react';
 import { useSignMessage } from 'wagmi';
 import { SiweMessage, generateNonce } from 'siwe';
 import { useFrameContext } from '@/lib/frame-context';
+import { openExternalUrl } from '@/lib/open-external';
 
 // Base Verify requires specific configuration
 const BASE_VERIFY_CONFIG = {
@@ -237,22 +238,11 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
     );
   }
 
-  const getVerifyLinks = () => {
-    const redirectUri = BASE_VERIFY_CONFIG.appUrl;
-    const params = new URLSearchParams({
-      redirect_uri: redirectUri,
-      providers: 'x',
-    });
-    const miniAppUrl = `${BASE_VERIFY_CONFIG.miniAppUrl}?${params.toString()}`;
-    const deepLink = `cbwallet://miniapp?url=${encodeURIComponent(miniAppUrl)}`;
-    return { miniAppUrl, deepLink };
-  };
 
   if (step === 'unverified') {
-    const { miniAppUrl, deepLink } = getVerifyLinks();
     return (
       <Card className="relative overflow-hidden font-sans">
-        <div 
+        <div
           className="absolute inset-0 z-0"
           style={{
             backgroundImage: 'url(/icons/bgclaim.png)',
@@ -265,7 +255,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
-              <Image src="/icons/verified.svg" alt="Verified" width={24} height={24} /> 
+              <Image src="/icons/verified.svg" alt="Verified" width={24} height={24} />
             </div>
             Verification Required
           </CardTitle>
@@ -274,21 +264,14 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-sans font-medium" 
-              onClick={() => window.open(deepLink, '_blank')}
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-sans font-medium"
+              onClick={() => openExternalUrl('https://verify.base.dev')}
             >
-              Open in Coinbase Wallet
+              Open Base Verify
             </Button>
-            <Button 
-              variant="outline" 
-              className="w-full bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/40 font-sans"
-              onClick={() => window.open(miniAppUrl, '_blank')}
-            >
-              Open in Browser
-            </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full text-sm text-white/80 hover:text-white hover:bg-white/10 font-sans"
               onClick={() => {
                 setStep('idle');
