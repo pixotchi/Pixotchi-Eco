@@ -13,7 +13,9 @@ import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { getBuilderCapabilities, transformCallsWithBuilderCode, useIsPrivyEmbeddedWallet } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, isPrivyEmbeddedWallet } from '@/lib/builder-code';
+import { usePrivy } from '@privy-io/react-auth';
+import { useAccount } from 'wagmi';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
@@ -35,18 +37,21 @@ export default function SmartWalletTransaction({
   showToast = true
 }: SmartWalletTransactionProps) {
   const { isSponsored } = usePaymaster();
-  
-  // Check if current wallet is Privy embedded (skip pre-encoding for these)
-  const isPrivyEmbeddedWallet = useIsPrivyEmbeddedWallet();
+  const { address } = useAccount();
+  const { user: privyUser } = usePrivy();
+
+  // Check if current wallet is a Privy embedded wallet
+  const isEmbeddedWallet = isPrivyEmbeddedWallet(address, privyUser);
 
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
+  // Skip for Privy embedded wallets as they cause transaction failures
+  const builderCapabilities = isEmbeddedWallet ? undefined : getBuilderCapabilities();
 
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  // Skip pre-encoding for Privy embedded wallets since they support capabilities
+  // Skip builder code appending for Privy embedded wallets
   const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[], isPrivyEmbeddedWallet) as TransactionCall[],
-    [calls, isPrivyEmbeddedWallet]
+    transformCallsWithBuilderCode(calls as any[], isEmbeddedWallet) as TransactionCall[],
+    [calls, isEmbeddedWallet]
   );
   
   const handleOnSuccess = useCallback((tx: any) => {

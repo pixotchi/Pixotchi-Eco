@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount, useWalletClient } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
 import { getPlantsByOwner, getLandsByOwner, transferPlants, transferLands, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
 import { isAddress, getAddress, encodeFunctionData } from "viem";
 import { toast } from "react-hot-toast";
@@ -14,7 +15,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
 import { Land, Plant } from "@/lib/types";
-import { appendBuilderSuffix } from "@/lib/builder-code";
+import { appendBuilderSuffix, isPrivyEmbeddedWallet } from "@/lib/builder-code";
 
 interface TransferAssetsDialogProps {
   open: boolean;
@@ -25,6 +26,10 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  const { user: privyUser } = usePrivy();
+
+  // Check if current wallet is a Privy embedded wallet
+  const isEmbeddedWallet = isPrivyEmbeddedWallet(address, privyUser);
   const [destination, setDestination] = useState("");
   const [loading, setLoading] = useState(false);
   const [counts, setCounts] = useState<{ plants: number; lands: number }>({ plants: 0, lands: 0 });
@@ -246,7 +251,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
         if (plantIds.length === 0 && landIds.length === 0) {
           toast.error('No assets to transfer');
         } else {
-          const r = await routerBatchTransfer(walletClient, targetAddress, plantIds, landIds);
+          const r = await routerBatchTransfer(walletClient, targetAddress, plantIds, landIds, isEmbeddedWallet);
           if (r.success) {
             toast.success('Assets transferred in a single transaction');
           } else {
@@ -261,8 +266,8 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           toast.error('No assets to transfer');
         } else {
           const [plantRes, landRes] = await Promise.all([
-            plantIds.length ? transferPlants(walletClient, targetAddress, plantIds) : Promise.resolve({ successIds: [], failedIds: [] }),
-            landIds.length ? transferLands(walletClient, targetAddress, landIds) : Promise.resolve({ successIds: [], failedIds: [] }),
+            plantIds.length ? transferPlants(walletClient, targetAddress, plantIds, isEmbeddedWallet) : Promise.resolve({ successIds: [], failedIds: [] }),
+            landIds.length ? transferLands(walletClient, targetAddress, landIds, isEmbeddedWallet) : Promise.resolve({ successIds: [], failedIds: [] }),
           ]);
           const summary = `Plants: ${plantRes.successIds.length}/${plantIds.length}, Lands: ${landRes.successIds.length}/${landIds.length}`;
           const totalFailed = plantRes.failedIds.length + landRes.failedIds.length;

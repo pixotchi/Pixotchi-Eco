@@ -17,8 +17,7 @@
 import { Attribution } from "ox/erc8021";
 import { encodeFunctionData } from "viem";
 import { CLIENT_ENV } from "./env-config";
-import { usePrivy } from "@privy-io/react-auth";
-import { useAccount } from "wagmi";
+import type { WalletWithMetadata } from "@privy-io/react-auth";
 
 // Builder code from base.dev - set via environment variable
 const BUILDER_CODE = CLIENT_ENV.BUILDER_CODE;
@@ -97,31 +96,20 @@ export function getBuilderCode(): string | undefined {
 
 /**
  * Check if the current wallet is a Privy embedded wallet
- * This is used to determine if we should pre-encode builder suffixes
+ * @param address - Current connected wallet address
+ * @param privyUser - Privy user object with linked accounts
+ * @returns true if the current wallet is a Privy embedded wallet
  */
-export function isPrivyEmbeddedWallet(): boolean {
-  try {
-    // This function needs to be called from within a React component
-    // We'll return false here and handle the logic in the hook version
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Hook version of isPrivyEmbeddedWallet that can access Privy context
- */
-export function useIsPrivyEmbeddedWallet(): boolean {
-  const { user } = usePrivy();
-  const { address } = useAccount();
-
-  if (!address || !user?.linkedAccounts) return false;
+export function isPrivyEmbeddedWallet(
+  address: string | undefined,
+  privyUser: any
+): boolean {
+  if (!address || !privyUser?.linkedAccounts) return false;
 
   // Find the linked account that matches the current address
-  const linkedWallet = user.linkedAccounts.find((account) => {
+  const linkedWallet = privyUser.linkedAccounts.find((account: any) => {
     if (account?.type !== "wallet") return false;
-    const walletAccount = account as any; // WalletWithMetadata
+    const walletAccount = account as WalletWithMetadata;
     return (
       walletAccount.address?.toLowerCase() === address.toLowerCase() &&
       walletAccount.walletClientType === "privy" &&
@@ -157,13 +145,13 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
  * By pre-encoding the calldata with the suffix, we ensure builder attribution
  * works across ALL wallet types.
  *
- * IMPORTANT: For Privy embedded wallets, this function preserves the original ABI format
- * since they support capabilities and don't need pre-encoded suffixes. For external EOA wallets,
- * calls are converted to raw format (to, data, value) with pre-encoded builder suffixes.
+ * IMPORTANT: This function also ensures calls are converted to raw format
+ * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
+ * function objects that cannot be structured-cloned for postMessage communication.
  *
  * @param calls - Array of transaction calls (OnchainKit format)
- * @param skipPreEncodingForPrivyEmbedded - If true, preserve original ABI format for Privy embedded wallets
- * @returns Transformed calls with builder suffix baked into calldata (raw format for EOA, ABI format for Privy embedded)
+ * @param skipBuilderCode - If true, skips appending builder code suffix (for Privy embedded wallets)
+ * @returns Transformed calls with builder suffix baked into calldata (raw format)
  */
 export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
@@ -173,27 +161,21 @@ export function transformCallsWithBuilderCode<T extends {
   args?: any[];
   data?: `0x${string}`;
   value?: bigint;
-}>(calls: T[], skipPreEncodingForPrivyEmbedded: boolean = false): T[] {
-  const suffix = getDataSuffix();
-
+}>(calls: T[], skipBuilderCode: boolean = false): T[] {
+  const suffix = skipBuilderCode ? null : getDataSuffix();
+  
   return calls.map((call) => {
-    // For Privy embedded wallets, don't transform at all - let them use capabilities
-    // This preserves the original ABI format which works better with Privy embedded wallets
-    if (skipPreEncodingForPrivyEmbedded) {
-      return call;
-    }
-
     // If call has abi/functionName, it's a contract call that needs encoding
-    // Encode to raw format for EOA wallets that don't support ERC-5792 capabilities
-    // (ABIs contain function objects that cannot be structured-cloned for some wallets)
+    // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
+    // (ABIs contain function objects that cannot be structured-cloned)
     if (call.abi && call.functionName) {
       const encodedData = encodeFunctionData({
         abi: call.abi,
         functionName: call.functionName,
         args: call.args || [],
       });
-
-      // Return as raw call with pre-encoded data and builder suffix
+      
+      // Return as raw call with pre-encoded data (and suffix if configured)
       // Create a completely new object without any reference to the original ABI
       return {
         to: call.address || call.to,
@@ -201,8 +183,8 @@ export function transformCallsWithBuilderCode<T extends {
         value: call.value,
       } as T;
     }
-
-    // If call already has data, append suffix if available
+    
+    // If call already has data, optionally append suffix
     if (call.data) {
       // Create a new object to ensure no non-serializable properties are retained
       return {
@@ -211,8 +193,9 @@ export function transformCallsWithBuilderCode<T extends {
         value: call.value,
       } as T;
     }
-
-    // Fallback: return a clean copy
+    
+    // Fallback: return a clean copy without abi/functionName/args
+    // This ensures Privy embedded wallets can serialize the call
     return {
       to: call.address || call.to,
       data: call.data,
