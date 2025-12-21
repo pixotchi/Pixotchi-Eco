@@ -6,16 +6,16 @@
  * OnchainKit's Transaction component passes chain objects with formatters/serializers
  * that contain functions, which fail to serialize via postMessage to Privy's iframe.
  * 
- * This component uses Privy's native sendTransaction for embedded wallets, bypassing
- * the OnchainKit serialization issue.
+ * This component uses Privy's native useSendTransaction hook for embedded wallets,
+ * completely bypassing OnchainKit and wagmi's problematic serialization.
  */
 
 import React, { useState, useCallback } from 'react';
+import { useSendTransaction, useWallets } from '@privy-io/react-auth';
 import { useAccount } from 'wagmi';
 import { encodeFunctionData } from 'viem';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
-import { appendBuilderSuffix } from '@/lib/builder-code';
 import type { TransactionCall } from '@/lib/types';
 
 interface PrivyNativeTransactionProps {
@@ -26,8 +26,6 @@ interface PrivyNativeTransactionProps {
     buttonClassName?: string;
     disabled?: boolean;
     showToast?: boolean;
-    /** The Privy embedded wallet object from usePrivyEmbeddedWallet */
-    embeddedWallet: any;
 }
 
 type TxStatus = 'idle' | 'pending' | 'success' | 'error';
@@ -40,15 +38,24 @@ export default function PrivyNativeTransaction({
     buttonClassName = "",
     disabled = false,
     showToast = true,
-    embeddedWallet,
 }: PrivyNativeTransactionProps) {
     const { address } = useAccount();
+    const { wallets } = useWallets();
+    const { sendTransaction } = useSendTransaction();
     const [status, setStatus] = useState<TxStatus>('idle');
     const [txHash, setTxHash] = useState<string | null>(null);
 
     const handleTransaction = useCallback(async () => {
-        if (!embeddedWallet || !address || calls.length === 0) {
+        if (!address || calls.length === 0) {
             console.error('[PrivyNative] Missing wallet or calls');
+            return;
+        }
+
+        // Find the embedded wallet matching the current address
+        const wallet = wallets.find(w => w.address?.toLowerCase() === address.toLowerCase());
+        if (!wallet) {
+            console.error('[PrivyNative] No matching wallet found');
+            onError?.(new Error('No wallet found'));
             return;
         }
 
@@ -58,51 +65,54 @@ export default function PrivyNativeTransaction({
         }
 
         try {
-            // Get the provider from the embedded wallet
-            const provider = await embeddedWallet.getEthereumProvider();
-
             // Process each call sequentially
-            // TODO: For batching support, we could use wallet_sendCalls if available
+            let lastHash: string | null = null;
+
             for (let i = 0; i < calls.length; i++) {
                 const call = calls[i];
 
                 // Encode the function call
                 let data: `0x${string}`;
-                if (call.abi && call.functionName) {
+                if ((call as any).abi && (call as any).functionName) {
                     data = encodeFunctionData({
-                        abi: call.abi,
-                        functionName: call.functionName,
-                        args: call.args || [],
+                        abi: (call as any).abi,
+                        functionName: (call as any).functionName,
+                        args: (call as any).args || [],
                     });
-                    // Append builder code suffix
-                    data = appendBuilderSuffix(data);
                 } else {
                     // Already encoded data
                     data = (call as any).data || '0x';
                 }
 
-                // Prepare clean transaction object with only serializable data
+                // Prepare simple transaction object (no chain object!)
                 const txRequest = {
                     to: call.address || (call as any).to,
                     data,
-                    value: call.value ? `0x${call.value.toString(16)}` : undefined,
-                    from: address,
+                    value: call.value ? Number(call.value) : undefined,
+                    chainId: 8453, // Base mainnet
                 };
 
-                console.log('[PrivyNative] Sending transaction:', {
+                console.log('[PrivyNative] Sending transaction via Privy:', {
                     callIndex: i + 1,
                     totalCalls: calls.length,
                     to: txRequest.to,
                     dataLength: txRequest.data?.length,
+                    walletAddress: wallet.address,
                 });
 
-                // Send transaction via Privy's EIP-1193 provider
-                const hash = await provider.request({
-                    method: 'eth_sendTransaction',
-                    params: [txRequest],
-                });
+                // Use Privy's useSendTransaction - bypasses wagmi entirely
+                const result = await sendTransaction(
+                    txRequest as any,
+                    {
+                        address: wallet.address,
+                        uiOptions: {
+                            showWalletUIs: true,
+                        },
+                    }
+                );
 
-                setTxHash(hash);
+                lastHash = result.hash;
+                setTxHash(result.hash);
 
                 if (i < calls.length - 1) {
                     // Wait a bit between transactions
@@ -120,7 +130,7 @@ export default function PrivyNativeTransaction({
                 window.dispatchEvent(new Event('balances:refresh'));
             } catch { }
 
-            onSuccess?.({ transactionHash: txHash });
+            onSuccess?.({ transactionHash: lastHash });
 
         } catch (error: any) {
             console.error('[PrivyNative] Transaction failed:', error);
@@ -133,13 +143,13 @@ export default function PrivyNativeTransaction({
 
             onError?.(error);
         }
-    }, [embeddedWallet, address, calls, onSuccess, onError, showToast, txHash]);
+    }, [address, wallets, calls, sendTransaction, onSuccess, onError, showToast]);
 
     return (
         <div className="flex flex-col gap-2">
             <Button
                 onClick={handleTransaction}
-                disabled={disabled || status === 'pending' || !embeddedWallet}
+                disabled={disabled || status === 'pending'}
                 className={buttonClassName}
             >
                 {status === 'pending' ? 'Processing...' : buttonText}

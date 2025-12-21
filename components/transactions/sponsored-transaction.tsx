@@ -10,6 +10,7 @@ import {
 } from '@coinbase/onchainkit/transaction';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import GlobalTransactionToast from './global-transaction-toast';
+import PrivyNativeTransaction from './privy-native-transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
@@ -145,7 +146,24 @@ export default function SponsoredTransaction({
     }
   }, [handleOnSuccess, onStatusUpdate]);
 
-  // Use OnchainKit Transaction but WITHOUT capabilities for embedded wallets
+  // For embedded wallets, use Privy's native useSendTransaction to bypass OnchainKit
+  // OnchainKit adds chain object with formatters/serializers (functions) that fail postMessage
+  if (isEmbeddedWallet) {
+    console.log('[SponsoredTransaction] Using Privy native transaction for embedded wallet');
+    return (
+      <PrivyNativeTransaction
+        calls={calls}
+        onSuccess={handleOnSuccess}
+        onError={onError}
+        buttonText={buttonText}
+        buttonClassName={`${buttonClassName} inline-flex items-center justify-center whitespace-nowrap leading-none`}
+        disabled={disabled}
+        showToast={showToast}
+      />
+    );
+  }
+
+  // Use OnchainKit Transaction for non-embedded wallets
   return (
     <Transaction
       onStatus={handleOnStatus}
