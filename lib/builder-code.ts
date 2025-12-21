@@ -103,7 +103,7 @@ export function getBuilderCode(): string | undefined {
 export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
   const suffix = getDataSuffix();
   if (!suffix) return encodedData;
-  
+
   // Append suffix bytes (remove 0x prefix from suffix since encodedData has it)
   return (encodedData + suffix.slice(2)) as `0x${string}`;
 }
@@ -125,7 +125,7 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
  * @param calls - Array of transaction calls (OnchainKit format)
  * @returns Transformed calls with builder suffix baked into calldata (raw format)
  */
-export function transformCallsWithBuilderCode<T extends { 
+export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
   to?: `0x${string}`;
   abi?: any;
@@ -135,8 +135,8 @@ export function transformCallsWithBuilderCode<T extends {
   value?: bigint;
 }>(calls: T[]): T[] {
   const suffix = getDataSuffix();
-  
-  return calls.map((call) => {
+
+  const transformed = calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding
     // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
     // (ABIs contain function objects that cannot be structured-cloned)
@@ -146,7 +146,7 @@ export function transformCallsWithBuilderCode<T extends {
         functionName: call.functionName,
         args: call.args || [],
       });
-      
+
       // Return as raw call with pre-encoded data (and suffix if configured)
       // Create a completely new object without any reference to the original ABI
       return {
@@ -155,7 +155,7 @@ export function transformCallsWithBuilderCode<T extends {
         value: call.value,
       } as T;
     }
-    
+
     // If call already has data, optionally append suffix
     if (call.data) {
       // Create a new object to ensure no non-serializable properties are retained
@@ -165,7 +165,7 @@ export function transformCallsWithBuilderCode<T extends {
         value: call.value,
       } as T;
     }
-    
+
     // Fallback: return a clean copy without abi/functionName/args
     // This ensures Privy embedded wallets can serialize the call
     return {
@@ -174,5 +174,27 @@ export function transformCallsWithBuilderCode<T extends {
       value: call.value,
     } as T;
   });
+
+  // DEBUG: Verify transformed calls are serializable (remove after debugging)
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Test if the calls can be structured-cloned by using JSON serialization
+      const testSerialization = JSON.stringify(transformed, (key, value) => {
+        if (typeof value === 'function') {
+          console.error('[BuilderCode] FUNCTION FOUND in transformed calls at key:', key, 'value:', value.toString().slice(0, 100));
+          return `[FUNCTION: ${value.name || 'anonymous'}]`;
+        }
+        if (typeof value === 'bigint') {
+          return value.toString(); // BigInts need special handling
+        }
+        return value;
+      });
+      console.log('[BuilderCode] Transformed calls are serializable:', testSerialization.slice(0, 500));
+    } catch (err) {
+      console.error('[BuilderCode] Transformed calls serialization test failed:', err);
+    }
+  }
+
+  return transformed;
 }
 

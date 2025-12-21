@@ -53,10 +53,10 @@ export default function ClaimRewardsTransaction({
 
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
   const builderCapabilities = getBuilderCapabilities();
-  
+
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  const transformedCalls = useMemo(() => 
-    transformCallsWithBuilderCode(calls as any[]), 
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[]),
     [calls]
   );
 
