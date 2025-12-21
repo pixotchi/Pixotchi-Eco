@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
   Transaction,
   TransactionButton,
@@ -10,13 +10,11 @@ import {
 } from '@coinbase/onchainkit/transaction';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import GlobalTransactionToast from './global-transaction-toast';
-import PrivyNativeTransaction from './privy-native-transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities, debugLogTransactionData } from '@/lib/builder-code';
-import { usePrivyEmbeddedWallet } from '@/hooks/usePrivyEmbeddedWallet';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -46,63 +44,15 @@ export default function SponsoredTransaction({
   const { isSponsored } = usePaymaster();
   const { address } = useAccount();
 
-  // Detect if using Privy embedded wallet
-  const { isEmbeddedWallet, isReady } = usePrivyEmbeddedWallet();
+  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
+  const builderCapabilities = getBuilderCapabilities();
 
-  // For embedded wallets, skip builder capabilities entirely to avoid postMessage serialization issues
-  // The ox library's builder code attribution adds non-serializable functions to the chain object
-  const builderCapabilities = useMemo(() => {
-    if (isEmbeddedWallet) {
-      console.log('[SponsoredTransaction] Skipping builder capabilities for embedded wallet');
-      return undefined;
-    }
-    return serializeCapabilities(getBuilderCapabilities());
-  }, [isEmbeddedWallet]);
-
-  // Transform calls - for embedded wallets, skip builder suffix to avoid any serialization issues
-  const transformedCalls = useMemo(() => {
-    if (isEmbeddedWallet) {
-      // For embedded wallets, just convert to raw format without builder suffix
-      // This ensures ABI objects are removed (they contain non-serializable functions)
-      return calls.map(call => {
-        if ((call as any).abi && (call as any).functionName) {
-          const { encodeFunctionData } = require('viem');
-          const data = encodeFunctionData({
-            abi: (call as any).abi,
-            functionName: (call as any).functionName,
-            args: (call as any).args || [],
-          });
-          return {
-            to: call.address || (call as any).to,
-            data,
-            value: call.value,
-          } as unknown as TransactionCall;
-        }
-        return {
-          to: call.address || (call as any).to,
-          data: (call as any).data,
-          value: call.value,
-        } as unknown as TransactionCall;
-      });
-    }
-    return transformCallsWithBuilderCode(calls as any[]) as TransactionCall[];
-  }, [calls, isEmbeddedWallet]);
-
-  // Debug logging for Privy embedded wallet serialization issues
-  useEffect(() => {
-    debugLogTransactionData('SponsoredTransaction', {
-      calls,
-      transformedCalls,
-      capabilities: builderCapabilities,
-    });
-
-    if (isReady) {
-      console.log('[SponsoredTransaction] Wallet type:', {
-        isEmbeddedWallet,
-        skipBuilderCode: isEmbeddedWallet,
-      });
-    }
-  }, [calls, transformedCalls, builderCapabilities, isEmbeddedWallet, isReady]);
+  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  // This ensures builder attribution works across ALL wallet types
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
+    [calls]
+  );
 
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Sponsored transaction successful');
@@ -116,7 +66,7 @@ export default function SponsoredTransaction({
         body: JSON.stringify({ address })
       }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
     }
-  }, [onSuccess, address]);
+  }, [onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
   const successHandledRef = useRef(false);
@@ -146,24 +96,17 @@ export default function SponsoredTransaction({
     }
   }, [handleOnSuccess, onStatusUpdate]);
 
-  // For embedded wallets, use Privy's native useSendTransaction to bypass OnchainKit
-  // OnchainKit adds chain object with formatters/serializers (functions) that fail postMessage
-  if (isEmbeddedWallet) {
-    console.log('[SponsoredTransaction] Using Privy native transaction for embedded wallet');
-    return (
-      <PrivyNativeTransaction
-        calls={calls}
-        onSuccess={handleOnSuccess}
-        onError={onError}
-        buttonText={buttonText}
-        buttonClassName={`${buttonClassName} inline-flex items-center justify-center whitespace-nowrap leading-none`}
-        disabled={disabled}
-        showToast={showToast}
-      />
-    );
+  // DEBUG: Log what's being passed to OnchainKit Transaction (remove after debugging)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[SponsoredTx] Debug - calls passed to transform:', calls.length);
+    console.log('[SponsoredTx] Debug - transformedCalls:', JSON.stringify(transformedCalls, (k, v) => {
+      if (typeof v === 'function') return `[FUNC:${v.name}]`;
+      if (typeof v === 'bigint') return v.toString();
+      return v;
+    }));
+    console.log('[SponsoredTx] Debug - builderCapabilities:', JSON.stringify(builderCapabilities));
   }
 
-  // Use OnchainKit Transaction for non-embedded wallets
   return (
     <Transaction
       onStatus={handleOnStatus}

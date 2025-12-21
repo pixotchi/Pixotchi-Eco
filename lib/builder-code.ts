@@ -21,139 +21,6 @@ import { CLIENT_ENV } from "./env-config";
 // Builder code from base.dev - set via environment variable
 const BUILDER_CODE = CLIENT_ENV.BUILDER_CODE;
 
-// Enable debug logging for Privy serialization issues
-const DEBUG_SERIALIZATION = process.env.NODE_ENV === 'development' ||
-  (typeof window !== 'undefined' && (window as any).__PRIVY_DEBUG__);
-
-/**
- * Debug utility to find non-serializable properties in an object.
- * Helps diagnose postMessage cloning errors with Privy embedded wallets.
- */
-function findNonSerializableProperties(obj: any, path: string = 'root'): string[] {
-  const issues: string[] = [];
-
-  if (obj === null || obj === undefined) return issues;
-
-  const type = typeof obj;
-
-  // Check for non-serializable types
-  if (type === 'function') {
-    issues.push(`${path}: function (${obj.toString().slice(0, 50)}...)`);
-    return issues;
-  }
-
-  if (type === 'symbol') {
-    issues.push(`${path}: symbol`);
-    return issues;
-  }
-
-  if (obj instanceof Error) {
-    issues.push(`${path}: Error object`);
-    return issues;
-  }
-
-  if (obj instanceof Map || obj instanceof Set || obj instanceof WeakMap || obj instanceof WeakSet) {
-    issues.push(`${path}: ${obj.constructor.name}`);
-    return issues;
-  }
-
-  if (type === 'object') {
-    // Check for DOM nodes
-    if (typeof Node !== 'undefined' && obj instanceof Node) {
-      issues.push(`${path}: DOM Node`);
-      return issues;
-    }
-
-    // Check for circular references (simple check)
-    try {
-      JSON.stringify(obj);
-    } catch (e) {
-      if (e instanceof TypeError && String(e).includes('circular')) {
-        issues.push(`${path}: circular reference`);
-        return issues;
-      }
-    }
-
-    // Recursively check object properties
-    for (const key of Object.keys(obj)) {
-      try {
-        const value = obj[key];
-        const childIssues = findNonSerializableProperties(value, `${path}.${key}`);
-        issues.push(...childIssues);
-      } catch (e) {
-        issues.push(`${path}.${key}: error accessing property`);
-      }
-    }
-
-    // Also check prototype chain for getters that might return functions
-    const proto = Object.getPrototypeOf(obj);
-    if (proto && proto !== Object.prototype && proto !== Array.prototype) {
-      const descriptors = Object.getOwnPropertyDescriptors(proto);
-      for (const [key, desc] of Object.entries(descriptors)) {
-        if (desc.get && key !== 'constructor') {
-          try {
-            const value = obj[key];
-            if (typeof value === 'function') {
-              issues.push(`${path}.${key} (getter): returns function`);
-            }
-          } catch (e) {
-            // Getter threw, skip
-          }
-        }
-      }
-    }
-  }
-
-  return issues;
-}
-
-/**
- * Debug log transaction data to console for Privy serialization debugging.
- */
-export function debugLogTransactionData(label: string, data: {
-  calls?: any[];
-  capabilities?: any;
-  transformedCalls?: any[];
-}) {
-  if (!DEBUG_SERIALIZATION) return;
-
-  console.group(`[Privy Debug] ${label}`);
-
-  if (data.calls) {
-    console.log('Original calls:', data.calls);
-    const callIssues = data.calls.flatMap((call, i) =>
-      findNonSerializableProperties(call, `calls[${i}]`)
-    );
-    if (callIssues.length > 0) {
-      console.warn('⚠️ Non-serializable in original calls:', callIssues);
-    }
-  }
-
-  if (data.transformedCalls) {
-    console.log('Transformed calls:', data.transformedCalls);
-    const transformedIssues = data.transformedCalls.flatMap((call, i) =>
-      findNonSerializableProperties(call, `transformedCalls[${i}]`)
-    );
-    if (transformedIssues.length > 0) {
-      console.warn('⚠️ Non-serializable in transformed calls:', transformedIssues);
-    } else {
-      console.log('✅ Transformed calls appear serializable');
-    }
-  }
-
-  if (data.capabilities) {
-    console.log('Capabilities:', data.capabilities);
-    const capIssues = findNonSerializableProperties(data.capabilities, 'capabilities');
-    if (capIssues.length > 0) {
-      console.warn('⚠️ Non-serializable in capabilities:', capIssues);
-    } else {
-      console.log('✅ Capabilities appear serializable');
-    }
-  }
-
-  console.groupEnd();
-}
-
 // Cache the computed suffix to avoid recomputation
 let cachedDataSuffix: string | null = null;
 let cacheInitialized = false;
@@ -213,32 +80,6 @@ export function getBuilderCapabilities(): { dataSuffix: string } | undefined {
 }
 
 /**
- * Ensure capabilities object is fully serializable for postMessage.
- * 
- * Privy embedded wallets communicate via iframe postMessage which requires
- * all data to be serializable by the Structured Clone Algorithm.
- * This function strips any functions, getters, or other non-serializable
- * properties that may be attached by the ox/erc8021 library or viem.
- * 
- * @param capabilities - The capabilities object from getBuilderCapabilities
- * @returns A clean, serializable copy of capabilities
- */
-export function serializeCapabilities(
-  capabilities: { dataSuffix: string } | undefined
-): { dataSuffix: string } | undefined {
-  if (!capabilities) return undefined;
-
-  // Create a clean copy with only primitive values
-  // JSON.parse(JSON.stringify()) strips functions, getters, and non-serializable properties
-  try {
-    return JSON.parse(JSON.stringify(capabilities));
-  } catch (error) {
-    console.warn('[BuilderCode] Failed to serialize capabilities, returning undefined:', error);
-    return undefined;
-  }
-}
-
-/**
  * Check if builder code attribution is configured
  */
 export function isBuilderCodeConfigured(): boolean {
@@ -295,7 +136,7 @@ export function transformCallsWithBuilderCode<T extends {
 }>(calls: T[]): T[] {
   const suffix = getDataSuffix();
 
-  return calls.map((call) => {
+  const transformed = calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding
     // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
     // (ABIs contain function objects that cannot be structured-cloned)
@@ -333,5 +174,27 @@ export function transformCallsWithBuilderCode<T extends {
       value: call.value,
     } as T;
   });
+
+  // DEBUG: Verify transformed calls are serializable (remove after debugging)
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Test if the calls can be structured-cloned by using JSON serialization
+      const testSerialization = JSON.stringify(transformed, (key, value) => {
+        if (typeof value === 'function') {
+          console.error('[BuilderCode] FUNCTION FOUND in transformed calls at key:', key, 'value:', value.toString().slice(0, 100));
+          return `[FUNCTION: ${value.name || 'anonymous'}]`;
+        }
+        if (typeof value === 'bigint') {
+          return value.toString(); // BigInts need special handling
+        }
+        return value;
+      });
+      console.log('[BuilderCode] Transformed calls are serializable:', testSerialization.slice(0, 500));
+    } catch (err) {
+      console.error('[BuilderCode] Transformed calls serialization test failed:', err);
+    }
+  }
+
+  return transformed;
 }
 
