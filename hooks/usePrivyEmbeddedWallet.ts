@@ -71,9 +71,9 @@ export function usePrivyEmbeddedWallet(): PrivyWalletInfo {
             connector?.name?.toLowerCase().includes('privy');
 
         return {
-            isPrivyWallet: isPrivyConnector || !!embeddedWallet,
+            isPrivyWallet: !!(isPrivyConnector || embeddedWallet),
             isEmbeddedWallet: !!isCurrentWalletEmbedded,
-            isExternalWallet: isPrivyConnector && !isCurrentWalletEmbedded,
+            isExternalWallet: !!(isPrivyConnector && !isCurrentWalletEmbedded),
             embeddedWallet: isCurrentWalletEmbedded ? embeddedWallet : null,
             isReady: true,
         };
