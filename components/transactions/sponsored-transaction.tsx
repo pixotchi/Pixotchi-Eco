@@ -10,11 +10,13 @@ import {
 } from '@coinbase/onchainkit/transaction';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import GlobalTransactionToast from './global-transaction-toast';
+import PrivyNativeTransaction from './privy-native-transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities, debugLogTransactionData } from '@/lib/builder-code';
+import { usePrivyEmbeddedWallet } from '@/hooks/usePrivyEmbeddedWallet';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -44,6 +46,9 @@ export default function SponsoredTransaction({
   const { isSponsored } = usePaymaster();
   const { address } = useAccount();
 
+  // Detect if using Privy embedded wallet
+  const { isEmbeddedWallet, embeddedWallet, isReady } = usePrivyEmbeddedWallet();
+
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
   // Serialize to ensure Privy embedded wallets can pass via postMessage
   const builderCapabilities = serializeCapabilities(getBuilderCapabilities());
@@ -62,7 +67,14 @@ export default function SponsoredTransaction({
       transformedCalls,
       capabilities: builderCapabilities,
     });
-  }, [calls, transformedCalls, builderCapabilities]);
+
+    if (isReady) {
+      console.log('[SponsoredTransaction] Wallet type:', {
+        isEmbeddedWallet,
+        hasEmbeddedWallet: !!embeddedWallet,
+      });
+    }
+  }, [calls, transformedCalls, builderCapabilities, isEmbeddedWallet, embeddedWallet, isReady]);
 
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Sponsored transaction successful');
@@ -76,7 +88,7 @@ export default function SponsoredTransaction({
         body: JSON.stringify({ address })
       }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
     }
-  }, [onSuccess]);
+  }, [onSuccess, address]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
   const successHandledRef = useRef(false);
@@ -106,6 +118,25 @@ export default function SponsoredTransaction({
     }
   }, [handleOnSuccess, onStatusUpdate]);
 
+  // Use Privy native transaction for embedded wallets to bypass OnchainKit serialization issues
+  // OnchainKit passes chain object with formatters/serializers (functions) that fail postMessage
+  if (isEmbeddedWallet && embeddedWallet) {
+    console.log('[SponsoredTransaction] Using Privy native transaction for embedded wallet');
+    return (
+      <PrivyNativeTransaction
+        calls={calls}
+        onSuccess={handleOnSuccess}
+        onError={onError}
+        buttonText={buttonText}
+        buttonClassName={`${buttonClassName} inline-flex items-center justify-center whitespace-nowrap leading-none`}
+        disabled={disabled}
+        showToast={showToast}
+        embeddedWallet={embeddedWallet}
+      />
+    );
+  }
+
+  // Standard OnchainKit Transaction for non-embedded wallets
   return (
     <Transaction
       onStatus={handleOnStatus}
