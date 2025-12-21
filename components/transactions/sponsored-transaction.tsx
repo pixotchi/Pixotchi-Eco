@@ -96,17 +96,6 @@ export default function SponsoredTransaction({
     }
   }, [handleOnSuccess, onStatusUpdate]);
 
-  // DEBUG: Log what's being passed to OnchainKit Transaction (remove after debugging)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[SponsoredTx] Debug - calls passed to transform:', calls.length);
-    console.log('[SponsoredTx] Debug - transformedCalls:', JSON.stringify(transformedCalls, (k, v) => {
-      if (typeof v === 'function') return `[FUNC:${v.name}]`;
-      if (typeof v === 'bigint') return v.toString();
-      return v;
-    }));
-    console.log('[SponsoredTx] Debug - builderCapabilities:', JSON.stringify(builderCapabilities));
-  }
-
   return (
     <Transaction
       onStatus={handleOnStatus}

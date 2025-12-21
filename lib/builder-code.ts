@@ -136,7 +136,7 @@ export function transformCallsWithBuilderCode<T extends {
 }>(calls: T[]): T[] {
   const suffix = getDataSuffix();
 
-  const transformed = calls.map((call) => {
+  return calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding
     // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
     // (ABIs contain function objects that cannot be structured-cloned)
@@ -174,27 +174,5 @@ export function transformCallsWithBuilderCode<T extends {
       value: call.value,
     } as T;
   });
-
-  // DEBUG: Verify transformed calls are serializable (remove after debugging)
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      // Test if the calls can be structured-cloned by using JSON serialization
-      const testSerialization = JSON.stringify(transformed, (key, value) => {
-        if (typeof value === 'function') {
-          console.error('[BuilderCode] FUNCTION FOUND in transformed calls at key:', key, 'value:', value.toString().slice(0, 100));
-          return `[FUNCTION: ${value.name || 'anonymous'}]`;
-        }
-        if (typeof value === 'bigint') {
-          return value.toString(); // BigInts need special handling
-        }
-        return value;
-      });
-      console.log('[BuilderCode] Transformed calls are serializable:', testSerialization.slice(0, 500));
-    } catch (err) {
-      console.error('[BuilderCode] Transformed calls serialization test failed:', err);
-    }
-  }
-
-  return transformed;
 }
 
