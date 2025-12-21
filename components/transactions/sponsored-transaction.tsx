@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   Transaction,
   TransactionButton,
@@ -14,7 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities, debugLogTransactionData } from '@/lib/builder-code';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -54,6 +54,15 @@ export default function SponsoredTransaction({
     transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]
   );
+
+  // Debug logging for Privy embedded wallet serialization issues
+  useEffect(() => {
+    debugLogTransactionData('SponsoredTransaction', {
+      calls,
+      transformedCalls,
+      capabilities: builderCapabilities,
+    });
+  }, [calls, transformedCalls, builderCapabilities]);
 
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Sponsored transaction successful');
