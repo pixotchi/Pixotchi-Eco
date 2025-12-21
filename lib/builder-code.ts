@@ -17,6 +17,8 @@
 import { Attribution } from "ox/erc8021";
 import { encodeFunctionData } from "viem";
 import { CLIENT_ENV } from "./env-config";
+import { usePrivy } from "@privy-io/react-auth";
+import { useAccount } from "wagmi";
 
 // Builder code from base.dev - set via environment variable
 const BUILDER_CODE = CLIENT_ENV.BUILDER_CODE;
@@ -94,6 +96,43 @@ export function getBuilderCode(): string | undefined {
 }
 
 /**
+ * Check if the current wallet is a Privy embedded wallet
+ * This is used to determine if we should pre-encode builder suffixes
+ */
+export function isPrivyEmbeddedWallet(): boolean {
+  try {
+    // This function needs to be called from within a React component
+    // We'll return false here and handle the logic in the hook version
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hook version of isPrivyEmbeddedWallet that can access Privy context
+ */
+export function useIsPrivyEmbeddedWallet(): boolean {
+  const { user } = usePrivy();
+  const { address } = useAccount();
+
+  if (!address || !user?.linkedAccounts) return false;
+
+  // Find the linked account that matches the current address
+  const linkedWallet = user.linkedAccounts.find((account) => {
+    if (account?.type !== "wallet") return false;
+    const walletAccount = account as any; // WalletWithMetadata
+    return (
+      walletAccount.address?.toLowerCase() === address.toLowerCase() &&
+      walletAccount.walletClientType === "privy" &&
+      walletAccount.chainType === "ethereum"
+    );
+  });
+
+  return Boolean(linkedWallet);
+}
+
+/**
  * Append builder code suffix to encoded calldata for legacy transactions.
  * Use this for direct `sendTransaction` calls when `wallet_sendCalls` is not available.
  * 
@@ -110,22 +149,23 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
 
 /**
  * Transform OnchainKit calls to include builder code suffix in the calldata.
- * 
+ *
  * This is necessary because OnchainKit only passes capabilities (including dataSuffix)
  * to wallets that support wallet_sendCalls (ERC-5792). For EOA wallets like Rabby,
  * MetaMask, etc., the capabilities are ignored.
- * 
+ *
  * By pre-encoding the calldata with the suffix, we ensure builder attribution
  * works across ALL wallet types.
- * 
+ *
  * IMPORTANT: This function also ensures calls are converted to raw format
  * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
  * function objects that cannot be structured-cloned for postMessage communication.
- * 
+ *
  * @param calls - Array of transaction calls (OnchainKit format)
+ * @param skipPreEncodingForPrivyEmbedded - If true, skip pre-encoding builder suffix for Privy embedded wallets
  * @returns Transformed calls with builder suffix baked into calldata (raw format)
  */
-export function transformCallsWithBuilderCode<T extends { 
+export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
   to?: `0x${string}`;
   abi?: any;
@@ -133,9 +173,9 @@ export function transformCallsWithBuilderCode<T extends {
   args?: any[];
   data?: `0x${string}`;
   value?: bigint;
-}>(calls: T[]): T[] {
+}>(calls: T[], skipPreEncodingForPrivyEmbedded: boolean = false): T[] {
   const suffix = getDataSuffix();
-  
+
   return calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding
     // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
@@ -146,26 +186,31 @@ export function transformCallsWithBuilderCode<T extends {
         functionName: call.functionName,
         args: call.args || [],
       });
-      
-      // Return as raw call with pre-encoded data (and suffix if configured)
+
+      // For Privy embedded wallets, skip pre-encoding the builder suffix
+      // They can use the capabilities.dataSuffix instead
+      const shouldAppendSuffix = suffix && !skipPreEncodingForPrivyEmbedded;
+
+      // Return as raw call with pre-encoded data (and suffix if configured and not skipping)
       // Create a completely new object without any reference to the original ABI
       return {
         to: call.address || call.to,
-        data: suffix ? appendBuilderSuffix(encodedData) : encodedData,
+        data: shouldAppendSuffix ? appendBuilderSuffix(encodedData) : encodedData,
         value: call.value,
       } as T;
     }
-    
-    // If call already has data, optionally append suffix
+
+    // If call already has data, optionally append suffix (but skip for Privy embedded)
     if (call.data) {
+      const shouldAppendSuffix = suffix && !skipPreEncodingForPrivyEmbedded;
       // Create a new object to ensure no non-serializable properties are retained
       return {
         to: call.to,
-        data: suffix ? appendBuilderSuffix(call.data) : call.data,
+        data: shouldAppendSuffix ? appendBuilderSuffix(call.data) : call.data,
         value: call.value,
       } as T;
     }
-    
+
     // Fallback: return a clean copy without abi/functionName/args
     // This ensures Privy embedded wallets can serialize the call
     return {

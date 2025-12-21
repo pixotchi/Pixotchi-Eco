@@ -12,7 +12,7 @@ import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, useIsPrivyEmbeddedWallet } from '@/lib/builder-code';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
@@ -40,13 +40,17 @@ export default function UniversalTransaction({
   // Determine if this transaction should be sponsored
   const isSponsored = forceUnsponsored ? false : paymasterEnabled;
   
+  // Check if current wallet is Privy embedded (skip pre-encoding for these)
+  const isPrivyEmbeddedWallet = useIsPrivyEmbeddedWallet();
+
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
   const builderCapabilities = getBuilderCapabilities();
-  
+
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  const transformedCalls = useMemo(() => 
-    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[], 
-    [calls]
+  // Skip pre-encoding for Privy embedded wallets since they support capabilities
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[], isPrivyEmbeddedWallet) as TransactionCall[],
+    [calls, isPrivyEmbeddedWallet]
   );
   
   const handleOnSuccess = useCallback((tx: any) => {

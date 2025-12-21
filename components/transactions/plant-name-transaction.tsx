@@ -14,7 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, useIsPrivyEmbeddedWallet } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -62,10 +62,14 @@ export function PlantNameTransaction({
     args: [BigInt(plantId), newName], 
   }], [plantId, newName]);
   
+  // Check if current wallet is Privy embedded (skip pre-encoding for these)
+  const isPrivyEmbeddedWallet = useIsPrivyEmbeddedWallet();
+
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  const transformedCalls = useMemo(() => 
-    transformCallsWithBuilderCode(calls as any[]), 
-    [calls]
+  // Skip pre-encoding for Privy embedded wallets since they support capabilities
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[], isPrivyEmbeddedWallet),
+    [calls, isPrivyEmbeddedWallet]
   );
 
   const handleOnSuccess = useCallback((tx: any) => {
