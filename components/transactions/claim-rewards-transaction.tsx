@@ -11,7 +11,7 @@ import {
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -52,11 +52,12 @@ export default function ClaimRewardsTransaction({
   }], [plantId]);
 
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
-  
+  // Serialize to ensure Privy embedded wallets can pass via postMessage
+  const builderCapabilities = serializeCapabilities(getBuilderCapabilities());
+
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  const transformedCalls = useMemo(() => 
-    transformCallsWithBuilderCode(calls as any[]), 
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[]),
     [calls]
   );
 

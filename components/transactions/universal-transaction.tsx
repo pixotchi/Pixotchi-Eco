@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useCallback, useMemo, useRef } from 'react';
-import { 
-  Transaction, 
+import {
+  Transaction,
   TransactionButton,
   TransactionStatus,
   TransactionStatusAction,
@@ -12,7 +12,7 @@ import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities } from '@/lib/builder-code';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
@@ -36,29 +36,30 @@ export default function UniversalTransaction({
   forceUnsponsored = false
 }: UniversalTransactionProps) {
   const { isSponsored: paymasterEnabled } = usePaymaster();
-  
+
   // Determine if this transaction should be sponsored
   const isSponsored = forceUnsponsored ? false : paymasterEnabled;
-  
+
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
-  
+  // Serialize to ensure Privy embedded wallets can pass via postMessage
+  const builderCapabilities = serializeCapabilities(getBuilderCapabilities());
+
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  const transformedCalls = useMemo(() => 
-    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[], 
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]
   );
-  
+
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Universal transaction successful:', tx);
     onSuccess?.(tx);
     // Notify status bar to refresh balances
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
+    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
   }, [onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
   const successHandledRef = useRef(false);
-  
+
   // Wrap onError to ignore errors after success has been handled
   // This fixes OnchainKit race condition where onError can fire after successful tx
   const handleOnError = useCallback((error: any) => {
@@ -88,17 +89,17 @@ export default function UniversalTransaction({
       isSponsored={isSponsored}
       capabilities={builderCapabilities}
     >
-      <TransactionButton 
-        text={buttonText} 
+      <TransactionButton
+        text={buttonText}
         className={buttonClassName}
         disabled={disabled}
       />
-      
+
       <TransactionStatus>
         <TransactionStatusAction />
         <TransactionStatusLabel />
       </TransactionStatus>
-      
+
       {showToast && <GlobalTransactionToast />}
     </Transaction>
   );

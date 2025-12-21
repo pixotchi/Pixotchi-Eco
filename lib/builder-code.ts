@@ -80,6 +80,32 @@ export function getBuilderCapabilities(): { dataSuffix: string } | undefined {
 }
 
 /**
+ * Ensure capabilities object is fully serializable for postMessage.
+ * 
+ * Privy embedded wallets communicate via iframe postMessage which requires
+ * all data to be serializable by the Structured Clone Algorithm.
+ * This function strips any functions, getters, or other non-serializable
+ * properties that may be attached by the ox/erc8021 library or viem.
+ * 
+ * @param capabilities - The capabilities object from getBuilderCapabilities
+ * @returns A clean, serializable copy of capabilities
+ */
+export function serializeCapabilities(
+  capabilities: { dataSuffix: string } | undefined
+): { dataSuffix: string } | undefined {
+  if (!capabilities) return undefined;
+  
+  // Create a clean copy with only primitive values
+  // JSON.parse(JSON.stringify()) strips functions, getters, and non-serializable properties
+  try {
+    return JSON.parse(JSON.stringify(capabilities));
+  } catch (error) {
+    console.warn('[BuilderCode] Failed to serialize capabilities, returning undefined:', error);
+    return undefined;
+  }
+}
+
+/**
  * Check if builder code attribution is configured
  */
 export function isBuilderCodeConfigured(): boolean {

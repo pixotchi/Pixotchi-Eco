@@ -13,7 +13,7 @@ import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities } from '@/lib/builder-code';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
@@ -35,25 +35,26 @@ export default function SmartWalletTransaction({
   showToast = true
 }: SmartWalletTransactionProps) {
   const { isSponsored } = usePaymaster();
-  
+
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
-  
+  // Serialize to ensure Privy embedded wallets can pass via postMessage
+  const builderCapabilities = serializeCapabilities(getBuilderCapabilities());
+
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  const transformedCalls = useMemo(() => 
-    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[], 
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]
   );
-  
+
   const handleOnSuccess = useCallback((tx: any) => {
     console.log('Smart wallet transaction successful:', tx);
     onSuccess?.(tx);
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
+    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
   }, [onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
   const successHandledRef = useRef(false);
-  
+
   // Wrap onError to ignore errors after success has been handled
   // This fixes OnchainKit race condition where onError can fire after successful tx
   const handleOnError = useCallback((error: any) => {
@@ -86,17 +87,17 @@ export default function SmartWalletTransaction({
       isSponsored={isSponsored}
       capabilities={builderCapabilities}
     >
-      <TransactionButton 
-        text={buttonText} 
+      <TransactionButton
+        text={buttonText}
         className={buttonClassName}
         disabled={disabled}
       />
-      
+
       <TransactionStatus>
         <TransactionStatusAction />
         <TransactionStatusLabel />
       </TransactionStatus>
-      
+
       {showToast && <GlobalTransactionToast />}
     </Transaction>
   );

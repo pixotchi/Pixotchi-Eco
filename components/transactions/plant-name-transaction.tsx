@@ -14,7 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode, serializeCapabilities } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -48,23 +48,24 @@ export function PlantNameTransaction({
   buttonClassName,
   disabled = false
 }: PlantNameTransactionProps) {
-  
+
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
-  
+
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
-  
+  // Serialize to ensure Privy embedded wallets can pass via postMessage
+  const builderCapabilities = serializeCapabilities(getBuilderCapabilities());
+
   const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'setPlantName',
-    args: [BigInt(plantId), newName], 
+    args: [BigInt(plantId), newName],
   }], [plantId, newName]);
-  
+
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  const transformedCalls = useMemo(() => 
-    transformCallsWithBuilderCode(calls as any[]), 
+  const transformedCalls = useMemo(() =>
+    transformCallsWithBuilderCode(calls as any[]),
     [calls]
   );
 
@@ -85,7 +86,7 @@ export function PlantNameTransaction({
         <span className="text-sm font-medium">{buttonText}</span>
         <SponsoredBadge show={isSponsored && isSmartWallet} />
       </div>
-      
+
       <Transaction
         calls={transformedCalls}
         onError={onError}
@@ -98,7 +99,7 @@ export function PlantNameTransaction({
           className={buttonClassName}
           disabled={disabled}
         />
-        
+
         <TransactionStatus>
           <TransactionStatusLabel />
           <TransactionStatusAction />
