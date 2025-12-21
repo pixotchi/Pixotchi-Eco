@@ -157,13 +157,13 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
  * By pre-encoding the calldata with the suffix, we ensure builder attribution
  * works across ALL wallet types.
  *
- * IMPORTANT: This function also ensures calls are converted to raw format
- * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
- * function objects that cannot be structured-cloned for postMessage communication.
+ * IMPORTANT: For Privy embedded wallets, this function preserves the original ABI format
+ * since they support capabilities and don't need pre-encoded suffixes. For external EOA wallets,
+ * calls are converted to raw format (to, data, value) with pre-encoded builder suffixes.
  *
  * @param calls - Array of transaction calls (OnchainKit format)
- * @param skipPreEncodingForPrivyEmbedded - If true, skip pre-encoding builder suffix for Privy embedded wallets
- * @returns Transformed calls with builder suffix baked into calldata (raw format)
+ * @param skipPreEncodingForPrivyEmbedded - If true, preserve original ABI format for Privy embedded wallets
+ * @returns Transformed calls with builder suffix baked into calldata (raw format for EOA, ABI format for Privy embedded)
  */
 export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
@@ -177,9 +177,15 @@ export function transformCallsWithBuilderCode<T extends {
   const suffix = getDataSuffix();
 
   return calls.map((call) => {
+    // For Privy embedded wallets, don't transform at all - let them use capabilities
+    // This preserves the original ABI format which works better with Privy embedded wallets
+    if (skipPreEncodingForPrivyEmbedded) {
+      return call;
+    }
+
     // If call has abi/functionName, it's a contract call that needs encoding
-    // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
-    // (ABIs contain function objects that cannot be structured-cloned)
+    // Encode to raw format for EOA wallets that don't support ERC-5792 capabilities
+    // (ABIs contain function objects that cannot be structured-cloned for some wallets)
     if (call.abi && call.functionName) {
       const encodedData = encodeFunctionData({
         abi: call.abi,
@@ -187,32 +193,26 @@ export function transformCallsWithBuilderCode<T extends {
         args: call.args || [],
       });
 
-      // For Privy embedded wallets, skip pre-encoding the builder suffix
-      // They can use the capabilities.dataSuffix instead
-      const shouldAppendSuffix = suffix && !skipPreEncodingForPrivyEmbedded;
-
-      // Return as raw call with pre-encoded data (and suffix if configured and not skipping)
+      // Return as raw call with pre-encoded data and builder suffix
       // Create a completely new object without any reference to the original ABI
       return {
         to: call.address || call.to,
-        data: shouldAppendSuffix ? appendBuilderSuffix(encodedData) : encodedData,
+        data: suffix ? appendBuilderSuffix(encodedData) : encodedData,
         value: call.value,
       } as T;
     }
 
-    // If call already has data, optionally append suffix (but skip for Privy embedded)
+    // If call already has data, append suffix if available
     if (call.data) {
-      const shouldAppendSuffix = suffix && !skipPreEncodingForPrivyEmbedded;
       // Create a new object to ensure no non-serializable properties are retained
       return {
         to: call.to,
-        data: shouldAppendSuffix ? appendBuilderSuffix(call.data) : call.data,
+        data: suffix ? appendBuilderSuffix(call.data) : call.data,
         value: call.value,
       } as T;
     }
 
-    // Fallback: return a clean copy without abi/functionName/args
-    // This ensures Privy embedded wallets can serialize the call
+    // Fallback: return a clean copy
     return {
       to: call.address || call.to,
       data: call.data,
