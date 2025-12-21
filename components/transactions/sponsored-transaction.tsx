@@ -75,13 +75,13 @@ export default function SponsoredTransaction({
             to: call.address || (call as any).to,
             data,
             value: call.value,
-          } as TransactionCall;
+          } as unknown as TransactionCall;
         }
         return {
           to: call.address || (call as any).to,
           data: (call as any).data,
           value: call.value,
-        } as TransactionCall;
+        } as unknown as TransactionCall;
       });
     }
     return transformCallsWithBuilderCode(calls as any[]) as TransactionCall[];
