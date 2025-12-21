@@ -118,8 +118,12 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
  * By pre-encoding the calldata with the suffix, we ensure builder attribution
  * works across ALL wallet types.
  * 
+ * IMPORTANT: This function also ensures calls are converted to raw format
+ * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
+ * function objects that cannot be structured-cloned for postMessage communication.
+ * 
  * @param calls - Array of transaction calls (OnchainKit format)
- * @returns Transformed calls with builder suffix baked into calldata
+ * @returns Transformed calls with builder suffix baked into calldata (raw format)
  */
 export function transformCallsWithBuilderCode<T extends { 
   address?: `0x${string}`;
@@ -131,10 +135,11 @@ export function transformCallsWithBuilderCode<T extends {
   value?: bigint;
 }>(calls: T[]): T[] {
   const suffix = getDataSuffix();
-  if (!suffix) return calls;
   
   return calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding
+    // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
+    // (ABIs contain function objects that cannot be structured-cloned)
     if (call.abi && call.functionName) {
       const encodedData = encodeFunctionData({
         abi: call.abi,
@@ -142,23 +147,32 @@ export function transformCallsWithBuilderCode<T extends {
         args: call.args || [],
       });
       
-      // Return as raw call with pre-encoded data including suffix
+      // Return as raw call with pre-encoded data (and suffix if configured)
+      // Create a completely new object without any reference to the original ABI
       return {
         to: call.address || call.to,
-        data: appendBuilderSuffix(encodedData),
+        data: suffix ? appendBuilderSuffix(encodedData) : encodedData,
         value: call.value,
       } as T;
     }
     
-    // If call already has data, append suffix to it
+    // If call already has data, optionally append suffix
     if (call.data) {
+      // Create a new object to ensure no non-serializable properties are retained
       return {
-        ...call,
-        data: appendBuilderSuffix(call.data),
-      };
+        to: call.to,
+        data: suffix ? appendBuilderSuffix(call.data) : call.data,
+        value: call.value,
+      } as T;
     }
     
-    return call;
+    // Fallback: return a clean copy without abi/functionName/args
+    // This ensures Privy embedded wallets can serialize the call
+    return {
+      to: call.address || call.to,
+      data: call.data,
+      value: call.value,
+    } as T;
   });
 }
 
