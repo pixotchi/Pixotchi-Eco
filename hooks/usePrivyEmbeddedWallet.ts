@@ -13,7 +13,7 @@
  */
 
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useAccount } from "wagmi";
 
 export interface PrivyWalletInfo {
@@ -29,10 +29,33 @@ export interface PrivyWalletInfo {
     isReady: boolean;
 }
 
+// Debug flag - set window.__PRIVY_DEBUG__ = true in console to enable
+const DEBUG = typeof window !== 'undefined' && (window as any).__PRIVY_DEBUG__;
+
 export function usePrivyEmbeddedWallet(): PrivyWalletInfo {
     const { ready, authenticated, user } = usePrivy();
     const { wallets } = useWallets();
     const { address: wagmiAddress, connector } = useAccount();
+
+    // Debug logging
+    useEffect(() => {
+        if (!DEBUG && process.env.NODE_ENV !== 'development') return;
+
+        console.log('[usePrivyEmbeddedWallet] State:', {
+            ready,
+            authenticated,
+            hasUser: !!user,
+            walletsCount: wallets?.length || 0,
+            wallets: wallets?.map(w => ({
+                address: w.address,
+                walletClientType: w.walletClientType,
+                connectorType: w.connectorType,
+            })),
+            wagmiAddress,
+            connectorId: connector?.id,
+            connectorName: connector?.name,
+        });
+    }, [ready, authenticated, user, wallets, wagmiAddress, connector]);
 
     return useMemo(() => {
         // Not ready yet
@@ -58,8 +81,13 @@ export function usePrivyEmbeddedWallet(): PrivyWalletInfo {
         }
 
         // Find embedded wallet from Privy wallets list
+        // Privy uses 'privy' as walletClientType for embedded wallets
+        // Also check for 'embedded' in case of different versions
         const embeddedWallet = wallets.find(
-            (w) => w.walletClientType === 'privy'
+            (w) => w.walletClientType === 'privy' ||
+                w.walletClientType === 'embedded' ||
+                // Cross-app wallets might also have this issue
+                w.connectorType === 'embedded'
         );
 
         // Check if current wagmi address matches an embedded wallet
@@ -70,11 +98,38 @@ export function usePrivyEmbeddedWallet(): PrivyWalletInfo {
         const isPrivyConnector = connector?.id?.includes('privy') ||
             connector?.name?.toLowerCase().includes('privy');
 
+        // Also check if the user logged in with email/social (which means embedded wallet)
+        const hasEmailLogin = user?.email?.address;
+        const hasSocialLogin = user?.google || user?.twitter || user?.discord || user?.farcaster || user?.apple;
+        const isLikelyEmbedded = !!(hasEmailLogin || hasSocialLogin);
+
+        // Final check: if we have an embedded wallet OR user logged in via email/social,
+        // and the wagmi address matches any Privy wallet, treat as embedded
+        const matchingPrivyWallet = wallets.find(
+            (w) => wagmiAddress?.toLowerCase() === w.address?.toLowerCase()
+        );
+
+        const isEmbedded = !!(isCurrentWalletEmbedded ||
+            (isLikelyEmbedded && matchingPrivyWallet));
+
+        if (DEBUG || process.env.NODE_ENV === 'development') {
+            console.log('[usePrivyEmbeddedWallet] Detection result:', {
+                embeddedWallet: embeddedWallet?.address,
+                isCurrentWalletEmbedded,
+                isPrivyConnector,
+                hasEmailLogin: !!hasEmailLogin,
+                hasSocialLogin: !!hasSocialLogin,
+                isLikelyEmbedded,
+                matchingPrivyWallet: matchingPrivyWallet?.address,
+                finalIsEmbedded: isEmbedded,
+            });
+        }
+
         return {
-            isPrivyWallet: !!(isPrivyConnector || embeddedWallet),
-            isEmbeddedWallet: !!isCurrentWalletEmbedded,
-            isExternalWallet: !!(isPrivyConnector && !isCurrentWalletEmbedded),
-            embeddedWallet: isCurrentWalletEmbedded ? embeddedWallet : null,
+            isPrivyWallet: !!(isPrivyConnector || embeddedWallet || matchingPrivyWallet),
+            isEmbeddedWallet: isEmbedded,
+            isExternalWallet: !!(isPrivyConnector && !isEmbedded),
+            embeddedWallet: isEmbedded ? (embeddedWallet || matchingPrivyWallet) : null,
             isReady: true,
         };
     }, [ready, authenticated, user, wallets, wagmiAddress, connector]);
