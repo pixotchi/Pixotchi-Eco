@@ -1007,7 +1007,6 @@ export const transferPlants = async (
   walletClient: WalletClient,
   toAddress: string,
   plantIds: number[],
-  skipBuilderCode: boolean = false,
 ): Promise<{ successIds: number[]; failedIds: number[] }> => {
   if (!walletClient?.account) throw new Error('No account connected');
   const from = walletClient.account.address;
@@ -1019,13 +1018,13 @@ export const transferPlants = async (
 
   for (const id of plantIds) {
     try {
-      // Encode function data and conditionally append builder code suffix for ERC-8021 attribution
+      // Encode function data and append builder code suffix for ERC-8021 attribution
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, BigInt(id)],
       });
-      const dataWithSuffix = skipBuilderCode ? encodedData : appendBuilderSuffix(encodedData);
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
       
       const hash = await walletClient.sendTransaction({
         to: PIXOTCHI_NFT_ADDRESS,
@@ -1051,7 +1050,6 @@ export const transferLands = async (
   walletClient: WalletClient,
   toAddress: string,
   landTokenIds: bigint[],
-  skipBuilderCode: boolean = false,
 ): Promise<{ successIds: bigint[]; failedIds: bigint[] }> => {
   if (!walletClient?.account) throw new Error('No account connected');
   const from = walletClient.account.address;
@@ -1063,13 +1061,13 @@ export const transferLands = async (
 
   for (const id of landTokenIds) {
     try {
-      // Encode function data and conditionally append builder code suffix for ERC-8021 attribution
+      // Encode function data and append builder code suffix for ERC-8021 attribution
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, id],
       });
-      const dataWithSuffix = skipBuilderCode ? encodedData : appendBuilderSuffix(encodedData);
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
       
       const hash = await walletClient.sendTransaction({
         to: LAND_CONTRACT_ADDRESS,
@@ -2114,7 +2112,6 @@ export const routerBatchTransfer = async (
   toAddress: string,
   plantIds: number[],
   landIds: bigint[],
-  skipBuilderCode: boolean = false,
 ): Promise<{ hash: `0x${string}`; success: boolean }> => {
   if (!walletClient?.account) throw new Error('No account connected');
   if (!BATCH_ROUTER_ADDRESS) throw new Error('Batch router not configured');
@@ -2155,8 +2152,8 @@ export const routerBatchTransfer = async (
     throw new Error('No assets to transfer');
   }
   
-  // Conditionally append builder code suffix for ERC-8021 attribution
-  const dataWithSuffix = skipBuilderCode ? encodedData : appendBuilderSuffix(encodedData);
+  // Append builder code suffix for ERC-8021 attribution
+  const dataWithSuffix = appendBuilderSuffix(encodedData);
   
   hash = await walletClient.sendTransaction({
     to: BATCH_ROUTER_ADDRESS,

@@ -17,7 +17,6 @@
 import { Attribution } from "ox/erc8021";
 import { encodeFunctionData } from "viem";
 import { CLIENT_ENV } from "./env-config";
-import type { WalletWithMetadata } from "@privy-io/react-auth";
 
 // Builder code from base.dev - set via environment variable
 const BUILDER_CODE = CLIENT_ENV.BUILDER_CODE;
@@ -95,32 +94,6 @@ export function getBuilderCode(): string | undefined {
 }
 
 /**
- * Check if the current wallet is a Privy embedded wallet
- * @param address - Current connected wallet address
- * @param privyUser - Privy user object with linked accounts
- * @returns true if the current wallet is a Privy embedded wallet
- */
-export function isPrivyEmbeddedWallet(
-  address: string | undefined,
-  privyUser: any
-): boolean {
-  if (!address || !privyUser?.linkedAccounts) return false;
-
-  // Find the linked account that matches the current address
-  const linkedWallet = privyUser.linkedAccounts.find((account: any) => {
-    if (account?.type !== "wallet") return false;
-    const walletAccount = account as WalletWithMetadata;
-    return (
-      walletAccount.address?.toLowerCase() === address.toLowerCase() &&
-      walletAccount.walletClientType === "privy" &&
-      walletAccount.chainType === "ethereum"
-    );
-  });
-
-  return Boolean(linkedWallet);
-}
-
-/**
  * Append builder code suffix to encoded calldata for legacy transactions.
  * Use this for direct `sendTransaction` calls when `wallet_sendCalls` is not available.
  * 
@@ -137,23 +110,22 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
 
 /**
  * Transform OnchainKit calls to include builder code suffix in the calldata.
- *
+ * 
  * This is necessary because OnchainKit only passes capabilities (including dataSuffix)
  * to wallets that support wallet_sendCalls (ERC-5792). For EOA wallets like Rabby,
  * MetaMask, etc., the capabilities are ignored.
- *
+ * 
  * By pre-encoding the calldata with the suffix, we ensure builder attribution
  * works across ALL wallet types.
- *
+ * 
  * IMPORTANT: This function also ensures calls are converted to raw format
  * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
  * function objects that cannot be structured-cloned for postMessage communication.
- *
+ * 
  * @param calls - Array of transaction calls (OnchainKit format)
- * @param skipBuilderCode - If true, skips appending builder code suffix (for Privy embedded wallets)
  * @returns Transformed calls with builder suffix baked into calldata (raw format)
  */
-export function transformCallsWithBuilderCode<T extends {
+export function transformCallsWithBuilderCode<T extends { 
   address?: `0x${string}`;
   to?: `0x${string}`;
   abi?: any;
@@ -161,8 +133,8 @@ export function transformCallsWithBuilderCode<T extends {
   args?: any[];
   data?: `0x${string}`;
   value?: bigint;
-}>(calls: T[], skipBuilderCode: boolean = false): T[] {
-  const suffix = skipBuilderCode ? null : getDataSuffix();
+}>(calls: T[]): T[] {
+  const suffix = getDataSuffix();
   
   return calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding

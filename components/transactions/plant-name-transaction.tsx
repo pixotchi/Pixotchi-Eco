@@ -14,9 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { getBuilderCapabilities, transformCallsWithBuilderCode, isPrivyEmbeddedWallet } from '@/lib/builder-code';
-import { usePrivy } from '@privy-io/react-auth';
-import { useAccount } from 'wagmi';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -50,31 +48,24 @@ export function PlantNameTransaction({
   buttonClassName,
   disabled = false
 }: PlantNameTransactionProps) {
-
+  
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
-  const { address } = useAccount();
-  const { user: privyUser } = usePrivy();
-
-  // Check if current wallet is a Privy embedded wallet
-  const isEmbeddedWallet = isPrivyEmbeddedWallet(address, privyUser);
-
+  
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  // Skip for Privy embedded wallets as they cause transaction failures
-  const builderCapabilities = isEmbeddedWallet ? undefined : getBuilderCapabilities();
-
+  const builderCapabilities = getBuilderCapabilities();
+  
   const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'setPlantName',
-    args: [BigInt(plantId), newName],
+    args: [BigInt(plantId), newName], 
   }], [plantId, newName]);
-
+  
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  // Skip builder code appending for Privy embedded wallets
-  const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[], isEmbeddedWallet),
-    [calls, isEmbeddedWallet]
+  const transformedCalls = useMemo(() => 
+    transformCallsWithBuilderCode(calls as any[]), 
+    [calls]
   );
 
   const handleOnSuccess = useCallback((tx: any) => {

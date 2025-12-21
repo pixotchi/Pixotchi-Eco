@@ -14,8 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { getBuilderCapabilities, transformCallsWithBuilderCode, isPrivyEmbeddedWallet } from '@/lib/builder-code';
-import { usePrivy } from '@privy-io/react-auth';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -44,20 +43,15 @@ export default function SponsoredTransaction({
 }: SponsoredTransactionProps) {
   const { isSponsored } = usePaymaster();
   const { address } = useAccount();
-  const { user: privyUser } = usePrivy();
-
-  // Check if current wallet is a Privy embedded wallet
-  const isEmbeddedWallet = isPrivyEmbeddedWallet(address, privyUser);
-
+  
   // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  // Skip for Privy embedded wallets as they cause transaction failures
-  const builderCapabilities = isEmbeddedWallet ? undefined : getBuilderCapabilities();
-
+  const builderCapabilities = getBuilderCapabilities();
+  
   // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  // Skip builder code appending for Privy embedded wallets
-  const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[], isEmbeddedWallet) as TransactionCall[],
-    [calls, isEmbeddedWallet]
+  // This ensures builder attribution works across ALL wallet types
+  const transformedCalls = useMemo(() => 
+    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[], 
+    [calls]
   );
   
   const handleOnSuccess = useCallback((tx: any) => {
