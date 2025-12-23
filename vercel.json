@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/notifications/cron/plant-care",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 */2 * * *"
     }
   ]
 }
