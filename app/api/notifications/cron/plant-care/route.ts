@@ -34,18 +34,51 @@ function verifyVercelCron(req: NextRequest): boolean {
   return authHeader === `Bearer ${cronSecret}`;
 }
 
-async function fetchEnabledFids(cursor?: string): Promise<{ fids: number[]; next?: string }> {
+/**
+ * Fetch ALL enabled FIDs from Neynar with proper pagination.
+ * Loops through all pages using cursor until no more data.
+ */
+async function fetchAllEnabledFids(): Promise<number[]> {
   const apiKey = SERVER_ENV.NEYNAR_API_KEY;
-  if (!apiKey) return { fids: [] };
-  const url = new URL('https://api.neynar.com/v2/farcaster/frame/notification_tokens/');
-  if (cursor) url.searchParams.set('cursor', cursor);
-  const res = await fetch(url.toString(), { headers: { 'x-api-key': apiKey } });
-  if (!res.ok) return { fids: [] };
-  const json = await res.json();
-  const tokens: Array<{ fid: number }> | undefined = json?.notification_tokens;
-  const nextCursor: string | undefined = json?.next?.cursor;
-  const fids = (tokens || []).map(t => t.fid).filter((v, i, a) => a.indexOf(v) === i);
-  return { fids, next: nextCursor };
+  if (!apiKey) return [];
+
+  const allFids: number[] = [];
+  let cursor: string | null = null;
+  let pageCount = 0;
+  const maxPages = 100; // Safety limit to prevent infinite loops
+
+  do {
+    const url = new URL('https://api.neynar.com/v2/farcaster/frame/notification_tokens/');
+    url.searchParams.set('limit', '100'); // Max per page
+    if (cursor) {
+      url.searchParams.set('cursor', cursor);
+    }
+
+    const res = await fetch(url.toString(), { headers: { 'x-api-key': apiKey } });
+    if (!res.ok) {
+      console.error(`[fetchAllEnabledFids] Neynar API error: ${res.status}`);
+      break;
+    }
+
+    const json = await res.json();
+    const tokens: Array<{ fid: number }> | undefined = json?.notification_tokens;
+
+    if (tokens?.length) {
+      for (const t of tokens) {
+        if (!allFids.includes(t.fid)) {
+          allFids.push(t.fid);
+        }
+      }
+    }
+
+    // Get next page cursor
+    cursor = json?.next?.cursor || null;
+    pageCount++;
+
+  } while (cursor && pageCount < maxPages);
+
+  console.log(`[plant-care cron] Fetched ${allFids.length} unique FIDs from ${pageCount} Neynar pages`);
+  return allFids;
 }
 
 async function publishToFids(fids: number[], title: string, body: string) {
@@ -112,8 +145,7 @@ export async function GET(req: NextRequest) {
     if (targetFid) {
       fids = [targetFid];
     } else {
-      const result = await fetchEnabledFids();
-      fids = result.fids;
+      fids = await fetchAllEnabledFids();
     }
 
     if (!debug && !dryRun) {
