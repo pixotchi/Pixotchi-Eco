@@ -3,7 +3,10 @@
     {
       "path": "/api/status/checks",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/notifications/cron/plant-care",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
-

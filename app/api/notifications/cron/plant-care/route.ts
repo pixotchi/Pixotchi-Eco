@@ -5,15 +5,34 @@ import { getPlantsByOwnerWithRpc } from '@/lib/contracts';
 import { z } from 'zod';
 import { differenceInSeconds } from 'date-fns';
 
+// Configuration
+const THRESHOLD_SECONDS = 3 * 60 * 60; // 3 hours
+const THROTTLE_SECONDS = 2 * 60 * 60; // 2 hours cooldown between notifications
+const REDIS_KEY_PREFIX = 'notif:plant3h';
+
 // Validation Schemas
 const QuerySchema = z.object({
   debug: z.enum(['0', '1', 'true', 'false']).optional().transform(val => val === '1' || val === 'true'),
+  fid: z.string().optional().transform(val => val ? parseInt(val, 10) : undefined),
+  dry: z.enum(['0', '1', 'true', 'false']).optional().transform(val => val === '1' || val === 'true'),
 });
 
 type PublishBody = {
   target_fids: number[];
   notification: { title: string; body: string; target_url: string };
 };
+
+// Verify Vercel cron authorization
+function verifyVercelCron(req: NextRequest): boolean {
+  const authHeader = req.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+
+  // If no CRON_SECRET is set, allow requests (for development)
+  if (!cronSecret) return true;
+
+  // Vercel sends: Authorization: Bearer <CRON_SECRET>
+  return authHeader === `Bearer ${cronSecret}`;
+}
 
 async function fetchEnabledFids(cursor?: string): Promise<{ fids: number[]; next?: string }> {
   const apiKey = SERVER_ENV.NEYNAR_API_KEY;
@@ -45,27 +64,27 @@ async function publishToFids(fids: number[], title: string, body: string) {
 }
 
 async function clearPlantEpisode(fid: number, plantId: number) {
-  try { await (redis as any)?.del?.(`notif:plant1h:fid:${fid}:plant:${plantId}`); } catch {}
+  try { await (redis as any)?.del?.(`${REDIS_KEY_PREFIX}:fid:${fid}:plant:${plantId}`); } catch { }
 }
 
 function shouldThrottle(fid: number, opts?: { dry?: boolean }): Promise<boolean> {
-  const key = `notif:plant1h:fid:${fid}`;
+  const key = `${REDIS_KEY_PREFIX}:fid:${fid}`;
   return (async () => {
     if (!redis) return false;
     const exists = await (redis as any)?.get?.(key);
     if (exists) return true;
-    if (!opts?.dry) await (redis as any)?.set?.(key, '1', { ex: 2 * 60 * 60 });
+    if (!opts?.dry) await (redis as any)?.set?.(key, '1', { ex: THROTTLE_SECONDS });
     return false;
   })();
 }
 
 function shouldThrottlePlant(fid: number, plantId: number, opts?: { dry?: boolean }): Promise<boolean> {
-  const key = `notif:plant1h:fid:${fid}:plant:${plantId}`;
+  const key = `${REDIS_KEY_PREFIX}:fid:${fid}:plant:${plantId}`;
   return (async () => {
     if (!redis) return false;
     const exists = await (redis as any)?.get?.(key);
     if (exists) return true;
-    if (!opts?.dry) await (redis as any)?.set?.(key, '1', { ex: 2 * 60 * 60 });
+    if (!opts?.dry) await (redis as any)?.set?.(key, '1', { ex: THROTTLE_SECONDS });
     return false;
   })();
 }
@@ -76,12 +95,34 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   try {
+    // Parse query params
     const url = new URL(req.url);
     const queryResult = QuerySchema.safeParse(Object.fromEntries(url.searchParams.entries()));
     const debug = queryResult.success ? queryResult.data.debug : false;
+    const targetFid = queryResult.success ? queryResult.data.fid : undefined;
+    const dryRun = queryResult.success ? queryResult.data.dry : false;
 
-    const { fids } = await fetchEnabledFids();
-    if (!debug) { try { for (const fid of fids) { await (redis as any)?.sadd?.('notif:eligible:fids', String(fid)); } } catch {} }
+    // Verify Vercel cron auth (skip for debug/manual calls with fid param)
+    if (!targetFid && !debug && !verifyVercelCron(req)) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Fetch eligible fids
+    let fids: number[];
+    if (targetFid) {
+      fids = [targetFid];
+    } else {
+      const result = await fetchEnabledFids();
+      fids = result.fids;
+    }
+
+    if (!debug && !dryRun) {
+      try {
+        for (const fid of fids) {
+          await (redis as any)?.sadd?.('notif:eligible:fids', String(fid));
+        }
+      } catch { }
+    }
 
     const startedAt = Date.now();
     const rpcUrl = 'https://base-rpc.publicnode.com';
@@ -94,24 +135,35 @@ export async function GET(req: NextRequest) {
     let plantEpisodes = 0;
     const fidsToNotify: number[] = [];
 
-    const details: Array<{ fid: number; address?: string | null; userThrottled?: boolean; plants?: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }>; dueCount?: number }>
-      = [];
+    const details: Array<{
+      fid: number;
+      address?: string | null;
+      userThrottled?: boolean;
+      plants?: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }>;
+      dueCount?: number
+    }> = [];
 
     for (const fid of fids) {
       // Resolve address: prefer cached mapping, fallback to Farcaster API
       let address: string | null = null;
-      try { address = await (async () => {
-        const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
-        if (cached) return String(cached).toLowerCase();
-        const res = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`);
-        if (!res.ok) return null;
-        const data = await res.json();
-        const addr = data?.result?.address?.address as string | undefined;
-        if (addr) await (redis as any)?.set?.(`fidmap:${fid}`, addr.toLowerCase());
-        return addr ? addr.toLowerCase() : null;
-      })(); } catch {}
+      try {
+        address = await (async () => {
+          const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
+          if (cached) return String(cached).toLowerCase();
+          const res = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`);
+          if (!res.ok) return null;
+          const data = await res.json();
+          const addr = data?.result?.address?.address as string | undefined;
+          if (addr) await (redis as any)?.set?.(`fidmap:${fid}`, addr.toLowerCase());
+          return addr ? addr.toLowerCase() : null;
+        })();
+      } catch { }
 
-      if (!address) { skippedNoAddress++; details.push({ fid, address: null, dueCount: 0, plants: [] }); continue; }
+      if (!address) {
+        skippedNoAddress++;
+        details.push({ fid, address: null, dueCount: 0, plants: [] });
+        continue;
+      }
 
       const plants = await getPlantsByOwnerWithRpc(address, rpcUrl);
       resolved++;
@@ -119,34 +171,42 @@ export async function GET(req: NextRequest) {
       // Build plant debug entries
       const plantDebug: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }> = [];
 
-      // Clear safe episodes and prepare due list
-      if (!debug) {
+      // Clear safe episodes (when plant has more than threshold time left)
+      if (!debug && !dryRun) {
         for (const p of plants || []) {
           const t = Number(p.timeUntilStarving ?? 0);
           const plantDate = new Date(t * 1000);
-          // Calculate difference in seconds using date-fns
           const left = differenceInSeconds(plantDate, now);
-          if (left > 3600) { await clearPlantEpisode(fid, Number(p.id)); }
+          if (left > THRESHOLD_SECONDS) {
+            await clearPlantEpisode(fid, Number(p.id));
+          }
         }
       }
 
+      // Find plants with 3h or less remaining
       const due = (plants || []).filter(p => {
         const t = Number(p.timeUntilStarving ?? 0);
         const plantDate = new Date(t * 1000);
         const left = differenceInSeconds(plantDate, now);
-        return left > 0 && left <= 3600;
+        return left > 0 && left <= THRESHOLD_SECONDS;
       });
 
-      // Per-user throttle: bypass completely in debug
-      const userThrottled = debug ? false : await shouldThrottle(fid);
+      // Per-user throttle: bypass in debug/dry mode
+      const userThrottled = (debug || dryRun) ? false : await shouldThrottle(fid, { dry: dryRun });
+
       if (due.length === 0) {
         skippedNoDue++;
         for (const p of plants || []) {
-          const t = Number(p.timeUntilStarving ?? 0); 
+          const t = Number(p.timeUntilStarving ?? 0);
           const plantDate = new Date(t * 1000);
           const left = differenceInSeconds(plantDate, now);
-          const plantThrottled = false;
-          plantDebug.push({ id: Number(p.id), timestamp: t, left, due: left > 0 && left <= 3600, plantThrottled });
+          plantDebug.push({
+            id: Number(p.id),
+            timestamp: t,
+            left,
+            due: left > 0 && left <= THRESHOLD_SECONDS,
+            plantThrottled: false
+          });
         }
         details.push({ fid, address, userThrottled, dueCount: 0, plants: plantDebug });
         continue;
@@ -155,17 +215,22 @@ export async function GET(req: NextRequest) {
       let hasAny = false;
       for (const p of due) {
         const pid = Number(p.id);
-        const plantThrottled = debug ? false : await shouldThrottlePlant(fid, pid);
-        if (plantThrottled) { if (!debug) skippedThrottled++; }
-        else { hasAny = true; plantEpisodes++; }
-        const t = Number(p.timeUntilStarving ?? 0); 
+        const plantThrottled = (debug || dryRun) ? false : await shouldThrottlePlant(fid, pid, { dry: dryRun });
+        if (plantThrottled) {
+          if (!debug && !dryRun) skippedThrottled++;
+        } else {
+          hasAny = true;
+          plantEpisodes++;
+        }
+        const t = Number(p.timeUntilStarving ?? 0);
         const plantDate = new Date(t * 1000);
         const left = differenceInSeconds(plantDate, now);
         plantDebug.push({ id: pid, timestamp: t, left, due: true, plantThrottled });
       }
-      // include non-due plants in debug too
+
+      // Include non-due plants in debug output
       for (const p of (plants || []).filter(pp => due.every(d => Number(d.id) !== Number(pp.id)))) {
-        const t = Number(p.timeUntilStarving ?? 0); 
+        const t = Number(p.timeUntilStarving ?? 0);
         const plantDate = new Date(t * 1000);
         const left = differenceInSeconds(plantDate, now);
         plantDebug.push({ id: Number(p.id), timestamp: t, left, due: false, plantThrottled: false });
@@ -175,41 +240,55 @@ export async function GET(req: NextRequest) {
       if (hasAny) fidsToNotify.push(fid);
     }
 
-    if (fidsToNotify.length > 0) {
+    // Send notifications (unless dry run)
+    let publishResult: { ok: boolean; json?: unknown } = { ok: true };
+    if (fidsToNotify.length > 0 && !dryRun) {
       const title = '🪴 Plant Death Alert';
-      const body = 'Your plant has under 1h left before it dies. Tap to feed it now.';
-      const resp = await publishToFids(fidsToNotify, title, body);
-      if (!resp.ok) {
-        return NextResponse.json({ success: false, error: resp.json || 'publish_failed' }, { status: 500 });
+      const body = 'Your plant has under 3h left before it dies. Tap to feed it now!';
+      publishResult = await publishToFids(fidsToNotify, title, body);
+
+      if (!publishResult.ok) {
+        return NextResponse.json({ success: false, error: publishResult.json || 'publish_failed' }, { status: 500 });
       }
+
       if (!debug) {
         try {
           const ts = Date.now();
-          await (redis as any)?.lpush?.('notif:plant1h:log', JSON.stringify({ ts, fids: fidsToNotify }));
-          await (redis as any)?.ltrim?.('notif:plant1h:log', 0, 99);
-          for (const fid of fidsToNotify) await (redis as any)?.hset?.('notif:plant1h:last', { [fid]: String(ts) });
-          try { await (redis as any)?.incrby?.('notif:plant1h:sentCount', fidsToNotify.length); } catch {}
-        } catch {}
+          await (redis as any)?.lpush?.(`${REDIS_KEY_PREFIX}:log`, JSON.stringify({ ts, fids: fidsToNotify }));
+          await (redis as any)?.ltrim?.(`${REDIS_KEY_PREFIX}:log`, 0, 99);
+          for (const fid of fidsToNotify) {
+            await (redis as any)?.hset?.(`${REDIS_KEY_PREFIX}:last`, { [fid]: String(ts) });
+          }
+          try {
+            await (redis as any)?.incrby?.(`${REDIS_KEY_PREFIX}:sentCount`, fidsToNotify.length);
+          } catch { }
+        } catch { }
       }
     }
 
     const summary = {
       success: true,
+      dryRun,
       startedAt,
       endedAt: Date.now(),
+      thresholdHours: THRESHOLD_SECONDS / 3600,
       fetchedEligible: fids.length,
       resolvedAddresses: resolved,
       plantEpisodes,
-      notified: fidsToNotify.length,
+      notified: dryRun ? 0 : fidsToNotify.length,
+      wouldNotify: dryRun ? fidsToNotify.length : undefined,
       skipped: { noAddress: skippedNoAddress, noDue: skippedNoDue, throttled: skippedThrottled },
       debug: { nowSec: Math.floor(now.getTime() / 1000), details },
     } as const;
 
-    try {
-      await (redis as any)?.set?.('notif:plant1h:lastRun', JSON.stringify(summary), { ex: 3600 });
-      await (redis as any)?.lpush?.('notif:plant1h:runs', JSON.stringify(summary));
-      await (redis as any)?.ltrim?.('notif:plant1h:runs', 0, 49);
-    } catch {}
+    // Save run stats (unless dry run)
+    if (!dryRun) {
+      try {
+        await (redis as any)?.set?.(`${REDIS_KEY_PREFIX}:lastRun`, JSON.stringify(summary), { ex: 3600 });
+        await (redis as any)?.lpush?.(`${REDIS_KEY_PREFIX}:runs`, JSON.stringify(summary));
+        await (redis as any)?.ltrim?.(`${REDIS_KEY_PREFIX}:runs`, 0, 49);
+      } catch { }
+    }
 
     return NextResponse.json(summary);
   } catch (e: any) {
@@ -217,4 +296,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) { return GET(req); }
+export async function POST(req: NextRequest) {
+  return GET(req);
+}

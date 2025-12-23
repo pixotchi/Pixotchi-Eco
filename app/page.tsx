@@ -146,14 +146,14 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
           if (key === activeTab) return;
           if (loadedTabs.current.has(key) || prefetchingTabs.current.has(key)) return;
           prefetchingTabs.current.add(key);
-          
+
           const prefetchPromise = import(`@/components/tabs/${tab}-tab`)
             .finally(() => {
               prefetchingTabs.current.delete(key);
               loadedTabs.current.add(key);
               prefetchPromises.current.delete(key);
             });
-          
+
           prefetchPromises.current.set(key, prefetchPromise);
         });
       });
@@ -193,7 +193,7 @@ export default function App() {
 
   // Privy state for debug + button readiness + Solana wallet check
   const { ready: privyReady, authenticated, user } = usePrivy();
-  
+
   // Check if user has a Solana wallet connected via Privy
   const hasSolanaWallet = useMemo(() => {
     if (!authenticated || !user) return false;
@@ -202,17 +202,17 @@ export default function App() {
       (account: any) => account.type === 'wallet' && account.chainType === 'solana'
     ) ?? false;
   }, [authenticated, user]);
-  
+
   // Combined connection check: EVM wallet OR Solana wallet
   const isConnected = isEvmConnected || hasSolanaWallet;
-  
+
   // For Solana users, use their Twin address as the "address" for the app
   // This will be populated by the SolanaWalletContext
   const effectiveAddress = address; // EVM address or undefined for Solana users
 
   // Enable intelligent tab prefetching
   useTabPrefetching(activeTab, isConnected);
-  
+
   // Custom hooks for logic separation
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
   const readyBlocker =
@@ -236,16 +236,16 @@ export default function App() {
   const { login } = useLogin();
   const { wallets } = useWallets();
   const { connect, connectors } = useConnect();
-  
+
   // Initialize surface as null on server to avoid SSR hydration mismatch
   // sessionStorage doesn't exist on server, so we populate this on client mount
   const [surface, setSurface] = useState<'privy' | 'base' | 'privysolana' | null>(null);
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
-  
+
   // Populate surface from sessionStorage on client mount only
   useEffect(() => {
     if (surfaceInitialized) return;
-    
+
     try {
       const stored = sessionStorageManager.getAuthSurface();
       // Map 'coinbase' to 'base' for backward compatibility
@@ -254,10 +254,10 @@ export default function App() {
     } catch (error) {
       console.warn('Failed to read surface on mount:', error);
     }
-    
+
     setSurfaceInitialized(true);
   }, [surfaceInitialized]);
-  
+
   // Back navigation control: enable web navigation integration inside Mini App
   useEffect(() => {
     (async () => {
@@ -266,25 +266,25 @@ export default function App() {
         if (inMini) {
           await sdk.back.enableWebNavigation();
         }
-      } catch {}
+      } catch { }
     })();
   }, []);
-  
+
   // One-shot autologin after surface switch
   useEffect(() => {
     if (isConnected) return;
-    
+
     let mounted = true;
     let timeoutId: NodeJS.Timeout | null = null;
-    
+
     const handleAutologin = async () => {
       try {
         const storedAuto = sessionStorageManager.getAutologin();
         if (!storedAuto) return;
-        
+
         // Map 'coinbase' to 'base'
         const auto = storedAuto === 'coinbase' ? 'base' : storedAuto;
-        
+
         // Handle Privy surfaces (both EVM and Solana)
         if (auto === 'privy' && surface === 'privy' && privyReady) {
           await sessionStorageManager.removeAutologin();
@@ -304,9 +304,9 @@ export default function App() {
         console.error('Failed to handle autologin:', error);
       }
     };
-    
+
     handleAutologin();
-    
+
     return () => {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
@@ -316,7 +316,7 @@ export default function App() {
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets
   // after signing auth messages
-  
+
 
   const addFrame = useAddFrame();
 
@@ -327,19 +327,39 @@ export default function App() {
     }
   }, [isConnected, userValidated, startIfFirstVisit]);
 
+  // Auto-prompt to add mini app when user opens in miniapp mode and hasn't added yet
+  useEffect(() => {
+    // Only run once context is available, user is in miniapp, and hasn't added yet
+    if (!context || context.client.added || frameAdded) return;
+    if (!fc?.isInMiniApp) return;
+
+    // Small delay to let the app settle before showing the prompt
+    const timeoutId = setTimeout(async () => {
+      try {
+        await sdk.actions.addMiniApp();
+        setFrameAdded(true);
+      } catch (e) {
+        // User may have dismissed or it failed - that's okay, they can try the button
+        console.log('Auto add mini app prompt dismissed or failed:', e);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timeoutId);
+  }, [context, fc?.isInMiniApp, frameAdded]);
+
   // Map fid -> address for backend notifications (optional, best-effort)
   useEffect(() => {
     let mounted = true;
     let timeoutId: NodeJS.Timeout | null = null;
-    
+
     (async () => {
       try {
         const fid = typeof fc?.context === 'object' ? (fc?.context as any)?.user?.fid : undefined;
         if (!fid || !address || !mounted) return;
-        
+
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 5000);
-        
+
         await fetch('/api/notifications/map-fid', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -354,7 +374,7 @@ export default function App() {
         if (timeoutId) clearTimeout(timeoutId);
       }
     })();
-    
+
     return () => {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
@@ -366,7 +386,7 @@ export default function App() {
     if (isConnected) {
       try {
         (window as any).__pixotchi_refresh_balances__?.();
-      } catch {}
+      } catch { }
     }
   }, [isConnected]);
 
@@ -447,10 +467,10 @@ export default function App() {
           'Loading...'
         ) : (
           <span className="flex items-center gap-2">
-            <Image 
-              src="/icons/solana.svg" 
-              alt="Solana" 
-              width={20} 
+            <Image
+              src="/icons/solana.svg"
+              alt="Solana"
+              width={20}
               height={20}
               className="w-5 h-5"
             />
@@ -535,7 +555,7 @@ export default function App() {
   // Show invite gate if wallet is connected but not validated (and system is enabled)
   if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !userValidated) {
     return (
-      <InviteGate 
+      <InviteGate
         onValidated={handleInviteValidated}
         onSkip={handleSkipInvite}
         showSkip={process.env.NODE_ENV === 'development'}
@@ -545,11 +565,9 @@ export default function App() {
 
   return (
     <div
-      className={`flex justify-center w-full min-h-dvh bg-background overscroll-none ${
-        keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
-      } ${
-        isKeyboardNavigation ? 'keyboard-navigation' : ''
-      }`}
+      className={`flex justify-center w-full min-h-dvh bg-background overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
+        } ${isKeyboardNavigation ? 'keyboard-navigation' : ''
+        }`}
       aria-label="Pixotchi Mini Game"
       style={{
         // Dynamic viewport height for mobile
@@ -560,58 +578,58 @@ export default function App() {
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">
           <header className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1.5">
-              <Image
-                src="/PixotchiKit/Logonotext.svg"
-                alt="Pixotchi Mini Logo"
-                width={24}
-                height={24}
-              />
-              <h1 className="text-sm font-pixel text-foreground">
-                {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
-              </h1>
-            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1.5">
+                <Image
+                  src="/PixotchiKit/Logonotext.svg"
+                  alt="Pixotchi Mini Logo"
+                  width={24}
+                  height={24}
+                />
+                <h1 className="text-sm font-pixel text-foreground">
+                  {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
+                </h1>
+              </div>
 
-            <div className="flex items-center space-x-2">
-              {context && !context.client.added && (
-                <Button variant="outline" size="sm" onClick={handleAddFrame}>
-                  <PlusCircle className="w-4 h-4" />
-                </Button>
-              )}
+              <div className="flex items-center space-x-2">
+                {context && !context.client.added && !frameAdded && (
+                  <Button variant="outline" size="sm" onClick={handleAddFrame}>
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                )}
 
-              <ChatButton />
-              
-              {isConnected ? (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowWalletProfile(true)}
-                >
-                  <Image 
-                    src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"} 
-                    alt="Profile" 
-                    width={24} 
-                    height={24} 
-                    className="w-6 h-6"
-                  />
-                </Button>
-              ) : null}
-              <ThemeSelector />
+                <ChatButton />
+
+                {isConnected ? (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowWalletProfile(true)}
+                  >
+                    <Image
+                      src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"}
+                      alt="Profile"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
+                    />
+                  </Button>
+                ) : null}
+                <ThemeSelector />
+              </div>
             </div>
-          </div>
-        </header>
-        {isConnected && (
-          <ErrorBoundary
-            variant="inline"
-            resetKeys={address ? [address] : []}
-            onError={(error, errorInfo) => {
-              console.error('Error in StatusBar:', { error, errorInfo });
-            }}
-          >
-            <StatusBar />
-          </ErrorBoundary>
-        )}
+          </header>
+          {isConnected && (
+            <ErrorBoundary
+              variant="inline"
+              resetKeys={address ? [address] : []}
+              onError={(error, errorInfo) => {
+                console.error('Error in StatusBar:', { error, errorInfo });
+              }}
+            >
+              <StatusBar />
+            </ErrorBoundary>
+          )}
         </div>
 
         {/* Main Content */}
@@ -620,19 +638,19 @@ export default function App() {
             <div className="flex flex-col items-center justify-center h-full p-4">
               <div className="flex-grow flex flex-col items-center justify-center text-center">
                 <div className="flex flex-col items-center space-y-3 mb-8">
-                    <Image
-                        src="/PixotchiKit/Logonotext.svg"
-                        alt="Pixotchi Mini Logo"
-                        width={80}
-                        height={80}
-                        priority
-                        fetchPriority="high"
-                        sizes="80px"
-                        quality={90}
-                    />
-                    <h1 className="text-2xl font-pixel text-foreground">
-                        {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
-                    </h1>
+                  <Image
+                    src="/PixotchiKit/Logonotext.svg"
+                    alt="Pixotchi Mini Logo"
+                    width={80}
+                    height={80}
+                    priority
+                    fetchPriority="high"
+                    sizes="80px"
+                    quality={90}
+                  />
+                  <h1 className="text-2xl font-pixel text-foreground">
+                    {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
+                  </h1>
                 </div>
                 <h2 className="text-xl font-semibold text-foreground mb-2">
                   Welcome!
@@ -660,10 +678,10 @@ export default function App() {
                       try {
                         // Set preferences first using centralized manager
                         await sessionStorageManager.setAuthSurfaceAndAutologin('privy');
-                        
+
                         // Wait a tick to ensure storage operations complete
                         await new Promise(resolve => setTimeout(resolve, 0));
-                        
+
                         // Update URL and reload
                         const url = new URL(window.location.href);
                         url.searchParams.set('surface', 'privy');
@@ -737,12 +755,11 @@ export default function App() {
                     <Button
                       key={tab.id}
                       variant="ghost"
-                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                        activeTab === tab.id
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${activeTab === tab.id
                           ? "bg-primary/10 text-primary border border-primary/20"
                           : "text-muted-foreground border border-transparent"
-                      }`}
+                        }`}
                       role="tab"
                       id={`tab-${tab.id}`}
                       aria-selected={activeTab === tab.id}
@@ -751,9 +768,8 @@ export default function App() {
                       tabIndex={activeTab === tab.id ? 0 : -1}
                     >
                       <tab.icon
-                        className={`w-5 h-5 ${
-                          activeTab === tab.id ? "text-primary" : ""
-                        }`}
+                        className={`w-5 h-5 ${activeTab === tab.id ? "text-primary" : ""
+                          }`}
                       />
                       <span className="text-xs font-medium">{tab.label}</span>
                     </Button>

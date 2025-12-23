@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { useMiniKit, useAddFrame } from "@coinbase/onchainkit/minikit";
+import { sdk } from "@farcaster/miniapp-sdk";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Info, Gift, ExternalLink, User, PlusCircle } from 'lucide-react';
@@ -26,6 +27,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
   const { theme } = useTheme();
   const [urlCode, setUrlCode] = useState<string>('');
   const [showWalletProfile, setShowWalletProfile] = useState(false);
+  const [frameAdded, setFrameAdded] = useState(false);
 
   const addFrame = useAddFrame();
 
@@ -41,10 +43,18 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
     }
   }, []);
 
-  const handleAddFrame = async () => {
-    const result = await addFrame();
-    console.log("Frame added:", result);
-  };
+  const handleAddFrame = useCallback(async () => {
+    // Prefer Farcaster Mini App add flow when available, fallback to MiniKit's add frame
+    try {
+      await sdk.actions.addMiniApp();
+      setFrameAdded(true);
+      return;
+    } catch (e) {
+      // Fallback to Base MiniKit if Farcaster add flow is not available
+      const result = await addFrame();
+      setFrameAdded(Boolean(result));
+    }
+  }, [addFrame]);
 
   const handleValidated = async (code: string) => {
     try {
@@ -52,7 +62,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
       const keys = getLocalStorageKeys();
       localStorage.setItem(keys.INVITE_VALIDATED, 'true');
       localStorage.setItem(keys.VALIDATED_CODE, code);
-      
+
       // Store wallet address if connected
       if (address) {
         localStorage.setItem(keys.USER_ADDRESS, address);
@@ -87,7 +97,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
               </div>
 
               <div className="flex items-center space-x-2">
-                {context && !context.client.added && (
+                {context && !context.client.added && !frameAdded && (
                   <Button variant="outline" size="sm" onClick={handleAddFrame}>
                     <PlusCircle className="w-4 h-4" />
                   </Button>
@@ -99,11 +109,11 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
                     size="icon"
                     onClick={() => setShowWalletProfile(true)}
                   >
-                    <Image 
-                      src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"} 
-                      alt="Profile" 
-                      width={24} 
-                      height={24} 
+                    <Image
+                      src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"}
+                      alt="Profile"
+                      width={24}
+                      height={24}
                       className="w-6 h-6"
                     />
                   </Button>
@@ -131,7 +141,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
                   className="opacity-90"
                 />
               </div>
-              
+
               <div>
                 <h1 className="text-2xl font-pixel text-foreground mb-2">
                   Invite Required
@@ -143,7 +153,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
             </div>
 
             {/* Invite Code Input */}
-            <InviteCodeInput 
+            <InviteCodeInput
               onValidated={handleValidated}
               initialCode={urlCode}
               autoSubmit={!!urlCode}
@@ -152,9 +162,9 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
             {/* Skip for development */}
             {showSkip && onSkip && (
               <div className="text-center">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={onSkip}
                   className="text-muted-foreground"
                 >
@@ -174,7 +184,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
                         Connect Your Wallet
                       </div>
                       <p className="text-muted-foreground">
-                        For the best experience, connect your wallet after validation 
+                        For the best experience, connect your wallet after validation
                         to automatically track your invite usage.
                       </p>
                     </div>
@@ -187,8 +197,8 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
 
         {/* Wallet Profile Modal */}
         {showWalletProfile && (
-          <WalletProfile 
-            open={showWalletProfile} 
+          <WalletProfile
+            open={showWalletProfile}
             onOpenChange={setShowWalletProfile}
           />
         )}
