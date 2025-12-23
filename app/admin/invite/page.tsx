@@ -1118,7 +1118,7 @@ export default function AdminInviteDashboard() {
       const url = `/api/admin/notifications/trigger?${params.toString()}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'x-admin-key': adminKey }
+        headers: { Authorization: `Bearer ${adminKey}` }
       });
       const data = await res.json();
       setTriggerResult(data);
