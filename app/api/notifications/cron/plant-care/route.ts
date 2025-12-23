@@ -124,7 +124,7 @@ function shouldThrottlePlant(fid: number, plantId: number, opts?: { dry?: boolea
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300; // 5 minutes (Pro plan limit)
 
 export async function GET(req: NextRequest) {
   try {
