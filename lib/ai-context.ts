@@ -51,6 +51,7 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 **Context Updated:** December 2025
+**ongoing special event:** Users on Base app that have their X account linked, can claim a free plant on mint tab (only on base app and only 1 free plant))
 **Real-time Data Handling:** User stats are provided with each request; use them directly.
 **Hallucination Risk Mitigation:** Do NOT invent prices, addresses, or game states not in this guide or user context.
 
@@ -119,7 +120,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - **Farm:** Manage minted Plants and Land NFTs; buy items and upgrade buildings.
 - **Mint:** Mint new Plant and Land NFTs.
 - **Activity:** View game events and transaction history.
-- **Ranking:** View Plant, Land, and Staking leaderboards. Attack plants (with ⚔️) here.
+- **Ranking:** View Plant, Land, and Staking leaderboards. Attack plants (with ⚔️) here. (Reviving, Killing plants also happens here)
 - **Swap:** Trade ETH ↔ SEED ↔ USDC; view SEED chart and tokenomics.
 - **About:** Access Missions/Rocks, daily streaks, ecosystem info, and feedback button.
 
@@ -184,7 +185,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - Target can be re-attacked after 60 minutes.
 - Attacker must be alive and lower level than target.
 - Fenced/protected plants cannot be attacked.
-- You cannot attack your own plant.
+- You cannot attack/kill your own plant.
 
 **Win/Loss:**
 - Win: 30% chance → Steal target's PTS.
@@ -398,12 +399,12 @@ export function buildAIPrompt(userMessage: string, conversationHistory?: string,
 } {
   // System prompt with cache control - split into blocks for optimal caching
   // Block 1: Response guidelines (small, frequently used)
-  const responseGuidelines = SYSTEM_PROMPT.split('## RESPONSE GUIDELINES')[0] + '## RESPONSE GUIDELINES' + 
+  const responseGuidelines = SYSTEM_PROMPT.split('## RESPONSE GUIDELINES')[0] + '## RESPONSE GUIDELINES' +
     SYSTEM_PROMPT.split('## RESPONSE GUIDELINES')[1].split('---')[0];
-  
+
   // Block 2: Knowledge base context (large, rarely changes) - MARK WITH CACHE_CONTROL
   const knowledgeBaseBlock = KNOWLEDGE_BASE;
-  
+
   const systemBlocks = [
     {
       type: "text" as const,
@@ -417,22 +418,22 @@ export function buildAIPrompt(userMessage: string, conversationHistory?: string,
       cache_control: { type: "ephemeral" as const }
     }
   ];
-  
+
   // User content - actual user question with optional history and stats
   // NOTE: These are NOT cached because they change per request
   let userContent = '';
-  
+
   if (conversationHistory) {
     userContent += `Previous conversation:\n${conversationHistory}\n\n`;
   }
-  
+
   // Include user stats if available (formatted as clean JSON)
   if (userStats) {
     userContent += `User's Current Game Stats:\n${userStats}\n\n`;
   }
-  
+
   userContent += `User Question: ${userMessage}`;
-  
+
   return {
     systemBlocks,
     userContent
@@ -442,7 +443,7 @@ export function buildAIPrompt(userMessage: string, conversationHistory?: string,
 export function generateConversationTitle(firstMessage: string): string {
   // Generate a short title from the first user message
   const cleaned = firstMessage.trim().toLowerCase();
-  
+
   // Common question patterns
   if (cleaned.includes('mint') && cleaned.includes('plant')) return 'Minting Plants';
   if (cleaned.includes('mint') && cleaned.includes('land')) return 'Minting Land';
@@ -455,7 +456,7 @@ export function generateConversationTitle(firstMessage: string): string {
   if (cleaned.includes('help') || cleaned.includes('how')) return 'Game Help';
   if (cleaned.includes('wallet') || cleaned.includes('connect')) return 'Wallet Issues';
   if (cleaned.includes('transfer') || cleaned.includes('asset')) return 'Asset Transfer';
-  
+
   // Fallback: use first few words
   const words = firstMessage.split(' ').slice(0, 3).join(' ');
   return words.length > 20 ? words.substring(0, 20) + '...' : words;
