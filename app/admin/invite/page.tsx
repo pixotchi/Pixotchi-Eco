@@ -1004,6 +1004,13 @@ export default function AdminInviteDashboard() {
   const [notifResetFenceLoading, setNotifResetFenceLoading] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
 
+  // Eligible plants management
+  const [eligiblePlants, setEligiblePlants] = useState<any>(null);
+  const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [triggerLoading, setTriggerLoading] = useState(false);
+  const [notifFidFilter, setNotifFidFilter] = useState('');
+  const [triggerResult, setTriggerResult] = useState<any>(null);
+
   const fetchNotifStats = async () => {
     if (!adminKey.trim()) return;
     setNotifLoading(true);
@@ -1076,6 +1083,59 @@ export default function AdminInviteDashboard() {
       onConfirm: resetNotifHistory,
       isDangerous: true,
     });
+  };
+
+  // Fetch eligible plants (under 3h remaining)
+  const fetchEligiblePlants = async (fid?: string) => {
+    if (!adminKey.trim()) return toast.error('Enter admin key');
+    setEligibleLoading(true);
+    try {
+      const url = fid
+        ? `/api/admin/notifications/eligible?fid=${fid}`
+        : '/api/admin/notifications/eligible';
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${adminKey}` } });
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        setEligiblePlants(data);
+        toast.success(`Found ${data.summary?.totalEligiblePlants || 0} eligible plants`);
+      } else {
+        toast.error(data?.error || 'Failed to fetch eligible plants');
+      }
+    } catch (error) {
+      console.error('Failed to fetch eligible plants:', error);
+      toast.error('Failed to fetch eligible plants');
+    } finally { setEligibleLoading(false); }
+  };
+
+  // Trigger notifications (with optional dry-run)
+  const triggerNotifications = async (fid?: string, dryRun: boolean = false) => {
+    if (!adminKey.trim()) return toast.error('Enter admin key');
+    setTriggerLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (fid) params.set('fid', fid);
+      if (dryRun) params.set('dry', '1');
+      const url = `/api/admin/notifications/trigger?${params.toString()}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'x-admin-key': adminKey }
+      });
+      const data = await res.json();
+      setTriggerResult(data);
+      if (res.ok && data?.success) {
+        if (dryRun) {
+          toast.success(`Dry run: Would notify ${data.result?.wouldNotify || 0} users`);
+        } else {
+          toast.success(`Sent notifications to ${data.result?.notified || 0} users`);
+          fetchNotifStats(); // Refresh stats
+        }
+      } else {
+        toast.error(data?.error || 'Trigger failed');
+      }
+    } catch (error) {
+      console.error('Trigger notifications failed:', error);
+      toast.error('Trigger failed');
+    } finally { setTriggerLoading(false); }
   };
 
   const runFenceDebug = async (type: 'warn' | 'expire') => {
@@ -2500,6 +2560,121 @@ export default function AdminInviteDashboard() {
                       </Card>
                     </div>
 
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Eligible Plants & Manual Trigger */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5" /> Plants Under 3h (Eligible for Notification)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* FID Filter & Actions */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    placeholder="Filter by FID (optional)"
+                    value={notifFidFilter}
+                    onChange={(e) => setNotifFidFilter(e.target.value.replace(/\D/g, ''))}
+                    className="w-40"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchEligiblePlants(notifFidFilter || undefined)}
+                    disabled={eligibleLoading}
+                  >
+                    <Search className={`w-4 h-4 mr-2 ${eligibleLoading ? 'animate-spin' : ''}`} />
+                    {eligibleLoading ? 'Loading...' : 'Check Eligible'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => triggerNotifications(notifFidFilter || undefined, true)}
+                    disabled={triggerLoading}
+                  >
+                    <Eye className={`w-4 h-4 mr-2`} />
+                    Dry Run
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      showConfirmDialog({
+                        title: 'Send Notifications',
+                        description: notifFidFilter
+                          ? `This will send notifications to FID ${notifFidFilter} if they have eligible plants.`
+                          : 'This will send notifications to ALL users with eligible plants.',
+                        confirmText: 'Send',
+                        onConfirm: () => triggerNotifications(notifFidFilter || undefined, false),
+                        isDangerous: true,
+                      });
+                    }}
+                    disabled={triggerLoading}
+                  >
+                    <Bell className={`w-4 h-4 mr-2 ${triggerLoading ? 'animate-spin' : ''}`} />
+                    {triggerLoading ? 'Sending...' : 'Send Notifications'}
+                  </Button>
+                </div>
+
+                {/* Eligible Plants Results */}
+                {eligiblePlants && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded">
+                      <div className="text-sm">
+                        <span className="font-semibold">Summary:</span>{' '}
+                        {eligiblePlants.summary?.fidsChecked || 0} users checked,{' '}
+                        {eligiblePlants.summary?.fidsWithEligiblePlants || 0} with eligible plants,{' '}
+                        <span className="text-orange-600 font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {(eligiblePlants.eligible || []).map((user: any) => (
+                        <div key={user.fid} className="p-3 border rounded space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="font-mono text-sm">
+                              FID: <span className="font-semibold">{user.fid}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                              {user.address}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            {(user.plants || []).map((plant: any) => (
+                              <div
+                                key={plant.id}
+                                className={`p-2 rounded text-xs ${plant.eligible ? 'bg-orange-100 dark:bg-orange-900/30 border border-orange-300' : 'bg-muted'}`}
+                              >
+                                <div className="font-semibold">Plant #{plant.id}</div>
+                                <div className={plant.eligible ? 'text-orange-600 font-semibold' : 'text-muted-foreground'}>
+                                  {plant.hoursLeft > 0 ? `${plant.hoursLeft}h left` : 'Dead/Fed'}
+                                </div>
+                                {plant.eligible && <div className="text-green-600">✓ Eligible</div>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      {(eligiblePlants.eligible || []).length === 0 && (
+                        <div className="text-center py-4 text-muted-foreground">
+                          No users with eligible plants found.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Trigger Result */}
+                {triggerResult && (
+                  <div className="text-sm">
+                    <div className="font-semibold mb-1">Last Trigger Result</div>
+                    <pre className="p-2 rounded border text-xs text-muted-foreground whitespace-pre-wrap max-h-64 overflow-y-auto">
+                      {JSON.stringify(triggerResult, null, 2)}
+                    </pre>
                   </div>
                 )}
               </CardContent>
