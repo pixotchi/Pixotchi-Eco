@@ -7,15 +7,58 @@ import { differenceInSeconds } from 'date-fns';
 
 const THRESHOLD_SECONDS = 3 * 60 * 60; // 3 hours
 
+/**
+ * Fetch ALL enabled FIDs from Neynar with proper pagination.
+ * The API returns paginated results with a cursor.
+ */
 async function fetchEnabledFids(): Promise<number[]> {
     const apiKey = SERVER_ENV.NEYNAR_API_KEY;
     if (!apiKey) return [];
-    const url = new URL('https://api.neynar.com/v2/farcaster/frame/notification_tokens/');
-    const res = await fetch(url.toString(), { headers: { 'x-api-key': apiKey } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    const tokens: Array<{ fid: number }> | undefined = json?.notification_tokens;
-    return (tokens || []).map(t => t.fid).filter((v, i, a) => a.indexOf(v) === i);
+
+    const allFids: number[] = [];
+    let cursor: string | null = null;
+    let pageCount = 0;
+    const maxPages = 100; // Safety limit
+
+    do {
+        const url = new URL('https://api.neynar.com/v2/farcaster/frame/notification_tokens/');
+        url.searchParams.set('limit', '100'); // Max per page
+        if (cursor) {
+            url.searchParams.set('cursor', cursor);
+        }
+
+        const res = await fetch(url.toString(), {
+            headers: { 'x-api-key': apiKey },
+            next: { revalidate: 60 } // Cache for 1 minute
+        });
+
+        if (!res.ok) {
+            console.error(`[fetchEnabledFids] Neynar API error: ${res.status}`);
+            break;
+        }
+
+        const json = await res.json();
+        const tokens: Array<{ fid: number }> | undefined = json?.notification_tokens;
+
+        if (tokens?.length) {
+            for (const t of tokens) {
+                if (!allFids.includes(t.fid)) {
+                    allFids.push(t.fid);
+                }
+            }
+        }
+
+        // Get next page cursor
+        cursor = json?.next?.cursor || null;
+        pageCount++;
+
+        // Log progress for debugging
+        console.log(`[fetchEnabledFids] Page ${pageCount}: fetched ${tokens?.length || 0} tokens, total unique FIDs: ${allFids.length}`);
+
+    } while (cursor && pageCount < maxPages);
+
+    console.log(`[fetchEnabledFids] Completed: ${pageCount} pages, ${allFids.length} total unique FIDs`);
+    return allFids;
 }
 
 export const runtime = 'nodejs';
