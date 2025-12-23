@@ -206,7 +206,7 @@ async function processFidsBatch(
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300; // 5 minutes (Pro plan limit)
 
 /**
  * GET /api/admin/notifications/eligible
