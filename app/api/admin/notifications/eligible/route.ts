@@ -103,7 +103,7 @@ async function processFidsBatch(
         totalEligiblePlants: number;
     };
 }> {
-    const CONCURRENCY = 15; // Process 15 FIDs in parallel
+    const CONCURRENCY = 30; // Process 30 FIDs in parallel for speed
     const eligible: Array<{
         fid: number;
         address: string;
@@ -226,7 +226,7 @@ export async function GET(request: NextRequest) {
     try {
         const url = new URL(request.url);
         const targetFid = url.searchParams.get('fid') ? parseInt(url.searchParams.get('fid')!, 10) : undefined;
-        const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
+        const limit = url.searchParams.get('limit') ? Math.min(parseInt(url.searchParams.get('limit')!, 10), 5000) : undefined;
         const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 
         // Fetch eligible fids
@@ -237,9 +237,9 @@ export async function GET(request: NextRequest) {
             allFids = await fetchEnabledFids();
         }
 
-        // Apply pagination
+        // Apply pagination only if limit is specified
         const totalFids = allFids.length;
-        const paginatedFids = targetFid ? allFids : allFids.slice(offset, offset + limit);
+        const paginatedFids = targetFid ? allFids : (limit ? allFids.slice(offset, offset + limit) : allFids);
 
         const rpcUrl = 'https://base-rpc.publicnode.com';
         const now = new Date();
