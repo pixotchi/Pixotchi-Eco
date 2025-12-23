@@ -6,30 +6,43 @@ import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { differenceInSeconds } from 'date-fns';
 
 const THRESHOLD_SECONDS = 3 * 60 * 60; // 3 hours
+const NEYNAR_FIDS_CACHE_KEY = 'notif:neynar:enabled_fids';
+const NEYNAR_FIDS_CACHE_TTL = 5 * 60; // 5 minutes
 
 /**
  * Fetch ALL enabled FIDs from Neynar with proper pagination.
- * The API returns paginated results with a cursor.
+ * Results are cached for 5 minutes to avoid repeated API calls.
  */
 async function fetchEnabledFids(): Promise<number[]> {
     const apiKey = SERVER_ENV.NEYNAR_API_KEY;
     if (!apiKey) return [];
 
+    // Check cache first
+    if (redis) {
+        try {
+            const cached = await redis.get(NEYNAR_FIDS_CACHE_KEY);
+            if (cached) {
+                const fids = JSON.parse(typeof cached === 'string' ? cached : JSON.stringify(cached));
+                console.log(`[fetchEnabledFids] Using cached ${fids.length} FIDs`);
+                return fids;
+            }
+        } catch { }
+    }
+
     const allFids: number[] = [];
     let cursor: string | null = null;
     let pageCount = 0;
-    const maxPages = 100; // Safety limit
+    const maxPages = 100;
 
     do {
         const url = new URL('https://api.neynar.com/v2/farcaster/frame/notification_tokens/');
-        url.searchParams.set('limit', '100'); // Max per page
+        url.searchParams.set('limit', '100');
         if (cursor) {
             url.searchParams.set('cursor', cursor);
         }
 
         const res = await fetch(url.toString(), {
             headers: { 'x-api-key': apiKey },
-            next: { revalidate: 60 } // Cache for 1 minute
         });
 
         if (!res.ok) {
@@ -48,72 +61,73 @@ async function fetchEnabledFids(): Promise<number[]> {
             }
         }
 
-        // Get next page cursor
         cursor = json?.next?.cursor || null;
         pageCount++;
 
-        // Log progress for debugging
-        console.log(`[fetchEnabledFids] Page ${pageCount}: fetched ${tokens?.length || 0} tokens, total unique FIDs: ${allFids.length}`);
-
     } while (cursor && pageCount < maxPages);
 
-    console.log(`[fetchEnabledFids] Completed: ${pageCount} pages, ${allFids.length} total unique FIDs`);
+    console.log(`[fetchEnabledFids] Fetched ${allFids.length} unique FIDs from ${pageCount} pages`);
+
+    // Cache the result
+    if (redis && allFids.length > 0) {
+        try {
+            await redis.setex(NEYNAR_FIDS_CACHE_KEY, NEYNAR_FIDS_CACHE_TTL, JSON.stringify(allFids));
+        } catch { }
+    }
+
     return allFids;
 }
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
-
 /**
- * GET /api/admin/notifications/eligible
- * 
- * List all plants eligible for TOD notification (under 3h lifetime).
- * 
- * Query params:
- * - fid: Filter to specific user
+ * Process a batch of FIDs in parallel with concurrency limit
  */
-export async function GET(request: NextRequest) {
-    if (!validateAdminKey(request)) {
-        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-    }
+async function processFidsBatch(
+    fids: number[],
+    rpcUrl: string,
+    now: Date
+): Promise<{
+    eligible: Array<{
+        fid: number;
+        address: string;
+        plants: Array<{
+            id: number;
+            hoursLeft: number;
+            eligible: boolean;
+        }>;
+    }>;
+    stats: {
+        processed: number;
+        withAddress: number;
+        withPlants: number;
+        withEligiblePlants: number;
+        totalEligiblePlants: number;
+    };
+}> {
+    const CONCURRENCY = 15; // Process 15 FIDs in parallel
+    const eligible: Array<{
+        fid: number;
+        address: string;
+        plants: Array<{
+            id: number;
+            hoursLeft: number;
+            eligible: boolean;
+        }>;
+    }> = [];
 
-    try {
-        const url = new URL(request.url);
-        const targetFid = url.searchParams.get('fid') ? parseInt(url.searchParams.get('fid')!, 10) : undefined;
+    let withAddress = 0;
+    let withPlants = 0;
+    let withEligiblePlants = 0;
+    let totalEligiblePlants = 0;
 
-        // Fetch eligible fids
-        let fids: number[];
-        if (targetFid) {
-            fids = [targetFid];
-        } else {
-            fids = await fetchEnabledFids();
-        }
+    // Process in batches with concurrency limit
+    for (let i = 0; i < fids.length; i += CONCURRENCY) {
+        const batch = fids.slice(i, i + CONCURRENCY);
 
-        const rpcUrl = 'https://base-rpc.publicnode.com';
-        const now = new Date();
-        const nowSec = Math.floor(now.getTime() / 1000);
-
-        const eligible: Array<{
-            fid: number;
-            address: string;
-            plants: Array<{
-                id: number;
-                timeUntilStarving: number;
-                secondsLeft: number;
-                hoursLeft: number;
-                eligible: boolean;
-                wouldBeThrottled: boolean;
-            }>;
-        }> = [];
-
-        let totalEligiblePlants = 0;
-        let totalThrottled = 0;
-
-        for (const fid of fids) {
+        const results = await Promise.allSettled(batch.map(async (fid) => {
             // Resolve address
             let address: string | null = null;
             try {
+                // Check cache first
                 const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
                 if (cached) {
                     address = String(cached).toLowerCase();
@@ -130,56 +144,135 @@ export async function GET(request: NextRequest) {
                 }
             } catch { }
 
-            if (!address) continue;
+            if (!address) return null;
 
+            // Get plants
             const plants = await getPlantsByOwnerWithRpc(address, rpcUrl);
-            if (!plants?.length) continue;
+            if (!plants?.length) return { fid, address, plants: [], hasEligible: false };
 
             const plantDetails = plants.map(p => {
-                const plantId = Number(p.id);
                 const t = Number(p.timeUntilStarving ?? 0);
                 const plantDate = new Date(t * 1000);
                 const secondsLeft = differenceInSeconds(plantDate, now);
                 const isEligible = secondsLeft > 0 && secondsLeft <= THRESHOLD_SECONDS;
 
-                // Check if would be throttled
-                let wouldBeThrottled = false;
-                // We'll check async but for simplicity in listing, just note it
-
-                if (isEligible) totalEligiblePlants++;
-
                 return {
-                    id: plantId,
-                    timeUntilStarving: t,
-                    secondsLeft,
+                    id: Number(p.id),
                     hoursLeft: Math.round((secondsLeft / 3600) * 100) / 100,
                     eligible: isEligible,
-                    wouldBeThrottled,
                 };
             });
 
-            const hasEligible = plantDetails.some(p => p.eligible);
-            if (hasEligible || targetFid) {
-                eligible.push({
-                    fid,
-                    address,
-                    plants: plantDetails,
-                });
+            const eligibleCount = plantDetails.filter(p => p.eligible).length;
+
+            return {
+                fid,
+                address,
+                plants: plantDetails,
+                hasEligible: eligibleCount > 0,
+                eligibleCount
+            };
+        }));
+
+        // Collect results
+        for (const result of results) {
+            if (result.status === 'fulfilled' && result.value) {
+                if (result.value.address) withAddress++;
+                if (result.value.plants?.length > 0) withPlants++;
+                if (result.value.hasEligible) {
+                    withEligiblePlants++;
+                    totalEligiblePlants += result.value.eligibleCount || 0;
+                    eligible.push({
+                        fid: result.value.fid,
+                        address: result.value.address,
+                        plants: result.value.plants,
+                    });
+                }
             }
         }
+    }
+
+    return {
+        eligible,
+        stats: {
+            processed: fids.length,
+            withAddress,
+            withPlants,
+            withEligiblePlants,
+            totalEligiblePlants,
+        }
+    };
+}
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+/**
+ * GET /api/admin/notifications/eligible
+ * 
+ * List all plants eligible for TOD notification (under 3h lifetime).
+ * 
+ * Query params:
+ * - fid: Filter to specific user
+ * - limit: Max FIDs to check (default: 100, max: 500)
+ * - offset: Skip first N FIDs (for pagination)
+ */
+export async function GET(request: NextRequest) {
+    if (!validateAdminKey(request)) {
+        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
+    }
+
+    try {
+        const url = new URL(request.url);
+        const targetFid = url.searchParams.get('fid') ? parseInt(url.searchParams.get('fid')!, 10) : undefined;
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        // Fetch eligible fids
+        let allFids: number[];
+        if (targetFid) {
+            allFids = [targetFid];
+        } else {
+            allFids = await fetchEnabledFids();
+        }
+
+        // Apply pagination
+        const totalFids = allFids.length;
+        const paginatedFids = targetFid ? allFids : allFids.slice(offset, offset + limit);
+
+        const rpcUrl = 'https://base-rpc.publicnode.com';
+        const now = new Date();
+        const startTime = Date.now();
+
+        // Process with parallel batching
+        const { eligible, stats } = await processFidsBatch(paginatedFids, rpcUrl, now);
+
+        const processingTime = Date.now() - startTime;
 
         return NextResponse.json({
             success: true,
-            timestamp: nowSec,
+            timestamp: Math.floor(now.getTime() / 1000),
             thresholdHours: 3,
+            pagination: {
+                total: totalFids,
+                offset,
+                limit,
+                returned: paginatedFids.length,
+                hasMore: offset + limit < totalFids,
+            },
             summary: {
-                fidsChecked: fids.length,
-                fidsWithEligiblePlants: eligible.length,
-                totalEligiblePlants,
+                fidsChecked: stats.processed,
+                fidsWithAddress: stats.withAddress,
+                fidsWithPlants: stats.withPlants,
+                fidsWithEligiblePlants: stats.withEligiblePlants,
+                totalEligiblePlants: stats.totalEligiblePlants,
+                processingTimeMs: processingTime,
             },
             eligible,
         });
     } catch (e: any) {
+        console.error('[eligible] Error:', e);
         return NextResponse.json(createErrorResponse(e?.message || 'Failed', 500).body, { status: 500 });
     }
 }
