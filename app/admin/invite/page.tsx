@@ -14,13 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { 
-  Shield, 
-  Users, 
-  Code, 
-  Trash2, 
-  Plus, 
-  BarChart3, 
+import {
+  Shield,
+  Users,
+  Code,
+  Trash2,
+  Plus,
+  BarChart3,
   Download,
   RefreshCw,
   Eye,
@@ -116,12 +116,13 @@ interface FenceStats {
 interface AdminStatsResponse {
   success: boolean;
   stats: {
-    plant1h: PlantNotificationStats;
-    fence: FenceStats;
-    fenceV2?: FenceStats;
-    global: GlobalNotificationStats;
+    plantTOD: PlantNotificationStats & { thresholdHours: number; runs?: any[] };
+    legacy?: { plant1hSentCount?: number };
+    global?: GlobalNotificationStats;
     eligibleFids: string[];
+    eligibleFidsCount?: number;
   };
+  endpoints?: Record<string, string>;
 }
 
 // Loading spinner component for consistency
@@ -140,20 +141,20 @@ export default function AdminInviteDashboard() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
-  
+
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     open: false,
     title: '',
     description: '',
     confirmText: 'Confirm',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
   const [confirmationInput, setConfirmationInput] = useState('');
-  
+
   // AbortController for canceling requests on tab switch or unmount
   const abortControllerRef = useRef<AbortController | null>(null);
-  
+
   // Chat state
   const [chatMessages, setChatMessages] = useState<AdminChatMessage[]>([]);
   const [chatStats, setChatStats] = useState<ChatStats | null>(null);
@@ -245,7 +246,7 @@ export default function AdminInviteDashboard() {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         // Extract the stats from the API response structure
@@ -274,7 +275,7 @@ export default function AdminInviteDashboard() {
 
   const refreshStats = async () => {
     if (!isAuthenticated) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch('/api/invite/admin/stats', {
@@ -311,7 +312,7 @@ export default function AdminInviteDashboard() {
     try {
       const response = await fetch('/api/invite/admin/generate', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminKey}`,
         },
@@ -541,7 +542,7 @@ export default function AdminInviteDashboard() {
     try {
       const response = await fetch('/api/invite/admin/cleanup', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminKey}`,
         },
@@ -581,7 +582,7 @@ export default function AdminInviteDashboard() {
 
     const actionName = actionNames[action as keyof typeof actionNames];
     const isDangerous = action === 'delete_everything' || action === 'delete_all_codes' || action === 'reset_user_data';
-    
+
     showConfirmDialog({
       title: isDangerous ? '⚠️ Dangerous Operation' : 'Confirm Action',
       description: `Are you sure you want to ${actionName}? This action cannot be undone.`,
@@ -595,7 +596,7 @@ export default function AdminInviteDashboard() {
 
   const exportRewardData = () => {
     if (!stats) return;
-    
+
     const rewardData = stats.users.topGenerators.map(user => ({
       address: user.address,
       generated: user.generated,
@@ -615,14 +616,14 @@ export default function AdminInviteDashboard() {
     a.download = `invite-rewards-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     toast.success('Reward data exported');
   };
 
   // Chat management functions
   const fetchChatData = async () => {
     if (!adminKey.trim()) return;
-    
+
     setChatLoading(true);
     try {
       const response = await fetch('/api/chat/admin/messages', {
@@ -648,7 +649,7 @@ export default function AdminInviteDashboard() {
 
   const deleteMessage = async (messageId: string, timestamp: number) => {
     if (!adminKey.trim()) return;
-    
+
     try {
       const response = await fetch('/api/chat/admin/delete', {
         method: 'DELETE',
@@ -713,7 +714,7 @@ export default function AdminInviteDashboard() {
   // AI Chat management functions
   const fetchAIChatData = async () => {
     if (!adminKey.trim()) return;
-    
+
     setAIChatLoading(true);
     try {
       const response = await fetch('/api/chat/ai/admin/conversations?includeStats=true', {
@@ -774,7 +775,7 @@ export default function AdminInviteDashboard() {
 
       toast.success('Conversation deleted');
       fetchAIChatData();
-      
+
       if (selectedConversation === conversationId) {
         setSelectedConversation(null);
         setConversationMessages([]);
@@ -798,7 +799,7 @@ export default function AdminInviteDashboard() {
   };
 
   // Filter conversations by search term
-  const filteredConversations = aiConversations.filter(conv => 
+  const filteredConversations = aiConversations.filter(conv =>
     conv.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     conv.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -811,7 +812,7 @@ export default function AdminInviteDashboard() {
     if (!adminKey.trim()) return;
     setFeedbackLoading(true);
     try {
-      const res = await fetch('/api/admin/feedback/list', { 
+      const res = await fetch('/api/admin/feedback/list', {
         headers: { 'Authorization': `Bearer ${adminKey}` },
         signal: abortControllerRef.current?.signal,
       });
@@ -836,7 +837,7 @@ export default function AdminInviteDashboard() {
     try {
       const res = await fetch('/api/admin/feedback/delete', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminKey}`,
         },
@@ -867,7 +868,7 @@ export default function AdminInviteDashboard() {
         try {
           const res = await fetch('/api/admin/feedback/delete', {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${adminKey}`,
             },
@@ -899,7 +900,7 @@ export default function AdminInviteDashboard() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
+
     // Create new AbortController for this tab
     abortControllerRef.current = new AbortController();
 
@@ -910,7 +911,7 @@ export default function AdminInviteDashboard() {
     } else if (activeTab === 'gamification') {
       (async () => {
         try {
-          const res = await fetch('/api/gamification/leaderboards', { 
+          const res = await fetch('/api/gamification/leaderboards', {
             headers: { 'Authorization': `Bearer ${adminKey}` },
             signal: abortControllerRef.current?.signal,
           });
@@ -945,22 +946,22 @@ export default function AdminInviteDashboard() {
   // Gamification helpers
   const resetGamification = async (scope: 'streaks' | 'missions' | 'all') => {
     try {
-      const res = await fetch('/api/gamification/admin/reset', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminKey}` }, 
+      const res = await fetch('/api/gamification/admin/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminKey}` },
         body: JSON.stringify({ scope }),
         signal: abortControllerRef.current?.signal,
       });
       const data = await res.json();
-      if (res.ok) { 
-        toast.success(`Reset ${scope} successfully (${data.deleted} keys deleted)`); 
-      } else { 
-        toast.error(data?.error || `Failed to reset ${scope}`); 
+      if (res.ok) {
+        toast.success(`Reset ${scope} successfully (${data.deleted} keys deleted)`);
+      } else {
+        toast.error(data?.error || `Failed to reset ${scope}`);
       }
-    } catch (error: any) { 
+    } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Reset gamification error:', error);
-        toast.error(error.message || 'Reset failed'); 
+        toast.error(error.message || 'Reset failed');
       }
     }
   };
@@ -1011,9 +1012,9 @@ export default function AdminInviteDashboard() {
       const data: AdminStatsResponse | { error?: string } = await res.json();
       if (res.ok && (data as AdminStatsResponse)?.success) {
         const payload = data as AdminStatsResponse;
-        setNotifStats(payload?.stats?.plant1h || null);
-        setNotifFenceStats(payload?.stats?.fence || null);
-        setNotifFenceV2Stats(payload?.stats?.fenceV2 || null);
+        setNotifStats(payload?.stats?.plantTOD || null);
+        setNotifFenceStats(null); // Fence notifications removed
+        setNotifFenceV2Stats(null); // Fence notifications removed
         setNotifGlobalStats(payload?.stats?.global || null);
         setEligibleFids(payload?.stats?.eligibleFids || []);
       } else {
@@ -1046,8 +1047,8 @@ export default function AdminInviteDashboard() {
     if (!adminKey.trim()) return toast.error('Enter admin key');
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/notifications/reset?scope=all', { 
-        method: 'DELETE', 
+      const res = await fetch('/api/admin/notifications/reset?scope=all', {
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${adminKey}` },
         signal: abortControllerRef.current?.signal,
       });
@@ -1443,7 +1444,7 @@ export default function AdminInviteDashboard() {
                     <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
                   </div>
                 </div>
-                
+
                 <div className="space-y-3">
                   {stats.users.topGenerators.map((user) => (
                     <div key={user.address} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
@@ -1601,11 +1602,10 @@ export default function AdminInviteDashboard() {
                           key={option.value}
                           type="button"
                           onClick={() => setBroadcastType(option.value as any)}
-                          className={`p-3 rounded-lg border-2 transition-all ${
-                            broadcastType === option.value
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border hover:border-primary/50'
-                          }`}
+                          className={`p-3 rounded-lg border-2 transition-all ${broadcastType === option.value
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-primary/50'
+                            }`}
                         >
                           <div className="text-2xl mb-1">{option.icon}</div>
                           <div className="text-xs font-medium">{option.label}</div>
@@ -1626,11 +1626,10 @@ export default function AdminInviteDashboard() {
                           key={option.value}
                           type="button"
                           onClick={() => setBroadcastPriority(option.value as any)}
-                          className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
-                            broadcastPriority === option.value
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border hover:border-primary/50'
-                          }`}
+                          className={`w-full p-3 rounded-lg border-2 transition-all text-left ${broadcastPriority === option.value
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-primary/50'
+                            }`}
                         >
                           <div className={`text-sm font-medium ${option.color}`}>{option.label}</div>
                         </button>
@@ -1659,11 +1658,10 @@ export default function AdminInviteDashboard() {
                           setBroadcastExpiresIn(option.value);
                           setCustomExpiry('');
                         }}
-                        className={`p-2 rounded-lg border transition-all text-sm ${
-                          !broadcastNeverExpires && broadcastExpiresIn === option.value
-                            ? 'border-primary bg-primary/10 font-medium'
-                            : 'border-border hover:border-primary/50'
-                        }`}
+                        className={`p-2 rounded-lg border transition-all text-sm ${!broadcastNeverExpires && broadcastExpiresIn === option.value
+                          ? 'border-primary bg-primary/10 font-medium'
+                          : 'border-border hover:border-primary/50'
+                          }`}
                       >
                         {option.label}
                       </button>
@@ -1674,22 +1672,20 @@ export default function AdminInviteDashboard() {
                         setBroadcastNeverExpires(false);
                         setBroadcastExpiresIn('custom');
                       }}
-                      className={`p-2 rounded-lg border transition-all text-sm ${
-                        !broadcastNeverExpires && broadcastExpiresIn === 'custom'
-                          ? 'border-primary bg-primary/10 font-medium'
-                          : 'border-border hover:border-primary/50'
-                      }`}
+                      className={`p-2 rounded-lg border transition-all text-sm ${!broadcastNeverExpires && broadcastExpiresIn === 'custom'
+                        ? 'border-primary bg-primary/10 font-medium'
+                        : 'border-border hover:border-primary/50'
+                        }`}
                     >
                       Custom…
                     </button>
                     <button
                       type="button"
                       onClick={() => setBroadcastNeverExpires(true)}
-                      className={`p-2 rounded-lg border transition-all text-sm ${
-                        broadcastNeverExpires
-                          ? 'border-primary bg-primary/10 font-medium'
-                          : 'border-border hover:border-primary/50'
-                      }`}
+                      className={`p-2 rounded-lg border transition-all text-sm ${broadcastNeverExpires
+                        ? 'border-primary bg-primary/10 font-medium'
+                        : 'border-border hover:border-primary/50'
+                        }`}
                     >
                       No expiry
                     </button>
@@ -1739,14 +1735,12 @@ export default function AdminInviteDashboard() {
                   <button
                     type="button"
                     onClick={() => setBroadcastDismissible(!broadcastDismissible)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      broadcastDismissible ? 'bg-primary' : 'bg-gray-300'
-                    }`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${broadcastDismissible ? 'bg-primary' : 'bg-gray-300'
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        broadcastDismissible ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${broadcastDismissible ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                     />
                   </button>
                 </div>
@@ -1800,11 +1794,10 @@ export default function AdminInviteDashboard() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-semibold">{msg.title || 'Untitled Message'}</h3>
-                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                msg.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                              <span className={`text-xs px-2 py-0.5 rounded ${msg.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
                                 msg.priority === 'normal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
-                                'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                              }`}>
+                                  'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                }`}>
                                 {msg.priority}
                               </span>
                               <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
@@ -1884,7 +1877,7 @@ export default function AdminInviteDashboard() {
                     <Clock className="w-4 h-4 mr-2" />
                     Delete Expired Codes
                   </Button>
-                  
+
                   <Button
                     variant="outline"
                     onClick={() => confirmCleanup('delete_used_codes')}
@@ -1893,7 +1886,7 @@ export default function AdminInviteDashboard() {
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Delete Used Codes
                   </Button>
-                  
+
                   <Button
                     variant="outline"
                     onClick={() => confirmCleanup('reset_daily_limits')}
@@ -1902,7 +1895,7 @@ export default function AdminInviteDashboard() {
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Reset Daily Limits
                   </Button>
-                  
+
                   <Button
                     variant="outline"
                     onClick={() => confirmCleanup('reset_user_data')}
@@ -1912,8 +1905,8 @@ export default function AdminInviteDashboard() {
                     Reset User Data
                   </Button>
                 </div>
-                
-                  <div className="border-t border-border pt-4 space-y-4">
+
+                <div className="border-t border-border pt-4 space-y-4">
                   <Button
                     variant="destructive"
                     onClick={() => confirmCleanup('delete_all_codes')}
@@ -1923,7 +1916,7 @@ export default function AdminInviteDashboard() {
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete ALL Codes
                   </Button>
-                  
+
                   <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
                     <div className="flex items-center mb-2">
                       <AlertTriangle className="w-5 h-5 text-destructive mr-2" />
@@ -1965,7 +1958,7 @@ export default function AdminInviteDashboard() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
@@ -1977,7 +1970,7 @@ export default function AdminInviteDashboard() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
@@ -2031,11 +2024,10 @@ export default function AdminInviteDashboard() {
                     {chatMessages.map((message) => (
                       <div
                         key={`${message.id}-${message.timestamp}`}
-                        className={`p-4 rounded-lg border ${
-                          message.isSpam
-                            ? 'bg-destructive/10 border-destructive/20'
-                            : 'bg-card'
-                        }`}
+                        className={`p-4 rounded-lg border ${message.isSpam
+                          ? 'bg-destructive/10 border-destructive/20'
+                          : 'bg-card'
+                          }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -2084,51 +2076,51 @@ export default function AdminInviteDashboard() {
         {activeTab === 'ai-chat' && (
           <div className="space-y-6">
             {/* AI Chat Stats */}
-                {aiStats && (
+            {aiStats && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card>
                   <CardContent className="flex items-center p-4">
-                        <MessageCircle className="w-8 h-8 text-primary mr-3" />
+                    <MessageCircle className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Conversations</p>
                       <p className="text-2xl font-bold">{aiStats.totalConversations}</p>
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="flex items-center p-4">
-                        <Bot className="w-8 h-8 text-primary mr-3" />
+                    <Bot className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Messages</p>
                       <p className="text-2xl font-bold">{aiStats.totalMessages}</p>
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="flex items-center p-4">
-                        <TrendingUp className="w-8 h-8 text-primary mr-3" />
+                    <TrendingUp className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Tokens</p>
                       <p className="text-2xl font-bold">{aiStats.totalTokens.toLocaleString()}</p>
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="flex items-center p-4">
-                        <Clock className="w-8 h-8 text-primary mr-3" />
+                    <Clock className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Daily Usage</p>
                       <p className="text-2xl font-bold">{aiStats.dailyUsage}</p>
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="flex items-center p-4">
-                        <DollarSign className="w-8 h-8 text-primary mr-3" />
+                    <DollarSign className="w-8 h-8 text-primary mr-3" />
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Est. Cost</p>
                       <p className="text-2xl font-bold">${aiStats.costEstimate.toFixed(4)}</p>
@@ -2184,18 +2176,17 @@ export default function AdminInviteDashboard() {
                     filteredConversations.map((conversation) => (
                       <div
                         key={conversation.id}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedConversation === conversation.id
-                            ? 'bg-primary/10 border-primary'
-                            : 'hover:bg-muted/50'
-                        }`}
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedConversation === conversation.id
+                          ? 'bg-primary/10 border-primary'
+                          : 'hover:bg-muted/50'
+                          }`}
                         onClick={() => loadConversationMessages(conversation.id)}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-medium truncate">{conversation.title}</p>
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                              <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                                 {conversation.model}
                               </span>
                             </div>
@@ -2265,11 +2256,10 @@ export default function AdminInviteDashboard() {
                       {conversationMessages.map((message) => (
                         <div
                           key={message.id}
-                          className={`p-3 rounded-lg border ${
-                            message.type === 'assistant'
-                              ? 'bg-blue-50 dark:bg-blue-950/30 border-l-4 border-blue-500 dark:border-blue-400'
-                              : 'bg-gray-50 dark:bg-gray-800/30 border-l-4 border-gray-500 dark:border-gray-400'
-                          }`}
+                          className={`p-3 rounded-lg border ${message.type === 'assistant'
+                            ? 'bg-blue-50 dark:bg-blue-950/30 border-l-4 border-blue-500 dark:border-blue-400'
+                            : 'bg-gray-50 dark:bg-gray-800/30 border-l-4 border-gray-500 dark:border-gray-400'
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -2411,7 +2401,7 @@ export default function AdminInviteDashboard() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications (Plant Care 1h)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications (Plant Care 3h)</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between mb-3">
@@ -2483,176 +2473,33 @@ export default function AdminInviteDashboard() {
                       </div>
                     ) : null}
 
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence V1 Alerts (2h warning)</h3>
-                        <Button variant="outline" size="sm" onClick={() => runFenceDebug('warn')} disabled={notifDebugLoadingWarn}>
-                          <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoadingWarn ? 'animate-spin' : ''}`} /> Debug Warn
-                        </Button>
-                      </div>
+
+                    {/* Run History */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Card>
-                        <CardContent className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span>Total warns</span>
-                            <span className="font-semibold">{notifFenceStats?.warn.sentCount || 0}</span>
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
-                            <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
-                              {(notifFenceStats?.warn.recent || []).length === 0 ? (
-                                <div className="text-muted-foreground">No warn notifications sent yet.</div>
-                              ) : (
-                                (notifFenceStats?.warn.recent || []).map((entry: any, idx: number) => (
-                                  <div key={idx} className="flex items-center justify-between p-2 rounded border">
-                                    <span>{new Date(entry.ts || 0).toLocaleString()}</span>
-                                    <span>fids: {(entry.fids || []).length}</span>
-                                  </div>
-                                ))
-                              )}
-                            </div>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Last Cron Run</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">
+                            {notifDebugResult ? JSON.stringify(notifDebugResult, null, 2) : notifStats?.lastRun ? JSON.stringify(notifStats.lastRun, null, 2) : 'No runs yet.'}
+                          </pre>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Run History (last 20)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">
+                            {((notifStats as any)?.runs || []).length === 0 ? 'No history yet.' : ((notifStats as any)?.runs || []).map((run: any, idx: number) => (
+                              <pre key={idx} className="border p-2 rounded">{JSON.stringify(run, null, 2)}</pre>
+                            ))}
                           </div>
                         </CardContent>
                       </Card>
-
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence V1 Alerts (expired)</h3>
-                        <Button variant="outline" size="sm" onClick={() => runFenceDebug('expire')} disabled={notifDebugLoadingExpire}>
-                          <RefreshCw className={`w-4 h-4 mr-2 ${notifDebugLoadingExpire ? 'animate-spin' : ''}`} /> Debug Expire
-                        </Button>
-                      </div>
-                      <Card>
-                        <CardContent className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span>Total expiries</span>
-                            <span className="font-semibold">{notifFenceStats?.expire.sentCount || 0}</span>
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
-                            <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
-                              {(notifFenceStats?.expire.recent || []).length === 0 ? (
-                                <div className="text-muted-foreground">No expiry notifications sent yet.</div>
-                              ) : (
-                                (notifFenceStats?.expire.recent || []).map((entry: any, idx: number) => (
-                                  <div key={idx} className="flex items-center justify-between p-2 rounded border">
-                                    <span>{new Date(entry.ts || 0).toLocaleString()}</span>
-                                    <span>fids: {(entry.fids || []).length}</span>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm">Last Fence V1 Cron Run</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">{notifFenceStats?.lastRun ? JSON.stringify(notifFenceStats.lastRun, null, 2) : 'No runs yet.'}</pre>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm">Run History (last 20)</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">
-                              {(notifFenceStats?.runs || []).length === 0 ? 'No history yet.' : (notifFenceStats?.runs || []).map((run: any, idx: number) => (
-                                <pre key={idx} className="border p-2 rounded">{JSON.stringify(run, null, 2)}</pre>
-                              ))}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="destructive" size="sm" onClick={confirmResetNotifFence} disabled={notifResetFenceLoading}>
-                          {notifResetFenceLoading ? 'Clearing Fence Data…' : 'Clear Fence Data (V1 & V2)'}
-                        </Button>
-                      </div>
                     </div>
 
-                    {notifFenceV2Stats && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-semibold flex items-center gap-2"><Shield className="w-4 h-4" /> Fence Alerts (2h warning)</h3>
-                        </div>
-                        <Card>
-                          <CardContent className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span>Total warns</span>
-                              <span className="font-semibold">{notifFenceV2Stats?.warn.sentCount || 0}</span>
-                            </div>
-                            <div>
-                              <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
-                              <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
-                                {(notifFenceV2Stats?.warn.recent || []).length === 0 ? (
-                                  <div className="text-muted-foreground">No Fence warn notifications sent yet.</div>
-                                ) : (
-                                  (notifFenceV2Stats?.warn.recent || []).map((entry: any, idx: number) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 rounded border">
-                                      <span>{new Date(entry.ts || 0).toLocaleString()}</span>
-                                      <span>fids: {(entry.fids || []).length}</span>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fence Alerts (expired)</h3>
-                        </div>
-                        <Card>
-                          <CardContent className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span>Total expiries</span>
-                              <span className="font-semibold">{notifFenceV2Stats?.expire.sentCount || 0}</span>
-                            </div>
-                            <div>
-                              <div className="text-xs font-semibold text-muted-foreground mb-1">Recent</div>
-                              <div className="space-y-1 max-h-[200px] overflow-y-auto text-xs">
-                                {(notifFenceV2Stats?.expire.recent || []).length === 0 ? (
-                                  <div className="text-muted-foreground">No Fence expiry notifications sent yet.</div>
-                                ) : (
-                                  (notifFenceV2Stats?.expire.recent || []).map((entry: any, idx: number) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 rounded border">
-                                      <span>{new Date(entry.ts || 0).toLocaleString()}</span>
-                                      <span>fids: {(entry.fids || []).length}</span>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-sm">Last Fence Cron Run</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">{notifFenceV2Stats?.lastRun ? JSON.stringify(notifFenceV2Stats.lastRun, null, 2) : 'No runs yet.'}</pre>
-                            </CardContent>
-                          </Card>
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-sm">Run History (Fence)</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">
-                                {(notifFenceV2Stats?.runs || []).length === 0 ? 'No history yet.' : (notifFenceV2Stats?.runs || []).map((run: any, idx: number) => (
-                                  <pre key={idx} className="border p-2 rounded">{JSON.stringify(run, null, 2)}</pre>
-                                ))}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </CardContent>
@@ -2707,8 +2554,8 @@ export default function AdminInviteDashboard() {
                     Refresh Images
                   </Button>
 
-                  <Button 
-                    onClick={handleOgGenerateShortUrl} 
+                  <Button
+                    onClick={handleOgGenerateShortUrl}
                     className="w-full"
                     variant="secondary"
                     disabled={ogIsGenerating}
@@ -2767,10 +2614,10 @@ export default function AdminInviteDashboard() {
                     className="w-full border border-border rounded-lg"
                   />
                   <div className="flex gap-2">
-                    <Input 
+                    <Input
                       value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/og/mint?platform=twitter&address=${encodeURIComponent(ogAddress)}&strain=${ogSelectedStrain}`}
-                      readOnly 
-                      className="flex-1 text-xs" 
+                      readOnly
+                      className="flex-1 text-xs"
                     />
                     <Button
                       size="sm"
@@ -2813,10 +2660,10 @@ export default function AdminInviteDashboard() {
                     className="w-full border border-border rounded-lg"
                   />
                   <div className="flex gap-2">
-                    <Input 
+                    <Input
                       value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/og/mint?platform=farcaster&address=${encodeURIComponent(ogAddress)}&strain=${ogSelectedStrain}`}
-                      readOnly 
-                      className="flex-1 text-xs" 
+                      readOnly
+                      className="flex-1 text-xs"
                     />
                     <Button
                       size="sm"
@@ -2881,8 +2728,8 @@ export default function AdminInviteDashboard() {
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold">User Feedback</h2>
               {feedbackList.length > 0 && (
-                <Button 
-                  variant="destructive" 
+                <Button
+                  variant="destructive"
                   onClick={deleteAllFeedback}
                   disabled={feedbackLoading || loading}
                 >
@@ -2924,7 +2771,7 @@ export default function AdminInviteDashboard() {
                                 {new Date(feedback.createdAt).toLocaleDateString()} {new Date(feedback.createdAt).toLocaleTimeString()}
                               </span>
                             </div>
-                            
+
                             {/* Wallet Profile Data */}
                             <div className="grid grid-cols-2 gap-2 gap-x-3 mb-3 p-2 bg-muted/30 rounded text-xs">
                               <div className="flex flex-col gap-0.5">
@@ -2983,7 +2830,7 @@ export default function AdminInviteDashboard() {
             </DialogTitle>
             <DialogDescription>{confirmDialog.description}</DialogDescription>
           </DialogHeader>
-          
+
           {confirmDialog.requiresTextConfirmation && confirmDialog.textToMatch && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Type <strong>{confirmDialog.textToMatch}</strong> to confirm:</p>
@@ -2994,7 +2841,7 @@ export default function AdminInviteDashboard() {
               />
             </div>
           )}
-          
+
           <DialogFooter>
             <Button
               variant="outline"
