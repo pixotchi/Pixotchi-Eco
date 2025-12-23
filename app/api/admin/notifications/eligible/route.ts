@@ -257,9 +257,9 @@ export async function GET(request: NextRequest) {
             pagination: {
                 total: totalFids,
                 offset,
-                limit,
+                limit: limit || totalFids,
                 returned: paginatedFids.length,
-                hasMore: offset + limit < totalFids,
+                hasMore: limit ? (offset + limit < totalFids) : false,
             },
             summary: {
                 fidsChecked: stats.processed,
