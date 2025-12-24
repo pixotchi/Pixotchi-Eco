@@ -44,7 +44,7 @@ async function getKeyInfo(key: string): Promise<KeyInfo> {
                         value = strVal;
                     }
                 } else {
-                    value = strVal;
+                    value = strVal !== null && strVal !== undefined ? String(strVal) : null;
                 }
                 break;
             case 'list':
