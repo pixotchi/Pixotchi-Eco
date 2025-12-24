@@ -2623,21 +2623,41 @@ export default function AdminInviteDashboard() {
                 {/* Eligible Plants Results */}
                 {eligiblePlants && (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded">
+                    <div className="flex flex-col gap-2 p-3 bg-muted/50 rounded">
                       <div className="text-sm">
                         <span className="font-semibold">Summary:</span>{' '}
                         {eligiblePlants.summary?.fidsChecked || 0} users checked,{' '}
                         {eligiblePlants.summary?.fidsWithEligiblePlants || 0} with eligible plants,{' '}
                         <span className="text-orange-600 font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
                       </div>
+                      {/* Throttle Stats */}
+                      <div className="text-sm border-t pt-2 mt-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Already notified (throttled):</span>
+                          <span className="font-semibold text-yellow-600">
+                            {eligiblePlants.summary?.throttledUsers || 0} users, {eligiblePlants.summary?.throttledPlants || 0} plants
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Would notify now:</span>
+                          <span className="font-semibold text-green-600">
+                            {eligiblePlants.summary?.wouldNotify || 0} users
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {(eligiblePlants.eligible || []).map((user: any) => (
-                        <div key={user.fid} className="p-3 border rounded space-y-2">
+                        <div key={user.fid} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
                           <div className="flex items-center justify-between">
-                            <div className="font-mono text-sm">
+                            <div className="font-mono text-sm flex items-center gap-2">
                               FID: <span className="font-semibold">{user.fid}</span>
+                              {user.userThrottled && (
+                                <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded">
+                                  THROTTLED
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-muted-foreground truncate max-w-[200px]">
                               {user.address}
@@ -2647,13 +2667,22 @@ export default function AdminInviteDashboard() {
                             {(user.plants || []).map((plant: any) => (
                               <div
                                 key={plant.id}
-                                className={`p-2 rounded text-xs ${plant.eligible ? 'bg-orange-100 dark:bg-orange-900/30 border border-orange-300' : 'bg-muted'}`}
+                                className={`p-2 rounded text-xs ${plant.eligible
+                                    ? plant.throttled
+                                      ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300'
+                                      : 'bg-green-100 dark:bg-green-900/30 border border-green-300'
+                                    : 'bg-muted'
+                                  }`}
                               >
                                 <div className="font-semibold">Plant #{plant.id}</div>
-                                <div className={plant.eligible ? 'text-orange-600 font-semibold' : 'text-muted-foreground'}>
+                                <div className={plant.eligible ? (plant.throttled ? 'text-yellow-600' : 'text-green-600') + ' font-semibold' : 'text-muted-foreground'}>
                                   {plant.hoursLeft > 0 ? `${plant.hoursLeft}h left` : 'Dead/Fed'}
                                 </div>
-                                {plant.eligible && <div className="text-green-600">✓ Eligible</div>}
+                                {plant.eligible && (
+                                  <div className={plant.throttled ? 'text-yellow-600' : 'text-green-600'}>
+                                    {plant.throttled ? '⏸ Notified' : '✓ Would notify'}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>

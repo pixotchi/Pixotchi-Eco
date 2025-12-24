@@ -221,13 +221,13 @@ async function processFidsBatch(
                     throttledPlants += result.value.throttledCount || 0;
                     if (result.value.userThrottled) {
                         throttledUsers++;
-                    } else if (result.value.notThrottledCount > 0) {
+                    } else if ((result.value.notThrottledCount || 0) > 0) {
                         wouldNotify++;
                     }
                     eligible.push({
                         fid: result.value.fid,
                         address: result.value.address,
-                        userThrottled: result.value.userThrottled,
+                        userThrottled: result.value.userThrottled || false,
                         plants: result.value.plants,
                     });
                 }
