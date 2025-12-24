@@ -61,7 +61,7 @@ export default function LeaderboardTab() {
   const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
-  
+
   // Use Twin address for Solana users, EVM address otherwise
   // Memoize to prevent unnecessary re-renders when dependencies haven't actually changed
   const address = useMemo(() => {
@@ -88,6 +88,7 @@ export default function LeaderboardTab() {
   const [selectedKillerId, setSelectedKillerId] = useState<number | null>(null);
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [filterMode, setFilterMode] = useState<'all' | 'attackable'>('all');
+  const [showOnlyMyPlants, setShowOnlyMyPlants] = useState(false);
   const publicClient = usePublicClient();
   const [boardType, setBoardType] = useState<'plants' | 'lands' | 'stake' | 'rocks'>('plants');
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
@@ -122,7 +123,7 @@ export default function LeaderboardTab() {
       const abi = (PixotchiNFT as any).abi || PixotchiNFT;
       for (const log of receipt.logs) {
         try {
-          const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}` , topics: log.topics as any });
+          const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as any });
           if (decoded.eventName === 'Attack') {
             const attacker = Number(decoded.args.attacker);
             const winner = Number(decoded.args.winner);
@@ -131,7 +132,7 @@ export default function LeaderboardTab() {
             toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
             return;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
       // Fallback
       toast.success('Attack confirmed', { id: 'attack-result' });
@@ -154,9 +155,9 @@ export default function LeaderboardTab() {
             toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
             return true;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
-    } catch {}
+    } catch { }
     return false;
   };
 
@@ -165,18 +166,18 @@ export default function LeaderboardTab() {
     if (fetchLeaderboardDataPendingRef.current) {
       return;
     }
-    
+
     fetchLeaderboardDataPendingRef.current = true;
     setLoading(true);
     setError(null);
-    
+
     try {
       // Get all alive token IDs
       const aliveTokenIds = await getAliveTokenIds();
-      
+
       // Get detailed plant info for all alive plants
       const plantsData = await getPlantsInfoExtended(aliveTokenIds);
-      
+
       // Sort by score (highest first) and add ranking
       const sortedPlants = plantsData
         .sort((a, b) => b.score - a.score)
@@ -185,13 +186,13 @@ export default function LeaderboardTab() {
           rank: index + 1,
           isDead: plant.status === 4 // Assuming status 4 is dead
         }));
-      
+
       setPlants(sortedPlants);
       // Fetch lands leaderboard as well (with caching)
       try {
         const now = Date.now();
         const cacheAge = now - landDataCacheRef.current.timestamp;
-        
+
         if (landDataCacheRef.current.data && cacheAge < LAND_CACHE_DURATION) {
           setLandRows(landDataCacheRef.current.data);
         } else {
@@ -207,8 +208,8 @@ export default function LeaderboardTab() {
           landDataCacheRef.current = { data: sortedLands, timestamp: now };
           setLandRows(sortedLands);
         }
-      } catch {}
-      
+      } catch { }
+
       setCurrentPage(1); // Reset to first page when data changes
     } catch (err) {
       console.error('Error fetching leaderboard data:', err);
@@ -323,14 +324,14 @@ export default function LeaderboardTab() {
       fetchMyPlantsPendingRef.current = null;
       return;
     }
-    
+
     // Prevent duplicate calls for the same address
     if (fetchMyPlantsPendingRef.current === address) {
       return;
     }
-    
+
     fetchMyPlantsPendingRef.current = address;
-    
+
     try {
       const owned = await getPlantsByOwner(address);
       // Only update if address hasn't changed during the fetch
@@ -356,7 +357,7 @@ export default function LeaderboardTab() {
         try {
           const bal = await getTokenBalance(address);
           setSeedBalance(bal || BigInt(0));
-        } catch {}
+        } catch { }
       }
     })();
   }, [reviveDialogOpen, address]);
@@ -428,11 +429,24 @@ export default function LeaderboardTab() {
     setProfileDialogOpen(true);
   };
 
-  // Calculate pagination values
   const isAttackable = (plant: LeaderboardPlant) => !isUserPlant(plant) && !plant.isDead && eligibleAttackers(plant).length > 0 && !hasActiveFence(plant);
-  const filteredPlants = filterMode === 'attackable'
-    ? plants.filter(isAttackable)
-    : plants;
+
+  // Apply filters: My Plants filter takes priority, then All/Attackable mode
+  const filteredPlants = useMemo(() => {
+    let filtered = plants;
+
+    // Filter by ownership if "My Plants" is checked
+    if (showOnlyMyPlants) {
+      filtered = filtered.filter(isUserPlant);
+    }
+
+    // Then apply attackable filter if in attackable mode
+    if (filterMode === 'attackable') {
+      filtered = filtered.filter(isAttackable);
+    }
+
+    return filtered;
+  }, [plants, showOnlyMyPlants, filterMode, myPlants, address]);
 
   const totalItems = filteredPlants.length;
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
@@ -489,7 +503,7 @@ export default function LeaderboardTab() {
           </div>
         );
       }
-      
+
       // Check if user is in attackable mode but has plants (just no attackable targets)
       if (filterMode === 'attackable' && address && myPlants.length > 0) {
         return (
@@ -498,7 +512,7 @@ export default function LeaderboardTab() {
           </div>
         );
       }
-      
+
       // Default message for 'all' mode or when not connected
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -521,130 +535,130 @@ export default function LeaderboardTab() {
             const canShowRevive = isMine && plant.isDead;
 
             return (
-            <div 
-              key={plant.id}
-              className={`py-3 transition-all ${
-                isUserPlant(plant) ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''
-              } ${plant.isDead ? 'opacity-60' : ''}`}
-            >
-              <div className="flex items-center space-x-2">
-                {/* Rank */}
-                <div className="flex items-center justify-center w-8">
-                  <div className={`flex items-center ${getRankColor(plant.rank)}`}>
-                    {plant.rank <= 3 ? (
-                      getRankIcon(plant.rank)
-                    ) : (
-                      <span className="text-sm font-semibold">#{plant.rank}</span>
+              <div
+                key={plant.id}
+                className={`py-3 transition-all ${isUserPlant(plant) ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''
+                  } ${plant.isDead ? 'opacity-60' : ''}`}
+              >
+                <div className="flex items-center space-x-2">
+                  {/* Rank */}
+                  <div className="flex items-center justify-center w-8">
+                    <div className={`flex items-center ${getRankColor(plant.rank)}`}>
+                      {plant.rank <= 3 ? (
+                        getRankIcon(plant.rank)
+                      ) : (
+                        <span className="text-sm font-semibold">#{plant.rank}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Plant Image */}
+                  <div
+                    className="relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => handlePlantImageClick(plant)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handlePlantImageClick(plant);
+                      }
+                    }}
+                    aria-label="View plant profile"
+                  >
+                    <PlantImage selectedPlant={plant} width={48} height={48} />
+                    {hasActiveFence(plant) && (
+                      <div className="absolute -top-1 -right-1">
+                        <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} />
+                      </div>
+                    )}
+                    {plant.isDead && (
+                      <div className="absolute -top-1 -right-1">
+                        <Skull className="w-3 h-3 text-red-500" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Plant Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center space-x-2">
+                      <div className="relative">
+                        <h4 className="font-semibold text-base truncate pr-6">
+                          {plant.name || `Plant #${plant.id}`}
+                          {isUserPlant(plant) && (
+                            <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                          )}
+                        </h4>
+                        {/* Edit name removed for leaderboard view */}
+                      </div>
+                      {/* Dead label removed. Skull indicator is shown over image and actions show accordingly. */}
+                    </div>
+                    <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
+                      <span>LvL {plant.level}</span>
+                    </div>
+                  </div>
+
+                  {/* Stats with right-aligned action buttons */}
+                  <div className="flex items-center space-x-2 text-right">
+                    <div className="flex flex-col items-end space-y-1">
+                      <div className="flex items-center space-x-1">
+                        <Image src="/icons/pts.svg" alt="Points" width={16} height={16} />
+                        <span className="text-base font-bold">{formatScoreShort(plant.score)}</span>
+                      </div>
+                      <div className="flex items-center space-x-3 text-sm text-muted-foreground">
+                        <div className="flex items-center space-x-1">
+                          <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} />
+                          <span>{plant.stars}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Image src="/icons/ethlogo.svg" alt="ETH" width={14} height={14} />
+                          <span>{formatEthShort(plant.rewards)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {canShowAttack && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="rounded-md"
+                        onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
+                        aria-label="Attack this plant"
+                        title="Attack"
+                      >
+                        <Sword className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canShowKill && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="rounded-md"
+                        onClick={() => { setTargetPlant(plant); setSelectedKillerId(null); setKillDialogOpen(true); }}
+                        aria-label="Kill dead plant to collect star"
+                        title="Kill to collect star"
+                      >
+                        <Skull className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canShowRevive && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="rounded-md"
+                        onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
+                        aria-label="Revive your plant"
+                        title="Revive"
+                      >
+                        <HeartPulse className="w-4 h-4" />
+                      </Button>
                     )}
                   </div>
                 </div>
-
-                {/* Plant Image */}
-                <div 
-                  className="relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => handlePlantImageClick(plant)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handlePlantImageClick(plant);
-                    }
-                  }}
-                  aria-label="View plant profile"
-                >
-                  <PlantImage selectedPlant={plant} width={48} height={48} />
-                  {hasActiveFence(plant) && (
-                    <div className="absolute -top-1 -right-1">
-                      <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} />
-                    </div>
-                  )}
-                  {plant.isDead && (
-                    <div className="absolute -top-1 -right-1">
-                      <Skull className="w-3 h-3 text-red-500" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Plant Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <div className="relative">
-                      <h4 className="font-semibold text-base truncate pr-6">
-                        {plant.name || `Plant #${plant.id}`}
-                        {isUserPlant(plant) && (
-                          <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                        )}
-                      </h4>
-                      {/* Edit name removed for leaderboard view */}
-                    </div>
-                    {/* Dead label removed. Skull indicator is shown over image and actions show accordingly. */}
-                  </div>
-                  <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                    <span>Level {plant.level}</span>
-                  </div>
-                </div>
-
-                {/* Stats with right-aligned action buttons */}
-                <div className="flex items-center space-x-2 text-right">
-                  <div className="flex flex-col items-end space-y-1">
-                    <div className="flex items-center space-x-1">
-                      <Image src="/icons/pts.svg" alt="Points" width={16} height={16} />
-                      <span className="text-base font-bold">{formatScoreShort(plant.score)}</span>
-                    </div>
-                    <div className="flex items-center space-x-3 text-sm text-muted-foreground">
-                      <div className="flex items-center space-x-1">
-                        <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} />
-                        <span>{plant.stars}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Image src="/icons/ethlogo.svg" alt="ETH" width={14} height={14} />
-                        <span>{formatEthShort(plant.rewards)}</span>
-                      </div>
-                    </div>
-                  </div>
-                   {canShowAttack && (
-                    <Button
-                      variant="outline"
-                       size="icon"
-                       className="rounded-md"
-                      onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
-                      aria-label="Attack this plant"
-                      title="Attack"
-                    >
-                      <Sword className="w-4 h-4" />
-                    </Button>
-                  )}
-                   {canShowKill && (
-                     <Button
-                       variant="outline"
-                       size="icon"
-                       className="rounded-md"
-                       onClick={() => { setTargetPlant(plant); setSelectedKillerId(null); setKillDialogOpen(true); }}
-                       aria-label="Kill dead plant to collect star"
-                       title="Kill to collect star"
-                     >
-                       <Skull className="w-4 h-4" />
-                     </Button>
-                   )}
-                   {canShowRevive && (
-                     <Button
-                       variant="outline"
-                       size="icon"
-                       className="rounded-md"
-                       onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
-                       aria-label="Revive your plant"
-                       title="Revive"
-                     >
-                       <HeartPulse className="w-4 h-4" />
-                     </Button>
-                   )}
-                </div>
               </div>
-            </div>
-          );})}
+            );
+          })}
         </div>
-        
+
         {totalPages > 1 && (
           <div className="flex justify-center items-center pt-4">
             <div className="flex space-x-2">
@@ -674,53 +688,150 @@ export default function LeaderboardTab() {
     );
   };
 
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>
-                Ranking
-              </CardTitle>
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>
+              Ranking
+            </CardTitle>
+            <ToggleGroup
+              value={boardType}
+              onValueChange={(v) => setBoardType((v as any) || 'plants')}
+              options={[
+                { value: 'plants', label: 'Plants' },
+                { value: 'lands', label: 'Lands' },
+                { value: 'stake', label: 'Stake' },
+                { value: 'rocks', label: 'Rocks' },
+              ]}
+            />
+          </div>
+          {boardType === 'plants' && (
+            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
               <ToggleGroup
-                value={boardType}
-                onValueChange={(v) => setBoardType((v as any) || 'plants')}
+                value={filterMode}
+                onValueChange={(v) => {
+                  setCurrentPage(1);
+                  setFilterMode(v as any);
+                  // Auto-uncheck "My Plants" when switching to attackable (can't attack own plants)
+                  if (v === 'attackable') {
+                    setShowOnlyMyPlants(false);
+                  }
+                }}
                 options={[
-                  { value: 'plants', label: 'Plants' },
-                  { value: 'lands', label: 'Lands' },
-                  { value: 'stake', label: 'Stake' },
-                  { value: 'rocks', label: 'Rocks' },
+                  { value: 'all', label: 'All' },
+                  { value: 'attackable', label: 'Attackable' },
                 ]}
               />
+              {address && myPlants.length > 0 && filterMode !== 'attackable' && (
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={showOnlyMyPlants}
+                    onChange={(e) => {
+                      setShowOnlyMyPlants(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="w-4 h-4 rounded border-border accent-primary"
+                  />
+                  <span className="text-muted-foreground">My Plants</span>
+                </label>
+              )}
             </div>
-            {boardType === 'plants' && (
-              <div className="mt-2">
-                <ToggleGroup
-                  value={filterMode}
-                  onValueChange={(v) => { setCurrentPage(1); setFilterMode(v as any); }}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'attackable', label: 'Attackable' },
-                  ]}
-                />
+          )}
+        </CardHeader>
+        <CardContent>
+          {boardType === 'plants' ? (
+            renderContent()
+          ) : boardType === 'lands' ? (
+            loading ? (
+              <div className="flex items-center justify-center py-8">
+                <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
               </div>
-            )}
-          </CardHeader>
-          <CardContent>
-            {boardType === 'plants' ? (
-              renderContent()
-            ) : boardType === 'lands' ? (
-              loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
-                </div>
-              ) : (
-                <div className="space-y-2 divide-y divide-border -mx-4 px-4">
-                  {totalLandItems === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">No lands found.</div>
-                  )}
-                  {currentLands.map((row) => (
-                    <div key={row.landId} className="py-3">
+            ) : (
+              <div className="space-y-2 divide-y divide-border -mx-4 px-4">
+                {totalLandItems === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">No lands found.</div>
+                )}
+                {currentLands.map((row) => (
+                  <div key={row.landId} className="py-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center justify-center w-8">
+                        <div className={`flex items-center ${getRankColor(row.rank)}`}>
+                          {row.rank <= 3 ? (
+                            getRankIcon(row.rank)
+                          ) : (
+                            <span className="text-sm font-semibold">#{row.rank}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <h4 className="font-semibold text-base truncate pr-6">
+                            {row.name}
+                          </h4>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 text-right">
+                        <div className="flex flex-col items-end space-y-1">
+                          <div className="flex items-center space-x-1">
+                            <Image src="/icons/pts.svg" alt="EXP" width={16} height={16} />
+                            <span className="text-base font-bold">{row.exp.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {totalLandPages > 1 && (
+                  <div className="flex justify-center items-center pt-4">
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Back
+                      </Button>
+                      <span className="flex items-center px-3 text-sm">
+                        Page {currentPage} of {totalLandPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalLandPages))}
+                        disabled={currentPage === totalLandPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          ) : boardType === 'stake' ? (
+            stakeLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
+              </div>
+            ) : (
+              <div className="space-y-2 divide-y divide-border -mx-4 px-4">
+                {totalStakeItems === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">No stakers found.</div>
+                )}
+                {currentStakes.map((row) => {
+                  const formattedStake = (Number(row.stakedAmount) / 1e18).toLocaleString(undefined, {
+                    maximumFractionDigits: 2
+                  });
+                  const isCurrentUser = address && row.address.toLowerCase() === address.toLowerCase();
+
+                  return (
+                    <div
+                      key={row.address}
+                      className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
+                    >
                       <div className="flex items-center space-x-2">
                         <div className="flex items-center justify-center w-8">
                           <div className={`flex items-center ${getRankColor(row.rank)}`}>
@@ -732,249 +843,173 @@ export default function LeaderboardTab() {
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2">
-                            <h4 className="font-semibold text-base truncate pr-6">
-                              {row.name}
-                            </h4>
+                          <div className="flex flex-col">
+                            {row.ensName ? (
+                              <>
+                                <h4 className="font-semibold text-base truncate pr-6">
+                                  {row.ensName}
+                                  {isCurrentUser && (
+                                    <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                                  )}
+                                </h4>
+                                <span className="text-xs text-muted-foreground font-mono truncate">
+                                  {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                                </span>
+                              </>
+                            ) : (
+                              <h4 className="font-semibold text-base font-mono truncate pr-6">
+                                {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                                {isCurrentUser && (
+                                  <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                                )}
+                              </h4>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center space-x-2 text-right">
                           <div className="flex flex-col items-end space-y-1">
                             <div className="flex items-center space-x-1">
-                              <Image src="/icons/pts.svg" alt="EXP" width={16} height={16} />
-                              <span className="text-base font-bold">{row.exp.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                              <Image src="/PixotchiKit/COIN.svg" alt="Staked SEED" width={16} height={16} />
+                              <span className="text-base font-bold">{formattedStake}</span>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  ))}
-                  {totalLandPages > 1 && (
-                    <div className="flex justify-center items-center pt-4">
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                          disabled={currentPage === 1}
-                        >
-                          Back
-                        </Button>
-                        <span className="flex items-center px-3 text-sm">
-                          Page {currentPage} of {totalLandPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalLandPages))}
-                          disabled={currentPage === totalLandPages}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            ) : boardType === 'stake' ? (
-              stakeLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
-                </div>
-              ) : (
-                <div className="space-y-2 divide-y divide-border -mx-4 px-4">
-                  {totalStakeItems === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">No stakers found.</div>
-                  )}
-                  {currentStakes.map((row) => {
-                    const formattedStake = (Number(row.stakedAmount) / 1e18).toLocaleString(undefined, {
-                      maximumFractionDigits: 2
-                    });
-                    const isCurrentUser = address && row.address.toLowerCase() === address.toLowerCase();
-                    
-                    return (
-                      <div 
-                        key={row.address} 
-                        className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
+                  );
+                })}
+                {totalStakePages > 1 && (
+                  <div className="flex justify-center items-center pt-4">
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
                       >
-                        <div className="flex items-center space-x-2">
-                          <div className="flex items-center justify-center w-8">
-                            <div className={`flex items-center ${getRankColor(row.rank)}`}>
-                              {row.rank <= 3 ? (
-                                getRankIcon(row.rank)
-                              ) : (
-                                <span className="text-sm font-semibold">#{row.rank}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col">
-                              {row.ensName ? (
-                                <>
-                                  <h4 className="font-semibold text-base truncate pr-6">
-                                    {row.ensName}
-                                    {isCurrentUser && (
-                                      <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                                    )}
-                                  </h4>
-                                  <span className="text-xs text-muted-foreground font-mono truncate">
-                                    {row.address.slice(0, 6)}...{row.address.slice(-4)}
-                                  </span>
-                                </>
-                              ) : (
-                                <h4 className="font-semibold text-base font-mono truncate pr-6">
-                                  {row.address.slice(0, 6)}...{row.address.slice(-4)}
-                                  {isCurrentUser && (
-                                    <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                                  )}
-                                </h4>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2 text-right">
-                            <div className="flex flex-col items-end space-y-1">
-                              <div className="flex items-center space-x-1">
-                                <Image src="/PixotchiKit/COIN.svg" alt="Staked SEED" width={16} height={16} />
-                                <span className="text-base font-bold">{formattedStake}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {totalStakePages > 1 && (
-                    <div className="flex justify-center items-center pt-4">
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                          disabled={currentPage === 1}
-                        >
-                          Back
-                        </Button>
-                        <span className="flex items-center px-3 text-sm">
-                          Page {currentPage} of {totalStakePages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalStakePages))}
-                          disabled={currentPage === totalStakePages}
-                        >
-                          Next
-                        </Button>
-                      </div>
+                        Back
+                      </Button>
+                      <span className="flex items-center px-3 text-sm">
+                        Page {currentPage} of {totalStakePages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalStakePages))}
+                        disabled={currentPage === totalStakePages}
+                      >
+                        Next
+                      </Button>
                     </div>
-                  )}
-                </div>
-              )
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            rocksLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
+              </div>
+            ) : rocksError ? (
+              <Alert variant="destructive" className="mt-4">
+                <Terminal className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{rocksError}</AlertDescription>
+              </Alert>
             ) : (
-              rocksLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
-                </div>
-              ) : rocksError ? (
-                <Alert variant="destructive" className="mt-4">
-                  <Terminal className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{rocksError}</AlertDescription>
-                </Alert>
-              ) : (
-                <div className="space-y-2 divide-y divide-border -mx-4 px-4">
-                  {totalRockItems === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">No rock earners found.</div>
-                  )}
-                  {currentRocks.map((row) => {
-                    const isCurrentUser = address && row.address?.toLowerCase() === address.toLowerCase();
-                    return (
-                      <div
-                        key={row.address || `rock-${row.rank}`}
-                        className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <div className="flex items-center justify-center w-8">
-                            <div className={`flex items-center ${getRankColor(row.rank)}`}>
-                              {row.rank <= 3 ? (
-                                getRankIcon(row.rank)
-                              ) : (
-                                <span className="text-sm font-semibold">#{row.rank}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {row.address ? (
-                              <Avatar
-                                address={row.address as `0x${string}`}
-                                chain={base}
-                                className="w-10 h-10 rounded-full"
-                              />
+              <div className="space-y-2 divide-y divide-border -mx-4 px-4">
+                {totalRockItems === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">No rock earners found.</div>
+                )}
+                {currentRocks.map((row) => {
+                  const isCurrentUser = address && row.address?.toLowerCase() === address.toLowerCase();
+                  return (
+                    <div
+                      key={row.address || `rock-${row.rank}`}
+                      className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center justify-center w-8">
+                          <div className={`flex items-center ${getRankColor(row.rank)}`}>
+                            {row.rank <= 3 ? (
+                              getRankIcon(row.rank)
                             ) : (
-                              <div className="w-10 h-10 rounded-full bg-muted" />
+                              <span className="text-sm font-semibold">#{row.rank}</span>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-base truncate pr-6">
-                              {row.name || (row.address ? formatAddress(row.address) : 'Unknown')}
-                              {isCurrentUser && (
-                                <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                              )}
-                            </h4>
-                            {row.name && row.address && (
-                              <span className="text-xs text-muted-foreground font-mono">
-                                {formatAddress(row.address)}
-                              </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {row.address ? (
+                            <Avatar
+                              address={row.address as `0x${string}`}
+                              chain={base}
+                              className="w-10 h-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-muted" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-base truncate pr-6">
+                            {row.name || (row.address ? formatAddress(row.address) : 'Unknown')}
+                            {isCurrentUser && (
+                              <span className="ml-2 text-xs text-primary font-medium">(You)</span>
                             )}
-                          </div>
-                          <div className="flex items-center space-x-2 text-right">
-                            <div className="flex items-center space-x-1">
-                              <Image src="/icons/Volcanic_Rock.svg" alt="Rocks" width={16} height={16} />
-                              <span className="text-base font-bold">{row.rocks.toLocaleString()}</span>
-                            </div>
+                          </h4>
+                          {row.name && row.address && (
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {formatAddress(row.address)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2 text-right">
+                          <div className="flex items-center space-x-1">
+                            <Image src="/icons/Volcanic_Rock.svg" alt="Rocks" width={16} height={16} />
+                            <span className="text-base font-bold">{row.rocks.toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
-                    );
-                  })}
-                  {totalRockPages > 1 && (
-                    <div className="flex justify-center items-center pt-4">
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                          disabled={currentPage === 1}
-                        >
-                          Back
-                        </Button>
-                        <span className="flex items-center px-3 text-sm">
-                          Page {currentPage} of {totalRockPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalRockPages))}
-                          disabled={currentPage === totalRockPages}
-                        >
-                          Next
-                        </Button>
-                      </div>
                     </div>
-                  )}
-                </div>
-              )
-            )}
-          </CardContent>
-        </Card>
+                  );
+                })}
+                {totalRockPages > 1 && (
+                  <div className="flex justify-center items-center pt-4">
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Back
+                      </Button>
+                      <span className="flex items-center px-3 text-sm">
+                        Page {currentPage} of {totalRockPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalRockPages))}
+                        disabled={currentPage === totalRockPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Attack dialog */}
-        <Dialog open={attackDialogOpen} onOpenChange={setAttackDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Select your attacker</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
+      {/* Attack dialog */}
+      <Dialog open={attackDialogOpen} onOpenChange={setAttackDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select your attacker</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
             {/* Brief rules/eligibility panel */}
             <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
               <ul className="list-disc pl-5 space-y-1">
@@ -985,271 +1020,271 @@ export default function LeaderboardTab() {
                 <li>You cannot attack your own plant.</li>
               </ul>
             </div>
-              {targetPlant && (
+            {targetPlant && (
+              <div className="text-sm text-muted-foreground">
+                Target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span> (Lvl {targetPlant.level})
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {targetPlant && eligibleAttackers(targetPlant).length === 0 && (
                 <div className="text-sm text-muted-foreground">
-                  Target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span> (Lvl {targetPlant.level})
+                  No eligible plants to attack with right now. Each plant can attack once every 30 minutes.
                 </div>
               )}
-
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {targetPlant && eligibleAttackers(targetPlant).length === 0 && (
-                  <div className="text-sm text-muted-foreground">
-                    No eligible plants to attack with right now. Each plant can attack once every 30 minutes.
-                  </div>
-                )}
-                {targetPlant && eligibleAttackers(targetPlant).map((p) => (
-                  <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedAttackerId === p.id ? 'bg-accent' : 'bg-card'}`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="attacker"
-                        className="accent-primary"
-                        checked={selectedAttackerId === p.id}
-                        onChange={() => setSelectedAttackerId(p.id)}
-                      />
-                      <PlantImage selectedPlant={p as any} width={28} height={28} />
-                      <div className="text-sm">
-                        <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
-                        <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
-                      </div>
+              {targetPlant && eligibleAttackers(targetPlant).map((p) => (
+                <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedAttackerId === p.id ? 'bg-accent' : 'bg-card'}`}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="attacker"
+                      className="accent-primary"
+                      checked={selectedAttackerId === p.id}
+                      onChange={() => setSelectedAttackerId(p.id)}
+                    />
+                    <PlantImage selectedPlant={p as any} width={28} height={28} />
+                    <div className="text-sm">
+                      <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
+                      <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
                     </div>
-                  </label>
-                ))}
-              </div>
+                  </div>
+                </label>
+              ))}
+            </div>
 
-              <div className="pt-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Confirm Attack</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
-                </div>
-                {targetPlant && selectedAttackerId !== null ? (
-                  (() => {
-                    const attacker = myPlants.find(p => p.id === selectedAttackerId) as Plant | undefined;
-                    const eligible = attacker && targetPlant ? canAttackWith(attacker, targetPlant) : false;
-                    return isSolana ? (
-                  <SolanaBridgeButton
-                    actionType="attack"
-                    plantId={selectedAttackerId}
-                    targetId={targetPlant.id}
-                    buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
-                    buttonClassName="w-full"
-                    disabled={isSubmitting || !eligible}
-                    onSuccess={() => {
-                      setIsSubmitting(false);
-                      setPendingHash(null);
-                      setAttackDialogOpen(false);
-                      setSelectedAttackerId(null);
-                      fetchLeaderboardData();
-                      void fetchMyPlants();
-                      toast.success('Attack submitted via bridge!');
-                    }}
-                    onError={() => {
-                      setIsSubmitting(false);
-                      toast.error('Attack failed');
-                    }}
-                  />
-                    ) : (
-                  <AttackTransaction
-                    attackerId={selectedAttackerId}
-                    targetId={targetPlant.id}
-                    onSuccess={() => {
-                      setIsSubmitting(false);
-                      setPendingHash(null);
-                      setAttackDialogOpen(false);
-                      setSelectedAttackerId(null);
-                      fetchLeaderboardData();
-                      void fetchMyPlants();
-                    }}
-                    onError={() => {}}
-                    buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
-                    buttonClassName="w-full"
-                    showToast={true}
-                    disabled={isSubmitting || !eligible}
-                    onStatusUpdate={(status: any) => {
-                      if (status.statusName === 'pending') {
-                        setIsSubmitting(true);
-                        try {
-                          const h = status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
-                          if (h) setPendingHash(h);
-                        } catch {}
-                        toast.loading('Submitting attack...', { id: 'attack-tx' });
-                      }
-                      if (status.statusName === 'success') {
-                        setIsSubmitting(false);
-                        toast.success('Attack confirmed!', { id: 'attack-tx' });
-                        try {
-                          const receipt = status.statusData?.transactionReceipts?.[0];
-                          const logs = receipt?.logs || [];
-                          const shown = showAttackOutcomeFromLogs(logs);
-                          if (!shown) {
-                            const h = receipt?.transactionHash || pendingHash;
-                            void showAttackOutcomeFromHash(h);
-                          }
-                        } catch {}
-                        // After a successful attack, refresh lists
-                        fetchLeaderboardData();
-                        void fetchMyPlants();
-                      }
-                      if (status.statusName === 'error') {
+            <div className="pt-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Confirm Attack</span>
+                <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
+              </div>
+              {targetPlant && selectedAttackerId !== null ? (
+                (() => {
+                  const attacker = myPlants.find(p => p.id === selectedAttackerId) as Plant | undefined;
+                  const eligible = attacker && targetPlant ? canAttackWith(attacker, targetPlant) : false;
+                  return isSolana ? (
+                    <SolanaBridgeButton
+                      actionType="attack"
+                      plantId={selectedAttackerId}
+                      targetId={targetPlant.id}
+                      buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
+                      buttonClassName="w-full"
+                      disabled={isSubmitting || !eligible}
+                      onSuccess={() => {
                         setIsSubmitting(false);
                         setPendingHash(null);
-                        toast.error('Attack failed', { id: 'attack-tx' });
-                      }
-                    }}
-                  />
-                    );
-                  })()
-                ) : (
-                  <Button className="w-full" disabled>
-                    Select an attacker
-                  </Button>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Kill dialog */}
-        <Dialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Collect a star by killing a dead plant</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
-                Select one of your living plants to perform the kill. Target must be dead.
-              </div>
-              {targetPlant && (
-                <div className="text-sm text-muted-foreground">
-                  Dead target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>
-                </div>
+                        setAttackDialogOpen(false);
+                        setSelectedAttackerId(null);
+                        fetchLeaderboardData();
+                        void fetchMyPlants();
+                        toast.success('Attack submitted via bridge!');
+                      }}
+                      onError={() => {
+                        setIsSubmitting(false);
+                        toast.error('Attack failed');
+                      }}
+                    />
+                  ) : (
+                    <AttackTransaction
+                      attackerId={selectedAttackerId}
+                      targetId={targetPlant.id}
+                      onSuccess={() => {
+                        setIsSubmitting(false);
+                        setPendingHash(null);
+                        setAttackDialogOpen(false);
+                        setSelectedAttackerId(null);
+                        fetchLeaderboardData();
+                        void fetchMyPlants();
+                      }}
+                      onError={() => { }}
+                      buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
+                      buttonClassName="w-full"
+                      showToast={true}
+                      disabled={isSubmitting || !eligible}
+                      onStatusUpdate={(status: any) => {
+                        if (status.statusName === 'pending') {
+                          setIsSubmitting(true);
+                          try {
+                            const h = status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
+                            if (h) setPendingHash(h);
+                          } catch { }
+                          toast.loading('Submitting attack...', { id: 'attack-tx' });
+                        }
+                        if (status.statusName === 'success') {
+                          setIsSubmitting(false);
+                          toast.success('Attack confirmed!', { id: 'attack-tx' });
+                          try {
+                            const receipt = status.statusData?.transactionReceipts?.[0];
+                            const logs = receipt?.logs || [];
+                            const shown = showAttackOutcomeFromLogs(logs);
+                            if (!shown) {
+                              const h = receipt?.transactionHash || pendingHash;
+                              void showAttackOutcomeFromHash(h);
+                            }
+                          } catch { }
+                          // After a successful attack, refresh lists
+                          fetchLeaderboardData();
+                          void fetchMyPlants();
+                        }
+                        if (status.statusName === 'error') {
+                          setIsSubmitting(false);
+                          setPendingHash(null);
+                          toast.error('Attack failed', { id: 'attack-tx' });
+                        }
+                      }}
+                    />
+                  );
+                })()
+              ) : (
+                <Button className="w-full" disabled>
+                  Select an attacker
+                </Button>
               )}
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {myPlants.filter(p => p.status !== 4).map((p) => (
-                  <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedKillerId === p.id ? 'bg-accent' : 'bg-card'}`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="killer"
-                        className="accent-primary"
-                        checked={selectedKillerId === p.id}
-                        onChange={() => setSelectedKillerId(p.id)}
-                      />
-                      <PlantImage selectedPlant={p as any} width={28} height={28} />
-                      <div className="text-sm">
-                        <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
-                        <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
-                      </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kill dialog */}
+      <Dialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Collect a star by killing a dead plant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
+              Select one of your living plants to perform the kill. Target must be dead.
+            </div>
+            {targetPlant && (
+              <div className="text-sm text-muted-foreground">
+                Dead target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>
+              </div>
+            )}
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {myPlants.filter(p => p.status !== 4).map((p) => (
+                <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedKillerId === p.id ? 'bg-accent' : 'bg-card'}`}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="killer"
+                      className="accent-primary"
+                      checked={selectedKillerId === p.id}
+                      onChange={() => setSelectedKillerId(p.id)}
+                    />
+                    <PlantImage selectedPlant={p as any} width={28} height={28} />
+                    <div className="text-sm">
+                      <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
+                      <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
                     </div>
-                  </label>
-                ))}
-              </div>
-              <div className="pt-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Confirm Kill</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
-                </div>
-                {isSolana ? (
-                  <SolanaNotSupported feature="Kill action" />
-                ) : targetPlant && selectedKillerId !== null ? (
-                  <KillTransaction
-                    deadId={targetPlant.id}
-                    tokenId={selectedKillerId}
-                    buttonText="Confirm Kill"
-                    buttonClassName="w-full"
-                    showToast={true}
-                    onStatusUpdate={(status: any) => {
-                      if (status.statusName === 'pending') {
-                        toast.loading('Submitting kill...', { id: 'kill-tx' });
-                      }
-                      if (status.statusName === 'success') {
-                        toast.success('Kill successful! You earned 1 star.', { id: 'kill-tx' });
-                      }
-                      if (status.statusName === 'error') {
-                        toast.error('Kill failed', { id: 'kill-tx' });
-                      }
-                    }}
-                    onSuccess={() => {
-                      setKillDialogOpen(false);
-                      setSelectedKillerId(null);
-                      fetchLeaderboardData();
-                      void fetchMyPlants();
-                    }}
-                  />
-                ) : (
-                  <Button className="w-full" disabled>
-                    Select your plant
-                  </Button>
-                )}
-              </div>
+                  </div>
+                </label>
+              ))}
             </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Revive dialog */}
-        <Dialog open={reviveDialogOpen} onOpenChange={setReviveDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Revive your plant</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              {targetPlant && (
-                <div className="text-sm text-muted-foreground">
-                  You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>. Cost: 100 SEED.
-                </div>
-              )}
-              <div className="pt-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Confirm Revive</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
-                </div>
-                {isSolana ? (
-                  <SolanaNotSupported feature="Revive action" />
-                ) : (() => {
-                  const REVIVE_COST_WEI = BigInt(100) * (BigInt(10) ** BigInt(18));
-                  const hasEnough = seedBalance > REVIVE_COST_WEI;
-                  return (
-                    <>
-                <ReviveTransaction
-                  plantId={targetPlant?.id || 0}
-                  buttonText="Confirm Revive"
+            <div className="pt-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Confirm Kill</span>
+                <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
+              </div>
+              {isSolana ? (
+                <SolanaNotSupported feature="Kill action" />
+              ) : targetPlant && selectedKillerId !== null ? (
+                <KillTransaction
+                  deadId={targetPlant.id}
+                  tokenId={selectedKillerId}
+                  buttonText="Confirm Kill"
                   buttonClassName="w-full"
                   showToast={true}
-                  disabled={!targetPlant || !hasEnough}
                   onStatusUpdate={(status: any) => {
                     if (status.statusName === 'pending') {
-                      toast.loading('Submitting revive...', { id: 'revive-tx' });
+                      toast.loading('Submitting kill...', { id: 'kill-tx' });
                     }
                     if (status.statusName === 'success') {
-                      toast.success('You revived your plant.', { id: 'revive-tx' });
+                      toast.success('Kill successful! You earned 1 star.', { id: 'kill-tx' });
                     }
                     if (status.statusName === 'error') {
-                      toast.error('Revive failed', { id: 'revive-tx' });
+                      toast.error('Kill failed', { id: 'kill-tx' });
                     }
                   }}
                   onSuccess={() => {
-                    setReviveDialogOpen(false);
+                    setKillDialogOpen(false);
+                    setSelectedKillerId(null);
                     fetchLeaderboardData();
                     void fetchMyPlants();
                   }}
                 />
+              ) : (
+                <Button className="w-full" disabled>
+                  Select your plant
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revive dialog */}
+      <Dialog open={reviveDialogOpen} onOpenChange={setReviveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revive your plant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {targetPlant && (
+              <div className="text-sm text-muted-foreground">
+                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>. Cost: 100 SEED.
+              </div>
+            )}
+            <div className="pt-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Confirm Revive</span>
+                <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
+              </div>
+              {isSolana ? (
+                <SolanaNotSupported feature="Revive action" />
+              ) : (() => {
+                const REVIVE_COST_WEI = BigInt(100) * (BigInt(10) ** BigInt(18));
+                const hasEnough = seedBalance > REVIVE_COST_WEI;
+                return (
+                  <>
+                    <ReviveTransaction
+                      plantId={targetPlant?.id || 0}
+                      buttonText="Confirm Revive"
+                      buttonClassName="w-full"
+                      showToast={true}
+                      disabled={!targetPlant || !hasEnough}
+                      onStatusUpdate={(status: any) => {
+                        if (status.statusName === 'pending') {
+                          toast.loading('Submitting revive...', { id: 'revive-tx' });
+                        }
+                        if (status.statusName === 'success') {
+                          toast.success('You revived your plant.', { id: 'revive-tx' });
+                        }
+                        if (status.statusName === 'error') {
+                          toast.error('Revive failed', { id: 'revive-tx' });
+                        }
+                      }}
+                      onSuccess={() => {
+                        setReviveDialogOpen(false);
+                        fetchLeaderboardData();
+                        void fetchMyPlants();
+                      }}
+                    />
                     {!hasEnough && (
                       <div className="text-xs text-red-500">Insufficient SEED balance (requires &gt; 100 SEED)</div>
                     )}
-                    </>
-                  );
-                })()}
-              </div>
+                  </>
+                );
+              })()}
             </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Plant Profile Dialog */}
-        <PlantProfileDialog
-          open={profileDialogOpen}
-          onOpenChange={setProfileDialogOpen}
-          plant={selectedPlantForProfile}
-        />
-      </div>
-    );
+      {/* Plant Profile Dialog */}
+      <PlantProfileDialog
+        open={profileDialogOpen}
+        onOpenChange={setProfileDialogOpen}
+        plant={selectedPlantForProfile}
+      />
+    </div>
+  );
 }
