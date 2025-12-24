@@ -27,17 +27,37 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Plant TOD notification stats (12h threshold)
-    const plantSentCount = Number((await (redis as any)?.get?.('notif:plant12h:sent:count')) || '0');
-    const plantLast = Number((await (redis as any)?.get?.('notif:plant12h:last')) || '0');
-    const plantRecent = parseList(await (redis as any)?.lrange?.('notif:plant12h:log', 0, 20));
-    const plantRuns = Number((await (redis as any)?.get?.('notif:plant12h:runs')) || '0');
+    // Plant TOD notification stats (12h threshold) - wrap each call to handle type mismatches
+    let plantSentCount = 0;
+    let plantLast = 0;
+    let plantRecent: any[] = [];
+    let plantRuns = 0;
+    let legacySentCount = 0;
+    let eligibleSet: string[] = [];
 
-    // Legacy 1h stats (for migration visibility)
-    const legacySentCount = Number((await (redis as any)?.get?.('notif:plant1h:sentCount')) || '0');
+    try {
+      plantSentCount = Number((await (redis as any)?.get?.('notif:plant12h:sent:count')) || '0');
+    } catch { /* key might be wrong type */ }
 
-    // Eligible fids
-    const eligibleSet = await redis?.smembers?.('notif:eligible:fids');
+    try {
+      plantLast = Number((await (redis as any)?.get?.('notif:plant12h:last')) || '0');
+    } catch { /* key might be wrong type */ }
+
+    try {
+      plantRecent = parseList(await (redis as any)?.lrange?.('notif:plant12h:log', 0, 20));
+    } catch { /* key might be wrong type */ }
+
+    try {
+      plantRuns = Number((await (redis as any)?.get?.('notif:plant12h:runs')) || '0');
+    } catch { /* key might be wrong type */ }
+
+    try {
+      legacySentCount = Number((await (redis as any)?.get?.('notif:plant1h:sentCount')) || '0');
+    } catch { /* key might be wrong type */ }
+
+    try {
+      eligibleSet = (await redis?.smembers?.('notif:eligible:fids')) || [];
+    } catch { /* key might be wrong type */ }
 
     return NextResponse.json({
       success: true,
