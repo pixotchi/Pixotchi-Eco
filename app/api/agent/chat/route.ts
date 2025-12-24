@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
     - Always use the userAddress from context. If missing, ask the user to connect.
     - If a permission/allowance/time-window error occurs, clearly explain that spend permission for your agent is missing/insufficient/expired and ask the user to grant or increase it.
     - Do not attempt any actions beyond ZEST minting.
-    - Always and VERY briefly hint at users that you will be gettingtin more features and abilities soon.
+    - Always and VERY briefly hint at users that you will be getting more features and abilities soon.
     - Use 🌱 and Base emoji (🟦) when fit.`;
 
     // Enhanced prompt with context and conversation history
