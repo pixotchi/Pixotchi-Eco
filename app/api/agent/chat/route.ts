@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
-      inputSchema: listStrainsParams,
+      inputSchema: listStrainsParams as any,
       execute: listStrainsExecute,
       strict: true,
     });
@@ -154,6 +154,7 @@ export async function POST(req: NextRequest) {
           transactionHash: result.spendTransactionHash || result.result?.transactionHash,
           message: result.message,
           executed: true,
+          // Removed duplicate fields to clean up
         };
 
       } catch (error: any) {
@@ -175,7 +176,7 @@ export async function POST(req: NextRequest) {
 
     const mintPlants = tool({
       description: 'Mint Pixotchi plants for the user. Use execute=false for estimates, execute=true when user confirms.',
-      inputSchema: mintPlantsParams,
+      inputSchema: mintPlantsParams as any,
       execute: mintPlantsExecute,
       strict: true,
     });
@@ -265,7 +266,7 @@ export async function POST(req: NextRequest) {
     const { text, toolResults } = await generateText({
       model,
       messages,
-      tools: toolBundle,
+      tools: toolBundle as any,
       maxSteps: 5, // Enable multi-step calls so model generates text after tool results
     });
 
