@@ -222,7 +222,7 @@ export async function POST(req: NextRequest) {
       enhancedPrompt = `Recent conversation:\n${historyText}\n\nCurrent request:\n${enhancedPrompt}`;
     }
 
-    const toolBundle: Record<string, any> = { list_strains: listStrains, mint_plants: mintPlants };
+    const toolBundle = { list_strains: listStrains, mint_plants: mintPlants };
 
     console.log('[AGENT_CHAT] Starting generateText with:', {
       hasTools: !!toolBundle,
