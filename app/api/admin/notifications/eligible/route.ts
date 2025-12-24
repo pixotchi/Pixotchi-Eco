@@ -221,7 +221,8 @@ async function processFidsBatch(
                     throttledPlants += result.value.throttledCount || 0;
                     if (result.value.userThrottled) {
                         throttledUsers++;
-                    } else if ((result.value.notThrottledCount || 0) > 0) {
+                    } else {
+                        // User has eligible plants and is NOT user-throttled = would notify
                         wouldNotify++;
                     }
                     eligible.push({
