@@ -268,7 +268,7 @@ export async function POST(req: NextRequest) {
       messages,
       tools: toolBundle as any,
       maxSteps: 5, // Enable multi-step calls so model generates text after tool results
-    });
+    } as any);
 
     console.log('[AGENT_CHAT] GenerateText completed:', {
       textLength: text?.length || 0,
