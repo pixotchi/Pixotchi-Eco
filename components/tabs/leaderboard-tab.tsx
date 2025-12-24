@@ -594,7 +594,7 @@ export default function LeaderboardTab() {
                       {/* Dead label removed. Skull indicator is shown over image and actions show accordingly. */}
                     </div>
                     <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                      <span>Level {plant.level}</span>
+                      <span>LvL {plant.level}</span>
                     </div>
                   </div>
 
@@ -711,13 +711,20 @@ export default function LeaderboardTab() {
             <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
               <ToggleGroup
                 value={filterMode}
-                onValueChange={(v) => { setCurrentPage(1); setFilterMode(v as any); }}
+                onValueChange={(v) => {
+                  setCurrentPage(1);
+                  setFilterMode(v as any);
+                  // Auto-uncheck "My Plants" when switching to attackable (can't attack own plants)
+                  if (v === 'attackable') {
+                    setShowOnlyMyPlants(false);
+                  }
+                }}
                 options={[
                   { value: 'all', label: 'All' },
                   { value: 'attackable', label: 'Attackable' },
                 ]}
               />
-              {address && myPlants.length > 0 && (
+              {address && myPlants.length > 0 && filterMode !== 'attackable' && (
                 <label className="flex items-center gap-2 cursor-pointer text-sm">
                   <input
                     type="checkbox"
