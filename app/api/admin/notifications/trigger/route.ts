@@ -7,8 +7,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30; // Should be fast - just calling Neynar API
 
-const REDIS_KEY_PREFIX = 'notif:plant3h';
-const THROTTLE_SECONDS = 2 * 60 * 60; // 2 hours
+const REDIS_KEY_PREFIX = 'notif:plant12h';
+const THROTTLE_SECONDS = 6 * 60 * 60; // 6 hours
 
 /**
  * POST /api/admin/notifications/trigger
@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Notification content
-        const title = '🪴 Plant Death Alert';
-        const body = 'Your plant has under 3h left before it dies. Tap to feed it now!';
+        const title = '🪴 Plant Health Alert';
+        const body = 'Your plant has under 12h left before it dies. Tap to feed it now!';
         const targetUrl = CLIENT_ENV.APP_URL;
 
         if (dryRun) {

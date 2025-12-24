@@ -6,9 +6,9 @@ import { z } from 'zod';
 import { differenceInSeconds } from 'date-fns';
 
 // Configuration
-const THRESHOLD_SECONDS = 3 * 60 * 60; // 3 hours
-const THROTTLE_SECONDS = 2 * 60 * 60; // 2 hours cooldown between notifications
-const REDIS_KEY_PREFIX = 'notif:plant3h';
+const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
+const THROTTLE_SECONDS = 6 * 60 * 60; // 6 hours cooldown between notifications
+const REDIS_KEY_PREFIX = 'notif:plant12h';
 
 // Validation Schemas
 const QuerySchema = z.object({
@@ -275,8 +275,8 @@ export async function GET(req: NextRequest) {
     // Send notifications (unless dry run)
     let publishResult: { ok: boolean; json?: unknown } = { ok: true };
     if (fidsToNotify.length > 0 && !dryRun) {
-      const title = '🪴 Plant Death Alert';
-      const body = 'Your plant has under 3h left before it dies. Tap to feed it now!';
+      const title = '🪴 Plant Health Alert';
+      const body = 'Your plant has under 12h left before it dies. Tap to feed it now!';
       publishResult = await publishToFids(fidsToNotify, title, body);
 
       if (!publishResult.ok) {

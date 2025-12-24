@@ -5,7 +5,7 @@ import { getPlantsByOwnerWithRpc } from '@/lib/contracts';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { differenceInSeconds } from 'date-fns';
 
-const THRESHOLD_SECONDS = 3 * 60 * 60; // 3 hours
+const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
 const NEYNAR_FIDS_CACHE_KEY = 'notif:neynar:enabled_fids';
 const NEYNAR_FIDS_CACHE_TTL = 5 * 60; // 5 minutes
 
@@ -253,7 +253,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             timestamp: Math.floor(now.getTime() / 1000),
-            thresholdHours: 3,
+            thresholdHours: 12,
             pagination: {
                 total: totalFids,
                 offset,

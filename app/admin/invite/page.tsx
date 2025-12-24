@@ -1085,7 +1085,7 @@ export default function AdminInviteDashboard() {
     });
   };
 
-  // Fetch eligible plants (under 3h remaining)
+  // Fetch eligible plants (under 12h remaining)
   const fetchEligiblePlants = async (fid?: string) => {
     if (!adminKey.trim()) return toast.error('Enter admin key');
     setEligibleLoading(true);
@@ -2461,7 +2461,7 @@ export default function AdminInviteDashboard() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications (Plant Care 3h)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications (Plant Care 12h)</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between mb-3">
@@ -2569,7 +2569,7 @@ export default function AdminInviteDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5" /> Plants Under 3h (Eligible for Notification)
+                  <AlertTriangle className="w-5 h-5" /> Plants Under 12h (Eligible for Notification)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
