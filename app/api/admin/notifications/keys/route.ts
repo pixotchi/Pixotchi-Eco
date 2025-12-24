@@ -1,9 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis, redisScanKeys } from '@/lib/redis';
+import { redis } from '@/lib/redis';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Raw scan without prefix - notification keys are stored WITHOUT pixotchi: prefix
+async function rawScanKeys(pattern: string, maxKeys: number = 1000): Promise<string[]> {
+    if (!redis) return [];
+    const results: string[] = [];
+    try {
+        let cursor = 0;
+        do {
+            const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
+            if (Array.isArray(resp)) {
+                cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
+                const keys: string[] = (resp[1] || []) as string[];
+                for (const key of keys) {
+                    if (results.length < maxKeys && !results.includes(key)) {
+                        results.push(key);
+                    }
+                }
+            } else {
+                break;
+            }
+        } while (cursor !== 0 && results.length < maxKeys);
+    } catch (e) {
+        console.error('[rawScanKeys] Error:', e);
+    }
+    return results;
+}
 
 const NOTIFICATION_KEY_PATTERNS = [
     'notif:plant12h:*',   // Current notification system
@@ -101,7 +127,7 @@ export async function GET(request: NextRequest) {
 
         for (const pattern of patterns) {
             try {
-                const keys = await redisScanKeys(pattern, 1000);
+                const keys = await rawScanKeys(pattern, 1000);
                 for (const key of keys) {
                     if (!allKeys.includes(key) && allKeys.length < limit) {
                         allKeys.push(key);
@@ -206,7 +232,7 @@ export async function DELETE(request: NextRequest) {
                 }, { status: 400 });
             }
 
-            const matchingKeys = await redisScanKeys(pattern, 1000);
+            const matchingKeys = await rawScanKeys(pattern, 1000);
             for (const key of matchingKeys) {
                 try {
                     await redis.del(key);

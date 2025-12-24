@@ -1,23 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis, redisScanKeys } from '@/lib/redis';
+import { redis } from '@/lib/redis';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Scan and delete notification keys - uses raw scan WITHOUT pixotchi: prefix
+// because notification keys are stored without the prefix
 async function scanAndDelete(pattern: string): Promise<number> {
+  if (!redis) return 0;
   let deletedCount = 0;
   try {
-    // Use redisScanKeys which handles the pixotchi: prefix correctly
-    const keys = await redisScanKeys(pattern, 1000);
-    if (keys.length > 0 && redis) {
-      for (const key of keys) {
-        try {
-          await redis.del(key);
-          deletedCount++;
-        } catch { }
+    let cursor = 0;
+    do {
+      // Use raw scan with pattern (notification keys don't have pixotchi: prefix)
+      const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
+      if (Array.isArray(resp)) {
+        cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
+        const keys: string[] = (resp[1] || []) as string[];
+        for (const key of keys) {
+          try {
+            await (redis as any).del(key);
+            deletedCount++;
+          } catch { }
+        }
+      } else {
+        break;
       }
-    }
+    } while (cursor !== 0);
   } catch (e) {
     console.error('[scanAndDelete] Error:', e);
   }
