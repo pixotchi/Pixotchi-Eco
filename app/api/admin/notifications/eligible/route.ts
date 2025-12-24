@@ -6,6 +6,7 @@ import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { differenceInSeconds } from 'date-fns';
 
 const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
+const REDIS_KEY_PREFIX = 'notif:plant12h';
 const NEYNAR_FIDS_CACHE_KEY = 'notif:neynar:enabled_fids';
 const NEYNAR_FIDS_CACHE_TTL = 5 * 60; // 5 minutes
 
@@ -93,6 +94,7 @@ async function processFidsBatch(
             id: number;
             hoursLeft: number;
             eligible: boolean;
+            throttled: boolean;
         }>;
     }>;
     stats: {
@@ -101,16 +103,21 @@ async function processFidsBatch(
         withPlants: number;
         withEligiblePlants: number;
         totalEligiblePlants: number;
+        throttledUsers: number;
+        throttledPlants: number;
+        wouldNotify: number;
     };
 }> {
     const CONCURRENCY = 30; // Process 30 FIDs in parallel for speed
     const eligible: Array<{
         fid: number;
         address: string;
+        userThrottled: boolean;
         plants: Array<{
             id: number;
             hoursLeft: number;
             eligible: boolean;
+            throttled: boolean;
         }>;
     }> = [];
 
@@ -118,6 +125,9 @@ async function processFidsBatch(
     let withPlants = 0;
     let withEligiblePlants = 0;
     let totalEligiblePlants = 0;
+    let throttledUsers = 0;
+    let throttledPlants = 0;
+    let wouldNotify = 0;
 
     // Process in batches with concurrency limit
     for (let i = 0; i < fids.length; i += CONCURRENCY) {
@@ -150,27 +160,53 @@ async function processFidsBatch(
             const plants = await getPlantsByOwnerWithRpc(address, rpcUrl);
             if (!plants?.length) return { fid, address, plants: [], hasEligible: false };
 
-            const plantDetails = plants.map(p => {
+            const plantDetails = await Promise.all(plants.map(async p => {
                 const t = Number(p.timeUntilStarving ?? 0);
                 const plantDate = new Date(t * 1000);
                 const secondsLeft = differenceInSeconds(plantDate, now);
                 const isEligible = secondsLeft > 0 && secondsLeft <= THRESHOLD_SECONDS;
 
+                // Check plant throttle status
+                let isThrottled = false;
+                if (isEligible && redis) {
+                    try {
+                        const throttleKey = `${REDIS_KEY_PREFIX}:fid:${fid}:plant:${Number(p.id)}`;
+                        const exists = await (redis as any)?.get?.(throttleKey);
+                        isThrottled = !!exists;
+                    } catch { }
+                }
+
                 return {
                     id: Number(p.id),
                     hoursLeft: Math.round((secondsLeft / 3600) * 100) / 100,
                     eligible: isEligible,
+                    throttled: isThrottled,
                 };
-            });
+            }));
 
             const eligibleCount = plantDetails.filter(p => p.eligible).length;
+            const throttledCount = plantDetails.filter(p => p.eligible && p.throttled).length;
+            const notThrottledCount = eligibleCount - throttledCount;
+
+            // Check user-level throttle
+            let userThrottled = false;
+            if (redis) {
+                try {
+                    const userThrottleKey = `${REDIS_KEY_PREFIX}:fid:${fid}`;
+                    const exists = await (redis as any)?.get?.(userThrottleKey);
+                    userThrottled = !!exists;
+                } catch { }
+            }
 
             return {
                 fid,
                 address,
                 plants: plantDetails,
                 hasEligible: eligibleCount > 0,
-                eligibleCount
+                eligibleCount,
+                throttledCount,
+                notThrottledCount,
+                userThrottled
             };
         }));
 
@@ -182,9 +218,16 @@ async function processFidsBatch(
                 if (result.value.hasEligible) {
                     withEligiblePlants++;
                     totalEligiblePlants += result.value.eligibleCount || 0;
+                    throttledPlants += result.value.throttledCount || 0;
+                    if (result.value.userThrottled) {
+                        throttledUsers++;
+                    } else if (result.value.notThrottledCount > 0) {
+                        wouldNotify++;
+                    }
                     eligible.push({
                         fid: result.value.fid,
                         address: result.value.address,
+                        userThrottled: result.value.userThrottled,
                         plants: result.value.plants,
                     });
                 }
@@ -200,6 +243,9 @@ async function processFidsBatch(
             withPlants,
             withEligiblePlants,
             totalEligiblePlants,
+            throttledUsers,
+            throttledPlants,
+            wouldNotify,
         }
     };
 }
