@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
+import { redis, redisScanKeys } from '@/lib/redis';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function scanAndDelete(pattern: string) {
+async function scanAndDelete(pattern: string): Promise<number> {
+  let deletedCount = 0;
   try {
-    let cursor = '0';
-    do {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resp: any = await (redis as any)?.scan?.(cursor, 'MATCH', pattern, 'COUNT', 100);
-      cursor = resp?.[0] || '0';
-      const keys: string[] = resp?.[1] || [];
-      if (keys.length) await (redis as any)?.del?.(...keys);
-    } while (cursor !== '0');
-  } catch { }
+    // Use redisScanKeys which handles the pixotchi: prefix correctly
+    const keys = await redisScanKeys(pattern, 1000);
+    if (keys.length > 0 && redis) {
+      for (const key of keys) {
+        try {
+          await redis.del(key);
+          deletedCount++;
+        } catch { }
+      }
+    }
+  } catch (e) {
+    console.error('[scanAndDelete] Error:', e);
+  }
+  return deletedCount;
 }
 
 /**
