@@ -27,12 +27,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Plant TOD notification stats (3h threshold)
-    const plantSentCount = Number((await (redis as any)?.get?.('notif:plant3h:sentCount')) || '0');
-    const plantLastMap = (await (redis as any)?.hgetall?.('notif:plant3h:last')) as Record<string, string> | null;
-    const plantRecent = parseList(await (redis as any)?.lrange?.('notif:plant3h:log', 0, 20));
-    const plantLastRun = parseJSON(await (redis as any)?.get?.('notif:plant3h:lastRun'));
-    const plantRuns = parseList(await (redis as any)?.lrange?.('notif:plant3h:runs', 0, 20));
+    // Plant TOD notification stats (12h threshold)
+    const plantSentCount = Number((await (redis as any)?.get?.('notif:plant12h:sent:count')) || '0');
+    const plantLast = Number((await (redis as any)?.get?.('notif:plant12h:last')) || '0');
+    const plantRecent = parseList(await (redis as any)?.lrange?.('notif:plant12h:log', 0, 20));
+    const plantRuns = Number((await (redis as any)?.get?.('notif:plant12h:runs')) || '0');
 
     // Legacy 1h stats (for migration visibility)
     const legacySentCount = Number((await (redis as any)?.get?.('notif:plant1h:sentCount')) || '0');
@@ -44,12 +43,11 @@ export async function GET(request: NextRequest) {
       success: true,
       stats: {
         plantTOD: {
-          thresholdHours: 3,
+          thresholdHours: 12,
           sentCount: plantSentCount,
-          lastPerFid: plantLastMap || {},
+          lastRun: plantLast ? new Date(plantLast).toISOString() : null,
           recent: plantRecent,
-          lastRun: plantLastRun,
-          runs: plantRuns,
+          totalRuns: plantRuns,
         },
         legacy: {
           plant1hSentCount: legacySentCount,
@@ -60,6 +58,8 @@ export async function GET(request: NextRequest) {
       endpoints: {
         eligible: '/api/admin/notifications/eligible - List plants eligible for notification',
         trigger: '/api/admin/notifications/trigger - Manually trigger notifications',
+        keys: '/api/admin/notifications/keys - View and delete notification Redis keys',
+        reset: '/api/admin/notifications/reset - Reset throttle keys (scope=all|fid|plant)',
       },
     });
   } catch (e: any) {

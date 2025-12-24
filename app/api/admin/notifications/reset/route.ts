@@ -47,13 +47,12 @@ export async function DELETE(req: NextRequest) {
     const ops: Array<Promise<any>> = [];
 
     if (scope === 'all') {
-      // Clear all plant3h notification keys
-      ops.push((redis as any)?.del?.('notif:plant3h:log'));
-      ops.push((redis as any)?.del?.('notif:plant3h:last'));
-      ops.push((redis as any)?.del?.('notif:plant3h:sentCount'));
-      ops.push((redis as any)?.del?.('notif:plant3h:runs'));
-      ops.push((redis as any)?.del?.('notif:plant3h:lastRun'));
-      await scanAndDelete('notif:plant3h:fid:*');
+      // Clear all plant12h notification keys
+      ops.push((redis as any)?.del?.('notif:plant12h:log'));
+      ops.push((redis as any)?.del?.('notif:plant12h:last'));
+      ops.push((redis as any)?.del?.('notif:plant12h:sent:count'));
+      ops.push((redis as any)?.del?.('notif:plant12h:runs'));
+      await scanAndDelete('notif:plant12h:fid:*');
 
       // Also clean up legacy plant1h keys
       ops.push((redis as any)?.del?.('notif:plant1h:log'));
@@ -69,12 +68,12 @@ export async function DELETE(req: NextRequest) {
 
     } else if (scope === 'fid' && fid) {
       // Clear keys for specific fid
-      ops.push((redis as any)?.del?.(`notif:plant3h:fid:${fid}`));
-      await scanAndDelete(`notif:plant3h:fid:${fid}:plant:*`);
+      ops.push((redis as any)?.del?.(`notif:plant12h:fid:${fid}`));
+      await scanAndDelete(`notif:plant12h:fid:${fid}:plant:*`);
 
     } else if (scope === 'plant' && fid && plantId) {
       // Clear key for specific plant
-      ops.push((redis as any)?.del?.(`notif:plant3h:fid:${fid}:plant:${plantId}`));
+      ops.push((redis as any)?.del?.(`notif:plant12h:fid:${fid}:plant:${plantId}`));
 
     } else {
       return NextResponse.json({
