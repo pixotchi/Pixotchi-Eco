@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { generateText, tool, stepCountIs } from 'ai';
+import { generateText, tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -39,8 +39,9 @@ export async function POST(req: NextRequest) {
 
     const listStrains = tool({
       description: 'List available strains with exact prices. Always use this to get prices; do not guess.',
-      inputSchema: listStrainsParams,
-      execute: listStrainsExecute
+      inputSchema: listStrainsParams as any,
+      execute: listStrainsExecute,
+      strict: true,
     });
 
     const mintPlantsParams = z.object({
@@ -51,131 +52,133 @@ export async function POST(req: NextRequest) {
     });
 
     const mintPlantsExecute = async ({ count, strain, strainName, userAddress: toolUserAddress, execute = false }: { count: number; strain?: number; strainName?: string; userAddress?: string; execute?: boolean }) => {
-        console.log('[MINT_TOOL] Tool called with:', { count, strain, strainName, toolUserAddress, execute, bodyUserAddress: userAddress });
-        
-        // Use userAddress from tool parameter or fallback to the one from request body
-        const effectiveUserAddress = toolUserAddress || userAddress;
-        console.log('[MINT_TOOL] Effective user address:', effectiveUserAddress);
-        
-        // Use hardcoded strains dataset
-        const strains = HARDCODED_STRAINS;
-        let chosen: typeof HARDCODED_STRAINS[number] = strains[0];
-        if (typeof strain === 'number') {
-          const found = strains.find(s => s.id === Number(strain));
-          if (found) chosen = found as typeof HARDCODED_STRAINS[number];
-        } else if (strainName) {
-          const byName = strains.find(s => `${s.name}`.toLowerCase() === `${strainName}`.toLowerCase());
-          if (byName) chosen = byName as typeof HARDCODED_STRAINS[number];
-        }
-        const unit = chosen?.mintPriceSeed || 0;
-        const total = unit * count;
-        
-        console.log('[MINT_TOOL] Selected strain:', { id: chosen?.id, name: chosen?.name, unitPrice: unit, total });
+      console.log('[MINT_TOOL] Tool called with:', { count, strain, strainName, toolUserAddress, execute, bodyUserAddress: userAddress });
 
-        // If execute is false, just return estimate
-        if (!execute || !effectiveUserAddress) {
-          console.log('[MINT_TOOL] Returning estimate only:', { execute, hasAddress: !!effectiveUserAddress });
-          return {
-            strainId: chosen?.id,
-            strainName: chosen?.name,
-            unitSeedPrice: unit,
-            totalSeedRequired: total,
-            estimateOnly: true,
-            next: 'To execute: provide your wallet address and confirm execution.'
-          };
-        }
+      // Use userAddress from tool parameter or fallback to the one from request body
+      const effectiveUserAddress = toolUserAddress || userAddress;
+      console.log('[MINT_TOOL] Effective user address:', effectiveUserAddress);
 
-        // Actually execute the mint
-        console.log('[MINT_TOOL] Executing mint...');
-        try {
-          const origin = (() => { try { return new URL(req.url).origin; } catch { return ''; } })();
-          const base = process.env.NEXT_PUBLIC_URL || origin;
-          const mintUrl = `${base}/api/agent/mint`;
-          const requestBody = {
-            userAddress: effectiveUserAddress,
-            count,
-            strainId: chosen?.id,
-            totalSeedRequired: total,
-            preparedSpendCalls: Array.isArray((preparedSpendCalls as any)) ? preparedSpendCalls : undefined,
-          };
-          
-          console.log('[MINT_TOOL] Fetching:', { url: mintUrl, base, origin, body: requestBody });
-          
-          const response = await fetch(mintUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-          });
+      // Use hardcoded strains dataset
+      const strains = HARDCODED_STRAINS;
+      let chosen: typeof HARDCODED_STRAINS[number] = strains[0];
+      if (typeof strain === 'number') {
+        const found = strains.find(s => s.id === Number(strain));
+        if (found) chosen = found as typeof HARDCODED_STRAINS[number];
+      } else if (strainName) {
+        const byName = strains.find(s => `${s.name}`.toLowerCase() === `${strainName}`.toLowerCase());
+        if (byName) chosen = byName as typeof HARDCODED_STRAINS[number];
+      }
+      const unit = chosen?.mintPriceSeed || 0;
+      const total = unit * count;
 
-          console.log('[MINT_TOOL] Response received:', { 
-            status: response.status, 
-            statusText: response.statusText,
-            ok: response.ok,
-            contentType: response.headers.get('content-type'),
-            headers: Object.fromEntries(response.headers.entries())
-          });
+      console.log('[MINT_TOOL] Selected strain:', { id: chosen?.id, name: chosen?.name, unitPrice: unit, total });
 
-          // Check if response is JSON before parsing
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            const text = await response.text();
-            console.error('[MINT_TOOL] Non-JSON response:', { status: response.status, contentType, textPreview: text.substring(0, 500) });
-            return {
-              error: true,
-              message: `Mint endpoint returned non-JSON response (${response.status}): ${text.substring(0, 200)}`,
-              strainId: chosen?.id,
-              strainName: chosen?.name,
-              totalSeedRequired: total,
-            };
-          }
+      // If execute is false, just return estimate
+      if (!execute || !effectiveUserAddress) {
+        console.log('[MINT_TOOL] Returning estimate only:', { execute, hasAddress: !!effectiveUserAddress });
+        return {
+          strainId: chosen?.id,
+          strainName: chosen?.name,
+          unitSeedPrice: unit,
+          totalSeedRequired: total,
+          estimateOnly: true,
+          next: 'To execute: provide your wallet address and confirm execution.'
+        };
+      }
 
-          const result = await response.json();
-          console.log('[MINT_TOOL] Parsed JSON result:', JSON.stringify(result, null, 2));
-          
-          if (!response.ok) {
-            console.error('[MINT_TOOL] Response not OK:', { status: response.status, result });
-            return {
-              error: true,
-              message: result.error || 'Failed to execute mint',
-              strainId: chosen?.id,
-              strainName: chosen?.name,
-              totalSeedRequired: total,
-            };
-          }
+      // Actually execute the mint
+      console.log('[MINT_TOOL] Executing mint...');
+      try {
+        const origin = (() => { try { return new URL(req.url).origin; } catch { return ''; } })();
+        const base = process.env.NEXT_PUBLIC_URL || origin;
+        const mintUrl = `${base}/api/agent/mint`;
+        const requestBody = {
+          userAddress: effectiveUserAddress,
+          count,
+          strainId: chosen?.id,
+          totalSeedRequired: total,
+          preparedSpendCalls: Array.isArray((preparedSpendCalls as any)) ? preparedSpendCalls : undefined,
+        };
 
-          console.log('[MINT_TOOL] Mint successful:', { transactionHash: result.spendTransactionHash || result.result?.transactionHash, message: result.message });
-          return {
-            success: true,
-            strainId: chosen?.id,
-            strainName: chosen?.name,
-            plantsMinited: count,
-            seedSpent: total,
-            transactionHash: result.spendTransactionHash || result.result?.transactionHash,
-            message: result.message,
-            executed: true,
-          };
+        console.log('[MINT_TOOL] Fetching:', { url: mintUrl, base, origin, body: requestBody });
 
-        } catch (error: any) {
-          console.error('[MINT_TOOL] Error during mint execution:', {
-            error: error.message,
-            stack: error.stack,
-            name: error.name,
-            cause: error.cause
-          });
+        const response = await fetch(mintUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+
+        console.log('[MINT_TOOL] Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          contentType: response.headers.get('content-type'),
+          headers: Object.fromEntries(response.headers.entries())
+        });
+
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('[MINT_TOOL] Non-JSON response:', { status: response.status, contentType, textPreview: text.substring(0, 500) });
           return {
             error: true,
-            message: error.message || 'Network error during mint execution',
+            message: `Mint endpoint returned non-JSON response (${response.status}): ${text.substring(0, 200)}`,
             strainId: chosen?.id,
             strainName: chosen?.name,
             totalSeedRequired: total,
           };
         }
-      };
+
+        const result = await response.json();
+        console.log('[MINT_TOOL] Parsed JSON result:', JSON.stringify(result, null, 2));
+
+        if (!response.ok) {
+          console.error('[MINT_TOOL] Response not OK:', { status: response.status, result });
+          return {
+            error: true,
+            message: result.error || 'Failed to execute mint',
+            strainId: chosen?.id,
+            strainName: chosen?.name,
+            totalSeedRequired: total,
+          };
+        }
+
+        console.log('[MINT_TOOL] Mint successful:', { transactionHash: result.spendTransactionHash || result.result?.transactionHash, message: result.message });
+        return {
+          success: true,
+          strainId: chosen?.id,
+          strainName: chosen?.name,
+          plantsMinited: count,
+          seedSpent: total,
+          transactionHash: result.spendTransactionHash || result.result?.transactionHash,
+          message: result.message,
+          executed: true,
+          // Removed duplicate fields to clean up
+        };
+
+      } catch (error: any) {
+        console.error('[MINT_TOOL] Error during mint execution:', {
+          error: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        });
+        return {
+          error: true,
+          message: error.message || 'Network error during mint execution',
+          strainId: chosen?.id,
+          strainName: chosen?.name,
+          totalSeedRequired: total,
+        };
+      }
+    };
 
     const mintPlants = tool({
       description: 'Mint Pixotchi plants for the user. Use execute=false for estimates, execute=true when user confirms.',
-      inputSchema: mintPlantsParams,
-      execute: mintPlantsExecute
+      inputSchema: mintPlantsParams as any,
+      execute: mintPlantsExecute,
+      strict: true,
     });
 
     const agentProvider = getAgentAIProvider();
@@ -203,24 +206,24 @@ export async function POST(req: NextRequest) {
     - Always use the userAddress from context. If missing, ask the user to connect.
     - If a permission/allowance/time-window error occurs, clearly explain that spend permission for your agent is missing/insufficient/expired and ask the user to grant or increase it.
     - Do not attempt any actions beyond ZEST minting.
-    - Always and VERY briefly hint at users that you will be gettingtin more features and abilities soon.
+    - Always and VERY briefly hint at users that you will be getting more features and abilities soon.
     - Use 🌱 and Base emoji (🟦) when fit.`;
 
     // Enhanced prompt with context and conversation history
-    let enhancedPrompt = userAddress ? 
-      `User Address: ${userAddress}\nUser Request: ${prompt}` : 
+    let enhancedPrompt = userAddress ?
+      `User Address: ${userAddress}\nUser Request: ${prompt}` :
       `User Request: ${prompt}`;
-    
+
     // Add conversation context if available
     if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
       const recentHistory = conversationHistory.slice(-4); // Last 4 messages
-      const historyText = recentHistory.map((msg: any) => 
+      const historyText = recentHistory.map((msg: any) =>
         `${msg.role === 'user' ? 'User' : 'Agent'}: ${msg.content}`
       ).join('\n');
       enhancedPrompt = `Recent conversation:\n${historyText}\n\nCurrent request:\n${enhancedPrompt}`;
     }
 
-    const toolBundle: Record<string, any> = { list_strains: listStrains, mint_plants: mintPlants };
+    const toolBundle = { list_strains: listStrains, mint_plants: mintPlants };
 
     console.log('[AGENT_CHAT] Starting generateText with:', {
       hasTools: !!toolBundle,
@@ -231,7 +234,7 @@ export async function POST(req: NextRequest) {
 
     const agentModelConfig = getAgentModelConfig();
     let model;
-    
+
     if (agentProvider === 'claude') {
       model = anthropic(agentModelConfig.model);
     } else if (agentProvider === 'google') {
@@ -240,13 +243,32 @@ export async function POST(req: NextRequest) {
       model = openai(agentModelConfig.model);
     }
 
+    // Construct Messages Array for V6
+    const messages: any[] = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    // Add conversation history if available
+    if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+      const recentHistory = conversationHistory.slice(-10); // Last 10 messages
+      messages.push(...recentHistory.map((msg: any) => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      })));
+    }
+
+    // Add current request
+    messages.push({
+      role: 'user',
+      content: enhancedPrompt // This variable contains User Address + Prompt
+    });
+
     const { text, toolResults } = await generateText({
       model,
-      system: systemPrompt,
-      tools: toolBundle,
-      prompt: enhancedPrompt,
-      stopWhen: stepCountIs(5), // Enable multi-step calls so model generates text after tool results
-    });
+      messages,
+      tools: toolBundle as any,
+      maxSteps: 5, // Enable multi-step calls so model generates text after tool results
+    } as any);
 
     console.log('[AGENT_CHAT] GenerateText completed:', {
       textLength: text?.length || 0,

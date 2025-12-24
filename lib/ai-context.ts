@@ -24,7 +24,7 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 - 🚨 ALERT: If a plant's \`timeUntilStarving\` is <3h, prioritize urgent care guidance.
 - DO NOT make up or invent data: leaderboard positions, item costs, contract addresses, token prices, or game states.
 
-**Context & Data Handling:**s
+**Context & Data Handling:**
 - User's current game stats are provided in each message—use them naturally in your response.
 - Repeat player stat values exactly as they appear in your context (avoid conversions).
 - When referencing in-game features, mention specific app tabs (Farm, Mint, Ranking, Swap, About, Chat).
@@ -51,7 +51,7 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 **Context Updated:** December 2025
-**ongoing special event:** Users on Base app that have their X account linked, can claim a free plant on mint tab (only on base app and only 1 free plant))
+**ongoing special event:** Users on Base app that have their X account linked, can claim a free plant on mint tab (only on base app and only 1 free plant)
 **Real-time Data Handling:** User stats are provided with each request; use them directly.
 **Hallucination Risk Mitigation:** Do NOT invent prices, addresses, or game states not in this guide or user context.
 
@@ -305,7 +305,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 ### Daily Streaks
 - Streak increases when at least one tracked action is logged on a new UTC day (mission completion, chat activity, etc.).
 - Missing a full UTC day resets the current streak but keeps the all-time best value.
-- Current streak, best streak, daily mission score (out of 80), and lifetime Rocks points are shown in the Abwhout tab under “Farmer's Tasks”.
+- Current streak, best streak, daily mission score (out of 80), and lifetime Rocks points are shown in the About tab under “Farmer's Tasks”.
 
 ---
 
@@ -339,7 +339,7 @@ Easter egg that is activated by finding the secret pattern/key in game.
 **I Cannot Verify (Real-Time Data):**
 - Current LEAF/SEED staking ratio → Check Staking section from status bar.
 - Live leaderboard positions → Check Ranking tab.
-- Exact ETH/token prices → Check Swap tab for live prices and cha.
+- Exact ETH/token prices → Check Swap tab for live prices and charts.
 - Exact burn amounts → Check contract on Basescan.
 - Current plant balances or in-game inventory → Not provided in every request.
 
@@ -393,39 +393,25 @@ All actions in Pixotchi are **onchain transactions on Base**. Using a **Coinbase
 export const GAME_DOCS_CONTEXT = SYSTEM_PROMPT + "\n\n" + KNOWLEDGE_BASE;
 
 // Build proper system and user message structure for Anthropic API with Prompt Caching
+// Build proper system and user message structure
 export function buildAIPrompt(userMessage: string, conversationHistory?: string, userStats?: string): {
-  systemBlocks: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+  systemPrompt: string;
+  knowledgeBase: string; // Separate so we can cache this specifically
   userContent: string;
 } {
-  // System prompt with cache control - split into blocks for optimal caching
-  // Block 1: Response guidelines (small, frequently used)
+  // System guidelines (small, frequently used)
   const responseGuidelines = SYSTEM_PROMPT.split('## RESPONSE GUIDELINES')[0] + '## RESPONSE GUIDELINES' +
     SYSTEM_PROMPT.split('## RESPONSE GUIDELINES')[1].split('---')[0];
-
-  // Block 2: Knowledge base context (large, rarely changes) - MARK WITH CACHE_CONTROL
-  const knowledgeBaseBlock = KNOWLEDGE_BASE;
-
-  const systemBlocks = [
-    {
-      type: "text" as const,
-      text: responseGuidelines,
-      // First block: no cache control to ensure it's readable
-    },
-    {
-      type: "text" as const,
-      text: knowledgeBaseBlock,
-      // Second block: mark for caching - this is the heavy content
-      cache_control: { type: "ephemeral" as const }
-    }
-  ];
 
   // User content - actual user question with optional history and stats
   // NOTE: These are NOT cached because they change per request
   let userContent = '';
 
-  if (conversationHistory) {
-    userContent += `Previous conversation:\n${conversationHistory}\n\n`;
-  }
+  // Current architecture keeps history in the user prompt for now to avoid breaking legacy context, 
+  // but for V6 we will try to rely on the messages array structure in the service layer where possible.
+  // Ideally, we shouldn't duplicate history in the prompt if we pass it as messages. 
+  // For safety, we will ONLY include stats and the current question here, 
+  // and let the service layer handle history via the messages array.
 
   // Include user stats if available (formatted as clean JSON)
   if (userStats) {
@@ -435,7 +421,8 @@ export function buildAIPrompt(userMessage: string, conversationHistory?: string,
   userContent += `User Question: ${userMessage}`;
 
   return {
-    systemBlocks,
+    systemPrompt: responseGuidelines,
+    knowledgeBase: KNOWLEDGE_BASE,
     userContent
   };
 }

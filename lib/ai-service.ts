@@ -36,7 +36,7 @@ const google = createGoogleGenerativeAI({
 function getSDKModel() {
   const providerName = getCurrentAIProvider();
   const config = getCurrentModelConfig();
-  
+
   if (providerName === 'openai') {
     return openai(config.model);
   } else if (providerName === 'claude') {
@@ -54,17 +54,17 @@ export function validateAIMessage(message: string): string | null {
   if (!message || typeof message !== 'string') {
     return 'Message is required';
   }
-  
+
   const trimmed = message.trim();
-  
+
   if (trimmed.length < MIN_AI_MESSAGE_LENGTH) {
     return 'Message is too short';
   }
-  
+
   if (trimmed.length > MAX_AI_MESSAGE_LENGTH) {
     return `Message is too long (max ${MAX_AI_MESSAGE_LENGTH} characters)`;
   }
-  
+
   return null;
 }
 
@@ -78,22 +78,22 @@ export async function checkAIRateLimit(address: string): Promise<boolean> {
   try {
     const rateLimitKey = `ai:ratelimit:${address.toLowerCase()}`;
     const lastMessage = await redis.get(rateLimitKey);
-    
+
     if (!lastMessage) return true;
-    
+
     // Validate that lastMessage is a valid timestamp
     if (typeof lastMessage !== 'string' && typeof lastMessage !== 'number') {
       console.warn('Invalid rate limit data type');
       return true; // Fail open
     }
-    
+
     const now = Date.now();
     const lastMessageTime = parseInt(String(lastMessage), 10);
     if (isNaN(lastMessageTime)) {
       console.warn('Invalid rate limit timestamp');
       return true; // Fail open
     }
-    
+
     return (now - lastMessageTime) >= (AI_RATE_LIMIT_WINDOW * 1000);
   } catch (error) {
     console.error('Rate limit check failed:', error);
@@ -149,7 +149,7 @@ export async function getOrCreateConversation(address: string, firstMessage?: st
   // Create new conversation
   const conversationId = nanoid();
   const now = Date.now();
-  
+
   const conversation: AIConversation = {
     id: conversationId,
     address: lowerAddress,
@@ -162,7 +162,7 @@ export async function getOrCreateConversation(address: string, firstMessage?: st
   };
 
   const conversationKey = `ai:conversations:${lowerAddress}:${conversationId}`;
-  
+
   try {
     // Use pipeline for atomic updates
     const pipeline = redis.pipeline();
@@ -180,8 +180,8 @@ export async function getOrCreateConversation(address: string, firstMessage?: st
 
 // Store AI chat message
 export async function storeAIMessage(
-  address: string, 
-  message: string, 
+  address: string,
+  message: string,
   type: 'user' | 'assistant',
   conversationId: string,
   tokensUsed: number = 0
@@ -193,7 +193,7 @@ export async function storeAIMessage(
   const messageId = nanoid();
   const timestamp = Date.now();
   const lowerAddress = address.toLowerCase();
-  
+
   const aiMessage: AIChatMessage = {
     id: messageId,
     conversationId,
@@ -215,14 +215,14 @@ export async function storeAIMessage(
 
     // 1. Store message object
     pipeline.set(messageKey, JSON.stringify(aiMessage), { ex: AI_MESSAGE_TTL });
-    
+
     // 2. Add key to ordered list (replaces KEYS scan)
     pipeline.rpush(listKey, messageKey);
     pipeline.expire(listKey, AI_MESSAGE_TTL);
 
     // 3. Update conversation metadata
     const conversationData = await redis.get(conversationKey);
-    
+
     if (conversationData) {
       let conversation: AIConversation;
       if (typeof conversationData === 'object') {
@@ -230,11 +230,11 @@ export async function storeAIMessage(
       } else {
         conversation = JSON.parse(conversationData as string);
       }
-      
+
       conversation.lastMessageAt = timestamp;
       conversation.messageCount += 1;
       conversation.totalTokens += tokensUsed;
-      
+
       pipeline.set(conversationKey, JSON.stringify(conversation), { ex: AI_MESSAGE_TTL });
     }
 
@@ -255,10 +255,10 @@ export async function getAIConversationMessages(conversationId: string, limit: n
 
   try {
     const listKey = `ai:conversation_messages:${conversationId}`;
-    
+
     // 1. Try to get from new List structure first
     let messageKeys = await redis.lrange(listKey, -limit, -1);
-    
+
     // 2. Fallback to KEYS if List is empty (migration path)
     if (messageKeys.length === 0) {
       const legacyKeys = await redis.keys(`ai:messages:${conversationId}:*`);
@@ -270,7 +270,7 @@ export async function getAIConversationMessages(conversationId: string, limit: n
           return timestampA - timestampB;
         });
         messageKeys = legacyKeys.slice(-limit);
-        
+
         // Optional: Backfill list for future speed
         if (messageKeys.length > 0) {
           await redis.rpush(listKey, ...messageKeys);
@@ -283,7 +283,7 @@ export async function getAIConversationMessages(conversationId: string, limit: n
 
     // 3. Fetch all message data in one batch
     const dataArray = await redis.mget(...messageKeys);
-    
+
     const messages: AIChatMessage[] = [];
     for (const data of dataArray) {
       if (data) {
@@ -315,12 +315,10 @@ export async function sendAIMessage(address: string, message: string): Promise<{
   }
 
   const conversationId = await getOrCreateConversation(address, message);
-  
+
   // Get conversation history for context
   const historyMessages = await getAIConversationMessages(conversationId, 10);
-  const conversationHistory = historyMessages
-    .map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.message}`)
-    .join('\n');
+  // History is now mapped directly to the messages array later
 
   // Fetch user game stats
   let userStats: string | undefined;
@@ -335,7 +333,8 @@ export async function sendAIMessage(address: string, message: string): Promise<{
   }
 
   // Build structured prompt with proper system/user separation + user stats
-  const promptData = buildAIPrompt(message, conversationHistory, userStats);
+  // Build structured prompt data
+  const { systemPrompt, knowledgeBase, userContent } = buildAIPrompt(message, undefined, userStats);
 
   // Store user message
   const userMessage = await storeAIMessage(address, message, 'user', conversationId);
@@ -343,36 +342,48 @@ export async function sendAIMessage(address: string, message: string): Promise<{
   try {
     console.log('📝 AI Prompt Info:', {
       messageLength: message.length,
-      hasHistory: !!conversationHistory,
+      hasHistory: historyMessages.length > 0,
       provider: getCurrentAIProvider(),
       model: getCurrentModelConfig().model,
     });
 
     const model = getSDKModel();
-    
-    // Map our promptData structure to the SDK's generateText input
-    let system = '';
-    let prompt = '';
-    
-    if (typeof promptData === 'string') {
-      prompt = promptData;
-    } else if ('systemBlocks' in promptData && promptData.systemBlocks) {
-      system = promptData.systemBlocks.map(b => b.text).join('\n\n');
-      prompt = promptData.userContent;
-    } else {
-      // @ts-ignore - legacy structure check
-      system = promptData.system || '';
-      // @ts-ignore
-      prompt = promptData.userContent || '';
-    }
 
-    // Use Vercel AI SDK generateText
-    // Note: maxTokens and temperature are not supported as direct properties in AI SDK v5
-    // They can be configured at the model level if needed
+    // Construct Vercel AI SDK v6 Messages Array
+    // We use explicit 'any' for the message construction to avoid strict type issues 
+    // with providerOptions during the migration, but the structure is V6 compliant.
+    const messages: any[] = [
+      // 1. Core System Prompt (Guidelines)
+      {
+        role: 'system',
+        content: systemPrompt
+      },
+      // 2. Knowledge Base (Cached)
+      {
+        role: 'system',
+        content: knowledgeBase,
+        providerOptions: {
+          anthropic: { cacheControl: { type: 'ephemeral' } }
+        }
+      },
+      // 3. Conversation History
+      ...historyMessages.map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.message
+      })),
+      // 4. Current User Content (Request + Stats)
+      {
+        role: 'user',
+        content: userContent
+      }
+    ];
+
+    // Use Vercel AI SDK generateText with messages array
     const result = await generateText({
       model,
-      system: system || undefined, // only pass if present
-      prompt,
+      messages,
+      // Note: we do NOT use 'system' or 'prompt' top-level properties here anymore, 
+      // everything is in the 'messages' array for full control.
     });
 
     const response = result.text;
@@ -397,12 +408,12 @@ export async function sendAIMessage(address: string, message: string): Promise<{
       provider: getCurrentAIProvider(),
       model: getCurrentModelConfig().model,
       error: error instanceof Error ? error.message : String(error),
-      address: address.slice(0, 6) + '...' 
+      address: address.slice(0, 6) + '...'
     });
-    
+
     // Store error response
     const errorResponse = await storeAIMessage(
-      address, 
+      address,
       'Sorry, I encountered an error while processing your request. Please try again later.',
       'assistant',
       conversationId
@@ -419,21 +430,21 @@ export async function trackAIUsage(address: string, tokensUsed: number): Promise
   const today = new Date().toISOString().split('T')[0];
   const usageKey = `ai:usage:${address.toLowerCase()}:${today}`;
   const dateIndexKey = `ai:usage_index:${today}`;
-  
+
   try {
     const pipeline = redis.pipeline();
-    
+
     // 1. Get current usage
     const currentUsage = await redis.get(usageKey);
     let totalTokens = tokensUsed;
     let totalMessages = 1;
-    
+
     if (currentUsage) {
       const usage = typeof currentUsage === 'object' ? currentUsage : JSON.parse(currentUsage as string);
       totalTokens += usage.tokens || 0;
       totalMessages += usage.messages || 0;
     }
-    
+
     // 2. Update usage
     pipeline.set(usageKey, JSON.stringify({
       date: today,
@@ -444,7 +455,7 @@ export async function trackAIUsage(address: string, tokensUsed: number): Promise
     // 3. Add to date index (avoids KEYS * scan for usage stats)
     pipeline.sadd(dateIndexKey, usageKey);
     pipeline.expire(dateIndexKey, AI_USAGE_TTL);
-    
+
     await pipeline.exec();
   } catch (error) {
     console.error('Error tracking AI usage:', error);
@@ -458,14 +469,14 @@ export async function getAllAIConversations(): Promise<AIConversation[]> {
   try {
     // Use Set index instead of KEYS *
     let conversationKeys = await redis.smembers('ai:conversations:index');
-    
+
     // Fallback to KEYS for migration if index empty
     if (conversationKeys.length === 0) {
       conversationKeys = await redis.keys('ai:conversations:*');
       // Filter out non-conversation keys (like indices)
-      conversationKeys = conversationKeys.filter(k => k.split(':').length === 4); 
+      conversationKeys = conversationKeys.filter(k => k.split(':').length === 4);
     }
-    
+
     if (conversationKeys.length === 0) return [];
 
     // Fetch all conversations in batch
@@ -476,11 +487,11 @@ export async function getAllAIConversations(): Promise<AIConversation[]> {
     }
 
     const conversations: AIConversation[] = [];
-    
+
     for (const chunk of chunks) {
       if (chunk.length === 0) continue;
       const dataArray = await redis.mget(...chunk);
-      
+
       for (const data of dataArray) {
         if (data) {
           try {
@@ -517,18 +528,18 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
   const totalTokens = conversations.reduce((sum, conv) => sum + conv.totalTokens, 0);
 
   const today = new Date().toISOString().split('T')[0];
-  
+
   let dailyUsage = 0;
   try {
     // Try using the index
     const dateIndexKey = `ai:usage_index:${today}`;
     let usageKeys = await redis.smembers(dateIndexKey);
-    
+
     // Fallback if index empty
     if (usageKeys.length === 0) {
       usageKeys = await redis.keys(`ai:usage:*:${today}`);
     }
-    
+
     if (usageKeys.length > 0) {
       // Chunked MGET
       const chunks = [];
@@ -540,10 +551,10 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
         if (chunk.length === 0) continue;
         const dataArray = await redis.mget(...chunk);
         for (const data of dataArray) {
-           if (data) {
-             const usage = typeof data === 'object' ? data : JSON.parse(data as string);
-             dailyUsage += usage.tokens || 0;
-           }
+          if (data) {
+            const usage = typeof data === 'object' ? data : JSON.parse(data as string);
+            dailyUsage += usage.tokens || 0;
+          }
         }
       }
     }
@@ -568,15 +579,15 @@ export async function deleteAIConversation(conversationId: string): Promise<bool
 
   try {
     const pipeline = redis.pipeline();
-    
+
     // 1. Get all messages to delete (using list or scan)
     const listKey = `ai:conversation_messages:${conversationId}`;
     const messageKeys = await redis.lrange(listKey, 0, -1);
-    
+
     if (messageKeys.length > 0) {
       pipeline.del(...messageKeys);
     }
-    
+
     // Also clean up legacy keys if any remain
     const legacyKeys = await redis.keys(`ai:messages:${conversationId}:*`);
     if (legacyKeys.length > 0) {
@@ -589,16 +600,16 @@ export async function deleteAIConversation(conversationId: string): Promise<bool
       pipeline.del(...conversationKeys);
       // Also remove from index
       pipeline.srem('ai:conversations:index', ...conversationKeys);
-      
+
       for (const k of conversationKeys) {
-          const parts = k.split(':');
-          if (parts.length >= 3) {
-             const address = parts[2];
-             pipeline.del(`ai:user_active_conversation:${address}`);
-          }
+        const parts = k.split(':');
+        if (parts.length >= 3) {
+          const address = parts[2];
+          pipeline.del(`ai:user_active_conversation:${address}`);
+        }
       }
     }
-    
+
     // 3. Delete the message list
     pipeline.del(listKey);
 
