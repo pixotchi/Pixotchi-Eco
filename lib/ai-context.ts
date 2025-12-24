@@ -393,39 +393,25 @@ All actions in Pixotchi are **onchain transactions on Base**. Using a **Coinbase
 export const GAME_DOCS_CONTEXT = SYSTEM_PROMPT + "\n\n" + KNOWLEDGE_BASE;
 
 // Build proper system and user message structure for Anthropic API with Prompt Caching
+// Build proper system and user message structure
 export function buildAIPrompt(userMessage: string, conversationHistory?: string, userStats?: string): {
-  systemBlocks: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+  systemPrompt: string;
+  knowledgeBase: string; // Separate so we can cache this specifically
   userContent: string;
 } {
-  // System prompt with cache control - split into blocks for optimal caching
-  // Block 1: Response guidelines (small, frequently used)
+  // System guidelines (small, frequently used)
   const responseGuidelines = SYSTEM_PROMPT.split('## RESPONSE GUIDELINES')[0] + '## RESPONSE GUIDELINES' +
     SYSTEM_PROMPT.split('## RESPONSE GUIDELINES')[1].split('---')[0];
-
-  // Block 2: Knowledge base context (large, rarely changes) - MARK WITH CACHE_CONTROL
-  const knowledgeBaseBlock = KNOWLEDGE_BASE;
-
-  const systemBlocks = [
-    {
-      type: "text" as const,
-      text: responseGuidelines,
-      // First block: no cache control to ensure it's readable
-    },
-    {
-      type: "text" as const,
-      text: knowledgeBaseBlock,
-      // Second block: mark for caching - this is the heavy content
-      cache_control: { type: "ephemeral" as const }
-    }
-  ];
 
   // User content - actual user question with optional history and stats
   // NOTE: These are NOT cached because they change per request
   let userContent = '';
 
-  if (conversationHistory) {
-    userContent += `Previous conversation:\n${conversationHistory}\n\n`;
-  }
+  // Current architecture keeps history in the user prompt for now to avoid breaking legacy context, 
+  // but for V6 we will try to rely on the messages array structure in the service layer where possible.
+  // Ideally, we shouldn't duplicate history in the prompt if we pass it as messages. 
+  // For safety, we will ONLY include stats and the current question here, 
+  // and let the service layer handle history via the messages array.
 
   // Include user stats if available (formatted as clean JSON)
   if (userStats) {
@@ -435,7 +421,8 @@ export function buildAIPrompt(userMessage: string, conversationHistory?: string,
   userContent += `User Question: ${userMessage}`;
 
   return {
-    systemBlocks,
+    systemPrompt: responseGuidelines,
+    knowledgeBase: KNOWLEDGE_BASE,
     userContent
   };
 }
