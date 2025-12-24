@@ -9,6 +9,7 @@ import { differenceInSeconds } from 'date-fns';
 const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
 const THROTTLE_SECONDS = 6 * 60 * 60; // 6 hours cooldown between notifications
 const REDIS_KEY_PREFIX = 'notif:plant12h';
+const BATCH_SIZE = 30; // Process 30 FIDs in parallel
 
 // Validation Schemas
 const QuerySchema = z.object({
@@ -122,6 +123,115 @@ function shouldThrottlePlant(fid: number, plantId: number, opts?: { dry?: boolea
   })();
 }
 
+// Type for processing result
+type FidProcessResult = {
+  fid: number;
+  address: string | null;
+  userThrottled: boolean;
+  hasEligible: boolean;
+  dueCount: number;
+  plants: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }>;
+};
+
+/**
+ * Process a single FID - resolve address, get plants, check eligibility
+ */
+async function processFid(
+  fid: number,
+  rpcUrl: string,
+  now: Date,
+  debug: boolean,
+  dryRun: boolean
+): Promise<FidProcessResult> {
+  // Resolve address: prefer cached mapping, fallback to Farcaster API
+  let address: string | null = null;
+  try {
+    const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
+    if (cached) {
+      address = String(cached).toLowerCase();
+    } else {
+      const res = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`);
+      if (res.ok) {
+        const data = await res.json();
+        const addr = data?.result?.address?.address as string | undefined;
+        if (addr) {
+          address = addr.toLowerCase();
+          await (redis as any)?.set?.(`fidmap:${fid}`, address);
+        }
+      }
+    }
+  } catch { }
+
+  if (!address) {
+    return { fid, address: null, userThrottled: false, hasEligible: false, dueCount: 0, plants: [] };
+  }
+
+  const plants = await getPlantsByOwnerWithRpc(address, rpcUrl);
+  const plantDebug: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }> = [];
+
+  // Clear safe episodes (when plant has more than threshold time left)
+  if (!debug && !dryRun) {
+    for (const p of plants || []) {
+      const t = Number(p.timeUntilStarving ?? 0);
+      const plantDate = new Date(t * 1000);
+      const left = differenceInSeconds(plantDate, now);
+      if (left > THRESHOLD_SECONDS) {
+        await clearPlantEpisode(fid, Number(p.id));
+      }
+    }
+  }
+
+  // Find plants with 12h or less remaining
+  const due = (plants || []).filter(p => {
+    const t = Number(p.timeUntilStarving ?? 0);
+    const plantDate = new Date(t * 1000);
+    const left = differenceInSeconds(plantDate, now);
+    return left > 0 && left <= THRESHOLD_SECONDS;
+  });
+
+  // Per-user throttle: bypass in debug/dry mode
+  const userThrottled = (debug || dryRun) ? false : await shouldThrottle(fid, { dry: dryRun });
+
+  if (due.length === 0) {
+    for (const p of plants || []) {
+      const t = Number(p.timeUntilStarving ?? 0);
+      const plantDate = new Date(t * 1000);
+      const left = differenceInSeconds(plantDate, now);
+      plantDebug.push({
+        id: Number(p.id),
+        timestamp: t,
+        left,
+        due: false,
+        plantThrottled: false
+      });
+    }
+    return { fid, address, userThrottled, hasEligible: false, dueCount: 0, plants: plantDebug };
+  }
+
+  let hasAny = false;
+  for (const p of due) {
+    const pid = Number(p.id);
+    const plantThrottled = (debug || dryRun) ? false : await shouldThrottlePlant(fid, pid, { dry: dryRun });
+    if (!plantThrottled) {
+      hasAny = true;
+    }
+    const t = Number(p.timeUntilStarving ?? 0);
+    const plantDate = new Date(t * 1000);
+    const left = differenceInSeconds(plantDate, now);
+    plantDebug.push({ id: pid, timestamp: t, left, due: true, plantThrottled });
+  }
+
+  // Include non-due plants in debug output
+  for (const p of (plants || []).filter(pp => due.every(d => Number(d.id) !== Number(pp.id)))) {
+    const t = Number(p.timeUntilStarving ?? 0);
+    const plantDate = new Date(t * 1000);
+    const left = differenceInSeconds(plantDate, now);
+    plantDebug.push({ id: Number(p.id), timestamp: t, left, due: false, plantThrottled: false });
+  }
+
+  return { fid, address, userThrottled, hasEligible: hasAny, dueCount: due.length, plants: plantDebug };
+}
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes (Pro plan limit)
@@ -166,110 +276,41 @@ export async function GET(req: NextRequest) {
     let skippedThrottled = 0;
     let plantEpisodes = 0;
     const fidsToNotify: number[] = [];
+    const details: FidProcessResult[] = [];
 
-    const details: Array<{
-      fid: number;
-      address?: string | null;
-      userThrottled?: boolean;
-      plants?: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }>;
-      dueCount?: number
-    }> = [];
+    // Process FIDs in parallel batches
+    for (let i = 0; i < fids.length; i += BATCH_SIZE) {
+      const batch = fids.slice(i, i + BATCH_SIZE);
 
-    for (const fid of fids) {
-      // Resolve address: prefer cached mapping, fallback to Farcaster API
-      let address: string | null = null;
-      try {
-        address = await (async () => {
-          const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
-          if (cached) return String(cached).toLowerCase();
-          const res = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`);
-          if (!res.ok) return null;
-          const data = await res.json();
-          const addr = data?.result?.address?.address as string | undefined;
-          if (addr) await (redis as any)?.set?.(`fidmap:${fid}`, addr.toLowerCase());
-          return addr ? addr.toLowerCase() : null;
-        })();
-      } catch { }
+      const results = await Promise.allSettled(
+        batch.map(fid => processFid(fid, rpcUrl, now, debug, dryRun))
+      );
 
-      if (!address) {
-        skippedNoAddress++;
-        details.push({ fid, address: null, dueCount: 0, plants: [] });
-        continue;
-      }
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          const r = result.value;
+          details.push(r);
 
-      const plants = await getPlantsByOwnerWithRpc(address, rpcUrl);
-      resolved++;
-
-      // Build plant debug entries
-      const plantDebug: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }> = [];
-
-      // Clear safe episodes (when plant has more than threshold time left)
-      if (!debug && !dryRun) {
-        for (const p of plants || []) {
-          const t = Number(p.timeUntilStarving ?? 0);
-          const plantDate = new Date(t * 1000);
-          const left = differenceInSeconds(plantDate, now);
-          if (left > THRESHOLD_SECONDS) {
-            await clearPlantEpisode(fid, Number(p.id));
+          if (!r.address) {
+            skippedNoAddress++;
+          } else {
+            resolved++;
+            if (r.dueCount === 0) {
+              skippedNoDue++;
+            } else if (r.userThrottled) {
+              skippedThrottled++;
+            } else if (r.hasEligible) {
+              fidsToNotify.push(r.fid);
+              plantEpisodes += r.plants.filter(p => p.due && !p.plantThrottled).length;
+            }
           }
         }
       }
 
-      // Find plants with 3h or less remaining
-      const due = (plants || []).filter(p => {
-        const t = Number(p.timeUntilStarving ?? 0);
-        const plantDate = new Date(t * 1000);
-        const left = differenceInSeconds(plantDate, now);
-        return left > 0 && left <= THRESHOLD_SECONDS;
-      });
-
-      // Per-user throttle: bypass in debug/dry mode
-      const userThrottled = (debug || dryRun) ? false : await shouldThrottle(fid, { dry: dryRun });
-
-      if (due.length === 0) {
-        skippedNoDue++;
-        for (const p of plants || []) {
-          const t = Number(p.timeUntilStarving ?? 0);
-          const plantDate = new Date(t * 1000);
-          const left = differenceInSeconds(plantDate, now);
-          plantDebug.push({
-            id: Number(p.id),
-            timestamp: t,
-            left,
-            due: left > 0 && left <= THRESHOLD_SECONDS,
-            plantThrottled: false
-          });
-        }
-        details.push({ fid, address, userThrottled, dueCount: 0, plants: plantDebug });
-        continue;
+      // Log progress every 10 batches
+      if ((i / BATCH_SIZE) % 10 === 0) {
+        console.log(`[plant-care cron] Processed ${Math.min(i + BATCH_SIZE, fids.length)}/${fids.length} FIDs`);
       }
-
-      let hasAny = false;
-      for (const p of due) {
-        const pid = Number(p.id);
-        const plantThrottled = (debug || dryRun) ? false : await shouldThrottlePlant(fid, pid, { dry: dryRun });
-        if (plantThrottled) {
-          if (!debug && !dryRun) skippedThrottled++;
-        } else {
-          hasAny = true;
-          plantEpisodes++;
-        }
-        const t = Number(p.timeUntilStarving ?? 0);
-        const plantDate = new Date(t * 1000);
-        const left = differenceInSeconds(plantDate, now);
-        plantDebug.push({ id: pid, timestamp: t, left, due: true, plantThrottled });
-      }
-
-      // Include non-due plants in debug output
-      for (const p of (plants || []).filter(pp => due.every(d => Number(d.id) !== Number(pp.id)))) {
-        const t = Number(p.timeUntilStarving ?? 0);
-        const plantDate = new Date(t * 1000);
-        const left = differenceInSeconds(plantDate, now);
-        plantDebug.push({ id: Number(p.id), timestamp: t, left, due: false, plantThrottled: false });
-      }
-
-      details.push({ fid, address, userThrottled, dueCount: due.length, plants: plantDebug });
-      if (hasAny) fidsToNotify.push(fid);
     }
 
     // Send notifications (unless dry run)
@@ -283,51 +324,44 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, error: publishResult.json || 'publish_failed' }, { status: 500 });
       }
 
-      if (!debug) {
-        try {
-          const ts = Date.now();
-          await (redis as any)?.lpush?.(`${REDIS_KEY_PREFIX}:log`, JSON.stringify({ ts, fids: fidsToNotify }));
-          await (redis as any)?.ltrim?.(`${REDIS_KEY_PREFIX}:log`, 0, 99);
-          for (const fid of fidsToNotify) {
-            await (redis as any)?.hset?.(`${REDIS_KEY_PREFIX}:last`, { [fid]: String(ts) });
-          }
-          try {
-            await (redis as any)?.incrby?.(`${REDIS_KEY_PREFIX}:sentCount`, fidsToNotify.length);
-          } catch { }
-        } catch { }
-      }
-    }
-
-    const summary = {
-      success: true,
-      dryRun,
-      startedAt,
-      endedAt: Date.now(),
-      thresholdHours: THRESHOLD_SECONDS / 3600,
-      fetchedEligible: fids.length,
-      resolvedAddresses: resolved,
-      plantEpisodes,
-      notified: dryRun ? 0 : fidsToNotify.length,
-      wouldNotify: dryRun ? fidsToNotify.length : undefined,
-      skipped: { noAddress: skippedNoAddress, noDue: skippedNoDue, throttled: skippedThrottled },
-      debug: { nowSec: Math.floor(now.getTime() / 1000), details },
-    } as const;
-
-    // Save run stats (unless dry run)
-    if (!dryRun) {
+      // Log for stats
       try {
-        await (redis as any)?.set?.(`${REDIS_KEY_PREFIX}:lastRun`, JSON.stringify(summary), { ex: 3600 });
-        await (redis as any)?.lpush?.(`${REDIS_KEY_PREFIX}:runs`, JSON.stringify(summary));
-        await (redis as any)?.ltrim?.(`${REDIS_KEY_PREFIX}:runs`, 0, 49);
+        await (redis as any)?.set?.(`${REDIS_KEY_PREFIX}:last`, Date.now());
+        await (redis as any)?.incr?.(`${REDIS_KEY_PREFIX}:runs`);
+        await (redis as any)?.incrby?.(`${REDIS_KEY_PREFIX}:sent:count`, fidsToNotify.length);
+        await (redis as any)?.lpush?.(`${REDIS_KEY_PREFIX}:log`, JSON.stringify({
+          ts: Date.now(),
+          sent: fidsToNotify.length,
+          eligible: plantEpisodes,
+          resolved,
+          skippedNoAddress,
+          skippedNoDue,
+          skippedThrottled,
+        }));
+        await (redis as any)?.ltrim?.(`${REDIS_KEY_PREFIX}:log`, 0, 99);
       } catch { }
     }
 
-    return NextResponse.json(summary);
+    const elapsedMs = Date.now() - startedAt;
+    console.log(`[plant-care cron] Completed in ${elapsedMs}ms - notified: ${fidsToNotify.length}, resolved: ${resolved}, skipped: ${skippedNoAddress + skippedNoDue + skippedThrottled}`);
+
+    return NextResponse.json({
+      success: true,
+      dryRun,
+      stats: {
+        totalFids: fids.length,
+        resolved,
+        skippedNoAddress,
+        skippedNoDue,
+        skippedThrottled,
+        eligiblePlants: plantEpisodes,
+        notified: fidsToNotify.length,
+        elapsedMs,
+      },
+      ...(debug ? { details, publishResult } : {}),
+    });
   } catch (e: any) {
+    console.error('[plant-care cron] Error:', e);
     return NextResponse.json({ success: false, error: e?.message || 'cron_failed' }, { status: 500 });
   }
-}
-
-export async function POST(req: NextRequest) {
-  return GET(req);
 }
