@@ -22,9 +22,9 @@ Pixotchi is a P2E onchain game. Grow a playful onchain garden on Base. Mint and 
 - **SEED token**: Used for minting, upgrades, and staking.
 - **Social by default**: Public chat and a friendly community.
 - **Mobile‑first**: Designed for phones; works great inside Farcaster.
-- **Wallet‑friendly**: Supports EOAs, embedded wallets, and smart accounts.
+- **Wallet‑friendly**: Supports EOAs, Privy embedded wallets, and Coinbase smart accounts.
 - **Notifications**: Get reminders when your plants need attention.
-- **AI integrated**: Get assistance from Neural Seed on learning the gameplay and for questions.
+- **AI integrated**: Neural Seed assistant powered by OpenAI, Anthropic, or Google AI.
 - **Agent mode**: Executes approved actions via delegated permissions.
 
 ## Why open source?
@@ -36,12 +36,23 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 
 ## Integrations
 - **Base** – Layer 2 network where Pixotchi runs.
-- **Paymaster** - Gas sponsorship compatibility
+- **Paymaster** – Gas sponsorship compatibility.
 - **Farcaster Mini App** – Native, mobile‑friendly in‑app experience.
 - **Coinbase OnchainKit & CDP** – Wallets, AI Agents and smart account capabilities.
+- **Privy** – Embedded wallet authentication and social login.
 - **EFP** – Onchain Social Graph by Ethereum Follow Protocol.
 - **Memory Protocol** – Onchain Social Identities Graph.
-- **Neynar** - Notifications infra
+- **Neynar** – Notifications infra.
+- **Solana Bridge** – Cross‑chain minting from Solana *(experimental)*.
+
+## Features
+- **Minting** – Mint plants and lands with SEED or strain‑specific tokens.
+- **Daily Missions** – Complete tasks to earn points and climb the leaderboard.
+- **Spin & Box Games** – Mini‑games for bonus rewards and time extensions.
+- **Staking & LP** – Stake SEED to earn rewards; LP via BaseSwap.
+- **Leaderboards** – Compete for top rankings and ETH prizes.
+- **Shop & Upgrades** – Buy items to boost your plants and buildings.
+- **Secret Garden** – Hidden arcade area with special activities.
 
 ## Smart contracts (Base Mainnet)
 - Plant (ERC‑721): 0xeb4e16c804ae9275a655abbc20cd0658a91f9235
@@ -53,7 +64,7 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 
 ## How it works
 1. Connect a wallet (Autoconnects if in Mini app).  
-2. Mint your first plant/land with SEED.  
+2. Mint your first plant or land with SEED (or strain‑specific tokens).  
 3. Check in daily to grow your plants, upgrade buildings, and complete missions.  
 4. Chat, trade, stake SEED, and compete for ETH rewards as you climb the leaderboard.  
 
@@ -67,11 +78,12 @@ npm install
 npm run dev
 ```
 
-Create an `.env.local` with the basics:
+Copy `.env.example` to `.env.local` and fill in the basics:
 - Base RPC endpoint(s)
 - Redis URL (if using chat and persistence locally)
 - Admin key for the dashboard (for admin features)
-- Credentials for embedded wallets or the automation agent (if enabled)
+- AI provider keys (OpenAI, Anthropic, or Google)
+- Credentials for Privy or the automation agent (if enabled)
 
 Common scripts:
 ```bash
