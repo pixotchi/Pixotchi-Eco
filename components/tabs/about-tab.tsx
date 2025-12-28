@@ -411,10 +411,12 @@ export default function AboutTab() {
       <Card>
         <CardContent>
           <p className="text-muted-foreground mb-4">
-            <span className="font-pixel text-foreground">PIXOTCHI</span> is a 1.5 year old tamagotchi-style onchain game on Base where you can mint, grow,
-            and interact with your plants and lands; earning ETH rewards in the process. This App
-            brings an enhanced experience using latest Base features, designed for Base app.
+            <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
           </p>
+          <p className="text-muted-foreground mb-4">
+            Every player follows a different strategy. Some invest in Lands for long-term, passive growth, while others push their plants aggressively using the marketplace to climb rankings faster at a higher cost.
+          </p>
+
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Button
@@ -435,7 +437,10 @@ export default function AboutTab() {
             </div>
             {enabled && (
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => start({ reset: true })}>
+                <Button
+                  onClick={() => start({ reset: true })}
+                  className="bg-value text-white hover:opacity-90"
+                >
                   Tutorial
                 </Button>
                 <Button

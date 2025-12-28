@@ -73,7 +73,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     keywords: [
       "tamagotchi",
-      "onchain game", 
+      "onchain game",
       "Base blockchain",
       "NFT game",
       "virtual pet",
@@ -112,7 +112,7 @@ export async function generateMetadata(): Promise<Metadata> {
     twitter: {
       card: "summary_large_image",
       site: "@pixotchi",
-      creator: "@pixotchi", 
+      creator: "@pixotchi",
       title: "Pixotchi Mini - Onchain Tamagotchi Game",
       description: "Mint, grow, and care for your onchain plants on Base blockchain. The ultimate Web3 pet simulation game.",
       images: [`${baseURL}/og-image-ig.png`],
@@ -214,7 +214,7 @@ export default function RootLayout({
                 "priceCurrency": "USD"
               },
               "creator": {
-                "@type": "Organization", 
+                "@type": "Organization",
                 "name": "Pixotchi Team"
               },
               "genre": ["Simulation", "Blockchain Game", "Virtual Pet"],

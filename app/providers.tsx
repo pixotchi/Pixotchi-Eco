@@ -27,6 +27,8 @@ import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
+import { SnowEffect } from "@/components/ui/snow-effect";
+import { SnowProvider } from "@/lib/snow-context";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum-identity-kit';
 import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
@@ -340,118 +342,121 @@ export function Providers(props: { children: ReactNode }) {
         themes={["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"]}
       >
         <ThemeInitializer />
-        <PaymasterProvider>
-          <PrivyProvider
-            appId={privyAppId}
-            config={{
-              // Dynamic config based on selected surface (privy vs privysolana)
-              appearance: {
-                theme: 'light',
-                walletChainType: privyWalletConfig.walletChainType,
-                // Specify walletList based on mode
-                ...(privyWalletConfig.walletList && {
-                  walletList: privyWalletConfig.walletList,
-                }),
-              },
-              defaultChain: base,
-              supportedChains: [base],
-              loginMethods: ['wallet', 'email'],
-              // Avoid session race conditions by not auto-connecting until hooks report ready
-              embeddedWallets: {
-                // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
-                ethereum: { createOnLogin: 'off' },
-              },
-              // Solana RPC config (only when in Solana mode)
-              ...(privyWalletConfig.solana && {
-                solanaClusters: [
-                  {
-                    name: 'mainnet-beta',
-                    rpcUrl: privyWalletConfig.solana.rpcUrl || 'https://api.mainnet-beta.solana.com',
-                  },
-                ],
-              }),
-              // External Solana wallet connectors (only when in Solana mode)
-              ...(privyWalletConfig.externalWallets && {
-                externalWallets: privyWalletConfig.externalWallets,
-              }),
-            }}
-          >
-            <QueryClientProvider client={queryClient}>
-              <WagmiRouter>
-                <OnchainKitProvider
-                  apiKey={apiKey}
-                  chain={base}
-                  config={{
-                    appearance: {
-                      mode: "auto",
-                      name: "Pixotchi Mini",
-                      logo: process.env.NEXT_PUBLIC_ICON_URL,
+        <SnowProvider>
+          <PaymasterProvider>
+            <PrivyProvider
+              appId={privyAppId}
+              config={{
+                // Dynamic config based on selected surface (privy vs privysolana)
+                appearance: {
+                  theme: 'light',
+                  walletChainType: privyWalletConfig.walletChainType,
+                  // Specify walletList based on mode
+                  ...(privyWalletConfig.walletList && {
+                    walletList: privyWalletConfig.walletList,
+                  }),
+                },
+                defaultChain: base,
+                supportedChains: [base],
+                loginMethods: ['wallet', 'email'],
+                // Avoid session race conditions by not auto-connecting until hooks report ready
+                embeddedWallets: {
+                  // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
+                  ethereum: { createOnLogin: 'off' },
+                },
+                // Solana RPC config (only when in Solana mode)
+                ...(privyWalletConfig.solana && {
+                  solanaClusters: [
+                    {
+                      name: 'mainnet-beta',
+                      rpcUrl: privyWalletConfig.solana.rpcUrl || 'https://api.mainnet-beta.solana.com',
                     },
-                    paymaster: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
-                    analytics: true,
-                  }}
-                  miniKit={{
-                    enabled: true,
-                    autoConnect: true,
-                    notificationProxyUrl: "/api/notify",
-                  }}
-                >
-                  <SafeArea>
-                    <FrameProvider>
-                      <SmartWalletProvider>
-                        <EthModeProvider>
-                          <SolanaWalletProvider>
-                            <BalanceProvider>
-                              <LoadingProvider>
-                                <TutorialBundle>
-                                  {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                                  {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                                  {/** added provider wrapper **/}
-                                  {/* eslint-disable-next-line react/no-children-prop */}
-                                  <Toaster
-                                    position="top-center"
-                                    toastOptions={{
-                                      duration: 4000,
-                                      style: {
-                                        backgroundColor: "hsl(var(--background))",
-                                        color: "hsl(var(--foreground))",
-                                        border: "1px solid hsl(var(--border))",
+                  ],
+                }),
+                // External Solana wallet connectors (only when in Solana mode)
+                ...(privyWalletConfig.externalWallets && {
+                  externalWallets: privyWalletConfig.externalWallets,
+                }),
+              }}
+            >
+              <QueryClientProvider client={queryClient}>
+                <WagmiRouter>
+                  <OnchainKitProvider
+                    apiKey={apiKey}
+                    chain={base}
+                    config={{
+                      appearance: {
+                        mode: "auto",
+                        name: "Pixotchi Mini",
+                        logo: process.env.NEXT_PUBLIC_ICON_URL,
+                      },
+                      paymaster: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
+                      analytics: true,
+                    }}
+                    miniKit={{
+                      enabled: true,
+                      autoConnect: true,
+                      notificationProxyUrl: "/api/notify",
+                    }}
+                  >
+                    <SafeArea>
+                      <FrameProvider>
+                        <SmartWalletProvider>
+                          <EthModeProvider>
+                            <SolanaWalletProvider>
+                              <BalanceProvider>
+                                <LoadingProvider>
+                                  <TutorialBundle>
+                                    {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
+                                    {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
+                                    {/** added provider wrapper **/}
+                                    {/* eslint-disable-next-line react/no-children-prop */}
+                                    <Toaster
+                                      position="top-center"
+                                      toastOptions={{
+                                        duration: 4000,
+                                        style: {
+                                          backgroundColor: "hsl(var(--background))",
+                                          color: "hsl(var(--foreground))",
+                                          border: "1px solid hsl(var(--border))",
+                                          zIndex: 9999,
+                                        },
+                                        success: {
+                                          iconTheme: {
+                                            primary: "hsl(var(--primary))",
+                                            secondary: "hsl(var(--primary-foreground))",
+                                          },
+                                        },
+                                        error: {
+                                          iconTheme: {
+                                            primary: "hsl(var(--destructive))",
+                                            secondary: "hsl(var(--destructive-foreground))",
+                                          },
+                                        },
+                                      }}
+                                      containerStyle={{
                                         zIndex: 9999,
-                                      },
-                                      success: {
-                                        iconTheme: {
-                                          primary: "hsl(var(--primary))",
-                                          secondary: "hsl(var(--primary-foreground))",
-                                        },
-                                      },
-                                      error: {
-                                        iconTheme: {
-                                          primary: "hsl(var(--destructive))",
-                                          secondary: "hsl(var(--destructive-foreground))",
-                                        },
-                                      },
-                                    }}
-                                    containerStyle={{
-                                      zIndex: 9999,
-                                    }}
-                                  />
-                                  {props.children}
-                                  <SlideshowModal />
-                                </TutorialBundle>
-                                <TasksInfoDialog />
-                                <SecretGardenListener />
-                              </LoadingProvider>
-                            </BalanceProvider>
-                          </SolanaWalletProvider>
-                        </EthModeProvider>
-                      </SmartWalletProvider>
-                    </FrameProvider>
-                  </SafeArea>
-                </OnchainKitProvider>
-              </WagmiRouter>
-            </QueryClientProvider>
-          </PrivyProvider>
-        </PaymasterProvider>
+                                      }}
+                                    />
+                                    {props.children}
+                                    <SlideshowModal />
+                                  </TutorialBundle>
+                                  <TasksInfoDialog />
+                                  <SecretGardenListener />
+                                  <SnowEffect />
+                                </LoadingProvider>
+                              </BalanceProvider>
+                            </SolanaWalletProvider>
+                          </EthModeProvider>
+                        </SmartWalletProvider>
+                      </FrameProvider>
+                    </SafeArea>
+                  </OnchainKitProvider>
+                </WagmiRouter>
+              </QueryClientProvider>
+            </PrivyProvider>
+          </PaymasterProvider>
+        </SnowProvider>
       </ServerThemeProvider>
     </ErrorBoundary>
   );

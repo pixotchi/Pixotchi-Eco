@@ -1254,7 +1254,7 @@ export default function MintTab() {
                 disabled={ethBalance < ethQuote.ethAmountWithBuffer}
               />
               {ethBalance < ethQuote.ethAmountWithBuffer ? (
-                <p className="text-xs text-destructive text-center">
+                <p className="text-xs text-value text-center">
                   Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
                 </p>
               ) : (
@@ -1325,7 +1325,7 @@ export default function MintTab() {
                       disabled={hasInsufficientBalance}
                     />
                     {hasInsufficientBalance && (
-                      <p className="text-xs text-destructive text-center mt-2">
+                      <p className="text-xs text-value text-center mt-2">
                         Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
                       </p>
                     )}
@@ -1400,7 +1400,7 @@ export default function MintTab() {
                     disabled={needsApproval || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
                   />
                   {!needsApproval && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
-                    <p className="text-xs text-destructive text-center mt-2">
+                    <p className="text-xs text-value text-center mt-2">
                       Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
                     </p>
                   )}
@@ -1481,7 +1481,7 @@ export default function MintTab() {
               disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
             />
             {ethBalance < landEthQuote.ethAmountWithBuffer ? (
-              <p className="text-xs text-destructive text-center">
+              <p className="text-xs text-value text-center">
                 Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
               </p>
             ) : (
@@ -1551,7 +1551,7 @@ export default function MintTab() {
                   disabled={!landMintStatus?.canMint || needsLandApproval || seedBalanceRaw < landMintPrice}
                 />
                 {landMintStatus?.canMint && !needsLandApproval && seedBalanceRaw < landMintPrice && (
-                  <p className="text-xs text-destructive text-center mt-2">
+                  <p className="text-xs text-value text-center mt-2">
                     Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
                   </p>
                 )}

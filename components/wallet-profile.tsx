@@ -65,7 +65,7 @@ const EthModeToggleRow = () => {
       <button
         onClick={toggleEthMode}
         style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
-        className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isEthMode ? 'bg-green-500' : 'bg-muted'
+        className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isEthMode ? 'bg-value' : 'bg-muted'
           }`}
         aria-pressed={isEthMode}
         role="switch"
@@ -456,8 +456,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         <DialogContent className="max-w-2xl w-[min(92vw,32rem)]">
           <DialogHeader>
             <div className="flex items-center space-x-2">
-              <Wallet
-                className="w-6 h-6 text-primary cursor-pointer select-none"
+              {/* Profile Avatar or Wallet icon - with 5-tap debug mode trigger */}
+              <div
+                className="cursor-pointer select-none"
                 onClick={() => {
                   // Clear previous timeout
                   if (debugTapTimeoutRef.current) {
@@ -478,7 +479,13 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     }, 2000);
                   }
                 }}
-              />
+              >
+                {address ? (
+                  <Avatar address={address} chain={base} className="w-6 h-6" />
+                ) : (
+                  <Wallet className="w-6 h-6 text-primary" />
+                )}
+              </div>
               <DialogTitle className="text-lg font-semibold">Wallet Profile</DialogTitle>
             </div>
             <DialogDescription>
@@ -501,7 +508,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               {/* Wallet Connection Info */}
               <div className="space-y-3">
                 <h3 className="text-sm font-medium text-muted-foreground">
-                  Connection
+                  Account
                 </h3>
                 <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
                   <div className="flex items-center justify-between">
@@ -540,13 +547,33 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     </div>
                   </div>
 
+                  {/* Wallet Address with copy icon */}
+                  {address && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium">Address</span>
+                      <div className="flex items-center space-x-1">
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {formatAddress(address)}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(address, "Wallet address")}
+                          className="p-0 hover:opacity-70 transition-opacity"
+                          style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
+                          aria-label="Copy wallet address"
+                        >
+                          <Copy className="w-3 h-3 text-muted-foreground" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">Mini App</span>
                     <div className="flex items-center space-x-1">
                       {isMiniApp ? (
                         <React.Fragment>
-                          <CheckCircle className="w-3 h-3 text-green-500" />
-                          <span className="text-xs font-semibold text-green-600 dark:text-green-400">Yes</span>
+                          <CheckCircle className="w-3 h-3 text-value" />
+                          <span className="text-xs font-semibold text-value">Yes</span>
                         </React.Fragment>
                       ) : (
                         <React.Fragment>
@@ -572,8 +599,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         </div>
                       ) : isSmartWallet ? (
                         <div className="flex items-center space-x-1">
-                          <CheckCircle className="w-3 h-3 text-green-500" />
-                          <span className="text-xs font-semibold text-green-600 dark:text-green-400">
+                          <CheckCircle className="w-3 h-3 text-value" />
+                          <span className="text-xs font-semibold text-value">
                             Smart Wallet
                             {walletType === 'coinbase-smart' && ' (Coinbase)'}
                           </span>
@@ -597,8 +624,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <Skeleton className="h-4 w-16" />
                       ) : isSmartWallet || isSolana ? (
                         <div className="flex items-center space-x-1">
-                          <CheckCircle className="w-3 h-3 text-green-500" />
-                          <span className="text-xs font-semibold text-green-600 dark:text-green-400">
+                          <CheckCircle className="w-3 h-3 text-value" />
+                          <span className="text-xs font-semibold text-value">
                             Sponsored
                           </span>
                         </div>
@@ -740,8 +767,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           <Skeleton className="h-4 w-16" />
                         ) : isTwinSetup ? (
                           <>
-                            <CheckCircle className="w-3 h-3 text-green-500" />
-                            <span className="text-xs font-semibold text-green-600 dark:text-green-400">Ready</span>
+                            <CheckCircle className="w-3 h-3 text-value" />
+                            <span className="text-xs font-semibold text-value">Ready</span>
                           </>
                         ) : (
                           <>
@@ -763,51 +790,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 </div>
               )}
 
-              {/* Wallet Address - Only shown for EVM wallets */}
-              {address && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    Identity
-                  </h3>
-                  <StandardContainer className="p-4 rounded-md border bg-card">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar address={address} chain={base} />
-                        <span className="text-sm font-mono break-all">
-                          {isNameLoading
-                            ? <Skeleton className="h-5 w-40" />
-                            : showFullAddress
-                              ? address
-                              : name || formatAddress(address)}
-                        </span>
-                      </div>
 
-                      <div className="flex items-center space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => copyToClipboard(address, "Wallet address")}
-                          className="h-8 w-8"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setShowFullAddress(!showFullAddress)}
-                          className="h-8 w-8"
-                        >
-                          {showFullAddress ? (
-                            <EyeOff className="w-4 h-4" />
-                          ) : (
-                            <Eye className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </StandardContainer>
-                </div>
-              )}
 
               {/* Balances (consolidated) */}
               <BalanceCard variant="wallet-profile" />

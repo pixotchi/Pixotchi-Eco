@@ -603,7 +603,7 @@ export default function ItemDetailsPanel({
                 />
               )}
               {ethBalance < ethQuote.ethAmountWithBuffer && (
-                <p className="text-xs text-destructive text-center">
+                <p className="text-xs text-value text-center">
                   Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
                 </p>
               )}
@@ -721,13 +721,13 @@ export default function ItemDetailsPanel({
           )}
 
           {selectedPlant.status === 4 && (
-            <p className="text-xs text-destructive text-center mt-2">
+            <p className="text-xs text-value text-center mt-2">
               Cannot buy items for dead plants.
             </p>
           )}
 
           {hasInsufficientFunds && !isEthMode && (
-            <p className="text-xs text-destructive text-center mt-2">
+            <p className="text-xs text-value text-center mt-2">
               Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} SEED • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)} SEED
             </p>
           )}
