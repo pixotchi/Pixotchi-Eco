@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useState, useEffect } from "react";
+import { useAccount } from "wagmi";
 import {
     Transaction,
     TransactionButton,
@@ -17,7 +18,7 @@ import { getBuilderCapabilities, transformCallsWithBuilderCode } from "@/lib/bui
 import { normalizeTransactionReceipt } from "@/lib/transaction-utils";
 import { getEthQuote, formatEthAmount, type EthQuoteResult } from "@/lib/eth-quote-service";
 import { useEthMode } from "@/lib/eth-mode-context";
-import { PIXOTCHI_TOKEN_ADDRESS, WETH_ADDRESS } from "@/lib/contracts";
+import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS, WETH_ADDRESS } from "@/lib/contracts";
 import { Loader2 } from "lucide-react";
 import { encodeFunctionData } from "viem";
 
@@ -37,8 +38,25 @@ const UNISWAP_ROUTER_ABI = [
     },
 ] as const;
 
+// ERC20 approve ABI
+const ERC20_APPROVE_ABI = [
+    {
+        inputs: [
+            { name: "spender", type: "address" },
+            { name: "amount", type: "uint256" },
+        ],
+        name: "approve",
+        outputs: [{ name: "", type: "bool" }],
+        stateMutability: "nonpayable",
+        type: "function",
+    },
+] as const;
+
 // BaseSwap Router (Uniswap V2 Fork on Base)
 const BASESWAP_ROUTER_ADDRESS = "0x327Df1E6de05895d2ab08513aaDD9313Fe505d86";
+
+// Max approval amount (uint256 max)
+const MAX_APPROVAL = BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935");
 
 interface TransactionCall {
     address: `0x${string}`;
@@ -70,9 +88,12 @@ interface EthPaymentTransactionProps {
  * 
  * Handles payment with ETH by:
  * 1. Swapping ETH → SEED (with slippage buffer)
- * 2. Executing the intended action call(s)
+ * 2. Approving SEED spend (critical for gas estimation - approvals work with 0 balance)
+ * 3. Executing the intended action call(s)
  * 
- * Excess SEED remains in the user's wallet as a refund.
+ * The approval call is key: it allows bundler simulation to pass even when
+ * SEED balance is 0, because ERC20 approve doesn't require balance.
+ * 
  * Only works with smart wallets (for batched transactions).
  */
 export function EthPaymentTransaction({
@@ -84,6 +105,7 @@ export function EthPaymentTransaction({
     buttonClassName,
     disabled = false,
 }: EthPaymentTransactionProps) {
+    const { address } = useAccount();
     const { isSponsored } = usePaymaster();
     const { isSmartWallet } = useSmartWallet();
     const { isEthModeEnabled } = useEthMode();
@@ -93,7 +115,12 @@ export function EthPaymentTransaction({
     const [quoteError, setQuoteError] = useState<string | null>(null);
 
     // Get builder code capabilities for ERC-8021 attribution
+    // Merge with atomicRequired: true for EIP-5792 atomic batching
     const builderCapabilities = getBuilderCapabilities();
+    const capabilities = useMemo(() => ({
+        ...builderCapabilities,
+        atomicRequired: true, // Ensure swap + action execute atomically
+    }), [builderCapabilities]);
 
     // Fetch fresh quote before transaction
     const refreshQuote = useCallback(async () => {
@@ -124,12 +151,13 @@ export function EthPaymentTransaction({
     }, [refreshQuote]);
 
     // Build the batched transaction calls
+    // Order: 1. Swap ETH→SEED, 2. Approve SEED, 3. Action calls
     const calls = useMemo(() => {
-        if (!quote || !isEthModeEnabled || !isSmartWallet) {
+        if (!quote || !isEthModeEnabled || !isSmartWallet || !address) {
             return [];
         }
 
-        const swapDeadline = BigInt(Math.floor(Date.now() / 1000) + 1200); // 20 minutes
+        const swapDeadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 minutes
 
         // Minimum SEED output (the required amount - we're getting MORE due to buffer)
         const minSeedOut = seedAmountRequired;
@@ -139,6 +167,7 @@ export function EthPaymentTransaction({
 
         // 1. Swap call: swapExactETHForTokens
         // We send the quoted ETH amount and expect at least seedAmountRequired SEED
+        // Send SEED to user's wallet (the smart wallet address)
         const swapCall: TransactionCall = {
             address: BASESWAP_ROUTER_ADDRESS as `0x${string}`,
             abi: UNISWAP_ROUTER_ABI,
@@ -146,15 +175,25 @@ export function EthPaymentTransaction({
             args: [
                 minSeedOut,
                 swapPath,
-                "0x0000000000000000000000000000000000000000", // Will be replaced with user address
+                address, // User's wallet address - SEED goes here
                 swapDeadline,
             ],
             value: quote.ethAmountWei,
         };
 
-        // 2. Action calls (the original intended actions)
-        return [swapCall, ...actionCalls];
-    }, [quote, seedAmountRequired, actionCalls, isEthModeEnabled, isSmartWallet]);
+        // 2. Approve call: Allow NFT contract to spend SEED
+        // This is CRITICAL for gas estimation - approve works with 0 balance
+        // and helps bundlers simulate the full flow correctly
+        const approveCall: TransactionCall = {
+            address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
+            abi: ERC20_APPROVE_ABI,
+            functionName: "approve",
+            args: [PIXOTCHI_NFT_ADDRESS, MAX_APPROVAL],
+        };
+
+        // 3. Action calls (the original intended actions)
+        return [swapCall, approveCall, ...actionCalls];
+    }, [quote, seedAmountRequired, actionCalls, isEthModeEnabled, isSmartWallet, address]);
 
     // Transform calls for builder code
     const transformedCalls = useMemo(
@@ -223,8 +262,9 @@ export function EthPaymentTransaction({
         return null;
     }
 
+    // Consistent button text format: "Action • X.XXX ETH"
     const displayButtonText = quote
-        ? `${buttonText} (${quote.ethAmountFormatted} ETH)`
+        ? `${buttonText} • ${quote.ethAmountFormatted} ETH`
         : buttonText;
 
     return (
@@ -239,7 +279,7 @@ export function EthPaymentTransaction({
                 onError={onError}
                 onStatus={handleOnStatus}
                 isSponsored={isSponsored}
-                capabilities={builderCapabilities}
+                capabilities={capabilities}
             >
                 <TransactionButton
                     text={displayButtonText}

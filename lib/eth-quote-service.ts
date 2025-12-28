@@ -44,7 +44,7 @@ interface CachedQuote {
 
 let cachedQuote: CachedQuote | null = null;
 const QUOTE_CACHE_DURATION_MS = 45_000; // 45 seconds cache
-const QUOTE_BUFFER_MULTIPLIER = 1.05; // 5% buffer for slippage
+const QUOTE_BUFFER_MULTIPLIER = 1.02; // 2% buffer for slippage (reduced from 5%)
 
 export interface EthQuoteResult {
     /** ETH amount in wei */
@@ -147,23 +147,23 @@ export async function fetchEthQuote(seedAmountWei: bigint): Promise<EthQuoteResu
             throw new Error(data.error);
         }
 
-        // Extract the quote amount (in ETH wei)
+        // Extract the quote amount (in ETH wei) - already includes buffer from API
         const ethAmountWei = BigInt(data.fromAmount || data.amount || "0");
 
-        // Add buffer for slippage protection
-        const ethWithBuffer = (ethAmountWei * BigInt(Math.floor(QUOTE_BUFFER_MULTIPLIER * 100))) / BigInt(100);
+        // Use raw amount for cache rate calculation (without buffer)
+        const rawEthAmount = BigInt(data.rawEthAmount || data.fromAmount || "0");
 
-        // Update cache with the new rate
+        // Update cache with the new rate (using raw amount for accurate rate)
         cachedQuote = {
-            ethPerSeedRate: ethAmountWei * BigInt(1e18) / seedAmountWei, // Rate in 18 decimals
+            ethPerSeedRate: rawEthAmount * BigInt(1e18) / seedAmountWei, // Rate in 18 decimals
             fetchedAt: Date.now(),
             baseSeedAmount: seedAmountWei,
-            baseEthAmount: ethAmountWei,
+            baseEthAmount: rawEthAmount, // Use raw amount for cache
         };
 
         return {
-            ethAmountWei: ethWithBuffer,
-            ethAmountFormatted: formatEthAmount(ethWithBuffer),
+            ethAmountWei: ethAmountWei,
+            ethAmountFormatted: formatEthAmount(ethAmountWei),
             seedAmountWei,
             isFromCache: false,
             expiresAt: Date.now() + QUOTE_CACHE_DURATION_MS,

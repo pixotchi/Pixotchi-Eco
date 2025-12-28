@@ -46,12 +46,12 @@ export function BuyShopItemTransaction({
   buttonClassName,
   disabled = false
 }: BuyShopItemTransactionProps) {
-  
+
   const calls = [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'shopBuyItem',
-    args: [BigInt(plantId), BigInt(itemId)], 
+    args: [BigInt(plantId), BigInt(itemId)],
   }];
 
   return (
@@ -85,12 +85,12 @@ export function BuyGardenItemTransaction({
   buttonClassName,
   disabled = false
 }: BuyGardenItemTransactionProps) {
-  
+
   const calls = [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'buyAccessory',
-    args: [BigInt(plantId), BigInt(itemId)], 
+    args: [BigInt(plantId), BigInt(itemId)],
   }];
 
   return (

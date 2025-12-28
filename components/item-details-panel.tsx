@@ -24,6 +24,8 @@ import ApproveTransaction from '@/components/transactions/approve-transaction';
 import { useIsSolanaWallet, SolanaNotSupported } from '@/components/solana';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import { formatWsol } from '@/lib/solana-quote';
+import { useEthMode } from '@/lib/eth-mode-context';
+import { EthPriceDisplay } from '@/components/eth-price-display';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -33,9 +35,9 @@ interface ItemDetailsPanelProps {
   quantity: number;
 }
 
-export default function ItemDetailsPanel({ 
-  selectedItem, 
-  selectedPlant, 
+export default function ItemDetailsPanel({
+  selectedItem,
+  selectedPlant,
   itemType,
   onPurchaseSuccess,
   quantity
@@ -45,6 +47,7 @@ export default function ItemDetailsPanel({
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, walletType, isLoading: smartWalletLoading } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
+  const { isEthModeEnabled, canUseEthMode } = useEthMode();
   const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
@@ -63,15 +66,16 @@ export default function ItemDetailsPanel({
     ? (quantity > 0 ? basePrice * BigInt(quantity) : BigInt(0))
     : basePrice;
   const hasQuantitySelected = itemType === 'garden' ? quantity > 0 : true;
-  
+
   // Check if user has insufficient funds
   // For Solana users, skip this check - they pay with SOL and the quote system handles validation
-  const hasInsufficientFunds = isSolana
+  // For ETH mode users, also skip - they pay with ETH
+  const hasInsufficientFunds = isSolana || (isEthModeEnabled && canUseEthMode)
     ? false
     : isFenceItem
       ? fenceV2Quote > userSeedBalance
       : totalCost > userSeedBalance;
-  
+
   // Bundle transactions are only available for garden items and Smart Wallets
   const canBundle = itemType === 'garden' && quantity > 1;
 
@@ -83,7 +87,7 @@ export default function ItemDetailsPanel({
         setBalanceLoading(false);
         return;
       }
-      
+
       setBalanceLoading(true);
       try {
         const balance = await getTokenBalance(address);
@@ -193,7 +197,7 @@ export default function ItemDetailsPanel({
   const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
   const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
   const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
-  
+
   // These useMemo hooks must be called unconditionally (before any early returns)
   const fenceV2Bounds = useMemo(() => {
     const minFromConfig = fenceV2Config ? Math.max(1, fenceV2Config.minDurationDays || 1) : 1;
@@ -282,7 +286,7 @@ export default function ItemDetailsPanel({
     }
 
     if (quantity === 0 && itemType === 'garden') return 'Select quantity above';
-    
+
     if (itemType === 'shop') {
       const shopItem = selectedItem as ShopItem;
       return `${formatDuration(shopItem.effectTime)} protection`;
@@ -290,7 +294,7 @@ export default function ItemDetailsPanel({
       const gardenItem = selectedItem as GardenItem;
       const points = Number(gardenItem.points) / 1e12 * quantity;
       const hours = Math.floor(Number(gardenItem.timeExtension) / 3600) * quantity;
-      
+
       if (points > 0 && hours > 0) return `+${points} PTS & +${hours}h TOD`;
       if (points > 0) return `+${points} PTS`;
       if (hours > 0) return `+${hours}h TOD`;
@@ -324,6 +328,9 @@ export default function ItemDetailsPanel({
                 ) : (
                   <Skeleton className="h-4 w-24" />
                 )
+              ) : isEthModeEnabled && canUseEthMode ? (
+                // ETH Mode: Show ETH price
+                <EthPriceDisplay seedAmount={isFenceItem ? fenceV2Quote : totalCost} />
               ) : isFenceItem ? (
                 fenceV2QuoteLoading ? (
                   <Skeleton className="h-4 w-20" />
@@ -339,7 +346,7 @@ export default function ItemDetailsPanel({
               )}
             </div>
           </div>
-          
+
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Effect:</span>
             <span className="font-semibold text-primary">
@@ -412,7 +419,7 @@ export default function ItemDetailsPanel({
             </span>
             <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
-          
+
           {/* Solana users: Gate fence items and bundle transactions */}
           {isSolana && isFenceItem ? (
             <SolanaNotSupported feature="Fence protection" />
@@ -498,7 +505,7 @@ export default function ItemDetailsPanel({
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                       });
-                    } catch {}
+                    } catch { }
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={fenceButtonText}
@@ -522,7 +529,7 @@ export default function ItemDetailsPanel({
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                       });
-                    } catch {}
+                    } catch { }
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Buy Item"
@@ -558,7 +565,7 @@ export default function ItemDetailsPanel({
                       }
                     };
                     post(tx);
-                  } catch {}
+                  } catch { }
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Buy Item"
@@ -572,26 +579,26 @@ export default function ItemDetailsPanel({
               buttonClassName="w-full"
             />
           )}
-          
+
           {selectedPlant.status === 4 && (
             <p className="text-xs text-destructive text-center mt-2">
               Cannot buy items for dead plants.
             </p>
           )}
-          
+
           {hasInsufficientFunds && (
             <p className="text-xs text-destructive text-center mt-2">
               Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} SEED • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)} SEED
             </p>
           )}
-          
+
 
         </div>
 
         <div className="pt-2 border-t border-border">
           <p className="text-xs text-muted-foreground text-center">
-            {itemType === 'shop' 
-              ? 'Shop items provide ongoing protective effects.' 
+            {itemType === 'shop'
+              ? 'Shop items provide ongoing protective effects.'
               : 'Garden items give immediate points and/or TOD.'
             }
           </p>

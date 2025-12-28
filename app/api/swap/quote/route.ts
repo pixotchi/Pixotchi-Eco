@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createPublicClient, http, parseAbi } from "viem";
+import { base } from "viem/chains";
 
 /**
  * Swap Quote API
  * 
- * Proxies requests to OnchainKit's quote service to get ETH→SEED quotes.
- * This allows the frontend to get programmatic quotes without exposing API keys.
+ * Fetches ETH→SEED quotes directly from BaseSwap router on-chain.
+ * This is more reliable than CDP API and doesn't require special auth.
  */
 
-const ONCHAINKIT_CDP_API_URL = "https://api.developer.coinbase.com/rpc/v1/base";
+// SEED token on Base
+const SEED_TOKEN_ADDRESS = "0x546D239032b24eCEEE0cb05c92FC39090846adc7";
+const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+const BASESWAP_ROUTER = "0x327Df1E6de05895d2ab08513aaDD9313Fe505d86";
+
+const ROUTER_ABI = parseAbi([
+    "function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts)",
+]);
+
+// Create public client for reading on-chain data
+const publicClient = createPublicClient({
+    chain: base,
+    transport: http("https://mainnet.base.org"),
+});
 
 interface QuoteRequest {
     from: {
@@ -30,76 +45,65 @@ export async function POST(request: NextRequest) {
     try {
         const body: QuoteRequest = await request.json();
 
-        const { from, to, amount, amountReference } = body;
+        const { amount } = body;
 
-        if (!from || !to || !amount) {
+        if (!amount || amount === "0") {
             return NextResponse.json(
-                { error: "Missing required parameters: from, to, amount" },
+                { error: "Missing or zero amount" },
                 { status: 400 }
             );
         }
 
-        const apiKey = process.env.CDP_API_KEY || process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY;
+        const seedAmount = BigInt(amount);
 
-        if (!apiKey) {
-            return NextResponse.json(
-                { error: "CDP API key not configured" },
-                { status: 500 }
-            );
+        try {
+            // Call BaseSwap router getAmountsIn to find how much ETH is needed for X SEED
+            const path = [WETH_ADDRESS, SEED_TOKEN_ADDRESS] as const;
+
+            const amounts = await publicClient.readContract({
+                address: BASESWAP_ROUTER as `0x${string}`,
+                abi: ROUTER_ABI,
+                functionName: "getAmountsIn",
+                args: [seedAmount, [...path]],
+            });
+
+            const ethAmountWei = amounts[0];
+
+            // Add 2% buffer for slippage (reduced from 5%)
+            const ethWithBuffer = (ethAmountWei * BigInt(102)) / BigInt(100);
+
+            console.log("[SwapQuoteAPI] On-chain quote:", {
+                seedAmount: seedAmount.toString(),
+                ethNeeded: ethAmountWei.toString(),
+                ethWithBuffer: ethWithBuffer.toString(),
+            });
+
+            return NextResponse.json({
+                fromAmount: ethWithBuffer.toString(),
+                toAmount: amount,
+                rawEthAmount: ethAmountWei.toString(),
+                source: "baseswap",
+            });
+
+        } catch (onChainError) {
+            console.error("[SwapQuoteAPI] On-chain quote failed:", onChainError);
+
+            // Fallback: estimate based on typical rate
+            // 1 ETH ≈ 200,000 SEED (adjust this based on actual market rate)
+            const ethEstimate = seedAmount / BigInt(200000);
+            const ethWithBuffer = (ethEstimate * BigInt(102)) / BigInt(100);
+
+            // Minimum 0.0001 ETH
+            const minEth = BigInt("100000000000000"); // 0.0001 ETH
+            const finalAmount = ethWithBuffer > minEth ? ethWithBuffer : minEth;
+
+            return NextResponse.json({
+                fromAmount: finalAmount.toString(),
+                toAmount: amount,
+                isEstimate: true,
+                warning: "Using fallback estimate. Actual rate may vary.",
+            });
         }
-
-        // Use the CDP Quote API
-        // Reference: https://docs.base.org/onchainkit/latest/utilities/get-swap-quote
-        const quoteResponse = await fetch(`${ONCHAINKIT_CDP_API_URL}/${apiKey}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: 1,
-                method: "cdp_getSwapQuote",
-                params: [{
-                    fromAddress: from.address || undefined, // undefined for native ETH
-                    toAddress: to.address,
-                    fromChainId: from.chainId,
-                    toChainId: to.chainId,
-                    amount: amount,
-                    // If amountReference is "to", we're specifying output amount (SEED)
-                    // and want to know input amount (ETH)
-                    isAmountInToToken: amountReference === "to",
-                }],
-            }),
-        });
-
-        if (!quoteResponse.ok) {
-            const errorText = await quoteResponse.text();
-            console.error("[SwapQuoteAPI] CDP API error:", errorText);
-            return NextResponse.json(
-                { error: `Quote service error: ${quoteResponse.status}` },
-                { status: 502 }
-            );
-        }
-
-        const quoteData = await quoteResponse.json();
-
-        if (quoteData.error) {
-            console.error("[SwapQuoteAPI] Quote error:", quoteData.error);
-            return NextResponse.json(
-                { error: quoteData.error.message || "Quote failed" },
-                { status: 400 }
-            );
-        }
-
-        const result = quoteData.result;
-
-        return NextResponse.json({
-            fromAmount: result?.fromAmount || result?.inputAmount,
-            toAmount: result?.toAmount || result?.outputAmount,
-            priceImpact: result?.priceImpact,
-            route: result?.route,
-            estimatedGas: result?.estimatedGas,
-        });
 
     } catch (error) {
         console.error("[SwapQuoteAPI] Error:", error);
