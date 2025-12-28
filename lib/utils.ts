@@ -604,41 +604,10 @@ export const getFenceStatus = (plant: Plant): {
 /**
  * Get array of active fences for display (handles both V1 and V2, respects mirroring)
  */
-export const getActiveFences = (plant: Plant): Array<{ type: 'Fence V1' | 'Fence'; effectUntil: number }> => {
-  const active: Array<{ type: 'Fence V1' | 'Fence'; effectUntil: number }> = [];
-  const now = Math.floor(Date.now() / 1000);
-
-  const fenceV2State = plant.fenceV2 ?? null;
-  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > 0);
-  const fenceV2EffectUntil = fenceV2Active ? Number(fenceV2State?.activeUntil ?? 0) : 0;
-  const fenceV2Mirroring = Boolean(fenceV2State?.isMirroringV1);
-
-  // Check V1 fences
-  if (plant.extensions) {
-    for (const extension of plant.extensions) {
-      if (!extension.shopItemOwned) continue;
-      for (const item of extension.shopItemOwned) {
-        if (!item?.effectIsOngoingActive) continue;
-        const lowerName = item?.name?.toLowerCase() || '';
-        if (!lowerName.includes('fence') && !lowerName.includes('shield')) continue;
-        const effectUntil = Number(item.effectUntil || 0);
-        if (!Number.isFinite(effectUntil) || effectUntil <= 0) continue;
-        // Skip if mirroring V2
-        if (fenceV2Active && fenceV2Mirroring && approxTimestampEqual(effectUntil, fenceV2EffectUntil)) {
-          continue;
-        }
-        active.push({ type: 'Fence V1', effectUntil });
-        break;
-      }
-    }
+export const getActiveFences = (plant: Plant): Array<{ type: 'Fence'; effectUntil: number }> => {
+  const status = getFenceStatus(plant);
+  if (status.hasActiveFence) {
+    return [{ type: 'Fence', effectUntil: status.expiresAt }];
   }
-
-  // Check V2 fence
-  if (fenceV2Active) {
-    active.push({ type: 'Fence', effectUntil: fenceV2EffectUntil });
-  }
-
-  // Sort by expiry time (soonest first)
-  active.sort((a, b) => a.effectUntil - b.effectUntil);
-  return active;
+  return [];
 };
