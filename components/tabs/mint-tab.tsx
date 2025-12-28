@@ -143,6 +143,15 @@ export default function MintTab() {
     return symbol;
   };
 
+  // Helper: check if strain uses SEED as payment token (ETH mode only works for SEED)
+  const isSeedPaymentStrain = (strain: Strain | null): boolean => {
+    if (!strain) return true; // Default assumption
+    const paymentToken = strain.paymentToken;
+    // If no payment token specified, it's SEED. If it's SEED address, it's SEED.
+    if (!paymentToken) return true;
+    return paymentToken.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase();
+  };
+
   const fetchData = async () => {
     if (!address) return;
 
@@ -250,7 +259,8 @@ export default function MintTab() {
   // Fetch ETH quote when strain changes and ETH mode is active
   useEffect(() => {
     // Only fetch ETH quotes for smart wallet users with ETH mode enabled, on plant tab
-    if (!isSmartWallet || !isEthMode || !selectedStrain || mintType !== 'plant' || isSolana) {
+    // AND only for strains that use SEED as payment token (ETH mode doesn't support JESSE, etc.)
+    if (!isSmartWallet || !isEthMode || !selectedStrain || mintType !== 'plant' || isSolana || !isSeedPaymentStrain(selectedStrain)) {
       setEthQuote(null);
       return;
     }
@@ -1158,8 +1168,8 @@ export default function MintTab() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Price</span>
                 <div className="flex items-center space-x-1 font-semibold">
-                  {/* ETH Mode: show ETH price if smart wallet + ETH mode + valid quote */}
-                  {isSmartWallet && isEthMode && ethQuote ? (
+                  {/* ETH Mode: show ETH price if smart wallet + ETH mode + valid quote + SEED strain */}
+                  {isSmartWallet && isEthMode && ethQuote && isSeedPaymentStrain(selectedStrain) ? (
                     <>
                       <Image
                         src="/icons/ethlogo.svg"
@@ -1171,7 +1181,7 @@ export default function MintTab() {
                         {ethQuoteLoading ? '...' : (Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
                       </span>
                     </>
-                  ) : isSmartWallet && isEthMode && ethQuoteLoading ? (
+                  ) : isSmartWallet && isEthMode && ethQuoteLoading && isSeedPaymentStrain(selectedStrain) ? (
                     <>
                       <Image
                         src="/icons/ethlogo.svg"
@@ -1211,8 +1221,8 @@ export default function MintTab() {
         {/* StatusBar replaces BalanceCard globally under header */}
 
         <div className="flex flex-col space-y-2">
-          {/* ETH Mode: Show SwapMintBundle for atomic ETH->SEED->Mint transaction */}
-          {isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && (
+          {/* ETH Mode: Show SwapMintBundle for atomic ETH->SEED->Mint transaction (SEED strains only) */}
+          {isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && isSeedPaymentStrain(selectedStrain) && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Mint with ETH</span>
