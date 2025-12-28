@@ -77,11 +77,11 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 				</Button>
 			</DialogTrigger>
 
-		<DialogContent className="max-w-md">
-			<DialogHeader>
-				<DialogTitle className="text-lg font-semibold">Change Land Name</DialogTitle>
-				<DialogDescription>Set a new onchain name for your land.</DialogDescription>
-			</DialogHeader>
+			<DialogContent className="max-w-md">
+				<DialogHeader>
+					<DialogTitle className="text-lg font-semibold">Change Land Name</DialogTitle>
+					<DialogDescription>Set a new onchain name for your land.</DialogDescription>
+				</DialogHeader>
 
 				<div className="space-y-6">
 					<div className="space-y-3">
@@ -94,17 +94,16 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 					</div>
 
 					{canSubmit ? (
-						<div onClick={handleTransactionStart}>
-							<LandNameTransaction
-								landId={land.tokenId}
-								newName={trimmedName}
-								onSuccess={handleSuccess}
-								onError={handleError}
-								buttonText="Change Name"
-								buttonClassName="w-full"
-								disabled={!canSubmit}
-							/>
-						</div>
+						<LandNameTransaction
+							landId={land.tokenId}
+							newName={trimmedName}
+							onSuccess={handleSuccess}
+							onError={handleError}
+							buttonText="Change Name"
+							buttonClassName="w-full"
+							disabled={!canSubmit}
+							onButtonClick={handleTransactionStart}
+						/>
 					) : (
 						<Button disabled className="w-full">
 							{trimmedName.length === 0 ? 'Enter a name' : trimmedName.length > MAX_NAME_LENGTH ? 'Name too long' : trimmedName === (land.name || '').trim() ? 'Name unchanged' : 'Change Name'}

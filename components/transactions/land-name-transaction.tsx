@@ -1,20 +1,9 @@
 "use client";
 
-import { useWalletClient } from 'wagmi';
-import { Button } from '@/components/ui/button';
-import { useTransaction } from '@/hooks/useTransaction'; // aliased path
-import { Land } from '@/lib/types';
-
-// This is a simplified contract call for demonstration
-// In a real app, this would be in your contracts.ts file
-async function changeLandName(walletClient: any, landId: bigint, newName: string) {
-  if (!walletClient) throw new Error("Wallet not connected");
-  // Mock transaction
-  console.log(`Changing name for land ${landId} to "${newName}"`);
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  // In a real scenario, you'd return the transaction hash or receipt
-  return { success: true };
-}
+import React from 'react';
+import SponsoredTransaction from './sponsored-transaction';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
+import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 interface LandNameTransactionProps {
   landId: bigint;
@@ -24,6 +13,7 @@ interface LandNameTransactionProps {
   disabled?: boolean;
   buttonText?: string;
   buttonClassName?: string;
+  onButtonClick?: () => void;
 }
 
 export function LandNameTransaction({
@@ -33,45 +23,27 @@ export function LandNameTransaction({
   onError,
   disabled = false,
   buttonText = "Confirm Transaction",
-  buttonClassName = ""
+  buttonClassName = "",
+  onButtonClick
 }: LandNameTransactionProps) {
-  const { data: walletClient } = useWalletClient();
 
-  const { execute, isLoading } = useTransaction(
-    async () => {
-        if (!walletClient) throw new Error("Wallet not connected");
-        return await changeLandName(walletClient, landId, newName);
-    }, 
-    {
-      onSuccess: (data) => {
-        if (onSuccess) onSuccess(data);
-      },
-      onError: onError,
-      successMessage: `Successfully changed land name to "${newName}"!`,
-      errorMessage: "Failed to change land name."
-    }
-  );
+  const calls = [{
+    address: LAND_CONTRACT_ADDRESS,
+    abi: landAbi,
+    functionName: 'landSetName',
+    args: [landId, newName],
+  }];
 
-  const getButtonContent = () => {
-    if (isLoading) {
-      return (
-        <>
-          <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2" />
-          <span>Processing...</span>
-        </>
-      );
-    }
-    return buttonText;
-  };
-  
   return (
-    <Button
-      onClick={() => execute()}
-      disabled={disabled || isLoading}
-      className={buttonClassName}
-    >
-      {getButtonContent()}
-    </Button>
+    <SponsoredTransaction
+      calls={calls}
+      onSuccess={onSuccess}
+      onError={onError}
+      buttonText={buttonText}
+      buttonClassName={buttonClassName}
+      disabled={disabled}
+      onButtonClick={onButtonClick}
+    />
   );
 }
 
