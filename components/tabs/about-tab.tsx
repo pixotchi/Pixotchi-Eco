@@ -18,7 +18,6 @@ import { Textarea } from "@/components/ui/textarea";
 import packageJson from '@/package.json';
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useFrameContext } from "@/lib/frame-context";
-import { EthModeToggle } from "@/components/eth-mode-toggle";
 
 const InfoCard = ({
   icon,
@@ -521,11 +520,6 @@ export default function AboutTab() {
                 Feedback
               </Button>
             )}
-
-            {/* ETH Mode Toggle - Only for Smart Wallet users */}
-            <div className="pt-3 border-t border-border/30">
-              <EthModeToggle />
-            </div>
           </div>
         </CardContent>
       </Card>

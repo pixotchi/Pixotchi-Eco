@@ -24,8 +24,6 @@ import ApproveTransaction from '@/components/transactions/approve-transaction';
 import { useIsSolanaWallet, SolanaNotSupported } from '@/components/solana';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import { formatWsol } from '@/lib/solana-quote';
-import { useEthMode } from '@/lib/eth-mode-context';
-import { EthPriceDisplay } from '@/components/eth-price-display';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -47,7 +45,6 @@ export default function ItemDetailsPanel({
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, walletType, isLoading: smartWalletLoading } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
-  const { isEthModeEnabled, canUseEthMode } = useEthMode();
   const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
@@ -69,8 +66,7 @@ export default function ItemDetailsPanel({
 
   // Check if user has insufficient funds
   // For Solana users, skip this check - they pay with SOL and the quote system handles validation
-  // For ETH mode users, also skip - they pay with ETH
-  const hasInsufficientFunds = isSolana || (isEthModeEnabled && canUseEthMode)
+  const hasInsufficientFunds = isSolana
     ? false
     : isFenceItem
       ? fenceV2Quote > userSeedBalance
@@ -328,9 +324,6 @@ export default function ItemDetailsPanel({
                 ) : (
                   <Skeleton className="h-4 w-24" />
                 )
-              ) : isEthModeEnabled && canUseEthMode ? (
-                // ETH Mode: Show ETH price
-                <EthPriceDisplay seedAmount={isFenceItem ? fenceV2Quote : totalCost} />
               ) : isFenceItem ? (
                 fenceV2QuoteLoading ? (
                   <Skeleton className="h-4 w-20" />

@@ -23,8 +23,6 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useFrameContext } from '@/lib/frame-context';
-import { useEthMode } from '@/lib/eth-mode-context';
-import { EthPriceDisplay } from '@/components/eth-price-display';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import MintTransaction from '@/components/transactions/mint-transaction';
 import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
@@ -61,7 +59,6 @@ export default function MintTab() {
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
-  const { isEthModeEnabled, canUseEthMode } = useEthMode();
   const frameContext = useFrameContext();
 
   // Solana wallet support
@@ -1048,27 +1045,18 @@ export default function MintTab() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Price</span>
                 <div className="flex items-center space-x-1 font-semibold">
-                  {isEthModeEnabled && canUseEthMode ? (
-                    <>
-                      <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                      <EthPriceDisplay seedAmount={selectedStrain.paymentPrice || BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))} />
-                    </>
-                  ) : (
-                    <>
-                      <Image
-                        src={getTokenLogo(selectedStrain.paymentToken)}
-                        alt={paymentTokenSymbol}
-                        width={16}
-                        height={16}
-                      />
-                      <span>
-                        {selectedStrain.paymentPrice
-                          ? formatTokenAmount(selectedStrain.paymentPrice)
-                          : formatNumber(selectedStrain.mintPrice)
-                        } {paymentTokenSymbol}
-                      </span>
-                    </>
-                  )}
+                  <Image
+                    src={getTokenLogo(selectedStrain.paymentToken)}
+                    alt={paymentTokenSymbol}
+                    width={16}
+                    height={16}
+                  />
+                  <span>
+                    {selectedStrain.paymentPrice
+                      ? formatTokenAmount(selectedStrain.paymentPrice)
+                      : formatNumber(selectedStrain.mintPrice)
+                    } {paymentTokenSymbol}
+                  </span>
                 </div>
               </div>
               <div className="flex justify-between items-center">
@@ -1094,19 +1082,15 @@ export default function MintTab() {
                 const useBundle = isSmartWallet && isSponsored;
                 const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
 
-                // In ETH Mode, don't check SEED balance - user pays with ETH
-                const hasInsufficientBalance = (isEthModeEnabled && canUseEthMode) ? false : (
-                  selectedStrain.paymentPrice
-                    ? paymentTokenBalance < selectedStrain.paymentPrice
-                    : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))
-                );
+                const hasInsufficientBalance = selectedStrain.paymentPrice
+                  ? paymentTokenBalance < selectedStrain.paymentPrice
+                  : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18));
 
                 return useBundle ? (
                   <>
                     <ApproveMintBundle
                       strain={selectedStrain.id}
                       tokenAddress={paymentToken}
-                      mintPrice={selectedStrain.paymentPrice || BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))}
                       onSuccess={() => {
                         toast.success('Approved and minted successfully!');
                         setNeedsApproval(false);
@@ -1132,7 +1116,7 @@ export default function MintTab() {
                       buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                       disabled={hasInsufficientBalance}
                     />
-                    {hasInsufficientBalance && !(isEthModeEnabled && canUseEthMode) && (
+                    {hasInsufficientBalance && (
                       <p className="text-xs text-destructive text-center mt-2">
                         Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
                       </p>
@@ -1167,7 +1151,6 @@ export default function MintTab() {
                 <>
                   <MintTransaction
                     strain={selectedStrain.id}
-                    mintPrice={selectedStrain.paymentPrice || BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))}
                     onSuccess={(tx) => {
                       toast.success('Plant minted successfully!');
                       incrementForcedFetch();
@@ -1206,9 +1189,9 @@ export default function MintTab() {
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                     buttonText="Mint Plant"
                     buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                    disabled={needsApproval || (!(isEthModeEnabled && canUseEthMode) && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))))}
+                    disabled={needsApproval || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
                   />
-                  {!needsApproval && !(isEthModeEnabled && canUseEthMode) && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
+                  {!needsApproval && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
                     <p className="text-xs text-destructive text-center mt-2">
                       Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
                     </p>
