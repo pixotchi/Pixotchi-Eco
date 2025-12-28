@@ -1253,13 +1253,9 @@ export default function MintTab() {
                 buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                 disabled={ethBalance < ethQuote.ethAmountWithBuffer}
               />
-              {ethBalance < ethQuote.ethAmountWithBuffer ? (
+              {ethBalance < ethQuote.ethAmountWithBuffer && (
                 <p className="text-xs text-value text-center">
                   Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground text-center">
-                  Swaps ~{(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH → SEED → Mint (includes 6% buffer)
                 </p>
               )}
             </div>
@@ -1480,13 +1476,9 @@ export default function MintTab() {
               buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
               disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
             />
-            {ethBalance < landEthQuote.ethAmountWithBuffer ? (
+            {ethBalance < landEthQuote.ethAmountWithBuffer && (
               <p className="text-xs text-value text-center">
                 Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center">
-                Swaps ~{(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH → SEED → Mint Land (includes 6% buffer)
               </p>
             )}
           </div>
