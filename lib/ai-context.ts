@@ -188,8 +188,8 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - You cannot attack/kill your own plant.
 
 **Win/Loss:**
-- Win: 30% chance → Steal target's PTS.
-- Lose: 70% chance → Lose your attacker plant's PTS.
+- Win: 30% chance → Steal 0.5% of target's PTS.
+- Lose: 70% chance → Lose 0.5% of your PTS.
 
 **Death & Rewards:**
 - Dead plants can be killed by attackers (killer gains a star).
