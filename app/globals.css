@@ -25,6 +25,7 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-value: hsl(var(--value));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -38,27 +39,37 @@
   --font-sans: var(--font-coinbase, system-ui);
 
   /* Explicit breakpoints so md/lg variants work in Tailwind v4 when using @theme */
-  --breakpoint-sm: 40rem; /* 640px */
-  --breakpoint-md: 48rem; /* 768px */
-  --breakpoint-lg: 64rem; /* 1024px */
-  --breakpoint-xl: 80rem; /* 1280px */
-  --breakpoint-2xl: 96rem; /* 1536px */
+  --breakpoint-sm: 40rem;
+  /* 640px */
+  --breakpoint-md: 48rem;
+  /* 768px */
+  --breakpoint-lg: 64rem;
+  /* 1024px */
+  --breakpoint-xl: 80rem;
+  /* 1280px */
+  --breakpoint-2xl: 96rem;
+  /* 1536px */
 }
 
 @layer base {
   :root {
-    --background: 212 56% 81%; /* #a7c7e7 */
+    --background: 212 56% 81%;
+    /* #a7c7e7 */
     --foreground: 224 71.4% 4.1%;
-    --card: 212 56% 75%; /* Lighter shade of #a7c7e7 for cards */
+    --card: 212 56% 75%;
+    /* Lighter shade of #a7c7e7 for cards */
     --card-foreground: 224 71.4% 4.1%;
     --popover: 212 56% 75%;
     --popover-foreground: 224 71.4% 4.1%;
-    --primary: 212 86.2% 36.3%; /* A stronger blue for primary actions */
+    --primary: 212 86.2% 36.3%;
+    /* A stronger blue for primary actions */
     --primary-foreground: 0 0% 98%;
-    --secondary: 212 56% 88%; /* A lighter secondary tone */
+    --secondary: 212 56% 88%;
+    /* A lighter secondary tone */
     --secondary-foreground: 220.9 39.3% 11%;
     --muted: 212 56% 88%;
-    --muted-foreground: 225 8% 35%; /* Increased contrast */
+    --muted-foreground: 225 8% 35%;
+    /* Increased contrast */
     --accent: 212 56% 92%;
     --accent-foreground: 220.9 39.3% 11%;
     --destructive: 0 84.2% 60.2%;
@@ -67,13 +78,15 @@
     --input: 212 56% 70%;
     --ring: 212 86.2% 36.3%;
     --radius: 0.5rem;
-    
+    /* Theme-specific value highlight color for token amounts */
+    --value: 212 86% 45%;
+
     /* Safe area variables for in-app browsers */
     --safe-area-inset-top: env(safe-area-inset-top, 0px);
     --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
     --safe-area-inset-left: env(safe-area-inset-left, 0px);
     --safe-area-inset-right: env(safe-area-inset-right, 0px);
-    
+
     /* 
      * Z-index scale for consistent layering
      * Use these variables instead of arbitrary z-index values to maintain a predictable stacking order.
@@ -101,18 +114,22 @@
   }
 
   .dark {
-    --background: 218 28% 25%; /* #2d3c53 */
+    --background: 218 28% 25%;
+    /* #2d3c53 */
     --foreground: 210 40% 98%;
-    --card: 218 28% 20%; /* Darker shade for cards */
+    --card: 218 28% 20%;
+    /* Darker shade for cards */
     --card-foreground: 210 40% 98%;
     --popover: 218 28% 20%;
     --popover-foreground: 210 40% 98%;
-    --primary: 212 86.2% 50%; /* Brighter blue for dark mode primary */
+    --primary: 212 86.2% 50%;
+    /* Brighter blue for dark mode primary */
     --primary-foreground: 0 0% 98%;
     --secondary: 218 28% 30%;
     --secondary-foreground: 210 40% 98%;
     --muted: 218 28% 30%;
-    --muted-foreground: 215 16% 65%; /* Increased contrast */
+    --muted-foreground: 215 16% 65%;
+    /* Increased contrast */
     --accent: 218 28% 35%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
@@ -120,6 +137,8 @@
     --border: 218 28% 30%;
     --input: 218 28% 30%;
     --ring: 212 86.2% 50%;
+    /* Theme-specific value highlight color for token amounts */
+    --value: 212 100% 60%;
   }
 
   /* Additional color themes (light variants) */
@@ -143,6 +162,7 @@
     --border: 142 30% 76%;
     --input: 142 30% 76%;
     --ring: 142 55% 38%;
+    --value: 142 70% 35%;
   }
 
   .yellow {
@@ -165,6 +185,7 @@
     --border: 48 50% 76%;
     --input: 48 50% 76%;
     --ring: 48 96% 40%;
+    --value: 38 92% 45%;
   }
 
   .red {
@@ -187,6 +208,7 @@
     --border: 0 35% 76%;
     --input: 0 35% 76%;
     --ring: 0 72% 45%;
+    --value: 0 75% 50%;
   }
 
   .pink {
@@ -209,6 +231,7 @@
     --border: 330 30% 76%;
     --input: 330 30% 76%;
     --ring: 330 70% 50%;
+    --value: 330 80% 55%;
   }
 
   .blue {
@@ -232,6 +255,7 @@
     --border: 217 95% 65%;
     --input: 217 95% 80%;
     --ring: 217 100% 62%;
+    --value: 217 100% 55%;
   }
 
   .violet {
@@ -254,10 +278,18 @@
     --border: 265 30% 76%;
     --input: 265 30% 76%;
     --ring: 265 70% 50%;
+    --value: 265 80% 55%;
   }
-  
+
   /* Tailwind v4 theme variable fallback (ensures bg-*, text-*, ring-* custom tokens resolve even if @theme is not processed) */
-  :root, .dark, .green, .yellow, .red, .pink, .blue, .violet {
+  :root,
+  .dark,
+  .green,
+  .yellow,
+  .red,
+  .pink,
+  .blue,
+  .violet {
     --color-background: hsl(var(--background));
     --color-foreground: hsl(var(--foreground));
     --color-card: hsl(var(--card));
@@ -274,6 +306,7 @@
     --color-accent-foreground: hsl(var(--accent-foreground));
     --color-destructive: hsl(var(--destructive));
     --color-destructive-foreground: hsl(var(--destructive-foreground));
+    --color-value: hsl(var(--value));
     --color-border: hsl(var(--border));
     --color-input: hsl(var(--input));
     --color-ring: hsl(var(--ring));
@@ -288,6 +321,7 @@
     /* Use CSS variable directly for upgradability */
     border-color: hsl(var(--border));
   }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
@@ -299,7 +333,7 @@
     transition-timing-function: ease-in-out;
     transition-duration: 180ms;
   }
-  
+
   /* Respect user preference to reduce motion */
   @media (prefers-reduced-motion: reduce) {
     body {
@@ -308,14 +342,17 @@
   }
 
   /* Disable all animations/transitions when motion-off is set (mobile) */
-  .motion-off *, .motion-off *::before, .motion-off *::after {
+  .motion-off *,
+  .motion-off *::before,
+  .motion-off *::after {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
   }
 
   /* Global scroll lock for native-app feel */
-  html, body {
+  html,
+  body {
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
@@ -339,7 +376,12 @@
   }
 
   /* Improve Coinbase Sans rendering for headers */
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-weight: 500;
     letter-spacing: -0.01em;
   }
@@ -349,16 +391,33 @@
 
 @layer components {
   /* (removed legacy spacing/padding helpers; use Tailwind utilities directly) */
-  
-  
-  
+
+
+
   /* Theme-aware status colors */
-  .status-great { @apply text-green-600 dark:text-green-400; }
-  .status-okay { @apply text-yellow-600 dark:text-yellow-400; }
-  .status-dry { @apply text-orange-600 dark:text-orange-400; }
-  .status-dying { @apply text-red-600 dark:text-red-400; }
-  .status-dead { @apply text-gray-600 dark:text-gray-400; }
-  .status-unknown { @apply text-gray-400 dark:text-gray-500; }
+  .status-great {
+    @apply text-green-600 dark:text-green-400;
+  }
+
+  .status-okay {
+    @apply text-yellow-600 dark:text-yellow-400;
+  }
+
+  .status-dry {
+    @apply text-orange-600 dark:text-orange-400;
+  }
+
+  .status-dying {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  .status-dead {
+    @apply text-gray-600 dark:text-gray-400;
+  }
+
+  .status-unknown {
+    @apply text-gray-400 dark:text-gray-500;
+  }
 
   /* Base Loader Animations - Sequential Box Appearance */
   .base-box-1 {
@@ -367,21 +426,21 @@
     animation: base-load 1.2s ease-in-out infinite;
     animation-delay: 0s;
   }
-  
+
   .base-box-2 {
     fill: hsl(var(--primary));
     opacity: 0;
     animation: base-load 1.2s ease-in-out infinite;
     animation-delay: 0.3s;
   }
-  
+
   .base-box-3 {
     fill: hsl(var(--primary));
     opacity: 0;
     animation: base-load 1.2s ease-in-out infinite;
     animation-delay: 0.6s;
   }
-  
+
   .base-box-4 {
     fill: hsl(var(--primary));
     opacity: 0;
@@ -415,7 +474,7 @@
     transition: fill 0.1s ease;
   }
 
-  
+
 }
 
 /* In-app browser touch optimizations */
@@ -442,7 +501,7 @@
   .safe-area-bottom {
     padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
   }
-  
+
   /* Touch optimizations for buttons and interactive elements */
   button,
   [role="button"],
@@ -473,14 +532,15 @@
     min-height: 44px;
     min-width: 44px;
   }
+
   /* Compact buttons (override global min-size for small inline controls) */
   .btn-compact {
     min-height: 0 !important;
     min-width: 0 !important;
   }
-  
+
   /* Removed compact and width/height overrides to rely on standard Button sizes */
-  
+
   /* Header specific optimizations for in-app browsers */
   header {
     touch-action: manipulation;
@@ -493,13 +553,15 @@
 
 /* Mobile scrolling performance optimizations */
 @layer utilities {
+
   /* Optimize mobile scrolling performance */
   @media (max-width: 768px) {
+
     /* Improve mobile scroll performance */
     * {
       -webkit-overflow-scrolling: touch;
     }
-    
+
     /* (removed pixel-corner containment) */
   }
 }
@@ -523,14 +585,37 @@
  */
 
 /* Data attribute selectors for controlled layering */
-[data-layer="dropdown"] { z-index: var(--z-dropdown); }
-[data-layer="sticky"] { z-index: var(--z-sticky); }
-[data-layer="overlay"] { z-index: var(--z-overlay); }
-[data-layer="modal"] { z-index: var(--z-modal); }
-[data-layer="modal-nested"] { z-index: var(--z-modal-nested); }
-[data-layer="transaction"] { z-index: var(--z-transaction); }
-[data-layer="toast"] { z-index: var(--z-toast); }
-[data-layer="tooltip"] { z-index: var(--z-tooltip); }
+[data-layer="dropdown"] {
+  z-index: var(--z-dropdown);
+}
+
+[data-layer="sticky"] {
+  z-index: var(--z-sticky);
+}
+
+[data-layer="overlay"] {
+  z-index: var(--z-overlay);
+}
+
+[data-layer="modal"] {
+  z-index: var(--z-modal);
+}
+
+[data-layer="modal-nested"] {
+  z-index: var(--z-modal-nested);
+}
+
+[data-layer="transaction"] {
+  z-index: var(--z-transaction);
+}
+
+[data-layer="toast"] {
+  z-index: var(--z-toast);
+}
+
+[data-layer="tooltip"] {
+  z-index: var(--z-tooltip);
+}
 
 /* OnchainKit toast containers */
 .ock-transaction-toast,
@@ -577,14 +662,14 @@
  * Radix Portal ordering for transaction modals
  * When multiple portals exist, ensure transaction-related ones appear above dialogs
  */
-body > div[data-radix-portal] {
+body>div[data-radix-portal] {
   /* Base portals get modal layer by default */
   z-index: var(--z-modal);
 }
 
 /* Portals containing transaction modals get elevated */
-body > div[data-radix-portal]:has([class*="transaction-modal"]),
-body > div[data-radix-portal]:has([class*="TransactionModal"]) {
+body>div[data-radix-portal]:has([class*="transaction-modal"]),
+body>div[data-radix-portal]:has([class*="TransactionModal"]) {
   z-index: var(--z-transaction);
 }
 
@@ -620,15 +705,15 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
 }
 
 /* FollowButton content stability */
-[class*="follow-button"] > *,
-[class*="FollowButton"] > * {
+[class*="follow-button"]>*,
+[class*="FollowButton"]>* {
   transform: none;
   scale: 1;
   transition: none;
 }
 
-[class*="follow-button"]:hover > *,
-[class*="FollowButton"]:hover > * {
+[class*="follow-button"]:hover>*,
+[class*="FollowButton"]:hover>* {
   transform: none;
   scale: 1;
 }
@@ -641,13 +726,21 @@ body:has([class*="transaction-modal"]:not([aria-hidden="true"])) [data-radix-dia
 body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dialog-overlay] {
   pointer-events: none;
 }
- 
+
 
 /* Tutorial art subtle float */
 @keyframes float-soft {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-  100% { transform: translateY(0); }
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 .tutorial-art {
@@ -655,69 +748,286 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 }
 
 /* Port custom keyframes/utilities used by components to ensure v4 support */
-@keyframes accordion-down { from { height: 0 } to { height: var(--radix-accordion-content-height) } }
-@keyframes accordion-up { from { height: var(--radix-accordion-content-height) } to { height: 0 } }
-@keyframes fade-in { 0% { opacity: 0 } 100% { opacity: 1 } }
-@keyframes base-load { 0% { opacity: 0 } 25% { opacity: 1 } 75% { opacity: 1 } 100% { opacity: 0 } }
-@keyframes base-loading-colors {
-  0% { fill: hsl(var(--primary)) }
-  12% { fill: hsl(var(--secondary)) }
-  25% { fill: hsl(var(--accent)) }
-  37% { fill: hsl(var(--primary)) }
-  50% { fill: hsl(var(--muted)) }
-  62% { fill: hsl(var(--secondary)) }
-  75% { fill: hsl(var(--accent)) }
-  87% { fill: hsl(var(--primary)) }
-  100% { fill: hsl(var(--primary)) }
+@keyframes accordion-down {
+  from {
+    height: 0
+  }
+
+  to {
+    height: var(--radix-accordion-content-height)
+  }
 }
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height)
+  }
+
+  to {
+    height: 0
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0
+  }
+
+  100% {
+    opacity: 1
+  }
+}
+
+@keyframes base-load {
+  0% {
+    opacity: 0
+  }
+
+  25% {
+    opacity: 1
+  }
+
+  75% {
+    opacity: 1
+  }
+
+  100% {
+    opacity: 0
+  }
+}
+
+@keyframes base-loading-colors {
+  0% {
+    fill: hsl(var(--primary))
+  }
+
+  12% {
+    fill: hsl(var(--secondary))
+  }
+
+  25% {
+    fill: hsl(var(--accent))
+  }
+
+  37% {
+    fill: hsl(var(--primary))
+  }
+
+  50% {
+    fill: hsl(var(--muted))
+  }
+
+  62% {
+    fill: hsl(var(--secondary))
+  }
+
+  75% {
+    fill: hsl(var(--accent))
+  }
+
+  87% {
+    fill: hsl(var(--primary))
+  }
+
+  100% {
+    fill: hsl(var(--primary))
+  }
+}
+
 /* Theme-independent vibrant color cycle for streak indicator */
 @keyframes streak-colors {
-  0% { fill: #2563eb; }     /* blue-600 */
-  12% { fill: #10b981; }    /* emerald-500 */
-  25% { fill: #f59e0b; }    /* amber-500 */
-  37% { fill: #ef4444; }    /* red-500 */
-  50% { fill: #8b5cf6; }    /* violet-500 */
-  62% { fill: #06b6d4; }    /* cyan-500 */
-  75% { fill: #f43f5e; }    /* rose-500 */
-  87% { fill: #22c55e; }    /* green-500 */
-  100% { fill: #2563eb; }   /* blue-600 */
-}
-@keyframes theme-transition { 0% { opacity: 1; transform: scale(1) } 50% { opacity: .8; transform: scale(1.02) } 100% { opacity: 1; transform: scale(1) } }
-@keyframes spin-slow { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
-@keyframes coin-flip { 
-  0% { transform: rotateY(0deg); } 
-  100% { transform: rotateY(360deg); } 
+  0% {
+    fill: #2563eb;
+  }
+
+  /* blue-600 */
+  12% {
+    fill: #10b981;
+  }
+
+  /* emerald-500 */
+  25% {
+    fill: #f59e0b;
+  }
+
+  /* amber-500 */
+  37% {
+    fill: #ef4444;
+  }
+
+  /* red-500 */
+  50% {
+    fill: #8b5cf6;
+  }
+
+  /* violet-500 */
+  62% {
+    fill: #06b6d4;
+  }
+
+  /* cyan-500 */
+  75% {
+    fill: #f43f5e;
+  }
+
+  /* rose-500 */
+  87% {
+    fill: #22c55e;
+  }
+
+  /* green-500 */
+  100% {
+    fill: #2563eb;
+  }
+
+  /* blue-600 */
 }
 
-@utility animate-accordion-down { animation: accordion-down .2s ease-out; }
-@utility animate-accordion-up { animation: accordion-up .2s ease-out; }
-@utility animate-fade-in { animation: fade-in .3s ease-in-out; }
-@utility animate-base-load { animation: base-load 1.2s ease-in-out infinite; }
-@utility animate-base-loading-colors { animation: base-loading-colors 1.2s linear infinite; }
-@utility animate-theme-transition { animation: theme-transition .3s ease-in-out; }
-@utility animate-streak-colors { animation: streak-colors 1.2s linear infinite; }
-@utility animate-spin-slow { animation: spin-slow 5s linear infinite; }
-@utility animate-coin-flip { animation: coin-flip 3s linear infinite; }
+@keyframes theme-transition {
+  0% {
+    opacity: 1;
+    transform: scale(1)
+  }
+
+  50% {
+    opacity: .8;
+    transform: scale(1.02)
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1)
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg)
+  }
+
+  to {
+    transform: rotate(360deg)
+  }
+}
+
+@keyframes coin-flip {
+  0% {
+    transform: rotateY(0deg);
+  }
+
+  100% {
+    transform: rotateY(360deg);
+  }
+}
+
+@utility animate-accordion-down {
+  animation: accordion-down .2s ease-out;
+}
+
+@utility animate-accordion-up {
+  animation: accordion-up .2s ease-out;
+}
+
+@utility animate-fade-in {
+  animation: fade-in .3s ease-in-out;
+}
+
+@utility animate-base-load {
+  animation: base-load 1.2s ease-in-out infinite;
+}
+
+@utility animate-base-loading-colors {
+  animation: base-loading-colors 1.2s linear infinite;
+}
+
+@utility animate-theme-transition {
+  animation: theme-transition .3s ease-in-out;
+}
+
+@utility animate-streak-colors {
+  animation: streak-colors 1.2s linear infinite;
+}
+
+@utility animate-spin-slow {
+  animation: spin-slow 5s linear infinite;
+}
+
+@utility animate-coin-flip {
+  animation: coin-flip 3s linear infinite;
+}
 
 /* Ensure semantic color utilities exist even if Tailwind doesn't generate them */
-@utility bg-primary { background-color: var(--color-primary); }
-@utility bg-background { background-color: var(--color-background); }
-@utility text-primary-foreground { color: var(--color-primary-foreground); }
-@utility text-foreground { color: var(--color-foreground); }
-@utility bg-secondary { background-color: var(--color-secondary); }
-@utility text-secondary-foreground { color: var(--color-secondary-foreground); }
-@utility bg-accent { background-color: var(--color-accent); }
-@utility text-accent-foreground { color: var(--color-accent-foreground); }
-@utility text-muted-foreground { color: var(--color-muted-foreground); }
-@utility bg-muted { background-color: var(--color-muted); }
-@utility bg-card { background-color: var(--color-card); }
-@utility text-card-foreground { color: var(--color-card-foreground); }
-@utility bg-popover { background-color: var(--color-popover); }
-@utility text-popover-foreground { color: var(--color-popover-foreground); }
-@utility border-input { border-color: var(--color-input); }
-@utility border-border { border-color: var(--color-border); }
-@utility ring-ring { --tw-ring-color: var(--color-ring); }
-@utility ring-offset-background { --tw-ring-offset-color: var(--color-background); }
+@utility bg-primary {
+  background-color: var(--color-primary);
+}
+
+@utility bg-background {
+  background-color: var(--color-background);
+}
+
+@utility text-primary-foreground {
+  color: var(--color-primary-foreground);
+}
+
+@utility text-foreground {
+  color: var(--color-foreground);
+}
+
+@utility bg-secondary {
+  background-color: var(--color-secondary);
+}
+
+@utility text-secondary-foreground {
+  color: var(--color-secondary-foreground);
+}
+
+@utility bg-accent {
+  background-color: var(--color-accent);
+}
+
+@utility text-accent-foreground {
+  color: var(--color-accent-foreground);
+}
+
+@utility text-muted-foreground {
+  color: var(--color-muted-foreground);
+}
+
+@utility bg-muted {
+  background-color: var(--color-muted);
+}
+
+@utility bg-card {
+  background-color: var(--color-card);
+}
+
+@utility text-card-foreground {
+  color: var(--color-card-foreground);
+}
+
+@utility bg-popover {
+  background-color: var(--color-popover);
+}
+
+@utility text-popover-foreground {
+  color: var(--color-popover-foreground);
+}
+
+@utility border-input {
+  border-color: var(--color-input);
+}
+
+@utility border-border {
+  border-color: var(--color-border);
+}
+
+@utility ring-ring {
+  --tw-ring-color: var(--color-ring);
+}
+
+@utility ring-offset-background {
+  --tw-ring-offset-color: var(--color-background);
+}
 
 /* OnchainKit theme bridge: make OCK use Pixotchi theme tokens */
 [data-ock-theme='pixotchi'] {
@@ -755,6 +1065,7 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 [data-ock-theme='pixotchi'] .ock-swap-token-button {
   color: hsl(var(--foreground));
 }
+
 [data-ock-theme='pixotchi'] .ock-swap-token-button * {
   color: inherit;
 }
@@ -763,6 +1074,7 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 [data-ock-theme='pixotchi'] .ock\:text-ock-foreground {
   color: hsl(var(--foreground)) !important;
 }
+
 [data-ock-theme='pixotchi'] .ock\:text-ock-foreground-muted {
   color: var(--ock-foreground-muted) !important;
 }
@@ -781,6 +1093,7 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
   color: var(--ock-text-foreground) !important;
   border-color: var(--ock-border) !important;
 }
+
 [data-ock-theme='pixotchi'] [role='menu'] *,
 [data-ock-theme='pixotchi'] [role='listbox'] * {
   color: inherit !important;
@@ -795,9 +1108,11 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 [data-ock-theme='pixotchi'] .ock\:bg-ock-background-inverse {
   background-color: var(--ock-background-inverse) !important;
 }
+
 [data-ock-theme='pixotchi'] .ock\:hover\:bg-ock-background-hover:hover {
   background-color: var(--ock-background-hover) !important;
 }
+
 [data-ock-theme='pixotchi'] .ock\:active\:bg-ock-background-active:active,
 [data-ock-theme='pixotchi'] .ock\:focus\:bg-ock-background-active:focus {
   background-color: var(--ock-background-active) !important;
@@ -807,9 +1122,11 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 [data-ock-theme='pixotchi'] .ock\:bg-ock-background-alternate {
   background-color: var(--ock-background-alternate) !important;
 }
+
 [data-ock-theme='pixotchi'] .ock\:hover\:bg-ock-background-alternate-hover:hover {
   background-color: var(--ock-background-alternate-hover) !important;
 }
+
 [data-ock-theme='pixotchi'] .ock\:active\:bg-ock-background-alternate-active:active,
 [data-ock-theme='pixotchi'] .ock\:focus\:bg-ock-background-alternate-active:focus {
   background-color: var(--ock-background-alternate-active) !important;
@@ -823,11 +1140,15 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 
 /* Reduce toggle button size and negative margins to avoid balance overlap */
 [data-ock-theme='pixotchi'] [data-testid='SwapTokensButton'] {
-  height: 2.25rem !important; /* h-9 */
-  width: 2.25rem !important;  /* w-9 */
-  margin-top: -0.5rem !important;  /* was -my-6 ~= -1.5rem */
+  height: 2.25rem !important;
+  /* h-9 */
+  width: 2.25rem !important;
+  /* w-9 */
+  margin-top: -0.5rem !important;
+  /* was -my-6 ~= -1.5rem */
   margin-bottom: -0.5rem !important;
 }
+
 [data-ock-theme='pixotchi'] [data-testid='SwapTokensButton'] svg {
   width: 14px !important;
   height: 14px !important;
@@ -835,30 +1156,82 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
 
 /* Fallback hover utilities used by Button variants */
 @media (hover: hover) {
-  .hover\:bg-primary\/90:hover { background-color: hsl(var(--primary) / 0.9) !important; }
-  .hover\:bg-destructive\/90:hover { background-color: hsl(var(--destructive) / 0.9) !important; }
-  .hover\:bg-secondary\/80:hover { background-color: hsl(var(--secondary) / 0.8) !important; }
-  .hover\:bg-accent:hover { background-color: var(--color-accent) !important; }
-  .hover\:text-accent-foreground:hover { color: var(--color-accent-foreground) !important; }
+  .hover\:bg-primary\/90:hover {
+    background-color: hsl(var(--primary) / 0.9) !important;
+  }
+
+  .hover\:bg-destructive\/90:hover {
+    background-color: hsl(var(--destructive) / 0.9) !important;
+  }
+
+  .hover\:bg-secondary\/80:hover {
+    background-color: hsl(var(--secondary) / 0.8) !important;
+  }
+
+  .hover\:bg-accent:hover {
+    background-color: var(--color-accent) !important;
+  }
+
+  .hover\:text-accent-foreground:hover {
+    color: var(--color-accent-foreground) !important;
+  }
 }
 
 /* Opacity variants for token-based colors used in toggles and highlights */
-.bg-primary\/5 { background-color: hsl(var(--primary) / 0.05) !important; }
-.bg-primary\/10 { background-color: hsl(var(--primary) / 0.1) !important; }
-.bg-red-500\/10 { background-color: hsl(0 84% 60% / 0.1) !important; }
-.bg-green-500\/10 { background-color: hsl(142 72% 29% / 0.1) !important; }
-.divide-border > :not([hidden]) ~ :not([hidden]) { border-top-width: 1px; border-color: var(--color-border); }
-.border-primary\/20 { border-color: hsl(var(--primary) / 0.2) !important; }
-.border-primary\/30 { border-color: hsl(var(--primary) / 0.3) !important; }
+.bg-primary\/5 {
+  background-color: hsl(var(--primary) / 0.05) !important;
+}
+
+.bg-primary\/10 {
+  background-color: hsl(var(--primary) / 0.1) !important;
+}
+
+.bg-red-500\/10 {
+  background-color: hsl(0 84% 60% / 0.1) !important;
+}
+
+.bg-green-500\/10 {
+  background-color: hsl(142 72% 29% / 0.1) !important;
+}
+
+.divide-border> :not([hidden])~ :not([hidden]) {
+  border-top-width: 1px;
+  border-color: var(--color-border);
+}
+
+.border-primary\/20 {
+  border-color: hsl(var(--primary) / 0.2) !important;
+}
+
+.border-primary\/30 {
+  border-color: hsl(var(--primary) / 0.3) !important;
+}
 
 /* Fallback responsive helpers when md: classes are not emitted */
 @media (min-width: 48rem) {
-  .mq-md-grid { display: grid !important; }
-  .mq-md-hidden { display: none !important; }
-  .mq-md-grid-cols-3 { grid-template-columns: 1fr 1.2fr 1fr !important; }
-  .mq-md-col-span-1 { grid-column: span 1 / span 1 !important; }
-  .mq-md-overflow-auto { overflow: auto !important; }
-  .mq-md-max-h-22rem { max-height: 22rem !important; }
+  .mq-md-grid {
+    display: grid !important;
+  }
+
+  .mq-md-hidden {
+    display: none !important;
+  }
+
+  .mq-md-grid-cols-3 {
+    grid-template-columns: 1fr 1.2fr 1fr !important;
+  }
+
+  .mq-md-col-span-1 {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  .mq-md-overflow-auto {
+    overflow: auto !important;
+  }
+
+  .mq-md-max-h-22rem {
+    max-height: 22rem !important;
+  }
 }
 
 /* Admin page scroll override - allows scrolling in admin dashboard while preserving mobile-view UX in main app */

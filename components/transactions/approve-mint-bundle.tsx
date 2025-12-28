@@ -48,7 +48,7 @@ export default function ApproveMintBundle({
 }) {
   // Unlimited approval followed by mint call
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
-  
+
   // Use provided token address or default to SEED
   const token = tokenAddress || PIXOTCHI_TOKEN_ADDRESS;
 

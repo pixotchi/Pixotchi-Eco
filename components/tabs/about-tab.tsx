@@ -35,9 +35,9 @@ const InfoCard = ({
   linkLabel: string;
 }) => {
   const Icon = icon;
-  
+
   const handleExternalLink = () => { openExternalUrl(link); };
-  
+
   return (
     <Card>
       <CardHeader>
@@ -49,11 +49,11 @@ const InfoCard = ({
               </div>
             )}
             {iconSrc && (
-              <Image 
-                src={iconSrc} 
-                alt={title} 
-                width={40} 
-                height={40} 
+              <Image
+                src={iconSrc}
+                alt={title}
+                width={40}
+                height={40}
                 className="w-10 h-10 rounded-xl object-cover"
               />
             )}
@@ -61,16 +61,18 @@ const InfoCard = ({
           <CardTitle className="font-pixel">{title}</CardTitle>
         </div>
       </CardHeader>
-    <CardContent>
-      <p className="text-muted-foreground mb-4">{description}</p>
-      <Button variant="secondary" onClick={handleExternalLink}>
-        {linkLabel}
-        <ArrowUpRight className="w-4 h-4 ml-2" />
-      </Button>
-    </CardContent>
-  </Card>
+      <CardContent>
+        <p className="text-muted-foreground mb-4">{description}</p>
+        <Button variant="secondary" onClick={handleExternalLink}>
+          {linkLabel}
+          <ArrowUpRight className="w-4 h-4 ml-2" />
+        </Button>
+      </CardContent>
+    </Card>
   );
 };
+
+
 
 export default function AboutTab() {
   const { address } = useAccount();
@@ -110,7 +112,7 @@ export default function AboutTab() {
       });
 
       const data = await response.json();
-      
+
       if (data.systemEnabled) {
         setStats(data.stats);
       }
@@ -133,7 +135,7 @@ export default function AboutTab() {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         // Get the most recent 5 codes with their status
         const codes = data.codes.slice(0, 5).map((codeData: any) => ({
@@ -167,12 +169,12 @@ export default function AboutTab() {
 
       if (data.success) {
         const newCode = data.code;
-        
+
         toast.success('New invite code generated!');
-        
+
         // Auto-copy to clipboard
         await copyToClipboard(newCode, 'New invite code');
-        
+
         // Reload both stats and codes to ensure everything is up to date
         await Promise.all([
           loadInviteStats(),
@@ -189,39 +191,7 @@ export default function AboutTab() {
     }
   };
 
-  // Gamification: streak and mission status
-  const [streak, setStreak] = useState<{ current: number; best: number } | null>(null);
-  const [missionPts, setMissionPts] = useState<number | null>(null);
-  const [missionDay, setMissionDay] = useState<any | null>(null);
-  const [missionTotal, setMissionTotal] = useState<number>(0);
-  const [showMissionsInfo, setShowMissionsInfo] = useState(false);
-
-  // Allow StatusBar Tasks button to open this dialog
-  useEffect(() => {
-    const handler = () => setShowMissionsInfo(true);
-    window.addEventListener('pixotchi:openTasks' as any, handler as EventListener);
-    return () => window.removeEventListener('pixotchi:openTasks' as any, handler as EventListener);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!address) return;
-        const sRes = await fetch(`/api/gamification/streak?address=${address}`);
-        if (sRes.ok) {
-          const s = await sRes.json();
-          setStreak({ current: s.streak.current, best: s.streak.best });
-        }
-        const mRes = await fetch(`/api/gamification/missions?address=${address}`);
-        if (mRes.ok) {
-          const m = await mRes.json();
-          setMissionPts(m.day?.pts ?? 0);
-          setMissionDay(m.day || null);
-          setMissionTotal(typeof m.total === 'number' && Number.isFinite(m.total) ? m.total : 0);
-        }
-      } catch {}
-    })();
-  }, [address]);
+  // Note: Gamification streak/missions now handled by TasksInfoDialog component
 
   const copyToClipboard = async (code: string, label: string = 'Invite code') => {
     try {
@@ -229,7 +199,7 @@ export default function AboutTab() {
       await navigator.clipboard.writeText(code);
       setCopiedCode(code);
       toast.success(`${label} copied to clipboard!`);
-      
+
       // Reset copied state after 2 seconds
       setTimeout(() => setCopiedCode(null), 2000);
     } catch (error) {
@@ -259,7 +229,7 @@ export default function AboutTab() {
       // Collect wallet profile data
       const isMiniApp = Boolean(frameData?.isInMiniApp);
       const fcContext = (frameData?.context as any) ?? null;
-      
+
       // Extract farcaster details
       let farcasterDetails: any = null;
       if (isMiniApp && fcContext) {
@@ -275,7 +245,7 @@ export default function AboutTab() {
       const response = await fetch('/api/feedback/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           address,
           message: feedbackText.trim(),
           walletType,
@@ -306,7 +276,7 @@ export default function AboutTab() {
 
   return (
     <div className="space-y-8">
-      
+
       {/* Invite Section - Only show if system is enabled */}
       {INVITE_CONFIG.SYSTEM_ENABLED && (
         <div className="space-y-4">
@@ -334,13 +304,13 @@ export default function AboutTab() {
                   </div>
                 </div>
               )}
-              
+
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-3">
                   Share Pixotchi Mini! Generate up to 2 codes daily.
                 </p>
-                
-                <Button 
+
+                <Button
                   onClick={generateInviteCode}
                   disabled={generating || !stats?.canGenerateToday || loading || !address}
                   className="w-full max-w-xs"
@@ -381,19 +351,16 @@ export default function AboutTab() {
                   </div>
                   <div className="space-y-2">
                     {recentCodes.slice(0, 3).map((codeData) => (
-                      <div 
+                      <div
                         key={codeData.code}
-                        className={`flex items-center justify-between p-2 bg-muted/50 rounded-lg ${
-                          codeData.isUsed ? 'opacity-60' : ''
-                        }`}
+                        className={`flex items-center justify-between p-2 bg-muted/50 rounded-lg ${codeData.isUsed ? 'opacity-60' : ''
+                          }`}
                       >
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            codeData.isUsed ? 'bg-green-500' : 'bg-blue-500'
-                          }`} />
-                          <div className={`font-pixel text-sm font-medium ${
-                            codeData.isUsed ? 'line-through text-muted-foreground' : ''
-                          }`}>
+                          <div className={`w-2 h-2 rounded-full ${codeData.isUsed ? 'bg-green-500' : 'bg-blue-500'
+                            }`} />
+                          <div className={`font-pixel text-sm font-medium ${codeData.isUsed ? 'line-through text-muted-foreground' : ''
+                            }`}>
                             {codeData.code}
                           </div>
                           {codeData.isUsed && (
@@ -419,13 +386,13 @@ export default function AboutTab() {
                         </div>
                       </div>
                     ))}
-                    
+
                     {recentCodes.length > 3 && (
                       <div className="text-center pt-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {/* Could expand to show more */}}
+                          onClick={() => {/* Could expand to show more */ }}
                           className="text-xs text-muted-foreground h-6"
                         >
                           +{recentCodes.length - 3} more codes
@@ -440,62 +407,28 @@ export default function AboutTab() {
         </div>
       )}
 
-      {/* Daily Progress (Streak + Missions) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Farmer's Tasks</span>
-            <Button variant="outline" size="sm" onClick={() => setShowMissionsInfo(true)}>
-              <Info className="w-4 h-4 mr-2" /> How Tasks Work
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {/* Streak */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Current Streak</p>
-                <p className="text-2xl font-bold">{streak?.current ?? 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">Best: {streak?.best ?? 0}</p>
-              </div>
-              <svg width="24" height="24" viewBox="0 0 24 24" className="w-6 h-6 animate-streak-colors" aria-hidden="true">
-                <rect x="2" y="2" width="20" height="20" rx="3" />
-              </svg>
-            </div>
-            <div className="p-3 rounded-lg bg-muted flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Today's Rock</p>
-                <p className="text-2xl font-bold">{missionPts ?? 0} / 80</p>
-                <p className="text-xs text-muted-foreground mt-1">Lifetime Rocks: {missionTotal}</p>
-              </div>
-              <Image src="/icons/Volcanic_Rock.svg" alt="Rock" width={24} height={24} className="w-6 h-6" />
-            </div>
-          </div>
-          {/* Compact summary only; details in modal */}
-        </CardContent>
-      </Card>
-
       {/* Description */}
       <Card>
         <CardContent>
           <p className="text-muted-foreground mb-4">
-            <span className="font-pixel text-foreground">PIXOTCHI</span> is a 1.5 year old tamagotchi-style onchain game on Base where you can mint, grow,
-            and interact with your plants and lands; earning ETH rewards in the process. This App
-            brings an enhanced experience using latest Base features, designed for Base app.
+            <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
           </p>
+          <p className="text-muted-foreground mb-4">
+            Every player follows a different strategy. Some invest in Lands for long-term, passive growth, while others push their plants aggressively using the marketplace to climb rankings faster at a higher cost.
+          </p>
+
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
                 className="w-full"
               >
                 <Book className="w-4 h-4 mr-2" />
                 Documentation
               </Button>
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
                 className="w-full"
               >
@@ -504,11 +437,14 @@ export default function AboutTab() {
             </div>
             {enabled && (
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => start({ reset: true })}>
+                <Button
+                  onClick={() => start({ reset: true })}
+                  className="bg-value text-white hover:opacity-90"
+                >
                   Tutorial
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setShowFeedbackDialog(true)}
                 >
                   Feedback
@@ -516,8 +452,8 @@ export default function AboutTab() {
               </div>
             )}
             {!enabled && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setShowFeedbackDialog(true)}
               >
                 Feedback
@@ -534,51 +470,6 @@ export default function AboutTab() {
         </span>
       </div>
 
-      {/* Missions Info Dialog */}
-      <Dialog open={showMissionsInfo} onOpenChange={setShowMissionsInfo}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>How Tasks Work</DialogTitle>
-            <DialogDescription>
-              Earn up to 80 Rock per day by completing 4 sections:
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <div>
-              <div className="font-medium">Section 1 (20 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.buy5 ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy at least 5 elements</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.buyShield ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy a shield/fence</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.claimProduction ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim production from any building</li>
-              </ul>
-            </div>
-            <div>
-              <div className="font-medium">Section 2 (20 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.applyResources ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Apply resources/production to a plant</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.attackPlant ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Attack another plant</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.chatMessage ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a message in public chat</li>
-              </ul>
-            </div>
-            <div>
-              <div className="font-medium">Section 3 (10 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.sendQuest ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a farmer on a quest</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.placeOrder ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Place a SEED/LEAF order</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
-              </ul>
-        </div>
-            <div>
-              <div className="font-medium">Section 4 (30 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.makeSwap ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Make a SEED swap</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.collectStar ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Collect a star by killing a plant</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.playArcade ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play an arcade game (Box or Spin)</li>
-              </ul>
-            </div>
-      </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
@@ -615,30 +506,29 @@ export default function AboutTab() {
       </Dialog>
 
       <div className="pt-6 text-center">
-          <h3 className="text-lg font-semibold mb-3">Join our Community</h3>
-          <div className="flex justify-center space-x-4">
-              <button 
-                onClick={() => openExternalUrl('https://x.com/pixotchi')} 
-                className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
-              >
-                  <Image src="/icons/twitter.png" alt="X" width={24} height={24} />
-                  <span className="sr-only">X (Twitter)</span>
-              </button>
-              <button 
-                onClick={() => openExternalUrl('https://t.me/pixotchi')} 
-                className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
-              >
-                  <Image src="/icons/Telegram.png" alt="Telegram" width={24} height={24} />
-                  <span className="sr-only">Telegram</span>
-              </button>
-          </div>
+        <h3 className="text-lg font-semibold mb-3">Join our Community</h3>
+        <div className="flex justify-center space-x-4">
+          <button
+            onClick={() => openExternalUrl('https://x.com/pixotchi')}
+            className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+          >
+            <Image src="/icons/twitter.png" alt="X" width={24} height={24} />
+            <span className="sr-only">X (Twitter)</span>
+          </button>
+          <button
+            onClick={() => openExternalUrl('https://t.me/pixotchi')}
+            className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+          >
+            <Image src="/icons/Telegram.png" alt="Telegram" width={24} height={24} />
+            <span className="sr-only">Telegram</span>
+          </button>
+        </div>
       </div>
 
       <div className="pt-6">
-          <BaseAnimatedLogo className="mx-auto w-full" />
+        <BaseAnimatedLogo className="mx-auto w-full" />
       </div>
     </div>
   );
 }
 
- 

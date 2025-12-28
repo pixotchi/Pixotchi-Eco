@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient, useBalance } from 'wagmi';
 import { ShopItem, GardenItem, Plant } from '@/lib/types';
-import { buyShopItem, buyGardenItem, getTokenBalance, quoteFenceV2, buildFenceV2PurchaseCall, getFenceV2Config, checkTokenApproval, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { buyShopItem, buyGardenItem, getTokenBalance, quoteFenceV2, buildFenceV2PurchaseCall, getFenceV2Config, checkTokenApproval, PIXOTCHI_NFT_ADDRESS, getEthQuoteForSeedAmount } from '@/lib/contracts';
 import { formatTokenAmount, formatDuration, getFriendlyErrorMessage } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
@@ -14,6 +14,8 @@ import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { BuyShopItemTransaction, BuyGardenItemTransaction } from '@/components/transactions/buy-item-transaction';
 import BundleBuyTransaction from '@/components/transactions/bundle-buy-transaction';
+import SwapBuyItemBundle from '@/components/transactions/swap-buy-item-bundle';
+import SwapFencePurchaseBundle from '@/components/transactions/swap-fence-purchase-bundle';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import { Input } from '@/components/ui/input';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
@@ -24,6 +26,7 @@ import ApproveTransaction from '@/components/transactions/approve-transaction';
 import { useIsSolanaWallet, SolanaNotSupported } from '@/components/solana';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import { formatWsol } from '@/lib/solana-quote';
+import { useEthModeSafe } from '@/lib/eth-mode-context';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -33,9 +36,9 @@ interface ItemDetailsPanelProps {
   quantity: number;
 }
 
-export default function ItemDetailsPanel({ 
-  selectedItem, 
-  selectedPlant, 
+export default function ItemDetailsPanel({
+  selectedItem,
+  selectedPlant,
   itemType,
   onPurchaseSuccess,
   quantity
@@ -45,6 +48,7 @@ export default function ItemDetailsPanel({
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, walletType, isLoading: smartWalletLoading } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
+  const { isEthMode } = useEthModeSafe();
   const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
@@ -53,6 +57,12 @@ export default function ItemDetailsPanel({
   const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
   const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
   const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
+
+  // ETH Mode state - store per-unit ETH quote, calculate total by multiplication
+  const [ethQuotePerUnit, setEthQuotePerUnit] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
+  const [ethQuoteLoading, setEthQuoteLoading] = useState(false);
+  const { data: ethBalanceData } = useBalance({ address });
+  const ethBalance = ethBalanceData?.value ?? BigInt(0);
 
   const fenceItemName = selectedItem?.name?.toLowerCase() || '';
   const isFenceItem = fenceItemName.includes('fence') || fenceItemName.includes('shield');
@@ -63,15 +73,30 @@ export default function ItemDetailsPanel({
     ? (quantity > 0 ? basePrice * BigInt(quantity) : BigInt(0))
     : basePrice;
   const hasQuantitySelected = itemType === 'garden' ? quantity > 0 : true;
-  
+
+  // Calculate ETH totals from per-unit quote (no RPC call on quantity change)
+  const ethQuote = useMemo(() => {
+    if (!ethQuotePerUnit) return null;
+    // For fence, quote is already for the total (days-based), for items multiply by quantity
+    if (isFenceItem) return ethQuotePerUnit;
+    const qty = quantity > 0 ? BigInt(quantity) : BigInt(1);
+    return {
+      ethAmount: ethQuotePerUnit.ethAmount * qty,
+      ethAmountWithBuffer: ethQuotePerUnit.ethAmountWithBuffer * qty,
+    };
+  }, [ethQuotePerUnit, quantity, isFenceItem]);
+
   // Check if user has insufficient funds
   // For Solana users, skip this check - they pay with SOL and the quote system handles validation
+  // For ETH mode, check ETH balance instead of SEED
   const hasInsufficientFunds = isSolana
     ? false
-    : isFenceItem
-      ? fenceV2Quote > userSeedBalance
-      : totalCost > userSeedBalance;
-  
+    : isSmartWallet && isEthMode && ethQuote
+      ? ethBalance < ethQuote.ethAmountWithBuffer
+      : isFenceItem
+        ? fenceV2Quote > userSeedBalance
+        : totalCost > userSeedBalance;
+
   // Bundle transactions are only available for garden items and Smart Wallets
   const canBundle = itemType === 'garden' && quantity > 1;
 
@@ -83,7 +108,7 @@ export default function ItemDetailsPanel({
         setBalanceLoading(false);
         return;
       }
-      
+
       setBalanceLoading(true);
       try {
         const balance = await getTokenBalance(address);
@@ -181,6 +206,58 @@ export default function ItemDetailsPanel({
     };
   }, [isFenceItem, fenceV2Days]);
 
+  // Fetch ETH quote when ETH mode is active - only for per-unit price (fence uses its own quote)
+  useEffect(() => {
+    // Only fetch for smart wallet users with ETH mode enabled, not Solana
+    if (!isSmartWallet || !isEthMode || isSolana) {
+      setEthQuotePerUnit(null);
+      return;
+    }
+
+    // For fence items, use fenceV2Quote; for regular items, use basePrice (per-unit)
+    const seedCost = isFenceItem ? fenceV2Quote : basePrice;
+    if (seedCost <= BigInt(0)) {
+      setEthQuotePerUnit(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchEthQuote = async () => {
+      setEthQuoteLoading(true);
+      try {
+        const quote = await getEthQuoteForSeedAmount(seedCost);
+
+        if (!cancelled) {
+          if (quote.error || quote.ethAmountWithBuffer <= BigInt(0)) {
+            setEthQuotePerUnit(null);
+          } else {
+            setEthQuotePerUnit({
+              ethAmount: quote.ethAmount,
+              ethAmountWithBuffer: quote.ethAmountWithBuffer,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[ItemDetailsPanel] ETH quote fetch failed:', err);
+        if (!cancelled) {
+          setEthQuotePerUnit(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setEthQuoteLoading(false);
+        }
+      }
+    };
+
+    // Debounce the quote fetch
+    const timeoutId = setTimeout(fetchEthQuote, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [isSmartWallet, isEthMode, isSolana, isFenceItem, fenceV2Quote, basePrice]);
+
   // Calculate fence-related values (must be before any early returns to comply with Rules of Hooks)
   const currentTimeSec = Math.floor(Date.now() / 1000);
   const fenceV2State = selectedPlant?.fenceV2 ?? null;
@@ -193,7 +270,7 @@ export default function ItemDetailsPanel({
   const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
   const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
   const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
-  
+
   // These useMemo hooks must be called unconditionally (before any early returns)
   const fenceV2Bounds = useMemo(() => {
     const minFromConfig = fenceV2Config ? Math.max(1, fenceV2Config.minDurationDays || 1) : 1;
@@ -282,7 +359,7 @@ export default function ItemDetailsPanel({
     }
 
     if (quantity === 0 && itemType === 'garden') return 'Select quantity above';
-    
+
     if (itemType === 'shop') {
       const shopItem = selectedItem as ShopItem;
       return `${formatDuration(shopItem.effectTime)} protection`;
@@ -290,7 +367,7 @@ export default function ItemDetailsPanel({
       const gardenItem = selectedItem as GardenItem;
       const points = Number(gardenItem.points) / 1e12 * quantity;
       const hours = Math.floor(Number(gardenItem.timeExtension) / 3600) * quantity;
-      
+
       if (points > 0 && hours > 0) return `+${points} PTS & +${hours}h TOD`;
       if (points > 0) return `+${points} PTS`;
       if (hours > 0) return `+${hours}h TOD`;
@@ -314,7 +391,21 @@ export default function ItemDetailsPanel({
                   : 'Cost:'}
             </span>
             <div className="font-semibold text-destructive flex items-center gap-2">
-              {isSolana ? (
+              {/* ETH Mode: show ETH price for smart wallet users */}
+              {isSmartWallet && isEthMode && !isSolana && ethQuote ? (
+                <>
+                  <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                  <span>
+                    {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                    {itemType === 'garden' && quantity === 0 ? ' each' : ''}
+                  </span>
+                </>
+              ) : isSmartWallet && isEthMode && !isSolana && ethQuoteLoading ? (
+                <>
+                  <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                  <Skeleton className="h-4 w-20" />
+                </>
+              ) : isSolana ? (
                 solanaQuote ? (
                   solanaQuote.error ? (
                     <span className="text-amber-500">Quote error</span>
@@ -339,7 +430,7 @@ export default function ItemDetailsPanel({
               )}
             </div>
           </div>
-          
+
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Effect:</span>
             <span className="font-semibold text-primary">
@@ -412,7 +503,7 @@ export default function ItemDetailsPanel({
             </span>
             <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
-          
+
           {/* Solana users: Gate fence items and bundle transactions */}
           {isSolana && isFenceItem ? (
             <SolanaNotSupported feature="Fence protection" />
@@ -445,7 +536,7 @@ export default function ItemDetailsPanel({
                 toast.error(getFriendlyErrorMessage(message));
               }}
             />
-          ) : needsSeedApproval ? (
+          ) : needsSeedApproval && !(isSmartWallet && isEthMode && ethQuote) ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground text-center">
                 Approve SEED spending once to unlock shop and garden purchases.
@@ -460,6 +551,62 @@ export default function ItemDetailsPanel({
                 buttonText="Approve SEED"
                 buttonClassName="w-full"
               />
+            </div>
+          ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && selectedPlant && selectedItem ? (
+            // ETH Mode purchase - atomic swap + buy transaction
+            <div className="flex flex-col space-y-2">
+              {isFenceItem ? (
+                // Fence purchases use specialized bundle
+                <SwapFencePurchaseBundle
+                  plantId={selectedPlant.id}
+                  days={fenceV2Days}
+                  ethAmount={ethQuote.ethAmountWithBuffer}
+                  minSeedOut={fenceV2Quote}
+                  onSuccess={() => {
+                    onPurchaseSuccess();
+                    toast.success('Fence purchased with ETH!');
+                    window.dispatchEvent(new Event('balances:refresh'));
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText={
+                    ethBalance < ethQuote.ethAmountWithBuffer
+                      ? "Insufficient ETH Balance"
+                      : `Buy ${fenceV2Days} Day${fenceV2Days === 1 ? '' : 's'} Fence with ETH`
+                  }
+                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || fenceV2Bounds.todCapBreached || fenceV2BlockedByV1}
+                />
+              ) : (
+                // Regular item purchases
+                <SwapBuyItemBundle
+                  item={selectedItem}
+                  plant={selectedPlant}
+                  itemType={itemType}
+                  quantity={itemType === 'garden' ? quantity : 1}
+                  ethAmount={ethQuote.ethAmountWithBuffer}
+                  minSeedOut={totalCost}
+                  onSuccess={() => {
+                    onPurchaseSuccess();
+                    toast.success('Purchase with ETH successful!');
+                    window.dispatchEvent(new Event('balances:refresh'));
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText={
+                    ethBalance < ethQuote.ethAmountWithBuffer
+                      ? "Insufficient ETH Balance"
+                      : quantity > 1
+                        ? `Buy ${quantity}x with ETH`
+                        : `Buy with ETH`
+                  }
+                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || (!hasQuantitySelected && itemType === 'garden')}
+                />
+              )}
+              {ethBalance < ethQuote.ethAmountWithBuffer && (
+                <p className="text-xs text-value text-center">
+                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                </p>
+              )}
             </div>
           ) : disabledMessage ? (
             <DisabledTransaction
@@ -498,7 +645,7 @@ export default function ItemDetailsPanel({
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                       });
-                    } catch {}
+                    } catch { }
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={fenceButtonText}
@@ -522,7 +669,7 @@ export default function ItemDetailsPanel({
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                       });
-                    } catch {}
+                    } catch { }
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Buy Item"
@@ -558,7 +705,7 @@ export default function ItemDetailsPanel({
                       }
                     };
                     post(tx);
-                  } catch {}
+                  } catch { }
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Buy Item"
@@ -572,26 +719,26 @@ export default function ItemDetailsPanel({
               buttonClassName="w-full"
             />
           )}
-          
+
           {selectedPlant.status === 4 && (
-            <p className="text-xs text-destructive text-center mt-2">
+            <p className="text-xs text-value text-center mt-2">
               Cannot buy items for dead plants.
             </p>
           )}
-          
-          {hasInsufficientFunds && (
-            <p className="text-xs text-destructive text-center mt-2">
+
+          {hasInsufficientFunds && !isEthMode && (
+            <p className="text-xs text-value text-center mt-2">
               Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} SEED • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)} SEED
             </p>
           )}
-          
+
 
         </div>
 
         <div className="pt-2 border-t border-border">
           <p className="text-xs text-muted-foreground text-center">
-            {itemType === 'shop' 
-              ? 'Shop items provide ongoing protective effects.' 
+            {itemType === 'shop'
+              ? 'Shop items provide ongoing protective effects.'
               : 'Garden items give immediate points and/or TOD.'
             }
           </p>

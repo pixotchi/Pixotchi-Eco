@@ -55,11 +55,11 @@ import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 
 export default function PlantsView() {
   const { address: evmAddress } = useAccount();
-  
+
   // Solana wallet support - use Twin address for Solana users
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
-  
+
   // Use Twin address for Solana users, EVM address otherwise
   // Memoize to prevent unnecessary re-renders when dependencies haven't actually changed
   const address = useMemo(() => {
@@ -82,7 +82,7 @@ export default function PlantsView() {
 
   // Use ref to track selected plant ID without causing re-renders or re-fetches
   const selectedPlantIdRef = useRef<number | null>(null);
-  
+
   // Request deduplication ref to prevent multiple simultaneous calls
   const fetchDataPendingRef = useRef<string | null>(null);
 
@@ -141,12 +141,12 @@ export default function PlantsView() {
       // Only update if address hasn't changed during the fetch
       if (fetchDataPendingRef.current === address) {
         setPlants(plantsData);
-        
+
         // After refetching, try to find the previously selected plant in the new data
         // Use ref to get the current selected ID without causing dependency issues
         if (plantsData.length > 0) {
           const currentSelectedId = selectedPlantIdRef.current;
-          const newSelectedPlant = currentSelectedId 
+          const newSelectedPlant = currentSelectedId
             ? plantsData.find(p => p.id === currentSelectedId)
             : null;
           // Always update with fresh data - either preserve selection or select first
@@ -233,41 +233,41 @@ export default function PlantsView() {
 
   return (
     <div className="space-y-4">
-        {/* Top Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* StatusBar replaces BalanceCard globally under header */}
+      {/* Top Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* StatusBar replaces BalanceCard globally under header */}
 
-            {plants.length > 1 && (
-                 <Card>
-                    <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
-                    <CardContent>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="w-full justify-between">
-                                {selectedPlant ? (
-                                    <div className="flex items-center space-x-2">
-                                        <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
-                                        <span>{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
-                                    </div>
-                                ) : "Select a Plant"}
-                                <ChevronDown className="w-4 h-4" />
-                            </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
-                            {plants.map((plant) => (
-                                <DropdownMenuItem key={plant.id} onSelect={() => setSelectedPlant(plant)}>
-                                <div className="flex items-center space-x-2">
-                                    <PlantImage selectedPlant={plant} width={24} height={24} />
-                                    <span>{plant.name || `Plant #${plant.id}`} (Lvl {plant.level})</span>
-                                </div>
-                                </DropdownMenuItem>
-                            ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </CardContent>
-                 </Card>
-            )}
-        </div>
+        {plants.length > 1 && (
+          <Card>
+            <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
+            <CardContent>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between">
+                    {selectedPlant ? (
+                      <div className="flex items-center space-x-2">
+                        <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
+                        <span>{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
+                      </div>
+                    ) : "Select a Plant"}
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                  {plants.map((plant) => (
+                    <DropdownMenuItem key={plant.id} onSelect={() => setSelectedPlant(plant)}>
+                      <div className="flex items-center space-x-2">
+                        <PlantImage selectedPlant={plant} width={24} height={24} />
+                        <span>{plant.name || `Plant #${plant.id}`} (Lvl {plant.level})</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {selectedPlant && (
         <>
@@ -276,7 +276,7 @@ export default function PlantsView() {
             <CardContent className="p-4 space-y-3">
               {/* Main image container with stats overlay */}
               <div className="relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
-                
+
                 {/* Top Stats Bar - LVL, PTS, STARS */}
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-3 gap-2 text-sm font-bold text-foreground/80 z-20">
                   {/* Left: Level */}
@@ -301,15 +301,15 @@ export default function PlantsView() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Center: Plant Image - restore previous inner padding */}
                 <div className="absolute inset-6 sm:inset-8 flex items-center justify-center z-10">
                   <div className="relative">
                     <PlantImage selectedPlant={selectedPlant} width={180} height={180} priority={true} />
                     {hasActiveFence && (
-                        <div className="absolute top-0 right-0 z-10">
-                            <Image src="/icons/Shield.svg" alt="Shield" width={28} height={28} title="Fence protection active" />
-                        </div>
+                      <div className="absolute top-0 right-0 z-10">
+                        <Image src="/icons/Shield.svg" alt="Shield" width={28} height={28} title="Fence protection active" />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -349,7 +349,7 @@ export default function PlantsView() {
                     </button>
                   </>
                 )}
-                
+
                 {/* Bottom Status Bar - Timer and Health */}
                 <div className="absolute bottom-3 left-3 right-3 z-20">
                   <div className="flex justify-between items-end text-sm font-bold text-foreground/80">
@@ -385,13 +385,13 @@ export default function PlantsView() {
               <div className="text-center">
                 <div className="relative inline-block">
                   <h3 className="text-lg font-bold font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
-                  <EditPlantName 
-                    plant={selectedPlant} 
+                  <EditPlantName
+                    plant={selectedPlant}
                     onNameChanged={(plantId, newName) => {
                       // Update the selected plant name locally
                       setSelectedPlant(prev => prev ? { ...prev, name: newName } : null);
                       // Update the plants array
-                      setPlants(prev => prev.map(p => 
+                      setPlants(prev => prev.map(p =>
                         p.id === plantId ? { ...p, name: newName } : p
                       ));
                     }}
@@ -532,7 +532,7 @@ export default function PlantsView() {
             onOpenChange={setArcadeOpen}
             plant={selectedPlant}
           />
-          
+
           {/* Items Section */}
           <Card>
             <CardHeader>
@@ -550,71 +550,71 @@ export default function PlantsView() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-                        {/* Regular Wallet Info Message */}
-                        {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                <StandardContainer className="p-3 rounded-md border bg-primary/10">
-                            <div className="flex items-start space-x-2">
-                              <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                              <div className="text-sm text-foreground">
-                                <div className="font-medium">Regular Wallet Mode</div>
-                                <div className="text-xs mt-1">Purchasing 1 item at a time. For bulk purchases, consider using a smart wallet.</div>
+                {/* Regular Wallet Info Message */}
+                {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
+                  <StandardContainer className="p-3 rounded-md border bg-primary/10">
+                    <div className="flex items-start space-x-2">
+                      <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-foreground">
+                        <div className="font-medium">Regular Wallet Mode</div>
+                        <div className="text-xs mt-1">Purchasing 1 item at a time. For bulk purchases, consider using a smart wallet.</div>
+                      </div>
+                    </div>
+                  </StandardContainer>
+                )}
+
+                {/* Item Selection with Quantity */}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    {(itemType === 'garden' ? gardenItems : shopItems).map((item: ShopItem | GardenItem) => {
+                      const quantity = getItemQuantity(item.id);
+                      return (
+                        <div key={item.id} className="space-y-1">
+                          <div className="flex justify-center">
+                            <button
+                              onClick={() => setSelectedItem(item)}
+                              className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                            >
+                              <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
+                                <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
+                              </div>
+                            </button>
+                          </div>
+                          {itemType === 'garden' && isSmartWallet && (
+                            <div className="flex justify-center">
+                              <QuantitySelector
+                                quantity={quantity}
+                                onQuantityChange={(newQuantity) => {
+                                  handleQuantityChange(item.id, newQuantity);
+                                  setSelectedItem(item); // Auto-select item when quantity changes
+                                }}
+                                max={80}
+                                min={0}
+                                size="sm"
+                              />
+                            </div>
+                          )}
+                          {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
+                            <div className="flex justify-center">
+                              <div className="text-xs text-muted-foreground px-2 py-1">
+                                Qty: 1
                               </div>
                             </div>
-                          </StandardContainer>
-                        )}
-                        
-                        {/* Item Selection with Quantity */}
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-3 gap-2">
-                                {(itemType === 'garden' ? gardenItems : shopItems).map((item: ShopItem | GardenItem) => {
-                                  const quantity = getItemQuantity(item.id);
-                                  return (
-                                    <div key={item.id} className="space-y-1">
-                                      <div className="flex justify-center">
-                                        <button
-                                          onClick={() => setSelectedItem(item)}
-                                          className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
-                                        >
-                                          <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
-                                            <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                          </div>
-                                        </button>
-                                      </div>
-                                      {itemType === 'garden' && isSmartWallet && (
-                                        <div className="flex justify-center">
-                                          <QuantitySelector
-                                            quantity={quantity}
-                                            onQuantityChange={(newQuantity) => {
-                                              handleQuantityChange(item.id, newQuantity);
-                                              setSelectedItem(item); // Auto-select item when quantity changes
-                                            }}
-                                            max={80}
-                                            min={0}
-                                            size="sm"
-                                          />
-                                        </div>
-                                      )}
-                                      {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                                        <div className="flex justify-center">
-                                          <div className="text-xs text-muted-foreground px-2 py-1">
-                                            Qty: 1
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                          </div>
+                          )}
                         </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                        {/* Item Details and Purchase */}
-                        <ItemDetailsPanel
-                          selectedItem={selectedItem}
-                          selectedPlant={selectedPlant}
-                          itemType={itemType}
-                          onPurchaseSuccess={onPurchaseSuccess}
-                          quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
-                        />
+                {/* Item Details and Purchase */}
+                <ItemDetailsPanel
+                  selectedItem={selectedItem}
+                  selectedPlant={selectedPlant}
+                  itemType={itemType}
+                  onPurchaseSuccess={onPurchaseSuccess}
+                  quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
+                />
               </div>
             </CardContent>
           </Card>

@@ -55,7 +55,7 @@ export default function BundleBuyTransaction({
   const generateBundleCalls = () => {
     const calls = [];
     const functionName = itemType === 'shop' ? 'shopBuyItem' : 'buyAccessory';
-    
+
     for (let i = 0; i < quantity; i++) {
       calls.push({
         address: PIXOTCHI_NFT_ADDRESS,
@@ -64,7 +64,7 @@ export default function BundleBuyTransaction({
         args: [BigInt(plant.id), BigInt(item.id)],
       });
     }
-    
+
     // console.log('🎯 Bundle Transaction Calls Generated:', {
     //   quantity,
     //   callsCount: calls.length,
@@ -74,7 +74,7 @@ export default function BundleBuyTransaction({
     //   itemType,
     //   calls: calls.map((call, i) => ({ index: i, fn: call.functionName, args: call.args }))
     // });
-    
+
     return calls;
   };
 
@@ -112,13 +112,13 @@ export default function BundleBuyTransaction({
             };
             post(tx);
           }
-        } catch {}
+        } catch { }
         onSuccess?.(tx);
       }}
       onError={onError}
       buttonText={
-        quantity === 1 
-          ? `Buy ${item.name}` 
+        quantity === 1
+          ? `Buy ${item.name}`
           : `Buy ${quantity}x ${item.name} (Bundle)`
       }
       buttonClassName="w-full"

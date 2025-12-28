@@ -59,6 +59,45 @@ async function isContractAddress(addr: string): Promise<boolean> {
 }
 
 /**
+ * Helper to wait for a specified time
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetches transaction receipt with retry logic for timing issues.
+ * Base blocks are fast but RPC indexing can lag behind.
+ */
+async function getTransactionReceiptWithRetry(
+  client: ReturnType<typeof getReadClient>,
+  txHash: Hex,
+  maxAttempts = 3,
+  delayMs = 1000
+): Promise<Awaited<ReturnType<typeof client.getTransactionReceipt>> | null> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const receipt = await client.getTransactionReceipt({ hash: txHash });
+      if (receipt) return receipt;
+    } catch (error: any) {
+      // Check if it's a "not found" or "indexing in progress" error
+      const isTimingError =
+        error?.shortMessage?.includes('could not be found') ||
+        error?.details?.includes('indexing in progress') ||
+        error?.message?.includes('not found');
+
+      if (isTimingError && attempt < maxAttempts - 1) {
+        // Wait before retrying with exponential backoff
+        await sleep(delayMs * (attempt + 1));
+        continue;
+      }
+      throw error; // Re-throw if not a timing error or final attempt
+    }
+  }
+  return null;
+}
+
+/**
  * Validates on-chain proof for a task.
  * For smart wallets, we only verify the transaction exists and succeeded.
  * The sender address check is skipped for smart wallets since they use different addresses.
@@ -67,7 +106,7 @@ async function validateOnchainProof(address: string, proof: GmProgressProof | un
   if (!proof || typeof proof.txHash !== 'string' || !proof.txHash) {
     return false; // No proof provided, but we'll allow the task to be tracked
   }
-  
+
   const txHash = proof.txHash;
   if (!isHexHash(txHash)) {
     return false; // Invalid hash format
@@ -75,18 +114,18 @@ async function validateOnchainProof(address: string, proof: GmProgressProof | un
 
   try {
     const client = getReadClient();
-    const receipt = await client.getTransactionReceipt({ hash: txHash });
+    const receipt = await getTransactionReceiptWithRetry(client, txHash);
     if (!receipt) {
-      return false; // Transaction not found
+      return false; // Transaction not found after retries
     }
     if (receipt.status !== 'success') {
       return false; // Transaction failed
     }
-    
+
     // Check if sender is a smart contract (smart wallet)
     // Smart wallets will have different 'from' addresses, so we skip that check
     const senderIsContract = receipt.from ? await isContractAddress(receipt.from) : false;
-    
+
     // For smart wallets (contract addresses), we only verify transaction succeeded
     // For EOAs, we verify sender matches the user's address
     if (!senderIsContract) {
@@ -96,7 +135,7 @@ async function validateOnchainProof(address: string, proof: GmProgressProof | un
     }
     // For smart wallets, we trust that if the transaction succeeded, it was authorized
     // The smart wallet contract handles authorization internally
-    
+
     return true; // Proof validated
   } catch (error) {
     console.warn(`Failed to validate proof for task ${taskId}:`, error);

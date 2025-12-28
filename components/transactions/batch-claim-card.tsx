@@ -84,23 +84,23 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
   const burnAmountWei = parseUnits(BURN_AMOUNT_TOKENS.toString(), 18);
   const hasEnoughTokens = pixotchiBalance >= burnAmountWei;
-  
+
   // Memoize land IDs to detect changes
-  const landIdsHash = useMemo(() => 
-    lands.map(l => l.tokenId.toString()).sort().join(','), 
+  const landIdsHash = useMemo(() =>
+    lands.map(l => l.tokenId.toString()).sort().join(','),
     [lands]
   );
 
   const scanLands = async () => {
     if (lands.length === 0) return;
-    
+
     setLoading(true);
     try {
       const landIds = lands.map(l => l.tokenId);
       const results = await getLandBuildingsBatch(landIds);
-      
+
       const items: ClaimableItem[] = [];
-      
+
       results.forEach(result => {
         // Check village buildings (0: Solar, 3: Soil, 5: Bee)
         // Note: building IDs in result are from contract, so we iterate what we got
@@ -108,13 +108,13 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           const id = Number(b.id);
           const points = BigInt(b.accumulatedPoints || 0);
           const lifetime = BigInt(b.accumulatedLifetime || 0);
-          
+
           // Only include if there is meaningful amount to claim
           // We target IDs 0, 3, 5 specifically as they are the production buildings
           // Use minimum thresholds to filter out dust (buildings accumulate constantly)
           const hasEnoughPoints = points >= MIN_POINTS_TO_CLAIM;
           const hasEnoughLifetime = lifetime >= MIN_LIFETIME_TO_CLAIM;
-          
+
           if ((id === 0 || id === 3 || id === 5) && (hasEnoughPoints || hasEnoughLifetime)) {
             items.push({
               landId: result.landId,
@@ -125,7 +125,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           }
         });
       });
-      
+
       setClaimableItems(items);
       setLastScannedLandIds(landIdsHash);
     } catch (error) {
@@ -156,33 +156,33 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   // Calculate batch info
   const totalBatches = Math.ceil(claimableItems.length / MAX_BATCH_SIZE);
   const hasMultipleBatches = claimableItems.length > MAX_BATCH_SIZE;
-  
+
   // Current batch is always the first MAX_BATCH_SIZE items
   // After each successful claim, we re-scan and the claimed items are removed
-  const currentBatchItems = useMemo(() => 
+  const currentBatchItems = useMemo(() =>
     claimableItems.slice(0, MAX_BATCH_SIZE),
     [claimableItems]
   );
 
   // Total points/lifetime across ALL items (for display)
-  const totalPoints = useMemo(() => 
-    claimableItems.reduce((acc, item) => acc + item.points, BigInt(0)), 
+  const totalPoints = useMemo(() =>
+    claimableItems.reduce((acc, item) => acc + item.points, BigInt(0)),
     [claimableItems]
   );
 
-  const totalLifetime = useMemo(() => 
-    claimableItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)), 
+  const totalLifetime = useMemo(() =>
+    claimableItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)),
     [claimableItems]
   );
 
   // Current batch points/lifetime (what will be claimed this tx)
-  const batchPoints = useMemo(() => 
-    currentBatchItems.reduce((acc, item) => acc + item.points, BigInt(0)), 
+  const batchPoints = useMemo(() =>
+    currentBatchItems.reduce((acc, item) => acc + item.points, BigInt(0)),
     [currentBatchItems]
   );
 
-  const batchLifetime = useMemo(() => 
-    currentBatchItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)), 
+  const batchLifetime = useMemo(() =>
+    currentBatchItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)),
     [currentBatchItems]
   );
 
@@ -262,7 +262,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
             <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>
-                Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}. 
+                Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}.
                 This batch: {currentBatchItems.length} buildings ({formatScore(Number(batchPoints))} PTS)
               </span>
             </div>
@@ -279,7 +279,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           </div>
         ) : !hasEnoughTokens ? (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
+            <div className="flex items-center gap-2 text-value font-bold text-xs">
               <Lock className="w-3 h-3" />
               Insufficient PIXOTCHI Balance
             </div>
@@ -289,52 +289,52 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           </div>
         ) : (
           <div className="space-y-2">
-             <div className="flex justify-between items-center text-xs px-1">
-               <span className="text-muted-foreground">Cost:</span>
-               <span className="font-mono text-primary font-semibold">
-                 {BURN_AMOUNT_TOKENS} PIXOTCHI
-               </span>
-             </div>
-          <SmartWalletTransaction
-            key={txKey} // Force re-mount to reset button state after each batch
-            calls={calls}
+            <div className="flex justify-between items-center text-xs px-1">
+              <span className="text-muted-foreground">Cost:</span>
+              <span className="font-mono text-primary font-semibold">
+                {BURN_AMOUNT_TOKENS} PIXOTCHI
+              </span>
+            </div>
+            <SmartWalletTransaction
+              key={txKey} // Force re-mount to reset button state after each batch
+              calls={calls}
               buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
-            buttonClassName="w-full font-bold h-9 text-sm"
-            onSuccess={(tx) => {
-              const claimedCount = currentBatchItems.length;
-              const remainingCount = claimableItems.length - claimedCount;
-              const newTotalClaimed = totalClaimedThisSession + claimedCount;
-              
-              setTotalClaimedThisSession(newTotalClaimed);
-              setTxKey(k => k + 1); // Increment key to reset Transaction component
-              
-              if (remainingCount > 0) {
+              buttonClassName="w-full font-bold h-9 text-sm"
+              onSuccess={(tx) => {
+                const claimedCount = currentBatchItems.length;
+                const remainingCount = claimableItems.length - claimedCount;
+                const newTotalClaimed = totalClaimedThisSession + claimedCount;
+
+                setTotalClaimedThisSession(newTotalClaimed);
+                setTxKey(k => k + 1); // Increment key to reset Transaction component
+
+                if (remainingCount > 0) {
                   toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
-              } else {
+                } else {
                   toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed all ${newTotalClaimed} buildings!`);
-              }
-              
-              scanLands(); // Re-scan to update remaining items
-              if (onSuccess) onSuccess();
-              window.dispatchEvent(new Event('balances:refresh'));
-              window.dispatchEvent(new Event('buildings:refresh'));
-              
-              // Trigger claim production task for gamification
-              try {
-                const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
-                const txHash = extractTransactionHash(tx);
-                if (txHash) {
-                  payload.proof = { txHash };
                 }
-                fetch('/api/gamification/missions', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload)
-                });
-              } catch {}
-            }}
-            onError={(e) => toast.error("Batch claim failed")}
-          />
+
+                scanLands(); // Re-scan to update remaining items
+                if (onSuccess) onSuccess();
+                window.dispatchEvent(new Event('balances:refresh'));
+                window.dispatchEvent(new Event('buildings:refresh'));
+
+                // Trigger claim production task for gamification
+                try {
+                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
+                  const txHash = extractTransactionHash(tx);
+                  if (txHash) {
+                    payload.proof = { txHash };
+                  }
+                  fetch('/api/gamification/missions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                  });
+                } catch { }
+              }}
+              onError={(e) => toast.error("Batch claim failed")}
+            />
           </div>
         )}
       </CardContent>

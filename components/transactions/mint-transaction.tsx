@@ -31,12 +31,12 @@ export default function MintTransaction({
   buttonClassName,
   disabled = false
 }: MintTransactionProps) {
-  
+
   const calls = [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'mint',
-    args: [BigInt(strain)], 
+    args: [BigInt(strain)],
   }];
 
   return (

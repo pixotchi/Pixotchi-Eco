@@ -77,13 +77,13 @@ export default function UpgradePanel({
           <h4 className="font-semibold text-sm">Upgrade Costs:</h4>
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Normal:</span>
-            <span className={`font-semibold ${hasInsufficientLeaf ? 'text-destructive' : ''}`}>
+            <span className={`font-semibold ${hasInsufficientLeaf ? 'text-value' : ''}`}>
               {formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF
             </span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Speed up with:</span>
-            <span className={`font-semibold ${hasInsufficientPixotchi ? 'text-destructive' : ''}`}>
+            <span className={`font-semibold ${hasInsufficientPixotchi ? 'text-value' : ''}`}>
               {formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI
             </span>
           </div>
@@ -93,8 +93,8 @@ export default function UpgradePanel({
       <div className="space-y-2">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium">
-            {isMaxLevel ? 'Building at Max Level' : 
-             building.isUpgrading ? 'Upgrade Actions' : 'Upgrade Building'}
+            {isMaxLevel ? 'Building at Max Level' :
+              building.isUpgrading ? 'Upgrade Actions' : 'Upgrade Building'}
           </span>
           <SponsoredBadge show={isSponsored && isSmartWallet} />
         </div>
@@ -169,10 +169,10 @@ export default function UpgradePanel({
           )
         )}
         {hasInsufficientLeaf && !building.isUpgrading && !isMaxLevel && (
-          <p className="text-xs text-destructive text-center mt-2">Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} LEAF</p>
+          <p className="text-xs text-value text-center mt-2">Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} LEAF</p>
         )}
         {hasInsufficientPixotchi && building.isUpgrading && (
-          <p className="text-xs text-destructive text-center mt-2">Not enough PIXOTCHI for speed up. Balance: {formatTokenAmount(userPixotchiBalance)} PIXOTCHI</p>
+          <p className="text-xs text-value text-center mt-2">Not enough PIXOTCHI for speed up. Balance: {formatTokenAmount(userPixotchiBalance)} PIXOTCHI</p>
         )}
       </div>
     </div>
