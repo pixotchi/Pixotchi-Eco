@@ -191,39 +191,7 @@ export default function AboutTab() {
     }
   };
 
-  // Gamification: streak and mission status
-  const [streak, setStreak] = useState<{ current: number; best: number } | null>(null);
-  const [missionPts, setMissionPts] = useState<number | null>(null);
-  const [missionDay, setMissionDay] = useState<any | null>(null);
-  const [missionTotal, setMissionTotal] = useState<number>(0);
-  const [showMissionsInfo, setShowMissionsInfo] = useState(false);
-
-  // Allow StatusBar Tasks button to open this dialog
-  useEffect(() => {
-    const handler = () => setShowMissionsInfo(true);
-    window.addEventListener('pixotchi:openTasks' as any, handler as EventListener);
-    return () => window.removeEventListener('pixotchi:openTasks' as any, handler as EventListener);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!address) return;
-        const sRes = await fetch(`/api/gamification/streak?address=${address}`);
-        if (sRes.ok) {
-          const s = await sRes.json();
-          setStreak({ current: s.streak.current, best: s.streak.best });
-        }
-        const mRes = await fetch(`/api/gamification/missions?address=${address}`);
-        if (mRes.ok) {
-          const m = await mRes.json();
-          setMissionPts(m.day?.pts ?? 0);
-          setMissionDay(m.day || null);
-          setMissionTotal(typeof m.total === 'number' && Number.isFinite(m.total) ? m.total : 0);
-        }
-      } catch { }
-    })();
-  }, [address]);
+  // Note: Gamification streak/missions now handled by TasksInfoDialog component
 
   const copyToClipboard = async (code: string, label: string = 'Invite code') => {
     try {
@@ -439,42 +407,6 @@ export default function AboutTab() {
         </div>
       )}
 
-      {/* Daily Progress (Streak + Missions) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Farmer's Tasks</span>
-            <Button variant="outline" size="sm" onClick={() => setShowMissionsInfo(true)}>
-              <Info className="w-4 h-4 mr-2" /> How Tasks Work
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {/* Streak */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Current Streak</p>
-                <p className="text-2xl font-bold">{streak?.current ?? 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">Best: {streak?.best ?? 0}</p>
-              </div>
-              <svg width="24" height="24" viewBox="0 0 24 24" className="w-6 h-6 animate-streak-colors" aria-hidden="true">
-                <rect x="2" y="2" width="20" height="20" rx="3" />
-              </svg>
-            </div>
-            <div className="p-3 rounded-lg bg-muted flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Today's Rock</p>
-                <p className="text-2xl font-bold">{missionPts ?? 0} / 80</p>
-                <p className="text-xs text-muted-foreground mt-1">Lifetime Rocks: {missionTotal}</p>
-              </div>
-              <Image src="/icons/Volcanic_Rock.svg" alt="Rock" width={24} height={24} className="w-6 h-6" />
-            </div>
-          </div>
-          {/* Compact summary only; details in modal */}
-        </CardContent>
-      </Card>
-
       {/* Description */}
       <Card>
         <CardContent>
@@ -533,51 +465,6 @@ export default function AboutTab() {
         </span>
       </div>
 
-      {/* Missions Info Dialog */}
-      <Dialog open={showMissionsInfo} onOpenChange={setShowMissionsInfo}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>How Tasks Work</DialogTitle>
-            <DialogDescription>
-              Earn up to 80 Rock per day by completing 4 sections:
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <div>
-              <div className="font-medium">Section 1 (20 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.buy5 ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy at least 5 elements</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.buyShield ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy a shield/fence</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.claimProduction ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim production from any building</li>
-              </ul>
-            </div>
-            <div>
-              <div className="font-medium">Section 2 (20 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.applyResources ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Apply resources/production to a plant</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.attackPlant ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Attack another plant</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.chatMessage ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a message in public chat</li>
-              </ul>
-            </div>
-            <div>
-              <div className="font-medium">Section 3 (10 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.sendQuest ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a farmer on a quest</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.placeOrder ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Place a SEED/LEAF order</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
-              </ul>
-            </div>
-            <div>
-              <div className="font-medium">Section 4 (30 Rock)</div>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.makeSwap ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Make a SEED swap</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.collectStar ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Collect a star by killing a plant</li>
-                <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.playArcade ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play an arcade game (Box or Spin)</li>
-              </ul>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
