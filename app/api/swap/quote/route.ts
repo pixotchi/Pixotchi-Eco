@@ -88,21 +88,15 @@ export async function POST(request: NextRequest) {
         } catch (onChainError) {
             console.error("[SwapQuoteAPI] On-chain quote failed:", onChainError);
 
-            // Fallback: estimate based on typical rate
-            // 1 ETH ≈ 200,000 SEED (adjust this based on actual market rate)
-            const ethEstimate = seedAmount / BigInt(200000);
-            const ethWithBuffer = (ethEstimate * BigInt(102)) / BigInt(100);
-
-            // Minimum 0.0001 ETH
-            const minEth = BigInt("100000000000000"); // 0.0001 ETH
-            const finalAmount = ethWithBuffer > minEth ? ethWithBuffer : minEth;
-
-            return NextResponse.json({
-                fromAmount: finalAmount.toString(),
-                toAmount: amount,
-                isEstimate: true,
-                warning: "Using fallback estimate. Actual rate may vary.",
-            });
+            // No fallback - return error so client can handle appropriately
+            // Using hardcoded rates is dangerous as market prices fluctuate
+            return NextResponse.json(
+                {
+                    error: "Unable to fetch quote from DEX. Please try again.",
+                    code: "QUOTE_FAILED"
+                },
+                { status: 503 }
+            );
         }
 
     } catch (error) {
