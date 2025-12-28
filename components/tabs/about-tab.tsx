@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import packageJson from '@/package.json';
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useFrameContext } from "@/lib/frame-context";
+import { EthModeToggle } from "@/components/eth-mode-toggle";
 
 const InfoCard = ({
   icon,
@@ -35,9 +36,9 @@ const InfoCard = ({
   linkLabel: string;
 }) => {
   const Icon = icon;
-  
+
   const handleExternalLink = () => { openExternalUrl(link); };
-  
+
   return (
     <Card>
       <CardHeader>
@@ -49,11 +50,11 @@ const InfoCard = ({
               </div>
             )}
             {iconSrc && (
-              <Image 
-                src={iconSrc} 
-                alt={title} 
-                width={40} 
-                height={40} 
+              <Image
+                src={iconSrc}
+                alt={title}
+                width={40}
+                height={40}
                 className="w-10 h-10 rounded-xl object-cover"
               />
             )}
@@ -61,14 +62,14 @@ const InfoCard = ({
           <CardTitle className="font-pixel">{title}</CardTitle>
         </div>
       </CardHeader>
-    <CardContent>
-      <p className="text-muted-foreground mb-4">{description}</p>
-      <Button variant="secondary" onClick={handleExternalLink}>
-        {linkLabel}
-        <ArrowUpRight className="w-4 h-4 ml-2" />
-      </Button>
-    </CardContent>
-  </Card>
+      <CardContent>
+        <p className="text-muted-foreground mb-4">{description}</p>
+        <Button variant="secondary" onClick={handleExternalLink}>
+          {linkLabel}
+          <ArrowUpRight className="w-4 h-4 ml-2" />
+        </Button>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -110,7 +111,7 @@ export default function AboutTab() {
       });
 
       const data = await response.json();
-      
+
       if (data.systemEnabled) {
         setStats(data.stats);
       }
@@ -133,7 +134,7 @@ export default function AboutTab() {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         // Get the most recent 5 codes with their status
         const codes = data.codes.slice(0, 5).map((codeData: any) => ({
@@ -167,12 +168,12 @@ export default function AboutTab() {
 
       if (data.success) {
         const newCode = data.code;
-        
+
         toast.success('New invite code generated!');
-        
+
         // Auto-copy to clipboard
         await copyToClipboard(newCode, 'New invite code');
-        
+
         // Reload both stats and codes to ensure everything is up to date
         await Promise.all([
           loadInviteStats(),
@@ -219,7 +220,7 @@ export default function AboutTab() {
           setMissionDay(m.day || null);
           setMissionTotal(typeof m.total === 'number' && Number.isFinite(m.total) ? m.total : 0);
         }
-      } catch {}
+      } catch { }
     })();
   }, [address]);
 
@@ -229,7 +230,7 @@ export default function AboutTab() {
       await navigator.clipboard.writeText(code);
       setCopiedCode(code);
       toast.success(`${label} copied to clipboard!`);
-      
+
       // Reset copied state after 2 seconds
       setTimeout(() => setCopiedCode(null), 2000);
     } catch (error) {
@@ -259,7 +260,7 @@ export default function AboutTab() {
       // Collect wallet profile data
       const isMiniApp = Boolean(frameData?.isInMiniApp);
       const fcContext = (frameData?.context as any) ?? null;
-      
+
       // Extract farcaster details
       let farcasterDetails: any = null;
       if (isMiniApp && fcContext) {
@@ -275,7 +276,7 @@ export default function AboutTab() {
       const response = await fetch('/api/feedback/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           address,
           message: feedbackText.trim(),
           walletType,
@@ -306,7 +307,7 @@ export default function AboutTab() {
 
   return (
     <div className="space-y-8">
-      
+
       {/* Invite Section - Only show if system is enabled */}
       {INVITE_CONFIG.SYSTEM_ENABLED && (
         <div className="space-y-4">
@@ -334,13 +335,13 @@ export default function AboutTab() {
                   </div>
                 </div>
               )}
-              
+
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-3">
                   Share Pixotchi Mini! Generate up to 2 codes daily.
                 </p>
-                
-                <Button 
+
+                <Button
                   onClick={generateInviteCode}
                   disabled={generating || !stats?.canGenerateToday || loading || !address}
                   className="w-full max-w-xs"
@@ -381,19 +382,16 @@ export default function AboutTab() {
                   </div>
                   <div className="space-y-2">
                     {recentCodes.slice(0, 3).map((codeData) => (
-                      <div 
+                      <div
                         key={codeData.code}
-                        className={`flex items-center justify-between p-2 bg-muted/50 rounded-lg ${
-                          codeData.isUsed ? 'opacity-60' : ''
-                        }`}
+                        className={`flex items-center justify-between p-2 bg-muted/50 rounded-lg ${codeData.isUsed ? 'opacity-60' : ''
+                          }`}
                       >
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            codeData.isUsed ? 'bg-green-500' : 'bg-blue-500'
-                          }`} />
-                          <div className={`font-pixel text-sm font-medium ${
-                            codeData.isUsed ? 'line-through text-muted-foreground' : ''
-                          }`}>
+                          <div className={`w-2 h-2 rounded-full ${codeData.isUsed ? 'bg-green-500' : 'bg-blue-500'
+                            }`} />
+                          <div className={`font-pixel text-sm font-medium ${codeData.isUsed ? 'line-through text-muted-foreground' : ''
+                            }`}>
                             {codeData.code}
                           </div>
                           {codeData.isUsed && (
@@ -419,13 +417,13 @@ export default function AboutTab() {
                         </div>
                       </div>
                     ))}
-                    
+
                     {recentCodes.length > 3 && (
                       <div className="text-center pt-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {/* Could expand to show more */}}
+                          onClick={() => {/* Could expand to show more */ }}
                           className="text-xs text-muted-foreground h-6"
                         >
                           +{recentCodes.length - 3} more codes
@@ -486,16 +484,16 @@ export default function AboutTab() {
           </p>
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
                 className="w-full"
               >
                 <Book className="w-4 h-4 mr-2" />
                 Documentation
               </Button>
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
                 className="w-full"
               >
@@ -507,8 +505,8 @@ export default function AboutTab() {
                 <Button variant="outline" onClick={() => start({ reset: true })}>
                   Tutorial
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setShowFeedbackDialog(true)}
                 >
                   Feedback
@@ -516,13 +514,18 @@ export default function AboutTab() {
               </div>
             )}
             {!enabled && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setShowFeedbackDialog(true)}
               >
                 Feedback
               </Button>
             )}
+
+            {/* ETH Mode Toggle - Only for Smart Wallet users */}
+            <div className="pt-3 border-t border-border/30">
+              <EthModeToggle />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -567,7 +570,7 @@ export default function AboutTab() {
                 <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.placeOrder ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Place a SEED/LEAF order</li>
                 <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
               </ul>
-        </div>
+            </div>
             <div>
               <div className="font-medium">Section 4 (30 Rock)</div>
               <ul className="list-disc pl-5 text-muted-foreground">
@@ -576,7 +579,7 @@ export default function AboutTab() {
                 <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.playArcade ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play an arcade game (Box or Spin)</li>
               </ul>
             </div>
-      </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -615,30 +618,29 @@ export default function AboutTab() {
       </Dialog>
 
       <div className="pt-6 text-center">
-          <h3 className="text-lg font-semibold mb-3">Join our Community</h3>
-          <div className="flex justify-center space-x-4">
-              <button 
-                onClick={() => openExternalUrl('https://x.com/pixotchi')} 
-                className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
-              >
-                  <Image src="/icons/twitter.png" alt="X" width={24} height={24} />
-                  <span className="sr-only">X (Twitter)</span>
-              </button>
-              <button 
-                onClick={() => openExternalUrl('https://t.me/pixotchi')} 
-                className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
-              >
-                  <Image src="/icons/Telegram.png" alt="Telegram" width={24} height={24} />
-                  <span className="sr-only">Telegram</span>
-              </button>
-          </div>
+        <h3 className="text-lg font-semibold mb-3">Join our Community</h3>
+        <div className="flex justify-center space-x-4">
+          <button
+            onClick={() => openExternalUrl('https://x.com/pixotchi')}
+            className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+          >
+            <Image src="/icons/twitter.png" alt="X" width={24} height={24} />
+            <span className="sr-only">X (Twitter)</span>
+          </button>
+          <button
+            onClick={() => openExternalUrl('https://t.me/pixotchi')}
+            className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+          >
+            <Image src="/icons/Telegram.png" alt="Telegram" width={24} height={24} />
+            <span className="sr-only">Telegram</span>
+          </button>
+        </div>
       </div>
 
       <div className="pt-6">
-          <BaseAnimatedLogo className="mx-auto w-full" />
+        <BaseAnimatedLogo className="mx-auto w-full" />
       </div>
     </div>
   );
 }
 
- 

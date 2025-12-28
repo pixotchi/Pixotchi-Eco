@@ -60,11 +60,11 @@ export default function MintTab() {
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
   const frameContext = useFrameContext();
-  
+
   // Solana wallet support
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
-  
+
   // Use Twin address for Solana users, EVM address otherwise
   const address = evmAddress || (isSolana && twinAddress ? twinAddress as `0x${string}` : undefined);
   const isConnected = !!evmAddress || isSolana;
@@ -93,7 +93,7 @@ export default function MintTab() {
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);
   const [needsLandApproval, setNeedsLandApproval] = useState<boolean>(true);
   const [landMintPrice, setLandMintPrice] = useState<bigint>(BigInt(0));
-  
+
   const [forcedFetchCount, setForcedFetchCount] = useState(0);
   const [shareData, setShareData] = useState<{
     address: string;
@@ -129,7 +129,7 @@ export default function MintTab() {
 
   const fetchData = async () => {
     if (!address) return;
-    
+
     setLoading(true);
     try {
       if (mintType === 'plant') {
@@ -202,12 +202,12 @@ export default function MintTab() {
           setPaymentTokenSymbol(finalSymbol);
         } else {
           // If symbol fetch fails, still format based on token address
-          const fallbackSymbol = paymentToken.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase() 
-            ? '$JESSE' 
+          const fallbackSymbol = paymentToken.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase()
+            ? '$JESSE'
             : 'SEED';
           setPaymentTokenSymbol(fallbackSymbol);
         }
-        
+
         if (rawBalance.status === 'fulfilled') {
           setPaymentTokenBalance(rawBalance.value);
         }
@@ -236,7 +236,7 @@ export default function MintTab() {
       setLoading(false);
       return;
     }
-    
+
     fetchData();
   }, [address, forcedFetchCount, mintType, chainId]);
 
@@ -248,32 +248,32 @@ export default function MintTab() {
   const { wallets: solanaWallets } = useSolanaWallets();
   const { user, authenticated } = usePrivy();
   const { signAndSendTransaction: privySignAndSendTransaction } = useSignAndSendTransaction();
-  
+
   // Find Solana wallet from connected wallets
   const solanaWallet = useMemo(() => {
     if (!isSolana) {
       return null;
     }
-    
+
     // Debug: log all Solana wallets
     solLog('[SolanaMint] Looking for Solana wallet:', {
       authenticated,
       solanaWalletsCount: solanaWallets?.length || 0,
       linkedAccountsCount: user?.linkedAccounts?.length || 0,
     });
-    
+
     // Use the first Solana wallet from the Solana-specific hook
     if (solanaWallets && solanaWallets.length > 0) {
       solLog('[SolanaMint] Available Solana wallets:', solanaWallets.map(w => ({
         address: w.address,
       })));
-      
+
       // Return the first Solana wallet
       const wallet = solanaWallets[0];
       solLog('[SolanaMint] Using Solana wallet:', wallet.address);
       return wallet;
     }
-    
+
     // Fallback: Check user's linked accounts for Solana wallet info
     if (user?.linkedAccounts) {
       solLog('[SolanaMint] Checking linked accounts:', user.linkedAccounts.map(a => ({
@@ -281,7 +281,7 @@ export default function MintTab() {
         address: 'address' in a ? a.address : undefined,
         chainType: 'chainType' in a ? (a as any).chainType : undefined,
       })));
-      
+
       for (const account of user.linkedAccounts) {
         if (account.type === 'wallet' && 'chainType' in account && (account as any).chainType === 'solana') {
           solLog('[SolanaMint] Found Solana wallet in linked accounts:', (account as any).address);
@@ -289,18 +289,18 @@ export default function MintTab() {
         }
       }
     }
-    
+
     solLog('[SolanaMint] No Solana wallet found');
     return null;
   }, [isSolana, solanaWallets, user, authenticated]);
-  
+
   const [solanaMintLoading, setSolanaMintLoading] = useState(false);
   const [solQuote, setSolQuote] = useState<{ wsolAmount: bigint; seedAmount: bigint } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
-  
+
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const { getQuote } = bridge;
-  
+
   // Fetch SOL quote when strain is selected (for Solana users only)
   useEffect(() => {
     if (!isSolana || !selectedStrain) {
@@ -308,9 +308,9 @@ export default function MintTab() {
       setQuoteError(null);
       return;
     }
-    
+
     let cancelled = false;
-    
+
     const fetchQuote = async () => {
       setQuoteLoading(true);
       setQuoteError(null);
@@ -328,26 +328,26 @@ export default function MintTab() {
             error: quote.error,
             route: quote.route,
           });
-          
+
           // Ensure we're comparing BigInt values (handle string conversion if needed)
-          const wsolAmount = typeof quote.wsolAmount === 'bigint' 
-            ? quote.wsolAmount 
+          const wsolAmount = typeof quote.wsolAmount === 'bigint'
+            ? quote.wsolAmount
             : BigInt(quote.wsolAmount || 0);
-          const seedAmount = typeof quote.seedAmount === 'bigint' 
-            ? quote.seedAmount 
+          const seedAmount = typeof quote.seedAmount === 'bigint'
+            ? quote.seedAmount
             : BigInt(quote.seedAmount || 0);
-          
+
           // Only treat as error if quote data is invalid (no valid amounts)
           // Even if there's an error field, if we have valid quote data, use it
           const hasValidQuoteData = wsolAmount > BigInt(0) && seedAmount > BigInt(0);
-          
+
           solLog('[SolanaMint] Quote validation:', {
             hasValidQuoteData,
             wsolAmount: wsolAmount.toString(),
             seedAmount: seedAmount.toString(),
             hasError: !!quote.error,
           });
-          
+
           if (hasValidQuoteData) {
             // Use the quote even if there's an error field (might be a warning)
             // Always prioritize valid data over error messages
@@ -404,9 +404,9 @@ export default function MintTab() {
         }
       }
     };
-    
+
     fetchQuote();
-    
+
     return () => {
       cancelled = true;
     };
@@ -417,7 +417,7 @@ export default function MintTab() {
       toast.error('Please connect your Solana wallet');
       return;
     }
-    
+
     if (!privySignAndSendTransaction) {
       toast.error('Transaction signing not available.');
       return;
@@ -427,19 +427,19 @@ export default function MintTab() {
     try {
       solLog('[SolanaMint] Preparing setup transaction...');
       const tx = await bridge.prepareSetup();
-      
+
       if (!tx) {
         const errorMsg = bridge.state.error || 'Failed to prepare setup transaction';
         throw new Error(errorMsg);
       }
 
       solLog('[SolanaMint] Setup transaction prepared. Signing and sending...');
-      
+
       // Import the bridge implementation to build the actual Solana transaction
       const { solanaBridgeImplementation } = await import('@/lib/solana-bridge-implementation');
       const { PublicKey } = await import('@solana/web3.js');
       const { SOLANA_BRIDGE_CONFIG } = await import('@/lib/solana-constants');
-      
+
       // Build the Solana transaction
       const walletPubkey = new PublicKey(solanaWalletHook.solanaAddress!);
       const asset = {
@@ -449,14 +449,14 @@ export default function MintTab() {
         decimals: 9,
         remoteAddress: SOLANA_BRIDGE_CONFIG.base.wrappedSOL.toLowerCase(),
       };
-      
+
       const callOptions = tx.params.call ? {
         type: 'call' as const,
         target: tx.params.call.target,
         data: tx.params.call.data,
         value: '0',
       } : undefined;
-      
+
       const solanaTransaction = await solanaBridgeImplementation.createBridgeTransaction({
         walletAddress: walletPubkey,
         amount: tx.params.solAmount,
@@ -464,37 +464,37 @@ export default function MintTab() {
         asset,
         call: callOptions,
       });
-      
+
       // Serialize for Privy
       const transactionBytes = solanaTransaction.serialize({
         requireAllSignatures: false,
         verifySignatures: false,
       });
-      
+
       solLog('[SolanaMint] Calling Privy signAndSendTransaction...');
       const result = await privySignAndSendTransaction({
         transaction: new Uint8Array(transactionBytes),
         wallet: solanaWallet,
       });
-      
+
       solLog('[SolanaMint] Transaction sent! Signature:', result.signature);
-      
+
       if (result.signature) {
         toast.success('Bridge setup initiated! Waiting for relay to Base...');
         window.dispatchEvent(new Event('balances:refresh'));
-        
+
         // Bridge relay can take 15-60+ seconds depending on Solana finality and relayer speed
         // Poll for setup completion with increasing intervals
         solLog('[SolanaMint] Waiting for bridge relay to Base...');
-        
+
         let setupComplete = false;
         const pollIntervals = [5000, 10000, 15000, 20000, 30000]; // 5s, 10s, 15s, 20s, 30s
-        
+
         for (let i = 0; i < pollIntervals.length && !setupComplete; i++) {
           const delay = pollIntervals[i];
-          solLog(`[SolanaMint] Polling for setup status in ${delay/1000}s (attempt ${i + 1}/${pollIntervals.length})...`);
+          solLog(`[SolanaMint] Polling for setup status in ${delay / 1000}s (attempt ${i + 1}/${pollIntervals.length})...`);
           await new Promise(resolve => setTimeout(resolve, delay));
-          
+
           try {
             await solanaWalletHook.refresh();
             // Check if setup is now complete (needsSetup should become false)
@@ -506,7 +506,7 @@ export default function MintTab() {
             solWarn('[SolanaMint] Refresh failed, will retry:', refreshError);
           }
         }
-        
+
         if (setupComplete) {
           toast.success('Bridge setup complete! You can now mint.');
           solLog('[SolanaMint] Setup complete! UI should update.');
@@ -533,13 +533,13 @@ export default function MintTab() {
       await handleSolanaSetup();
       return;
     }
-    
+
     // Check if Privy's signAndSendTransaction hook is available
     if (!privySignAndSendTransaction) {
       toast.error('Transaction signing not available. Please ensure your wallet is connected.');
       return;
     }
-    
+
     setSolanaMintLoading(true);
     try {
       // V2: Check if we have a valid quote (no swap data needed - contract does on-chain swap)
@@ -560,7 +560,7 @@ export default function MintTab() {
           minSeedOut: freshQuote.minSeedOut?.toString(),
         });
       }
-      
+
       // Prepare the mint transaction (V2 - on-chain swap)
       solLog('[SolanaMint] Preparing mint transaction...', {
         currentBridgeState: {
@@ -570,19 +570,19 @@ export default function MintTab() {
           hasTransaction: !!bridge.state.transaction,
         },
       });
-      
+
       // Capture error state before calling prepareMint
       const errorStateBefore = bridge.state.error;
-      
+
       const tx = await bridge.prepareMint(selectedStrain.id);
-      
+
       // Wait a tick to ensure state has updated, then check again
       await new Promise(resolve => setTimeout(resolve, 150));
-      
+
       if (!tx) {
         // Check both before and after state
         const errorMsg = bridge.state.error || errorStateBefore || 'Failed to prepare mint transaction';
-        
+
         solError('[SolanaMint] prepareMint returned null:', {
           errorBefore: errorStateBefore,
           errorAfter: bridge.state.error,
@@ -601,35 +601,35 @@ export default function MintTab() {
             route: bridge.state.quote.route,
           } : 'no quote',
         });
-        
+
         // Ensure we always have a meaningful error message
         if (!errorMsg || errorMsg === 'Failed to prepare mint transaction') {
           throw new Error('Transaction preparation failed. Please check console for details and try again.');
         }
-        
+
         throw new Error(errorMsg);
       }
-      
+
       solLog('[SolanaMint] Transaction prepared successfully:', {
         hasTransaction: !!tx,
         actionType: tx.actionType,
         description: tx.description,
       });
-      
+
       // Show quote info
       if (bridge.state.quote) {
         const wsolNeeded = Number(bridge.state.quote.wsolAmount) / 1e9;
         solLog(`[SolanaMint] Will spend ~${wsolNeeded.toFixed(4)} SOL for ${selectedStrain.mintPrice} SEED`);
       }
-      
+
       // Build and send the bridge transaction using Privy
       solLog('[SolanaMint] Building Solana bridge transaction...');
-      
+
       // Import the bridge implementation to build the actual Solana transaction
       const { solanaBridgeImplementation } = await import('@/lib/solana-bridge-implementation');
       const { PublicKey } = await import('@solana/web3.js');
       const { SOLANA_BRIDGE_CONFIG } = await import('@/lib/solana-constants');
-      
+
       // Build the Solana transaction
       const walletPubkey = new PublicKey(solanaWalletHook.solanaAddress!);
       const asset = {
@@ -639,14 +639,14 @@ export default function MintTab() {
         decimals: 9,
         remoteAddress: SOLANA_BRIDGE_CONFIG.base.wrappedSOL.toLowerCase(),
       };
-      
+
       const callOptions = tx.params.call ? {
         type: 'call' as const,
         target: tx.params.call.target,
         data: tx.params.call.data,
         value: '0',
       } : undefined;
-      
+
       solLog('[SolanaMint] Creating bridge transaction with params:', {
         walletAddress: walletPubkey.toBase58(),
         amount: tx.params.solAmount.toString(),
@@ -655,7 +655,7 @@ export default function MintTab() {
         callTarget: callOptions?.target,
         callDataLength: callOptions?.data?.length || 0,
       });
-      
+
       const solanaTransaction = await solanaBridgeImplementation.createBridgeTransaction({
         walletAddress: walletPubkey,
         amount: tx.params.solAmount,
@@ -663,7 +663,7 @@ export default function MintTab() {
         asset,
         call: callOptions,
       });
-      
+
       // Debug transaction before serialization
       solLog('[SolanaMint] Transaction created:', {
         numInstructions: solanaTransaction.instructions?.length,
@@ -671,7 +671,7 @@ export default function MintTab() {
         hasBlockhash: !!solanaTransaction.recentBlockhash,
         instructionDataLengths: solanaTransaction.instructions?.map(ix => ix.data?.length),
       });
-      
+
       // Serialize for Privy
       let transactionBytes: Uint8Array;
       try {
@@ -681,7 +681,7 @@ export default function MintTab() {
         });
       } catch (serializeError) {
         solError('[SolanaMint] Serialization error:', serializeError);
-        
+
         // If error is RangeError, it might be because the transaction is missing required fields
         // Try alternative serialization method
         try {
@@ -692,8 +692,8 @@ export default function MintTab() {
           solLog('[SolanaMint] Alternative serialization successful');
         } catch (altError) {
           solError('[SolanaMint] Alternative serialization failed:', altError);
-          
-          solError('[SolanaMint] Raw instruction details:', 
+
+          solError('[SolanaMint] Raw instruction details:',
             solanaTransaction.instructions?.map((ix, i) => ({
               index: i,
               programId: ix.programId?.toBase58(),
@@ -705,25 +705,25 @@ export default function MintTab() {
           throw new Error(`Transaction serialization failed: ${serializeError instanceof Error ? serializeError.message : String(serializeError)}`);
         }
       }
-      
+
       solLog('[SolanaMint] Signing and sending transaction with Privy:', {
         transactionSize: transactionBytes.length,
         walletAddress: solanaWallet.address,
       });
-      
+
       // Check if transaction is too large for Solana (max 1232 bytes)
       if (transactionBytes.length > 1232) {
         solWarn('[SolanaMint] Transaction may be too large:', transactionBytes.length, 'bytes');
       }
-      
+
       // Sign and send using Privy's hook
       const result = await privySignAndSendTransaction({
         transaction: new Uint8Array(transactionBytes),
         wallet: solanaWallet,
       });
-      
+
       solLog('[SolanaMint] Transaction sent! Signature:', result.signature);
-      
+
       if (result.signature) {
         toast.success('Plant minted successfully via Solana bridge!');
         incrementForcedFetch();
@@ -763,7 +763,7 @@ export default function MintTab() {
                   <Button variant="outline" className="w-full justify-between">
                     {selectedStrain ? (
                       <div className="flex items-center space-x-2">
-                        <Image src={PLANT_STATIC_IMAGES[selectedStrain.id -1]} alt={selectedStrain.name} width={24} height={24} />
+                        <Image src={PLANT_STATIC_IMAGES[selectedStrain.id - 1]} alt={selectedStrain.name} width={24} height={24} />
                         <span>{selectedStrain.name}</span>
                       </div>
                     ) : (
@@ -777,8 +777,8 @@ export default function MintTab() {
                     const isSoldOut = strain.maxSupply - strain.totalMinted <= 0;
                     const isBaseOnly = isSolana && ['FLORA', 'TYJ'].includes(strain.name?.toUpperCase?.() || '');
                     return (
-                      <DropdownMenuItem 
-                        key={strain.id} 
+                      <DropdownMenuItem
+                        key={strain.id}
                         onSelect={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
                         disabled={isSoldOut || isBaseOnly}
                         className={isSoldOut || isBaseOnly ? 'text-muted-foreground' : ''}
@@ -816,14 +816,14 @@ export default function MintTab() {
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Price</span>
                   <div className="flex items-center space-x-1 font-semibold">
-                    <Image 
-                      src={getTokenLogo(selectedStrain.paymentToken)} 
-                      alt={paymentTokenSymbol} 
-                      width={16} 
-                      height={16} 
+                    <Image
+                      src={getTokenLogo(selectedStrain.paymentToken)}
+                      alt={paymentTokenSymbol}
+                      width={16}
+                      height={16}
                     />
                     <span>
-                      {selectedStrain.paymentPrice 
+                      {selectedStrain.paymentPrice
                         ? formatTokenAmount(selectedStrain.paymentPrice)
                         : formatNumber(selectedStrain.mintPrice)
                       } {paymentTokenSymbol}
@@ -871,7 +871,7 @@ export default function MintTab() {
                   </p>
                 </div>
               </div>
-              
+
               {/* Status message */}
               {currentStatusText && (
                 <div className="flex items-center gap-2 text-sm text-purple-400">
@@ -882,19 +882,19 @@ export default function MintTab() {
                   {currentStatusText}
                 </div>
               )}
-              
+
               {/* Error message */}
               {bridge.state.error && (
                 <div className="text-sm text-red-400 bg-red-500/10 p-2 rounded">
                   {bridge.state.error}
                 </div>
               )}
-              
+
               {/* Success message */}
               {bridge.state.status === 'success' && bridge.state.signature && (
                 <div className="text-sm text-green-400 bg-green-500/10 p-2 rounded">
                   Mint successful!{' '}
-                  <a 
+                  <a
                     href={`https://explorer.solana.com/tx/${bridge.state.signature}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -904,7 +904,7 @@ export default function MintTab() {
                   </a>
                 </div>
               )}
-              
+
               {/* Debug info - shows wallet detection status */}
               {isSolana && (
                 <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded mb-2">
@@ -931,8 +931,8 @@ export default function MintTab() {
                   )}
                 </div>
               )}
-              
-              <Button 
+
+              <Button
                 onClick={handleSolanaMint}
                 disabled={!selectedStrain || isLoading || !solanaWallet || (!needsSetup && (quoteLoading || !solQuote))}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white disabled:opacity-50"
@@ -959,7 +959,7 @@ export default function MintTab() {
                   `Mint ${selectedStrain.name} for ~${(Number(solQuote.wsolAmount) / 1e9).toFixed(4)} SOL`
                 )}
               </Button>
-              
+
               <p className="text-xs text-muted-foreground text-center">
                 Twin Address: {twinAddress ? `${twinAddress.slice(0, 6)}...${twinAddress.slice(-4)}` : 'Loading...'}
               </p>
@@ -971,133 +971,191 @@ export default function MintTab() {
 
     // Regular EVM wallet minting
     return (
-    <>
-      <div className="mb-6">
-        <VerifyClaim 
-          strainId={4} // Force Zest strain (ID 4)
-          onClaimSuccess={() => {
-            incrementForcedFetch();
-            window.dispatchEvent(new Event('balances:refresh'));
-          }} 
-        />
-      </div>
+      <>
+        <div className="mb-6">
+          <VerifyClaim
+            strainId={4} // Force Zest strain (ID 4)
+            onClaimSuccess={() => {
+              incrementForcedFetch();
+              window.dispatchEvent(new Event('balances:refresh'));
+            }}
+          />
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Choose a Strain</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="w-full justify-between">
-                {selectedStrain ? (
-                  <div className="flex items-center space-x-2">
-                    <Image src={PLANT_STATIC_IMAGES[selectedStrain.id -1]} alt={selectedStrain.name} width={24} height={24} />
-                    <span>{selectedStrain.name}</span>
-                  </div>
-                ) : (
-                  'Select a Strain'
-                )}
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-              {strains.map(strain => {
-                const isSoldOut = strain.maxSupply - strain.totalMinted <= 0;
-                const isBaseOnly = isSolana && ['FLORA', 'TYJ'].includes(strain.name?.toUpperCase?.() || '');
-                return (
-                  <DropdownMenuItem 
-                    key={strain.id} 
-                    onSelect={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
-                    disabled={isSoldOut || isBaseOnly}
-                    className={isSoldOut || isBaseOnly ? 'text-muted-foreground' : ''}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
-                        <Image src={PLANT_STATIC_IMAGES[strain.id - 1]} alt={strain.name} width={24} height={24} />
-                        <span>{strain.name}</span>
-                      </div>
-                      {isSoldOut && (
-                        <span className="text-xs font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full">
-                          SOLD OUT
-                        </span>
-                      )}
-                      {isBaseOnly && !isSoldOut && (
-                        <span className="text-xs font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full">
-                          ON BASE
-                        </span>
-                      )}
-                    </div>
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </CardContent>
-      </Card>
-
-      {selectedStrain && (
         <Card>
           <CardHeader>
-            <CardTitle>Details</CardTitle>
+            <CardTitle>Choose a Strain</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Price</span>
-              <div className="flex items-center space-x-1 font-semibold">
-                <Image 
-                  src={getTokenLogo(selectedStrain.paymentToken)} 
-                  alt={paymentTokenSymbol} 
-                  width={16} 
-                  height={16} 
-                />
-                <span>
-                  {selectedStrain.paymentPrice 
-                    ? formatTokenAmount(selectedStrain.paymentPrice)
-                    : formatNumber(selectedStrain.mintPrice)
-                  } {paymentTokenSymbol}
-                </span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Available</span>
-              <span className="font-semibold">{formatNumber(selectedStrain.maxSupply - selectedStrain.totalMinted)} / {formatNumber(selectedStrain.maxSupply)}</span>
-            </div>
+          <CardContent>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {selectedStrain ? (
+                    <div className="flex items-center space-x-2">
+                      <Image src={PLANT_STATIC_IMAGES[selectedStrain.id - 1]} alt={selectedStrain.name} width={24} height={24} />
+                      <span>{selectedStrain.name}</span>
+                    </div>
+                  ) : (
+                    'Select a Strain'
+                  )}
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                {strains.map(strain => {
+                  const isSoldOut = strain.maxSupply - strain.totalMinted <= 0;
+                  const isBaseOnly = isSolana && ['FLORA', 'TYJ'].includes(strain.name?.toUpperCase?.() || '');
+                  return (
+                    <DropdownMenuItem
+                      key={strain.id}
+                      onSelect={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
+                      disabled={isSoldOut || isBaseOnly}
+                      className={isSoldOut || isBaseOnly ? 'text-muted-foreground' : ''}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
+                          <Image src={PLANT_STATIC_IMAGES[strain.id - 1]} alt={strain.name} width={24} height={24} />
+                          <span>{strain.name}</span>
+                        </div>
+                        {isSoldOut && (
+                          <span className="text-xs font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full">
+                            SOLD OUT
+                          </span>
+                        )}
+                        {isBaseOnly && !isSoldOut && (
+                          <span className="text-xs font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full">
+                            ON BASE
+                          </span>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </CardContent>
         </Card>
-      )}
-      
-      {/* StatusBar replaces BalanceCard globally under header */}
 
-      <div className="flex flex-col space-y-2">
-        {needsApproval && (
-          <div className="flex flex-col space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Approval</span>
-              <SponsoredBadge show={isSponsored && isSmartWallet} />
-            </div>
-            {/* If smart wallet + sponsored, offer bundled Approve + Mint */}
-            {(() => {
-              if (!selectedStrain) return null;
-              const useBundle = isSmartWallet && isSponsored;
-              const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
-              
-              const hasInsufficientBalance = selectedStrain.paymentPrice 
-                ? paymentTokenBalance < selectedStrain.paymentPrice 
-                : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18));
+        {selectedStrain && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Price</span>
+                <div className="flex items-center space-x-1 font-semibold">
+                  <Image
+                    src={getTokenLogo(selectedStrain.paymentToken)}
+                    alt={paymentTokenSymbol}
+                    width={16}
+                    height={16}
+                  />
+                  <span>
+                    {selectedStrain.paymentPrice
+                      ? formatTokenAmount(selectedStrain.paymentPrice)
+                      : formatNumber(selectedStrain.mintPrice)
+                    } {paymentTokenSymbol}
+                  </span>
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Available</span>
+                <span className="font-semibold">{formatNumber(selectedStrain.maxSupply - selectedStrain.totalMinted)} / {formatNumber(selectedStrain.maxSupply)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-              return useBundle ? (
-                <>
-                  <ApproveMintBundle
-                    strain={selectedStrain.id}
+        {/* StatusBar replaces BalanceCard globally under header */}
+
+        <div className="flex flex-col space-y-2">
+          {needsApproval && (
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Approval</span>
+                <SponsoredBadge show={isSponsored && isSmartWallet} />
+              </div>
+              {/* If smart wallet + sponsored, offer bundled Approve + Mint */}
+              {(() => {
+                if (!selectedStrain) return null;
+                const useBundle = isSmartWallet && isSponsored;
+                const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+
+                const hasInsufficientBalance = selectedStrain.paymentPrice
+                  ? paymentTokenBalance < selectedStrain.paymentPrice
+                  : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18));
+
+                return useBundle ? (
+                  <>
+                    <ApproveMintBundle
+                      strain={selectedStrain.id}
+                      tokenAddress={paymentToken}
+                      mintPrice={selectedStrain.paymentPrice || BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))}
+                      onSuccess={() => {
+                        toast.success('Approved and minted successfully!');
+                        setNeedsApproval(false);
+                        incrementForcedFetch();
+                        window.dispatchEvent(new Event('balances:refresh'));
+                      }}
+                      onTransactionComplete={(tx) => {
+                        if (address) {
+                          const mintedAt = new Date().toISOString();
+                          setShareData({
+                            address,
+                            basename: primaryName || undefined,
+                            strainName: selectedStrain.name,
+                            strainId: selectedStrain.id,
+                            mintedAt,
+                            txHash: tx?.transactionHash,
+                          });
+                          setShowShareModal(true);
+                        }
+                      }}
+                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                      buttonText={hasInsufficientBalance ? "Insufficient Balance" : "Approve + Mint"}
+                      buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                      disabled={hasInsufficientBalance}
+                    />
+                    {hasInsufficientBalance && (
+                      <p className="text-xs text-destructive text-center mt-2">
+                        Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <ApproveTransaction
+                    spenderAddress={PIXOTCHI_NFT_ADDRESS}
                     tokenAddress={paymentToken}
                     onSuccess={() => {
-                      toast.success('Approved and minted successfully!');
+                      toast.success('Token approval successful!');
                       setNeedsApproval(false);
                       incrementForcedFetch();
-                      window.dispatchEvent(new Event('balances:refresh'));
                     }}
-                    onTransactionComplete={(tx) => {
+                    onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                    buttonText={`Approve ${paymentTokenSymbol}`}
+                    buttonClassName="w-full"
+                  />
+                );
+              })()}
+            </div>
+          )}
+
+          {/** Hide Mint step if using bundle path (smart wallet + sponsored + needsApproval) **/}
+          {!(isSmartWallet && isSponsored && needsApproval && selectedStrain) && (
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Mint Plant</span>
+                <SponsoredBadge show={isSponsored && isSmartWallet} />
+              </div>
+              {selectedStrain ? (
+                <>
+                  <MintTransaction
+                    strain={selectedStrain.id}
+                    onSuccess={(tx) => {
+                      toast.success('Plant minted successfully!');
+                      incrementForcedFetch();
+                      window.dispatchEvent(new Event('balances:refresh'));
                       if (address) {
                         const mintedAt = new Date().toISOString();
                         setShareData({
@@ -1110,104 +1168,47 @@ export default function MintTab() {
                         });
                         setShowShareModal(true);
                       }
+                      try {
+                        const fid = farcasterUser?.fid;
+                        const notificationDetails = farcasterClient?.notificationDetails;
+                        if (fid) {
+                          fetch('/api/notify', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              fid,
+                              notification: {
+                                title: 'Mint Completed! 🌱',
+                                body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
+                                notificationDetails,
+                              },
+                            }),
+                          }).catch(() => { });
+                        }
+                      } catch { }
                     }}
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                    buttonText={hasInsufficientBalance ? "Insufficient Balance" : "Approve + Mint"}
+                    buttonText="Mint Plant"
                     buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                    disabled={hasInsufficientBalance}
+                    disabled={needsApproval || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
                   />
-                  {hasInsufficientBalance && (
+                  {!needsApproval && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
                     <p className="text-xs text-destructive text-center mt-2">
                       Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
                     </p>
                   )}
                 </>
               ) : (
-              <ApproveTransaction
-                spenderAddress={PIXOTCHI_NFT_ADDRESS}
-                tokenAddress={paymentToken}
-                onSuccess={() => {
-                  toast.success('Token approval successful!');
-                  setNeedsApproval(false);
-                  incrementForcedFetch();
-                }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText={`Approve ${paymentTokenSymbol}`}
-                buttonClassName="w-full"
-              />
-              );
-            })()}
-          </div>
-        )}
-        
-        {/** Hide Mint step if using bundle path (smart wallet + sponsored + needsApproval) **/}
-        {!(isSmartWallet && isSponsored && needsApproval && selectedStrain) && (
-          <div className="flex flex-col space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Mint Plant</span>
-              <SponsoredBadge show={isSponsored && isSmartWallet} />
-            </div>
-            {selectedStrain ? (
-              <>
-                <MintTransaction
-                  strain={selectedStrain.id}
-                  onSuccess={(tx) => {
-                    toast.success('Plant minted successfully!');
-                    incrementForcedFetch();
-                    window.dispatchEvent(new Event('balances:refresh'));
-                    if (address) {
-                      const mintedAt = new Date().toISOString();
-                      setShareData({
-                        address,
-                        basename: primaryName || undefined,
-                        strainName: selectedStrain.name,
-                        strainId: selectedStrain.id,
-                        mintedAt,
-                        txHash: tx?.transactionHash,
-                      });
-                      setShowShareModal(true);
-                    }
-                    try {
-                      const fid = farcasterUser?.fid;
-                      const notificationDetails = farcasterClient?.notificationDetails;
-                      if (fid) {
-                        fetch('/api/notify', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            fid,
-                            notification: {
-                              title: 'Mint Completed! 🌱',
-                              body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
-                              notificationDetails,
-                            },
-                          }),
-                        }).catch(() => {});
-                      }
-                    } catch {}
-                  }}
-                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                  buttonText="Mint Plant"
+                <DisabledTransaction
+                  buttonText="Select a Strain First"
                   buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={needsApproval || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
                 />
-                {!needsApproval && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
-                  <p className="text-xs text-destructive text-center mt-2">
-                    Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
-                  </p>
-                )}
-              </>
-            ) : (
-              <DisabledTransaction
-                buttonText="Select a Strain First"
-                buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-              />
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  );
+              )}
+            </div>
+          )}
+        </div>
+      </>
+    );
   };
 
   const renderLandMinting = () => (
@@ -1257,7 +1258,7 @@ export default function MintTab() {
           <span className="text-sm font-medium">
             {needsLandApproval ? 'Step 2: Mint Land' : 'Mint Land'}
           </span>
-                            <SponsoredBadge show={isSmartWallet} />
+          <SponsoredBadge show={isSmartWallet} />
         </div>
         {landMintStatus && !landMintStatus.canMint ? (
           <DisabledTransaction
@@ -1289,79 +1290,79 @@ export default function MintTab() {
   );
 
   const renderContent = () => {
-  if (!isConnected) {
-    return (
+    if (!isConnected) {
+      return (
         <Card className="text-center p-6">
           <h3 className="text-lg font-semibold mb-2">Connect Wallet</h3>
           <p className="text-muted-foreground mb-4">Please connect your wallet to mint plants.</p>
         </Card>
-    );
-  }
+      );
+    }
 
-  if (loading) {
-          return (
+    if (loading) {
+      return (
         <div className="flex items-center justify-center py-8">
           <BaseExpandedLoadingPageLoader text="Loading mint data..." />
-          </div>
-        )
-  }
+        </div>
+      )
+    }
 
-  // Solana users can only mint plants, not lands
-  const showLandOption = !isSolana;
+    // Solana users can only mint plants, not lands
+    const showLandOption = !isSolana;
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="flex flex-col space-y-3">
-          <div className="flex justify-between items-start w-full gap-4">
-            <div className="space-y-2">
-              <h3 className="text-xl font-pixel font-bold">
-                {mintType === 'plant' ? 'Mint a Plant' : 'Mint a Land'}
-              </h3>
-              <p className="text-muted-foreground text-sm max-w-xl">
-                {mintType === 'plant'
-                  ? 'Plant your SEED and mint your very own Pixotchi Plant NFT. Each strain has a unique look and feel.'
-                  : 'Expand your onchain farm by minting a new land plot. Lands unlock new buildings and opportunities.'}
-              </p>
-              {isSolana && (
-                <p className="text-xs text-purple-400">
-                   Connected via Solana Bridge
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="flex flex-col space-y-3">
+            <div className="flex justify-between items-start w-full gap-4">
+              <div className="space-y-2">
+                <h3 className="text-xl font-pixel font-bold">
+                  {mintType === 'plant' ? 'Mint a Plant' : 'Mint a Land'}
+                </h3>
+                <p className="text-muted-foreground text-sm max-w-xl">
+                  {mintType === 'plant'
+                    ? 'Plant your SEED and mint your very own Pixotchi Plant NFT. Each strain has a unique look and feel.'
+                    : 'Expand your onchain farm by minting a new land plot. Lands unlock new buildings and opportunities.'}
                 </p>
+                {isSolana && (
+                  <p className="text-xs text-purple-400">
+                    Connected via Solana Bridge
+                  </p>
+                )}
+              </div>
+              {showLandOption ? (
+                <ToggleGroup
+                  value={mintType}
+                  onValueChange={(v) => setMintType(v as 'plant' | 'land')}
+                  options={[
+                    { value: 'plant', label: 'Plants' },
+                    { value: 'land', label: 'Lands' },
+                  ]}
+                />
+              ) : (
+                // Solana users only see Plants tab
+                <div className="text-xs text-muted-foreground">
+                  Plants only
+                </div>
               )}
             </div>
-            {showLandOption ? (
-              <ToggleGroup
-                value={mintType}
-                onValueChange={(v) => setMintType(v as 'plant' | 'land')}
-                options={[
-                  { value: 'plant', label: 'Plants' },
-                  { value: 'land', label: 'Lands' },
-                ]}
-              />
-            ) : (
-              // Solana users only see Plants tab
-              <div className="text-xs text-muted-foreground">
-                Plants only
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Show land not supported for Solana users if they somehow got to land view */}
-      {mintType === 'land' && isSolana ? (
-        <SolanaNotSupported feature="Land minting" />
-      ) : (
-        mintType === 'plant' ? renderPlantMinting() : renderLandMinting()
-      )}
+        {/* Show land not supported for Solana users if they somehow got to land view */}
+        {mintType === 'land' && isSolana ? (
+          <SolanaNotSupported feature="Land minting" />
+        ) : (
+          mintType === 'plant' ? renderPlantMinting() : renderLandMinting()
+        )}
 
-      <MintShareModal
-        open={showShareModal}
-        onOpenChange={setShowShareModal}
-        data={shareData}
-      />
-    </div>
-  );
+        <MintShareModal
+          open={showShareModal}
+          onOpenChange={setShowShareModal}
+          data={shareData}
+        />
+      </div>
+    );
   };
 
   return <div>{renderContent()}</div>;

@@ -7,6 +7,7 @@ import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "next-themes";
 import { PaymasterProvider } from "@/lib/paymaster-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
+import { EthModeProvider } from "@/lib/eth-mode-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
 // Privy wagmi will be scoped locally where needed (login UI) to avoid intercepting OnchainKit
@@ -38,9 +39,9 @@ type AuthSurface = 'privy' | 'base' | 'privysolana';
 // Solana RPC config for Privy - mainnet only
 const getSolanaRpcConfig = () => {
   if (typeof window === 'undefined' || !isSolanaEnabled()) return undefined;
-  
+
   const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-  
+
   // Return simple RPC config for Privy (not @solana/kit format)
   return {
     mainnet: rpcUrl,
@@ -51,13 +52,13 @@ const getSolanaRpcConfig = () => {
 // Using dynamic import to avoid build issues when Solana is not enabled
 const getSolanaConnectors = () => {
   if (!isSolanaEnabled()) return undefined;
-  
+
   try {
     // Import Solana wallet connectors from Privy
     const privySolana = require('@privy-io/react-auth/solana');
     if (privySolana?.toSolanaWalletConnectors) {
-      return privySolana.toSolanaWalletConnectors({ 
-        shouldAutoConnect: true 
+      return privySolana.toSolanaWalletConnectors({
+        shouldAutoConnect: true
       });
     }
     return undefined;
@@ -107,17 +108,17 @@ export function Providers(props: { children: ReactNode }) {
   // Determine surface BEFORE rendering PrivyProvider so we can configure it correctly
   const [authSurface, setAuthSurface] = useState<AuthSurface>('privy');
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
-  
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       setSurfaceInitialized(true);
       return;
     }
-    
+
     // Check URL param first
     const params = new URLSearchParams(window.location.search);
     const urlSurface = params.get('surface');
-    
+
     if (urlSurface === 'privy' || urlSurface === 'base' || urlSurface === 'privysolana') {
       sessionStorageManager.setAuthSurface(urlSurface);
       setAuthSurface(urlSurface);
@@ -128,7 +129,7 @@ export function Providers(props: { children: ReactNode }) {
       const effective = stored === 'coinbase' ? 'base' : (stored || 'privy');
       setAuthSurface(effective as AuthSurface);
     }
-    
+
     setSurfaceInitialized(true);
   }, []);
 
@@ -178,7 +179,7 @@ export function Providers(props: { children: ReactNode }) {
   const privyWalletConfig = useMemo(() => {
     const isSolanaMode = authSurface === 'privysolana';
     const solanaEnabled = isSolanaEnabled();
-    
+
     // Solana-only mode: only show Solana wallets
     if (isSolanaMode && solanaEnabled) {
       const solanaConnectors = getSolanaConnectors();
@@ -201,10 +202,10 @@ export function Providers(props: { children: ReactNode }) {
           } : undefined,
         };
       }
-      
+
       console.warn('[Providers] Solana enabled but connectors failed to load. Falling back to EVM-only mode.');
     }
-    
+
     // EVM-only mode (default): only show Ethereum wallets
     // This runs if not Solana mode OR if Solana mode failed to load connectors
     return {
@@ -219,34 +220,34 @@ export function Providers(props: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
     const [surface, setSurface] = useState<AuthSurface>('privy');
     const [isInitialized, setIsInitialized] = useState(false);
-    
+
     useEffect(() => {
       let mounted = true;
       let cancelToken = false;
-      
+
       const initializeRouter = async () => {
         try {
           // Step 1: Check if we're in a MiniApp
           const flag = await sdk.isInMiniApp();
-          
+
           if (cancelToken || !mounted) return;
-          
+
           setIsMiniApp(Boolean(flag));
-          
+
           if (Boolean(flag)) {
             if (cancelToken || !mounted) return;
             setIsInitialized(true);
             return;
           }
-          
+
           // Step 2: Use the already-determined auth surface
           if (cancelToken || !mounted) return;
           setSurface(authSurface);
-          
+
           // Final initialization
           if (cancelToken || !mounted) return;
           setIsInitialized(true);
-          
+
         } catch (error) {
           console.error('Failed to initialize router:', error);
           if (cancelToken || !mounted) return;
@@ -254,10 +255,10 @@ export function Providers(props: { children: ReactNode }) {
           setIsInitialized(true);
         }
       };
-      
+
       initializeRouter();
-      
-      return () => { 
+
+      return () => {
         cancelToken = true;
         mounted = false;
       };
@@ -279,7 +280,7 @@ export function Providers(props: { children: ReactNode }) {
     if (isMiniApp) {
       return (
         <CoreWagmiProvider config={wagmiMiniAppConfig}>
-          <TransactionProvider 
+          <TransactionProvider
             defaultChainId={8453}
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
           >
@@ -289,12 +290,12 @@ export function Providers(props: { children: ReactNode }) {
         </CoreWagmiProvider>
       );
     }
-    
+
     // Web: choose provider based on surface
     if (surface === 'base') {
       return (
         <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>
-          <TransactionProvider 
+          <TransactionProvider
             defaultChainId={8453}
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
           >
@@ -304,12 +305,12 @@ export function Providers(props: { children: ReactNode }) {
         </CoreWagmiProvider>
       );
     }
-    
+
     // 'privy' and 'privysolana' both use PrivyWagmiProvider
     // (Solana doesn't use wagmi, so same provider works)
     return (
       <PrivyWagmiProvider config={wagmiPrivyConfig}>
-        <TransactionProvider 
+        <TransactionProvider
           defaultChainId={8453}
           paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
         >
@@ -340,116 +341,118 @@ export function Providers(props: { children: ReactNode }) {
       >
         <ThemeInitializer />
         <PaymasterProvider>
-        <PrivyProvider
-          appId={privyAppId}
-          config={{
-            // Dynamic config based on selected surface (privy vs privysolana)
-            appearance: {
-              theme: 'light',
-              walletChainType: privyWalletConfig.walletChainType,
-              // Specify walletList based on mode
-              ...(privyWalletConfig.walletList && {
-                walletList: privyWalletConfig.walletList,
-              }),
-            },
-            defaultChain: base,
-            supportedChains: [base],
-            loginMethods: ['wallet', 'email'],
-            // Avoid session race conditions by not auto-connecting until hooks report ready
-            embeddedWallets: {
-              // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
-              ethereum: { createOnLogin: 'off' },
-            },
-            // Solana RPC config (only when in Solana mode)
-            ...(privyWalletConfig.solana && {
-              solanaClusters: [
-                {
-                  name: 'mainnet-beta',
-                  rpcUrl: privyWalletConfig.solana.rpcUrl || 'https://api.mainnet-beta.solana.com',
-                },
-              ],
-            }),
-            // External Solana wallet connectors (only when in Solana mode)
-            ...(privyWalletConfig.externalWallets && {
-              externalWallets: privyWalletConfig.externalWallets,
-            }),
-          }}
-        >
-          <QueryClientProvider client={queryClient}>
-            <WagmiRouter>
-              <OnchainKitProvider
-                apiKey={apiKey}
-                chain={base}
-                config={{
-                  appearance: {
-                    mode: "auto",
-                    name: "Pixotchi Mini",
-                    logo: process.env.NEXT_PUBLIC_ICON_URL,
+          <PrivyProvider
+            appId={privyAppId}
+            config={{
+              // Dynamic config based on selected surface (privy vs privysolana)
+              appearance: {
+                theme: 'light',
+                walletChainType: privyWalletConfig.walletChainType,
+                // Specify walletList based on mode
+                ...(privyWalletConfig.walletList && {
+                  walletList: privyWalletConfig.walletList,
+                }),
+              },
+              defaultChain: base,
+              supportedChains: [base],
+              loginMethods: ['wallet', 'email'],
+              // Avoid session race conditions by not auto-connecting until hooks report ready
+              embeddedWallets: {
+                // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
+                ethereum: { createOnLogin: 'off' },
+              },
+              // Solana RPC config (only when in Solana mode)
+              ...(privyWalletConfig.solana && {
+                solanaClusters: [
+                  {
+                    name: 'mainnet-beta',
+                    rpcUrl: privyWalletConfig.solana.rpcUrl || 'https://api.mainnet-beta.solana.com',
                   },
-                  paymaster: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
-                  analytics: true,
-                }}
-                miniKit={{
-                  enabled: true,
-                  autoConnect: true,
-                  notificationProxyUrl: "/api/notify",
-                }}
-              >
-                <SafeArea>
-                  <FrameProvider>
-                    <SmartWalletProvider>
-                      <SolanaWalletProvider>
-                      <BalanceProvider>
-                        <LoadingProvider>
-                          <TutorialBundle>
-                            {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                            {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                            {/** added provider wrapper **/}
-                            {/* eslint-disable-next-line react/no-children-prop */}
-                            <Toaster
-                              position="top-center"
-                              toastOptions={{
-                                duration: 4000,
-                                style: {
-                                  backgroundColor: "hsl(var(--background))",
-                                  color: "hsl(var(--foreground))",
-                                  border: "1px solid hsl(var(--border))",
-                                  zIndex: 9999,
-                                },
-                                success: {
-                                  iconTheme: {
-                                    primary: "hsl(var(--primary))",
-                                    secondary: "hsl(var(--primary-foreground))",
-                                  },
-                                },
-                                error: {
-                                  iconTheme: {
-                                    primary: "hsl(var(--destructive))",
-                                    secondary: "hsl(var(--destructive-foreground))",
-                                  },
-                                },
-                              }}
-                              containerStyle={{
-                                zIndex: 9999,
-                              }}
-                            />
-                            {props.children}
-                            <SlideshowModal />
-                          </TutorialBundle>
-                          <TasksInfoDialog />
-                          <SecretGardenListener />
-                        </LoadingProvider>
-                      </BalanceProvider>
-                      </SolanaWalletProvider>
-                    </SmartWalletProvider>
-                  </FrameProvider>
-                </SafeArea>
-              </OnchainKitProvider>
-            </WagmiRouter>
-          </QueryClientProvider>
-        </PrivyProvider>
-      </PaymasterProvider>
-    </ServerThemeProvider>
+                ],
+              }),
+              // External Solana wallet connectors (only when in Solana mode)
+              ...(privyWalletConfig.externalWallets && {
+                externalWallets: privyWalletConfig.externalWallets,
+              }),
+            }}
+          >
+            <QueryClientProvider client={queryClient}>
+              <WagmiRouter>
+                <OnchainKitProvider
+                  apiKey={apiKey}
+                  chain={base}
+                  config={{
+                    appearance: {
+                      mode: "auto",
+                      name: "Pixotchi Mini",
+                      logo: process.env.NEXT_PUBLIC_ICON_URL,
+                    },
+                    paymaster: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
+                    analytics: true,
+                  }}
+                  miniKit={{
+                    enabled: true,
+                    autoConnect: true,
+                    notificationProxyUrl: "/api/notify",
+                  }}
+                >
+                  <SafeArea>
+                    <FrameProvider>
+                      <SmartWalletProvider>
+                        <EthModeProvider>
+                          <SolanaWalletProvider>
+                            <BalanceProvider>
+                              <LoadingProvider>
+                                <TutorialBundle>
+                                  {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
+                                  {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
+                                  {/** added provider wrapper **/}
+                                  {/* eslint-disable-next-line react/no-children-prop */}
+                                  <Toaster
+                                    position="top-center"
+                                    toastOptions={{
+                                      duration: 4000,
+                                      style: {
+                                        backgroundColor: "hsl(var(--background))",
+                                        color: "hsl(var(--foreground))",
+                                        border: "1px solid hsl(var(--border))",
+                                        zIndex: 9999,
+                                      },
+                                      success: {
+                                        iconTheme: {
+                                          primary: "hsl(var(--primary))",
+                                          secondary: "hsl(var(--primary-foreground))",
+                                        },
+                                      },
+                                      error: {
+                                        iconTheme: {
+                                          primary: "hsl(var(--destructive))",
+                                          secondary: "hsl(var(--destructive-foreground))",
+                                        },
+                                      },
+                                    }}
+                                    containerStyle={{
+                                      zIndex: 9999,
+                                    }}
+                                  />
+                                  {props.children}
+                                  <SlideshowModal />
+                                </TutorialBundle>
+                                <TasksInfoDialog />
+                                <SecretGardenListener />
+                              </LoadingProvider>
+                            </BalanceProvider>
+                          </SolanaWalletProvider>
+                        </EthModeProvider>
+                      </SmartWalletProvider>
+                    </FrameProvider>
+                  </SafeArea>
+                </OnchainKitProvider>
+              </WagmiRouter>
+            </QueryClientProvider>
+          </PrivyProvider>
+        </PaymasterProvider>
+      </ServerThemeProvider>
     </ErrorBoundary>
   );
 }

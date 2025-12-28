@@ -9,8 +9,8 @@ pnpm-debug.log*
 # Next.js
 .next/
 out/
-pixotchi-onchain/
 bridge-main/
+pixotchi-onchain/
 
 
 # Environment variables
