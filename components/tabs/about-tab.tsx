@@ -72,6 +72,8 @@ const InfoCard = ({
   );
 };
 
+
+
 export default function AboutTab() {
   const { address } = useAccount();
   const { start, enabled } = useSlideshow();

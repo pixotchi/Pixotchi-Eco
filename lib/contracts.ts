@@ -1593,6 +1593,58 @@ export const getSwapQuote = async (ethAmount: string): Promise<{ quote: string; 
   }
 };
 
+// Get ETH quote for a specific SEED amount (inverse of getSwapQuote)
+// Uses getAmountsIn to calculate how much ETH is needed for exact SEED output
+export const getEthQuoteForSeedAmount = async (seedAmount: bigint): Promise<{
+  ethAmount: bigint;
+  ethAmountWithBuffer: bigint;
+  seedAmount: bigint;
+  error?: string;
+}> => {
+  if (seedAmount <= BigInt(0)) {
+    return { ethAmount: BigInt(0), ethAmountWithBuffer: BigInt(0), seedAmount: BigInt(0), error: "Invalid seed amount" };
+  }
+
+  const readClient = getReadClient();
+
+  try {
+    // getAmountsIn returns [inputAmount, outputAmount] for exact output
+    const amounts = await readClient.readContract({
+      address: UNISWAP_ROUTER_ADDRESS,
+      abi: UniswapAbi,
+      functionName: 'getAmountsIn',
+      args: [seedAmount, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
+    }) as bigint[];
+
+    if (!amounts || amounts.length < 2 || amounts[0] <= BigInt(0)) {
+      return { ethAmount: BigInt(0), ethAmountWithBuffer: BigInt(0), seedAmount, error: "No liquidity available" };
+    }
+
+    const ethNeeded = amounts[0];
+    // Add 6% buffer for slippage protection
+    const ethWithBuffer = (ethNeeded * BigInt(106)) / BigInt(100);
+
+    return {
+      ethAmount: ethNeeded,
+      ethAmountWithBuffer: ethWithBuffer,
+      seedAmount,
+    };
+  } catch (error: any) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[getEthQuoteForSeedAmount] Error:', error);
+    }
+
+    let errorMessage = "Unable to get ETH quote";
+    if (error?.message?.includes('insufficient')) {
+      errorMessage = "Insufficient liquidity";
+    } else if (error?.message?.includes('network')) {
+      errorMessage = "Network error";
+    }
+
+    return { ethAmount: BigInt(0), ethAmountWithBuffer: BigInt(0), seedAmount, error: errorMessage };
+  }
+};
+
 // Execute swap
 export const executeSwap = async (walletClient: WalletClient, ethAmount: string): Promise<boolean> => {
   return retryWithBackoff(async () => {

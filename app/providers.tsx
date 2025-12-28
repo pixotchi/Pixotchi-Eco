@@ -6,6 +6,7 @@ import { OnchainKitProvider } from "@coinbase/onchainkit";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "next-themes";
 import { PaymasterProvider } from "@/lib/paymaster-context";
+import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
@@ -398,49 +399,51 @@ export function Providers(props: { children: ReactNode }) {
                   <SafeArea>
                     <FrameProvider>
                       <SmartWalletProvider>
-                        <SolanaWalletProvider>
-                          <BalanceProvider>
-                            <LoadingProvider>
-                              <TutorialBundle>
-                                {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                                {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                                {/** added provider wrapper **/}
-                                {/* eslint-disable-next-line react/no-children-prop */}
-                                <Toaster
-                                  position="top-center"
-                                  toastOptions={{
-                                    duration: 4000,
-                                    style: {
-                                      backgroundColor: "hsl(var(--background))",
-                                      color: "hsl(var(--foreground))",
-                                      border: "1px solid hsl(var(--border))",
+                        <EthModeProvider>
+                          <SolanaWalletProvider>
+                            <BalanceProvider>
+                              <LoadingProvider>
+                                <TutorialBundle>
+                                  {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
+                                  {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
+                                  {/** added provider wrapper **/}
+                                  {/* eslint-disable-next-line react/no-children-prop */}
+                                  <Toaster
+                                    position="top-center"
+                                    toastOptions={{
+                                      duration: 4000,
+                                      style: {
+                                        backgroundColor: "hsl(var(--background))",
+                                        color: "hsl(var(--foreground))",
+                                        border: "1px solid hsl(var(--border))",
+                                        zIndex: 9999,
+                                      },
+                                      success: {
+                                        iconTheme: {
+                                          primary: "hsl(var(--primary))",
+                                          secondary: "hsl(var(--primary-foreground))",
+                                        },
+                                      },
+                                      error: {
+                                        iconTheme: {
+                                          primary: "hsl(var(--destructive))",
+                                          secondary: "hsl(var(--destructive-foreground))",
+                                        },
+                                      },
+                                    }}
+                                    containerStyle={{
                                       zIndex: 9999,
-                                    },
-                                    success: {
-                                      iconTheme: {
-                                        primary: "hsl(var(--primary))",
-                                        secondary: "hsl(var(--primary-foreground))",
-                                      },
-                                    },
-                                    error: {
-                                      iconTheme: {
-                                        primary: "hsl(var(--destructive))",
-                                        secondary: "hsl(var(--destructive-foreground))",
-                                      },
-                                    },
-                                  }}
-                                  containerStyle={{
-                                    zIndex: 9999,
-                                  }}
-                                />
-                                {props.children}
-                                <SlideshowModal />
-                              </TutorialBundle>
-                              <TasksInfoDialog />
-                              <SecretGardenListener />
-                            </LoadingProvider>
-                          </BalanceProvider>
-                        </SolanaWalletProvider>
+                                    }}
+                                  />
+                                  {props.children}
+                                  <SlideshowModal />
+                                </TutorialBundle>
+                                <TasksInfoDialog />
+                                <SecretGardenListener />
+                              </LoadingProvider>
+                            </BalanceProvider>
+                          </SolanaWalletProvider>
+                        </EthModeProvider>
                       </SmartWalletProvider>
                     </FrameProvider>
                   </SafeArea>

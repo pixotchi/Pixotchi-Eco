@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useBalance } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { Button } from '../ui/button';
@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getFormattedTokenBalance, getFormattedTokenBalanceForToken, getTokenBalanceForToken, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandMintApproval, getLandMintPrice, getTokenSymbol, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
+import { getFormattedTokenBalance, getFormattedTokenBalanceForToken, getTokenBalanceForToken, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandMintApproval, getLandMintPrice, getTokenSymbol, getEthQuoteForSeedAmount, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
 import { useBalances } from '@/lib/balance-context';
 import { Strain } from '@/lib/types';
 import { formatNumber, formatTokenAmount } from '@/lib/utils';
@@ -26,12 +26,15 @@ import { useFrameContext } from '@/lib/frame-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import MintTransaction from '@/components/transactions/mint-transaction';
 import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
+import SwapMintBundle from '@/components/transactions/swap-mint-bundle';
+import SwapLandMintBundle from '@/components/transactions/swap-land-mint-bundle';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import LandMintTransaction from '../transactions/land-mint-transaction';
 import { MintShareModal } from '@/components/mint-share-modal';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import { VerifyClaim } from '@/components/verify-claim';
+import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported, useSolanaBridge, useSolanaWallet } from '@/components/solana';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
@@ -60,6 +63,19 @@ export default function MintTab() {
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
   const frameContext = useFrameContext();
+
+  // ETH Mode for smart wallet users
+  const { isEthMode } = useEthModeSafe();
+  const [ethQuote, setEthQuote] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
+  const [ethQuoteLoading, setEthQuoteLoading] = useState(false);
+  const [landEthQuote, setLandEthQuote] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
+  const [landEthQuoteLoading, setLandEthQuoteLoading] = useState(false);
+
+  // ETH balance for ETH mode insufficent balance check
+  const { data: ethBalanceData } = useBalance({
+    address: evmAddress,
+  });
+  const ethBalance = ethBalanceData?.value ?? BigInt(0);
 
   // Solana wallet support
   const isSolana = useIsSolanaWallet();
@@ -230,6 +246,103 @@ export default function MintTab() {
 
     fetchPaymentTokenInfo();
   }, [selectedStrain, address, mintType]);
+
+  // Fetch ETH quote when strain changes and ETH mode is active
+  useEffect(() => {
+    // Only fetch ETH quotes for smart wallet users with ETH mode enabled, on plant tab
+    if (!isSmartWallet || !isEthMode || !selectedStrain || mintType !== 'plant' || isSolana) {
+      setEthQuote(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchEthQuote = async () => {
+      setEthQuoteLoading(true);
+      try {
+        // Get mint price in SEED (payment price or default mint price)
+        const seedPrice = selectedStrain.paymentPrice ?? BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18));
+        if (seedPrice <= BigInt(0)) {
+          setEthQuote(null);
+          return;
+        }
+
+        const quote = await getEthQuoteForSeedAmount(seedPrice);
+
+        if (!cancelled) {
+          if (quote.error || quote.ethAmountWithBuffer <= BigInt(0)) {
+            setEthQuote(null);
+          } else {
+            setEthQuote({
+              ethAmount: quote.ethAmount,
+              ethAmountWithBuffer: quote.ethAmountWithBuffer,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[MintTab] ETH quote fetch failed:', err);
+        if (!cancelled) {
+          setEthQuote(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setEthQuoteLoading(false);
+        }
+      }
+    };
+
+    // Debounce the quote fetch
+    const timeoutId = setTimeout(fetchEthQuote, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [isSmartWallet, isEthMode, selectedStrain, mintType, isSolana]);
+
+  // Fetch ETH quote for land minting when on land tab + ETH mode active
+  useEffect(() => {
+    // Only fetch ETH quotes for smart wallet users with ETH mode enabled, on land tab
+    if (!isSmartWallet || !isEthMode || mintType !== 'land' || isSolana || landMintPrice <= BigInt(0)) {
+      setLandEthQuote(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchLandEthQuote = async () => {
+      setLandEthQuoteLoading(true);
+      try {
+        const quote = await getEthQuoteForSeedAmount(landMintPrice);
+
+        if (!cancelled) {
+          if (quote.error || quote.ethAmountWithBuffer <= BigInt(0)) {
+            setLandEthQuote(null);
+          } else {
+            setLandEthQuote({
+              ethAmount: quote.ethAmount,
+              ethAmountWithBuffer: quote.ethAmountWithBuffer,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[MintTab] Land ETH quote fetch failed:', err);
+        if (!cancelled) {
+          setLandEthQuote(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLandEthQuoteLoading(false);
+        }
+      }
+    };
+
+    // Debounce the quote fetch
+    const timeoutId = setTimeout(fetchLandEthQuote, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [isSmartWallet, isEthMode, mintType, isSolana, landMintPrice]);
 
   useEffect(() => {
     if (!address) {
@@ -1045,18 +1158,46 @@ export default function MintTab() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Price</span>
                 <div className="flex items-center space-x-1 font-semibold">
-                  <Image
-                    src={getTokenLogo(selectedStrain.paymentToken)}
-                    alt={paymentTokenSymbol}
-                    width={16}
-                    height={16}
-                  />
-                  <span>
-                    {selectedStrain.paymentPrice
-                      ? formatTokenAmount(selectedStrain.paymentPrice)
-                      : formatNumber(selectedStrain.mintPrice)
-                    } {paymentTokenSymbol}
-                  </span>
+                  {/* ETH Mode: show ETH price if smart wallet + ETH mode + valid quote */}
+                  {isSmartWallet && isEthMode && ethQuote ? (
+                    <>
+                      <Image
+                        src="/icons/ethlogo.svg"
+                        alt="ETH"
+                        width={16}
+                        height={16}
+                      />
+                      <span>
+                        {ethQuoteLoading ? '...' : (Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                      </span>
+                    </>
+                  ) : isSmartWallet && isEthMode && ethQuoteLoading ? (
+                    <>
+                      <Image
+                        src="/icons/ethlogo.svg"
+                        alt="ETH"
+                        width={16}
+                        height={16}
+                      />
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    /* Default: show SEED/payment token price */
+                    <>
+                      <Image
+                        src={getTokenLogo(selectedStrain.paymentToken)}
+                        alt={paymentTokenSymbol}
+                        width={16}
+                        height={16}
+                      />
+                      <span>
+                        {selectedStrain.paymentPrice
+                          ? formatTokenAmount(selectedStrain.paymentPrice)
+                          : formatNumber(selectedStrain.mintPrice)
+                        } {paymentTokenSymbol}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex justify-between items-center">
@@ -1070,7 +1211,64 @@ export default function MintTab() {
         {/* StatusBar replaces BalanceCard globally under header */}
 
         <div className="flex flex-col space-y-2">
-          {needsApproval && (
+          {/* ETH Mode: Show SwapMintBundle for atomic ETH->SEED->Mint transaction */}
+          {isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && (
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Mint with ETH</span>
+                <SponsoredBadge show={isSponsored} />
+              </div>
+              <SwapMintBundle
+                strain={selectedStrain.id}
+                ethAmount={ethQuote.ethAmountWithBuffer}
+                minSeedOut={selectedStrain.paymentPrice ?? BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))}
+                onSuccess={() => {
+                  toast.success('Plant minted successfully with ETH!');
+                  incrementForcedFetch();
+                  window.dispatchEvent(new Event('balances:refresh'));
+                  if (address) {
+                    const mintedAt = new Date().toISOString();
+                    setShareData({
+                      address,
+                      basename: primaryName || undefined,
+                      strainName: selectedStrain.name,
+                      strainId: selectedStrain.id,
+                      mintedAt,
+                    });
+                    setShowShareModal(true);
+                  }
+                }}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint"}
+                buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                disabled={ethBalance < ethQuote.ethAmountWithBuffer}
+              />
+              {ethBalance < ethQuote.ethAmountWithBuffer ? (
+                <p className="text-xs text-destructive text-center">
+                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center">
+                  Swaps ~{(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH → SEED → Mint (includes 6% buffer)
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ETH Mode loading state */}
+          {isSmartWallet && isEthMode && selectedStrain && ethQuoteLoading && (
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Mint with ETH</span>
+              </div>
+              <Button disabled className="w-full">
+                Fetching ETH quote...
+              </Button>
+            </div>
+          )}
+
+          {/* Standard SEED minting (not ETH mode or no quote) */}
+          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && needsApproval && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Approval</span>
@@ -1140,8 +1338,8 @@ export default function MintTab() {
             </div>
           )}
 
-          {/** Hide Mint step if using bundle path (smart wallet + sponsored + needsApproval) **/}
-          {!(isSmartWallet && isSponsored && needsApproval && selectedStrain) && (
+          {/** Hide Mint step if using bundle path (smart wallet + sponsored + needsApproval) or ETH mode **/}
+          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && !(isSmartWallet && isSponsored && needsApproval && selectedStrain) && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Mint Plant</span>
@@ -1221,8 +1419,26 @@ export default function MintTab() {
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Price</span>
               <div className="flex items-center space-x-1 font-semibold">
-                <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                <span>{formatTokenAmount(landMintPrice)} SEED</span>
+                {/* ETH Mode: show ETH price if smart wallet + ETH mode + valid quote */}
+                {isSmartWallet && isEthMode && landEthQuote ? (
+                  <>
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                    <span>
+                      {landEthQuoteLoading ? '...' : (Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                    </span>
+                  </>
+                ) : isSmartWallet && isEthMode && landEthQuoteLoading ? (
+                  <>
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  /* Default: show SEED price */
+                  <>
+                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
+                    <span>{formatTokenAmount(landMintPrice)} SEED</span>
+                  </>
+                )}
               </div>
             </div>
             <div className="flex justify-between items-center">
@@ -1234,59 +1450,109 @@ export default function MintTab() {
       )}
       {/* StatusBar replaces BalanceCard globally under header */}
       <div className="flex flex-col space-y-2">
-        {needsLandApproval && (
+        {/* ETH Mode: Show SwapLandMintBundle for atomic ETH->SEED->Mint Land transaction */}
+        {isSmartWallet && isEthMode && landEthQuote && !landEthQuoteLoading && landMintStatus?.canMint && (
           <div className="flex flex-col space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Step 1: Approve SEED</span>
-              <SponsoredBadge show={isSponsored && isSmartWallet} />
+              <span className="text-sm font-medium">Mint Land with ETH</span>
+              <SponsoredBadge show={isSponsored} />
             </div>
-            <ApproveTransaction
-              spenderAddress={LAND_CONTRACT_ADDRESS}
+            <SwapLandMintBundle
+              ethAmount={landEthQuote.ethAmountWithBuffer}
+              minSeedOut={landMintPrice}
               onSuccess={() => {
-                toast.success('Token approval successful!');
-                setNeedsLandApproval(false);
-                incrementForcedFetch();
-              }}
-              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-              buttonText="Approve SEED for Land"
-              buttonClassName="w-full"
-            />
-          </div>
-        )}
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">
-            {needsLandApproval ? 'Step 2: Mint Land' : 'Mint Land'}
-          </span>
-          <SponsoredBadge show={isSmartWallet} />
-        </div>
-        {landMintStatus && !landMintStatus.canMint ? (
-          <DisabledTransaction
-            buttonText={landMintStatus.reason}
-            buttonClassName="w-full"
-          />
-        ) : (
-          <>
-            <LandMintTransaction
-              onSuccess={() => {
-                toast.success('Land minted successfully!');
+                toast.success('Land minted successfully with ETH!');
                 incrementForcedFetch();
                 window.dispatchEvent(new Event('balances:refresh'));
               }}
               onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-              buttonText={`Mint Land`}
+              buttonText={ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
               buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-              disabled={!landMintStatus?.canMint || needsLandApproval || seedBalanceRaw < landMintPrice}
+              disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
             />
-            {landMintStatus?.canMint && !needsLandApproval && seedBalanceRaw < landMintPrice && (
-              <p className="text-xs text-destructive text-center mt-2">
-                Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
+            {ethBalance < landEthQuote.ethAmountWithBuffer ? (
+              <p className="text-xs text-destructive text-center">
+                Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
               </p>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center">
+                Swaps ~{(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH → SEED → Mint Land (includes 6% buffer)
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ETH Mode loading state */}
+        {isSmartWallet && isEthMode && landEthQuoteLoading && landMintStatus?.canMint && (
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Mint Land with ETH</span>
+            </div>
+            <Button disabled className="w-full">
+              Fetching ETH quote...
+            </Button>
+          </div>
+        )}
+
+        {/* Standard SEED land minting (not ETH mode or no quote or can't mint) */}
+        {!(isSmartWallet && isEthMode && (landEthQuote || landEthQuoteLoading) && landMintStatus?.canMint) && (
+          <>
+            {needsLandApproval && (
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Step 1: Approve SEED</span>
+                  <SponsoredBadge show={isSponsored && isSmartWallet} />
+                </div>
+                <ApproveTransaction
+                  spenderAddress={LAND_CONTRACT_ADDRESS}
+                  onSuccess={() => {
+                    toast.success('Token approval successful!');
+                    setNeedsLandApproval(false);
+                    incrementForcedFetch();
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText="Approve SEED for Land"
+                  buttonClassName="w-full"
+                />
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                {needsLandApproval ? 'Step 2: Mint Land' : 'Mint Land'}
+              </span>
+              <SponsoredBadge show={isSmartWallet} />
+            </div>
+            {landMintStatus && !landMintStatus.canMint ? (
+              <DisabledTransaction
+                buttonText={landMintStatus.reason}
+                buttonClassName="w-full"
+              />
+            ) : (
+              <>
+                <LandMintTransaction
+                  onSuccess={() => {
+                    toast.success('Land minted successfully!');
+                    incrementForcedFetch();
+                    window.dispatchEvent(new Event('balances:refresh'));
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText={`Mint Land`}
+                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={!landMintStatus?.canMint || needsLandApproval || seedBalanceRaw < landMintPrice}
+                />
+                {landMintStatus?.canMint && !needsLandApproval && seedBalanceRaw < landMintPrice && (
+                  <p className="text-xs text-destructive text-center mt-2">
+                    Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
+                  </p>
+                )}
+              </>
             )}
           </>
         )}
       </div>
     </>
   );
+
 
   const renderContent = () => {
     if (!isConnected) {
