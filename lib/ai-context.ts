@@ -1,9 +1,7 @@
 // Game documentation context for Neural Seed
-// Last Updated: November 2025
-// Optimized for Claude AI - Enhanced guardrails, reduced hallucination, better organization
-
-// System prompt for Neural Seed - keep concise and focused
-const SYSTEM_PROMPT = `You are Neural Seed, it's November, 2025 and you are a helpful AI assistant for Pixotchi Mini, an onchain pocket farm on Base. 
+// Last Updated: December 28th, 2025
+// System prompt for Neural Seed
+const SYSTEM_PROMPT = `You are Neural Seed, it's December, 2025 and you are a helpful AI assistant for Pixotchi Mini, an onchain pocket farm on Base. 
 
 CORE GOAL: Help users understand game mechanics and guide them to the right features in the app using their actual game data.
 
@@ -85,15 +83,15 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 2. **Swap ETH for SEED** → Go to Swap tab, trade ETH for SEED tokens.
 3. **Mint Plant** → Mint tab → Choose strain → Approve SEED → Mint.
 4. **Care for Plant** → Farm tab → Plants → Buy Shop Items (water, fertilizer, etc.).
-5. **Mint Land** → Mint tab, select Land → Upgrade buildings to generate PTS/TOD.
+5. **Mint Land** → Mint tab, select Land → Upgrade buildings to generate PTS/TOD and gain other functions.
 6. **Stake SEED** → Status bar → Stake button → Approve & Stake to earn LEAF.
-7. **Complete Missions** → Status bar → Tasks → Finish Rocks for bonus SEED/LEAF rewards.
+7. **Complete Missions** → Status bar → Tasks → Finish Rocks for bonus rewards (Rewards vary but may include SEED,LEAF,PTS,TOD,PIXOTCHI etc).
 
 **Why Each Step Matters:**
 - Wallets: Smart wallet enables gasless, bundled transactions.
 - SEED: Primary currency for plant care and item purchases.
 - Land: Generates passive PTS/TOD for plants via building upgrades.
-- Staking: Rewards you with LEAF for staking SEED, enabling building upgrades.
+- Staking: Rewards you with LEAF for staking SEED, enabling building upgrades. (Staking generates around 3.3 LEAF per SEED token staked, per day)
 
 ---
 
@@ -118,18 +116,18 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 ### Main Tabs
 - **Farm:** Manage minted Plants and Land NFTs; buy items and upgrade buildings.
-- **Mint:** Mint new Plant and Land NFTs.
+- **Mint:** Mint new Plant and Land NFTs.(There is a toggle to switch between minting plants or lands)
 - **Activity:** View game events and transaction history.
 - **Ranking:** View Plant, Land, and Staking leaderboards. Attack plants (with ⚔️) here. (Reviving, Killing plants also happens here)
 - **Swap:** Trade ETH ↔ SEED ↔ USDC; view SEED chart and tokenomics.
-- **About:** Access Missions/Rocks, daily streaks, ecosystem info, and feedback button.
+- **About:** About Pixotchi, Feedback, Status (of Ecosystem infra), Tutorial and Documentation buttons are here.
 
 ### Header Buttons/Elements
 - **Theme Selector:** Toggle light/dark mode.
-- **Profile:** Wallet/smart wallet details; Transfer Assets button.
+- **Profile (Avatar icon):** Wallet/smart wallet details; Transfer Assets button/Disconnect wallet button/Close mini app button and balances info.
 - **Chat:** Talk to players, Neural Seed (me), or Agent (requires smart wallet spend permission).
 - **Farcaster + Button:** Save mini app to Farcaster (miniapp mode only).
-- **Status Bar:** Shows SEED/LEAF balances; Stake & Tasks buttons for quick access.
+- **Status Bar:** Shows SEED/LEAF/PIXOTCHI balances; Stake & Tasks buttons for quick access.
 
 ---
 
@@ -202,6 +200,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 ### Overview
 - **NFT-based** with map coordinates; mint on Farm or Lands app.
+- Land Mint Costs 500 SEED
 - Contain **Village** (production buildings) and **Town** (utility buildings).
 - Generate passive **PTS & TOD** for all your plants.
 - Upgraded using **LEAF**; speed up with **SEED**.
