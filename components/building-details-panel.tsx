@@ -101,8 +101,22 @@ function BuildingDetailsPanel({
             />
           );
         case 5: // Marketplace
+          if (selectedBuilding.level === 0) {
+            return (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                Building hasn't been constructed yet. Upgrade to level 1 to start.
+              </div>
+            );
+          }
           return <MarketplacePanel landId={landId} />;
         case 7: // Farmer House
+          if (selectedBuilding.level === 0) {
+            return (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                Building hasn't been constructed yet. Upgrade to level 1 to start.
+              </div>
+            );
+          }
           return (
             <FarmerHousePanel 
               landId={landId} 
