@@ -27,6 +27,8 @@ import {
   EyeOff,
   AlertTriangle,
   CheckCircle,
+  Gift,
+  Upload,
   Clock,
   UserX,
   MessageCircle,
@@ -72,7 +74,7 @@ interface AdminStats {
   }>;
 }
 
-type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback';
+type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback' | 'airdrop';
 
 interface ConfirmDialogState {
   open: boolean;
@@ -200,6 +202,11 @@ export default function AdminInviteDashboard() {
     { id: 4, name: 'Zest' },
     { id: 5, name: 'TYJ' },
   ];
+
+  // Airdrop state
+  const [airdropData, setAirdropData] = useState<{ meta: any; recipients: any[] } | null>(null);
+  const [airdropLoading, setAirdropLoading] = useState(false);
+  const [airdropCsv, setAirdropCsv] = useState('');
 
   // Cleanup: abort pending requests on unmount
   useEffect(() => {
@@ -976,6 +983,45 @@ export default function AdminInviteDashboard() {
     });
   };
 
+  // Export helpers for gamification data
+  const exportToCSV = (data: Array<{ address: string; value: number }>, filename: string) => {
+    if (!data || data.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+    const header = 'address,value';
+    const rows = data.map(e => `${e.address},${e.value}`);
+    const csvContent = [header, ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${data.length} rows to CSV`);
+  };
+
+  const exportToJSON = (data: Array<{ address: string; value: number }>, filename: string) => {
+    if (!data || data.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+    const jsonContent = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${data.length} entries to JSON`);
+  };
+
   // RPC status state
   const [rpcStatus, setRpcStatus] = useState<{ endpoints: Array<{ url: string; ok: boolean; ms: number; error?: string }>; summary: any } | null>(null);
   const [rpcLoading, setRpcLoading] = useState(false);
@@ -1441,6 +1487,7 @@ export default function AdminInviteDashboard() {
             { id: 'notifications', label: 'Notifications', icon: Bell },
             { id: 'og-images', label: 'OG Images', icon: FileText },
             { id: 'feedback', label: 'Feedback', icon: Plus },
+            { id: 'airdrop', label: 'Airdrop', icon: Gift },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -2485,7 +2532,17 @@ export default function AdminInviteDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="font-medium mb-2">Streaks (Current Month)</h4>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">Streaks (Current Month)</h4>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => exportToCSV(gmLb.streakTop, 'streaks')}>
+                            <Download className="w-3 h-3 mr-1" />CSV
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => exportToJSON(gmLb.streakTop, 'streaks')}>
+                            <Download className="w-3 h-3 mr-1" />JSON
+                          </Button>
+                        </div>
+                      </div>
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.streakTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
@@ -2498,7 +2555,17 @@ export default function AdminInviteDashboard() {
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Missions (Rocks · All-Time)</h4>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">Missions (Rocks · All-Time)</h4>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => exportToCSV(gmLb.missionTop, 'missions')}>
+                            <Download className="w-3 h-3 mr-1" />CSV
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => exportToJSON(gmLb.missionTop, 'missions')}>
+                            <Download className="w-3 h-3 mr-1" />JSON
+                          </Button>
+                        </div>
+                      </div>
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.missionTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
@@ -3241,6 +3308,221 @@ export default function AdminInviteDashboard() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Airdrop Tab */}
+        {activeTab === 'airdrop' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Airdrop Management</h2>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setAirdropLoading(true);
+                    try {
+                      const res = await fetch('/api/airdrop/manage', {
+                        headers: { 'Authorization': `Bearer ${adminKey}` }
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setAirdropData(data);
+                      } else {
+                        toast.error(data.error || 'Failed to fetch airdrop data');
+                      }
+                    } catch {
+                      toast.error('Failed to fetch airdrop data');
+                    } finally {
+                      setAirdropLoading(false);
+                    }
+                  }}
+                  disabled={airdropLoading}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${airdropLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                {airdropData?.recipients && airdropData.recipients.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    onClick={async () => {
+                      if (!confirm('Are you sure you want to clear all airdrop data?')) return;
+                      setAirdropLoading(true);
+                      try {
+                        const res = await fetch('/api/airdrop/manage', {
+                          method: 'DELETE',
+                          headers: { 'Authorization': `Bearer ${adminKey}` }
+                        });
+                        if (res.ok) {
+                          toast.success('Airdrop data cleared');
+                          setAirdropData(null);
+                        } else {
+                          toast.error('Failed to clear airdrop data');
+                        }
+                      } catch {
+                        toast.error('Failed to clear airdrop data');
+                      } finally {
+                        setAirdropLoading(false);
+                      }
+                    }}
+                    disabled={airdropLoading}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Upload CSV */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="w-5 h-5" />
+                  Upload Eligibility List
+                </CardTitle>
+                <CardDescription>
+                  CSV format: address,seed,leaf,pixotchi (amounts in tokens, not wei)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea
+                  placeholder={`address,seed,leaf,pixotchi
+0x123...,100,50,0
+0x456...,0,200,10`}
+                  value={airdropCsv}
+                  onChange={(e) => setAirdropCsv(e.target.value)}
+                  rows={6}
+                  className="font-mono text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      if (!airdropCsv.trim()) {
+                        toast.error('Please enter CSV data');
+                        return;
+                      }
+                      setAirdropLoading(true);
+                      try {
+                        const res = await fetch('/api/airdrop/manage', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${adminKey}`
+                          },
+                          body: JSON.stringify({ csv: airdropCsv })
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                          toast.success(`Uploaded ${data.totalRecipients} recipients`);
+                          setAirdropCsv('');
+                          // Refresh data
+                          const refreshRes = await fetch('/api/airdrop/manage', {
+                            headers: { 'Authorization': `Bearer ${adminKey}` }
+                          });
+                          if (refreshRes.ok) {
+                            setAirdropData(await refreshRes.json());
+                          }
+                        } else {
+                          toast.error(data.error || 'Upload failed');
+                          if (data.validationErrors?.length) {
+                            console.error('Validation errors:', data.validationErrors);
+                          }
+                        }
+                      } catch {
+                        toast.error('Upload failed');
+                      } finally {
+                        setAirdropLoading(false);
+                      }
+                    }}
+                    disabled={airdropLoading || !airdropCsv.trim()}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload CSV
+                  </Button>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setAirdropCsv(ev.target?.result as string || '');
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                    />
+                    <Button variant="outline" asChild>
+                      <span>
+                        <FileText className="w-4 h-4 mr-2" />
+                        Load File
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stats & Recipients */}
+            {airdropData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recipients ({airdropData.recipients?.length || 0})</CardTitle>
+                  {airdropData.meta && (
+                    <CardDescription>
+                      Claimed: {airdropData.meta.claimedCount || 0} / {airdropData.meta.totalRecipients || 0}
+                      {airdropData.meta.uploadedAt && (
+                        <span className="ml-2 text-xs">
+                          • Uploaded {formatDistanceToNow(airdropData.meta.uploadedAt, { addSuffix: true })}
+                        </span>
+                      )}
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {airdropData.recipients?.length > 0 ? (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      <div className="grid grid-cols-6 gap-2 text-xs font-medium text-muted-foreground sticky top-0 bg-background py-2 border-b">
+                        <div className="col-span-2">Address</div>
+                        <div>SEED</div>
+                        <div>LEAF</div>
+                        <div>PIXOTCHI</div>
+                        <div>Status</div>
+                      </div>
+                      {airdropData.recipients.map((r: any) => (
+                        <div key={r.address} className="grid grid-cols-6 gap-2 text-sm py-2 border-b border-border/50 hover:bg-muted/50">
+                          <div className="col-span-2 font-mono text-xs truncate" title={r.address}>
+                            {r.address.slice(0, 8)}...{r.address.slice(-6)}
+                          </div>
+                          <div>{r.seed}</div>
+                          <div>{r.leaf}</div>
+                          <div>{r.pixotchi}</div>
+                          <div>
+                            {r.claimed ? (
+                              <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3" /> Claimed
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Pending</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Gift className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No airdrop data loaded</p>
+                      <p className="text-sm">Upload a CSV to get started</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </div>

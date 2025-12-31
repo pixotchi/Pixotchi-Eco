@@ -12,10 +12,8 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html className="admin-page-scrollable">
-      <body>
-        {children}
-      </body>
-    </html>
+    <div className="admin-page-scrollable min-h-screen">
+      {children}
+    </div>
   );
-} 
+}
