@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { encodeFunctionData, parseUnits, verifyMessage } from 'viem';
+import { encodeFunctionData, parseUnits } from 'viem';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
+
+// Create public client for signature verification (supports ERC-1271)
+const publicClient = createPublicClient({
+    chain: base,
+    transport: http(process.env.NEXT_PUBLIC_RPC_NODE)
+});
 
 // Token addresses
 const AIRDROP_TOKENS = {
@@ -86,7 +94,7 @@ export async function POST(req: NextRequest) {
         const message = getClaimMessage(userAddress, signedTimestamp);
         let isValid = false;
         try {
-            isValid = await verifyMessage({
+            isValid = await publicClient.verifyMessage({
                 address: userAddress as `0x${string}`,
                 message,
                 signature: signature as `0x${string}`,
