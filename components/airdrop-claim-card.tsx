@@ -5,6 +5,7 @@ import { useAccount, useSignMessage } from 'wagmi';
 import { Button } from '@/components/ui/button';
 import { Gift, Loader2, CheckCircle, PenTool } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import Image from 'next/image';
 import { StandardContainer } from '@/components/ui/pixel-container';
 
 interface AirdropStatus {
@@ -109,9 +110,31 @@ export function AirdropClaimCard() {
         }
     };
 
-    // Don't render if loading, no address, not eligible, or already claimed
-    if (loading || !address || !status?.eligible) {
+    // Don't render if loading or no address
+    if (loading || !address || !status) {
         return null;
+    }
+
+    // Not eligible state
+    if (!status.eligible) {
+        return (
+            <div className="space-y-3 mb-4">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                    Airdrop
+                </h3>
+                <StandardContainer className="p-4 rounded-md border bg-card">
+                    <div className="flex items-center gap-3">
+                        <Gift className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-muted-foreground">No Allocation</p>
+                            <p className="text-xs text-muted-foreground">
+                                You are not eligible for this airdrop. Keep playing and staying active to qualify for future rewards!
+                            </p>
+                        </div>
+                    </div>
+                </StandardContainer>
+            </div>
+        );
     }
 
     // Format token amounts for display
@@ -189,14 +212,30 @@ export function AirdropClaimCard() {
                             <div className="flex-1">
                                 <p className="text-sm font-medium">Claimable Tokens</p>
                                 <div className="flex flex-wrap gap-2 mt-1">
-                                    {tokens.map(t => (
-                                        <span
-                                            key={t.name}
-                                            className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
-                                        >
-                                            {t.amount} {t.name}
-                                        </span>
-                                    ))}
+                                    {tokens.map(t => {
+                                        let iconPath = '';
+                                        if (t.name === 'SEED') iconPath = '/PixotchiKit/COIN.svg';
+                                        else if (t.name === 'LEAF') iconPath = '/icons/leaf.png';
+                                        else if (t.name === 'PIXOTCHI') iconPath = '/icons/cc.png';
+
+                                        return (
+                                            <span
+                                                key={t.name}
+                                                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium border border-primary/20"
+                                            >
+                                                {iconPath && (
+                                                    <Image
+                                                        src={iconPath}
+                                                        alt={t.name}
+                                                        width={14}
+                                                        height={14}
+                                                        className="w-3.5 h-3.5 object-contain"
+                                                    />
+                                                )}
+                                                {t.amount} {t.name}
+                                            </span>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
