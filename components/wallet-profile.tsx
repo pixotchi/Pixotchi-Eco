@@ -51,6 +51,7 @@ import { useIsSolanaWallet, useSolanaWallet, SolanaBridgeBadge } from "@/compone
 import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana";
 import { isSolanaEnabled } from "@/lib/solana-constants";
 import { useEthMode } from "@/lib/eth-mode-context";
+import { AirdropClaimCard } from "@/components/airdrop-claim-card";
 
 // Compact ETH Mode toggle row for Connection card
 const EthModeToggleRow = () => {
@@ -506,6 +507,10 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               )}
 
               {/* Wallet Connection Info */}
+
+              {/* Airdrop Claim Card - shown when eligible */}
+              <AirdropClaimCard />
+
               <div className="space-y-3">
                 <h3 className="text-sm font-medium text-muted-foreground">
                   Account
