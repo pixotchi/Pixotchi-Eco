@@ -206,7 +206,7 @@ export function AirdropClaimCard() {
                                 Airdrop Claimed
                             </p>
                             <p className="text-xs text-muted-foreground">
-                                Tokens have been sent to your wallet.
+                                Thanks for playing and helping Pixotchi grow🌱
                             </p>
                         </div>
                     </div>
