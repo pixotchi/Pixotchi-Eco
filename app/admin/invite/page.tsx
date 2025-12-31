@@ -976,6 +976,45 @@ export default function AdminInviteDashboard() {
     });
   };
 
+  // Export helpers for gamification data
+  const exportToCSV = (data: Array<{ address: string; value: number }>, filename: string) => {
+    if (!data || data.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+    const header = 'address,value';
+    const rows = data.map(e => `${e.address},${e.value}`);
+    const csvContent = [header, ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${data.length} rows to CSV`);
+  };
+
+  const exportToJSON = (data: Array<{ address: string; value: number }>, filename: string) => {
+    if (!data || data.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+    const jsonContent = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${data.length} entries to JSON`);
+  };
+
   // RPC status state
   const [rpcStatus, setRpcStatus] = useState<{ endpoints: Array<{ url: string; ok: boolean; ms: number; error?: string }>; summary: any } | null>(null);
   const [rpcLoading, setRpcLoading] = useState(false);
@@ -2485,7 +2524,17 @@ export default function AdminInviteDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="font-medium mb-2">Streaks (Current Month)</h4>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">Streaks (Current Month)</h4>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => exportToCSV(gmLb.streakTop, 'streaks')}>
+                            <Download className="w-3 h-3 mr-1" />CSV
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => exportToJSON(gmLb.streakTop, 'streaks')}>
+                            <Download className="w-3 h-3 mr-1" />JSON
+                          </Button>
+                        </div>
+                      </div>
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.streakTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
@@ -2498,7 +2547,17 @@ export default function AdminInviteDashboard() {
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Missions (Rocks · All-Time)</h4>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">Missions (Rocks · All-Time)</h4>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => exportToCSV(gmLb.missionTop, 'missions')}>
+                            <Download className="w-3 h-3 mr-1" />CSV
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => exportToJSON(gmLb.missionTop, 'missions')}>
+                            <Download className="w-3 h-3 mr-1" />JSON
+                          </Button>
+                        </div>
+                      </div>
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {gmLb.missionTop.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No data</div>
