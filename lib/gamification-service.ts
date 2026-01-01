@@ -321,36 +321,38 @@ async function getCombinedMissionLeaderboard(limit: number = 50): Promise<GmLead
     .sort((a, b) => b.value - a.value)
     .slice(0, limit);
 }
-
 /**
- * Get combined streak leaderboard across all months.
- * Uses MAX value per user (best streak ever), not SUM.
+ * Get combined streak leaderboard across all time.
+ * Reads from individual streak records (streak:{address}) and uses the 'best' field.
  */
 async function getCombinedStreakLeaderboard(limit: number = 50): Promise<GmLeaderEntry[]> {
   if (!redis) return [];
-  const bestStreaks = new Map<string, number>();
-  const streakKeys = await redisKeys(withPrefix(`${PX}streak:leaderboard:*`));
+
+  // Scan all individual streak keys (not leaderboard sorted sets)
+  const streakPattern = `${PX}streak:0*`; // Streak keys start with address (0x...)
+  const streakKeys = await redisScanKeys(streakPattern, 1000);
+
   if (!streakKeys.length) return [];
 
-  for (const rawKey of streakKeys) {
+  const results: GmLeaderEntry[] = [];
+
+  // Read each streak record and extract the 'best' value
+  for (const key of streakKeys) {
     try {
-      const entries = (await (redis as any)?.zrange?.(rawKey, 0, -1, { withScores: true })) || [];
-      if (!Array.isArray(entries)) continue;
-      for (let i = 0; i < entries.length; i += 2) {
-        const address = typeof entries[i] === 'string' ? entries[i].toLowerCase() : String(entries[i] || '').toLowerCase();
-        const value = Number(entries[i + 1]);
-        if (!address || !Number.isFinite(value)) continue;
-        // Use MAX instead of SUM - we want the best streak ever
-        const current = bestStreaks.get(address) || 0;
-        if (value > current) bestStreaks.set(address, value);
+      // Extract address from key (pixotchi:gm:streak:0x123... -> 0x123...)
+      const address = key.replace(`${PX}streak:`, '').toLowerCase();
+      if (!address.startsWith('0x')) continue; // Skip non-address keys like leaderboard:*
+
+      const data = await redisGetJSON<GmStreak>(key.replace('pixotchi:', '')); // Remove outer prefix for redisGetJSON
+      if (data && typeof data.best === 'number' && data.best > 0) {
+        results.push({ address, value: data.best });
       }
     } catch (error) {
-      console.warn('Failed to aggregate streak leaderboard key:', rawKey, error);
+      console.warn('Failed to read streak record:', key, error);
     }
   }
 
-  return Array.from(bestStreaks.entries())
-    .map(([address, value]) => ({ address, value }))
+  return results
     .sort((a, b) => b.value - a.value)
     .slice(0, limit);
 }
