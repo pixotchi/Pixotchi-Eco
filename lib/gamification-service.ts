@@ -378,13 +378,27 @@ export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLe
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
   const patterns = [] as string[];
-  if (scope === 'streaks' || scope === 'all') patterns.push(`${PX}streak:*`, `${PX}streak:leaderboard:*`, `${PX}streak:activity:*`);
-  if (scope === 'missions' || scope === 'all') patterns.push(`${PX}missions:*`, `${PX}missions:leaderboard:*`);
+  // Use withPrefix to match actual stored keys (keys are stored with withPrefix which adds KEY_PREFIX)
+  if (scope === 'streaks' || scope === 'all') {
+    patterns.push(
+      withPrefix(`${PX}streak:*`),
+      withPrefix(`${PX}streak:leaderboard:*`),
+      withPrefix(`${PX}streak:activity:*`)
+    );
+  }
+  if (scope === 'missions' || scope === 'all') {
+    patterns.push(
+      withPrefix(`${PX}missions:*`),
+      withPrefix(`${PX}missions:leaderboard:*`)
+    );
+  }
 
   let deleted = 0;
   for (const p of patterns) {
+    // redisKeys will not re-prefix since pattern already starts with KEY_PREFIX
     const keysList = await redisKeys(p);
     if (keysList.length) {
+      // Keys from redisKeys are already fully prefixed, can delete directly
       await redis?.del?.(...keysList as any);
       deleted += keysList.length;
     }
@@ -392,6 +406,7 @@ export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise
   await redisSetJSON(keys.adminLastReset, { at: Date.now(), scope });
   return { deleted };
 }
+
 
 export async function getMissionScore(address: string, month?: string): Promise<number> {
   if (!address) return 0;
