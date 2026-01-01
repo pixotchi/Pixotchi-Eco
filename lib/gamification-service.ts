@@ -322,6 +322,39 @@ async function getCombinedMissionLeaderboard(limit: number = 50): Promise<GmLead
     .slice(0, limit);
 }
 
+/**
+ * Get combined streak leaderboard across all months.
+ * Uses MAX value per user (best streak ever), not SUM.
+ */
+async function getCombinedStreakLeaderboard(limit: number = 50): Promise<GmLeaderEntry[]> {
+  if (!redis) return [];
+  const bestStreaks = new Map<string, number>();
+  const streakKeys = await redisKeys(withPrefix(`${PX}streak:leaderboard:*`));
+  if (!streakKeys.length) return [];
+
+  for (const rawKey of streakKeys) {
+    try {
+      const entries = (await (redis as any)?.zrange?.(rawKey, 0, -1, { withScores: true })) || [];
+      if (!Array.isArray(entries)) continue;
+      for (let i = 0; i < entries.length; i += 2) {
+        const address = typeof entries[i] === 'string' ? entries[i].toLowerCase() : String(entries[i] || '').toLowerCase();
+        const value = Number(entries[i + 1]);
+        if (!address || !Number.isFinite(value)) continue;
+        // Use MAX instead of SUM - we want the best streak ever
+        const current = bestStreaks.get(address) || 0;
+        if (value > current) bestStreaks.set(address, value);
+      }
+    } catch (error) {
+      console.warn('Failed to aggregate streak leaderboard key:', rawKey, error);
+    }
+  }
+
+  return Array.from(bestStreaks.entries())
+    .map(([address, value]) => ({ address, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit);
+}
+
 function convertZRangeResponse(arr: any[]): GmLeaderEntry[] {
   if (!Array.isArray(arr)) return [];
   const out: GmLeaderEntry[] = [];
@@ -366,14 +399,19 @@ async function getCombinedMissionScore(address: string): Promise<number> {
 export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLeaderEntry[]; missionTop: GmLeaderEntry[] }> {
   const d = getTodayDateString();
   const yyyymm = month && !isCombinedMonth(month) ? month : toMonth(d);
-  const sKey = keys.streakLeaderboard(yyyymm);
 
-  const streakPromise = (redis as any)?.zrange?.(withPrefix(sKey), 0, 49, { rev: true, withScores: true }) || [];
+  // Both leaderboards now show all-time/combined by default (or specific month if requested)
+  const streakPromise = isCombinedMonth(month)
+    ? getCombinedStreakLeaderboard()
+    : (async () => {
+      const raw = (await (redis as any)?.zrange?.(withPrefix(keys.streakLeaderboard(yyyymm)), 0, 49, { rev: true, withScores: true })) || [];
+      return convertZRangeResponse(raw as any);
+    })();
   const missionPromise = isCombinedMonth(month) ? getCombinedMissionLeaderboard() : getMonthlyMissionLeaderboard(yyyymm);
 
-  const [streakRaw, missionTop] = await Promise.all([streakPromise, missionPromise]);
+  const [streakTop, missionTop] = await Promise.all([streakPromise, missionPromise]);
 
-  return { streakTop: convertZRangeResponse(streakRaw as any), missionTop };
+  return { streakTop, missionTop };
 }
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
