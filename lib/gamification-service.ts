@@ -1,4 +1,4 @@
-import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON } from '@/lib/redis';
+import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON, redisScanKeys } from '@/lib/redis';
 import { getTodayDateString } from '@/lib/invite-utils';
 import type { GmDay, GmLeaderEntry, GmMissionDay, GmProgressProof, GmSectionKey, GmStreak, GmTaskId } from './gamification-types';
 
@@ -416,28 +416,32 @@ export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLe
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
   const patterns = [] as string[];
-  // Use withPrefix to match actual stored keys (keys are stored with withPrefix which adds KEY_PREFIX)
+  // Keys are stored as pixotchi:gm:streak:* etc (PX already starts with KEY_PREFIX)
   if (scope === 'streaks' || scope === 'all') {
     patterns.push(
-      withPrefix(`${PX}streak:*`),
-      withPrefix(`${PX}streak:leaderboard:*`),
-      withPrefix(`${PX}streak:activity:*`)
+      `${PX}streak:*`,
+      `${PX}streak:leaderboard:*`,
+      `${PX}streak:activity:*`
     );
   }
   if (scope === 'missions' || scope === 'all') {
     patterns.push(
-      withPrefix(`${PX}missions:*`),
-      withPrefix(`${PX}missions:leaderboard:*`)
+      `${PX}missions:*`,
+      `${PX}missions:leaderboard:*`
     );
   }
 
   let deleted = 0;
   for (const p of patterns) {
-    // redisKeys will not re-prefix since pattern already starts with KEY_PREFIX
-    const keysList = await redisKeys(p);
+    // Use SCAN instead of KEYS to handle large datasets (KEYS fails on Upstash with many keys)
+    const keysList = await redisScanKeys(p, 1000);
+    console.log(`[adminReset] Pattern ${p} found ${keysList.length} keys`);
     if (keysList.length) {
-      // Keys from redisKeys are already fully prefixed, can delete directly
-      await redis?.del?.(...keysList as any);
+      // Delete in batches of 100 to avoid hitting limits
+      for (let i = 0; i < keysList.length; i += 100) {
+        const batch = keysList.slice(i, i + 100);
+        await redis?.del?.(...batch as any);
+      }
       deleted += keysList.length;
     }
   }
