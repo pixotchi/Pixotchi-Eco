@@ -4,7 +4,7 @@ import { useMiniKit, useAddFrame } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useFrameContext } from "@/lib/frame-context";
 import { useAccount, useConnect } from "wagmi";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Activity } from "react";
 import { Button } from "@/components/ui/button";
 import { PageLoader, BasePageLoader } from "@/components/ui/loading";
 import { Tab } from "@/lib/types";
@@ -23,6 +23,7 @@ import { SignInWithBaseButton } from "@base-org/account-ui/react";
 import { clearAppCaches } from "@/lib/cache-utils";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
+import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 
 // Import custom hooks
 import { useInviteValidation } from "@/hooks/useInviteValidation";
@@ -734,17 +735,29 @@ export default function App() {
                 aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
               >
                 <ErrorBoundary
-                  key={activeTab}
-                  resetKeys={[activeTab, ...(address ? [address] : [])]}
+                  key="tab-boundary"
+                  resetKeys={address ? [address] : []}
                   variant="card"
                   onError={(error, errorInfo) => {
-                    console.error(`Error in ${activeTab} tab:`, { error, errorInfo });
+                    console.error(`Error in tabs:`, { error, errorInfo });
                   }}
                 >
-                  {(() => {
-                    const ActiveTabComponent = tabComponents[activeTab];
-                    return ActiveTabComponent ? <ActiveTabComponent /> : null;
-                  })()}
+                  <TabVisibilityProvider activeTab={activeTab}>
+                    {tabs.map((tab) => {
+                      const TabComponent = tabComponents[tab.id];
+                      // Activity mode: 'visible' means mounted/active effects, 'hidden' means kept in memory but effects unmounted.
+                      // This preserves scroll position and state (e.g. inputs) when switching tabs.
+                      const activityMode = activeTab === tab.id ? 'visible' : 'hidden';
+
+                      return (
+                        <Activity key={tab.id} mode={activityMode}>
+                          <div className={activeTab === tab.id ? 'block h-full' : 'hidden'}>
+                            {TabComponent ? <TabComponent /> : null}
+                          </div>
+                        </Activity>
+                      );
+                    })}
+                  </TabVisibilityProvider>
                 </ErrorBoundary>
               </div>
 
@@ -757,8 +770,8 @@ export default function App() {
                       variant="ghost"
                       onClick={() => setActiveTab(tab.id)}
                       className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${activeTab === tab.id
-                          ? "bg-primary/10 text-primary border border-primary/20"
-                          : "text-muted-foreground border border-transparent"
+                        ? "bg-primary/10 text-primary border border-primary/20"
+                        : "text-muted-foreground border border-transparent"
                         }`}
                       role="tab"
                       id={`tab-${tab.id}`}

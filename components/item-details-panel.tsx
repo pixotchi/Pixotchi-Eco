@@ -55,7 +55,7 @@ export default function ItemDetailsPanel({
   const [fenceV2Days, setFenceV2Days] = useState<number>(1);
   const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
   const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
-  const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
+  const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
   const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
 
   // ETH Mode state - store per-unit ETH quote, calculate total by multiplication
@@ -129,18 +129,18 @@ export default function ItemDetailsPanel({
     let cancelled = false;
     const fetchApproval = async () => {
       if (!address) {
-        setNeedsSeedApproval(true);
+        setSeedAllowance(BigInt(0));
         return;
       }
       try {
-        const hasApproval = await checkTokenApproval(address);
+        const allowance = await checkTokenApproval(address);
         if (!cancelled) {
-          setNeedsSeedApproval(!hasApproval);
+          setSeedAllowance(allowance);
         }
       } catch (error) {
         console.error('Failed to fetch SEED approval status:', error);
         if (!cancelled) {
-          setNeedsSeedApproval(true);
+          setSeedAllowance(BigInt(0));
         }
       }
     };
@@ -536,7 +536,7 @@ export default function ItemDetailsPanel({
                 toast.error(getFriendlyErrorMessage(message));
               }}
             />
-          ) : needsSeedApproval && !(isSmartWallet && isEthMode && ethQuote) ? (
+          ) : seedAllowance < (isFenceItem ? (fenceV2Quote || BigInt(0)) : totalCost) && !(isSmartWallet && isEthMode && ethQuote) ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground text-center">
                 Approve SEED spending once to unlock shop and garden purchases.
@@ -545,7 +545,10 @@ export default function ItemDetailsPanel({
                 spenderAddress={PIXOTCHI_NFT_ADDRESS}
                 onSuccess={() => {
                   toast.success('SEED approval successful!');
-                  setNeedsSeedApproval(false);
+                  // Refresh allowance
+                  if (address) {
+                    checkTokenApproval(address).then(setSeedAllowance);
+                  }
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Approve SEED"

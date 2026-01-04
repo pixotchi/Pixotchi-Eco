@@ -2533,7 +2533,7 @@ export default function AdminInviteDashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium">Streaks (Current Month)</h4>
+                        <h4 className="font-medium">Streaks (Best · All-Time)</h4>
                         <div className="flex gap-1">
                           <Button size="sm" variant="ghost" onClick={() => exportToCSV(gmLb.streakTop, 'streaks')}>
                             <Download className="w-3 h-3 mr-1" />CSV

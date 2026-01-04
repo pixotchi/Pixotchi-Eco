@@ -24,6 +24,7 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { ToggleGroup } from "@/components/ui/toggle-group";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
 import { Avatar } from "@coinbase/onchainkit/identity";
 import { base } from "viem/chains";
@@ -61,6 +62,8 @@ export default function LeaderboardTab() {
   const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('leaderboard');
 
   // Use Twin address for Solana users, EVM address otherwise
   // Memoize to prevent unnecessary re-renders when dependencies haven't actually changed
@@ -168,7 +171,11 @@ export default function LeaderboardTab() {
     }
 
     fetchLeaderboardDataPendingRef.current = true;
-    setLoading(true);
+
+    // Only show loader on initial data fetch
+    if (plants.length === 0) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -240,7 +247,10 @@ export default function LeaderboardTab() {
     }
 
     // Fetch fresh data if cache expired or first load
-    setStakeLoading(true);
+    // Only show loading spinner if we have no existing data
+    if (stakeRows.length === 0) {
+      setStakeLoading(true);
+    }
     try {
       console.log(`📊 [Stake] Fetching fresh data from API...`);
       const stakeResponse = await fetch('/api/leaderboard/stake');
@@ -278,7 +288,10 @@ export default function LeaderboardTab() {
       return;
     }
 
-    setRocksLoading(true);
+    // Only show loading spinner if we have no existing data
+    if (rocksRows.length === 0) {
+      setRocksLoading(true);
+    }
     setRocksError(null);
     try {
       const res = await fetch('/api/leaderboard/rocks');
@@ -349,6 +362,20 @@ export default function LeaderboardTab() {
   }, [address]);
 
   useEffect(() => { void fetchMyPlants(); }, [fetchMyPlants]);
+
+  // Refresh data when tab becomes visible
+  useEffect(() => {
+    if (isVisible) {
+      console.log('🔄 [Leaderboard] Tab visible, refreshing data...');
+      fetchLeaderboardData();
+      void fetchMyPlants();
+      if (boardType === 'stake') {
+        fetchStakeLeaderboard();
+      } else if (boardType === 'rocks') {
+        fetchRocksLeaderboard();
+      }
+    }
+  }, [isVisible, fetchLeaderboardData, fetchMyPlants, fetchStakeLeaderboard, fetchRocksLeaderboard, boardType]);
 
   // Refresh SEED balance when opening revive dialog
   useEffect(() => {
@@ -475,7 +502,8 @@ export default function LeaderboardTab() {
   const currentRocks = rocksRows.slice(startRockIndex, endRockIndex);
 
   const renderContent = () => {
-    if (loading) {
+    // Only show full page loader if we have NO plants data and are loading
+    if (loading && totalItems === 0) {
       return (
         <div className="flex items-center justify-center py-8">
           <BaseExpandedLoadingPageLoader text="Loading leaderboard..." />
@@ -745,7 +773,7 @@ export default function LeaderboardTab() {
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (
-            loading ? (
+            loading && totalLandItems === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
               </div>
@@ -812,7 +840,7 @@ export default function LeaderboardTab() {
               </div>
             )
           ) : boardType === 'stake' ? (
-            stakeLoading ? (
+            stakeLoading && totalStakeItems === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
               </div>
@@ -906,7 +934,7 @@ export default function LeaderboardTab() {
               </div>
             )
           ) : (
-            rocksLoading ? (
+            rocksLoading && totalRockItems === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
               </div>

@@ -33,7 +33,7 @@ export const wagmiPrivyConfig = createConfig({
   // Expose common external connectors so OnchainKit ConnectWallet can attach in web mode
   connectors,
   // Match production behavior: rely on viem defaults for chain RPC list and keep modest polling
-  // Lower frequency to reduce background health probes (5 minutes)
+  // Standard polling interval (4s) to ensure responsive transaction updates
   pollingInterval: 300_000,
   ssr: true,
 });

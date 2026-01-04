@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { ChatProvider, useChat } from './chat-context';
+import { useChat } from './chat-context';
 import ChatMessages from './chat-messages';
 import ChatInput from './chat-input';
 import AITypingIndicator from './ai-typing-indicator';
@@ -13,6 +13,7 @@ import AgentPermissionsPanel from './AgentPermissionsPanel';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useFrameContext } from '@/lib/frame-context';
 import { useTransactions } from 'ethereum-identity-kit';
+import { CLIENT_ENV } from '@/lib/env-config';
 
 interface ChatDialogProps {
   open: boolean;
@@ -24,6 +25,12 @@ function ChatDialogContent() {
   const { isSmartWallet, isLoading: smartLoading } = useSmartWallet();
   const fc = useFrameContext();
   const isInMiniApp = Boolean(fc?.isInMiniApp);
+
+  // Agent tab is only shown if:
+  // 1. AGENT_ENABLED env is not false (defaults to true)
+  // 2. User has a smart wallet
+  // 3. User is not in a MiniApp
+  const isAgentAvailable = CLIENT_ENV.AGENT_ENABLED && isSmartWallet && !isInMiniApp;
 
   return (
     <DialogContent className="max-w-md w-full h-[80vh] flex flex-col">
@@ -43,17 +50,17 @@ function ChatDialogContent() {
             options={[
               { value: 'public', label: 'Public' },
               { value: 'ai', label: 'AI' },
-              ...(isSmartWallet && !isInMiniApp ? [{ value: 'agent', label: 'Agent' }] : []),
+              ...(isAgentAvailable ? [{ value: 'agent', label: 'Agent' }] : []),
             ]}
           />
         </DialogTitle>
         <DialogDescription>
           {mode === 'agent'
             ? (isInMiniApp
-                ? 'Agent is not available in Mini App.'
-                : (!isSmartWallet
-                    ? 'Agent requires a smart wallet.'
-                    : 'Neural Seed Agent can mint plants using your spend permission.'))
+              ? 'Agent is not available in Mini App.'
+              : (!isSmartWallet
+                ? 'Agent requires a smart wallet.'
+                : 'Neural Seed Agent can mint plants using your spend permission.'))
             : 'Chat with the community or get help from Neural Seed AI assistant.'}
         </DialogDescription>
         {mode === 'agent' && isSmartWallet && !isInMiniApp && (
@@ -69,8 +76,8 @@ function ChatDialogContent() {
 
       <DialogFooter className="border-t border-border pt-3">
         <div className="w-full space-y-2">
-            {isAITyping && <AITypingIndicator />}
-            <ChatInput />
+          {isAITyping && <AITypingIndicator />}
+          <ChatInput />
         </div>
       </DialogFooter>
     </DialogContent>
@@ -87,10 +94,8 @@ export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
   }, [txModalOpen, open, onOpenChange]);
 
   return (
-    <ChatProvider>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <ChatDialogContent />
-      </Dialog>
-    </ChatProvider>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <ChatDialogContent />
+    </Dialog>
   );
 }

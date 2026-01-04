@@ -1,4 +1,4 @@
-import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON } from '@/lib/redis';
+import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON, redisScanKeys } from '@/lib/redis';
 import { getTodayDateString } from '@/lib/invite-utils';
 import type { GmDay, GmLeaderEntry, GmMissionDay, GmProgressProof, GmSectionKey, GmStreak, GmTaskId } from './gamification-types';
 
@@ -321,6 +321,41 @@ async function getCombinedMissionLeaderboard(limit: number = 50): Promise<GmLead
     .sort((a, b) => b.value - a.value)
     .slice(0, limit);
 }
+/**
+ * Get combined streak leaderboard across all time.
+ * Reads from individual streak records (streak:{address}) and uses the 'best' field.
+ */
+async function getCombinedStreakLeaderboard(limit: number = 50): Promise<GmLeaderEntry[]> {
+  if (!redis) return [];
+
+  // Scan all individual streak keys (not leaderboard sorted sets)
+  const streakPattern = `${PX}streak:0*`; // Streak keys start with address (0x...)
+  const streakKeys = await redisScanKeys(streakPattern, 1000);
+
+  if (!streakKeys.length) return [];
+
+  const results: GmLeaderEntry[] = [];
+
+  // Read each streak record and extract the 'best' value
+  for (const key of streakKeys) {
+    try {
+      // Extract address from key (pixotchi:gm:streak:0x123... -> 0x123...)
+      const address = key.replace(`${PX}streak:`, '').toLowerCase();
+      if (!address.startsWith('0x')) continue; // Skip non-address keys like leaderboard:*
+
+      const data = await redisGetJSON<GmStreak>(key.replace('pixotchi:', '')); // Remove outer prefix for redisGetJSON
+      if (data && typeof data.best === 'number' && data.best > 0) {
+        results.push({ address, value: data.best });
+      }
+    } catch (error) {
+      console.warn('Failed to read streak record:', key, error);
+    }
+  }
+
+  return results
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit);
+}
 
 function convertZRangeResponse(arr: any[]): GmLeaderEntry[] {
   if (!Array.isArray(arr)) return [];
@@ -366,32 +401,56 @@ async function getCombinedMissionScore(address: string): Promise<number> {
 export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLeaderEntry[]; missionTop: GmLeaderEntry[] }> {
   const d = getTodayDateString();
   const yyyymm = month && !isCombinedMonth(month) ? month : toMonth(d);
-  const sKey = keys.streakLeaderboard(yyyymm);
 
-  const streakPromise = (redis as any)?.zrange?.(withPrefix(sKey), 0, 49, { rev: true, withScores: true }) || [];
+  // Both leaderboards now show all-time/combined by default (or specific month if requested)
+  const streakPromise = isCombinedMonth(month)
+    ? getCombinedStreakLeaderboard()
+    : (async () => {
+      const raw = (await (redis as any)?.zrange?.(withPrefix(keys.streakLeaderboard(yyyymm)), 0, 49, { rev: true, withScores: true })) || [];
+      return convertZRangeResponse(raw as any);
+    })();
   const missionPromise = isCombinedMonth(month) ? getCombinedMissionLeaderboard() : getMonthlyMissionLeaderboard(yyyymm);
 
-  const [streakRaw, missionTop] = await Promise.all([streakPromise, missionPromise]);
+  const [streakTop, missionTop] = await Promise.all([streakPromise, missionPromise]);
 
-  return { streakTop: convertZRangeResponse(streakRaw as any), missionTop };
+  return { streakTop, missionTop };
 }
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
   const patterns = [] as string[];
-  if (scope === 'streaks' || scope === 'all') patterns.push(`${PX}streak:*`, `${PX}streak:leaderboard:*`, `${PX}streak:activity:*`);
-  if (scope === 'missions' || scope === 'all') patterns.push(`${PX}missions:*`, `${PX}missions:leaderboard:*`);
+  // Keys are stored as pixotchi:gm:streak:* etc (PX already starts with KEY_PREFIX)
+  if (scope === 'streaks' || scope === 'all') {
+    patterns.push(
+      `${PX}streak:*`,
+      `${PX}streak:leaderboard:*`,
+      `${PX}streak:activity:*`
+    );
+  }
+  if (scope === 'missions' || scope === 'all') {
+    patterns.push(
+      `${PX}missions:*`,
+      `${PX}missions:leaderboard:*`
+    );
+  }
 
   let deleted = 0;
   for (const p of patterns) {
-    const keysList = await redisKeys(p);
+    // Use SCAN instead of KEYS to handle large datasets (KEYS fails on Upstash with many keys)
+    const keysList = await redisScanKeys(p, 1000);
+    console.log(`[adminReset] Pattern ${p} found ${keysList.length} keys`);
     if (keysList.length) {
-      await redis?.del?.(...keysList as any);
+      // Delete in batches of 100 to avoid hitting limits
+      for (let i = 0; i < keysList.length; i += 100) {
+        const batch = keysList.slice(i, i + 100);
+        await redis?.del?.(...batch as any);
+      }
       deleted += keysList.length;
     }
   }
   await redisSetJSON(keys.adminLastReset, { at: Date.now(), scope });
   return { deleted };
 }
+
 
 export async function getMissionScore(address: string, month?: string): Promise<number> {
   if (!address) return 0;

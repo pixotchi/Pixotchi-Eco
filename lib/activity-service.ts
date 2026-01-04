@@ -8,9 +8,9 @@ const API_URL = process.env.NEXT_PUBLIC_PONDER_API_URL || 'https://api.mini.pixo
 function filterLast24Hours(activities: ActivityEvent[]): ActivityEvent[] {
   const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
   const twentyFourHoursAgo = now - (24 * 60 * 60); // 24 hours ago in seconds
-  
+
   return activities.filter(activity => {
-    const activityTimestamp = parseInt(activity.timestamp);
+    const activityTimestamp = Number(activity.timestamp);
     return activityTimestamp >= twentyFourHoursAgo;
   });
 }
@@ -464,7 +464,7 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
     }
 
     const { data } = json;
-    
+
     const allActivities: ActivityEvent[] = [
       ...(data.attacks?.items || []),
       ...(data.killeds?.items || []),
@@ -486,9 +486,16 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
 
     const deduped = dedupePlayedEvents(allActivities);
 
-    // Sort all activities by timestamp in descending order
-    deduped.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
-    
+    // Sort all activities by timestamp in descending order safely
+    deduped.sort((a, b) => {
+      const timeA = Number(a.timestamp);
+      const timeB = Number(b.timestamp);
+      if (isNaN(timeA) && isNaN(timeB)) return 0;
+      if (isNaN(timeA)) return 1;
+      if (isNaN(timeB)) return -1;
+      return timeB - timeA;
+    });
+
     // Filter to last 24 hours and return all activities
     return filterLast24Hours(deduped);
 
@@ -515,9 +522,9 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         query: GET_MY_ACTIVITY_QUERY,
-        variables: { 
+        variables: {
           plantIds,
           landIds,
           playerAddress: address
@@ -560,7 +567,15 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
 
     const deduped = dedupePlayedEvents(myActivities);
 
-    deduped.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
+    // Sort all activities by timestamp in descending order safely
+    deduped.sort((a, b) => {
+      const timeA = Number(a.timestamp);
+      const timeB = Number(b.timestamp);
+      if (isNaN(timeA) && isNaN(timeB)) return 0;
+      if (isNaN(timeA)) return 1;
+      if (isNaN(timeB)) return -1;
+      return timeB - timeA;
+    });
 
     return filterLast24Hours(deduped);
 

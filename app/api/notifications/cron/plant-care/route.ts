@@ -11,11 +11,11 @@ const THROTTLE_SECONDS = 6 * 60 * 60; // 6 hours cooldown between notifications
 const REDIS_KEY_PREFIX = 'notif:plant12h';
 const BATCH_SIZE = 30; // Process 30 FIDs in parallel
 
-// Validation Schemas
+// Validation Schemas (using Zod v4 stringbool for cleaner boolean parsing)
 const QuerySchema = z.object({
-  debug: z.enum(['0', '1', 'true', 'false']).optional().transform(val => val === '1' || val === 'true'),
-  fid: z.string().optional().transform(val => val ? parseInt(val, 10) : undefined),
-  dry: z.enum(['0', '1', 'true', 'false']).optional().transform(val => val === '1' || val === 'true'),
+  debug: z.stringbool().optional(),
+  fid: z.coerce.number().int().optional(),
+  dry: z.stringbool().optional(),
 });
 
 type PublishBody = {
@@ -241,9 +241,9 @@ export async function GET(req: NextRequest) {
     // Parse query params
     const url = new URL(req.url);
     const queryResult = QuerySchema.safeParse(Object.fromEntries(url.searchParams.entries()));
-    const debug = queryResult.success ? queryResult.data.debug : false;
+    const debug = queryResult.success ? (queryResult.data.debug ?? false) : false;
     const targetFid = queryResult.success ? queryResult.data.fid : undefined;
-    const dryRun = queryResult.success ? queryResult.data.dry : false;
+    const dryRun = queryResult.success ? (queryResult.data.dry ?? false) : false;
 
     // Verify Vercel cron auth (skip for debug/manual calls with fid param)
     if (!targetFid && !debug && !verifyVercelCron(req)) {

@@ -11,6 +11,7 @@ import { ToggleGroup } from '@/components/ui/toggle-group';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
+import { useTabVisibility } from "@/lib/tab-visibility-context";
 import type { Token } from '@coinbase/onchainkit/token';
 import type { LifecycleStatus } from '@coinbase/onchainkit/swap';
 import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS, JESSE_TOKEN_ADDRESS, CREATOR_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -24,7 +25,9 @@ export default function SwapTab() {
   const [swapView, setSwapView] = useState<'swap' | 'chart'>('swap');
   const [fromTokenSymbol, setFromTokenSymbol] = useState<string>('ETH');
   const [toTokenSymbol, setToTokenSymbol] = useState<string>('SEED');
-  
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('swap');
+
   // Track OnchainKit's internal token state to detect when toggle happens
   const lastKnownStateRef = useRef<{ from: string; to: string }>({ from: 'ETH', to: 'SEED' });
 
@@ -115,7 +118,7 @@ export default function SwapTab() {
   }, [fromTokenSymbol, ETH, USDC, SEED, JESSE, PIXOTCHI]);
 
   const handleSuccess = useCallback((receipt: TransactionReceipt) => {
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch {}
+    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
     toast.success('Swap successful!');
 
     if (!address) return;
@@ -161,7 +164,7 @@ export default function SwapTab() {
       if (statusData?.tokenFrom?.symbol && statusData?.tokenTo?.symbol) {
         const onchainFromSymbol = statusData.tokenFrom.symbol;
         const onchainToSymbol = statusData.tokenTo.symbol;
-        
+
         // Check if OnchainKit's state is different from our last known state
         if (
           onchainFromSymbol !== lastKnownStateRef.current.from ||
@@ -176,6 +179,14 @@ export default function SwapTab() {
     }
   }, []);
 
+  // Refresh global balances when swap tab is visible (in case user swapped elsewhere/added funds)
+  useEffect(() => {
+    if (isVisible) {
+      console.log('🔄 [SwapTab] Tab visible, triggering balance refresh...');
+      window.dispatchEvent(new Event('balances:refresh'));
+    }
+  }, [isVisible]);
+
   if (!address) {
     return (
       <div className="text-center text-muted-foreground py-8">Connect your wallet to swap.</div>
@@ -184,7 +195,7 @@ export default function SwapTab() {
 
   return (
     <div className="space-y-4">
-      <Card 
+      <Card
         className={swapView === 'chart' ? 'flex flex-col aspect-square' : ''}
         padding={swapView === 'chart' ? 'none' : 'md'}
       >
@@ -213,27 +224,27 @@ export default function SwapTab() {
                 onStatus={handleStatus}
               >
                 {/* SEED or JESSE or PIXOTCHI must always be part of the swap - only show valid token pairs */}
-                <SwapAmountInput 
-                  label="Sell" 
+                <SwapAmountInput
+                  label="Sell"
                   token={
-                    fromTokenSymbol === 'ETH' ? ETH 
-                    : fromTokenSymbol === 'USDC' ? USDC 
-                    : fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE' ? JESSE
-                    : fromTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
-                    : SEED
+                    fromTokenSymbol === 'ETH' ? ETH
+                      : fromTokenSymbol === 'USDC' ? USDC
+                        : fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE' ? JESSE
+                          : fromTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
+                            : SEED
                   }
                   swappableTokens={fromSwappable}
                   type="from"
                 />
                 <SwapToggleButton />
-                <SwapAmountInput 
-                  label="Buy" 
+                <SwapAmountInput
+                  label="Buy"
                   token={
-                    toTokenSymbol === 'ETH' ? ETH 
-                    : toTokenSymbol === 'USDC' ? USDC 
-                    : toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE' ? JESSE
-                    : toTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
-                    : SEED
+                    toTokenSymbol === 'ETH' ? ETH
+                      : toTokenSymbol === 'USDC' ? USDC
+                        : toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE' ? JESSE
+                          : toTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
+                            : SEED
                   }
                   swappableTokens={toSwappable}
                   type="to"
@@ -309,6 +320,6 @@ export default function SwapTab() {
       </Card>
     </div>
   );
-} 
+}
 
 

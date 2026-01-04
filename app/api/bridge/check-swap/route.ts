@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, formatUnits, type Address } from 'viem';
 import { base } from 'viem/chains';
 
+// Segment config: Always fetch fresh onchain data
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 
 // Contract addresses from SolanaTwinAdapterV2
@@ -28,12 +33,14 @@ const AERODROME_ROUTER_ABI = [
     stateMutability: 'view',
     inputs: [
       { name: 'amountIn', type: 'uint256' },
-      { name: 'routes', type: 'tuple[]', components: [
-        { name: 'from', type: 'address' },
-        { name: 'to', type: 'address' },
-        { name: 'stable', type: 'bool' },
-        { name: 'factory', type: 'address' },
-      ]},
+      {
+        name: 'routes', type: 'tuple[]', components: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'stable', type: 'bool' },
+          { name: 'factory', type: 'address' },
+        ]
+      },
     ],
     outputs: [{ name: 'amounts', type: 'uint256[]' }],
   },
@@ -173,7 +180,7 @@ export async function GET(request: NextRequest) {
         seedNeeded: formatUnits(mintPrice, 18),
         seedReceived: formatUnits(seedFromBase, 18),
         shortfall: seedShortfall > 0 ? formatUnits(seedShortfall, 18) + ' SEED' : 'None',
-        verdict: wouldSucceed 
+        verdict: wouldSucceed
           ? '✅ Swap would produce enough SEED for mint'
           : `❌ NOT ENOUGH SEED: Need ${formatUnits(mintPrice, 18)} but would only get ${formatUnits(seedFromBase, 18)}`,
       },
@@ -181,9 +188,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Check swap error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to check swap', 
-      details: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      error: 'Failed to check swap',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

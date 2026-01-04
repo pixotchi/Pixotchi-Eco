@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Land, BuildingData, BuildingType } from "@/lib/types";
-import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandSpeedUpApproval } from "@/lib/contracts";
+import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandSpeedUpApproval, checkLandMintApproval } from "@/lib/contracts";
 import { formatTokenAmount, formatAddress, formatXP } from "@/lib/utils";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
@@ -27,10 +27,13 @@ import { useLandMap } from "@/hooks/useLandMap";
 import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
 import BatchClaimCard from "@/components/transactions/batch-claim-card";
 
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
+
 export default function LandsView() {
   // Gate: Solana wallets cannot use Land features
   const isSolana = useIsSolanaWallet();
-  
+
   if (isSolana) {
     return (
       <div className="p-4">
@@ -39,10 +42,13 @@ export default function LandsView() {
     );
   }
   const { address } = useAccount();
+  const { isSmartWallet } = useSmartWallet();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('dashboard');
   const [isMapOpen, setIsMapOpen] = useState(false);
-  
+
   // Map data hook
   const { totalSupply, neighborData } = useLandMap(lands);
 
@@ -65,14 +71,14 @@ export default function LandsView() {
   const fetchBuildingDataPendingRef = useRef<bigint | null>(null);
 
   // Token approval state for land interactions
-  const [needsLeafApproval, setNeedsLeafApproval] = useState<boolean>(true);
-  const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
+  const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
+  const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
 
   // Fetch land contract approval status (LEAF + SEED)
   const fetchApprovalStatus = useCallback(async () => {
     if (!address) {
-      setNeedsLeafApproval(true);
-      setNeedsSeedApproval(true);
+      setLeafAllowance(BigInt(0));
+      setSeedAllowance(BigInt(0));
       fetchApprovalStatusPendingRef.current = null;
       return;
     }
@@ -85,21 +91,21 @@ export default function LandsView() {
     fetchApprovalStatusPendingRef.current = address;
 
     try {
-      const [hasLeafApproval, hasSeedApproval] = await Promise.all([
+      const [currentLeafAllowance, currentSeedAllowance] = await Promise.all([
         checkLeafTokenApproval(address),
         checkLandSpeedUpApproval(address),
       ]);
       // Only update if address hasn't changed during the fetch
       if (fetchApprovalStatusPendingRef.current === address) {
-        setNeedsLeafApproval(!hasLeafApproval);
-        setNeedsSeedApproval(!hasSeedApproval);
+        setLeafAllowance(currentLeafAllowance);
+        setSeedAllowance(currentSeedAllowance);
       }
     } catch (error) {
       console.error("Failed to fetch land token approval status:", error);
       // Only set error if address hasn't changed
       if (fetchApprovalStatusPendingRef.current === address) {
-        setNeedsLeafApproval(true);
-        setNeedsSeedApproval(true);
+        setLeafAllowance(BigInt(0));
+        setSeedAllowance(BigInt(0));
       }
     } finally {
       // Clear pending flag only if address hasn't changed
@@ -121,7 +127,11 @@ export default function LandsView() {
     }
 
     fetchDataPendingRef.current = address;
-    setLoading(true);
+
+    // Only show full page loader on initial load
+    if (lands.length === 0) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -152,7 +162,7 @@ export default function LandsView() {
         fetchDataPendingRef.current = null;
       }
     }
-  }, [address, selectedLand?.tokenId]);
+  }, [address, selectedLand?.tokenId, lands.length]);
 
   const fetchBuildingData = useCallback(async () => {
     if (!selectedLand) {
@@ -181,8 +191,8 @@ export default function LandsView() {
 
       // Only update if land hasn't changed during the fetch
       if (fetchBuildingDataPendingRef.current === landId) {
-          setVillageBuildings(villageData || []);
-        
+        setVillageBuildings(villageData || []);
+
         // Add prebuilt buildings to town data (Warehouse ID 3, Stake House ID 1)
         const prebuiltBuildings = [
           {
@@ -195,6 +205,7 @@ export default function LandsView() {
             accumulatedLifetime: BigInt(0),
             levelUpgradeCostLeaf: BigInt(0),
             levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeCostSeed: BigInt(0),
             levelUpgradeBlockInterval: BigInt(0),
             isUpgrading: false,
             blockHeightUpgradeInitiated: BigInt(0),
@@ -210,13 +221,14 @@ export default function LandsView() {
             accumulatedLifetime: BigInt(0),
             levelUpgradeCostLeaf: BigInt(0),
             levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeCostSeed: BigInt(0),
             levelUpgradeBlockInterval: BigInt(0),
             isUpgrading: false,
             blockHeightUpgradeInitiated: BigInt(0),
             blockHeightUntilUpgradeDone: BigInt(0)
           }
         ];
-        
+
         // Combine prebuilt buildings with contract data, avoiding duplicates
         const allTownBuildings = [...prebuiltBuildings];
         if (townData) {
@@ -227,21 +239,33 @@ export default function LandsView() {
             }
           });
         }
-        
+
         setTownBuildings(allTownBuildings);
 
         // Choose preferred building for the new land: try last selected id, else first
         const currentBuildings = buildingType === 'village' ? (villageData || []) : allTownBuildings;
+
         if (currentBuildings.length > 0) {
           const preferredId = lastSelectedBuildingIdRef.current;
-          const preferred = preferredId != null ? currentBuildings.find(b => Number(b.id) === Number(preferredId)) : undefined;
-          if (preferred) {
-            if (!selectedBuilding || Number(selectedBuilding.id) !== Number(preferred.id)) {
-              setSelectedBuilding(preferred);
+
+          // If we have a preferred ID (e.g. from previous selection), try to find it in the NEW data
+          if (preferredId != null) {
+            const freshBuilding = currentBuildings.find(b => Number(b.id) === Number(preferredId));
+
+            // If we found the building in the fresh data, ALWAYS update selectedBuilding state 
+            // to ensure meaningful properties (level, isUpgrading) are reflected in the UI.
+            if (freshBuilding) {
+              setSelectedBuilding(freshBuilding);
+            } else {
+              // Fallback if the building ID is no longer valid for some reason, select the first one
+              setSelectedBuilding(currentBuildings[0]);
             }
-          } else if (!selectedBuilding) {
+          } else {
+            // No preference, just select the first one
             setSelectedBuilding(currentBuildings[0]);
           }
+        } else {
+          setSelectedBuilding(null);
         }
       }
     } catch (err) {
@@ -289,18 +313,25 @@ export default function LandsView() {
           const latest = await getLandById(selectedLand.tokenId);
           if (latest) setSelectedLand(latest);
         }
-      } catch {}
+      } catch { }
     })();
     // Balances are refreshed globally via the 'balances:refresh' event
     window.dispatchEvent(new Event('balances:refresh'));
   }, [fetchBuildingData, selectedLand]);
 
+  // Refresh when dashboard becomes visible
   useEffect(() => {
-    if(address) {
+    if (isVisible) {
+      console.log('🔄 [LandsView] Dashboard visible, refreshing...');
       fetchData();
+    }
+  }, [isVisible, fetchData]);
+
+  useEffect(() => {
+    if (address) {
       fetchApprovalStatus();
     }
-  }, [address, fetchData, fetchApprovalStatus]);
+  }, [address, fetchApprovalStatus]);
 
   // Listen for global buildings refresh events (emitted on tx success in panels)
   useEffect(() => {
@@ -313,7 +344,7 @@ export default function LandsView() {
             const latest = await getLandById(selectedLand.tokenId);
             if (latest) setSelectedLand(latest);
           }
-        } catch {}
+        } catch { }
       })();
     };
     window.addEventListener('buildings:refresh', handler as EventListener);
@@ -335,7 +366,7 @@ export default function LandsView() {
       try {
         const latest = await getLandById(selectedLand.tokenId);
         if (latest) setSelectedLand(latest);
-      } catch {}
+      } catch { }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLand?.tokenId]);
@@ -350,7 +381,7 @@ export default function LandsView() {
   // Watch for block updates to track upgrade progress
   // Only watch when we have buildings that are actually upgrading
   const hasUpgradingBuildings = [...villageBuildings, ...townBuildings].some(building => building.isUpgrading);
-  
+
   useWatchBlockNumber({
     onBlockNumber(blockNumber) {
       setCurrentBlock(blockNumber);
@@ -360,7 +391,8 @@ export default function LandsView() {
   });
 
 
-  if (loading) {
+  // Only block render if we have NO lands data at all
+  if (loading && lands.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
         <BaseExpandedLoadingPageLoader text="Loading your lands..." />
@@ -396,8 +428,8 @@ export default function LandsView() {
     <div className="space-y-4">
       {/* Batch Claim Card - Only shows if there are claimable rewards */}
       {lands.length > 0 && (
-        <BatchClaimCard 
-          lands={lands} 
+        <BatchClaimCard
+          lands={lands}
           onSuccess={() => {
             fetchBuildingData(); // Refresh current land buildings
             // Also refresh selected land to update warehouse numbers
@@ -458,7 +490,7 @@ export default function LandsView() {
                     </div>
                   </div>
                   <div className="flex justify-end">
-                    <div 
+                    <div
                       className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full"
                     >
                       <Image src="/icons/location.svg" alt="Coordinates" width={16} height={16} className="w-4 h-4" />
@@ -476,12 +508,12 @@ export default function LandsView() {
                     MAP
                   </button>
                 </div>
-                
-                <div 
+
+                <div
                   className="absolute inset-0 md:inset-8 flex items-center justify-center z-10"
                 >
-                  <LandImage 
-                    selectedLand={selectedLand} 
+                  <LandImage
+                    selectedLand={selectedLand}
                     buildingType={buildingType}
                     villageBuildings={villageBuildings}
                     townBuildings={townBuildings}
@@ -545,62 +577,62 @@ export default function LandsView() {
           </Card>
 
           {/* Building Management Section */}
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="font-pixel">Buildings</CardTitle>
-              <ToggleGroup
-                value={buildingType}
-                onValueChange={(v) => {
-                  const newType = v as 'village' | 'town';
-                  setBuildingType(newType);
-                  setSelectedBuilding((newType === 'village' ? villageBuildings[0] : townBuildings[0]) || null);
-                }}
-                options={[
-                  { value: 'village', label: 'Village' },
-                  { value: 'town', label: 'Town' },
-                ]}
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Building Grid */}
-              <div>
-                {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
-                  <div className="text-center text-muted-foreground p-6">
-                    Loading buildings...
-                  </div>
-                ) : (
-                  <BuildingGrid
-                    buildings={buildingType === 'village' ? villageBuildings : townBuildings}
-                    buildingType={buildingType}
+          <Card className="rounded-2xl">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="font-pixel">Buildings</CardTitle>
+                <ToggleGroup
+                  value={buildingType}
+                  onValueChange={(v) => {
+                    const newType = v as 'village' | 'town';
+                    setBuildingType(newType);
+                    setSelectedBuilding((newType === 'village' ? villageBuildings[0] : townBuildings[0]) || null);
+                  }}
+                  options={[
+                    { value: 'village', label: 'Village' },
+                    { value: 'town', label: 'Town' },
+                  ]}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Building Grid */}
+                <div>
+                  {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
+                    <div className="text-center text-muted-foreground p-6">
+                      Loading buildings...
+                    </div>
+                  ) : (
+                    <BuildingGrid
+                      buildings={buildingType === 'village' ? villageBuildings : townBuildings}
+                      buildingType={buildingType}
+                      selectedBuilding={selectedBuilding}
+                      onBuildingSelect={setSelectedBuilding}
+                      currentBlock={currentBlock}
+                    />
+                  )}
+                </div>
+
+                {/* Building Details Panel */}
+                {selectedBuilding && (
+                  <BuildingDetailsPanel
                     selectedBuilding={selectedBuilding}
-                    onBuildingSelect={setSelectedBuilding}
+                    landId={selectedLand.tokenId}
+                    buildingType={buildingType}
+                    onUpgradeSuccess={handleBuildingTransactionSuccess}
                     currentBlock={currentBlock}
+                    leafAllowance={leafAllowance}
+                    onLeafApprovalSuccess={fetchApprovalStatus}
+                    seedAllowance={seedAllowance}
+                    onSeedApprovalSuccess={fetchApprovalStatus}
+                    warehousePoints={selectedLand.accumulatedPlantPoints}
+                    warehouseLifetime={selectedLand.accumulatedPlantLifetime}
                   />
                 )}
               </div>
-
-              {/* Building Details Panel */}
-              {selectedBuilding && (
-                <BuildingDetailsPanel
-                  selectedBuilding={selectedBuilding}
-                  landId={selectedLand.tokenId}
-                  buildingType={buildingType}
-                  onUpgradeSuccess={handleBuildingTransactionSuccess}
-                  currentBlock={currentBlock}
-                  needsLeafApproval={needsLeafApproval}
-                  onLeafApprovalSuccess={() => setNeedsLeafApproval(false)}
-                  needsSeedApproval={needsSeedApproval}
-                  onSeedApprovalSuccess={() => setNeedsSeedApproval(false)}
-                  warehousePoints={selectedLand.accumulatedPlantPoints}
-                  warehouseLifetime={selectedLand.accumulatedPlantLifetime}
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
         </>
       )}
       {/* Map Modal */}

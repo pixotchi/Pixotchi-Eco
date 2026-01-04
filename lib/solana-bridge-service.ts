@@ -21,7 +21,7 @@ import type { SolanaQuoteResult } from './solana-quote';
 
 // ============ Types ============
 
-export type BridgeActionType = 
+export type BridgeActionType =
   | 'setup'           // Initial wSOL approval
   | 'mint'            // Mint a plant
   | 'shopItem'        // Buy shop item
@@ -84,11 +84,11 @@ export async function buildSetupTransaction(
   const config = getPixotchiSolanaConfig();
   const bridgeConfig = getBridgeConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   // Build approve call for max uint256
   const callData = encodeFunctionData({
     abi: WSOL_ABI,
@@ -98,7 +98,7 @@ export async function buildSetupTransaction(
       BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'), // Max uint256
     ],
   });
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -132,7 +132,7 @@ export async function buildMintTransaction(
       wsolAmount: quote.wsolAmount?.toString(),
       minSeedOut: quote.minSeedOut?.toString(),
     });
-    
+
     // Validate quote exists
     if (!quote.wsolAmount || quote.wsolAmount <= BigInt(0)) {
       throw new Error('Quote required: wsolAmount must be provided by app');
@@ -140,14 +140,14 @@ export async function buildMintTransaction(
     if (!quote.minSeedOut || quote.minSeedOut <= BigInt(0)) {
       throw new Error('Quote required: minSeedOut must be provided by app');
     }
-    
+
     console.log('[buildMintTransaction] Getting config and twin address...');
     const config = getPixotchiSolanaConfig();
-    
+
     if (!config.twinAdapter) {
       throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
     }
-    
+
     let twinAddress: string;
     try {
       twinAddress = await getTwinAddress(solanaPublicKey);
@@ -160,7 +160,7 @@ export async function buildMintTransaction(
       });
       throw new Error(`Failed to resolve Twin address: ${errorMsg}`);
     }
-    
+
     // V2: Simple call - no swapTarget/swapData needed
     // Contract does on-chain swap via Aerodrome + BaseSwap
     console.log('[buildMintTransaction] Encoding function data (V2)...');
@@ -168,14 +168,14 @@ export async function buildMintTransaction(
       abi: SOLANA_TWIN_ADAPTER_ABI,
       functionName: 'mintWithWsol',
       args: [
-        BigInt(strain), 
-        quote.wsolAmount, 
+        BigInt(strain),
+        quote.wsolAmount,
         quote.minSeedOut,
       ],
     });
-    
+
     console.log('[buildMintTransaction] Transaction built successfully, callData length:', callData.length);
-    
+
     return {
       params: {
         solanaPublicKey,
@@ -213,26 +213,26 @@ export async function buildShopItemTransaction(
   if (!quote.wsolAmount || quote.wsolAmount <= BigInt(0)) {
     throw new Error('Quote required: wsolAmount must be provided by app');
   }
-  
+
   const config = getPixotchiSolanaConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   // V2: Simple call - no swapTarget/swapData needed
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
     functionName: 'buyShopItemWithWsol',
     args: [
-      BigInt(plantId), 
-      BigInt(itemId), 
-      quote.wsolAmount, 
+      BigInt(plantId),
+      BigInt(itemId),
+      quote.wsolAmount,
       quote.minSeedOut,
     ],
   });
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -264,26 +264,26 @@ export async function buildGardenItemTransaction(
   if (!quote.wsolAmount || quote.wsolAmount <= BigInt(0)) {
     throw new Error('Quote required: wsolAmount must be provided by app');
   }
-  
+
   const config = getPixotchiSolanaConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   // V2: Simple call - no swapTarget/swapData needed
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
     functionName: 'buyGardenItemWithWsol',
     args: [
-      BigInt(plantId), 
-      BigInt(itemId), 
-      quote.wsolAmount, 
+      BigInt(plantId),
+      BigInt(itemId),
+      quote.wsolAmount,
       quote.minSeedOut,
     ],
   });
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -311,20 +311,20 @@ export async function buildBoxGameTransaction(
 ): Promise<BridgeTransaction> {
   const config = getPixotchiSolanaConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   // Generate random seed
   const seed = Math.floor(Math.random() * 1000000);
-  
+
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
     functionName: 'playBoxGame',
     args: [BigInt(plantId), BigInt(seed)],
   });
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -351,19 +351,19 @@ export async function buildSpinGameTransaction(
 ): Promise<BridgeTransaction> {
   const config = getPixotchiSolanaConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   const seed = Math.floor(Math.random() * 1000000);
-  
+
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
     functionName: 'playSpinGame',
     args: [BigInt(plantId), BigInt(seed)],
   });
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -391,17 +391,17 @@ export async function buildAttackTransaction(
 ): Promise<BridgeTransaction> {
   const config = getPixotchiSolanaConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
     functionName: 'attackPlant',
     args: [BigInt(fromPlantId), BigInt(toPlantId)],
   });
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -428,17 +428,17 @@ export async function buildClaimRewardsTransaction(
 ): Promise<BridgeTransaction> {
   const config = getPixotchiSolanaConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
     functionName: 'claimRewards',
     args: [BigInt(plantId)],
   });
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -468,33 +468,33 @@ export async function buildSetNameTransaction(
 ): Promise<BridgeTransaction> {
   const config = getPixotchiSolanaConfig();
   const twinAddress = await getTwinAddress(solanaPublicKey);
-  
+
   if (!config.twinAdapter) {
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
-  
+
   // Name change may or may not cost SEED
   const wsolAmount = quote.wsolAmount || BigInt(0);
   const minSeedOut = quote.minSeedOut || BigInt(0);
-  
+
   // Calculate bridge amount
   const baseBridgeAmount = wsolAmount > BigInt(0) ? wsolAmount : BRIDGE_CONFIG.minBridgeAmount;
   const bridgeAmount = baseBridgeAmount + BRIDGE_FEE_LAMPORTS;
-  
+
   // V2: Simple call - no swapTarget/swapData needed
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
     functionName: 'setPlantNameWithWsol',
     args: [
-      BigInt(plantId), 
-      name, 
-      wsolAmount, 
+      BigInt(plantId),
+      name,
+      wsolAmount,
       minSeedOut,
     ],
   });
-  
+
   const isFree = wsolAmount === BigInt(0);
-  
+
   return {
     params: {
       solanaPublicKey,
@@ -525,7 +525,7 @@ export function requiresSetup(actionType: BridgeActionType): boolean {
     'gardenItem',
     'setName',
   ];
-  
+
   return requiresWsolApproval.includes(actionType);
 }
 
@@ -539,7 +539,7 @@ export function requiresQuote(actionType: BridgeActionType): boolean {
     'gardenItem',
     'setName',
   ];
-  
+
   return paidActions.includes(actionType);
 }
 
@@ -558,6 +558,6 @@ export function getActionDescription(actionType: BridgeActionType): string {
     claimRewards: 'Claim Rewards',
     setName: 'Set Plant Name',
   };
-  
+
   return descriptions[actionType] || 'Unknown Action';
 }

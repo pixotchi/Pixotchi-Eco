@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStreak, trackDailyActivity } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
+// Segment config: Always fetch fresh user data
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

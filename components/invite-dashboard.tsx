@@ -6,12 +6,12 @@ import { useAccount } from 'wagmi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { 
-  Gift, 
-  Copy, 
-  Check, 
-  Users, 
-  TrendingUp, 
+import {
+  Gift,
+  Copy,
+  Check,
+  Users,
+  TrendingUp,
   Calendar,
   Share2,
   Plus,
@@ -60,8 +60,6 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
     }
   }, [inviteStatsQuery.data]);
 
-  const loadInviteStats = async () => inviteStatsQuery.refetch();
-
   const generateMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch('/api/invite/generate', {
@@ -75,7 +73,8 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
       if (data.success) {
         const newCode = data.code;
         setRecentCodes(prev => [newCode, ...prev.slice(0, 4)]);
-        await inviteStatsQuery.refetch();
+        // Use invalidateQueries instead of direct refetch for proper cache management
+        await queryClient.invalidateQueries({ queryKey: ['invite-stats', address] });
         toast.success('New invite code generated!');
         await copyToClipboard(newCode, 'New invite code');
       } else {
@@ -98,7 +97,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
       await navigator.clipboard.writeText(url);
       setCopiedCode(code);
       toast.success(`${label} copied to clipboard!`);
-      
+
       // Reset copied state after 2 seconds
       setTimeout(() => setCopiedCode(null), 2000);
     } catch (error) {
@@ -205,8 +204,8 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
               <p className="text-sm text-muted-foreground">
                 Share Pixotchi Mini with your friends! You can generate up to 2 invite codes per day.
               </p>
-              
-              <Button 
+
+              <Button
                 onClick={generateInviteCode}
                 disabled={generating || !stats?.canGenerateToday || loading}
                 className="w-full"
@@ -241,9 +240,9 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
               <CardContent>
                 <div className="space-y-2">
                   {recentCodes.map((code, index) => (
-                    <div 
+                    <div
                       key={code}
-                    className="flex items-center justify-between p-3 bg-muted rounded-md"
+                      className="flex items-center justify-between p-3 bg-muted rounded-md"
                     >
                       <div className="font-mono text-sm">{code}</div>
                       <div className="flex gap-1">

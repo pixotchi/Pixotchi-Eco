@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, formatUnits, type Address } from 'viem';
 import { base } from 'viem/chains';
 
+// Segment config: Always fetch fresh onchain data
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 
@@ -68,18 +73,18 @@ export async function GET(request: NextRequest) {
         formatted: formatUnits(allowance, decimals),
         isZero: allowance === BigInt(0),
       } : null,
-      diagnosis: allowance === BigInt(0) && adapter 
+      diagnosis: allowance === BigInt(0) && adapter
         ? '❌ ZERO ALLOWANCE: Twin has NOT approved adapter to spend wSOL. This is the bug!'
-        : allowance > BigInt(0) 
+        : allowance > BigInt(0)
           ? '✅ Allowance exists - approval is not the issue'
           : 'Specify adapter address to check allowance',
     });
 
   } catch (error) {
     console.error('Check twin error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to check twin', 
-      details: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      error: 'Failed to check twin',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

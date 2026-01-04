@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, formatUnits, type Address } from 'viem';
 import { base } from 'viem/chains';
 
+// Segment config: Always fetch fresh onchain data
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
@@ -73,7 +78,7 @@ export async function GET(request: NextRequest) {
         });
 
         const token0 = await publicClient.readContract({ address: wsolUsdcPool, abi: POOL_ABI, functionName: 'token0' });
-        
+
         const isWsolToken0 = token0.toLowerCase() === WSOL.toLowerCase();
         const wsolReserve = isWsolToken0 ? reserve0 : reserve1;
         const usdcReserve = isWsolToken0 ? reserve1 : reserve0;
@@ -116,7 +121,7 @@ export async function GET(request: NextRequest) {
         });
 
         const token0 = await publicClient.readContract({ address: usdcWethPool, abi: POOL_ABI, functionName: 'token0' });
-        
+
         const isUsdcToken0 = token0.toLowerCase() === USDC.toLowerCase();
         const usdcReserve = isUsdcToken0 ? reserve0 : reserve1;
         const wethReserve = isUsdcToken0 ? reserve1 : reserve0;
@@ -136,7 +141,7 @@ export async function GET(request: NextRequest) {
     // Check WETH/SEED pool on BaseSwap (UniswapV2)
     // BaseSwap factory: 0xFDa619b6d20975be80A10332cD39b9a4b0FAa8BB
     const BASESWAP_FACTORY = '0xFDa619b6d20975be80A10332cD39b9a4b0FAa8BB' as Address;
-    
+
     try {
       const wethSeedPool = await publicClient.readContract({
         address: BASESWAP_FACTORY,
@@ -156,7 +161,7 @@ export async function GET(request: NextRequest) {
         });
 
         const token0 = await publicClient.readContract({ address: wethSeedPool, abi: POOL_ABI, functionName: 'token0' });
-        
+
         const isWethToken0 = token0.toLowerCase() === WETH.toLowerCase();
         const wethReserve = isWethToken0 ? reserve0 : reserve1;
         const seedReserve = isWethToken0 ? reserve1 : reserve0;
@@ -173,7 +178,7 @@ export async function GET(request: NextRequest) {
       results.issues.push('❌ Failed to check WETH/SEED pool');
     }
 
-    results.diagnosis = results.issues.length > 0 
+    results.diagnosis = results.issues.length > 0
       ? `Found ${results.issues.length} potential issue(s)`
       : '✅ All pools exist and appear to have liquidity';
 
@@ -181,9 +186,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Check pools error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to check pools', 
-      details: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      error: 'Failed to check pools',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

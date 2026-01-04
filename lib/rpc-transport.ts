@@ -15,27 +15,39 @@ export const getPublicHealthRpc = (): string =>
 // ============================================
 
 export const getRpcEndpoints = (): string[] => {
-  // Force health checks to public RPC only (ignore custom endpoints for probes)
-  const publicOnly = getPublicHealthRpc();
-  return [publicOnly];
+  // Use the central config which includes primary + 4 backups
+  const config = getRpcConfig();
+  return config.endpoints;
 };
 
 export const createResilientTransport = (inputEndpoints?: string[]): Transport => {
   const endpoints = (inputEndpoints && inputEndpoints.length > 0) ? inputEndpoints : getRpcEndpoints();
-  const target = endpoints[0] || getPublicHealthRpc();
 
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`🔗 [Base] Using PUBLIC transport (no fallbacks): ${target}`);
+  // If only one endpoint, return simple http transport
+  if (endpoints.length === 1) {
+    const target = endpoints[0];
+    if (!rpcDiagnostics[target]) rpcDiagnostics[target] = { url: target, ok: 0, fail: 0 };
+    return http(target, {
+      retryCount: 3,
+      retryDelay: 1000,
+      timeout: 10_000,
+    });
   }
 
-  if (!rpcDiagnostics[target]) rpcDiagnostics[target] = { url: target, ok: 0, fail: 0 };
-
-  // Single endpoint only; no fallback list to avoid multi-RPC health checks
-  return http(target, {
-    retryCount: 3,
-    retryDelay: 1000, // Fixed delay
-    timeout: 10_000,
-  }) as Transport;
+  // If multiple endpoints, use fallback transport
+  return fallback(
+    endpoints.map(url => {
+      if (!rpcDiagnostics[url]) rpcDiagnostics[url] = { url, ok: 0, fail: 0 };
+      return http(url, {
+        retryCount: 2, // Retries per endpoint before switching
+        retryDelay: 1000,
+        timeout: 10_000,
+      });
+    }),
+    {
+      rank: true // Automatically rank healthy endpoints
+    }
+  );
 };
 
 // Explicit public-only transport for walletconnect/health probes

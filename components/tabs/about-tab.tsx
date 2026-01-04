@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import packageJson from '@/package.json';
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useFrameContext } from "@/lib/frame-context";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
 
 const InfoCard = ({
   icon,
@@ -79,6 +80,8 @@ export default function AboutTab() {
   const { start, enabled } = useSlideshow();
   const { walletType, isSmartWallet } = useSmartWallet();
   const frameData = useFrameContext();
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('about');
   const [stats, setStats] = useState<InviteStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -98,12 +101,28 @@ export default function AboutTab() {
       loadInviteStats();
       loadUserCodes();
     }
+    if (address && INVITE_CONFIG.SYSTEM_ENABLED) {
+      loadInviteStats();
+      loadUserCodes();
+    }
   }, [address]);
+
+  // Refresh when tab becomes visible
+  useEffect(() => {
+    if (isVisible && address && INVITE_CONFIG.SYSTEM_ENABLED) {
+      console.log('🔄 [AboutTab] Tab visible, refreshing stats...');
+      loadInviteStats();
+      loadUserCodes();
+    }
+  }, [isVisible, address]);
 
   const loadInviteStats = async () => {
     if (!address) return;
 
-    setLoading(true);
+    // Only show loading state if we have no stats yet
+    if (!stats) {
+      setLoading(true);
+    }
     try {
       const response = await fetch('/api/invite/stats', {
         method: 'POST',
@@ -463,14 +482,6 @@ export default function AboutTab() {
         </CardContent>
       </Card>
 
-      {/* Version Number */}
-      <div className="text-center">
-        <span className="text-xs text-muted-foreground/60 font-mono">
-          v{packageJson.version}
-        </span>
-      </div>
-
-
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
         <DialogContent>
@@ -505,28 +516,37 @@ export default function AboutTab() {
         </DialogContent>
       </Dialog>
 
-      <div className="pt-6 text-center">
-        <h3 className="text-lg font-semibold mb-3">Join our Community</h3>
-        <div className="flex justify-center space-x-4">
-          <button
-            onClick={() => openExternalUrl('https://x.com/pixotchi')}
-            className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
-          >
-            <Image src="/icons/twitter.png" alt="X" width={24} height={24} />
-            <span className="sr-only">X (Twitter)</span>
-          </button>
-          <button
-            onClick={() => openExternalUrl('https://t.me/pixotchi')}
-            className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
-          >
-            <Image src="/icons/Telegram.png" alt="Telegram" width={24} height={24} />
-            <span className="sr-only">Telegram</span>
-          </button>
+      <div className="space-y-4">
+        {/* Version Number */}
+        <div className="text-center">
+          <span className="text-xs text-muted-foreground/60 font-mono">
+            v{packageJson.version}
+          </span>
         </div>
-      </div>
 
-      <div className="pt-6">
-        <BaseAnimatedLogo className="mx-auto w-full" />
+        <div className="text-center">
+          <h3 className="text-sm font-semibold mb-2">Join our Community</h3>
+          <div className="flex justify-center space-x-4">
+            <button
+              onClick={() => openExternalUrl('https://x.com/pixotchi')}
+              className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+            >
+              <Image src="/icons/twitter.png" alt="X" width={24} height={24} />
+              <span className="sr-only">X (Twitter)</span>
+            </button>
+            <button
+              onClick={() => openExternalUrl('https://t.me/pixotchi')}
+              className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+            >
+              <Image src="/icons/Telegram.png" alt="Telegram" width={24} height={24} />
+              <span className="sr-only">Telegram</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <BaseAnimatedLogo className="mx-auto w-full" />
+        </div>
       </div>
     </div>
   );

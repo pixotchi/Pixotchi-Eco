@@ -1,13 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
-import { getRecentMessages } from '@/lib/chat-service';
-import { getAIConversationMessages } from '@/lib/ai-service';
 import { useAccount } from 'wagmi';
 import toast from 'react-hot-toast';
-import { getReadClient } from '@/lib/contracts';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { PLANT_STRAINS } from '@/lib/constants';
 import { useIsSolanaWallet, useSolanaWallet } from '@/components/solana';
@@ -26,6 +22,8 @@ interface ChatContextState {
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
   isAITyping: boolean;
+  unreadCount: number;
+  markAsRead: () => void;
 }
 
 const ChatContext = createContext<ChatContextState | undefined>(undefined);
@@ -46,7 +44,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Cache messages per mode so switching tabs doesn't bleed content across modes
   const messageCacheRef = useRef<{ public: AnyChatMessage[]; ai: AnyChatMessage[]; agent: AnyChatMessage[] }>({ public: [], ai: [], agent: [] });
   const modeRef = useRef<ChatMode>("public");
-  
+
   // AbortController for cancelling pending fetch requests
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -64,10 +62,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (mode) {
       messageCacheRef.current[mode] = messages;
     }
-    
+
     // Get target mode messages
     const targetCached = messageCacheRef.current[next] || [];
-    
+
     // Set new mode and messages
     setModeState(next);
     setMessages(targetCached);
@@ -102,7 +100,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('agent-chat-history', JSON.stringify(messages));
         messageCacheRef.current.agent = messages;
       }
-    } catch {}
+    } catch { }
   }, [mode, messages]);
 
   // Restore agent-mode messages on mount
@@ -114,16 +112,57 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         messageCacheRef.current.agent = parsed;
         if (mode === 'agent') setMessages(parsed);
       }
-    } catch {}
+    } catch { }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Note: Message loading is now handled directly in setMode() to prevent race conditions
+  // Unread message tracking
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chat-last-read');
+      return saved ? parseInt(saved, 10) : Date.now();
+    }
+    return Date.now();
+  });
+
+  // Calculate unread count whenever messages or lastReadTimestamp changes
+  // Only track unread for public chat for now, as that's the primary use case
+  useEffect(() => {
+    // We check the latest messages in the 'public' cache + current messages if mode is public
+    const publicMessages = mode === 'public' ? messages : (messageCacheRef.current.public || []);
+
+    if (publicMessages.length === 0) {
+      setUnreadCount(0);
+      return;
+    }
+
+    // Sort to be sure we're checking correctly (though they should be sorted already)
+    // Count how many are newer than lastReadTimestamp
+    // Also ignore messages sent by the current user to avoid self-unread
+    const count = publicMessages.filter(m => {
+      const isNew = m.timestamp > lastReadTimestamp;
+      // Check if message is from current user
+      const isFromMe = chatAddress && m.address && m.address.toLowerCase() === chatAddress.toLowerCase();
+      return isNew && !isFromMe;
+    }).length;
+
+    setUnreadCount(count);
+  }, [messages, mode, lastReadTimestamp, chatAddress]);
+
+  const markAsRead = useCallback(() => {
+    const now = Date.now();
+    setLastReadTimestamp(now);
+    localStorage.setItem('chat-last-read', now.toString());
+    setUnreadCount(0);
+  }, []);
+
+  // note: Message loading is now handled directly in setMode() to prevent race conditions
 
   const fetchHistory = useCallback(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
     if (showLoading) setLoading(true);
     setError(null);
-    
+
     try {
       if (requestedMode === 'public') {
         // Fetch public messages using the API endpoint like the original
@@ -142,16 +181,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           address: chatAddress,
           limit: '50'
         });
-        
+
         if (conversationId) {
           params.append('conversationId', conversationId);
         }
-        
+
         const response = await fetch(`/api/chat/ai/messages?${params}`);
         if (!response.ok) {
           throw new Error('Failed to fetch AI messages');
         }
-        
+
         const data = await response.json();
         if (modeRef.current !== requestedMode) return; // ignore stale result after tab switch
         const next = data.messages || [];
@@ -166,7 +205,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       } else {
         setMessages([]);
       }
-        } catch (err) {
+    } catch (err) {
       setError('Failed to fetch message history.');
       console.error(err);
     } finally {
@@ -208,7 +247,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
+
     // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -217,162 +256,162 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     const endpoint = mode === 'ai' ? '/api/chat/ai/send' : '/api/chat/send';
-    
+
     const optimisticId = `optimistic-${Date.now()}`;
     const optimisticUserMessage: AnyChatMessage = mode === 'ai'
-    ? { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), type: 'user', model: '', displayName: 'You', conversationId: conversationId || '' }
-    : { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), displayName: 'You' };
-    
+      ? { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), type: 'user', model: '', displayName: 'You', conversationId: conversationId || '' }
+      : { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), displayName: 'You' };
+
     setMessages(prev => {
       const next = [...prev, optimisticUserMessage];
       if (mode === 'agent') {
         messageCacheRef.current.agent = next;
-        try { localStorage.setItem('agent-chat-history', JSON.stringify(next)); } catch {}
+        try { localStorage.setItem('agent-chat-history', JSON.stringify(next)); } catch { }
       }
       return next;
     });
-    if(mode === 'ai' || mode === 'agent') setIsAITyping(true);
+    if (mode === 'ai' || mode === 'agent') setIsAITyping(true);
 
     try {
-        if (mode === 'agent') {
-          // Get recent conversation history for context
-          const agentMessages = messageCacheRef.current['agent'] || [];
-          const conversationHistory = agentMessages.slice(-6).map(msg => ({
-            role: (msg as any).displayName === 'Agent' ? 'assistant' : 'user',
-            content: msg.message
-          }));
+      if (mode === 'agent') {
+        // Get recent conversation history for context
+        const agentMessages = messageCacheRef.current['agent'] || [];
+        const conversationHistory = agentMessages.slice(-6).map(msg => ({
+          role: (msg as any).displayName === 'Agent' ? 'assistant' : 'user',
+          content: msg.message
+        }));
 
-          // Best-effort: prepare Base Account spend calls on the client
-          let preparedSpendCalls: Array<{ to: `0x${string}`; value: string; data: `0x${string}` }> | undefined;
-          try {
-            const wallet = await fetch('/api/agent/wallet', { signal }).then(r => r.json()).catch(() => null);
-            const spender = wallet?.smartAccountAddress as `0x${string}` | undefined;
-            if (spender && address) {
-              const [{ createBaseAccountSDK }, spendMod, viem] = await Promise.all([
-                import('@base-org/account' as any),
-                import('@base-org/account/spend-permission' as any),
-                import('viem')
-              ]);
-              const sdk = createBaseAccountSDK({ appName: 'Pixotchi Agent' } as any);
-              const provider = sdk.getProvider();
-              try { await provider.request({ method: 'eth_requestAccounts' }); } catch {}
-              try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch {}
-              const perms = await spendMod.fetchPermissions({ account: address as `0x${string}`, chainId: 8453, spender, provider }).catch(() => []);
-              const SEED = PIXOTCHI_TOKEN_ADDRESS;
-              const seedPerm = (perms || []).find((p: any) => `${p.permission?.token}`.toLowerCase() === SEED.toLowerCase());
-              if (seedPerm) {
-                // Robustly infer mint count from current or recent user messages; clamp to 1..5 per agent policy
-                const extractCount = (txt: string): number | null => {
-                  const m = txt.match(/\b(\d{1,2})\b/);
-                  if (!m) return null;
-                  const n = parseInt(m[1], 10);
-                  if (isNaN(n)) return null;
-                  return Math.max(1, Math.min(5, n));
-                };
-                let inferredCount = extractCount(messageText);
-                if (inferredCount == null) {
-                  for (let i = agentMessages.length - 1; i >= 0; i--) {
-                    const m = agentMessages[i] as any;
-                    const isUser = m?.displayName !== 'Agent';
-                    if (!isUser) continue;
-                    const n = extractCount(m?.message || '');
-                    if (n != null) { inferredCount = n; break; }
-                  }
+        // Best-effort: prepare Base Account spend calls on the client
+        let preparedSpendCalls: Array<{ to: `0x${string}`; value: string; data: `0x${string}` }> | undefined;
+        try {
+          const wallet = await fetch('/api/agent/wallet', { signal }).then(r => r.json()).catch(() => null);
+          const spender = wallet?.smartAccountAddress as `0x${string}` | undefined;
+          if (spender && address) {
+            const [{ createBaseAccountSDK }, spendMod, viem] = await Promise.all([
+              import('@base-org/account' as any),
+              import('@base-org/account/spend-permission' as any),
+              import('viem')
+            ]);
+            const sdk = createBaseAccountSDK({ appName: 'Pixotchi Agent' } as any);
+            const provider = sdk.getProvider();
+            try { await provider.request({ method: 'eth_requestAccounts' }); } catch { }
+            try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch { }
+            const perms = await spendMod.fetchPermissions({ account: address as `0x${string}`, chainId: 8453, spender, provider }).catch(() => []);
+            const SEED = PIXOTCHI_TOKEN_ADDRESS;
+            const seedPerm = (perms || []).find((p: any) => `${p.permission?.token}`.toLowerCase() === SEED.toLowerCase());
+            if (seedPerm) {
+              // Robustly infer mint count from current or recent user messages; clamp to 1..5 per agent policy
+              const extractCount = (txt: string): number | null => {
+                const m = txt.match(/\b(\d{1,2})\b/);
+                if (!m) return null;
+                const n = parseInt(m[1], 10);
+                if (isNaN(n)) return null;
+                return Math.max(1, Math.min(5, n));
+              };
+              let inferredCount = extractCount(messageText);
+              if (inferredCount == null) {
+                for (let i = agentMessages.length - 1; i >= 0; i--) {
+                  const m = agentMessages[i] as any;
+                  const isUser = m?.displayName !== 'Agent';
+                  if (!isUser) continue;
+                  const n = extractCount(m?.message || '');
+                  if (n != null) { inferredCount = n; break; }
                 }
-                if (inferredCount == null) inferredCount = 1;
+              }
+              if (inferredCount == null) inferredCount = 1;
 
-                // Use the same hardcoded strains as the server (SEED units)
-                const STRAINS = PLANT_STRAINS;
-                // Default to ZEST in agent mode unless user explicitly specifies another strain
-                let chosen: typeof STRAINS[number] = STRAINS.find(s => s.id === 4) || STRAINS[0];
-                const idMatch = /strain\s*(\d{1,2})/i.exec(messageText);
-                if (idMatch) {
-                  const sid = parseInt(idMatch[1], 10);
-                  const found = STRAINS.find(s => s.id === sid);
-                  if (found) chosen = found as typeof STRAINS[number];
-                } else if (Array.isArray(STRAINS)) {
-                  const lower = messageText.toLowerCase();
-                  const byName = STRAINS.find(s => lower.includes(String(s.name || '').toLowerCase()));
-                  if (byName) chosen = byName as typeof STRAINS[number];
-                }
-                const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10); // SEED units
-                const total = unit * inferredCount;
-                const requiredWei = viem.parseUnits(total.toFixed(6), 18);
-                const spendCalls = await spendMod.prepareSpendCallData(seedPerm, requiredWei).catch(() => []);
-                if (Array.isArray(spendCalls) && spendCalls.length > 0) {
-                  preparedSpendCalls = spendCalls.map((c: any) => ({ to: c.to as `0x${string}`, value: String(c.value ?? 0), data: (c.data || '0x') as `0x${string}` }));
-                }
+              // Use the same hardcoded strains as the server (SEED units)
+              const STRAINS = PLANT_STRAINS;
+              // Default to ZEST in agent mode unless user explicitly specifies another strain
+              let chosen: typeof STRAINS[number] = STRAINS.find(s => s.id === 4) || STRAINS[0];
+              const idMatch = /strain\s*(\d{1,2})/i.exec(messageText);
+              if (idMatch) {
+                const sid = parseInt(idMatch[1], 10);
+                const found = STRAINS.find(s => s.id === sid);
+                if (found) chosen = found as typeof STRAINS[number];
+              } else if (Array.isArray(STRAINS)) {
+                const lower = messageText.toLowerCase();
+                const byName = STRAINS.find(s => lower.includes(String(s.name || '').toLowerCase()));
+                if (byName) chosen = byName as typeof STRAINS[number];
+              }
+              const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10); // SEED units
+              const total = unit * inferredCount;
+              const requiredWei = viem.parseUnits(total.toFixed(6), 18);
+              const spendCalls = await spendMod.prepareSpendCallData(seedPerm, requiredWei).catch(() => []);
+              if (Array.isArray(spendCalls) && spendCalls.length > 0) {
+                preparedSpendCalls = spendCalls.map((c: any) => ({ to: c.to as `0x${string}`, value: String(c.value ?? 0), data: (c.data || '0x') as `0x${string}` }));
               }
             }
-          } catch {}
+          }
+        } catch { }
 
-          const response = await fetch('/api/agent/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              prompt: messageText,
-              userAddress: chatAddress, // Use effective (Twin) address for spend permission validation
-              conversationHistory, // Pass conversation context
-              preparedSpendCalls
-            }),
-            signal
-          });
-          if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.error || 'Failed to send agent prompt');
-          }
-          const data = await response.json();
-          const replyText = typeof data?.text === 'string' ? data.text : (data?.success ? 'Done.' : '');
-          const agentReply: AnyChatMessage = { id: `agent-${Date.now()}`, address, message: replyText, timestamp: Date.now(), displayName: 'Agent' } as any;
-          setMessages(prev => {
-            const next = [...prev, agentReply];
-            messageCacheRef.current.agent = next;
-            try { localStorage.setItem('agent-chat-history', JSON.stringify(next)); } catch {}
-            return next;
-          });
-        } else {
-          const response = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: messageText, address: chatAddress, conversationId }),
-              signal
-          });
-  
-          if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.error || 'Failed to send message');
-          }
-  
-          const data = await response.json();
-          
-          if (mode === 'ai') {
-              const { userMessage, aiResponse } = data;
-              if (!conversationId) {
-                  setConversationId(userMessage.conversationId);
-              }
-              // Replace optimistic user message and add AI response
-              setMessages(prev => [...prev.filter(m => m.id !== optimisticId), userMessage, aiResponse]);
-          } else {
-              // For public chat, add the returned message
-              const newMessage = data.message;
-              setMessages(prev => [...prev.filter(m => m.id !== optimisticId), newMessage]);
-          }
+        const response = await fetch('/api/agent/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: messageText,
+            userAddress: chatAddress, // Use effective (Twin) address for spend permission validation
+            conversationHistory, // Pass conversation context
+            preparedSpendCalls
+          }),
+          signal
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to send agent prompt');
         }
+        const data = await response.json();
+        const replyText = typeof data?.text === 'string' ? data.text : (data?.success ? 'Done.' : '');
+        const agentReply: AnyChatMessage = { id: `agent-${Date.now()}`, address, message: replyText, timestamp: Date.now(), displayName: 'Agent' } as any;
+        setMessages(prev => {
+          const next = [...prev, agentReply];
+          messageCacheRef.current.agent = next;
+          try { localStorage.setItem('agent-chat-history', JSON.stringify(next)); } catch { }
+          return next;
+        });
+      } else {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: messageText, address: chatAddress, conversationId }),
+          signal
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to send message');
+        }
+
+        const data = await response.json();
+
+        if (mode === 'ai') {
+          const { userMessage, aiResponse } = data;
+          if (!conversationId) {
+            setConversationId(userMessage.conversationId);
+          }
+          // Replace optimistic user message and add AI response
+          setMessages(prev => [...prev.filter(m => m.id !== optimisticId), userMessage, aiResponse]);
+        } else {
+          // For public chat, add the returned message
+          const newMessage = data.message;
+          setMessages(prev => [...prev.filter(m => m.id !== optimisticId), newMessage]);
+        }
+      }
 
     } catch (err: any) {
-        // Don't show error if request was intentionally aborted
-        if (err.name === 'AbortError') {
-          console.log('Request was cancelled');
-          setMessages(prev => prev.filter(m => m.id !== optimisticId));
-        } else {
-          const friendlyMessage = err.message || 'An unexpected error occurred.';
-          setError(friendlyMessage);
-          toast.error(friendlyMessage);
-          setMessages(prev => prev.filter(m => m.id !== optimisticId));
-        }
+      // Don't show error if request was intentionally aborted
+      if (err.name === 'AbortError') {
+        console.log('Request was cancelled');
+        setMessages(prev => prev.filter(m => m.id !== optimisticId));
+      } else {
+        const friendlyMessage = err.message || 'An unexpected error occurred.';
+        setError(friendlyMessage);
+        toast.error(friendlyMessage);
+        setMessages(prev => prev.filter(m => m.id !== optimisticId));
+      }
     } finally {
-        setIsSending(false);
-        if(mode === 'ai' || mode === 'agent') setIsAITyping(false);
+      setIsSending(false);
+      if (mode === 'ai' || mode === 'agent') setIsAITyping(false);
     }
   };
 
@@ -386,7 +425,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isSending,
     conversationId,
     setConversationId,
-    isAITyping
+    isAITyping,
+    unreadCount,
+    markAsRead
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

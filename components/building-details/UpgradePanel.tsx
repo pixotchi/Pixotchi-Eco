@@ -21,10 +21,10 @@ interface UpgradePanelProps {
   landId: bigint;
   buildingType: BuildingType;
   currentBlock: bigint;
-  needsLeafApproval: boolean;
+  leafAllowance: bigint;
   onUpgradeSuccess: () => void;
   onLeafApprovalSuccess: () => void;
-  needsSeedApproval: boolean; // Now refers to PIXOTCHI approval
+  seedAllowance: bigint; // Now refers to PIXOTCHI allowance
   onSeedApprovalSuccess: () => void;
 }
 
@@ -33,15 +33,19 @@ export default function UpgradePanel({
   landId,
   buildingType,
   currentBlock,
-  needsLeafApproval,
+  leafAllowance,
   onUpgradeSuccess,
   onLeafApprovalSuccess,
-  needsSeedApproval,
+  seedAllowance,
   onSeedApprovalSuccess,
 }: UpgradePanelProps) {
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const { pixotchiBalance: userPixotchiBalance, leafBalance: userLeafBalance } = useBalances();
+
+  // Determine if approval is needed based on allowance vs cost
+  const needsLeafApproval = leafAllowance < building.levelUpgradeCostLeaf;
+  const needsSeedApproval = seedAllowance < building.levelUpgradeCostSeedInstant;
 
   const hasInsufficientLeaf = building.levelUpgradeCostLeaf > userLeafBalance;
   // Speedup cost is now in PIXOTCHI

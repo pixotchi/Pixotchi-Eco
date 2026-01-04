@@ -37,8 +37,8 @@ import {
 import { toast } from "react-hot-toast";
 import { ITEM_ICONS } from "@/lib/constants";
 import { usePaymaster } from "@/lib/paymaster-context";
-import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
 import QuantitySelector from "@/components/quantity-selector";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { StandardContainer } from "@/components/ui/pixel-container";
@@ -67,6 +67,8 @@ export default function PlantsView() {
   }, [evmAddress, isSolana, twinAddress]);
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('dashboard');
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
   const [selectedItem, setSelectedItem] = useState<ShopItem | GardenItem | null>(null);
@@ -132,8 +134,10 @@ export default function PlantsView() {
     fetchDataPendingRef.current = address;
 
     try {
-      // Keep loading spinner for refetches
-      setLoading(true);
+      // Only show full page loader on initial load
+      if (plants.length === 0) {
+        setLoading(true);
+      }
       setError(null);
 
       const plantsData = await getPlantsByOwner(address);
@@ -193,11 +197,13 @@ export default function PlantsView() {
   }, [selectedItem, gardenItems, shopItems]);
 
   // Fetch data when address changes - properly include fetchData in deps
+  // Refresh when dashboard becomes visible
   useEffect(() => {
-    if (address) {
+    if (isVisible && address) {
+      console.log('🔄 [PlantsView] Dashboard visible, refreshing...');
       fetchData();
     }
-  }, [address, fetchData]);
+  }, [isVisible, address, fetchData]);
 
   const onPurchaseSuccess = useCallback(() => {
     console.log("Purchase successful, refetching data...");
@@ -221,7 +227,10 @@ export default function PlantsView() {
     </div>
   );
 
-  if (loading || catalogsLoading) {
+  // Only block render if we have NO plants data at all
+  // If we have plants, we show them (Activity API maintains state) and update silently
+  // Catalogs loading shouldn't block the main view either
+  if (loading && plants.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
         <BaseExpandedLoadingPageLoader text="Loading dashboard..." />

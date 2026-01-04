@@ -5,6 +5,8 @@ import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-service";
 import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,8 +41,11 @@ const ITEMS_PER_PAGE = 12;
 
 export default function ActivityTab() {
   const { address, isConnected } = useAccount();
+  const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('activity');
   const myAddress = isSolana ? twinAddress : address;
   const isWalletConnected = isConnected || (isSolana && !!twinAddress);
   const [allActivities, setAllActivities] = useState<ProcessedActivityEvent[]>([]);
@@ -62,7 +67,7 @@ export default function ActivityTab() {
     activities.forEach(activity => {
       if (activity.__typename === 'ItemConsumed') {
         const key = `${activity.nftId}-${activity.timestamp}-${activity.itemId}`;
-        
+
         if (bundledMap.has(key)) {
           const existing = bundledMap.get(key)!;
           existing.quantity += 1;
@@ -79,10 +84,18 @@ export default function ActivityTab() {
 
     const bundledEvents = Array.from(bundledMap.values());
     const allProcessedEvents = [...otherEvents, ...bundledEvents];
-    
-    // Re-sort by timestamp
-    allProcessedEvents.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
-    
+
+    // Re-sort by timestamp safely
+    allProcessedEvents.sort((a, b) => {
+      const timeA = Number(a.timestamp);
+      const timeB = Number(b.timestamp);
+      // Fallback to 0 if invalid, but generally sort descending (newer first)
+      if (isNaN(timeA) && isNaN(timeB)) return 0;
+      if (isNaN(timeA)) return 1;
+      if (isNaN(timeB)) return -1;
+      return timeB - timeA;
+    });
+
     return allProcessedEvents;
   };
 
@@ -98,7 +111,10 @@ export default function ActivityTab() {
     fetchActivitiesPendingRef.current = fetchKey;
 
     try {
-      setLoading(true);
+      // Only show full page loader on initial load
+      if (allActivities.length === 0) {
+        setLoading(true);
+      }
       setError(null);
 
       const newShopItemMap: ItemMap = {};
@@ -112,7 +128,7 @@ export default function ActivityTab() {
         newGardenItemMap[item.id] = item.name;
       });
       setGardenItemMap(newGardenItemMap);
-      
+
       let recentActivities: ActivityEvent[] = [];
 
       if (view === "my" && myAddress) {
@@ -120,7 +136,7 @@ export default function ActivityTab() {
       } else {
         recentActivities = await getAllActivity();
       }
-      
+
       // Only update if parameters haven't changed during the fetch
       if (fetchActivitiesPendingRef.current === fetchKey) {
         const processedActivities = bundleItemConsumedEvents(recentActivities);
@@ -145,10 +161,20 @@ export default function ActivityTab() {
   useEffect(() => {
     if (view === 'my' && (!isWalletConnected || !myAddress)) {
       setView('all');
-    } else {
+    }
+  }, [view, isWalletConnected, myAddress]);
+
+  useEffect(() => {
+    fetchActivities();
+  }, [fetchActivities]);
+
+  // Refresh when tab becomes visible
+  useEffect(() => {
+    if (isVisible) {
+      console.log('🔄 [Activity] Tab visible, refreshing...');
       fetchActivities();
     }
-  }, [view, isWalletConnected, myAddress, fetchActivities]);
+  }, [isVisible, fetchActivities]);
 
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {
@@ -198,7 +224,9 @@ export default function ActivityTab() {
   const currentActivities = allActivities.slice(startIndex, endIndex);
 
   const renderContent = () => {
-    if (loading || catalogsLoading) {
+    // Only block render if we have NO data at all
+    // If we have data, we show it (Activity API maintains state) and update silently
+    if (loading && allActivities.length === 0) {
       return (
         <div className="flex items-center justify-center py-8">
           <BaseExpandedLoadingPageLoader text="Loading activities..." />
@@ -218,9 +246,9 @@ export default function ActivityTab() {
 
     if (view === 'my' && !isWalletConnected) {
       return (
-          <div className="text-center py-8 text-muted-foreground">
-              <p>Connect your wallet to see your activity.</p>
-          </div>
+        <div className="text-center py-8 text-muted-foreground">
+          <p>Connect your wallet to see your activity.</p>
+        </div>
       );
     }
 
@@ -237,7 +265,7 @@ export default function ActivityTab() {
         <div className="space-y-2 divide-y -mx-4 px-4">
           {currentActivities.map(renderActivity)}
         </div>
-        
+
         {totalPages > 1 && (
           <div className="flex justify-center items-center pt-4">
             <div className="flex space-x-2">
