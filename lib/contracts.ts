@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData, ContractFunctionExecutionError } from 'viem';
+import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
 import { appendBuilderSuffix } from './builder-code';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
@@ -266,7 +266,6 @@ export const SPIN_GAME_ABI = [
 
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
-let cachedRawReadClient: any = null;
 let cachedWriteClient: any = null;
 
 // Create optimized read client for data fetching
@@ -283,35 +282,12 @@ export const getReadClient = () => {
   if (!cachedReadClient) {
     cachedReadClient = createPublicClient({
       chain: baseWithHealth,
-      transport: createResilientTransport(), // Use all endpoints from config
+      transport: createResilientTransport([healthRpc]),
       // Slow polling to minimize background health checks; explicit calls still work immediately
       pollingInterval: 300_000,
-      // Enable automatic eth_call aggregation via multicall - batches scattered readContract
-      // calls into single multicall requests, reducing RPC calls and compute units
-      // Limit batch size to prevent gas limit issues on production RPCs (Vercel)
-      batch: {
-        multicall: {
-          batchSize: 100, // Max 100 calls per multicall to stay within RPC gas limits
-          wait: 10, // Wait 10ms to collect calls before batching
-        },
-      },
     });
   }
   return cachedReadClient;
-};
-
-// Raw read client WITHOUT multicall batching - use for heavy single calls like leaderboard
-// that already handle their own batching or should not be auto-aggregated
-export const getRawReadClient = () => {
-  if (!cachedRawReadClient) {
-    cachedRawReadClient = createPublicClient({
-      chain: baseWithHealth,
-      transport: createResilientTransport(),
-      pollingInterval: 300_000,
-      // NO batch.multicall here - calls go directly without auto-aggregation
-    });
-  }
-  return cachedRawReadClient;
 };
 
 // Create optimized write client for transactions
@@ -337,27 +313,14 @@ export const retryWithBackoff = async <T>(
       const res = await fn();
       // We can't tell which endpoint served this call from here; individual read helpers can annotate.
       return res;
-    } catch (error: unknown) {
-      // Use typed error handling for viem errors
-      const isContractError = error instanceof ContractFunctionExecutionError;
+    } catch (error: any) {
+      const isRateLimit = error?.details?.includes('rate limit') ||
+        error?.message?.includes('429') ||
+        error?.status === 429;
 
-      // Extract error details safely
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorDetails = (error as any)?.details ?? '';
-      const errorStatus = (error as any)?.status;
-
-      const isRateLimit = errorDetails.includes('rate limit') ||
-        errorMessage.includes('429') ||
-        errorStatus === 429;
-
-      const isNetworkError = errorMessage.includes('fetch') ||
-        errorMessage.includes('network') ||
-        errorMessage.includes('timeout');
-
-      // Don't retry contract execution errors (revert, out of gas, etc.) - they won't succeed
-      if (isContractError && !isNetworkError && !isRateLimit) {
-        throw error;
-      }
+      const isNetworkError = error?.message?.includes('fetch') ||
+        error?.message?.includes('network') ||
+        error?.message?.includes('timeout');
 
       if ((isRateLimit || isNetworkError) && attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
@@ -370,6 +333,7 @@ export const retryWithBackoff = async <T>(
   }
   throw new Error('Max retries exceeded');
 };
+
 
 
 // Simplified contract ABIs (only the functions we need)
@@ -2106,9 +2070,9 @@ export const claimVillageProduction = async (walletClient: WalletClient, landId:
   return hash;
 };
 
-// Leaderboard functions - use raw client to avoid multicall batching issues
+// Leaderboard functions
 export const getAliveTokenIds = async (): Promise<number[]> => {
-  const readClient = getRawReadClient();
+  const readClient = getReadClient();
 
   return retryWithBackoff(async () => {
     const tokenIds = await readClient.readContract({
@@ -2121,11 +2085,8 @@ export const getAliveTokenIds = async (): Promise<number[]> => {
   });
 };
 
-
 export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]> => {
-  // Use raw client WITHOUT multicall batching to prevent auto-aggregation
-  // This is a heavy single call that should not be combined with other calls
-  const readClient = getRawReadClient();
+  const readClient = getReadClient();
 
   return retryWithBackoff(async () => {
     const plants = await readClient.readContract({
@@ -2135,9 +2096,13 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
       args: [tokenIds.map(id => BigInt(id))],
     }) as any[];
 
+    // Fence V2 writes to the same extensions storage, so derive it from extensions
+    // No need for separate RPC call to fenceV2GetPurchaseStats
+
     return plants.map((plant: any) => {
       const plantId = Number(plant.id);
       const extensions = plant.extensions || [];
+      // Derive Fence V2 state directly from extensions (same storage)
       const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
       return {
@@ -2161,6 +2126,7 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
     });
   });
 };
+
 
 
 // Get specific land owner

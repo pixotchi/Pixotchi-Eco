@@ -28,16 +28,9 @@ const getPublicClient = cache(() => {
     return createPublicClient({
         chain: base,
         transport: http(rpcUrl),
-        // Enable automatic eth_call aggregation via multicall
-        // Limit batch size to prevent gas limit issues on production RPCs
-        batch: {
-            multicall: {
-                batchSize: 100, // Max 100 calls per multicall to stay within RPC gas limits
-                wait: 10, // Wait 10ms to collect calls before batching
-            },
-        },
     });
 });
+
 
 
 
