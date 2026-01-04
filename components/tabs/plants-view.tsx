@@ -132,8 +132,10 @@ export default function PlantsView() {
     fetchDataPendingRef.current = address;
 
     try {
-      // Keep loading spinner for refetches
-      setLoading(true);
+      // Only show full page loader on initial load
+      if (plants.length === 0) {
+        setLoading(true);
+      }
       setError(null);
 
       const plantsData = await getPlantsByOwner(address);

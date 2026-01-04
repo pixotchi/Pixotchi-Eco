@@ -103,7 +103,10 @@ export default function AboutTab() {
   const loadInviteStats = async () => {
     if (!address) return;
 
-    setLoading(true);
+    // Only show loading state if we have no stats yet
+    if (!stats) {
+      setLoading(true);
+    }
     try {
       const response = await fetch('/api/invite/stats', {
         method: 'POST',

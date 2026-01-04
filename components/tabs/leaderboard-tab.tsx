@@ -168,7 +168,11 @@ export default function LeaderboardTab() {
     }
 
     fetchLeaderboardDataPendingRef.current = true;
-    setLoading(true);
+
+    // Only show loader on initial data fetch
+    if (plants.length === 0) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -240,7 +244,10 @@ export default function LeaderboardTab() {
     }
 
     // Fetch fresh data if cache expired or first load
-    setStakeLoading(true);
+    // Only show loading spinner if we have no existing data
+    if (stakeRows.length === 0) {
+      setStakeLoading(true);
+    }
     try {
       console.log(`📊 [Stake] Fetching fresh data from API...`);
       const stakeResponse = await fetch('/api/leaderboard/stake');
@@ -278,7 +285,10 @@ export default function LeaderboardTab() {
       return;
     }
 
-    setRocksLoading(true);
+    // Only show loading spinner if we have no existing data
+    if (rocksRows.length === 0) {
+      setRocksLoading(true);
+    }
     setRocksError(null);
     try {
       const res = await fetch('/api/leaderboard/rocks');

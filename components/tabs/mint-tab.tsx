@@ -155,7 +155,13 @@ export default function MintTab() {
   const fetchData = async () => {
     if (!address) return;
 
-    setLoading(true);
+    // Only show full page loader on initial load based on current view
+    if (mintType === 'plant') {
+      if (strains.length === 0) setLoading(true);
+    } else {
+      if (!landSupply) setLoading(true);
+    }
+
     try {
       if (mintType === 'plant') {
         const [balance, strainsData] = await Promise.allSettled([

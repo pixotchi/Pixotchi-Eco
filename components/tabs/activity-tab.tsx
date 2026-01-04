@@ -62,7 +62,7 @@ export default function ActivityTab() {
     activities.forEach(activity => {
       if (activity.__typename === 'ItemConsumed') {
         const key = `${activity.nftId}-${activity.timestamp}-${activity.itemId}`;
-        
+
         if (bundledMap.has(key)) {
           const existing = bundledMap.get(key)!;
           existing.quantity += 1;
@@ -79,10 +79,18 @@ export default function ActivityTab() {
 
     const bundledEvents = Array.from(bundledMap.values());
     const allProcessedEvents = [...otherEvents, ...bundledEvents];
-    
-    // Re-sort by timestamp
-    allProcessedEvents.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
-    
+
+    // Re-sort by timestamp safely
+    allProcessedEvents.sort((a, b) => {
+      const timeA = Number(a.timestamp);
+      const timeB = Number(b.timestamp);
+      // Fallback to 0 if invalid, but generally sort descending (newer first)
+      if (isNaN(timeA) && isNaN(timeB)) return 0;
+      if (isNaN(timeA)) return 1;
+      if (isNaN(timeB)) return -1;
+      return timeB - timeA;
+    });
+
     return allProcessedEvents;
   };
 
@@ -98,7 +106,10 @@ export default function ActivityTab() {
     fetchActivitiesPendingRef.current = fetchKey;
 
     try {
-      setLoading(true);
+      // Only show full page loader on initial load
+      if (allActivities.length === 0) {
+        setLoading(true);
+      }
       setError(null);
 
       const newShopItemMap: ItemMap = {};
@@ -112,7 +123,7 @@ export default function ActivityTab() {
         newGardenItemMap[item.id] = item.name;
       });
       setGardenItemMap(newGardenItemMap);
-      
+
       let recentActivities: ActivityEvent[] = [];
 
       if (view === "my" && myAddress) {
@@ -120,7 +131,7 @@ export default function ActivityTab() {
       } else {
         recentActivities = await getAllActivity();
       }
-      
+
       // Only update if parameters haven't changed during the fetch
       if (fetchActivitiesPendingRef.current === fetchKey) {
         const processedActivities = bundleItemConsumedEvents(recentActivities);
@@ -218,9 +229,9 @@ export default function ActivityTab() {
 
     if (view === 'my' && !isWalletConnected) {
       return (
-          <div className="text-center py-8 text-muted-foreground">
-              <p>Connect your wallet to see your activity.</p>
-          </div>
+        <div className="text-center py-8 text-muted-foreground">
+          <p>Connect your wallet to see your activity.</p>
+        </div>
       );
     }
 
@@ -237,7 +248,7 @@ export default function ActivityTab() {
         <div className="space-y-2 divide-y -mx-4 px-4">
           {currentActivities.map(renderActivity)}
         </div>
-        
+
         {totalPages > 1 && (
           <div className="flex justify-center items-center pt-4">
             <div className="flex space-x-2">
