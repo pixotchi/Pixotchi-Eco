@@ -148,10 +148,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
       setLeafAllowance(leafAll || BigInt(0));
     } catch (error) {
       console.warn('[Marketplace] Failed to fetch balances:', error);
-      setSeedBalance(BigInt(0));
-      setLeafBalance(BigInt(0));
-      setSeedAllowance(BigInt(0));
-      setLeafAllowance(BigInt(0));
+      // Don't reset state on error - keep stale data to prevent UI flash
     } finally {
       setIsRefreshing(false);
     }
