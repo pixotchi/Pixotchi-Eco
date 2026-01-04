@@ -14,6 +14,11 @@ import { createPublicClient, http, keccak256, encodeAbiParameters, toHex, padHex
 import { base } from 'viem/chains';
 import { Connection, PublicKey } from '@solana/web3.js';
 
+// Segment config: Always fetch fresh onchain data
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 // Use existing environment variable conventions from lib/solana-constants.ts
 const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined; // Uses viem default if not set
@@ -71,8 +76,8 @@ export async function GET(request: NextRequest) {
     const { innerHash, outerHash, evmMessage } = buildEvmMessage(pubkey, outgoingMessage);
 
     // Step 3: Check Base contracts
-    const publicClient = createPublicClient({ 
-      chain: config.baseChain, 
+    const publicClient = createPublicClient({
+      chain: config.baseChain,
       transport: http(config.baseRpc) // Uses env RPC or default
     });
 
@@ -169,9 +174,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Bridge diagnostic error:', error);
-    return NextResponse.json({ 
-      error: 'Diagnostic failed', 
-      details: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      error: 'Diagnostic failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
@@ -185,18 +190,18 @@ interface OutgoingMessageData {
 
 function decodeOutgoingMessage(data: Buffer): OutgoingMessageData {
   let offset = 8; // Skip discriminator
-  
+
   const nonce = BigInt('0x' + data.subarray(offset, offset + 8).reverse().toString('hex'));
   offset += 8;
-  
+
   const sender = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
   offset += 32;
-  
+
   const variant = data[offset];
   offset += 1;
-  
+
   let message: OutgoingMessageData['message'];
-  
+
   if (variant === 0) {
     message = { __kind: 'Call', fields: [decodeCall(data, offset)] };
   } else if (variant === 1) {
@@ -204,7 +209,7 @@ function decodeOutgoingMessage(data: Buffer): OutgoingMessageData {
   } else {
     throw new Error(`Unknown message variant: ${variant}`);
   }
-  
+
   return { nonce, sender, message };
 }
 
@@ -221,7 +226,7 @@ function decodeTransfer(data: Buffer, offset: number): any {
   offset += 1;
   let call = null;
   if (hasCall === 1) call = decodeCall(data, offset);
-  
+
   return {
     to: `0x${Buffer.from(to).toString('hex')}`,
     localToken,
@@ -241,7 +246,7 @@ function decodeCall(data: Buffer, offset: number): any {
   const dataLen = data.readUInt32LE(offset);
   offset += 4;
   const callData = data.subarray(offset, offset + dataLen);
-  
+
   return { ty, to: `0x${Buffer.from(to).toString('hex')}`, value, data: `0x${Buffer.from(callData).toString('hex')}` };
 }
 
@@ -276,7 +281,7 @@ function pubkeyToBytes32(pubkey: string): Hex {
 
 function buildIncomingPayload(outgoing: OutgoingMessageData): { ty: number; data: Hex } {
   const msg = outgoing.message;
-  
+
   if (msg.__kind === 'Transfer') {
     const transfer = msg.fields[0];
     const transferTuple = {
@@ -287,12 +292,14 @@ function buildIncomingPayload(outgoing: OutgoingMessageData): { ty: number; data
     } as const;
 
     const encodedTransfer = encodeAbiParameters(
-      [{ type: 'tuple', components: [
-        { name: 'localToken', type: 'address' },
-        { name: 'remoteToken', type: 'bytes32' },
-        { name: 'to', type: 'bytes32' },
-        { name: 'remoteAmount', type: 'uint64' },
-      ]}],
+      [{
+        type: 'tuple', components: [
+          { name: 'localToken', type: 'address' },
+          { name: 'remoteToken', type: 'bytes32' },
+          { name: 'to', type: 'bytes32' },
+          { name: 'remoteAmount', type: 'uint64' },
+        ]
+      }],
       [transferTuple]
     );
 
@@ -301,24 +308,28 @@ function buildIncomingPayload(outgoing: OutgoingMessageData): { ty: number; data
     const callTuple = { ty: transfer.call.ty, to: transfer.call.to as `0x${string}`, value: transfer.call.value, data: transfer.call.data as `0x${string}` };
     const data = encodeAbiParameters(
       [
-        { type: 'tuple', components: [
-          { name: 'localToken', type: 'address' },
-          { name: 'remoteToken', type: 'bytes32' },
-          { name: 'to', type: 'bytes32' },
-          { name: 'remoteAmount', type: 'uint64' },
-        ]},
-        { type: 'tuple', components: [
-          { name: 'ty', type: 'uint8' },
-          { name: 'to', type: 'address' },
-          { name: 'value', type: 'uint128' },
-          { name: 'data', type: 'bytes' },
-        ]},
+        {
+          type: 'tuple', components: [
+            { name: 'localToken', type: 'address' },
+            { name: 'remoteToken', type: 'bytes32' },
+            { name: 'to', type: 'bytes32' },
+            { name: 'remoteAmount', type: 'uint64' },
+          ]
+        },
+        {
+          type: 'tuple', components: [
+            { name: 'ty', type: 'uint8' },
+            { name: 'to', type: 'address' },
+            { name: 'value', type: 'uint128' },
+            { name: 'data', type: 'bytes' },
+          ]
+        },
       ],
       [transferTuple, callTuple]
     );
     return { ty: 2, data };
   }
-  
+
   throw new Error('Unsupported message type');
 }
 

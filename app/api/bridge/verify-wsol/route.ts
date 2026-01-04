@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
 
+// Segment config: Always fetch fresh onchain data
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 
 // The wSOL we're trying to use (from Base-Solana bridge)
@@ -91,7 +96,7 @@ export async function GET(request: NextRequest) {
       verification: {
         bridgeWsolInPool: hasMatch,
         matchedToken: hasMatch ? (isToken0Match ? 'token0' : 'token1') : 'NONE',
-        diagnosis: hasMatch 
+        diagnosis: hasMatch
           ? '✅ Bridge wSOL IS in the pool - token addresses match!'
           : '❌ MISMATCH! The pool uses a DIFFERENT wSOL token than the bridge!',
       },
@@ -106,9 +111,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Verify wSOL error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to verify wSOL', 
-      details: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      error: 'Failed to verify wSOL',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

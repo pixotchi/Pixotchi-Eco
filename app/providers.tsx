@@ -74,21 +74,23 @@ const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundl
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
 
+// TanStack Query client - created outside component to prevent recreation on every render
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: 2,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
+
 export function Providers(props: { children: ReactNode }) {
   // Use CDP Client API key for Coinbase SDK
   const apiKey = process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY;
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 30_000,
-        refetchOnWindowFocus: false,
-        retry: 2,
-      },
-      mutations: {
-        retry: 1,
-      },
-    },
-  });
 
   // MiniKit API key validation handled internally
 
