@@ -116,6 +116,7 @@ export type BuildingData = {
   levelUpgradeCostLeaf: bigint;             // LEAF cost for next upgrade
   levelUpgradeCostSeedInstant: bigint;      // SEED cost for instant upgrade
   levelUpgradeBlockInterval: bigint;        // Blocks needed for upgrade
+  levelUpgradeCostSeed?: bigint;            // SEED cost for normal upgrade (Town only)
   isUpgrading: boolean;                     // Whether upgrade is in progress
   blockHeightUpgradeInitiated: bigint;      // When upgrade started
   blockHeightUntilUpgradeDone: bigint;      // When upgrade completes
@@ -281,7 +282,7 @@ export type MintEvent = {
 
 export type PlayedEvent = {
   __typename: "Played";
-  id:string;
+  id: string;
   timestamp: string;
   nftId: string;
   nftName: string;

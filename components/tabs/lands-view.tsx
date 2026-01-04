@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Land, BuildingData, BuildingType } from "@/lib/types";
-import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandSpeedUpApproval } from "@/lib/contracts";
+import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandSpeedUpApproval, checkLandMintApproval } from "@/lib/contracts";
 import { formatTokenAmount, formatAddress, formatXP } from "@/lib/utils";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
@@ -71,14 +71,14 @@ export default function LandsView() {
   const fetchBuildingDataPendingRef = useRef<bigint | null>(null);
 
   // Token approval state for land interactions
-  const [needsLeafApproval, setNeedsLeafApproval] = useState<boolean>(true);
-  const [needsSeedApproval, setNeedsSeedApproval] = useState<boolean>(true);
+  const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
+  const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
 
   // Fetch land contract approval status (LEAF + SEED)
   const fetchApprovalStatus = useCallback(async () => {
     if (!address) {
-      setNeedsLeafApproval(true);
-      setNeedsSeedApproval(true);
+      setLeafAllowance(BigInt(0));
+      setSeedAllowance(BigInt(0));
       fetchApprovalStatusPendingRef.current = null;
       return;
     }
@@ -91,21 +91,21 @@ export default function LandsView() {
     fetchApprovalStatusPendingRef.current = address;
 
     try {
-      const [hasLeafApproval, hasSeedApproval] = await Promise.all([
+      const [currentLeafAllowance, currentSeedAllowance] = await Promise.all([
         checkLeafTokenApproval(address),
         checkLandSpeedUpApproval(address),
       ]);
       // Only update if address hasn't changed during the fetch
       if (fetchApprovalStatusPendingRef.current === address) {
-        setNeedsLeafApproval(!hasLeafApproval);
-        setNeedsSeedApproval(!hasSeedApproval);
+        setLeafAllowance(currentLeafAllowance);
+        setSeedAllowance(currentSeedAllowance);
       }
     } catch (error) {
       console.error("Failed to fetch land token approval status:", error);
       // Only set error if address hasn't changed
       if (fetchApprovalStatusPendingRef.current === address) {
-        setNeedsLeafApproval(true);
-        setNeedsSeedApproval(true);
+        setLeafAllowance(BigInt(0));
+        setSeedAllowance(BigInt(0));
       }
     } finally {
       // Clear pending flag only if address hasn't changed
@@ -205,6 +205,7 @@ export default function LandsView() {
             accumulatedLifetime: BigInt(0),
             levelUpgradeCostLeaf: BigInt(0),
             levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeCostSeed: BigInt(0),
             levelUpgradeBlockInterval: BigInt(0),
             isUpgrading: false,
             blockHeightUpgradeInitiated: BigInt(0),
@@ -220,6 +221,7 @@ export default function LandsView() {
             accumulatedLifetime: BigInt(0),
             levelUpgradeCostLeaf: BigInt(0),
             levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeCostSeed: BigInt(0),
             levelUpgradeBlockInterval: BigInt(0),
             isUpgrading: false,
             blockHeightUpgradeInitiated: BigInt(0),
@@ -608,10 +610,10 @@ export default function LandsView() {
                     buildingType={buildingType}
                     onUpgradeSuccess={handleBuildingTransactionSuccess}
                     currentBlock={currentBlock}
-                    needsLeafApproval={needsLeafApproval}
-                    onLeafApprovalSuccess={() => setNeedsLeafApproval(false)}
-                    needsSeedApproval={needsSeedApproval}
-                    onSeedApprovalSuccess={() => setNeedsSeedApproval(false)}
+                    leafAllowance={leafAllowance}
+                    onLeafApprovalSuccess={fetchApprovalStatus}
+                    seedAllowance={seedAllowance}
+                    onSeedApprovalSuccess={fetchApprovalStatus}
                     warehousePoints={selectedLand.accumulatedPlantPoints}
                     warehouseLifetime={selectedLand.accumulatedPlantLifetime}
                   />

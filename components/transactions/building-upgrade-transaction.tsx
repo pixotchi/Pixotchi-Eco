@@ -15,6 +15,7 @@ interface BuildingUpgradeTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  functionName?: string;
 }
 
 export default function BuildingUpgradeTransaction({
@@ -25,16 +26,20 @@ export default function BuildingUpgradeTransaction({
   onError,
   buttonText = "Upgrade with LEAF",
   buttonClassName = "",
-  disabled = false
+  disabled = false,
+  functionName
 }: BuildingUpgradeTransactionProps) {
-  
-  const functionName = buildingType === 'village' ? 'villageUpgradeWithLeaf' : 'townUpgradeWithLeaf';
-  
+
+  const finalFunctionName = functionName || (buildingType === 'village' ? 'villageUpgradeWithLeaf' : 'townUpgradeWithLeaf');
+
+  // townBuildMarketPlace only takes landId, while upgrades take landId and buildingId
+  const args = finalFunctionName === 'townBuildMarketPlace' ? [landId] : [landId, building.id];
+
   const calls = [{
     address: LAND_CONTRACT_ADDRESS,
     abi: landAbi,
-    functionName,
-    args: [landId, building.id],
+    functionName: finalFunctionName,
+    args: args,
   }];
 
   return (

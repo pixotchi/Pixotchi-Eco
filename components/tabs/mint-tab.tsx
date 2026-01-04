@@ -102,7 +102,7 @@ export default function MintTab() {
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
-  const [needsApproval, setNeedsApproval] = useState<boolean>(true);
+  const [paymentTokenAllowance, setPaymentTokenAllowance] = useState<bigint>(BigInt(0));
   const [loading, setLoading] = useState(true);
   const [paymentTokenSymbol, setPaymentTokenSymbol] = useState<string>('SEED');
   const [paymentTokenBalance, setPaymentTokenBalance] = useState<bigint>(BigInt(0));
@@ -110,7 +110,7 @@ export default function MintTab() {
   const [landBalance, setLandBalance] = useState(0);
   const [landSupply, setLandSupply] = useState<{ totalSupply: number; maxSupply: number; } | null>(null);
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);
-  const [needsLandApproval, setNeedsLandApproval] = useState<boolean>(true);
+  const [landMintAllowance, setLandMintAllowance] = useState<bigint>(BigInt(0));
   const [landMintPrice, setLandMintPrice] = useState<bigint>(BigInt(0));
 
   const [forcedFetchCount, setForcedFetchCount] = useState(0);
@@ -182,7 +182,7 @@ export default function MintTab() {
         }
       } else {
         if (!chainId || !address) return; // Guard against undefined chainId or address
-        const [lands, supply, status, landApproval, price] = await Promise.all([
+        const [lands, supply, status, landAllowance, price] = await Promise.all([
           getLandBalance(address),
           getLandSupply(),
           getLandMintStatus(address),
@@ -192,7 +192,7 @@ export default function MintTab() {
         setLandBalance(lands);
         setLandSupply(supply);
         setLandMintStatus(status);
-        setNeedsLandApproval(!landApproval);
+        setLandMintAllowance(landAllowance);
         setLandMintPrice(price);
       }
 
@@ -247,8 +247,8 @@ export default function MintTab() {
         }
 
         // Check approval for the payment token
-        const hasApproval = await checkTokenApproval(address, paymentToken);
-        setNeedsApproval(!hasApproval);
+        const allowance = await checkTokenApproval(address, paymentToken);
+        setPaymentTokenAllowance(allowance);
       } catch (error) {
         console.error('Error fetching payment token info:', error);
         // Fallback to SEED token on error
@@ -257,8 +257,8 @@ export default function MintTab() {
         setPaymentTokenSymbol(formattedSymbol);
         const balance = await getFormattedTokenBalance(address);
         setPaymentTokenBalance(BigInt(Math.floor(balance * 1e18)));
-        const hasApproval = await checkTokenApproval(address);
-        setNeedsApproval(!hasApproval);
+        const allowance = await checkTokenApproval(address);
+        setPaymentTokenAllowance(allowance);
       }
     };
 
@@ -1291,7 +1291,7 @@ export default function MintTab() {
           )}
 
           {/* Standard SEED minting (not ETH mode or no quote) */}
-          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && needsApproval && (
+          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && (paymentTokenAllowance < (selectedStrain?.paymentPrice ?? BigInt((selectedStrain?.mintPrice || 0) * 1e18))) && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Approval</span>
@@ -1307,6 +1307,8 @@ export default function MintTab() {
                   ? paymentTokenBalance < selectedStrain.paymentPrice
                   : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18));
 
+                const hasInsufficientAllowance = paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18));
+
                 return useBundle ? (
                   <>
                     <ApproveMintBundle
@@ -1314,7 +1316,9 @@ export default function MintTab() {
                       tokenAddress={paymentToken}
                       onSuccess={() => {
                         toast.success('Approved and minted successfully!');
-                        setNeedsApproval(false);
+                        if (address) {
+                          checkTokenApproval(address, selectedStrain.paymentToken).then(setPaymentTokenAllowance);
+                        }
                         incrementForcedFetch();
                         window.dispatchEvent(new Event('balances:refresh'));
                       }}
@@ -1349,7 +1353,9 @@ export default function MintTab() {
                     tokenAddress={paymentToken}
                     onSuccess={() => {
                       toast.success('Token approval successful!');
-                      setNeedsApproval(false);
+                      if (address) {
+                        checkTokenApproval(address, paymentToken).then(setPaymentTokenAllowance);
+                      }
                       incrementForcedFetch();
                     }}
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -1362,7 +1368,7 @@ export default function MintTab() {
           )}
 
           {/** Hide Mint step if using bundle path (smart wallet + sponsored + needsApproval) or ETH mode **/}
-          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && !(isSmartWallet && isSponsored && needsApproval && selectedStrain) && (
+          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && !(isSmartWallet && isSponsored && (paymentTokenAllowance < (selectedStrain?.paymentPrice ?? BigInt((selectedStrain?.mintPrice || 0) * 1e18))) && selectedStrain) && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Mint Plant</span>
@@ -1410,9 +1416,9 @@ export default function MintTab() {
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                     buttonText="Mint Plant"
                     buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                    disabled={needsApproval || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
+                    disabled={(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
                   />
-                  {!needsApproval && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
+                  {!(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
                     <p className="text-xs text-value text-center mt-2">
                       Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
                     </p>
@@ -1516,7 +1522,7 @@ export default function MintTab() {
         {/* Standard SEED land minting (not ETH mode or no quote or can't mint) */}
         {!(isSmartWallet && isEthMode && (landEthQuote || landEthQuoteLoading) && landMintStatus?.canMint) && (
           <>
-            {needsLandApproval && (
+            {landMintAllowance < landMintPrice && (
               <div className="flex flex-col space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Step 1: Approve SEED</span>
@@ -1526,7 +1532,9 @@ export default function MintTab() {
                   spenderAddress={LAND_CONTRACT_ADDRESS}
                   onSuccess={() => {
                     toast.success('Token approval successful!');
-                    setNeedsLandApproval(false);
+                    if (address) {
+                      checkLandMintApproval(address).then(setLandMintAllowance);
+                    }
                     incrementForcedFetch();
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -1537,7 +1545,7 @@ export default function MintTab() {
             )}
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {needsLandApproval ? 'Step 2: Mint Land' : 'Mint Land'}
+                {landMintAllowance < landMintPrice ? 'Step 2: Mint Land' : 'Mint Land'}
               </span>
               <SponsoredBadge show={isSmartWallet} />
             </div>
@@ -1557,9 +1565,9 @@ export default function MintTab() {
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={`Mint Land`}
                   buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={!landMintStatus?.canMint || needsLandApproval || seedBalanceRaw < landMintPrice}
+                  disabled={!landMintStatus?.canMint || (landMintAllowance < landMintPrice) || seedBalanceRaw < landMintPrice}
                 />
-                {landMintStatus?.canMint && !needsLandApproval && seedBalanceRaw < landMintPrice && (
+                {landMintStatus?.canMint && !(landMintAllowance < landMintPrice) && seedBalanceRaw < landMintPrice && (
                   <p className="text-xs text-value text-center mt-2">
                     Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
                   </p>

@@ -22,29 +22,29 @@ interface BuildingDetailsPanelProps {
   buildingType: BuildingType;
   onUpgradeSuccess: () => void;
   currentBlock: bigint;
-  needsLeafApproval?: boolean;
+  leafAllowance?: bigint;
   onLeafApprovalSuccess?: () => void;
-  needsSeedApproval?: boolean;
+  seedAllowance?: bigint;
   onSeedApprovalSuccess?: () => void;
   warehousePoints?: bigint;
   warehouseLifetime?: bigint;
 }
 
-function BuildingDetailsPanel({ 
-  selectedBuilding, 
+function BuildingDetailsPanel({
+  selectedBuilding,
   landId,
   buildingType,
   onUpgradeSuccess,
   currentBlock,
-  needsLeafApproval = false,
+  leafAllowance = BigInt(0),
   onLeafApprovalSuccess,
-  needsSeedApproval = false,
+  seedAllowance = BigInt(0),
   onSeedApprovalSuccess,
   warehousePoints,
   warehouseLifetime
 }: BuildingDetailsPanelProps) {
   const [showInfoDialog, setShowInfoDialog] = useState(false);
-  
+
   if (!selectedBuilding) {
     return (
       <Card>
@@ -63,7 +63,7 @@ function BuildingDetailsPanel({
 
   const buildingName = getBuildingName(selectedBuilding.id, buildingType === 'town');
   const buildingIcon = getBuildingIcon(buildingName);
-  
+
   const isPrebuiltTown = buildingType === 'town' && (selectedBuilding.id === 1 || selectedBuilding.id === 3);
 
   const renderBuildingContent = () => {
@@ -79,9 +79,9 @@ function BuildingDetailsPanel({
     if (buildingType === 'village') {
       if (selectedBuilding.level === 0) {
         return (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-                Building hasn't been constructed yet. Upgrade to level 1 to start.
-            </div>
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            Building hasn't been constructed yet. Upgrade to level 1 to start.
+          </div>
         )
       }
       return <ProductionPanel building={selectedBuilding} landId={landId} onClaimSuccess={onUpgradeSuccess} />;
@@ -93,11 +93,11 @@ function BuildingDetailsPanel({
           return <StakeHousePanel />;
         case 3: // Warehouse
           return (
-            <WarehousePanel 
-              landId={landId} 
+            <WarehousePanel
+              landId={landId}
               warehousePoints={warehousePoints}
               warehouseLifetime={warehouseLifetime}
-              onApplySuccess={onUpgradeSuccess} 
+              onApplySuccess={onUpgradeSuccess}
             />
           );
         case 5: // Marketplace
@@ -118,9 +118,9 @@ function BuildingDetailsPanel({
             );
           }
           return (
-            <FarmerHousePanel 
-              landId={landId} 
-              farmerHouseLevel={selectedBuilding.level} 
+            <FarmerHousePanel
+              landId={landId}
+              farmerHouseLevel={selectedBuilding.level}
               onQuestUpdate={onUpgradeSuccess}
             />
           );
@@ -140,11 +140,11 @@ function BuildingDetailsPanel({
     <Card>
       <CardHeader>
         <div className="flex items-center space-x-3">
-          <Image 
-            src={buildingIcon} 
-            alt={buildingName} 
-            width={48} 
-            height={48} 
+          <Image
+            src={buildingIcon}
+            alt={buildingName}
+            width={48}
+            height={48}
             className="rounded-md"
             style={{ height: 'auto' }}
           />
@@ -165,28 +165,28 @@ function BuildingDetailsPanel({
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {renderBuildingContent()}
 
         {!isPrebuiltTown && (
-          <UpgradePanel 
+          <UpgradePanel
             building={selectedBuilding}
             landId={landId}
             buildingType={buildingType}
             currentBlock={currentBlock}
-            needsLeafApproval={needsLeafApproval}
+            leafAllowance={leafAllowance}
             onUpgradeSuccess={onUpgradeSuccess}
-            onLeafApprovalSuccess={onLeafApprovalSuccess || (() => {})}
-            needsSeedApproval={needsSeedApproval}
-            onSeedApprovalSuccess={onSeedApprovalSuccess || (() => {})}
+            onLeafApprovalSuccess={onLeafApprovalSuccess || (() => { })}
+            seedAllowance={seedAllowance}
+            onSeedApprovalSuccess={onSeedApprovalSuccess || (() => { })}
           />
         )}
-        
+
         <div className="pt-2 border-t border-border">
           <p className="text-xs text-muted-foreground text-center">
-            {buildingType === 'village' 
-              ? 'Village buildings produce daily resources for your plants.' 
+            {buildingType === 'village'
+              ? 'Village buildings produce daily resources for your plants.'
               : 'Town buildings provide advanced services and perks.'
             }
           </p>
