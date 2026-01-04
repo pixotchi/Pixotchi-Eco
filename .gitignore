@@ -15,7 +15,7 @@ pixotchi-onchain/
 contracts/
 scripts/
 v22/
-
+exports/
 
 # Environment variables
 .env

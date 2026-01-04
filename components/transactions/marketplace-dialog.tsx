@@ -73,6 +73,45 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
+  // NEW: State for user's lands to ensure we use a valid landId for transactions
+  const [userLandIds, setUserLandIds] = useState<bigint[]>([]);
+
+  // Fetch user's lands to determine valid transaction signer
+  useEffect(() => {
+    if (!address) {
+      setUserLandIds([]);
+      return;
+    }
+    const fetchUserLands = async () => {
+      try {
+        const client = getReadClient();
+        // Use landOverviewByOwner to get tokenIds efficiently
+        const lands = await client.readContract({
+          address: LAND_CONTRACT_ADDRESS,
+          abi: landAbi as any,
+          functionName: 'landOverviewByOwner',
+          args: [address as `0x${string}`]
+        }) as any[];
+        // lands is array of struct { tokenId, ... }
+        if (Array.isArray(lands)) {
+          setUserLandIds(lands.map(l => BigInt(l.tokenId)));
+        }
+      } catch (e) {
+        console.warn('Failed to fetch user lands for marketplace:', e);
+      }
+    };
+    fetchUserLands();
+  }, [address]);
+
+  // Determine which landId to use for transactions (Create/Take/Cancel)
+  // Contract requires isApproved(landId), so we must use a land OWNED by the sender.
+  // PREFERENCE: Use current landId if owned (context relevant), otherwise use first owned land.
+  const transactionLandId = useMemo(() => {
+    if (userLandIds.some(id => id === landId)) return landId;
+    if (userLandIds.length > 0) return userLandIds[0];
+    return null; // User owns no lands -> Cannot trade (per contract logic requiring valid landId)
+  }, [landId, userLandIds]);
+
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
@@ -120,11 +159,14 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   // NEW: Improved refresh function that triggers allowance updates
   const refreshBalancesAndAllowances = useCallback(() => {
-    // Small delay to allow transaction to fully finalize onchain
-    setTimeout(() => {
-      fetchBalances();
-      fetchOrders();
-    }, 1000);
+    // Poll multiple times to handle RPC latency/indexing delays
+    const delays = [500, 1500, 3000];
+    delays.forEach(delay => {
+      setTimeout(() => {
+        fetchBalances();
+        fetchOrders();
+      }, delay);
+    });
   }, [fetchBalances, fetchOrders]);
 
   useEffect(() => {
@@ -152,7 +194,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   });
 
   const createOrderCall: { address: `0x${string}`; abi: any; functionName: string; args: any[] } | null = useMemo(() => {
-    if (!amount || !price) return null;
+    if (!amount || !price || transactionLandId === null) return null;
     const toWei = (v: string) => {
       const n = Number(v);
       if (!Number.isFinite(n) || n <= 0) return null;
@@ -166,9 +208,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
       address: LAND_CONTRACT_ADDRESS as `0x${string}`,
       abi: landAbi as any,
       functionName: 'marketPlaceCreateOrder',
-      args: [landId, BigInt(sellToken), orderAmount, amountAsk] as any[],
+      args: [transactionLandId, BigInt(sellToken), orderAmount, amountAsk] as any[],
     };
-  }, [sellSide, amount, price, landId]);
+  }, [sellSide, amount, price, transactionLandId]);
 
   const refresh = () => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
@@ -300,7 +342,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
       address: LAND_CONTRACT_ADDRESS as `0x${string}`,
       abi: landAbi as any,
       functionName: 'marketPlaceCreateOrder',
-      args: [landId, BigInt(sellToken), amountWei, amountAskWei] as any[],
+      args: [transactionLandId, BigInt(sellToken), amountWei, amountAskWei] as any[],
     };
   };
 
@@ -664,6 +706,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           const payTokenIsLeaf = o.sellToken === 0;
                           const currentAllowance = payTokenIsLeaf ? leafAllowance : seedAllowance;
                           const needsApproval = currentAllowance < o.amountAsk;
+                          const isMyOrder = address && o.seller.toLowerCase() === address.toLowerCase();
 
                           return (
                             <div key={String(o.id)} className="px-3 py-2 text-xs flex items-center justify-between gap-3">
@@ -671,7 +714,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <span className="font-medium">#{String(o.id)}</span>
                                 <span className="text-muted-foreground">Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
                               </div>
-                              {needsApproval ? (
+                              {needsApproval && !isMyOrder ? (
                                 <SponsoredTransaction
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
@@ -691,10 +734,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 />
                               ) : (
                                 <SponsoredTransaction
-                                  calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as any, functionName: 'marketPlaceTakeOrder', args: [landId, o.id] as any[] }]}
+                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as any, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as any[] }] : []}
                                   buttonText="Take"
                                   buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
-                                  disabled={loadingBalances || !hasSufficientForOrder(o) || (address && o.seller.toLowerCase() === address.toLowerCase())}
+                                  disabled={loadingBalances || !hasSufficientForOrder(o) || !!isMyOrder || !transactionLandId}
                                   hideStatus
                                   onSuccess={() => { toast.success('Order filled'); refresh(); }}
                                 />
@@ -769,7 +812,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           </div>
                           {showUserOrders && address && o.seller.toLowerCase() === address.toLowerCase() && o.isActive && (
                             <SponsoredTransaction
-                              calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as any, functionName: 'marketPlaceCancelOrder', args: [landId, o.id] as any[] }]}
+                              calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as any, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as any[] }] : []}
                               buttonText="Cancel"
                               buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
                               disabled={!isOrderActive(o.id)}
