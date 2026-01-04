@@ -34,6 +34,7 @@ import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum
 import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 import { SafeArea } from "@coinbase/onchainkit/minikit";
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
+import { ChatProvider } from "@/components/chat/chat-context";
 
 // Surface types for auth provider selection
 type AuthSurface = 'privy' | 'base' | 'privysolana';
@@ -408,44 +409,46 @@ export function Providers(props: { children: ReactNode }) {
                             <SolanaWalletProvider>
                               <BalanceProvider>
                                 <LoadingProvider>
-                                  <TutorialBundle>
-                                    {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                                    {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                                    {/** added provider wrapper **/}
-                                    {/* eslint-disable-next-line react/no-children-prop */}
-                                    <Toaster
-                                      position="top-center"
-                                      toastOptions={{
-                                        duration: 4000,
-                                        style: {
-                                          backgroundColor: "hsl(var(--background))",
-                                          color: "hsl(var(--foreground))",
-                                          border: "1px solid hsl(var(--border))",
+                                  <ChatProvider>
+                                    <TutorialBundle>
+                                      {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
+                                      {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
+                                      {/** added provider wrapper **/}
+                                      {/* eslint-disable-next-line react/no-children-prop */}
+                                      <Toaster
+                                        position="top-center"
+                                        toastOptions={{
+                                          duration: 4000,
+                                          style: {
+                                            backgroundColor: "hsl(var(--background))",
+                                            color: "hsl(var(--foreground))",
+                                            border: "1px solid hsl(var(--border))",
+                                            zIndex: 9999,
+                                          },
+                                          success: {
+                                            iconTheme: {
+                                              primary: "hsl(var(--primary))",
+                                              secondary: "hsl(var(--primary-foreground))",
+                                            },
+                                          },
+                                          error: {
+                                            iconTheme: {
+                                              primary: "hsl(var(--destructive))",
+                                              secondary: "hsl(var(--destructive-foreground))",
+                                            },
+                                          },
+                                        }}
+                                        containerStyle={{
                                           zIndex: 9999,
-                                        },
-                                        success: {
-                                          iconTheme: {
-                                            primary: "hsl(var(--primary))",
-                                            secondary: "hsl(var(--primary-foreground))",
-                                          },
-                                        },
-                                        error: {
-                                          iconTheme: {
-                                            primary: "hsl(var(--destructive))",
-                                            secondary: "hsl(var(--destructive-foreground))",
-                                          },
-                                        },
-                                      }}
-                                      containerStyle={{
-                                        zIndex: 9999,
-                                      }}
-                                    />
-                                    {props.children}
-                                    <SlideshowModal />
-                                  </TutorialBundle>
-                                  <TasksInfoDialog />
-                                  <SecretGardenListener />
-                                  <SnowEffect />
+                                        }}
+                                      />
+                                      {props.children}
+                                      <SlideshowModal />
+                                    </TutorialBundle>
+                                    <TasksInfoDialog />
+                                    <SecretGardenListener />
+                                    <SnowEffect />
+                                  </ChatProvider>
                                 </LoadingProvider>
                               </BalanceProvider>
                             </SolanaWalletProvider>

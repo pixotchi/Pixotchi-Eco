@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { ChatProvider, useChat } from './chat-context';
+import { useChat } from './chat-context';
 import ChatMessages from './chat-messages';
 import ChatInput from './chat-input';
 import AITypingIndicator from './ai-typing-indicator';
@@ -94,10 +94,8 @@ export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
   }, [txModalOpen, open, onOpenChange]);
 
   return (
-    <ChatProvider>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <ChatDialogContent />
-      </Dialog>
-    </ChatProvider>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <ChatDialogContent />
+    </Dialog>
   );
 }

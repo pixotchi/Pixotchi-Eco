@@ -22,6 +22,8 @@ interface ChatContextState {
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
   isAITyping: boolean;
+  unreadCount: number;
+  markAsRead: () => void;
 }
 
 const ChatContext = createContext<ChatContextState | undefined>(undefined);
@@ -114,7 +116,48 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Note: Message loading is now handled directly in setMode() to prevent race conditions
+  // Unread message tracking
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chat-last-read');
+      return saved ? parseInt(saved, 10) : Date.now();
+    }
+    return Date.now();
+  });
+
+  // Calculate unread count whenever messages or lastReadTimestamp changes
+  // Only track unread for public chat for now, as that's the primary use case
+  useEffect(() => {
+    // We check the latest messages in the 'public' cache + current messages if mode is public
+    const publicMessages = mode === 'public' ? messages : (messageCacheRef.current.public || []);
+
+    if (publicMessages.length === 0) {
+      setUnreadCount(0);
+      return;
+    }
+
+    // Sort to be sure we're checking correctly (though they should be sorted already)
+    // Count how many are newer than lastReadTimestamp
+    // Also ignore messages sent by the current user to avoid self-unread
+    const count = publicMessages.filter(m => {
+      const isNew = m.timestamp > lastReadTimestamp;
+      // Check if message is from current user
+      const isFromMe = chatAddress && m.address && m.address.toLowerCase() === chatAddress.toLowerCase();
+      return isNew && !isFromMe;
+    }).length;
+
+    setUnreadCount(count);
+  }, [messages, mode, lastReadTimestamp, chatAddress]);
+
+  const markAsRead = useCallback(() => {
+    const now = Date.now();
+    setLastReadTimestamp(now);
+    localStorage.setItem('chat-last-read', now.toString());
+    setUnreadCount(0);
+  }, []);
+
+  // note: Message loading is now handled directly in setMode() to prevent race conditions
 
   const fetchHistory = useCallback(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
     if (showLoading) setLoading(true);
@@ -382,7 +425,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isSending,
     conversationId,
     setConversationId,
-    isAITyping
+    isAITyping,
+    unreadCount,
+    markAsRead
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
