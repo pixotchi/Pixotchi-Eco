@@ -23,6 +23,7 @@ import { SignInWithBaseButton } from "@base-org/account-ui/react";
 import { clearAppCaches } from "@/lib/cache-utils";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
+import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 
 // Import custom hooks
 import { useInviteValidation } from "@/hooks/useInviteValidation";
@@ -741,20 +742,22 @@ export default function App() {
                     console.error(`Error in tabs:`, { error, errorInfo });
                   }}
                 >
-                  {tabs.map((tab) => {
-                    const TabComponent = tabComponents[tab.id];
-                    // Activity mode: 'visible' means mounted/active effects, 'hidden' means kept in memory but effects unmounted.
-                    // This preserves scroll position and state (e.g. inputs) when switching tabs.
-                    const activityMode = activeTab === tab.id ? 'visible' : 'hidden';
+                  <TabVisibilityProvider activeTab={activeTab}>
+                    {tabs.map((tab) => {
+                      const TabComponent = tabComponents[tab.id];
+                      // Activity mode: 'visible' means mounted/active effects, 'hidden' means kept in memory but effects unmounted.
+                      // This preserves scroll position and state (e.g. inputs) when switching tabs.
+                      const activityMode = activeTab === tab.id ? 'visible' : 'hidden';
 
-                    return (
-                      <Activity key={tab.id} mode={activityMode}>
-                        <div className={activeTab === tab.id ? 'block h-full' : 'hidden'}>
-                          {TabComponent ? <TabComponent /> : null}
-                        </div>
-                      </Activity>
-                    );
-                  })}
+                      return (
+                        <Activity key={tab.id} mode={activityMode}>
+                          <div className={activeTab === tab.id ? 'block h-full' : 'hidden'}>
+                            {TabComponent ? <TabComponent /> : null}
+                          </div>
+                        </Activity>
+                      );
+                    })}
+                  </TabVisibilityProvider>
                 </ErrorBoundary>
               </div>
 

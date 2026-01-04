@@ -30,6 +30,7 @@ import SwapMintBundle from '@/components/transactions/swap-mint-bundle';
 import SwapLandMintBundle from '@/components/transactions/swap-land-mint-bundle';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import { ToggleGroup } from '@/components/ui/toggle-group';
+import { useTabVisibility } from "@/lib/tab-visibility-context";
 import LandMintTransaction from '../transactions/land-mint-transaction';
 import { MintShareModal } from '@/components/mint-share-modal';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
@@ -63,6 +64,8 @@ export default function MintTab() {
   const { isSmartWallet } = useSmartWallet();
   const { seedBalance: seedBalanceRaw } = useBalances();
   const frameContext = useFrameContext();
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('mint');
 
   // ETH Mode for smart wallet users
   const { isEthMode } = useEthModeSafe();
@@ -368,6 +371,14 @@ export default function MintTab() {
 
     fetchData();
   }, [address, forcedFetchCount, mintType, chainId]);
+
+  // Refresh when tab becomes visible
+  useEffect(() => {
+    if (isVisible) {
+      console.log('🔄 [MintTab] Tab visible, refreshing...');
+      fetchData();
+    }
+  }, [isVisible, fetchData]);
 
   // Solana bridge minting (only used when isSolana is true)
   const bridge = useSolanaBridge();

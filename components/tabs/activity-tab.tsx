@@ -5,6 +5,8 @@ import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-service";
 import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,8 +41,11 @@ const ITEMS_PER_PAGE = 12;
 
 export default function ActivityTab() {
   const { address, isConnected } = useAccount();
+  const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('activity');
   const myAddress = isSolana ? twinAddress : address;
   const isWalletConnected = isConnected || (isSolana && !!twinAddress);
   const [allActivities, setAllActivities] = useState<ProcessedActivityEvent[]>([]);
@@ -156,10 +161,20 @@ export default function ActivityTab() {
   useEffect(() => {
     if (view === 'my' && (!isWalletConnected || !myAddress)) {
       setView('all');
-    } else {
+    }
+  }, [view, isWalletConnected, myAddress]);
+
+  useEffect(() => {
+    fetchActivities();
+  }, [fetchActivities]);
+
+  // Refresh when tab becomes visible
+  useEffect(() => {
+    if (isVisible) {
+      console.log('🔄 [Activity] Tab visible, refreshing...');
       fetchActivities();
     }
-  }, [view, isWalletConnected, myAddress, fetchActivities]);
+  }, [isVisible, fetchActivities]);
 
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {
@@ -209,7 +224,9 @@ export default function ActivityTab() {
   const currentActivities = allActivities.slice(startIndex, endIndex);
 
   const renderContent = () => {
-    if (loading || catalogsLoading) {
+    // Only block render if we have NO data at all
+    // If we have data, we show it (Activity API maintains state) and update silently
+    if (loading && allActivities.length === 0) {
       return (
         <div className="flex items-center justify-center py-8">
           <BaseExpandedLoadingPageLoader text="Loading activities..." />

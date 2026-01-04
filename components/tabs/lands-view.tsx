@@ -27,6 +27,9 @@ import { useLandMap } from "@/hooks/useLandMap";
 import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
 import BatchClaimCard from "@/components/transactions/batch-claim-card";
 
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
+
 export default function LandsView() {
   // Gate: Solana wallets cannot use Land features
   const isSolana = useIsSolanaWallet();
@@ -39,8 +42,11 @@ export default function LandsView() {
     );
   }
   const { address } = useAccount();
+  const { isSmartWallet } = useSmartWallet();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('dashboard');
   const [isMapOpen, setIsMapOpen] = useState(false);
 
   // Map data hook
@@ -156,7 +162,7 @@ export default function LandsView() {
         fetchDataPendingRef.current = null;
       }
     }
-  }, [address, selectedLand?.tokenId]);
+  }, [address, selectedLand?.tokenId, lands.length]);
 
   const fetchBuildingData = useCallback(async () => {
     if (!selectedLand) {
@@ -299,12 +305,19 @@ export default function LandsView() {
     window.dispatchEvent(new Event('balances:refresh'));
   }, [fetchBuildingData, selectedLand]);
 
+  // Refresh when dashboard becomes visible
+  useEffect(() => {
+    if (isVisible) {
+      console.log('🔄 [LandsView] Dashboard visible, refreshing...');
+      fetchData();
+    }
+  }, [isVisible, fetchData]);
+
   useEffect(() => {
     if (address) {
-      fetchData();
       fetchApprovalStatus();
     }
-  }, [address, fetchData, fetchApprovalStatus]);
+  }, [address, fetchApprovalStatus]);
 
   // Listen for global buildings refresh events (emitted on tx success in panels)
   useEffect(() => {
@@ -364,7 +377,8 @@ export default function LandsView() {
   });
 
 
-  if (loading) {
+  // Only block render if we have NO lands data at all
+  if (loading && lands.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
         <BaseExpandedLoadingPageLoader text="Loading your lands..." />

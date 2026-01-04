@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import packageJson from '@/package.json';
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useFrameContext } from "@/lib/frame-context";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
 
 const InfoCard = ({
   icon,
@@ -79,6 +80,8 @@ export default function AboutTab() {
   const { start, enabled } = useSlideshow();
   const { walletType, isSmartWallet } = useSmartWallet();
   const frameData = useFrameContext();
+  const { isTabVisible } = useTabVisibility();
+  const isVisible = isTabVisible('about');
   const [stats, setStats] = useState<InviteStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -98,7 +101,20 @@ export default function AboutTab() {
       loadInviteStats();
       loadUserCodes();
     }
+    if (address && INVITE_CONFIG.SYSTEM_ENABLED) {
+      loadInviteStats();
+      loadUserCodes();
+    }
   }, [address]);
+
+  // Refresh when tab becomes visible
+  useEffect(() => {
+    if (isVisible && address && INVITE_CONFIG.SYSTEM_ENABLED) {
+      console.log('🔄 [AboutTab] Tab visible, refreshing stats...');
+      loadInviteStats();
+      loadUserCodes();
+    }
+  }, [isVisible, address]);
 
   const loadInviteStats = async () => {
     if (!address) return;
