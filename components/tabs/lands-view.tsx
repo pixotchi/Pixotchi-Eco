@@ -244,16 +244,28 @@ export default function LandsView() {
 
         // Choose preferred building for the new land: try last selected id, else first
         const currentBuildings = buildingType === 'village' ? (villageData || []) : allTownBuildings;
+
         if (currentBuildings.length > 0) {
           const preferredId = lastSelectedBuildingIdRef.current;
-          const preferred = preferredId != null ? currentBuildings.find(b => Number(b.id) === Number(preferredId)) : undefined;
-          if (preferred) {
-            if (!selectedBuilding || Number(selectedBuilding.id) !== Number(preferred.id)) {
-              setSelectedBuilding(preferred);
+
+          // If we have a preferred ID (e.g. from previous selection), try to find it in the NEW data
+          if (preferredId != null) {
+            const freshBuilding = currentBuildings.find(b => Number(b.id) === Number(preferredId));
+
+            // If we found the building in the fresh data, ALWAYS update selectedBuilding state 
+            // to ensure meaningful properties (level, isUpgrading) are reflected in the UI.
+            if (freshBuilding) {
+              setSelectedBuilding(freshBuilding);
+            } else {
+              // Fallback if the building ID is no longer valid for some reason, select the first one
+              setSelectedBuilding(currentBuildings[0]);
             }
-          } else if (!selectedBuilding) {
+          } else {
+            // No preference, just select the first one
             setSelectedBuilding(currentBuildings[0]);
           }
+        } else {
+          setSelectedBuilding(null);
         }
       }
     } catch (err) {
