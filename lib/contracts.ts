@@ -282,7 +282,7 @@ export const getReadClient = () => {
   if (!cachedReadClient) {
     cachedReadClient = createPublicClient({
       chain: baseWithHealth,
-      transport: createResilientTransport([healthRpc]),
+      transport: createResilientTransport(), // Use all endpoints from config
       // Slow polling to minimize background health checks; explicit calls still work immediately
       pollingInterval: 300_000,
     });
