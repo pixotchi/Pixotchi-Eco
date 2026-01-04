@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.35",
+  "version": "1.6.40",
   "private": true,
   "scripts": {
     "dev": "next dev",
