@@ -266,6 +266,7 @@ export const SPIN_GAME_ABI = [
 
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
+let cachedRawReadClient: any = null;
 let cachedWriteClient: any = null;
 
 // Create optimized read client for data fetching
@@ -299,7 +300,19 @@ export const getReadClient = () => {
   return cachedReadClient;
 };
 
-
+// Raw read client WITHOUT multicall batching - use for heavy single calls like leaderboard
+// that already handle their own batching or should not be auto-aggregated
+export const getRawReadClient = () => {
+  if (!cachedRawReadClient) {
+    cachedRawReadClient = createPublicClient({
+      chain: baseWithHealth,
+      transport: createResilientTransport(),
+      pollingInterval: 300_000,
+      // NO batch.multicall here - calls go directly without auto-aggregation
+    });
+  }
+  return cachedRawReadClient;
+};
 
 // Create optimized write client for transactions
 const getWriteClient = () => {
@@ -2093,9 +2106,9 @@ export const claimVillageProduction = async (walletClient: WalletClient, landId:
   return hash;
 };
 
-// Leaderboard functions
+// Leaderboard functions - use raw client to avoid multicall batching issues
 export const getAliveTokenIds = async (): Promise<number[]> => {
-  const readClient = getReadClient();
+  const readClient = getRawReadClient();
 
   return retryWithBackoff(async () => {
     const tokenIds = await readClient.readContract({
@@ -2108,99 +2121,47 @@ export const getAliveTokenIds = async (): Promise<number[]> => {
   });
 };
 
+
 export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]> => {
-  const readClient = getReadClient();
+  // Use raw client WITHOUT multicall batching to prevent auto-aggregation
+  // This is a heavy single call that should not be combined with other calls
+  const readClient = getRawReadClient();
 
-  // Chunk size to prevent gas limit issues on production RPCs
-  // 400 plants per call stays within gas limits while reducing round trips
-  const CHUNK_SIZE = 400;
+  return retryWithBackoff(async () => {
+    const plants = await readClient.readContract({
+      address: PIXOTCHI_NFT_ADDRESS,
+      abi: PIXOTCHI_NFT_ABI,
+      functionName: 'getPlantsInfoExtended',
+      args: [tokenIds.map(id => BigInt(id))],
+    }) as any[];
 
-  // If small enough, process in a single call
-  if (tokenIds.length <= CHUNK_SIZE) {
-    return retryWithBackoff(async () => {
-      const plants = await readClient.readContract({
-        address: PIXOTCHI_NFT_ADDRESS,
-        abi: PIXOTCHI_NFT_ABI,
-        functionName: 'getPlantsInfoExtended',
-        args: [tokenIds.map(id => BigInt(id))],
-      }) as any[];
+    return plants.map((plant: any) => {
+      const plantId = Number(plant.id);
+      const extensions = plant.extensions || [];
+      const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
-      return plants.map((plant: any) => {
-        const plantId = Number(plant.id);
-        const extensions = plant.extensions || [];
-        const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
-
-        return {
-          id: plantId,
-          name: plant.name || '',
-          score: Number(plant.score),
-          status: Number(plant.status),
-          rewards: Number(plant.rewards),
-          level: Number(plant.level),
-          timeUntilStarving: Number(plant.timeUntilStarving),
-          stars: Number(plant.stars),
-          strain: Number(plant.strain),
-          timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
-          lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
-          lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
-          statusStr: plant.statusStr || '',
-          owner: plant.owner,
-          extensions,
-          fenceV2,
-        };
-      });
+      return {
+        id: plantId,
+        name: plant.name || '',
+        score: Number(plant.score),
+        status: Number(plant.status),
+        rewards: Number(plant.rewards),
+        level: Number(plant.level),
+        timeUntilStarving: Number(plant.timeUntilStarving),
+        stars: Number(plant.stars),
+        strain: Number(plant.strain),
+        timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
+        lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
+        lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
+        statusStr: plant.statusStr || '',
+        owner: plant.owner,
+        extensions,
+        fenceV2,
+      };
     });
-  }
-
-  // For large arrays, chunk the requests to avoid gas limit issues
-  const chunks: number[][] = [];
-  for (let i = 0; i < tokenIds.length; i += CHUNK_SIZE) {
-    chunks.push(tokenIds.slice(i, i + CHUNK_SIZE));
-  }
-
-  // Process chunks in parallel (with limited concurrency via Promise.all)
-  const chunkResults = await Promise.all(
-    chunks.map(chunk =>
-      retryWithBackoff(async () => {
-        const plants = await readClient.readContract({
-          address: PIXOTCHI_NFT_ADDRESS,
-          abi: PIXOTCHI_NFT_ABI,
-          functionName: 'getPlantsInfoExtended',
-          args: [chunk.map(id => BigInt(id))],
-        }) as any[];
-
-        return plants.map((plant: any) => {
-          const plantId = Number(plant.id);
-          const extensions = plant.extensions || [];
-          const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
-
-          return {
-            id: plantId,
-            name: plant.name || '',
-            score: Number(plant.score),
-            status: Number(plant.status),
-            rewards: Number(plant.rewards),
-            level: Number(plant.level),
-            timeUntilStarving: Number(plant.timeUntilStarving),
-            stars: Number(plant.stars),
-            strain: Number(plant.strain),
-            timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
-            lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
-            lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
-            statusStr: plant.statusStr || '',
-            owner: plant.owner,
-            extensions,
-            fenceV2,
-          };
-        });
-      })
-    )
-  );
-
-  // Flatten all chunk results into a single array
-  return chunkResults.flat();
-
+  });
 };
+
 
 // Get specific land owner
 export const getLandOwner = async (landId: number): Promise<string | null> => {
