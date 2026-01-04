@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
+import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData, ContractFunctionExecutionError } from 'viem';
 import { appendBuilderSuffix } from './builder-code';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
@@ -285,10 +285,16 @@ export const getReadClient = () => {
       transport: createResilientTransport(), // Use all endpoints from config
       // Slow polling to minimize background health checks; explicit calls still work immediately
       pollingInterval: 300_000,
+      // Enable automatic eth_call aggregation via multicall - batches scattered readContract
+      // calls into single multicall requests, reducing RPC calls and compute units
+      batch: {
+        multicall: true,
+      },
     });
   }
   return cachedReadClient;
 };
+
 
 // Create optimized write client for transactions
 const getWriteClient = () => {
@@ -313,14 +319,27 @@ export const retryWithBackoff = async <T>(
       const res = await fn();
       // We can't tell which endpoint served this call from here; individual read helpers can annotate.
       return res;
-    } catch (error: any) {
-      const isRateLimit = error?.details?.includes('rate limit') ||
-        error?.message?.includes('429') ||
-        error?.status === 429;
+    } catch (error: unknown) {
+      // Use typed error handling for viem errors
+      const isContractError = error instanceof ContractFunctionExecutionError;
 
-      const isNetworkError = error?.message?.includes('fetch') ||
-        error?.message?.includes('network') ||
-        error?.message?.includes('timeout');
+      // Extract error details safely
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorDetails = (error as any)?.details ?? '';
+      const errorStatus = (error as any)?.status;
+
+      const isRateLimit = errorDetails.includes('rate limit') ||
+        errorMessage.includes('429') ||
+        errorStatus === 429;
+
+      const isNetworkError = errorMessage.includes('fetch') ||
+        errorMessage.includes('network') ||
+        errorMessage.includes('timeout');
+
+      // Don't retry contract execution errors (revert, out of gas, etc.) - they won't succeed
+      if (isContractError && !isNetworkError && !isRateLimit) {
+        throw error;
+      }
 
       if ((isRateLimit || isNetworkError) && attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
@@ -333,6 +352,7 @@ export const retryWithBackoff = async <T>(
   }
   throw new Error('Max retries exceeded');
 };
+
 
 // Simplified contract ABIs (only the functions we need)
 const PIXOTCHI_NFT_ABI = [

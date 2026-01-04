@@ -1,4 +1,4 @@
-import { createPublicClient, isAddress, type PublicClient, type Transport } from 'viem';
+import { createPublicClient, isAddress, type PublicClient, type Transport, ContractFunctionExecutionError } from 'viem';
 import { base } from 'viem/chains';
 import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
@@ -89,7 +89,7 @@ function sanitiseResolvedName(address: `0x${string}`, value: string | null | und
  */
 async function resolveBasename(address: `0x${string}`): Promise<string | null> {
   const client = getBaseClient();
-  
+
   try {
     const name = await client.readContract({
       address: BASE_ENS_REGISTRAR,
@@ -97,16 +97,24 @@ async function resolveBasename(address: `0x${string}`): Promise<string | null> {
       functionName: 'nameForAddr',
       args: [address],
     });
-    
+
     // Return null if empty string
     return name && name.length > 0 ? name : null;
   } catch (error) {
+    // Use typed error handling: ContractFunctionExecutionError indicates the call completed
+    // but reverted (e.g., name not registered), while other errors are network/RPC issues
+    if (error instanceof ContractFunctionExecutionError) {
+      // Contract reverted - name not registered, this is expected behavior
+      return null;
+    }
+    // Network/RPC error - log for debugging
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Identity Resolver] Basename lookup failed', error);
+      console.log('[Identity Resolver] Basename lookup failed (network error)', error);
     }
     return null;
   }
 }
+
 
 /**
  * Resolve a single address to its Basename (Base network)
@@ -190,7 +198,7 @@ export async function resolvePrimaryNames(
         return { address, name };
       })
     );
-    
+
     results.forEach((result) => {
       if (result.status === 'fulfilled') {
         resultMap.set(result.value.address, result.value.name);

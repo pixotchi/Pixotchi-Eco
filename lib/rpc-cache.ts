@@ -28,8 +28,13 @@ const getPublicClient = cache(() => {
     return createPublicClient({
         chain: base,
         transport: http(rpcUrl),
+        // Enable automatic eth_call aggregation via multicall
+        batch: {
+            multicall: true,
+        },
     });
 });
+
 
 /**
  * Generic cached contract read function
