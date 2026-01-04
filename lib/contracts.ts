@@ -2107,60 +2107,58 @@ export const claimVillageProduction = async (walletClient: WalletClient, landId:
 };
 
 // Leaderboard functions - use raw client to avoid multicall batching issues
+// NO retryWithBackoff here - let viem's fallback transport handle RPC failover natively
 export const getAliveTokenIds = async (): Promise<number[]> => {
   const readClient = getRawReadClient();
 
-  return retryWithBackoff(async () => {
-    const tokenIds = await readClient.readContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'airdropGetAliveAndDeadTokenIds',
-    }) as bigint[];
+  const tokenIds = await readClient.readContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'airdropGetAliveAndDeadTokenIds',
+  }) as bigint[];
 
-    return tokenIds.map(id => Number(id));
-  });
+  return tokenIds.map(id => Number(id));
 };
 
 
 export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]> => {
   // Use raw client WITHOUT multicall batching to prevent auto-aggregation
-  // This is a heavy single call that should not be combined with other calls
+  // NO retryWithBackoff - let viem's fallback transport handle RPC failover natively
   const readClient = getRawReadClient();
 
-  return retryWithBackoff(async () => {
-    const plants = await readClient.readContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'getPlantsInfoExtended',
-      args: [tokenIds.map(id => BigInt(id))],
-    }) as any[];
+  const plants = await readClient.readContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'getPlantsInfoExtended',
+    args: [tokenIds.map(id => BigInt(id))],
+  }) as any[];
 
-    return plants.map((plant: any) => {
-      const plantId = Number(plant.id);
-      const extensions = plant.extensions || [];
-      const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
+  return plants.map((plant: any) => {
+    const plantId = Number(plant.id);
+    const extensions = plant.extensions || [];
+    const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
-      return {
-        id: plantId,
-        name: plant.name || '',
-        score: Number(plant.score),
-        status: Number(plant.status),
-        rewards: Number(plant.rewards),
-        level: Number(plant.level),
-        timeUntilStarving: Number(plant.timeUntilStarving),
-        stars: Number(plant.stars),
-        strain: Number(plant.strain),
-        timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
-        lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
-        lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
-        statusStr: plant.statusStr || '',
-        owner: plant.owner,
-        extensions,
-        fenceV2,
-      };
-    });
+    return {
+      id: plantId,
+      name: plant.name || '',
+      score: Number(plant.score),
+      status: Number(plant.status),
+      rewards: Number(plant.rewards),
+      level: Number(plant.level),
+      timeUntilStarving: Number(plant.timeUntilStarving),
+      stars: Number(plant.stars),
+      strain: Number(plant.strain),
+      timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
+      lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
+      lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
+      statusStr: plant.statusStr || '',
+      owner: plant.owner,
+      extensions,
+      fenceV2,
+    };
   });
 };
+
 
 
 // Get specific land owner
