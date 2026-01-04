@@ -266,6 +266,7 @@ export const SPIN_GAME_ABI = [
 
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
+let cachedRawReadClient: any = null;
 let cachedWriteClient: any = null;
 
 // Create optimized read client for data fetching
@@ -287,14 +288,31 @@ export const getReadClient = () => {
       pollingInterval: 300_000,
       // Enable automatic eth_call aggregation via multicall - batches scattered readContract
       // calls into single multicall requests, reducing RPC calls and compute units
+      // Limit batch size to prevent gas limit issues on production RPCs (Vercel)
       batch: {
-        multicall: true,
+        multicall: {
+          batchSize: 100, // Max 100 calls per multicall to stay within RPC gas limits
+          wait: 10, // Wait 10ms to collect calls before batching
+        },
       },
     });
   }
   return cachedReadClient;
 };
 
+// Raw read client WITHOUT multicall batching - use for heavy single calls like leaderboard
+// that already handle their own batching or should not be auto-aggregated
+export const getRawReadClient = () => {
+  if (!cachedRawReadClient) {
+    cachedRawReadClient = createPublicClient({
+      chain: baseWithHealth,
+      transport: createResilientTransport(),
+      pollingInterval: 300_000,
+      // NO batch.multicall here - calls go directly without auto-aggregation
+    });
+  }
+  return cachedRawReadClient;
+};
 
 // Create optimized write client for transactions
 const getWriteClient = () => {
@@ -2088,9 +2106,9 @@ export const claimVillageProduction = async (walletClient: WalletClient, landId:
   return hash;
 };
 
-// Leaderboard functions
+// Leaderboard functions - use raw client to avoid multicall batching issues
 export const getAliveTokenIds = async (): Promise<number[]> => {
-  const readClient = getReadClient();
+  const readClient = getRawReadClient();
 
   return retryWithBackoff(async () => {
     const tokenIds = await readClient.readContract({
@@ -2103,8 +2121,11 @@ export const getAliveTokenIds = async (): Promise<number[]> => {
   });
 };
 
+
 export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]> => {
-  const readClient = getReadClient();
+  // Use raw client WITHOUT multicall batching to prevent auto-aggregation
+  // This is a heavy single call that should not be combined with other calls
+  const readClient = getRawReadClient();
 
   return retryWithBackoff(async () => {
     const plants = await readClient.readContract({
@@ -2114,13 +2135,9 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
       args: [tokenIds.map(id => BigInt(id))],
     }) as any[];
 
-    // Fence V2 writes to the same extensions storage, so derive it from extensions
-    // No need for separate RPC call to fenceV2GetPurchaseStats
-
     return plants.map((plant: any) => {
       const plantId = Number(plant.id);
       const extensions = plant.extensions || [];
-      // Derive Fence V2 state directly from extensions (same storage)
       const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
       return {
@@ -2144,6 +2161,7 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
     });
   });
 };
+
 
 // Get specific land owner
 export const getLandOwner = async (landId: number): Promise<string | null> => {
