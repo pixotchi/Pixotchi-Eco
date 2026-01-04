@@ -287,13 +287,18 @@ export const getReadClient = () => {
       pollingInterval: 300_000,
       // Enable automatic eth_call aggregation via multicall - batches scattered readContract
       // calls into single multicall requests, reducing RPC calls and compute units
+      // Limit batch size to prevent gas limit issues on production RPCs (Vercel)
       batch: {
-        multicall: true,
+        multicall: {
+          batchSize: 100, // Max 100 calls per multicall to stay within RPC gas limits
+          wait: 10, // Wait 10ms to collect calls before batching
+        },
       },
     });
   }
   return cachedReadClient;
 };
+
 
 
 // Create optimized write client for transactions
@@ -2106,43 +2111,95 @@ export const getAliveTokenIds = async (): Promise<number[]> => {
 export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]> => {
   const readClient = getReadClient();
 
-  return retryWithBackoff(async () => {
-    const plants = await readClient.readContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'getPlantsInfoExtended',
-      args: [tokenIds.map(id => BigInt(id))],
-    }) as any[];
+  // Chunk size to prevent gas limit issues on production RPCs
+  // 400 plants per call stays within gas limits while reducing round trips
+  const CHUNK_SIZE = 400;
 
-    // Fence V2 writes to the same extensions storage, so derive it from extensions
-    // No need for separate RPC call to fenceV2GetPurchaseStats
+  // If small enough, process in a single call
+  if (tokenIds.length <= CHUNK_SIZE) {
+    return retryWithBackoff(async () => {
+      const plants = await readClient.readContract({
+        address: PIXOTCHI_NFT_ADDRESS,
+        abi: PIXOTCHI_NFT_ABI,
+        functionName: 'getPlantsInfoExtended',
+        args: [tokenIds.map(id => BigInt(id))],
+      }) as any[];
 
-    return plants.map((plant: any) => {
-      const plantId = Number(plant.id);
-      const extensions = plant.extensions || [];
-      // Derive Fence V2 state directly from extensions (same storage)
-      const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
+      return plants.map((plant: any) => {
+        const plantId = Number(plant.id);
+        const extensions = plant.extensions || [];
+        const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
 
-      return {
-        id: plantId,
-        name: plant.name || '',
-        score: Number(plant.score),
-        status: Number(plant.status),
-        rewards: Number(plant.rewards),
-        level: Number(plant.level),
-        timeUntilStarving: Number(plant.timeUntilStarving),
-        stars: Number(plant.stars),
-        strain: Number(plant.strain),
-        timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
-        lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
-        lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
-        statusStr: plant.statusStr || '',
-        owner: plant.owner,
-        extensions,
-        fenceV2,
-      };
+        return {
+          id: plantId,
+          name: plant.name || '',
+          score: Number(plant.score),
+          status: Number(plant.status),
+          rewards: Number(plant.rewards),
+          level: Number(plant.level),
+          timeUntilStarving: Number(plant.timeUntilStarving),
+          stars: Number(plant.stars),
+          strain: Number(plant.strain),
+          timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
+          lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
+          lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
+          statusStr: plant.statusStr || '',
+          owner: plant.owner,
+          extensions,
+          fenceV2,
+        };
+      });
     });
-  });
+  }
+
+  // For large arrays, chunk the requests to avoid gas limit issues
+  const chunks: number[][] = [];
+  for (let i = 0; i < tokenIds.length; i += CHUNK_SIZE) {
+    chunks.push(tokenIds.slice(i, i + CHUNK_SIZE));
+  }
+
+  // Process chunks in parallel (with limited concurrency via Promise.all)
+  const chunkResults = await Promise.all(
+    chunks.map(chunk =>
+      retryWithBackoff(async () => {
+        const plants = await readClient.readContract({
+          address: PIXOTCHI_NFT_ADDRESS,
+          abi: PIXOTCHI_NFT_ABI,
+          functionName: 'getPlantsInfoExtended',
+          args: [chunk.map(id => BigInt(id))],
+        }) as any[];
+
+        return plants.map((plant: any) => {
+          const plantId = Number(plant.id);
+          const extensions = plant.extensions || [];
+          const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
+
+          return {
+            id: plantId,
+            name: plant.name || '',
+            score: Number(plant.score),
+            status: Number(plant.status),
+            rewards: Number(plant.rewards),
+            level: Number(plant.level),
+            timeUntilStarving: Number(plant.timeUntilStarving),
+            stars: Number(plant.stars),
+            strain: Number(plant.strain),
+            timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
+            lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
+            lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
+            statusStr: plant.statusStr || '',
+            owner: plant.owner,
+            extensions,
+            fenceV2,
+          };
+        });
+      })
+    )
+  );
+
+  // Flatten all chunk results into a single array
+  return chunkResults.flat();
+
 };
 
 // Get specific land owner
