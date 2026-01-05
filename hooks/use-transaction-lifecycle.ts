@@ -48,9 +48,11 @@ export function useTransactionLifecycle({
 
             // Use viem's waitForTransactionReceipt which handles polling efficiently
             // Standard polling is ~4s, bypassing the global 5m wagmi config
+            // We set it to 1s to match Base's fast block times (~2s) for snappy UI
             const receipt = await waitForTransactionReceipt(publicClient, {
                 hash: txHash as `0x${string}`,
                 confirmations: 1,
+                pollingInterval: 1_000,
                 timeout: 60_000, // Stop polling after 60s to avoid infinite loops if RPC issues
             });
 
