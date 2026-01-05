@@ -108,7 +108,6 @@ async function resolveBasename(address: `0x${string}`): Promise<string | null> {
   }
 }
 
-
 /**
  * Resolve a single address to its Basename (Base network)
  * Uses the app's custom RPC transport with fallbacks

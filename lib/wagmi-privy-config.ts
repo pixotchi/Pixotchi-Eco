@@ -33,8 +33,7 @@ export const wagmiPrivyConfig = createConfig({
   // Expose common external connectors so OnchainKit ConnectWallet can attach in web mode
   connectors,
   // Match production behavior: rely on viem defaults for chain RPC list and keep modest polling
-  // Standard polling interval (5 minutes) to reduce background health probes
-  // Note: Transaction components now use independent, aggressive polling (via useTransactionLifecycle) for active txs
+  // Standard polling interval (4s) to ensure responsive transaction updates
   pollingInterval: 300_000,
   ssr: true,
 });

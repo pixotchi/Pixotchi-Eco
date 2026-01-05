@@ -366,7 +366,7 @@ export default function LeaderboardTab() {
   // Refresh data when tab becomes visible
   useEffect(() => {
     if (isVisible) {
-
+      console.log('🔄 [Leaderboard] Tab visible, refreshing data...');
       fetchLeaderboardData();
       void fetchMyPlants();
       if (boardType === 'stake') {

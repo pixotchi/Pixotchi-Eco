@@ -375,7 +375,7 @@ export default function MintTab() {
   // Refresh when tab becomes visible
   useEffect(() => {
     if (isVisible) {
-
+      console.log('🔄 [MintTab] Tab visible, refreshing...');
       fetchData();
     }
   }, [isVisible, fetchData]);
