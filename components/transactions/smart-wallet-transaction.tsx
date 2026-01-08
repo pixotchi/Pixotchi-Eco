@@ -85,6 +85,7 @@ export default function SmartWalletTransaction({
       onError={handleOnError}
       isSponsored={isSponsored}
       capabilities={builderCapabilities}
+      resetAfter={2000}
     >
       <TransactionButton
         text={buttonText}

@@ -84,6 +84,7 @@ export default function ClaimRewardsTransaction({
         onStatus={handleOnStatus}
         isSponsored={false}
         capabilities={builderCapabilities}
+        resetAfter={2000}
       >
         <TransactionButton
           text={buttonText}

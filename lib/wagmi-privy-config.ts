@@ -3,7 +3,7 @@
 import { createConfig } from "@privy-io/wagmi";
 import { injected } from "wagmi/connectors";
 import { base } from "viem/chains";
-import { createPublicHealthTransport, getPublicHealthRpc } from "./rpc-transport";
+import { createResilientTransport, getPrimaryRpcEndpoint } from "./rpc-transport";
 import { getRpcConfig } from "./env-config";
 import { baseAccountConnector } from "./base-account-connector";
 
@@ -13,29 +13,27 @@ const connectors = [
   injected(),
 ];
 
-const healthRpc = getPublicHealthRpc();
-const baseWithHealth = {
+const primaryRpc = getPrimaryRpcEndpoint();
+const baseWithRpc = {
   ...base,
   rpcUrls: {
-    default: { http: [healthRpc] },
-    public: { http: [healthRpc] },
+    default: { http: [primaryRpc] },
+    public: { http: [primaryRpc] },
   },
 };
 
-// Public-only transport so WalletConnect/health checks never hit custom RPCs
-const baseTransport = createPublicHealthTransport();
+// Use resilient fallback transport for full failover support
+const baseTransport = createResilientTransport();
 
 export const wagmiPrivyConfig = createConfig({
-  chains: [baseWithHealth],
+  chains: [baseWithRpc],
   transports: {
     [base.id]: baseTransport,
   },
   // Expose common external connectors so OnchainKit ConnectWallet can attach in web mode
   connectors,
   // Match production behavior: rely on viem defaults for chain RPC list and keep modest polling
-  // Standard polling interval (4s) to ensure responsive transaction updates
+  // Reduce wagmi polling frequency (5 minutes) - ranking handles health checks
   pollingInterval: 300_000,
   ssr: true,
 });
-
-

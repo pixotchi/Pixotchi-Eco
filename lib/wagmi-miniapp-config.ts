@@ -3,31 +3,29 @@
 import { createConfig } from "wagmi";
 import { base } from "viem/chains";
 import { farcasterMiniApp as miniAppConnector } from "@farcaster/miniapp-wagmi-connector";
-import { createPublicHealthTransport, getPublicHealthRpc } from "./rpc-transport";
+import { createResilientTransport, getPrimaryRpcEndpoint } from "./rpc-transport";
 
 // Wagmi config for Farcaster Mini App context using official Farcaster connector
 
-const healthRpc = getPublicHealthRpc();
-const baseWithHealth = {
+const primaryRpc = getPrimaryRpcEndpoint();
+const baseWithRpc = {
   ...base,
   rpcUrls: {
-    default: { http: [healthRpc] },
-    public: { http: [healthRpc] },
+    default: { http: [primaryRpc] },
+    public: { http: [primaryRpc] },
   },
 };
 
-// Public-only transport so health checks stay off custom RPCs
-const baseTransport = createPublicHealthTransport();
+// Use resilient fallback transport for full failover support
+const baseTransport = createResilientTransport();
 
 export const wagmiMiniAppConfig = createConfig({
-  chains: [baseWithHealth],
+  chains: [baseWithRpc],
   connectors: [miniAppConnector()],
   transports: {
     [base.id]: baseTransport,
   },
-  // Reduce health/polling frequency (5 minutes)
+  // Reduce wagmi polling frequency (5 minutes) - ranking handles health checks
   pollingInterval: 300_000,
   ssr: true,
 });
-
-

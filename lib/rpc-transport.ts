@@ -34,7 +34,8 @@ export const createResilientTransport = (inputEndpoints?: string[]): Transport =
     });
   }
 
-  // If multiple endpoints, use fallback transport
+  // If multiple endpoints, use fallback transport with tuned ranking
+  // Ranking pings each endpoint periodically to score by latency/stability
   return fallback(
     endpoints.map(url => {
       if (!rpcDiagnostics[url]) rpcDiagnostics[url] = { url, ok: 0, fail: 0 };
@@ -45,10 +46,19 @@ export const createResilientTransport = (inputEndpoints?: string[]): Transport =
       });
     }),
     {
-      rank: true // Automatically rank healthy endpoints
+      rank: {
+        interval: 30_000,  // Ping every 30 seconds (reduced from default 10s)
+        sampleCount: 5,    // Track last 5 samples for ranking
+        timeout: 5_000,    // 5s timeout for health pings
+        weights: {
+          latency: 0.3,    // 30% weight on speed
+          stability: 0.7,  // 70% weight on reliability
+        },
+      },
     }
   );
 };
+
 
 // Explicit public-only transport for walletconnect/health probes
 export const createPublicHealthTransport = (): Transport => {
