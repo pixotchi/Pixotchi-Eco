@@ -97,6 +97,9 @@ export default function LeaderboardTab() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
 
+  // Kill cooldown state (1 kill per hour per wallet)
+  const [killCooldown, setKillCooldown] = useState<{ canKill: boolean; remainingSeconds: number }>({ canKill: true, remainingSeconds: 0 });
+
   // Client-side cache for stake data to avoid re-fetches on tab toggles
   const stakeDataCacheRef = useRef<{
     data: StakeLeaderboardEntry[] | null;
@@ -363,6 +366,49 @@ export default function LeaderboardTab() {
 
   useEffect(() => { void fetchMyPlants(); }, [fetchMyPlants]);
 
+  // Kill cooldown functions
+  const fetchKillCooldown = useCallback(async () => {
+    if (!address) return;
+    try {
+      const res = await fetch(`/api/kill-cooldown?address=${address}`);
+      if (res.ok) {
+        const data = await res.json();
+        setKillCooldown({ canKill: data.canKill, remainingSeconds: data.remainingSeconds });
+      }
+    } catch (error) {
+      console.error('Failed to fetch kill cooldown:', error);
+      // On error, allow kills (graceful degradation)
+      setKillCooldown({ canKill: true, remainingSeconds: 0 });
+    }
+  }, [address]);
+
+  const recordKillCooldown = useCallback(async () => {
+    if (!address) return;
+    try {
+      await fetch('/api/kill-cooldown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      });
+      // Update local state immediately
+      setKillCooldown({ canKill: false, remainingSeconds: 3600 });
+    } catch (error) {
+      console.error('Failed to record kill cooldown:', error);
+    }
+  }, [address]);
+
+  // Fetch kill cooldown on mount and when address changes
+  useEffect(() => {
+    fetchKillCooldown();
+  }, [fetchKillCooldown]);
+
+  // Also fetch when kill dialog opens
+  useEffect(() => {
+    if (killDialogOpen) {
+      fetchKillCooldown();
+    }
+  }, [killDialogOpen, fetchKillCooldown]);
+
   // Refresh data when tab becomes visible
   useEffect(() => {
     if (isVisible) {
@@ -559,7 +605,7 @@ export default function LeaderboardTab() {
               eligibleAttackers(plant).length > 0 &&
               !hasActiveFence(plant);
             const isMine = isUserPlant(plant);
-            const canShowKill = !isMine && plant.isDead;
+            const canShowKill = !isMine && plant.isDead && killCooldown.canKill;
             const canShowRevive = isMine && plant.isDead;
 
             return (
@@ -1181,7 +1227,13 @@ export default function LeaderboardTab() {
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
               Select one of your living plants to perform the kill. Target must be dead.
+              <br /><span className="text-xs">Note: You can only kill once per hour.</span>
             </div>
+            {!killCooldown.canKill && (
+              <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
+                ⏳ Cooldown active. You can kill again in {Math.ceil(killCooldown.remainingSeconds / 60)} minutes.
+              </div>
+            )}
             {targetPlant && (
               <div className="text-sm text-muted-foreground">
                 Dead target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>
@@ -1233,6 +1285,7 @@ export default function LeaderboardTab() {
                     }
                   }}
                   onSuccess={() => {
+                    recordKillCooldown(); // Record the kill to start cooldown
                     setKillDialogOpen(false);
                     setSelectedKillerId(null);
                     fetchLeaderboardData();
