@@ -28,6 +28,9 @@ export default function SwapTab() {
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('swap');
 
+  // Rewards distributed today (2% of 24h volume)
+  const [rewardsData, setRewardsData] = useState<{ volume24h: number; rewards: number } | null>(null);
+
   // Track OnchainKit's internal token state to detect when toggle happens
   const lastKnownStateRef = useRef<{ from: string; to: string }>({ from: 'ETH', to: 'SEED' });
 
@@ -187,6 +190,22 @@ export default function SwapTab() {
     }
   }, [isVisible]);
 
+  // Fetch rewards data (24h volume from DexScreener)
+  useEffect(() => {
+    const fetchRewardsData = async () => {
+      try {
+        const res = await fetch('/api/seed-volume');
+        if (res.ok) {
+          const data = await res.json();
+          setRewardsData({ volume24h: data.volume24h, rewards: data.rewards });
+        }
+      } catch (error) {
+        console.error('Failed to fetch rewards data:', error);
+      }
+    };
+    fetchRewardsData();
+  }, []);
+
   if (!address) {
     return (
       <div className="text-center text-muted-foreground py-8">Connect your wallet to swap.</div>
@@ -288,6 +307,23 @@ export default function SwapTab() {
                 <li><span className="font-semibold">2% to Project Treasury:</span> Funds ongoing development and operational costs.</li>
                 <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure higher stablity.</li>
               </ul>
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-3">
+            <Image src="/icons/ethlogo.svg" alt="Rewards" width={20} height={20} className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold">
+                {rewardsData ? (
+                  `$${rewardsData.rewards.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Rewards Distributed Today`
+                ) : (
+                  'Rewards Distributed Today'
+                )}
+              </h4>
+              <p className="text-muted-foreground text-xs">
+                2% of SEED trading volume is distributed daily to plants as ETH based on their points. Higher points = larger rewards.
+                {rewardsData && ` Based on $${rewardsData.volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 })} 24h volume.`}
+              </p>
             </div>
           </div>
 
