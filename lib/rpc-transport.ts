@@ -34,24 +34,30 @@ export const createResilientTransport = (inputEndpoints?: string[]): Transport =
     });
   }
 
-  // Multiple endpoints: use fallback transport WITHOUT ranking
-  // This gives sequential failover without background polling:
-  // - First request goes to endpoint #1
-  // - If it fails after retries → tries endpoint #2, etc.
-  // - No background pings, no proactive ranking
+  // If multiple endpoints, use fallback transport with tuned ranking
+  // Ranking pings each endpoint periodically to score by latency/stability
   return fallback(
     endpoints.map(url => {
       if (!rpcDiagnostics[url]) rpcDiagnostics[url] = { url, ok: 0, fail: 0 };
       return http(url, {
-        retryCount: 2, // Retries per endpoint before switching to next
+        retryCount: 2, // Retries per endpoint before switching
         retryDelay: 1000,
         timeout: 10_000,
       });
-    })
-    // No rank option = no background polling
+    }),
+    {
+      rank: {
+        interval: 30_000,  // Ping every 30 seconds (reduced from default 10s)
+        sampleCount: 5,    // Track last 5 samples for ranking
+        timeout: 5_000,    // 5s timeout for health pings
+        weights: {
+          latency: 0.3,    // 30% weight on speed
+          stability: 0.7,  // 70% weight on reliability
+        },
+      },
+    }
   );
 };
-
 
 
 // Explicit public-only transport for walletconnect/health probes

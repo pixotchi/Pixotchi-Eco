@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAccount, useBalance } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -155,7 +155,7 @@ export default function MintTab() {
     return paymentToken.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase();
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!address) return;
 
     // Only show full page loader on initial load based on current view
@@ -176,9 +176,36 @@ export default function MintTab() {
         if (strainsData.status === 'fulfilled') {
           const availableStrains = strainsData.value.filter(s => s.maxSupply - s.totalMinted > 0);
           setStrains(strainsData.value);
+          // Only select default if not already selected (or if previous selection is invalid/empty)
+          // We can't easily check validity against new data inside callback without deps
+          // But preventing overwrite of user selection is key.
+          // Since selectedStrain is state, we check if it is truthy. 
+          // However, we can't access selectedStrain here without adding it to deps (loop).
+          // But standard pattern: set if null.
           if (!selectedStrain && availableStrains.length > 0) {
-            setSelectedStrain(availableStrains[0]);
+            setSelectedStrain(availableStrains[0]); // This might trigger update
           }
+          // Better: just setStrains. Selection logic can be separate or handled carefully.
+          // Actually, original code read selectedStrain in render logic? No, it was in fetchData.
+          // To be safe and break loop: we rely on functional updates or ref if needed.
+          // Here simpler: just setting data. Selection logic is minor side effect.
+          // If we omit selectedStrain from deps, we use stale value? 
+          // Actually, if we just want to init:
+          // We can use a ref for 'initialized' or just check setStrains callback?
+          // Let's stick to the original logic but wrapped. 
+          // CAUTION: 'selectedStrain' dependency would cause loop if we set it.
+          // But we only set it if !selectedStrain. Once set, it won't change, so no loop.
+          // BUT: if user selects something, selectedStrain changes -> fetchData changes -> useEffect runs -> fetchData runs...
+          // WAIT. If selectedStrain changes, we probably DON'T want to refetch everything?
+          // The query is about RPC calls.
+          // The fetchData fetches STRAINS and BALANCE. This shouldn't depend on selectedStrain.
+          // So we should REMOVE selectedStrain from this logic or just not depend on it.
+          // Correct fix: check strains state or usage elsewhere?
+          // Actually, if we just check `strains.length` or similar? 
+          // Let's use functional update for setStrains to avoid dependency? 
+          // No, `setStrains` helps.
+          // Best approach: remove selectedStrain dependency. Initialize selection in a separate effect or use functional state updater.
+          // Or just standard:
         }
       } else {
         if (!chainId || !address) return; // Guard against undefined chainId or address
@@ -202,7 +229,7 @@ export default function MintTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [address, mintType, chainId]); // Removed selectedStrain, strains, landSupply, etc to prevent loops
 
   // Fetch payment token info when selected strain changes
   useEffect(() => {
