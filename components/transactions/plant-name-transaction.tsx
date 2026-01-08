@@ -92,6 +92,7 @@ export function PlantNameTransaction({
         onStatus={handleOnStatus}
         isSponsored={isSponsored}
         capabilities={builderCapabilities}
+        resetAfter={2000}
       >
         <TransactionButton
           text={buttonText}

@@ -97,6 +97,25 @@ export default function LeaderboardTab() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
 
+  // Kill cooldown state (1 kill per hour per wallet)
+  const [killCooldown, setKillCooldown] = useState<{ canKill: boolean; remainingSeconds: number }>({ canKill: true, remainingSeconds: 0 });
+  const [cooldownDialogOpen, setCooldownDialogOpen] = useState(false);
+
+  // Timer for cooldown countdown
+  useEffect(() => {
+    if (killCooldown.remainingSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setKillCooldown(prev => {
+        const next = prev.remainingSeconds - 1;
+        if (next <= 0) {
+          return { canKill: true, remainingSeconds: 0 };
+        }
+        return { ...prev, remainingSeconds: next };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [killCooldown.remainingSeconds]);
+
   // Client-side cache for stake data to avoid re-fetches on tab toggles
   const stakeDataCacheRef = useRef<{
     data: StakeLeaderboardEntry[] | null;
@@ -363,10 +382,53 @@ export default function LeaderboardTab() {
 
   useEffect(() => { void fetchMyPlants(); }, [fetchMyPlants]);
 
+  // Kill cooldown functions
+  const fetchKillCooldown = useCallback(async () => {
+    if (!address) return;
+    try {
+      const res = await fetch(`/api/kill-cooldown?address=${address}`);
+      if (res.ok) {
+        const data = await res.json();
+        setKillCooldown({ canKill: data.canKill, remainingSeconds: data.remainingSeconds });
+      }
+    } catch (error) {
+      console.error('Failed to fetch kill cooldown:', error);
+      // On error, allow kills (graceful degradation)
+      setKillCooldown({ canKill: true, remainingSeconds: 0 });
+    }
+  }, [address]);
+
+  const recordKillCooldown = useCallback(async () => {
+    if (!address) return;
+    try {
+      await fetch('/api/kill-cooldown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      });
+      // Update local state immediately
+      setKillCooldown({ canKill: false, remainingSeconds: 3600 });
+    } catch (error) {
+      console.error('Failed to record kill cooldown:', error);
+    }
+  }, [address]);
+
+  // Fetch kill cooldown on mount and when address changes
+  useEffect(() => {
+    fetchKillCooldown();
+  }, [fetchKillCooldown]);
+
+  // Also fetch when kill dialog opens
+  useEffect(() => {
+    if (killDialogOpen) {
+      fetchKillCooldown();
+    }
+  }, [killDialogOpen, fetchKillCooldown]);
+
   // Refresh data when tab becomes visible
   useEffect(() => {
     if (isVisible) {
-
+      console.log('🔄 [Leaderboard] Tab visible, refreshing data...');
       fetchLeaderboardData();
       void fetchMyPlants();
       if (boardType === 'stake') {
@@ -660,10 +722,18 @@ export default function LeaderboardTab() {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="rounded-md"
-                        onClick={() => { setTargetPlant(plant); setSelectedKillerId(null); setKillDialogOpen(true); }}
+                        className={`rounded-md ${!killCooldown.canKill ? 'opacity-50' : ''}`}
+                        onClick={() => {
+                          if (!killCooldown.canKill) {
+                            setCooldownDialogOpen(true);
+                          } else {
+                            setTargetPlant(plant);
+                            setSelectedKillerId(null);
+                            setKillDialogOpen(true);
+                          }
+                        }}
                         aria-label="Kill dead plant to collect star"
-                        title="Kill to collect star"
+                        title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
                       >
                         <Skull className="w-4 h-4" />
                       </Button>
@@ -1181,7 +1251,13 @@ export default function LeaderboardTab() {
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
               Select one of your living plants to perform the kill. Target must be dead.
+              <br /><span className="text-xs">Note: You can only kill once per hour.</span>
             </div>
+            {!killCooldown.canKill && (
+              <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
+                ⏳ Cooldown active. You can kill again in {Math.ceil(killCooldown.remainingSeconds / 60)} minutes.
+              </div>
+            )}
             {targetPlant && (
               <div className="text-sm text-muted-foreground">
                 Dead target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>
@@ -1233,6 +1309,7 @@ export default function LeaderboardTab() {
                     }
                   }}
                   onSuccess={() => {
+                    recordKillCooldown(); // Record the kill to start cooldown
                     setKillDialogOpen(false);
                     setSelectedKillerId(null);
                     fetchLeaderboardData();
@@ -1251,6 +1328,8 @@ export default function LeaderboardTab() {
 
       {/* Revive dialog */}
       <Dialog open={reviveDialogOpen} onOpenChange={setReviveDialogOpen}>
+        {/* ... existing revive dialog content ... */}
+        {/* WE DO NOT EDIT REVIVE DIALOG HERE, JUST MATCHING CONTEXT IS HARD SO I WILL APPEND AT END OF FILE */}
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Revive your plant</DialogTitle>
@@ -1313,6 +1392,30 @@ export default function LeaderboardTab() {
         onOpenChange={setProfileDialogOpen}
         plant={selectedPlantForProfile}
       />
+
+      {/* Kill Cooldown Dialog */}
+      <Dialog open={cooldownDialogOpen} onOpenChange={setCooldownDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cooldown Active</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-lg space-y-3">
+              <Skull className="w-10 h-10 text-muted-foreground opacity-50" />
+              <p className="text-center font-medium">You can only kill 1 plant per hour.</p>
+              <div className="text-2xl font-bold font-mono text-primary">
+                {Math.floor(killCooldown.remainingSeconds / 60)}m {killCooldown.remainingSeconds % 60}s
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Wait for the cooldown to reset before killing another plant.
+              </p>
+            </div>
+            <Button className="w-full" onClick={() => setCooldownDialogOpen(false)}>
+              Understood
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -282,7 +282,7 @@ export default function LandsView() {
         fetchBuildingDataPendingRef.current = null;
       }
     }
-  }, [selectedLand, buildingType, selectedBuilding]);
+  }, [selectedLand, buildingType]); // Removed selectedBuilding to prevent infinite loop (updates trigger Effect -> calls func -> updates state -> triggers Effect)
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
   useEffect(() => {

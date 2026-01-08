@@ -90,9 +90,10 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
     // Listen for transaction-triggered refresh events
     const handleRefreshEvent = () => {
       // Small delay to allow blockchain state to propagate
+      // Base has fast 1-2 second block times, so 500ms is sufficient
       setTimeout(() => {
         refetch();
-      }, 1000);
+      }, 500);
     };
 
     window.addEventListener('balances:refresh', handleRefreshEvent);

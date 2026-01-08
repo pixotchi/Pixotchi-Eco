@@ -131,7 +131,15 @@ export default function ActivityTab() {
 
       let recentActivities: ActivityEvent[] = [];
 
-      if (view === "my" && myAddress) {
+      if (view === "my") {
+        // In 'my' view but address not ready - exit early, UI will show appropriate message
+        if (!myAddress) {
+          if (fetchActivitiesPendingRef.current === fetchKey) {
+            setLoading(false);
+            fetchActivitiesPendingRef.current = null;
+          }
+          return;
+        }
         recentActivities = await getMyActivity(myAddress);
       } else {
         recentActivities = await getAllActivity();
@@ -158,11 +166,8 @@ export default function ActivityTab() {
     }
   }, [view, myAddress, shopItems, gardenItems]);
 
-  useEffect(() => {
-    if (view === 'my' && (!isWalletConnected || !myAddress)) {
-      setView('all');
-    }
-  }, [view, isWalletConnected, myAddress]);
+  // Note: Removed auto-reset effect that caused race condition when switching to 'my' view
+  // The UI now handles missing wallet/address gracefully in renderContent()
 
   useEffect(() => {
     fetchActivities();
@@ -171,7 +176,7 @@ export default function ActivityTab() {
   // Refresh when tab becomes visible
   useEffect(() => {
     if (isVisible) {
-
+      console.log('🔄 [Activity] Tab visible, refreshing...');
       fetchActivities();
     }
   }, [isVisible, fetchActivities]);

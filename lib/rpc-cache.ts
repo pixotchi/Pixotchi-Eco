@@ -31,9 +31,6 @@ const getPublicClient = cache(() => {
     });
 });
 
-
-
-
 /**
  * Generic cached contract read function
  * Deduplicates identical readContract calls within the same request
