@@ -15,13 +15,13 @@ export function useLandMap(initialUserLands: Land[]) {
   const [totalSupply, setTotalSupply] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [neighborData, setNeighborData] = useState<Record<number, LandLeaderboardEntry>>({});
-  
+
   // Fetch total supply and leaderboard data (which contains name/xp/id for all minted lands)
   // We use getLandLeaderboard because it efficiently returns basic metadata for range of IDs
   // This is a "hack" to get map data without a dedicated indexer API
   useEffect(() => {
     let mounted = true;
-    
+
     const fetchData = async () => {
       // Prevent duplicate simultaneous calls
       if (fetchPending) {
@@ -38,28 +38,28 @@ export function useLandMap(initialUserLands: Land[]) {
           return;
         }
         setTotalSupply(supply);
-        
+
         // 2. Get Neighbor Data (using leaderboard cache)
         const now = Date.now();
         if (cachedLeaderboard.length === 0 || now - lastFetchTime > CACHE_DURATION) {
-            try {
-                const entries = await getLandLeaderboard();
-                cachedLeaderboard = entries;
-                lastFetchTime = now;
-            } catch (e) {
-                console.warn("Failed to fetch map neighbor data", e);
-            }
+          try {
+            const entries = await getLandLeaderboard();
+            cachedLeaderboard = entries;
+            lastFetchTime = now;
+          } catch (e) {
+            console.warn("Failed to fetch map neighbor data", e);
+          }
         }
-        
+
         // Convert array to map for O(1) lookup
         const map: Record<number, LandLeaderboardEntry> = {};
         cachedLeaderboard.forEach(entry => {
-            map[entry.landId] = entry;
+          map[entry.landId] = entry;
         });
-        
+
         if (mounted) {
-            setNeighborData(map);
-            setIsLoading(false);
+          setNeighborData(map);
+          setIsLoading(false);
         }
 
       } catch (err) {
@@ -76,7 +76,7 @@ export function useLandMap(initialUserLands: Land[]) {
     };
 
     fetchData();
-    
+
     return () => {
       mounted = false;
     };
