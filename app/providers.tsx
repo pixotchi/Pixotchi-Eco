@@ -142,13 +142,13 @@ export function Providers(props: { children: ReactNode }) {
   // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const CACHE_VERSION = '2025-08-privy-v3-solana';
+    const CACHE_VERSION = '2026-01-09-force-refresh-v1';
     try {
       if (needsCacheMigration(CACHE_VERSION)) {
-        // Soft clear without unregistering SW, no reload
+        // Hard clear: unregister SW and reload to force update
         clearAppCaches({
-          unregisterServiceWorkers: false,
-          reloadAfter: false,
+          unregisterServiceWorkers: true,
+          reloadAfter: true,
           preserveLocalStorageKeys: ["pixotchi:tutorial", "pixotchi:cache_version"],
           // Only clear our own keys to avoid racing Privy/OnchainKit first-load state
           onlyPrefixes: ["pixotchi", "pixotchi:"]
