@@ -11,8 +11,8 @@ export const AI_CONFIG = {
     },
     claude: {
       models: [
-        'claude-3-haiku-20240307', 
-        'claude-3-sonnet-20240229', 
+        'claude-3-haiku-20240307',
+        'claude-3-sonnet-20240229',
         'claude-3-5-sonnet-20240620',
         'claude-3-5-haiku-20241022',
         'claude-haiku-4-5-20251001'
@@ -28,11 +28,11 @@ export const AI_CONFIG = {
     },
     google: {
       models: [
-        'gemini-1.5-flash',
+        'gemini-3-flash-preview',
         'gemini-1.5-pro',
         'gemini-2.0-flash'
       ],
-      defaultModel: 'gemini-1.5-flash',
+      defaultModel: 'gemini-3-flash-preview',
       maxTokens: 2048,
       costPerToken: 0.35 / 1_000_000, // Gemini 1.5 Flash is very cheap
       endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
@@ -52,20 +52,20 @@ export const AI_CONFIG = {
 // Get current AI provider from environment
 export function getCurrentAIProvider(): AIProvider {
   const provider = process.env.AI_PROVIDER;
-  
+
   // Handle both 'claude' and 'anthropic' as valid values for Claude
   if (provider === 'claude' || provider === 'anthropic') {
     return 'claude';
   }
-  
+
   if (provider === 'openai') {
     return 'openai';
   }
-  
+
   if (provider === 'google') {
     return 'google';
   }
-  
+
   // Default fallback
   return 'openai';
 }
@@ -75,7 +75,7 @@ export function getCurrentModelConfig() {
   const provider = getCurrentAIProvider();
   const config = AI_CONFIG.providers[provider];
   const model = process.env.AI_MODEL || config.defaultModel;
-  
+
   return {
     provider,
     model,
@@ -117,11 +117,11 @@ export function getAgentModelConfig() {
 export function validateAIConfig(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   const provider = getCurrentAIProvider();
-  
+
   if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
     errors.push('OPENAI_API_KEY is required when using OpenAI provider');
   }
-  
+
   if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
     errors.push('ANTHROPIC_API_KEY is required when using Claude provider');
   }
@@ -129,20 +129,20 @@ export function validateAIConfig(): { valid: boolean; errors: string[] } {
   if (provider === 'google' && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     errors.push('GOOGLE_GENERATIVE_AI_API_KEY is required when using Google provider');
   }
-  
+
   const model = process.env.AI_MODEL;
   if (model) {
     const config = AI_CONFIG.providers[provider];
-    const isValidModel = config.models.includes(model) || 
-                        (provider === 'openai' && model.startsWith('gpt-')) ||
-                        (provider === 'claude' && model.startsWith('claude-')) ||
-                        (provider === 'google' && model.startsWith('gemini-'));
-    
+    const isValidModel = config.models.includes(model) ||
+      (provider === 'openai' && model.startsWith('gpt-')) ||
+      (provider === 'claude' && model.startsWith('claude-')) ||
+      (provider === 'google' && model.startsWith('gemini-'));
+
     if (!isValidModel) {
       errors.push(`Invalid model ${model} for provider ${provider}. Expected models starting with ${provider === 'openai' ? 'gpt-' : provider === 'claude' ? 'claude-' : 'gemini-'}`);
     }
   }
-  
+
   return {
     valid: errors.length === 0,
     errors

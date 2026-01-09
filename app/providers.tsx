@@ -35,7 +35,6 @@ import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper'
 import { SafeArea } from "@coinbase/onchainkit/minikit";
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
-import { getPrimaryRpcEndpoint } from "@/lib/rpc-transport";
 import packageJson from '@/package.json';
 
 // Surface types for auth provider selection
@@ -390,7 +389,6 @@ export function Providers(props: { children: ReactNode }) {
                   <OnchainKitProvider
                     apiKey={apiKey}
                     chain={base}
-                    rpcUrl={getPrimaryRpcEndpoint()}
                     config={{
                       appearance: {
                         mode: "auto",
