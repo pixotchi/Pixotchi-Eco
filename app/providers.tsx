@@ -36,6 +36,7 @@ import { SafeArea } from "@coinbase/onchainkit/minikit";
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { getPrimaryRpcEndpoint } from "@/lib/rpc-transport";
+import packageJson from '@/package.json';
 
 // Surface types for auth provider selection
 type AuthSurface = 'privy' | 'base' | 'privysolana';
@@ -141,11 +142,12 @@ export function Providers(props: { children: ReactNode }) {
 
   // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const CACHE_VERSION = '2026-01-09-force-refresh-v1';
+    const CACHE_VERSION = packageJson.version;
     try {
       if (needsCacheMigration(CACHE_VERSION)) {
         // Hard clear: unregister SW and reload to force update
+        // This runs automatically whenever package.json version changes
+        console.log(`[Cache] Migrating to version ${CACHE_VERSION}`);
         clearAppCaches({
           unregisterServiceWorkers: true,
           reloadAfter: true,
