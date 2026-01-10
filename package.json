@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.44",
+  "version": "1.6.45",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -12,7 +12,7 @@
     "@coinbase/onchainkit": "1.1.2",
     "@coinbase/agentkit": "0.10.4",
     "@coinbase/agentkit-vercel-ai-sdk": "0.1.0",
-    "@coinbase/cdp-sdk": "1.41.0",
+    "@coinbase/cdp-sdk": "1.43.0",
     "@base-org/account": "2.5.1",
     "@base-org/account-ui": "1.0.1",
     "@farcaster/miniapp-sdk": "0.2.1",
