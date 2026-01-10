@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Plant } from "@/lib/types";
-import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard } from "@/lib/contracts";
+import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard, getKillCooldown } from "@/lib/contracts";
 import { formatScoreShort, formatEthShort, formatScore, formatAddress, cn, getFenceStatus } from "@/lib/utils";
 import PlantImage from "@/components/PlantImage";
 import { Trophy, Skull, Sword, HeartPulse } from "lucide-react";
@@ -382,34 +382,16 @@ export default function LeaderboardTab() {
 
   useEffect(() => { void fetchMyPlants(); }, [fetchMyPlants]);
 
-  // Kill cooldown functions
+  // Kill cooldown functions - reads from on-chain KillCooldown extension
   const fetchKillCooldown = useCallback(async () => {
     if (!address) return;
     try {
-      const res = await fetch(`/api/kill-cooldown?address=${address}`);
-      if (res.ok) {
-        const data = await res.json();
-        setKillCooldown({ canKill: data.canKill, remainingSeconds: data.remainingSeconds });
-      }
+      const data = await getKillCooldown(address);
+      setKillCooldown({ canKill: data.canKill, remainingSeconds: data.remainingSeconds });
     } catch (error) {
-      console.error('Failed to fetch kill cooldown:', error);
+      console.error('Failed to fetch kill cooldown from contract:', error);
       // On error, allow kills (graceful degradation)
       setKillCooldown({ canKill: true, remainingSeconds: 0 });
-    }
-  }, [address]);
-
-  const recordKillCooldown = useCallback(async () => {
-    if (!address) return;
-    try {
-      await fetch('/api/kill-cooldown', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
-      });
-      // Update local state immediately
-      setKillCooldown({ canKill: false, remainingSeconds: 3600 });
-    } catch (error) {
-      console.error('Failed to record kill cooldown:', error);
     }
   }, [address]);
 
@@ -1309,11 +1291,12 @@ export default function LeaderboardTab() {
                     }
                   }}
                   onSuccess={() => {
-                    recordKillCooldown(); // Record the kill to start cooldown
+                    // Cooldown is handled on-chain by killWithCooldown, just refresh the state
                     setKillDialogOpen(false);
                     setSelectedKillerId(null);
                     fetchLeaderboardData();
                     void fetchMyPlants();
+                    fetchKillCooldown(); // Refresh cooldown state from contract
                   }}
                 />
               ) : (

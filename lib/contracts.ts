@@ -264,6 +264,38 @@ export const SPIN_GAME_ABI = [
   },
 ] as const;
 
+// Kill Cooldown Extension ABI (for on-chain rate limiting)
+export const KILL_COOLDOWN_ABI = [
+  {
+    inputs: [{ name: "wallet", type: "address" }],
+    name: "canKill",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "wallet", type: "address" }],
+    name: "getKillCooldownRemaining",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getKillCooldownSeconds",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "isKillCooldownEnabled",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
 // Provider caching to avoid recreating clients
 let cachedReadClient: any = null;
 let cachedWriteClient: any = null;
@@ -2233,4 +2265,46 @@ export const routerBatchTransfer = async (
   const writeClient = getWriteClient();
   const receipt = await writeClient.waitForTransactionReceipt({ hash });
   return { hash, success: receipt.status === 'success' };
+};
+
+// -------------------- KILL COOLDOWN HELPERS --------------------
+
+/**
+ * Get kill cooldown status from the on-chain KillCooldown extension.
+ * @param walletAddress The wallet address to check
+ * @returns Object with canKill boolean and remainingSeconds
+ */
+export const getKillCooldown = async (walletAddress: string): Promise<{ canKill: boolean; remainingSeconds: number }> => {
+  const readClient = getReadClient();
+  try {
+    const [canKillResult, remainingResult] = await retryWithBackoff(async () => {
+      const results = await readClient.multicall({
+        contracts: [
+          {
+            address: PIXOTCHI_NFT_ADDRESS,
+            abi: KILL_COOLDOWN_ABI,
+            functionName: 'canKill',
+            args: [walletAddress as `0x${string}`],
+          },
+          {
+            address: PIXOTCHI_NFT_ADDRESS,
+            abi: KILL_COOLDOWN_ABI,
+            functionName: 'getKillCooldownRemaining',
+            args: [walletAddress as `0x${string}`],
+          },
+        ],
+        allowFailure: true,
+      });
+      return results;
+    });
+
+    const canKill = canKillResult?.status === 'success' ? (canKillResult.result as boolean) : true;
+    const remainingSeconds = remainingResult?.status === 'success' ? Number(remainingResult.result) : 0;
+
+    return { canKill, remainingSeconds };
+  } catch (error) {
+    console.warn('Failed to fetch kill cooldown from contract, allowing kills:', error);
+    // Graceful degradation: allow kills if contract read fails
+    return { canKill: true, remainingSeconds: 0 };
+  }
 };
