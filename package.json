@@ -28,7 +28,7 @@
     "@solana-program/token": "0.9.0",
     "bs58": "6.0.0",
     "wagmi": "2.19.4",
-    "viem": "2.43.5",
+    "viem": "2.44.0",
     "ox": "0.11.3",
     "ethers": "6.16.0",
     "permissionless": "0.3.2",
@@ -49,7 +49,7 @@
     "zod": "4.3.5",
     "nanoid": "5.1.6",
     "date-fns": "4.1.0",
-    "ai": "6.0.23",
+    "ai": "6.0.26",
     "@ai-sdk/openai": "3.0.7",
     "@ai-sdk/google": "3.0.6",
     "@ai-sdk/anthropic": "3.0.9",
@@ -65,7 +65,7 @@
     "thread-stream": "3.1.0"
   },
   "devDependencies": {
-    "@types/node": "25.0.3",
+    "@types/node": "25.0.4",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.2",
@@ -84,6 +84,6 @@
   "overrides": {
     "pino": "10.1.0",
     "thread-stream": "3.1.0",
-    "viem": "2.43.5"
+    "viem": "2.44.0"
   }
 }
