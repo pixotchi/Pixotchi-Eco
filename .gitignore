@@ -11,8 +11,8 @@ pnpm-debug.log*
 .next/
 out/
 bridge-main/
-pixotchi-onchain/
 contracts/
+pixotchi-onchain/
 scripts/
 v22/
 exports/
