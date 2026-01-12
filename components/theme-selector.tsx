@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { THEMES, setClientTheme, Theme } from "@/lib/theme-utils";
 import { useSnow } from "@/lib/snow-context";
+import { useAmbientAudio } from "@/lib/ambient-audio-context";
 
 const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
 
@@ -28,6 +29,7 @@ const themes = [
 export function ThemeSelector() {
   const { theme, setTheme } = useTheme();
   const { isEnabled: isSnowEnabled, isFeatureEnabled: isSnowFeatureEnabled, toggleSnow } = useSnow();
+  const { isEnabled: isMusicEnabled, toggleAudio } = useAmbientAudio();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -135,6 +137,25 @@ export function ThemeSelector() {
             </button>
           </div>
         )}
+        {/* Ambient Music Toggle */}
+        <div className={`flex items-center justify-between mt-3 pt-3 ${isSnowFeatureEnabled ? '' : 'border-t border-border'}`}>
+          <span className="text-xs font-medium">Music</span>
+          <button
+            onClick={toggleAudio}
+            style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
+            className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isMusicEnabled ? 'bg-value' : 'bg-muted'
+              }`}
+            aria-pressed={isMusicEnabled}
+            role="switch"
+            aria-label="Toggle ambient music"
+          >
+            <span
+              style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
+              className={`inline-block transform rounded-full bg-white shadow-sm transition-transform ${isMusicEnabled ? 'translate-x-[14px]' : 'translate-x-[2px]'
+                }`}
+            />
+          </button>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

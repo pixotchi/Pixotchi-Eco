@@ -12,9 +12,9 @@ import { cn } from "@/lib/utils";
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
   const num = parseFloat(formatUnits(amount, decimals));
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2).replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1') + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(2).replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1') + "K";
-  return num.toFixed(4).replace(/(\.\d*?)0+$/,'$1').replace(/\.$/, '');
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1') + "M";
+  if (num >= 1_000) return (num / 1_000).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1') + "K";
+  return num.toFixed(4).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
 export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
@@ -25,7 +25,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
 
   const [stakingOpen, setStakingOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
-  
+
   // Balance refreshes are handled automatically by balance-context.tsx via events
   // No need for manual refresh on every render or tab change
 
@@ -43,7 +43,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     if (!tasksOpen) return;
     try {
       window.dispatchEvent(new CustomEvent('pixotchi:openTasks' as any));
-    } catch {}
+    } catch { }
     // Close flag after dispatch to avoid side-effects during render
     const t = setTimeout(() => setTasksOpen(false), 0);
     return () => clearTimeout(t);
@@ -59,7 +59,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     <div className="w-full bg-background" role="region" aria-label="Account balance and staking">
       <div className="rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-4 min-w-0" role="group" aria-label="Token balances">
+          <div className="flex items-center gap-2 min-w-0" role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className="flex items-center gap-1.5 min-w-0" aria-label={`SOL balance: ${solText} SOL`}>
@@ -73,10 +73,10 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
             </div>
             {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
             {!isSolana && (
-            <div className="flex items-center gap-1.5 min-w-0" aria-label={`Leaf balance: ${leafText} LEAF`}>
-              <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
-              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
-            </div>
+              <div className="flex items-center gap-1.5 min-w-0" aria-label={`Leaf balance: ${leafText} LEAF`}>
+                <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
+                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
+              </div>
             )}
             <div className="flex items-center gap-1.5 min-w-0" aria-label={`PIXOTCHI balance: ${pixotchiText}`}>
               <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />

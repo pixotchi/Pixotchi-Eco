@@ -290,7 +290,7 @@ export default function SwapTab() {
             <div>
               <h4 className="font-semibold">70% In-Game Burn</h4>
               <p className="text-muted-foreground text-xs">
-                Currently, 70% of the SEED tokens spent within the game on items or upgrades are permanently burned. 30% are added to the Quests rewards pool.
+                Currently, 70% of the SEED tokens spent within the game on items or upgrades are permanently burned. 30% are added to the rewards pool.
               </p>
             </div>
           </div>
@@ -322,7 +322,7 @@ export default function SwapTab() {
               </h4>
               <p className="text-muted-foreground text-xs">
                 2% of SEED trading volume is distributed daily to plants as ETH based on their points. Higher points = larger rewards.
-                {rewardsData && ` Based on $${rewardsData.volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 })} 24h volume.`}
+                {rewardsData && ` Based on $${rewardsData.volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 })} volume in the last 24h.`}
               </p>
             </div>
           </div>
