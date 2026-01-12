@@ -1249,7 +1249,7 @@ export default function LeaderboardTab() {
             </div>
             {!killCooldown.canKill && (
               <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
-                ⏳ Cooldown active. You can kill again in {Math.ceil(killCooldown.remainingSeconds / 60)} minutes.
+                ⏳ Cooldown active. Close this dialog to see the timer.
               </div>
             )}
             {targetPlant && (
@@ -1303,12 +1303,14 @@ export default function LeaderboardTab() {
                     }
                   }}
                   onSuccess={() => {
-                    // Cooldown is handled on-chain by killWithCooldown, just refresh the state
+                    // Close kill dialog and show cooldown dialog
                     setKillDialogOpen(false);
                     setSelectedKillerId(null);
                     fetchLeaderboardData();
                     void fetchMyPlants();
                     fetchKillCooldown(); // Refresh cooldown state from contract
+                    // Open the cooldown dialog to show the user the timer
+                    setCooldownDialogOpen(true);
                   }}
                 />
               ) : (
