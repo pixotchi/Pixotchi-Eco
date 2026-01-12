@@ -90,7 +90,7 @@ export default function LeaderboardTab() {
   const [reviveDialogOpen, setReviveDialogOpen] = useState(false);
   const [selectedKillerId, setSelectedKillerId] = useState<number | null>(null);
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
-  const [filterMode, setFilterMode] = useState<'all' | 'attackable'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'attackable' | 'dead'>('all');
   const [showOnlyMyPlants, setShowOnlyMyPlants] = useState(false);
   const publicClient = usePublicClient();
   const [boardType, setBoardType] = useState<'plants' | 'lands' | 'stake' | 'rocks'>('plants');
@@ -511,9 +511,11 @@ export default function LeaderboardTab() {
       filtered = filtered.filter(isUserPlant);
     }
 
-    // Then apply attackable filter if in attackable mode
+    // Then apply filter based on mode
     if (filterMode === 'attackable') {
       filtered = filtered.filter(isAttackable);
+    } else if (filterMode === 'dead') {
+      filtered = filtered.filter(plant => plant.isDead);
     }
 
     return filtered;
@@ -581,6 +583,15 @@ export default function LeaderboardTab() {
         return (
           <div className="text-center py-8 text-muted-foreground">
             <p>No attackable plants found. All plants are either yours, dead, or protected by fences.</p>
+          </div>
+        );
+      }
+
+      // Check if user is in dead mode but no dead plants exist
+      if (filterMode === 'dead') {
+        return (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No dead plants found. All plants are currently alive!</p>
           </div>
         );
       }
@@ -794,17 +805,18 @@ export default function LeaderboardTab() {
                 onValueChange={(v) => {
                   setCurrentPage(1);
                   setFilterMode(v as any);
-                  // Auto-uncheck "My Plants" when switching to attackable (can't attack own plants)
-                  if (v === 'attackable') {
+                  // Auto-uncheck "My Plants" when switching to attackable or dead
+                  if (v === 'attackable' || v === 'dead') {
                     setShowOnlyMyPlants(false);
                   }
                 }}
                 options={[
                   { value: 'all', label: 'All' },
                   { value: 'attackable', label: 'Attackable' },
+                  { value: 'dead', label: 'Dead' },
                 ]}
               />
-              {address && myPlants.length > 0 && filterMode !== 'attackable' && (
+              {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
                 <label className="flex items-center gap-2 cursor-pointer text-sm">
                   <input
                     type="checkbox"
