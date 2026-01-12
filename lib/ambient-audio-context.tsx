@@ -99,17 +99,25 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
         };
     }, [hasInteracted]);
 
-    // Play/pause based on enabled state and user interaction
+    // Play/pause based on enabled state
+    // Try to play immediately if enabled - some contexts (like mini apps) may allow autoplay
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio || !mounted) return;
 
-        if (isEnabled && hasInteracted) {
-            // Try to play
-            audio.play().catch((err) => {
-                // Autoplay was prevented - this is expected before user interaction
-                console.log("[AmbientAudio] Playback prevented:", err.message);
-            });
+        if (isEnabled) {
+            // Try to play - if it works, mark as interacted
+            audio.play()
+                .then(() => {
+                    // Playback started successfully - browser allowed it
+                    if (!hasInteracted) {
+                        setHasInteracted(true);
+                    }
+                })
+                .catch((err) => {
+                    // Autoplay was prevented - wait for user interaction
+                    console.log("[AmbientAudio] Waiting for user interaction:", err.message);
+                });
         } else {
             audio.pause();
         }
