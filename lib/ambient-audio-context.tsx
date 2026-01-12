@@ -105,7 +105,8 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
         const audio = audioRef.current;
         if (!audio || !mounted) return;
 
-        if (isEnabled) {
+        // Only attempt to play if document is visible
+        if (isEnabled && document.visibilityState === 'visible') {
             // Try to play - if it works, mark as interacted
             audio.play()
                 .then(() => {
@@ -122,6 +123,31 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
             audio.pause();
         }
     }, [isEnabled, hasInteracted, mounted]);
+
+    // Pause audio when app/tab loses focus, resume when it regains focus
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+
+        const handleVisibilityChange = () => {
+            const audio = audioRef.current;
+            if (!audio) return;
+
+            if (document.visibilityState === 'hidden') {
+                // App went to background - pause audio
+                audio.pause();
+            } else if (document.visibilityState === 'visible' && isEnabled) {
+                // App came back to foreground - resume if enabled
+                audio.play().catch(() => {
+                    // Ignore errors - browser may still block
+                });
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [isEnabled]);
 
     const toggleAudio = useCallback(() => {
         const newValue = !isEnabled;
