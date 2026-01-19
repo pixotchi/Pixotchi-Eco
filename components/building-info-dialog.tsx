@@ -20,7 +20,7 @@ const buildingInfo = {
     description: "Generates Plant Points over time for your plants. At Level 4 it upgrades into a hybrid that also delivers Plant Lifetime (TOD).",
     production: {
       level1: "~8 PTS/day",
-      level2: "~24 PTS/day", 
+      level2: "~24 PTS/day",
       level3: "~41 PTS/day",
       level4: "~85 PTS/day + ~3.56h TOD/day"
     },
@@ -32,7 +32,7 @@ const buildingInfo = {
     }
   },
   "village-3": { // Soil Factory
-    name: "Soil Factory", 
+    name: "Soil Factory",
     description: "Generates PTS daily for your plants.",
     production: {
       level1: "~12 PTS/day",
@@ -41,7 +41,7 @@ const buildingInfo = {
     },
     upgradeCosts: {
       level1: "2.03M LEAF (24h)",
-      level2: "2.86M LEAF (60h)", 
+      level2: "2.86M LEAF (60h)",
       level3: "4.69M LEAF (96h)"
     }
   },
@@ -65,7 +65,7 @@ const buildingInfo = {
     description: "Enables SEED token staking for passive LEAF rewards.",
     features: [
       "Stake SEED tokens to earn LEAF rewards",
-      "Real-time reward calculation", 
+      "Real-time reward calculation",
       "No lock-up period - unstake anytime"
     ]
   },
@@ -79,7 +79,7 @@ const buildingInfo = {
     ]
   },
   "town-5": { // Marketplace
-    name: "Marketplace", 
+    name: "Marketplace",
     description: "Enables token trading and item purchases.",
     features: [
       "Orderbook trading system for LEAF ↔ SEED swaps",
@@ -92,7 +92,7 @@ const buildingInfo = {
     description: "Unlocks the Quest System for earning rewards.",
     features: [
       "Level 1: 1 active quest",
-      "Level 2: 2 active quests", 
+      "Level 2: 2 active quests",
       "Level 3: 3 active quests",
       "Quest rewards: LEAF tokens, SEED tokens, Experience Points, Plant Lifetime"
     ],
@@ -101,14 +101,40 @@ const buildingInfo = {
       level2: "12M LEAF (50h)",
       level3: "18M LEAF (90h)"
     }
+  },
+  "town-6": { // Casino (Roulette)
+    name: "Casino",
+    description: "Play European Roulette with a true 2.7% house edge. Place bets on numbers, colors, or ranges and spin to win SEED tokens!",
+    features: [
+      "European roulette (single zero, 37 pockets)",
+      "Commit-reveal mechanism for provably fair results",
+      "Multiple bet types with different odds",
+      "Win up to 35x your bet on single numbers"
+    ],
+    betTypes: {
+      "Straight (Single Number)": "35:1 payout",
+      "Split (2 Numbers)": "17:1 payout",
+      "Street (3 Numbers)": "11:1 payout",
+      "Corner (4 Numbers)": "8:1 payout",
+      "Six Line (6 Numbers)": "5:1 payout",
+      "Dozen / Column": "2:1 payout",
+      "Red / Black / Odd / Even": "1:1 payout"
+    },
+    howToPlay: [
+      "1. Build the Casino (one-time cost)",
+      "2. Approve SEED token spending",
+      "3. Select bet type and amount",
+      "4. Spin and wait for the result",
+      "5. Winnings are paid out automatically"
+    ]
   }
 };
 
-export default function BuildingInfoDialog({ 
-  open, 
-  onOpenChange, 
-  buildingId, 
-  buildingType 
+export default function BuildingInfoDialog({
+  open,
+  onOpenChange,
+  buildingId,
+  buildingType
 }: BuildingInfoDialogProps) {
   const buildingName = getBuildingName(buildingId, buildingType === 'town');
   const key = `${buildingType}-${buildingId}` as keyof typeof buildingInfo;
@@ -144,7 +170,7 @@ export default function BuildingInfoDialog({
             {info.description}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-3">
           {isProductionBuilding && productionEntries && (
             <div className="bg-muted/30 rounded-lg p-3">
@@ -185,6 +211,33 @@ export default function BuildingInfoDialog({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {'betTypes' in info && info.betTypes && (
+            <div className="bg-muted/30 rounded-lg p-3">
+              <h4 className="font-semibold text-sm mb-2 text-foreground">Bet Types & Payouts</h4>
+              <div className="space-y-1.5 text-sm">
+                {Object.entries(info.betTypes as Record<string, string>).map(([betType, payout]) => (
+                  <div key={betType} className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{betType}:</span>
+                    <span className="font-medium text-green-600">{payout}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {'howToPlay' in info && info.howToPlay && (
+            <div className="bg-muted/30 rounded-lg p-3">
+              <h4 className="font-semibold text-sm mb-2 text-foreground">How to Play</h4>
+              <ul className="space-y-1.5 text-sm">
+                {(info.howToPlay as string[]).map((step, index) => (
+                  <li key={index} className="text-muted-foreground text-xs">
+                    {step}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

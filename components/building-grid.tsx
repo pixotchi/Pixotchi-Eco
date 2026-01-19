@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
+import { casinoIsBuilt } from '@/lib/contracts';
 
 interface BuildingGridProps {
   buildings: BuildingData[];
@@ -11,19 +12,22 @@ interface BuildingGridProps {
   selectedBuilding: BuildingData | null;
   onBuildingSelect: (building: BuildingData) => void;
   currentBlock: bigint;
+  landId: bigint;
 }
 
 // Individual building item memoized to prevent unnecessary re-renders
-const BuildingItem = React.memo(({ 
-  building, 
-  buildingType, 
-  isSelected, 
-  onBuildingSelect 
+const BuildingItem = React.memo(({
+  building,
+  buildingType,
+  isSelected,
+  onBuildingSelect,
+  casinoBuiltState
 }: {
   building: BuildingData;
   buildingType: BuildingType;
   isSelected: boolean;
   onBuildingSelect: (building: BuildingData) => void;
+  casinoBuiltState?: boolean | null;
 }) => {
   // Memoize building name and icon computation
   const { buildingName, buildingIcon } = useMemo(() => {
@@ -32,7 +36,10 @@ const BuildingItem = React.memo(({
     return { buildingName: name, buildingIcon: icon };
   }, [building.id, buildingType]);
 
-  const isMaxLevel = building.level >= building.maxLevel;
+  const isCasino = buildingType === 'town' && building.id === 6;
+  // For Casino, use casinoBuiltState; for others, use building.level
+  const effectiveLevel = isCasino && casinoBuiltState ? 1 : building.level;
+  const isMaxLevel = effectiveLevel >= building.maxLevel;
 
   return (
     <div className="space-y-1">
@@ -40,43 +47,40 @@ const BuildingItem = React.memo(({
       <div className="flex justify-center">
         <button
           onClick={() => onBuildingSelect(building)}
-        className={`building-button p-0.5 transition-all rounded-md building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${
-            isSelected ? 'bg-primary' : 'bg-transparent'
-          }`}
+          className={`building-button p-0.5 transition-all rounded-md building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${isSelected ? 'bg-primary' : 'bg-transparent'
+            }`}
         >
-        <div className={`building-element flex items-center justify-center p-2 transition-all rounded-md w-16 h-16 relative ${
-            isSelected ? 'bg-primary/10' : 'bg-card hover:bg-accent'
-          }`}>
-            <Image 
-              src={buildingIcon} 
-              alt={buildingName} 
-              width={40} 
-              height={40} 
-              className={`building-icon ${
-                building.level === 0 ? 'filter grayscale opacity-50' : ''
-              }`}
+          <div className={`building-element flex items-center justify-center p-2 transition-all rounded-md w-16 h-16 relative ${isSelected ? 'bg-primary/10' : 'bg-card hover:bg-accent'
+            }`}>
+            <Image
+              src={buildingIcon}
+              alt={buildingName}
+              width={40}
+              height={40}
+              className={`building-icon ${effectiveLevel === 0 ? 'filter grayscale opacity-50' : ''
+                }`}
               style={{ width: 'auto', height: 'auto' }}
             />
-            
+
             {/* Max Level Badge */}
             {isMaxLevel && (
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-sm flex items-center justify-center">
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-sm flex items-center justify-center">
                 <span className="text-xs font-bold text-black">★</span>
               </div>
             )}
           </div>
         </button>
       </div>
-      
+
       {/* Building Info */}
       <div className="text-center">
         <div className="text-xs font-semibold truncate" title={buildingName}>
           {buildingName}
         </div>
         <div className="text-xs text-muted-foreground">
-          Lv. {building.level}/{building.maxLevel}
+          Lv. {effectiveLevel}/{building.maxLevel}
         </div>
-        
+
         {/* Upgrade Status */}
         {building.isUpgrading && (
           <div className="text-xs text-primary animate-pulse">
@@ -95,8 +99,17 @@ export default function BuildingGrid({
   buildingType,
   selectedBuilding,
   onBuildingSelect,
-  currentBlock
+  currentBlock,
+  landId
 }: BuildingGridProps) {
+  const [casinoBuiltState, setCasinoBuiltState] = useState<boolean | null>(null);
+
+  // Fetch casino built state for town buildings
+  useEffect(() => {
+    if (buildingType === 'town' && landId) {
+      casinoIsBuilt(landId).then(setCasinoBuiltState).catch(() => setCasinoBuiltState(false));
+    }
+  }, [buildingType, landId]);
 
   const handleBuildingSelect = useCallback((building: BuildingData) => {
     onBuildingSelect(building);
@@ -128,6 +141,7 @@ export default function BuildingGrid({
             buildingType={buildingType}
             isSelected={isSelected}
             onBuildingSelect={handleBuildingSelect}
+            casinoBuiltState={casinoBuiltState}
           />
         );
       })}
