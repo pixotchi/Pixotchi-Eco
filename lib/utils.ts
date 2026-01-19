@@ -297,6 +297,7 @@ const TOWN_BUILDINGS: { [key: number]: string } = {
   1: "Stake House",
   3: "Ware House",
   5: "Marketplace",
+  6: "Casino",
   7: "Farmer House"
 };
 
@@ -314,6 +315,7 @@ const BUILDING_ICON_MAP: { [key: string]: string } = {
   "Stake House": "/icons/stake-house.svg",
   "Ware House": "/icons/ware-house.svg",
   "Marketplace": "/icons/marketplace.svg",
+  "Casino": "/icons/casino.svg",
   "Farmer House": "/icons/farmer-house.svg"
 };
 

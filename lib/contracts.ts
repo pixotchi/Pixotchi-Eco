@@ -2308,3 +2308,335 @@ export const getKillCooldown = async (walletAddress: string): Promise<{ canKill:
     return { canKill: true, remainingSeconds: 0 };
   }
 };
+
+// -------------------- CASINO (ROULETTE) HELPERS --------------------
+
+import { casinoAbi, CasinoBetType } from '@/public/abi/casino-abi';
+
+export type CasinoBuildingConfig = {
+  buildingToken: string;
+  buildingCost: bigint;
+};
+
+export type CasinoConfig = {
+  minBet: bigint;
+  maxBet: bigint;
+  bettingToken: string;
+  rewardPool: string;
+  enabled: boolean;
+};
+
+export type CasinoActiveBet = {
+  isActive: boolean;
+  betType: number;
+  betNumbers: number[];
+  betAmount: bigint;
+  revealBlock: bigint;
+  player: string;
+  canReveal: boolean;
+  isExpired: boolean;
+};
+
+export type CasinoStats = {
+  totalWagered: bigint;
+  totalWon: bigint;
+  gamesPlayed: bigint;
+};
+
+/**
+ * Check if casino is built on a land
+ */
+export const casinoIsBuilt = async (landId: bigint): Promise<boolean> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoIsBuilt',
+        args: [landId],
+      });
+    });
+    return result as boolean;
+  } catch (error) {
+    console.warn('Failed to check if casino is built:', error);
+    return false;
+  }
+};
+
+/**
+ * Get casino building configuration (token and cost)
+ */
+export const casinoGetBuildingConfig = async (): Promise<CasinoBuildingConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetBuildingConfig',
+      });
+    }) as [string, bigint];
+    return {
+      buildingToken: result[0],
+      buildingCost: result[1],
+    };
+  } catch (error) {
+    console.warn('Failed to get casino building config:', error);
+    return null;
+  }
+};
+
+/**
+ * Get casino game configuration (bet limits, token, pool, enabled)
+ */
+export const casinoGetConfig = async (): Promise<CasinoConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetConfig',
+      });
+    }) as [bigint, bigint, string, string, boolean];
+    return {
+      minBet: result[0],
+      maxBet: result[1],
+      bettingToken: result[2],
+      rewardPool: result[3],
+      enabled: result[4],
+    };
+  } catch (error) {
+    console.warn('Failed to get casino config:', error);
+    return null;
+  }
+};
+
+/**
+ * Get active bet details for a land
+ */
+export const casinoGetActiveBet = async (landId: bigint): Promise<CasinoActiveBet | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetActiveBet',
+        args: [landId],
+      });
+    }) as [boolean, number, number[], bigint, bigint, string, boolean, boolean];
+    return {
+      isActive: result[0],
+      betType: result[1],
+      betNumbers: result[2],
+      betAmount: result[3],
+      revealBlock: result[4],
+      player: result[5],
+      canReveal: result[6],
+      isExpired: result[7],
+    };
+  } catch (error) {
+    console.warn('Failed to get active bet:', error);
+    return null;
+  }
+};
+
+/**
+ * Get casino stats for a land
+ */
+export const casinoGetStats = async (landId: bigint): Promise<CasinoStats | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetStats',
+        args: [landId],
+      });
+    }) as [bigint, bigint, bigint];
+    return {
+      totalWagered: result[0],
+      totalWon: result[1],
+      gamesPlayed: result[2],
+    };
+  } catch (error) {
+    console.warn('Failed to get casino stats:', error);
+    return null;
+  }
+};
+
+/**
+ * Build casino on a land (transaction)
+ */
+export const casinoBuild = async (walletClient: WalletClient, landId: bigint): Promise<string> => {
+  if (!walletClient.account) throw new Error('No account connected');
+
+  const hash = await walletClient.writeContract({
+    address: LAND_CONTRACT_ADDRESS,
+    abi: casinoAbi,
+    functionName: 'casinoBuild',
+    args: [landId],
+    account: walletClient.account,
+    chain: base,
+  });
+
+  return hash;
+};
+
+/**
+ * Place a bet on the casino roulette table (transaction)
+ */
+export const casinoPlaceBet = async (
+  walletClient: WalletClient,
+  landId: bigint,
+  betType: CasinoBetType,
+  betNumbers: number[],
+  amount: bigint
+): Promise<string> => {
+  if (!walletClient.account) throw new Error('No account connected');
+
+  const hash = await walletClient.writeContract({
+    address: LAND_CONTRACT_ADDRESS,
+    abi: casinoAbi,
+    functionName: 'casinoPlaceBet',
+    args: [landId, betType, betNumbers.map(n => n as number), amount],
+    account: walletClient.account,
+    chain: base,
+  });
+
+  return hash;
+};
+
+/**
+ * Reveal the casino spin result (transaction)
+ * Returns the transaction hash, result must be parsed from receipt logs
+ */
+export const casinoReveal = async (walletClient: WalletClient, landId: bigint): Promise<string> => {
+  if (!walletClient.account) throw new Error('No account connected');
+
+  const hash = await walletClient.writeContract({
+    address: LAND_CONTRACT_ADDRESS,
+    abi: casinoAbi,
+    functionName: 'casinoReveal',
+    args: [landId],
+    account: walletClient.account,
+    chain: base,
+  });
+
+  return hash;
+};
+
+
+
+/**
+ * Build call data for casinoBuild (for batched transactions)
+ */
+export const buildCasinoBuildCall = (landId: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: casinoAbi,
+  functionName: 'casinoBuild' as const,
+  args: [landId],
+});
+
+/**
+ * Build call data for casinoPlaceBet (for batched transactions)
+ */
+export const buildCasinoPlaceBetCall = (
+  landId: bigint,
+  betType: CasinoBetType,
+  betNumbers: number[],
+  amount: bigint
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: casinoAbi,
+  functionName: 'casinoPlaceBet' as const,
+  args: [landId, betType, betNumbers.map(n => n as number), amount],
+});
+
+/**
+ * Build call data for casinoReveal (for batched transactions)
+ */
+export const buildCasinoRevealCall = (landId: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: casinoAbi,
+  functionName: 'casinoReveal' as const,
+  args: [landId],
+});
+
+// Re-export casino types and helpers
+export { CasinoBetType };
+
+// Standard ERC20 ABI for token approval checks
+const erc20ApprovalAbi = [
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
+] as const;
+
+/**
+ * Check token allowance for casino operations
+ * @param address User wallet address
+ * @param tokenAddress The token to check allowance for
+ */
+export const checkCasinoApproval = async (
+  address: string,
+  tokenAddress: string
+): Promise<bigint> => {
+  const readClient = getReadClient();
+  return retryWithBackoff(async () => {
+    const allowance = await readClient.readContract({
+      address: tokenAddress as `0x${string}`,
+      abi: erc20ApprovalAbi,
+      functionName: 'allowance',
+      args: [address as `0x${string}`, LAND_CONTRACT_ADDRESS],
+    }) as bigint;
+    return allowance;
+  });
+};
+
+/**
+ * Approve token spending for casino operations (betting/building)
+ * @param walletClient Connected wallet client
+ * @param tokenAddress The token to approve
+ */
+export const approveCasinoTokenSpending = async (
+  walletClient: WalletClient,
+  tokenAddress: string
+): Promise<boolean> => {
+  if (!walletClient.account) throw new Error('No account connected');
+
+  const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
+
+  const hash = await walletClient.writeContract({
+    address: tokenAddress as `0x${string}`,
+    abi: erc20ApprovalAbi,
+    functionName: 'approve',
+    args: [LAND_CONTRACT_ADDRESS, maxApproval],
+    account: walletClient.account,
+    chain: base,
+  });
+
+  const writeClient = getWriteClient();
+  const receipt = await writeClient.waitForTransactionReceipt({ hash });
+  return receipt.status === 'success';
+};
