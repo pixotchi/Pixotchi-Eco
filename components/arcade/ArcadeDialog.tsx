@@ -74,6 +74,9 @@ const TRANSACTION_FAILURE_STATUSES = new Set([
   "cancelled",
   "canceled",
   "rejected",
+  "transactionRejected",
+  "userRejected",
+  "buildError",
 ]);
 
 function createCommitment(secret: Uint8Array, plantId: number, address: string): `0x${string}` {
@@ -301,7 +304,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           }) as Promise<bigint>,
         ]);
         if (mounted) setCooldown({ normal: Number(normal), star: Number(star) });
-      } catch {}
+      } catch { }
     })();
     return () => { mounted = false; };
   }, [open, plant?.id, publicClient]);
@@ -311,7 +314,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     if (!open) return;
     // Stop interval if both cooldowns are 0
     if (cooldown.normal === 0 && cooldown.star === 0) return;
-    
+
     const id = setInterval(() => {
       setCooldown((prev: { normal: number; star: number }) => ({
         normal: Math.max(0, prev.normal - 1),
@@ -325,7 +328,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     if (!publicClient || !plant || !address) return null;
 
     try {
-    const currentBlock = await publicClient.getBlockNumber();
+      const currentBlock = await publicClient.getBlockNumber();
       const lookback = BigInt(LOG_LOOKBACK_BLOCKS);
       const fallbackFrom = currentBlock > lookback ? currentBlock - lookback : BigInt("0");
       const lastSeen = lastSeenCommitBlockRef.current != null
@@ -583,7 +586,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             const localKey = `spinleaf:pending:${plant?.id}`;
             try {
               localStorage.removeItem(localKey);
-            } catch {}
+            } catch { }
             setPendingSecret(null);
             setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
             toast.error("Spin expired — stars forfeited.");
@@ -681,11 +684,16 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       const txHash = status.statusData?.transactionReceipts?.[0]?.transactionHash as string | undefined;
 
       if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
-        setWheelState((prev) =>
-          prev.spinning || prev.revealReady || prev.rewardIndex !== undefined
-            ? { spinning: false, revealReady: false, rewardIndex: undefined }
-            : prev,
-        );
+        // Clear pending state on failure to prevent stuck spinning
+        if (mode === "reveal") {
+          const localKey = `spinleaf:pending:${plant.id}`;
+          try {
+            localStorage.removeItem(localKey);
+          } catch { }
+          setPendingSecret(null);
+          setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
+        }
+        setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
         return;
       }
 
@@ -703,7 +711,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         };
         try {
           localStorage.setItem(localKey, JSON.stringify(data));
-        } catch {}
+        } catch { }
         if (blockNumber > 0) persistLastSeenBlock(blockNumber);
         setSpinMeta((prev) => {
           if (!prev) return prev;
@@ -712,7 +720,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         if (secretHex) {
           try {
             setPendingSecret(hexToBytes(secretHex));
-          } catch {}
+          } catch { }
         }
         const unlockBlock = blockNumber + 2;
         setBlockCountdown(Math.max(0, unlockBlock - blockNumber));
@@ -725,7 +733,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         const localKey = `spinleaf:pending:${plant.id}`;
         try {
           localStorage.removeItem(localKey);
-        } catch {}
+        } catch { }
       }
     },
     [address, commitmentHex, plant, secretHex, spinMeta, startWheelSpin],
@@ -761,25 +769,14 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     return () => clearTimeout(timeout);
   }, [targetRotation, spinMeta?.pending]);
 
-  useEffect(() => {
-    if (targetRotation === null) return;
-
-    const timeout = setTimeout(() => {
-      const normalized = ((targetRotation % 360) + 360) % 360;
-      wheelRotationRef.current = normalized;
-      setCurrentRotation(normalized);
-      setTargetRotation(null);
-    }, FINAL_SPIN_DURATION_MS);
-
-    return () => clearTimeout(timeout);
-  }, [targetRotation]);
+  // NOTE: Duplicate useEffect removed - race condition bug fix
 
   const onStatus = useCallback((status: LifecycleStatus) => {
     if (status.statusName === "success") {
       onOpenChange(false);
       try {
         window.dispatchEvent(new Event("balances:refresh"));
-      } catch {}
+      } catch { }
     }
   }, [onOpenChange]);
 
@@ -789,18 +786,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   const canCommit = Boolean(
     spinMeta &&
-      !pending &&
-      spinMeta.cooldown === 0 &&
-      (plant?.stars ?? 0) >= spinStarCost &&
-      commitmentHex,
+    !pending &&
+    spinMeta.cooldown === 0 &&
+    (plant?.stars ?? 0) >= spinStarCost &&
+    commitmentHex,
   );
 
   const canReveal = Boolean(
     pending &&
-      address &&
-      pending.player.toLowerCase() === address.toLowerCase() &&
-      blockCountdown <= 0 &&
-      secretHex,
+    address &&
+    pending.player.toLowerCase() === address.toLowerCase() &&
+    blockCountdown <= 0 &&
+    secretHex,
   );
 
   const BoxGrid = () => (
@@ -809,9 +806,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         <button
           key={n}
           onClick={() => setSeed(n)}
-          className={`w-full h-16 sm:h-20 flex items-center justify-center rounded-lg border transition-colors ${
-            seed === n ? "bg-primary/10 border-primary ring-2 ring-primary/30" : "bg-card hover:bg-accent border-border"
-          }`}
+          className={`w-full h-16 sm:h-20 flex items-center justify-center rounded-lg border transition-colors ${seed === n ? "bg-primary/10 border-primary ring-2 ring-primary/30" : "bg-card hover:bg-accent border-border"
+            }`}
           aria-label={`Select box ${n}`}
         >
           <Image src="/icons/box.png" alt={`Box ${n}`} width={32} height={32} className="w-8 h-8 object-contain" />
@@ -846,232 +842,232 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           <DialogTitle>Arcade</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto pr-1">
-        <div className="space-y-4 mt-4">
-          <GameSelector selected={selectedGame} onSelect={setSelectedGame} />
+          <div className="space-y-4 mt-4">
+            <GameSelector selected={selectedGame} onSelect={setSelectedGame} />
 
-          {selectedGame === 'box' && (
-            <div className="space-y-4">
-              <div className="text-sm font-medium">Choose a box</div>
-              <BoxGrid />
+            {selectedGame === 'box' && (
+              <div className="space-y-4">
+                <div className="text-sm font-medium">Choose a box</div>
+                <BoxGrid />
 
-              <div className="space-y-3 rounded-xl border bg-card/60 p-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="font-medium text-foreground">
-                    {withStar ? 'Playing with Stars' : 'Playing without Stars'}
-                  </div>
-                  <button
-                    className="px-2 py-1 rounded-md border hover:bg-accent"
-                    onClick={() => setWithStar((v: boolean) => !v)}
-                  >
-                    {withStar ? 'Play without Stars' : 'Play with Stars'}
-                  </button>
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Cooldown: <span className="font-medium text-foreground">
-                    {currentCooldown > 0 ? `${formatDuration(currentCooldown)} remaining` : 'Ready to play'}
-                  </span>
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
-                  {withStar && (plant?.stars ?? 0) <= 0 && (
-                    <span className="ml-2 text-red-500">Not enough stars</span>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Confirm Play</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet} />
-                </div>
-
-                <BoxGameTransaction
-                  plantId={plant.id}
-                  seed={seed as number}
-                  withStar={withStar}
-                  buttonText={withStar ? "Play (Use Star)" : "Play"}
-                  buttonClassName="w-full"
-                  disabled={disabled || (withStar && (plant?.stars ?? 0) <= 0)}
-                  onStatusUpdate={onStatus as any}
-                  showToast
-                />
-              </div>
-            </div>
-          )}
-
-          {selectedGame === "spin" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium">SpinLeaf</div>
-                  <p className="text-xs text-muted-foreground">
-                    Spin the wheel for a surprise reward.
-                  </p>
-                </div>
-              </div>
-
-              <div className="relative mx-auto mt-6 w-48 h-48 sm:w-56 sm:h-56">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="relative w-full h-full rounded-full bg-gradient-to-br from-primary/10 via-background to-card shadow-[0_20px_45px_-20px_rgba(0,0,0,0.35)]" aria-hidden>
-                    <div
-                      className={cn(
-                        "absolute inset-4 rounded-full border border-primary/30 flex items-center justify-center",
-                        targetRotation !== null ? "transition-transform duration-[2200ms] ease-out" : "",
-                        wheelState.spinning && targetRotation === null ? "animate-[spin-slow_1.5s_linear_infinite]" : "",
-                      )}
-                      style={
-                        targetRotation !== null
-                          ? { transform: `rotate(${targetRotation}deg)` }
-                          : wheelState.spinning
-                          ? undefined
-                          : { transform: `rotate(${currentRotation}deg)` }
-                      }
+                <div className="space-y-3 rounded-xl border bg-card/60 p-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="font-medium text-foreground">
+                      {withStar ? 'Playing with Stars' : 'Playing without Stars'}
+                    </div>
+                    <button
+                      className="px-2 py-1 rounded-md border hover:bg-accent"
+                      onClick={() => setWithStar((v: boolean) => !v)}
                     >
-                      <svg viewBox="0 0 200 200" className="w-full h-full">
-                        {[...Array(6)].map((_, index) => {
-                          const angle = index * 60;
-                          const radius = 68;
-                          const cx = 100 + Math.cos((angle * Math.PI) / 180) * radius;
-                          const cy = 100 + Math.sin((angle * Math.PI) / 180) * radius;
-                          const rotation = angle + 90;
-                          return (
-                            <g key={index} transform={`rotate(${rotation} ${cx} ${cy})`}>
-                              <image
-                                href="/icons/spinleaf.svg"
-                                x={cx - 18}
-                                y={cy - 18}
-                                width={36}
-                                height={36}
-                                className="drop-shadow-sm"
-                              />
-                            </g>
-                          );
-                        })}
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-4 h-4 bg-primary rounded-full shadow-inner" />
-                      </div>
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-24 h-24 rounded-full border border-primary/20 bg-card/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-1">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
-                        <span className="text-xs font-semibold text-primary">Good luck!</span>
-                      </div>
-                    </div>
-                    <div className="absolute inset-0 rounded-full border border-white/10" />
+                      {withStar ? 'Play without Stars' : 'Play with Stars'}
+                    </button>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Cooldown: <span className="font-medium text-foreground">
+                      {currentCooldown > 0 ? `${formatDuration(currentCooldown)} remaining` : 'Ready to play'}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
+                    {withStar && (plant?.stars ?? 0) <= 0 && (
+                      <span className="ml-2 text-red-500">Not enough stars</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Confirm Play</span>
+                    <SponsoredBadge show={isSponsored && isSmartWallet} />
+                  </div>
+
+                  <BoxGameTransaction
+                    plantId={plant.id}
+                    seed={seed as number}
+                    withStar={withStar}
+                    buttonText={withStar ? "Play (Use Star)" : "Play"}
+                    buttonClassName="w-full"
+                    disabled={disabled || (withStar && (plant?.stars ?? 0) <= 0)}
+                    onStatusUpdate={onStatus as any}
+                    showToast
+                  />
+                </div>
+              </div>
+            )}
+
+            {selectedGame === "spin" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium">SpinLeaf</div>
+                    <p className="text-xs text-muted-foreground">
+                      Spin the wheel for a surprise reward.
+                    </p>
                   </div>
                 </div>
-                <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                  <div className="w-0 h-0 border-l-8 border-r-8 border-t-12 border-l-transparent border-r-transparent border-t-primary" />
-                </div>
-              </div>
 
-              <div className="space-y-3 rounded-xl border bg-card/60 p-4">
-                <div>
-                  <div className="text-sm font-medium">Playing with Stars</div>
-                  <p className="text-xs text-muted-foreground">
-                    Spin (Commit) locks in your spin using stars; Stop, reveals your reward after the next block to claim the reward.
-                  </p>
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Cooldown: <span className="font-medium text-foreground">
-                    {pending ? (canReveal ? "Reveal ready" : `${blockSecondsRemaining > 0 ? `${blockSecondsRemaining}s` : '<1s'} until reveal`) : spinCooldown > 0 ? formatDuration(spinCooldown) + " remaining" : "Ready to play"}
-                  </span>
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
-                  {spinStarCost > 0 && (plant?.stars ?? 0) < spinStarCost && !pending && (
-                    <span className="ml-2 text-red-500">Not enough stars to spin</span>
-                  )}
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Cost per spin: <span className="font-semibold text-foreground">{spinStarCost}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Commit / Reveal</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet} />
-                </div>
-
-                <div className="space-y-2">
-                  {!pending && (
-                    <SpinGameTransaction
-                      mode="commit"
-                      plantId={plant.id}
-                      commitment={commitmentHex ?? undefined}
-                      disabled={!(commitmentHex && canCommit)}
-                      buttonClassName="w-full"
-                      buttonText={spinStarCost > 0 ? `Spin! (${spinStarCost}★)` : "Spin!"}
-                      onStatusUpdate={handleSpinStatus("commit") as any}
-                      onButtonClick={() => {
-                        if (!(commitmentHex && canCommit)) return;
-                        setResultDetails(null);
-                        startWheelSpin();
-                      }}
-                    onRewardConfigUpdate={handleRewardUpdate}
-                    />
-                  )}
-
-                  {pending && (
-                    <SpinGameTransaction
-                      mode="reveal"
-                      plantId={plant.id}
-                      secret={secretHex}
-                      disabled={!canReveal}
-                      buttonClassName="w-full"
-                      buttonText="Stop Spin!"
-                      onStatusUpdate={handleSpinStatus("reveal") as any}
-                      onComplete={(result) => {
-                        handleRevealSuccess();
-                        finishWheelSpin(result?.rewardIndex);
-                        if (result) {
-                          setResultDetails({
-                            pointsDelta: result.pointsDelta,
-                            timeAdded: result.timeAdded,
-                            leafAmount: result.leafAmount,
-                          });
+                <div className="relative mx-auto mt-6 w-48 h-48 sm:w-56 sm:h-56">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="relative w-full h-full rounded-full bg-gradient-to-br from-primary/10 via-background to-card shadow-[0_20px_45px_-20px_rgba(0,0,0,0.35)]" aria-hidden>
+                      <div
+                        className={cn(
+                          "absolute inset-4 rounded-full border border-primary/30 flex items-center justify-center",
+                          targetRotation !== null ? "transition-transform duration-[2200ms] ease-out" : "",
+                          wheelState.spinning && targetRotation === null ? "animate-[spin-slow_1.5s_linear_infinite]" : "",
+                        )}
+                        style={
+                          targetRotation !== null
+                            ? { transform: `rotate(${targetRotation}deg)` }
+                            : wheelState.spinning
+                              ? undefined
+                              : { transform: `rotate(${currentRotation}deg)` }
                         }
-                      }}
-                      onButtonClick={() => {
-                        setWheelState((prev) => ({ ...prev, spinning: false, revealReady: true }));
-                      }}
-                    onRewardConfigUpdate={handleRewardUpdate}
-                    />
-                  )}
+                      >
+                        <svg viewBox="0 0 200 200" className="w-full h-full">
+                          {[...Array(6)].map((_, index) => {
+                            const angle = index * 60;
+                            const radius = 68;
+                            const cx = 100 + Math.cos((angle * Math.PI) / 180) * radius;
+                            const cy = 100 + Math.sin((angle * Math.PI) / 180) * radius;
+                            const rotation = angle + 90;
+                            return (
+                              <g key={index} transform={`rotate(${rotation} ${cx} ${cy})`}>
+                                <image
+                                  href="/icons/spinleaf.svg"
+                                  x={cx - 18}
+                                  y={cy - 18}
+                                  width={36}
+                                  height={36}
+                                  className="drop-shadow-sm"
+                                />
+                              </g>
+                            );
+                          })}
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-4 h-4 bg-primary rounded-full shadow-inner" />
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-24 h-24 rounded-full border border-primary/20 bg-card/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-1">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
+                          <span className="text-xs font-semibold text-primary">Good luck!</span>
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 rounded-full border border-white/10" />
+                    </div>
+                  </div>
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                    <div className="w-0 h-0 border-l-8 border-r-8 border-t-12 border-l-transparent border-r-transparent border-t-primary" />
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-xl border bg-card/60 p-4">
+                  <div>
+                    <div className="text-sm font-medium">Playing with Stars</div>
+                    <p className="text-xs text-muted-foreground">
+                      Spin (Commit) locks in your spin using stars; Stop, reveals your reward after the next block to claim the reward.
+                    </p>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Cooldown: <span className="font-medium text-foreground">
+                      {pending ? (canReveal ? "Reveal ready" : `${blockSecondsRemaining > 0 ? `${blockSecondsRemaining}s` : '<1s'} until reveal`) : spinCooldown > 0 ? formatDuration(spinCooldown) + " remaining" : "Ready to play"}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
+                    {spinStarCost > 0 && (plant?.stars ?? 0) < spinStarCost && !pending && (
+                      <span className="ml-2 text-red-500">Not enough stars to spin</span>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Cost per spin: <span className="font-semibold text-foreground">{spinStarCost}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Commit / Reveal</span>
+                    <SponsoredBadge show={isSponsored && isSmartWallet} />
+                  </div>
+
+                  <div className="space-y-2">
+                    {!pending && (
+                      <SpinGameTransaction
+                        mode="commit"
+                        plantId={plant.id}
+                        commitment={commitmentHex ?? undefined}
+                        disabled={!(commitmentHex && canCommit)}
+                        buttonClassName="w-full"
+                        buttonText={spinStarCost > 0 ? `Spin! (${spinStarCost}★)` : "Spin!"}
+                        onStatusUpdate={handleSpinStatus("commit") as any}
+                        onButtonClick={() => {
+                          if (!(commitmentHex && canCommit)) return;
+                          setResultDetails(null);
+                          startWheelSpin();
+                        }}
+                        onRewardConfigUpdate={handleRewardUpdate}
+                      />
+                    )}
+
+                    {pending && (
+                      <SpinGameTransaction
+                        mode="reveal"
+                        plantId={plant.id}
+                        secret={secretHex}
+                        disabled={!canReveal}
+                        buttonClassName="w-full"
+                        buttonText="Stop Spin!"
+                        onStatusUpdate={handleSpinStatus("reveal") as any}
+                        onComplete={(result) => {
+                          handleRevealSuccess();
+                          finishWheelSpin(result?.rewardIndex);
+                          if (result) {
+                            setResultDetails({
+                              pointsDelta: result.pointsDelta,
+                              timeAdded: result.timeAdded,
+                              leafAmount: result.leafAmount,
+                            });
+                          }
+                        }}
+                        onButtonClick={() => {
+                          setWheelState((prev) => ({ ...prev, spinning: false, revealReady: true }));
+                        }}
+                        onRewardConfigUpdate={handleRewardUpdate}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          {selectedGame === "spin" && resultDetails && (
-            <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-              <div className="font-semibold text-primary">Spin Reward</div>
-              <ul className="mt-2 space-y-1">
-                {typeof resultDetails.pointsDelta === "number" && resultDetails.pointsDelta !== 0 && (
-                  <li>
-                    PTS: <span className="font-medium text-foreground">{`${resultDetails.pointsDelta > 0 ? "+" : ""}${formatScore(Math.abs(resultDetails.pointsDelta))}`}</span>
-                  </li>
-                )}
-                {typeof resultDetails.timeAdded === "number" && resultDetails.timeAdded !== 0 && (
-                  <li>
-                    TOD: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : ""}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
-                  </li>
-                )}
-                {typeof resultDetails.leafAmount === "bigint" && resultDetails.leafAmount !== BigInt("0") && (
-                  <li>
-                    LEAF: <span className="font-medium text-foreground">{`${resultDetails.leafAmount > BigInt("0") ? "+" : ""}${formatTokenAmount(resultDetails.leafAmount)} LEAF`}</span>
-                  </li>
-                )}
-                {(resultDetails.pointsDelta ?? 0) === 0 && (resultDetails.timeAdded ?? 0) === 0 &&
-                  (!resultDetails.leafAmount || resultDetails.leafAmount === BigInt("0")) && (
-                  <li className="text-muted-foreground">No reward this time. Better luck next spin!</li>
-                )}
-              </ul>
-            </div>
-          )}
-        </div>
+            )}
+            {selectedGame === "spin" && resultDetails && (
+              <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+                <div className="font-semibold text-primary">Spin Reward</div>
+                <ul className="mt-2 space-y-1">
+                  {typeof resultDetails.pointsDelta === "number" && resultDetails.pointsDelta !== 0 && (
+                    <li>
+                      PTS: <span className="font-medium text-foreground">{`${resultDetails.pointsDelta > 0 ? "+" : ""}${formatScore(Math.abs(resultDetails.pointsDelta))}`}</span>
+                    </li>
+                  )}
+                  {typeof resultDetails.timeAdded === "number" && resultDetails.timeAdded !== 0 && (
+                    <li>
+                      TOD: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : ""}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
+                    </li>
+                  )}
+                  {typeof resultDetails.leafAmount === "bigint" && resultDetails.leafAmount !== BigInt("0") && (
+                    <li>
+                      LEAF: <span className="font-medium text-foreground">{`${resultDetails.leafAmount > BigInt("0") ? "+" : ""}${formatTokenAmount(resultDetails.leafAmount)} LEAF`}</span>
+                    </li>
+                  )}
+                  {(resultDetails.pointsDelta ?? 0) === 0 && (resultDetails.timeAdded ?? 0) === 0 &&
+                    (!resultDetails.leafAmount || resultDetails.leafAmount === BigInt("0")) && (
+                      <li className="text-muted-foreground">No reward this time. Better luck next spin!</li>
+                    )}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

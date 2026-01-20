@@ -86,6 +86,18 @@ export default function SpinGameTransaction({
   const handleStatus = (status: LifecycleStatus) => {
     onStatusUpdate?.(status);
 
+    // Handle transaction failures - call onComplete with undefined to reset wheel state
+    const failureStatuses = new Set([
+      "error", "failed", "reverted", "cancelled", "canceled", "rejected",
+      "transactionRejected", "userRejected", "buildError"
+    ]);
+    if (failureStatuses.has(status.statusName ?? "")) {
+      if (mode === "reveal") {
+        onComplete?.(undefined);
+      }
+      return;
+    }
+
     if (status.statusName !== "success") return;
 
     if (mode === "commit") {
