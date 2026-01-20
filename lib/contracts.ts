@@ -2309,7 +2309,7 @@ export const getKillCooldown = async (walletAddress: string): Promise<{ canKill:
   }
 };
 
-// -------------------- CASINO (ROULETTE) HELPERS --------------------
+// -------------------- CASINO (ROULETTE) HELPERS - MULTI-BET VERSION --------------------
 
 import { casinoAbi, CasinoBetType } from '@/public/abi/casino-abi';
 
@@ -2324,17 +2324,23 @@ export type CasinoConfig = {
   bettingToken: string;
   rewardPool: string;
   enabled: boolean;
+  maxBetsPerGame: bigint;
 };
 
 export type CasinoActiveBet = {
   isActive: boolean;
-  betType: number;
-  betNumbers: number[];
-  betAmount: bigint;
+  numBets: bigint;
+  totalBetAmount: bigint;
   revealBlock: bigint;
   player: string;
   canReveal: boolean;
   isExpired: boolean;
+};
+
+export type CasinoBetDetails = {
+  betType: number;
+  betNumbers: number[];
+  betAmount: bigint;
 };
 
 export type CasinoStats = {
@@ -2388,7 +2394,7 @@ export const casinoGetBuildingConfig = async (): Promise<CasinoBuildingConfig | 
 };
 
 /**
- * Get casino game configuration (bet limits, token, pool, enabled)
+ * Get casino game configuration (bet limits, token, pool, enabled, maxBetsPerGame)
  */
 export const casinoGetConfig = async (): Promise<CasinoConfig | null> => {
   const readClient = getReadClient();
@@ -2399,13 +2405,14 @@ export const casinoGetConfig = async (): Promise<CasinoConfig | null> => {
         abi: casinoAbi,
         functionName: 'casinoGetConfig',
       });
-    }) as [bigint, bigint, string, string, boolean];
+    }) as [bigint, bigint, string, string, boolean, bigint];
     return {
       minBet: result[0],
       maxBet: result[1],
       bettingToken: result[2],
       rewardPool: result[3],
       enabled: result[4],
+      maxBetsPerGame: result[5],
     };
   } catch (error) {
     console.warn('Failed to get casino config:', error);
@@ -2414,7 +2421,7 @@ export const casinoGetConfig = async (): Promise<CasinoConfig | null> => {
 };
 
 /**
- * Get active bet details for a land
+ * Get active game details for a land (multi-bet version)
  */
 export const casinoGetActiveBet = async (landId: bigint): Promise<CasinoActiveBet | null> => {
   const readClient = getReadClient();
@@ -2426,20 +2433,64 @@ export const casinoGetActiveBet = async (landId: bigint): Promise<CasinoActiveBe
         functionName: 'casinoGetActiveBet',
         args: [landId],
       });
-    }) as [boolean, number, number[], bigint, bigint, string, boolean, boolean];
+    }) as [boolean, bigint, bigint, bigint, string, boolean, boolean];
     return {
       isActive: result[0],
-      betType: result[1],
-      betNumbers: result[2],
-      betAmount: result[3],
-      revealBlock: result[4],
-      player: result[5],
-      canReveal: result[6],
-      isExpired: result[7],
+      numBets: result[1],
+      totalBetAmount: result[2],
+      revealBlock: result[3],
+      player: result[4],
+      canReveal: result[5],
+      isExpired: result[6],
     };
   } catch (error) {
     console.warn('Failed to get active bet:', error);
     return null;
+  }
+};
+
+/**
+ * Get details of a specific bet within an active game
+ */
+export const casinoGetBetDetails = async (landId: bigint, betIndex: number): Promise<CasinoBetDetails | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetBetDetails',
+        args: [landId, BigInt(betIndex)],
+      });
+    }) as [number, number[], bigint];
+    return {
+      betType: result[0],
+      betNumbers: result[1],
+      betAmount: result[2],
+    };
+  } catch (error) {
+    console.warn('Failed to get bet details:', error);
+    return null;
+  }
+};
+
+/**
+ * Get max bets allowed per game
+ */
+export const casinoGetMaxBets = async (): Promise<bigint> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetMaxBets',
+      });
+    }) as bigint;
+    return result;
+  } catch (error) {
+    console.warn('Failed to get max bets:', error);
+    return BigInt(2); // Default
   }
 };
 
@@ -2487,22 +2538,22 @@ export const casinoBuild = async (walletClient: WalletClient, landId: bigint): P
 };
 
 /**
- * Place a bet on the casino roulette table (transaction)
+ * Place multiple bets on the casino roulette table (transaction)
  */
-export const casinoPlaceBet = async (
+export const casinoPlaceBets = async (
   walletClient: WalletClient,
   landId: bigint,
-  betType: CasinoBetType,
-  betNumbers: number[],
-  amount: bigint
+  betTypes: CasinoBetType[],
+  betNumbersArray: number[][],
+  betAmounts: bigint[]
 ): Promise<string> => {
   if (!walletClient.account) throw new Error('No account connected');
 
   const hash = await walletClient.writeContract({
     address: LAND_CONTRACT_ADDRESS,
     abi: casinoAbi,
-    functionName: 'casinoPlaceBet',
-    args: [landId, betType, betNumbers.map(n => n as number), amount],
+    functionName: 'casinoPlaceBets',
+    args: [landId, betTypes, betNumbersArray, betAmounts],
     account: walletClient.account,
     chain: base,
   });
@@ -2529,8 +2580,6 @@ export const casinoReveal = async (walletClient: WalletClient, landId: bigint): 
   return hash;
 };
 
-
-
 /**
  * Build call data for casinoBuild (for batched transactions)
  */
@@ -2542,18 +2591,18 @@ export const buildCasinoBuildCall = (landId: bigint) => ({
 });
 
 /**
- * Build call data for casinoPlaceBet (for batched transactions)
+ * Build call data for casinoPlaceBets (for batched transactions)
  */
-export const buildCasinoPlaceBetCall = (
+export const buildCasinoPlaceBetsCall = (
   landId: bigint,
-  betType: CasinoBetType,
-  betNumbers: number[],
-  amount: bigint
+  betTypes: CasinoBetType[],
+  betNumbersArray: number[][],
+  betAmounts: bigint[]
 ) => ({
   address: LAND_CONTRACT_ADDRESS,
   abi: casinoAbi,
-  functionName: 'casinoPlaceBet' as const,
-  args: [landId, betType, betNumbers.map(n => n as number), amount],
+  functionName: 'casinoPlaceBets' as const,
+  args: [landId, betTypes, betNumbersArray, betAmounts],
 });
 
 /**

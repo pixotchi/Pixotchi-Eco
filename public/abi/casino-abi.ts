@@ -1,4 +1,4 @@
-// Casino (Roulette) ABI for RouletteFacet
+// Casino (Roulette) ABI for RouletteFacet - Multi-Bet Version
 export const casinoAbi = [
     // ============ Events ============
     {
@@ -9,7 +9,8 @@ export const casinoAbi = [
             { "name": "maxBet", "type": "uint256", "indexed": false },
             { "name": "bettingToken", "type": "address", "indexed": false },
             { "name": "rewardPool", "type": "address", "indexed": false },
-            { "name": "enabled", "type": "bool", "indexed": false }
+            { "name": "enabled", "type": "bool", "indexed": false },
+            { "name": "maxBetsPerGame", "type": "uint256", "indexed": false }
         ]
     },
     {
@@ -32,6 +33,18 @@ export const casinoAbi = [
     },
     {
         "type": "event",
+        "name": "RouletteBetPlaced",
+        "inputs": [
+            { "name": "landId", "type": "uint256", "indexed": true },
+            { "name": "player", "type": "address", "indexed": true },
+            { "name": "betType", "type": "uint8", "indexed": false },
+            { "name": "amount", "type": "uint256", "indexed": false },
+            { "name": "betIndex", "type": "uint256", "indexed": false },
+            { "name": "revealBlock", "type": "uint256", "indexed": false }
+        ]
+    },
+    {
+        "type": "event",
         "name": "RouletteSpinResult",
         "inputs": [
             { "name": "landId", "type": "uint256", "indexed": true },
@@ -39,6 +52,15 @@ export const casinoAbi = [
             { "name": "winningNumber", "type": "uint8", "indexed": false },
             { "name": "won", "type": "bool", "indexed": false },
             { "name": "payout", "type": "uint256", "indexed": false }
+        ]
+    },
+    {
+        "type": "event",
+        "name": "RouletteBetExpired",
+        "inputs": [
+            { "name": "landId", "type": "uint256", "indexed": true },
+            { "name": "player", "type": "address", "indexed": true },
+            { "name": "forfeitedAmount", "type": "uint256", "indexed": false }
         ]
     },
     // ============ Building Functions ============
@@ -66,15 +88,15 @@ export const casinoAbi = [
         ],
         "stateMutability": "view"
     },
-    // ============ Game Functions ============
+    // ============ Game Functions (Multi-Bet) ============
     {
         "type": "function",
-        "name": "casinoPlaceBet",
+        "name": "casinoPlaceBets",
         "inputs": [
             { "name": "landId", "type": "uint256" },
-            { "name": "betType", "type": "uint8" },
-            { "name": "betNumbers", "type": "uint8[]" },
-            { "name": "amount", "type": "uint256" }
+            { "name": "betTypes", "type": "uint8[]" },
+            { "name": "betNumbersArray", "type": "uint8[][]" },
+            { "name": "betAmounts", "type": "uint256[]" }
         ],
         "outputs": [],
         "stateMutability": "nonpayable"
@@ -95,13 +117,26 @@ export const casinoAbi = [
         "inputs": [{ "name": "landId", "type": "uint256" }],
         "outputs": [
             { "name": "isActive", "type": "bool" },
-            { "name": "betType", "type": "uint8" },
-            { "name": "betNumbers", "type": "uint8[]" },
-            { "name": "betAmount", "type": "uint256" },
+            { "name": "numBets", "type": "uint256" },
+            { "name": "totalBetAmount", "type": "uint256" },
             { "name": "revealBlock", "type": "uint256" },
             { "name": "player", "type": "address" },
             { "name": "canReveal", "type": "bool" },
             { "name": "isExpired", "type": "bool" }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "casinoGetBetDetails",
+        "inputs": [
+            { "name": "landId", "type": "uint256" },
+            { "name": "betIndex", "type": "uint256" }
+        ],
+        "outputs": [
+            { "name": "betType", "type": "uint8" },
+            { "name": "betNumbers", "type": "uint8[]" },
+            { "name": "betAmount", "type": "uint256" }
         ],
         "stateMutability": "view"
     },
@@ -114,7 +149,8 @@ export const casinoAbi = [
             { "name": "maxBet", "type": "uint256" },
             { "name": "bettingToken", "type": "address" },
             { "name": "rewardPool", "type": "address" },
-            { "name": "enabled", "type": "bool" }
+            { "name": "enabled", "type": "bool" },
+            { "name": "maxBetsPerGame", "type": "uint256" }
         ],
         "stateMutability": "view"
     },
@@ -143,6 +179,13 @@ export const casinoAbi = [
         "outputs": [{ "name": "multiplier", "type": "uint256" }],
         "stateMutability": "pure"
     },
+    {
+        "type": "function",
+        "name": "casinoGetMaxBets",
+        "inputs": [],
+        "outputs": [{ "name": "maxBets", "type": "uint256" }],
+        "stateMutability": "view"
+    },
     // ============ Admin Functions ============
     {
         "type": "function",
@@ -151,6 +194,13 @@ export const casinoAbi = [
             { "name": "minBet", "type": "uint256" },
             { "name": "maxBet", "type": "uint256" }
         ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "casinoSetMaxBets",
+        "inputs": [{ "name": "maxBets", "type": "uint256" }],
         "outputs": [],
         "stateMutability": "nonpayable"
     },
@@ -183,7 +233,8 @@ export const casinoAbi = [
             { "name": "maxBet", "type": "uint256" },
             { "name": "bettingToken", "type": "address" },
             { "name": "rewardPool", "type": "address" },
-            { "name": "enabled", "type": "bool" }
+            { "name": "enabled", "type": "bool" },
+            { "name": "maxBetsPerGame", "type": "uint256" }
         ],
         "outputs": [],
         "stateMutability": "nonpayable"
@@ -195,6 +246,13 @@ export const casinoAbi = [
             { "name": "token", "type": "address" },
             { "name": "cost", "type": "uint256" }
         ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "casinoInitializeMultiBet",
+        "inputs": [],
         "outputs": [],
         "stateMutability": "nonpayable"
     }
@@ -235,3 +293,20 @@ export const CASINO_PAYOUT_MULTIPLIERS: Record<CasinoBetType, number> = {
 
 // Red numbers in European roulette
 export const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+
+// Helper to get bet type name
+export const BET_TYPE_NAMES: Record<CasinoBetType, string> = {
+    [CasinoBetType.STRAIGHT]: 'Straight',
+    [CasinoBetType.SPLIT]: 'Split',
+    [CasinoBetType.STREET]: 'Street',
+    [CasinoBetType.CORNER]: 'Corner',
+    [CasinoBetType.SIX_LINE]: 'Six Line',
+    [CasinoBetType.DOZEN]: 'Dozen',
+    [CasinoBetType.COLUMN]: 'Column',
+    [CasinoBetType.RED]: 'Red',
+    [CasinoBetType.BLACK]: 'Black',
+    [CasinoBetType.ODD]: 'Odd',
+    [CasinoBetType.EVEN]: 'Even',
+    [CasinoBetType.LOW]: '1-18',
+    [CasinoBetType.HIGH]: '19-36'
+};
