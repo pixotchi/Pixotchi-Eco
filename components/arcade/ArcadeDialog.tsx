@@ -697,8 +697,26 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const handleRevealSuccess = useCallback(() => {
     setPendingSecret(null);
     setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
+    setRevealUnlockedAt(null);
     syncAfterTx();
   }, [syncAfterTx]);
+
+  // Force reset for users stuck with lost secrets from bugged version
+  const handleForceReset = useCallback(() => {
+    if (!plant) return;
+    const localKey = `spinleaf:pending:${plant.id}`;
+    try {
+      localStorage.removeItem(localKey);
+    } catch { }
+    setPendingSecret(null);
+    setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
+    setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
+    setRevealUnlockedAt(null);
+    // Generate new secret for next spin
+    const secret = crypto.getRandomValues(new Uint8Array(32));
+    setPendingSecret(secret);
+    toast.success('Spin reset. You can start a new spin now.');
+  }, [plant]);
 
   const handleSpinStatus = useCallback(
     (mode: "commit" | "reveal") => (status: LifecycleStatus) => {
@@ -706,15 +724,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       const txHash = status.statusData?.transactionReceipts?.[0]?.transactionHash as string | undefined;
 
       if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
-        // Clear pending state on failure to prevent stuck spinning
-        if (mode === "reveal") {
-          const localKey = `spinleaf:pending:${plant.id}`;
-          try {
-            localStorage.removeItem(localKey);
-          } catch { }
-          setPendingSecret(null);
-          setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
-        }
+        // Only reset wheel state on failure - DO NOT clear secret/pending!
+        // The user needs the secret to retry the reveal transaction
         setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
         return;
       }
@@ -1060,6 +1071,16 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         }}
                         onRewardConfigUpdate={handleRewardUpdate}
                       />
+                    )}
+
+                    {/* Reset button for users stuck with lost secrets */}
+                    {pending && !secretHex && (
+                      <button
+                        onClick={handleForceReset}
+                        className="w-full text-xs text-muted-foreground underline hover:text-foreground mt-2"
+                      >
+                        Stuck? Reset and start new spin
+                      </button>
                     )}
                   </div>
                 </div>
