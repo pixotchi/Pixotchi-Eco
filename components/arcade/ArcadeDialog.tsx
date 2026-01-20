@@ -813,8 +813,6 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     pending &&
     address &&
     pending.player.toLowerCase() === address.toLowerCase() &&
-    blockCountdown <= 0 &&
-    blockSecondsRemaining <= 0 &&
     secretHex,
   );
 
@@ -989,8 +987,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   </div>
 
                   <div className="text-xs text-muted-foreground">
-                    Cooldown: <span className="font-medium text-foreground">
-                      {pending ? (canReveal ? "Reveal ready" : `${blockSecondsRemaining > 0 ? `${blockSecondsRemaining}s` : '<1s'} until reveal`) : spinCooldown > 0 ? formatDuration(spinCooldown) + " remaining" : "Ready to play"}
+                    Status: <span className="font-medium text-foreground">
+                      {pending ? (canReveal ? "Ready - Click Stop Spin!" : "Waiting...") : spinCooldown > 0 ? formatDuration(spinCooldown) + " cooldown" : "Ready to play"}
                     </span>
                   </div>
 
