@@ -52,7 +52,7 @@ const LOG_LOOKBACK_BUFFER_BLOCKS = 64;
 const LOG_CHUNK_SIZE = BigInt(500);
 const BLOCK_TIME_SECONDS = 4;
 const BLOCK_POLL_INTERVAL_MS = 3000;
-const MIN_REVEAL_DELAY_SECONDS = 8;
+const MIN_REVEAL_DELAY_SECONDS = 4;
 
 const SPIN_GAME_COMMITTED_EVENT = parseAbiItem(
   "event SpinGameV2Committed(uint256 indexed nftId, address indexed player, bytes32 commitHash)"
