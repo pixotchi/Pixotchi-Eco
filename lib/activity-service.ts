@@ -462,6 +462,31 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
+    casinoBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { builder: $playerAddress }) {
+        items {
+          __typename
+          id
+          timestamp
+          landId
+          builder
+          token
+          cost
+          blockHeight
+        }
+      }
+      rouletteSpinResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { player: $playerAddress }) {
+        items {
+          __typename
+          id
+          timestamp
+          landId
+          player
+          winningNumber
+          won
+          payout
+          blockHeight
+        }
+      }
   }
 `;
 
@@ -590,6 +615,8 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
       ...(data.questStartedEvents?.items || []),
       ...(data.questFinalizedEvents?.items || []),
       ...(data.villageProductionClaimedEvents?.items || []),
+      ...(data.casinoBuiltEvents?.items || []),
+      ...(data.rouletteSpinResultEvents?.items || []),
     ];
 
     const deduped = dedupePlayedEvents(myActivities);

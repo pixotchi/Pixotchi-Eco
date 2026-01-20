@@ -128,7 +128,7 @@ const EventIcon = React.memo(({
       case 'CasinoBuiltEvent':
         return { iconSrc: "/icons/stake-house.svg", altText: "Casino Built" };
       case 'RouletteSpinResultEvent':
-        return { iconSrc: "/icons/GAME.png", altText: "Roulette Win" };
+        return { iconSrc: "/icons/casino.svg", altText: "Roulette Win" };
       default:
         return { iconSrc: null, altText: "Unknown Event" };
     }
@@ -503,7 +503,7 @@ export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event:
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played roulette and won <span className="font-semibold text-value">{payoutFormatted} SEED</span>.
+        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">roulette</span> and won <span className="font-semibold text-value">{payoutFormatted} SEED</span>.
       </p>
     </EventWrapper>
   );
