@@ -174,10 +174,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const lastHandledCommitRef = useRef<string | null>(null);
   const lastHandledRevealRef = useRef<string | null>(null);
   const lastSeenCommitBlockRef = useRef<number | null>(null);
+  const revealDeadlineRef = useRef<number | null>(null);
 
   useEffect(() => {
     lastSeenCommitBlockRef.current = lastSeenCommitBlock;
   }, [lastSeenCommitBlock]);
+
+  useEffect(() => {
+    revealDeadlineRef.current = revealDeadline;
+  }, [revealDeadline]);
 
   const handleRewardUpdate = useCallback(
     (index: number, reward: { pointDelta: bigint; timeExtension: bigint; leafAmount: bigint }) => {
@@ -574,13 +579,25 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         if (spinMeta?.pending) {
           const revealUnlockBlocks = Math.max(0, spinMeta.pending.commitBlock + 2 - blockNumber);
           const expiryBlocks = Math.max(0, spinMeta.pending.commitBlock + 1 + 256 - blockNumber);
-          const secondsRemaining = Math.max(
-            MIN_REVEAL_DELAY_SECONDS,
-            revealUnlockBlocks * BLOCK_TIME_SECONDS,
-          );
+
+          // Only update blockCountdown from on-chain data
           setBlockCountdown(revealUnlockBlocks);
-          setBlockSecondsRemaining(secondsRemaining);
-          setRevealDeadline(Date.now() + secondsRemaining * 1000);
+
+          // Only set revealDeadline ONCE when blocks are ready (to prevent countdown resets)
+          if (revealUnlockBlocks === 0 && revealDeadlineRef.current === null) {
+            const secondsRemaining = MIN_REVEAL_DELAY_SECONDS;
+            setBlockSecondsRemaining(secondsRemaining);
+            setRevealDeadline(Date.now() + secondsRemaining * 1000);
+          } else if (revealUnlockBlocks > 0) {
+            // Still waiting for blocks - update time estimate
+            const secondsRemaining = Math.max(
+              MIN_REVEAL_DELAY_SECONDS,
+              revealUnlockBlocks * BLOCK_TIME_SECONDS,
+            );
+            setBlockSecondsRemaining(secondsRemaining);
+            // Reset deadline if we're still waiting for blocks
+            setRevealDeadline(Date.now() + secondsRemaining * 1000);
+          }
 
           if (expiryBlocks === 0) {
             const localKey = `spinleaf:pending:${plant?.id}`;
@@ -797,6 +814,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     address &&
     pending.player.toLowerCase() === address.toLowerCase() &&
     blockCountdown <= 0 &&
+    blockSecondsRemaining <= 0 &&
     secretHex,
   );
 
