@@ -503,7 +503,7 @@ export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event:
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">roulette</span> and won <span className="font-semibold text-value">{payoutFormatted} SEED</span>.
+        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Roulette</span> and won <span className="font-semibold text-value">{payoutFormatted} SEED</span>.
       </p>
     </EventWrapper>
   );
