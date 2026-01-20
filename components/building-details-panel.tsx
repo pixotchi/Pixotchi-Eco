@@ -18,6 +18,9 @@ import MarketplacePanel from './building-details/MarketplacePanel';
 import StakeHousePanel from './building-details/StakeHousePanel';
 import CasinoPanel from './building-details/CasinoPanel';
 
+// Casino feature flag - hide casino when disabled
+const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
+
 interface BuildingDetailsPanelProps {
   selectedBuilding: BuildingData | null;
   landId: bigint;
@@ -122,6 +125,7 @@ function BuildingDetailsPanel({
           }
           return <MarketplacePanel landId={landId} />;
         case 6: // Casino/Roulette - CasinoPanel handles both build (level 0) and game UI
+          if (!CASINO_ENABLED) return null;
           return <CasinoPanel landId={landId} onSpinComplete={onUpgradeSuccess} />;
         case 7: // Farmer House
           if (selectedBuilding.level === 0) {

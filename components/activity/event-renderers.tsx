@@ -23,7 +23,9 @@ import {
   TownSpeedUpWithSeedEvent,
   QuestStartedEvent,
   QuestFinalizedEvent,
-  VillageProductionClaimedEvent
+  VillageProductionClaimedEvent,
+  CasinoBuiltEvent,
+  RouletteSpinResultEvent
 } from '@/lib/types';
 
 const TimeAgo = React.memo(({ timestamp }: { timestamp: string }) => {
@@ -123,6 +125,10 @@ const EventIcon = React.memo(({
           return { iconSrc: buildingIcons[buildingName] || "/icons/bee-house.svg", altText: buildingName };
         }
         return { iconSrc: "/icons/bee-house.svg", altText: "Production" };
+      case 'CasinoBuiltEvent':
+        return { iconSrc: "/icons/stake-house.svg", altText: "Casino Built" };
+      case 'RouletteSpinResultEvent':
+        return { iconSrc: "/icons/GAME.png", altText: "Roulette Win" };
       default:
         return { iconSrc: null, altText: "Unknown Event" };
     }
@@ -472,4 +478,33 @@ export const VillageProductionClaimedEventRenderer = ({ event }: { event: Villag
       </p>
     </EventWrapper>
   );
-}; 
+};
+
+// Casino/Roulette Event Renderers
+export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: CasinoBuiltEvent, userAddress?: string | null }) => {
+  const isYou = userAddress && event.builder.toLowerCase() === userAddress.toLowerCase();
+
+  return (
+    <EventWrapper event={event}>
+      <p className="text-sm">
+        <span className="font-bold">Land #{event.landId}</span> built a Casino{isYou ? " (You)" : ""}.
+      </p>
+    </EventWrapper>
+  );
+};
+
+export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event: RouletteSpinResultEvent, userAddress?: string | null }) => {
+  // Only render if player won
+  if (!event.won) return null;
+
+  const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
+  const payoutFormatted = (Number(event.payout) / 1e18).toFixed(2);
+
+  return (
+    <EventWrapper event={event}>
+      <p className="text-sm">
+        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played roulette and won <span className="font-semibold text-value">{payoutFormatted} SEED</span>.
+      </p>
+    </EventWrapper>
+  );
+};

@@ -246,7 +246,7 @@ export type InviteGenerationResult = {
 };
 
 // Types for Ponder Indexer
-export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent;
+export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | CasinoBuiltEvent | RouletteSpinResultEvent;
 
 export type AttackEvent = {
   __typename: "Attack";
@@ -419,6 +419,30 @@ export type VillageProductionClaimedEvent = {
   timestamp: string;
   landId: string;
   buildingId: number;
+  blockHeight: string;
+};
+
+// Casino/Roulette Event Types
+export type CasinoBuiltEvent = {
+  __typename: "CasinoBuiltEvent";
+  id: string;
+  timestamp: string;
+  landId: string;
+  builder: string;
+  token: string;
+  cost: string;
+  blockHeight: string;
+};
+
+export type RouletteSpinResultEvent = {
+  __typename: "RouletteSpinResultEvent";
+  id: string;
+  timestamp: string;
+  landId: string;
+  player: string;
+  winningNumber: number;
+  won: boolean;
+  payout: string;
   blockHeight: string;
 };
 

@@ -28,6 +28,8 @@ import {
   QuestStartedEventRenderer,
   QuestFinalizedEventRenderer,
   VillageProductionClaimedEventRenderer,
+  CasinoBuiltEventRenderer,
+  RouletteSpinResultEventRenderer,
 } from "@/components/activity";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
@@ -216,6 +218,11 @@ export default function ActivityTab() {
         return <QuestFinalizedEventRenderer key={activity.id} event={activity} userAddress={address} />;
       case "VillageProductionClaimedEvent":
         return <VillageProductionClaimedEventRenderer key={activity.id} event={activity} />;
+      // Casino Event Renderers
+      case "CasinoBuiltEvent":
+        return <CasinoBuiltEventRenderer key={activity.id} event={activity} userAddress={address} />;
+      case "RouletteSpinResultEvent":
+        return <RouletteSpinResultEventRenderer key={activity.id} event={activity} userAddress={address} />;
       default:
         return null;
     }

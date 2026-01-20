@@ -6,6 +6,9 @@ import { BuildingData, BuildingType } from '@/lib/types';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { casinoIsBuilt } from '@/lib/contracts';
 
+// Casino feature flag - hide casino building when disabled
+const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
+
 interface BuildingGridProps {
   buildings: BuildingData[];
   buildingType: BuildingType;
@@ -115,7 +118,15 @@ export default function BuildingGrid({
     onBuildingSelect(building);
   }, [onBuildingSelect]);
 
-  if (!buildings || buildings.length === 0) {
+  // Filter out casino (ID 6) if feature is disabled
+  const visibleBuildings = useMemo(() => {
+    if (!CASINO_ENABLED && buildingType === 'town') {
+      return buildings.filter(b => b.id !== 6);
+    }
+    return buildings;
+  }, [buildings, buildingType]);
+
+  if (!visibleBuildings || visibleBuildings.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
         <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
@@ -131,7 +142,7 @@ export default function BuildingGrid({
 
   return (
     <div className="grid grid-cols-4 gap-4 justify-items-center">
-      {buildings.map((building) => {
+      {visibleBuildings.map((building) => {
         const isSelected = selectedBuilding?.id === building.id;
 
         return (
