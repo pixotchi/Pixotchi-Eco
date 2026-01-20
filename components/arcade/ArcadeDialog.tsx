@@ -697,8 +697,26 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const handleRevealSuccess = useCallback(() => {
     setPendingSecret(null);
     setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
+    setRevealUnlockedAt(null);
     syncAfterTx();
   }, [syncAfterTx]);
+
+  // Force reset for users stuck with lost secrets from bugged version
+  const handleForceReset = useCallback(() => {
+    if (!plant) return;
+    const localKey = `spinleaf:pending:${plant.id}`;
+    try {
+      localStorage.removeItem(localKey);
+    } catch { }
+    setPendingSecret(null);
+    setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
+    setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
+    setRevealUnlockedAt(null);
+    // Generate new secret for next spin
+    const secret = crypto.getRandomValues(new Uint8Array(32));
+    setPendingSecret(secret);
+    toast.success('Spin reset. You can start a new spin now.');
+  }, [plant]);
 
   const handleSpinStatus = useCallback(
     (mode: "commit" | "reveal") => (status: LifecycleStatus) => {
@@ -1053,6 +1071,16 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         }}
                         onRewardConfigUpdate={handleRewardUpdate}
                       />
+                    )}
+
+                    {/* Reset button for users stuck with lost secrets */}
+                    {pending && !secretHex && (
+                      <button
+                        onClick={handleForceReset}
+                        className="w-full text-xs text-muted-foreground underline hover:text-foreground mt-2"
+                      >
+                        Stuck? Reset and start new spin
+                      </button>
                     )}
                   </div>
                 </div>
