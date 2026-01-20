@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { Info } from 'lucide-react';
 import BuildingInfoDialog from './building-info-dialog';
+import { casinoIsBuilt } from '@/lib/contracts';
 
 // Import the new specialized panel components
 import UpgradePanel from './building-details/UpgradePanel';
@@ -15,6 +16,10 @@ import WarehousePanel from './building-details/WarehousePanel';
 import FarmerHousePanel from './building-details/FarmerHousePanel';
 import MarketplacePanel from './building-details/MarketplacePanel';
 import StakeHousePanel from './building-details/StakeHousePanel';
+import CasinoPanel from './building-details/CasinoPanel';
+
+// Casino feature flag - hide casino when disabled
+const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
 
 interface BuildingDetailsPanelProps {
   selectedBuilding: BuildingData | null;
@@ -44,6 +49,15 @@ function BuildingDetailsPanel({
   warehouseLifetime
 }: BuildingDetailsPanelProps) {
   const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [casinoBuiltState, setCasinoBuiltState] = useState<boolean | null>(null);
+
+  // Fetch casino built state for Casino building
+  const isCasino = buildingType === 'town' && selectedBuilding?.id === 6;
+  useEffect(() => {
+    if (isCasino && landId) {
+      casinoIsBuilt(landId).then(setCasinoBuiltState).catch(() => setCasinoBuiltState(false));
+    }
+  }, [isCasino, landId]);
 
   if (!selectedBuilding) {
     return (
@@ -65,6 +79,7 @@ function BuildingDetailsPanel({
   const buildingIcon = getBuildingIcon(buildingName);
 
   const isPrebuiltTown = buildingType === 'town' && (selectedBuilding.id === 1 || selectedBuilding.id === 3);
+  // isCasino is defined above via useEffect
 
   const renderBuildingContent = () => {
     // Globally gate building functions while upgrading, regardless of level/type
@@ -109,6 +124,9 @@ function BuildingDetailsPanel({
             );
           }
           return <MarketplacePanel landId={landId} />;
+        case 6: // Casino/Roulette - CasinoPanel handles both build (level 0) and game UI
+          if (!CASINO_ENABLED) return null;
+          return <CasinoPanel landId={landId} onSpinComplete={onUpgradeSuccess} />;
         case 7: // Farmer House
           if (selectedBuilding.level === 0) {
             return (
@@ -160,7 +178,10 @@ function BuildingDetailsPanel({
               </button>
             </div>
             <p className="text-sm text-muted-foreground">
-              Level {selectedBuilding.level}/{selectedBuilding.maxLevel}
+              {isCasino
+                ? `Level ${casinoBuiltState ? 1 : 0}/${selectedBuilding.maxLevel}`
+                : `Level ${selectedBuilding.level}/${selectedBuilding.maxLevel}`
+              }
             </p>
           </div>
         </div>
@@ -169,7 +190,7 @@ function BuildingDetailsPanel({
       <CardContent className="space-y-4">
         {renderBuildingContent()}
 
-        {!isPrebuiltTown && (
+        {!isPrebuiltTown && !isCasino && (
           <UpgradePanel
             building={selectedBuilding}
             landId={landId}

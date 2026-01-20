@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Land, BuildingType, BuildingData } from '@/lib/types';
 import { getBuildingName } from '@/lib/utils';
+import { casinoIsBuilt } from '@/lib/contracts';
 
 interface LandImageProps {
   selectedLand: Land | null;
@@ -16,34 +17,48 @@ interface LandImageProps {
 // Mapping of building names to their layer image files
 const BUILDING_LAYERS = {
   "Solar Panels": "solar-layer.png",
-  "Soil Factory": "soil-layer.png", 
+  "Soil Factory": "soil-layer.png",
   "Bee Farm": "bee-layer.png",
   "Farmer House": "farmerhouse-layer.png",
   "Marketplace": "marketplace-layer.png",
+  "Casino": "casino-layer.png",
 } as const;
 
-const LandImage = ({ 
-  selectedLand, 
-  buildingType = 'village', 
+const LandImage = ({
+  selectedLand,
+  buildingType = 'village',
   villageBuildings = [],
   townBuildings = [],
   className = "",
   priority = false // Keep prop for potential future use (e.g., preloading)
 }: LandImageProps) => {
+  const [casinoBuiltState, setCasinoBuiltState] = useState<boolean>(false);
+
+  // Fetch casino built state
+  useEffect(() => {
+    if (selectedLand) {
+      casinoIsBuilt(selectedLand.tokenId).then(setCasinoBuiltState).catch(() => setCasinoBuiltState(false));
+    }
+  }, [selectedLand?.tokenId]);
 
   const backgroundStyle = useMemo(() => {
     if (!selectedLand) return {};
 
-    const baseImageUrl = buildingType === 'village' 
-      ? '/icons/village-start.png' 
+    const baseImageUrl = buildingType === 'village'
+      ? '/icons/village-start.png'
       : '/icons/town-small.png';
 
     const currentBuildings = buildingType === 'village' ? villageBuildings : townBuildings;
-    
+
     // Filter for completed buildings to render their layers
-    const completedBuildings = currentBuildings.filter(building => 
-      building.level > 1 || (building.level === 1 && !building.isUpgrading)
-    );
+    // Special case: Casino uses casinoBuiltState instead of building.level
+    const completedBuildings = currentBuildings.filter(building => {
+      const isCasino = building.id === 6;
+      if (isCasino) {
+        return casinoBuiltState; // Use async-fetched state for Casino
+      }
+      return building.level > 1 || (building.level === 1 && !building.isUpgrading);
+    });
 
     const layerImageUrls = completedBuildings
       .map(building => {
@@ -63,16 +78,16 @@ const LandImage = ({
       width: '100%',
       height: '100%',
     };
-  }, [selectedLand, buildingType, villageBuildings, townBuildings]);
-  
+  }, [selectedLand, buildingType, villageBuildings, townBuildings, casinoBuiltState]);
+
   if (!selectedLand) {
     return null;
   }
 
   // The `priority` prop could be used with <link rel="preload"> in the parent component if needed
   return (
-    <div 
-      className={className} 
+    <div
+      className={className}
       style={backgroundStyle}
       role="img"
       aria-label={selectedLand?.name || `Land #${selectedLand?.tokenId}`}
