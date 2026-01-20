@@ -171,6 +171,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [targetRotation, setTargetRotation] = useState<number | null>(null);
   const [revealDeadline, setRevealDeadline] = useState<number | null>(null);
   const [cooldownDeadline, setCooldownDeadline] = useState<number | null>(null);
+  const [revealUnlockedAt, setRevealUnlockedAt] = useState<number | null>(null); // 3s delay after commit
   const lastHandledCommitRef = useRef<string | null>(null);
   const lastHandledRevealRef = useRef<string | null>(null);
   const lastSeenCommitBlockRef = useRef<number | null>(null);
@@ -647,10 +648,14 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           setCooldownDeadline(null);
         }
       }
+      // Check if reveal unlock time has passed and clear it to trigger re-render
+      if (revealUnlockedAt !== null && Date.now() >= revealUnlockedAt) {
+        setRevealUnlockedAt(null);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [open, selectedGame, revealDeadline, cooldownDeadline, spinMeta?.pending]);
+  }, [open, selectedGame, revealDeadline, cooldownDeadline, spinMeta?.pending, revealUnlockedAt]);
 
   useEffect(() => {
     if (!open || selectedGame !== "spin") return;
@@ -742,6 +747,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         const unlockBlock = blockNumber + 2;
         setBlockCountdown(Math.max(0, unlockBlock - blockNumber));
         setBlockSecondsRemaining(Math.max(0, (unlockBlock - blockNumber) * BLOCK_TIME_SECONDS));
+        // Enable reveal button after 3 seconds
+        setRevealUnlockedAt(Date.now() + 3000);
         startWheelSpin();
       }
       if (mode === "reveal" && status.statusName === "success") {
@@ -813,7 +820,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     pending &&
     address &&
     pending.player.toLowerCase() === address.toLowerCase() &&
-    secretHex,
+    secretHex &&
+    (revealUnlockedAt === null || Date.now() >= revealUnlockedAt),
   );
 
   const BoxGrid = () => (
