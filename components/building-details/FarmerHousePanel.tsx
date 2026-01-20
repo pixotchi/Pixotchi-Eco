@@ -19,7 +19,7 @@ interface FarmerHousePanelProps {
 
 // Rewards wallet that funds farmer quests
 const QUEST_REWARDS_WALLET = '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB' as const;
-const MIN_SEED_BALANCE = parseUnits('300', 18); 
+const MIN_SEED_BALANCE = parseUnits('300', 18);
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
@@ -107,14 +107,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   };
   const difficultyLabel = (d: number) => (d === 0 ? 'EASY' : d === 1 ? 'MEDIUM' : 'HARD');
 
-  const handleSuccess = async (opts?: { slotIndex?: number; awaitCommitted?: boolean; awaitUncommitted?: boolean }) => {
+  const handleSuccess = async (opts?: { slotIndex?: number; awaitCommitted?: boolean; awaitUncommitted?: boolean; awaitInProgress?: boolean }) => {
     await fetchSlots();
     onQuestUpdate();
     // Ensure building/land UI reflects changes immediately
-    try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
+    try { window.dispatchEvent(new Event('buildings:refresh')); } catch { }
 
     // Optional: poll for desired status transition using fresh reads (avoids stale state)
-    if (opts && typeof opts.slotIndex === 'number' && (opts.awaitCommitted || opts.awaitUncommitted)) {
+    if (opts && typeof opts.slotIndex === 'number' && (opts.awaitCommitted || opts.awaitUncommitted || opts.awaitInProgress)) {
       for (let i = 0; i < 6; i++) {
         await new Promise((r) => setTimeout(r, 500));
         try {
@@ -123,7 +123,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
           const st = s ? statusOf(s) : undefined;
           if (opts.awaitCommitted && st === 'Committed') break;
           if (opts.awaitUncommitted && st !== 'Committed') break;
-        } catch {}
+          if (opts.awaitInProgress && st === 'In progress') break;
+        } catch { }
       }
       await fetchSlots();
     }
@@ -147,108 +148,108 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
             </div>
           )}
           <div className="grid grid-cols-1 gap-2">
-          {slots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
-            <div key={idx} className="flex flex-col gap-2 rounded-md border bg-card p-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm">
-                  <div className="font-medium">Slot {idx + 1}</div>
-                  <div className="text-xs text-muted-foreground">{statusOf(s)}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {statusOf(s) === 'Loading' && (
-                    <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">Loading…</div>
-                  )}
-                  {statusOf(s) === 'Ready to commit' && (
-                    <SponsoredTransaction
-                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
-                      buttonText="Return now"
-                      buttonClassName="h-8 px-3 text-xs"
-                      hideStatus
-                      onSuccess={() => handleSuccess({ slotIndex: idx, awaitCommitted: true })}
-                    />
-                  )}
-                  {statusOf(s) === 'Committed' && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Loot bag ready</span>
-                    <SponsoredTransaction
-                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
-                      buttonText="Open now"
-                      buttonClassName="h-8 px-3 text-xs"
-                      hideStatus
-                      onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess({ slotIndex: idx, awaitUncommitted: true }); }}
-                    />
+            {slots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
+              <div key={idx} className="flex flex-col gap-2 rounded-md border bg-card p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm">
+                    <div className="font-medium">Slot {idx + 1}</div>
+                    <div className="text-xs text-muted-foreground">{statusOf(s)}</div>
                   </div>
-                  )}
-                  {statusOf(s) === 'Cooldown' && (
-                    <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
-                      ~{formatSeconds(blocksLeft(s.coolDownBlock) * 2)} left
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {statusOf(s) === 'Loading' && (
+                      <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">Loading…</div>
+                    )}
+                    {statusOf(s) === 'Ready to commit' && (
+                      <SponsoredTransaction
+                        calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
+                        buttonText="Return now"
+                        buttonClassName="h-8 px-3 text-xs"
+                        hideStatus
+                        onSuccess={() => handleSuccess({ slotIndex: idx, awaitCommitted: true })}
+                      />
+                    )}
+                    {statusOf(s) === 'Committed' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Loot bag ready</span>
+                        <SponsoredTransaction
+                          calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
+                          buttonText="Open now"
+                          buttonClassName="h-8 px-3 text-xs"
+                          hideStatus
+                          onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess({ slotIndex: idx, awaitUncommitted: true }); }}
+                        />
+                      </div>
+                    )}
+                    {statusOf(s) === 'Cooldown' && (
+                      <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                        ~{formatSeconds(blocksLeft(s.coolDownBlock) * 2)} left
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {statusOf(s) === 'Available' && (
-                <>
-                  <div className="grid gap-2 sm:grid-cols-[1fr,auto] items-center rounded-md border bg-background/50 p-2">
-                    <div className="overflow-x-auto sm:overflow-visible">
-                      <ToggleGroup
-                        value={String(difficulty[idx] ?? 0)}
-                        onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
-                        options={[
-                          { value: '0', label: <span>Easy <span className="text-xs text-muted-foreground">(3h)</span></span> },
-                          { value: '1', label: <span>Med <span className="text-xs text-muted-foreground">(6h)</span></span> },
-                          { value: '2', label: <span>Hard <span className="text-xs text-muted-foreground">(12h)</span></span> },
-                        ]}
-                        className="bg-muted/50 border-primary/20"
-                        getButtonClassName={(val, selected) => (
-                          val === '0' ? (selected ? 'bg-green-600/20 text-green-700' : 'text-green-700') :
-                          val === '1' ? (selected ? 'bg-amber-600/20 text-amber-700' : 'text-amber-700') :
-                          (selected ? 'bg-red-600/20 text-red-700' : 'text-red-700')
-                        )}
+                {statusOf(s) === 'Available' && (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-[1fr,auto] items-center rounded-md border bg-background/50 p-2">
+                      <div className="overflow-x-auto sm:overflow-visible">
+                        <ToggleGroup
+                          value={String(difficulty[idx] ?? 0)}
+                          onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
+                          options={[
+                            { value: '0', label: <span>Easy <span className="text-xs text-muted-foreground">(3h)</span></span> },
+                            { value: '1', label: <span>Med <span className="text-xs text-muted-foreground">(6h)</span></span> },
+                            { value: '2', label: <span>Hard <span className="text-xs text-muted-foreground">(12h)</span></span> },
+                          ]}
+                          className="bg-muted/50 border-primary/20"
+                          getButtonClassName={(val, selected) => (
+                            val === '0' ? (selected ? 'bg-green-600/20 text-green-700' : 'text-green-700') :
+                              val === '1' ? (selected ? 'bg-amber-600/20 text-amber-700' : 'text-amber-700') :
+                                (selected ? 'bg-red-600/20 text-red-700' : 'text-red-700')
+                          )}
+                        />
+                      </div>
+                      <SponsoredTransaction
+                        calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
+                        buttonText="Start"
+                        buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
+                        hideStatus
+                        disabled={isRewardsDepleted}
+                        onSuccess={(tx: any) => {
+                          handleSuccess({ slotIndex: idx, awaitInProgress: true });
+                          try {
+                            const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
+                            const txHash = extractTransactionHash(tx);
+                            if (txHash) {
+                              payload.proof = { txHash };
+                            }
+                            fetch('/api/gamification/missions', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(payload)
+                            });
+                          } catch { }
+                        }}
                       />
                     </div>
-                    <SponsoredTransaction
-                      calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
-                      buttonText="Start"
-                      buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
-                      hideStatus
-                      disabled={isRewardsDepleted}
-                      onSuccess={(tx: any) => {
-                        handleSuccess();
-                        try {
-                          const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
-                          const txHash = extractTransactionHash(tx);
-                          if (txHash) {
-                            payload.proof = { txHash };
-                          }
-                          fetch('/api/gamification/missions', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                          });
-                        } catch {}
-                      }}
-                    />
+                    {isRewardsDepleted && (
+                      <p className="text-xs text-amber-800 sm:col-span-2">
+                        Rewards pool is low—please wait for it to refill before sending new quests.
+                      </p>
+                    )}
+                  </>
+                )}
+                {statusOf(s) === 'In progress' && (
+                  <div className="space-y-1">
+                    <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-2 bg-primary transition-all" style={{ width: `${Math.min(100, progressPct(s)).toFixed(1)}%` }} />
+                    </div>
+                    <div className="text-xs text-muted-foreground">Ends in ~{formatSeconds(Math.max(0, Math.ceil(blocksLeft(s.endBlock) * 2)))}</div>
                   </div>
-                  {isRewardsDepleted && (
-                    <p className="text-xs text-amber-800 sm:col-span-2">
-                      Rewards pool is low—please wait for it to refill before sending new quests.
-                    </p>
-                  )}
-                </>
-              )}
-              {statusOf(s) === 'In progress' && (
-                <div className="space-y-1">
-                  <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-2 bg-primary transition-all" style={{ width: `${Math.min(100, progressPct(s)).toFixed(1)}%` }} />
-                  </div>
-                  <div className="text-xs text-muted-foreground">Ends in ~{formatSeconds(Math.max(0, Math.ceil(blocksLeft(s.endBlock) * 2)))}</div>
-                </div>
-              )}
-            </div>
-          ))}
-          {slots.length === 0 && (
-            <div className="text-center text-sm text-muted-foreground">No quest slots available.</div>
-          )}
+                )}
+              </div>
+            ))}
+            {slots.length === 0 && (
+              <div className="text-center text-sm text-muted-foreground">No quest slots available.</div>
+            )}
           </div>
         </>
       )}
