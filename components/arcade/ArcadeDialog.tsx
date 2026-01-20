@@ -706,15 +706,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       const txHash = status.statusData?.transactionReceipts?.[0]?.transactionHash as string | undefined;
 
       if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
-        // Clear pending state on failure to prevent stuck spinning
-        if (mode === "reveal") {
-          const localKey = `spinleaf:pending:${plant.id}`;
-          try {
-            localStorage.removeItem(localKey);
-          } catch { }
-          setPendingSecret(null);
-          setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
-        }
+        // Only reset wheel state on failure - DO NOT clear secret/pending!
+        // The user needs the secret to retry the reveal transaction
         setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
         return;
       }
