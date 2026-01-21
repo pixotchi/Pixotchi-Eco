@@ -7,6 +7,7 @@ import { formatUnits } from 'viem';
 import {
     casinoIsBuilt,
     casinoGetBuildingConfig,
+    casinoGetConfig,
     casinoGetStats,
     buildCasinoBuildCall,
     checkCasinoApproval,
@@ -33,6 +34,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     // State
     const [isBuilt, setIsBuilt] = useState<boolean | null>(null);
     const [buildingConfig, setBuildingConfig] = useState<{ token: string; cost: bigint } | null>(null);
+    const [bettingTokenAddress, setBettingTokenAddress] = useState<string | null>(null);
     const [stats, setStats] = useState<{ wagered: bigint; won: bigint; games: bigint } | null>(null);
 
     // Approval state
@@ -49,13 +51,18 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             setIsLoading(true);
             setError(null);
 
-            const [built, bConfig, casinoStats] = await Promise.all([
+            const [built, bConfig, gConfig, casinoStats] = await Promise.all([
                 casinoIsBuilt(landId),
                 casinoGetBuildingConfig(),
+                casinoGetConfig(),
                 casinoGetStats(landId)
             ]);
 
             setIsBuilt(built);
+
+            if (gConfig) {
+                setBettingTokenAddress(gConfig.bettingToken);
+            }
             let tokenAddress = PIXOTCHI_TOKEN_ADDRESS;
 
             if (bConfig) {
@@ -100,6 +107,9 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     // Use the hook to get the symbol
     const tokenSymbol = useTokenSymbol(buildingConfig?.token);
     const displaySymbol = tokenSymbol || 'SEED'; // Fallback while loading or if hooks returns default
+
+    const bettingTokenSymbol = useTokenSymbol(bettingTokenAddress || undefined);
+    const displayBettingSymbol = bettingTokenSymbol || 'SEED';
 
     // Handle successful build
     const onBuildSuccess = useCallback(async () => {
@@ -203,8 +213,8 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             {stats && (
                 <div className="flex justify-center gap-4 text-xs text-muted-foreground py-2">
                     <span>Games: {stats.games.toString()}</span>
-                    <span>Wagered: {formatTokenAmount(stats.wagered, 18)} {displaySymbol}</span>
-                    <span>Won: {formatTokenAmount(stats.won, 18)} {displaySymbol}</span>
+                    <span>Wagered: {formatTokenAmount(stats.wagered, 18)} {displayBettingSymbol}</span>
+                    <span>Won: {formatTokenAmount(stats.won, 18)} {displayBettingSymbol}</span>
                 </div>
             )}
 

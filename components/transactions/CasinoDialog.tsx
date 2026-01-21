@@ -160,12 +160,31 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
     const addBet = useCallback((type: CasinoBetType, label: string, numbers: number[]) => {
         if (!canAddMoreBets) { toast.error(`Maximum ${maxBets} bets per spin`); return; }
+
+        // Validate Min/Max Bet
+        if (config) {
+            try {
+                const amountVal = parseUnits(currentBetAmount, 18); // assuming 18 decimals for now, or use token decimals if available
+                if (amountVal < config.minBet) {
+                    toast.error(`Minimum bet is ${formatUnits(config.minBet, 18)} ${tokenSymbol}`);
+                    return;
+                }
+                if (amountVal > config.maxBet) {
+                    toast.error(`Maximum bet is ${formatUnits(config.maxBet, 18)} ${tokenSymbol}`);
+                    return;
+                }
+            } catch (e) {
+                toast.error('Invalid bet amount');
+                return;
+            }
+        }
+
         const exists = placedBets.some(b => b.type === type && JSON.stringify([...b.numbers].sort()) === JSON.stringify([...numbers].sort()));
         if (exists) { toast.error('Bet already placed'); return; }
         const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
         setPlacedBets(prev => [...prev, newBet]);
         toast.success(`Added ${label} bet`);
-    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets]);
+    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenSymbol]);
 
     const removeBet = useCallback((id: string) => { setPlacedBets(prev => prev.filter(b => b.id !== id)); }, []);
     const clearBets = useCallback(() => { setPlacedBets([]); }, []);
