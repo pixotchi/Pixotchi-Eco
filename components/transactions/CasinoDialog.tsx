@@ -165,12 +165,20 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         if (config) {
             try {
                 const amountVal = parseUnits(currentBetAmount, 18); // assuming 18 decimals for now, or use token decimals if available
+
+                // Min check (per bet)
                 if (amountVal < config.minBet) {
                     toast.error(`Minimum bet is ${formatUnits(config.minBet, 18)} ${tokenSymbol}`);
                     return;
                 }
-                if (amountVal > config.maxBet) {
-                    toast.error(`Maximum bet is ${formatUnits(config.maxBet, 18)} ${tokenSymbol}`);
+
+                // Max check (Total Wager)
+                const currentTotal = placedBets.reduce((acc, b) => acc + parseUnits(b.amount, 18), BigInt(0));
+                const projectedTotal = currentTotal + amountVal;
+
+                if (projectedTotal > config.maxBet) {
+                    const remaining = config.maxBet - currentTotal;
+                    toast.error(`Total bet limit is ${formatUnits(config.maxBet, 18)} ${tokenSymbol}. You can add max ${formatUnits(remaining > BigInt(0) ? remaining : BigInt(0), 18)}`);
                     return;
                 }
             } catch (e) {

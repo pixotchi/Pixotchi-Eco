@@ -203,7 +203,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     return (
         <div className="text-center py-4 space-y-2">
             <div className="text-muted-foreground text-sm">
-                Your casino is ready! Play European Roulette with true 2.7% house edge.
+                Play European Roulette with true 2.7% house edge! Fair and secure randomness through onchain block verification.
                 <div className="mt-2 text-xs text-primary font-medium bg-primary/10 p-2 rounded border border-primary/20 text-left">
                     ⚠️ Info: Active bets expire after 256 blocks (~10 mins). Expired bets are forfeited.
                 </div>
@@ -220,7 +220,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
             <div className="pt-2">
                 <Button className="h-9 px-3 text-sm" onClick={() => setCasinoOpen(true)}>
-                    🎰 Open Casino
+                    Play Roulette
                 </Button>
             </div>
 
