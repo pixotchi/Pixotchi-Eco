@@ -457,22 +457,20 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                     {/* Trio 0-2-3 (Top intersection) */}
                                     <button
                                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, 'Trio 0-2-3', [0, 2, 3]); }}
-                                        className={`absolute top-0 right-0 w-1/2 h-[40%] z-20 flex items-center justify-center
-                                            ${hasBet(CasinoBetType.STREET, [0, 2, 3])
-                                                ? 'bg-blue-500/80 ring-2 ring-white rounded-bl-xl'
-                                                : 'hover:bg-white/20'}`}
+                                        className="absolute top-[33.33%] right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 z-20 flex items-center justify-center group"
                                         title="Bet on 0, 2, 3"
-                                    />
+                                    >
+                                        <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.STREET, [0, 2, 3]) ? 'bg-teal-400 ring-1 ring-white' : 'hover:bg-teal-400/70 bg-transparent'}`} />
+                                    </button>
 
                                     {/* Trio 0-1-2 (Bottom intersection) */}
                                     <button
                                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, 'Trio 0-1-2', [0, 1, 2]); }}
-                                        className={`absolute bottom-0 right-0 w-1/2 h-[40%] z-20 flex items-center justify-center
-                                            ${hasBet(CasinoBetType.STREET, [0, 1, 2])
-                                                ? 'bg-blue-500/80 ring-2 ring-white rounded-tl-xl'
-                                                : 'hover:bg-white/20'}`}
+                                        className="absolute top-[66.66%] right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 z-20 flex items-center justify-center group"
                                         title="Bet on 0, 1, 2"
-                                    />
+                                    >
+                                        <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.STREET, [0, 1, 2]) ? 'bg-teal-400 ring-1 ring-white' : 'hover:bg-teal-400/70 bg-transparent'}`} />
+                                    </button>
                                 </div>
 
                                 {/* Row 3 (Top): 3, 6, 9... 36 */}
@@ -532,6 +530,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     {/* Bet Legend */}
                     <div className="flex flex-wrap gap-2 text-[9px] text-white/80 justify-center font-medium bg-black/20 p-1 rounded-full">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" />Street</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-400" />Trio</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/60" />Split</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" />Corner</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />6-Line</span>
