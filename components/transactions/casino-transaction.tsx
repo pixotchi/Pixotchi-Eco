@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useCallback } from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import {
     buildCasinoPlaceBetsCall,
@@ -62,6 +62,9 @@ export default function CasinoTransaction({
 }: CasinoTransactionProps) {
     const { address } = useAccount();
 
+    // Track if user has initiated a transaction to prevent false failure callbacks
+    const transactionInitiatedRef = useRef(false);
+
     const calls = useMemo(() => {
         if (mode === "placeBets") {
             if (!betTypes?.length || !betNumbersArray?.length || !betAmounts?.length) {
@@ -79,16 +82,32 @@ export default function CasinoTransaction({
         return [];
     }, [mode, landId, betTypes, betNumbersArray, betAmounts]);
 
-    const handleStatus = (status: LifecycleStatus) => {
+    const handleButtonClick = useCallback(() => {
+        transactionInitiatedRef.current = true;
+        onButtonClick?.();
+    }, [onButtonClick]);
+
+    const handleStatus = useCallback((status: LifecycleStatus) => {
         onStatusUpdate?.(status);
 
-        // Handle failures
+        // Mark transaction as initiated on pending
+        if (status.statusName === 'transactionPending') {
+            transactionInitiatedRef.current = true;
+        }
+
+        // Handle failures - only report if user actually initiated the transaction
         if (FAILURE_STATUSES.has(status.statusName ?? "")) {
-            onComplete?.(undefined);
+            if (transactionInitiatedRef.current) {
+                onComplete?.(undefined);
+                transactionInitiatedRef.current = false; // Reset for next attempt
+            }
             return;
         }
 
         if (status.statusName !== "success") return;
+
+        // Reset initiation flag on success
+        transactionInitiatedRef.current = false;
 
         if (mode === "placeBets") {
             toast.success("Bets placed! Waiting for block...", {
@@ -176,7 +195,7 @@ export default function CasinoTransaction({
 
             onComplete?.(revealResult);
         }
-    };
+    }, [mode, onComplete, onStatusUpdate, address, tokenSymbol]);
 
     let defaultText = "Submit";
     if (mode === "placeBets") defaultText = "🎲 Place Bets";
@@ -191,7 +210,7 @@ export default function CasinoTransaction({
             buttonClassName={buttonClassName}
             disabled={finalDisabled}
             onStatusUpdate={handleStatus as any}
-            onButtonClick={onButtonClick}
+            onButtonClick={handleButtonClick}
         />
     );
 }

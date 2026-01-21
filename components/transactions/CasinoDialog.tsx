@@ -219,6 +219,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             return;
         }
         // Bets placed successfully, transition to waiting/reveal phase
+        setError(null); // Clear any previous errors
+        setIsSpinning(false); // Stop the spinning state from placeBets
         setSpinPhase('waiting');
         setPendingGame(true);
         // After short delay, enable reveal
@@ -229,17 +231,24 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
     // Handle reveal completion
     const handleRevealComplete = useCallback((result?: { winningNumber?: number; won?: boolean; payout?: string }) => {
+        // Only process if we're actually in a reveal phase
+        // This prevents false errors from OnchainKit status callbacks on initial render
+        if (spinPhase !== 'revealing' && !isSpinning) {
+            return; // Ignore callbacks when not actively revealing
+        }
+
         setIsSpinning(false);
         setSpinPhase('idle');
 
         if (result === undefined) {
-            // Transaction failed
+            // Transaction failed - but only show error if we were actually trying
             setError('Reveal failed');
             setWheelSpinning(false);
             return;
         }
 
         if (result.winningNumber !== undefined) {
+            setError(null); // Clear any errors on success
             setResult({
                 number: result.winningNumber,
                 won: result.won ?? false,
@@ -255,7 +264,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         setPendingGame(false);
         setPlacedBets([]);
         onSpinComplete?.();
-    }, [onSpinComplete, refetchBalance]);
+    }, [onSpinComplete, refetchBalance, spinPhase, isSpinning]);
 
     // Handle transaction status updates for UI feedback
     const handleStatusUpdate = useCallback((status: LifecycleStatus) => {
