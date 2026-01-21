@@ -13,6 +13,10 @@ const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
   '1': { name: 'Fence', icon: '/icons/Fence.png' },
 };
 import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward } from '@/lib/utils';
+import { useTokenSymbol } from '@/hooks/useTokenSymbol';
+import { useReadContract } from 'wagmi';
+import { casinoAbi } from '@/public/abi/casino-abi';
+import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import {
   LandTransferEvent,
   LandMintedEvent,
@@ -126,7 +130,7 @@ const EventIcon = React.memo(({
         }
         return { iconSrc: "/icons/bee-house.svg", altText: "Production" };
       case 'CasinoBuiltEvent':
-        return { iconSrc: "/icons/stake-house.svg", altText: "Casino Built" };
+        return { iconSrc: "/icons/casino.svg", altText: "Casino Built" };
       case 'RouletteSpinResultEvent':
         return { iconSrc: "/icons/casino.svg", altText: "Roulette Win" };
       default:
@@ -494,16 +498,22 @@ export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: Casino
 };
 
 export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event: RouletteSpinResultEvent, userAddress?: string | null }) => {
-  // Only render if player won
-  if (!event.won) return null;
-
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
   const payoutFormatted = (Number(event.payout) / 1e18).toFixed(2);
+
+  // Use the betting token stored in the indexed event for historical accuracy
+  const tokenSymbol = useTokenSymbol(event.bettingToken as `0x${string}`);
+  const displaySymbol = tokenSymbol || 'SEED';
 
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Roulette</span> and won <span className="font-semibold text-value">{payoutFormatted} SEED</span>.
+        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Roulette</span>
+        {event.won ? (
+          <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
+        ) : (
+          <> and lost.</>
+        )}
       </p>
     </EventWrapper>
   );

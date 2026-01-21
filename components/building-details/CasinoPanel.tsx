@@ -7,17 +7,20 @@ import { formatUnits } from 'viem';
 import {
     casinoIsBuilt,
     casinoGetBuildingConfig,
+    casinoGetConfig,
     casinoGetStats,
     buildCasinoBuildCall,
     checkCasinoApproval,
     LAND_CONTRACT_ADDRESS,
     PIXOTCHI_TOKEN_ADDRESS
 } from '@/lib/contracts';
+import { formatTokenAmount } from '@/lib/utils';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import CasinoDialog from '@/components/transactions/CasinoDialog';
 import { toast } from 'react-hot-toast';
 import { useWalletClient, useAccount } from 'wagmi';
+import { useTokenSymbol } from '@/hooks/useTokenSymbol';
 
 interface CasinoPanelProps {
     landId: bigint;
@@ -31,6 +34,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     // State
     const [isBuilt, setIsBuilt] = useState<boolean | null>(null);
     const [buildingConfig, setBuildingConfig] = useState<{ token: string; cost: bigint } | null>(null);
+    const [bettingTokenAddress, setBettingTokenAddress] = useState<string | null>(null);
     const [stats, setStats] = useState<{ wagered: bigint; won: bigint; games: bigint } | null>(null);
 
     // Approval state
@@ -47,13 +51,18 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             setIsLoading(true);
             setError(null);
 
-            const [built, bConfig, casinoStats] = await Promise.all([
+            const [built, bConfig, gConfig, casinoStats] = await Promise.all([
                 casinoIsBuilt(landId),
                 casinoGetBuildingConfig(),
+                casinoGetConfig(),
                 casinoGetStats(landId)
             ]);
 
             setIsBuilt(built);
+
+            if (gConfig) {
+                setBettingTokenAddress(gConfig.bettingToken);
+            }
             let tokenAddress = PIXOTCHI_TOKEN_ADDRESS;
 
             if (bConfig) {
@@ -94,6 +103,13 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     useEffect(() => {
         loadCasinoState();
     }, [loadCasinoState]);
+
+    // Use the hook to get the symbol
+    const tokenSymbol = useTokenSymbol(buildingConfig?.token);
+    const displaySymbol = tokenSymbol || 'SEED'; // Fallback while loading or if hooks returns default
+
+    const bettingTokenSymbol = useTokenSymbol(bettingTokenAddress || undefined);
+    const displayBettingSymbol = bettingTokenSymbol || 'SEED';
 
     // Handle successful build
     const onBuildSuccess = useCallback(async () => {
@@ -145,7 +161,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Instant Build:</span>
                             <span className="font-semibold">
-                                {buildingConfig ? formatUnits(buildingConfig.cost, 18) : '...'} SEED
+                                {buildingConfig ? formatTokenAmount(buildingConfig.cost, 18) : '...'} {displaySymbol}
                             </span>
                         </div>
                     </div>
@@ -160,7 +176,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                                 spenderAddress={LAND_CONTRACT_ADDRESS}
                                 tokenAddress={buildingConfig.token as `0x${string}`}
                                 onSuccess={onApproveSuccess}
-                                buttonText={`Approve SEED to Build`}
+                                buttonText={`Approve ${displaySymbol} to Build`}
                                 buttonClassName="w-full"
                             />
                         ) : (
@@ -168,7 +184,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                                 calls={[buildCasinoBuildCall(landId)]}
                                 onSuccess={onBuildSuccess}
                                 onError={(err) => setError(err.message)}
-                                buttonText={`Build (${buildingConfig ? formatUnits(buildingConfig.cost, 18) : '...'} SEED)`}
+                                buttonText={`Build (${buildingConfig ? formatTokenAmount(buildingConfig.cost, 18) : '...'} ${displaySymbol})`}
                                 buttonClassName="w-full"
                                 disabled={!walletClient || !buildingConfig || !hasApproval}
                             />
@@ -187,7 +203,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     return (
         <div className="text-center py-4 space-y-2">
             <div className="text-muted-foreground text-sm">
-                Your casino is ready! Play European Roulette with true 2.7% house edge.
+                Play European Roulette with true 2.7% house edge! Fair and secure randomness through onchain block verification.
                 <div className="mt-2 text-xs text-primary font-medium bg-primary/10 p-2 rounded border border-primary/20 text-left">
                     ⚠️ Info: Active bets expire after 256 blocks (~10 mins). Expired bets are forfeited.
                 </div>
@@ -197,14 +213,14 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             {stats && (
                 <div className="flex justify-center gap-4 text-xs text-muted-foreground py-2">
                     <span>Games: {stats.games.toString()}</span>
-                    <span>Wagered: {formatUnits(stats.wagered, 18)} SEED</span>
-                    <span>Won: {formatUnits(stats.won, 18)} SEED</span>
+                    <span>Wagered: {formatTokenAmount(stats.wagered, 18)} {displayBettingSymbol}</span>
+                    <span>Won: {formatTokenAmount(stats.won, 18)} {displayBettingSymbol}</span>
                 </div>
             )}
 
             <div className="pt-2">
                 <Button className="h-9 px-3 text-sm" onClick={() => setCasinoOpen(true)}>
-                    🎰 Open Casino
+                    Play Roulette
                 </Button>
             </div>
 

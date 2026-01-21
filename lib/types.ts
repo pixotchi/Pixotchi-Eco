@@ -443,6 +443,7 @@ export type RouletteSpinResultEvent = {
   winningNumber: number;
   won: boolean;
   payout: string;
+  bettingToken: string;
   blockHeight: string;
 };
 

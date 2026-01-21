@@ -119,14 +119,7 @@ const buildingInfo = {
       "Six Line (6 Numbers)": "5:1 payout",
       "Dozen / Column": "2:1 payout",
       "Red / Black / Odd / Even": "1:1 payout"
-    },
-    howToPlay: [
-      "1. Build the Casino (one-time cost)",
-      "2. Approve SEED token spending",
-      "3. Select bet type and amount",
-      "4. Spin and wait for the result",
-      "5. Winnings are paid out automatically"
-    ]
+    }
   }
 };
 
@@ -221,25 +214,14 @@ export default function BuildingInfoDialog({
                 {Object.entries(info.betTypes as Record<string, string>).map(([betType, payout]) => (
                   <div key={betType} className="flex justify-between items-center">
                     <span className="text-muted-foreground">{betType}:</span>
-                    <span className="font-medium text-green-600">{payout}</span>
+                    <span className="font-medium text-green-600">{payout as string}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {'howToPlay' in info && info.howToPlay && (
-            <div className="bg-muted/30 rounded-lg p-3">
-              <h4 className="font-semibold text-sm mb-2 text-foreground">How to Play</h4>
-              <ul className="space-y-1.5 text-sm">
-                {(info.howToPlay as string[]).map((step, index) => (
-                  <li key={index} className="text-muted-foreground text-xs">
-                    {step}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+
         </div>
       </DialogContent>
     </Dialog>
