@@ -57,7 +57,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const [error, setError] = useState<string | null>(null);
     const [pendingGame, setPendingGame] = useState<boolean>(false);
 
-    const { data: balanceData } = useBalance({
+    const { data: balanceData, refetch: refetchBalance } = useBalance({
         address: address,
         token: config?.bettingToken as `0x${string}` || PIXOTCHI_TOKEN_ADDRESS,
         query: { enabled: !!address }
@@ -222,6 +222,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 setWheelWinningNumber(resultNumber);
                 if (won) toast.success(`🎉 You won ${formatUnits(payout, 18)} ${tokenSymbol}!`);
                 else toast('Better luck next time!', { icon: '🎲' });
+                refetchBalance();
             } else { setError('Could not verify result'); setWheelSpinning(false); }
             setPendingGame(false); setPlacedBets([]); onSpinComplete?.();
         } catch (err: any) { console.error('Reveal failed:', err); setError(err.message || 'Reveal failed'); toast.error('Reveal failed'); setWheelSpinning(false); }
@@ -452,6 +453,26 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                         className={`w-full h-full flex items-center justify-center rounded-l-md text-xs md:text-sm font-bold text-white bg-green-600 border border-white/10
                                             ${hasBet(CasinoBetType.STRAIGHT, [0]) ? 'ring-2 inset-2 ring-amber-400 z-10' : 'hover:brightness-110'}`}
                                     ><span className="-rotate-90">0</span></button>
+
+                                    {/* Trio 0-2-3 (Top intersection) */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, 'Trio 0-2-3', [0, 2, 3]); }}
+                                        className={`absolute top-0 right-0 w-1/2 h-[40%] z-20 flex items-center justify-center
+                                            ${hasBet(CasinoBetType.STREET, [0, 2, 3])
+                                                ? 'bg-blue-500/80 ring-2 ring-white rounded-bl-xl'
+                                                : 'hover:bg-white/20'}`}
+                                        title="Bet on 0, 2, 3"
+                                    />
+
+                                    {/* Trio 0-1-2 (Bottom intersection) */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, 'Trio 0-1-2', [0, 1, 2]); }}
+                                        className={`absolute bottom-0 right-0 w-1/2 h-[40%] z-20 flex items-center justify-center
+                                            ${hasBet(CasinoBetType.STREET, [0, 1, 2])
+                                                ? 'bg-blue-500/80 ring-2 ring-white rounded-tl-xl'
+                                                : 'hover:bg-white/20'}`}
+                                        title="Bet on 0, 1, 2"
+                                    />
                                 </div>
 
                                 {/* Row 3 (Top): 3, 6, 9... 36 */}

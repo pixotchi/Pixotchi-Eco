@@ -130,7 +130,7 @@ const EventIcon = React.memo(({
         }
         return { iconSrc: "/icons/bee-house.svg", altText: "Production" };
       case 'CasinoBuiltEvent':
-        return { iconSrc: "/icons/stake-house.svg", altText: "Casino Built" };
+        return { iconSrc: "/icons/casino.svg", altText: "Casino Built" };
       case 'RouletteSpinResultEvent':
         return { iconSrc: "/icons/casino.svg", altText: "Roulette Win" };
       default:
@@ -498,9 +498,6 @@ export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: Casino
 };
 
 export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event: RouletteSpinResultEvent, userAddress?: string | null }) => {
-  // Only render if player won
-  if (!event.won) return null;
-
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
   const payoutFormatted = (Number(event.payout) / 1e18).toFixed(2);
 
@@ -511,7 +508,12 @@ export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event:
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Roulette</span> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.
+        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Roulette</span>
+        {event.won ? (
+          <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
+        ) : (
+          <> and lost.</>
+        )}
       </p>
     </EventWrapper>
   );
