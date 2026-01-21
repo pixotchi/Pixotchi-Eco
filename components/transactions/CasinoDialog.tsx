@@ -6,22 +6,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, X, Trash2 } from 'lucide-react';
-import { parseUnits, formatUnits, decodeEventLog } from 'viem';
-import { useWalletClient, usePublicClient, useAccount, useBalance } from 'wagmi';
+import { parseUnits, formatUnits } from 'viem';
+import { usePublicClient, useAccount, useBalance } from 'wagmi';
 import {
-    casinoPlaceBets,
-    casinoReveal,
     casinoGetActiveBet,
     casinoGetConfig,
     checkCasinoApproval,
     LAND_CONTRACT_ADDRESS,
     PIXOTCHI_TOKEN_ADDRESS,
 } from '@/lib/contracts';
-import { casinoAbi, CasinoBetType, CASINO_PAYOUT_MULTIPLIERS, RED_NUMBERS } from '@/public/abi/casino-abi';
+import { CasinoBetType, CASINO_PAYOUT_MULTIPLIERS, RED_NUMBERS } from '@/public/abi/casino-abi';
 import ApproveTransaction from './approve-transaction';
+import CasinoTransaction from './casino-transaction';
 import { toast } from 'react-hot-toast';
 import { useTokenSymbol } from '@/hooks/useTokenSymbol';
 import { formatTokenAmount } from '@/lib/utils';
+import { usePaymaster } from '@/lib/paymaster-context';
+import { SponsoredBadge } from '@/components/paymaster-toggle';
+import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 
 interface CasinoDialogProps {
     open: boolean;
@@ -40,9 +42,9 @@ interface PlacedBet {
 }
 
 export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete }: CasinoDialogProps) {
-    const { data: walletClient } = useWalletClient();
     const publicClient = usePublicClient();
     const { address } = useAccount();
+    const { isSponsored } = usePaymaster();
 
     const [placedBets, setPlacedBets] = useState<PlacedBet[]>([]);
     const [currentBetAmount, setCurrentBetAmount] = useState('10');
@@ -201,59 +203,79 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         return placedBets.some(b => b.type === type && JSON.stringify([...b.numbers].sort()) === JSON.stringify([...numbers].sort()));
     }, [placedBets]);
 
-    const handleReveal = useCallback(async () => {
-        if (!walletClient || !publicClient) return;
-        try {
-            setSpinPhase('revealing');
-            const hash = await casinoReveal(walletClient, landId);
-            const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
-            let spinResult = null;
-            for (const log of receipt.logs) {
-                try {
-                    const decoded = decodeEventLog({ abi: casinoAbi, data: log.data, topics: log.topics });
-                    if (decoded.eventName === 'RouletteSpinResult') { spinResult = decoded.args; break; }
-                } catch { continue; }
-            }
-            if (spinResult) {
-                const { winningNumber, won, payout } = spinResult as any;
-                const resultNumber = Number(winningNumber);
-                setResult({ number: resultNumber, won, payout: formatUnits(payout, 18) });
-                // Set winning number to stop the wheel on this number
-                setWheelWinningNumber(resultNumber);
-                if (won) toast.success(`🎉 You won ${formatUnits(payout, 18)} ${tokenSymbol}!`);
-                else toast('Better luck next time!', { icon: '🎲' });
-                refetchBalance();
-            } else { setError('Could not verify result'); setWheelSpinning(false); }
-            setPendingGame(false); setPlacedBets([]); onSpinComplete?.();
-        } catch (err: any) { console.error('Reveal failed:', err); setError(err.message || 'Reveal failed'); toast.error('Reveal failed'); setWheelSpinning(false); }
-        finally { setIsSpinning(false); setSpinPhase('idle'); }
-    }, [walletClient, publicClient, landId, onSpinComplete, tokenSymbol]);
+    // Prepare bet data for CasinoTransaction
+    const betTypes = useMemo(() => placedBets.map(b => b.type), [placedBets]);
+    const betNumbersArray = useMemo(() => placedBets.map(b => b.numbers), [placedBets]);
+    const betAmounts = useMemo(() => placedBets.map(b => parseUnits(b.amount, 18)), [placedBets]);
 
-    const handleSpin = useCallback(async () => {
-        if (!walletClient || !publicClient || placedBets.length === 0) return;
-        setError(null); setIsSpinning(true); setResult(null); setSpinPhase('betting');
-        // Reset wheel for new spin
-        setWheelWinningNumber(null);
-        setWheelSpinning(true); // Start spinning immediately
-        try {
-            const betTypes = placedBets.map(b => b.type);
-            const betNumbersArray = placedBets.map(b => b.numbers);
-            const betAmounts = placedBets.map(b => parseUnits(b.amount, 18));
-            await casinoPlaceBets(walletClient, landId, betTypes, betNumbersArray, betAmounts);
-
-            toast.success('Bets placed! Waiting for block...');
-            setSpinPhase('waiting');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            await handleReveal();
-        } catch (err: any) {
-            console.error('Spin failed:', err);
-            setError(err.message || 'Spin failed');
-            toast.error('Spin failed');
+    // Handle place bets completion
+    const handlePlaceBetsComplete = useCallback((result?: {}) => {
+        if (result === undefined) {
+            // Transaction failed
+            setError('Failed to place bets');
             setIsSpinning(false);
             setSpinPhase('idle');
             setWheelSpinning(false);
+            return;
         }
-    }, [walletClient, publicClient, placedBets, landId, handleReveal]);
+        // Bets placed successfully, transition to waiting/reveal phase
+        setSpinPhase('waiting');
+        setPendingGame(true);
+        // After short delay, enable reveal
+        setTimeout(() => {
+            setSpinPhase('revealing');
+        }, 5000);
+    }, []);
+
+    // Handle reveal completion
+    const handleRevealComplete = useCallback((result?: { winningNumber?: number; won?: boolean; payout?: string }) => {
+        setIsSpinning(false);
+        setSpinPhase('idle');
+
+        if (result === undefined) {
+            // Transaction failed
+            setError('Reveal failed');
+            setWheelSpinning(false);
+            return;
+        }
+
+        if (result.winningNumber !== undefined) {
+            setResult({
+                number: result.winningNumber,
+                won: result.won ?? false,
+                payout: result.payout ?? '0'
+            });
+            setWheelWinningNumber(result.winningNumber);
+            refetchBalance();
+        } else {
+            setError('Could not verify result');
+            setWheelSpinning(false);
+        }
+
+        setPendingGame(false);
+        setPlacedBets([]);
+        onSpinComplete?.();
+    }, [onSpinComplete, refetchBalance]);
+
+    // Handle transaction status updates for UI feedback
+    const handleStatusUpdate = useCallback((status: LifecycleStatus) => {
+        if (status.statusName === 'transactionPending') {
+            setError(null);
+            setIsSpinning(true);
+            setResult(null);
+            setWheelWinningNumber(null);
+            setWheelSpinning(true);
+        }
+    }, []);
+
+    // Button click handler to start spinning immediately
+    const handleSpinButtonClick = useCallback(() => {
+        setSpinPhase('betting');
+        setError(null);
+        setResult(null);
+        setWheelWinningNumber(null);
+        setWheelSpinning(true);
+    }, []);
 
     const refreshApproval = useCallback(async () => {
         if (address) { const approval = await checkCasinoApproval(address, config?.bettingToken || PIXOTCHI_TOKEN_ADDRESS); setHasApproval(approval > BigInt(0)); }
@@ -358,6 +380,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     <DialogTitle className="font-pixel text-xl flex items-center gap-2 text-white">
                         Roulette
                         <span className="text-xs font-normal text-white/80 ml-2">(Beta)</span>
+                        <SponsoredBadge show={isSponsored} className="ml-auto" />
                     </DialogTitle>
                 </DialogHeader>
 
@@ -540,13 +563,40 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     <div className="space-y-2">
                         {!hasApproval ? (
                             <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={(config?.bettingToken || PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`} onSuccess={refreshApproval} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
-                        ) : (
-                            <Button className="w-full" onClick={pendingGame ? handleReveal : handleSpin}
-                                disabled={(placedBets.length === 0 && !pendingGame) || isSpinning || !walletClient || (isInsufficientBalance && !pendingGame)}
-                                variant={isInsufficientBalance && !pendingGame ? "destructive" : "default"}>
-                                {isSpinning ? (<><Loader2 className="h-4 w-4 animate-spin mr-2" />{spinPhase === 'betting' && 'Placing...'}{spinPhase === 'waiting' && 'Waiting...'}{spinPhase === 'revealing' && 'Revealing...'}</>)
-                                    : pendingGame ? "Resume (Reveal)" : isInsufficientBalance ? "Insufficient Balance" : placedBets.length === 0 ? "Select bets" : `🎲 Spin (${totalBetAmount.toFixed(2)} ${tokenSymbol})`}
+                        ) : isInsufficientBalance && !pendingGame ? (
+                            <Button className="w-full" disabled variant="destructive">
+                                Insufficient Balance
                             </Button>
+                        ) : pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' ? (
+                            <CasinoTransaction
+                                mode="reveal"
+                                landId={landId}
+                                buttonText={isSpinning ? (spinPhase === 'waiting' ? 'Waiting...' : 'Revealing...') : 'Resume (Reveal)'}
+                                buttonClassName="w-full"
+                                disabled={isSpinning && spinPhase === 'waiting'}
+                                onStatusUpdate={handleStatusUpdate}
+                                onComplete={handleRevealComplete}
+                                tokenSymbol={tokenSymbol}
+                            />
+                        ) : placedBets.length === 0 ? (
+                            <Button className="w-full" disabled>
+                                Select bets
+                            </Button>
+                        ) : (
+                            <CasinoTransaction
+                                mode="placeBets"
+                                landId={landId}
+                                betTypes={betTypes}
+                                betNumbersArray={betNumbersArray}
+                                betAmounts={betAmounts}
+                                buttonText={isSpinning ? 'Placing...' : `🎲 Spin (${totalBetAmount.toFixed(2)} ${tokenSymbol})`}
+                                buttonClassName="w-full"
+                                disabled={isSpinning}
+                                onStatusUpdate={handleStatusUpdate}
+                                onComplete={handlePlaceBetsComplete}
+                                onButtonClick={handleSpinButtonClick}
+                                tokenSymbol={tokenSymbol}
+                            />
                         )}
                         {error && <p className="text-xs text-destructive text-center">{error}</p>}
                     </div>
