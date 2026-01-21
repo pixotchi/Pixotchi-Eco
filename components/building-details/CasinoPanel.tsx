@@ -13,11 +13,13 @@ import {
     LAND_CONTRACT_ADDRESS,
     PIXOTCHI_TOKEN_ADDRESS
 } from '@/lib/contracts';
+import { formatTokenAmount } from '@/lib/utils';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import CasinoDialog from '@/components/transactions/CasinoDialog';
 import { toast } from 'react-hot-toast';
 import { useWalletClient, useAccount } from 'wagmi';
+import { useTokenSymbol } from '@/hooks/useTokenSymbol';
 
 interface CasinoPanelProps {
     landId: bigint;
@@ -95,6 +97,10 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         loadCasinoState();
     }, [loadCasinoState]);
 
+    // Use the hook to get the symbol
+    const tokenSymbol = useTokenSymbol(buildingConfig?.token);
+    const displaySymbol = tokenSymbol || 'SEED'; // Fallback while loading or if hooks returns default
+
     // Handle successful build
     const onBuildSuccess = useCallback(async () => {
         toast.success("Casino built successfully!");
@@ -145,7 +151,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Instant Build:</span>
                             <span className="font-semibold">
-                                {buildingConfig ? formatUnits(buildingConfig.cost, 18) : '...'} SEED
+                                {buildingConfig ? formatTokenAmount(buildingConfig.cost, 18) : '...'} {displaySymbol}
                             </span>
                         </div>
                     </div>
@@ -160,7 +166,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                                 spenderAddress={LAND_CONTRACT_ADDRESS}
                                 tokenAddress={buildingConfig.token as `0x${string}`}
                                 onSuccess={onApproveSuccess}
-                                buttonText={`Approve SEED to Build`}
+                                buttonText={`Approve ${displaySymbol} to Build`}
                                 buttonClassName="w-full"
                             />
                         ) : (
@@ -168,7 +174,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                                 calls={[buildCasinoBuildCall(landId)]}
                                 onSuccess={onBuildSuccess}
                                 onError={(err) => setError(err.message)}
-                                buttonText={`Build (${buildingConfig ? formatUnits(buildingConfig.cost, 18) : '...'} SEED)`}
+                                buttonText={`Build (${buildingConfig ? formatTokenAmount(buildingConfig.cost, 18) : '...'} ${displaySymbol})`}
                                 buttonClassName="w-full"
                                 disabled={!walletClient || !buildingConfig || !hasApproval}
                             />
@@ -197,8 +203,8 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             {stats && (
                 <div className="flex justify-center gap-4 text-xs text-muted-foreground py-2">
                     <span>Games: {stats.games.toString()}</span>
-                    <span>Wagered: {formatUnits(stats.wagered, 18)} SEED</span>
-                    <span>Won: {formatUnits(stats.won, 18)} SEED</span>
+                    <span>Wagered: {formatTokenAmount(stats.wagered, 18)} {displaySymbol}</span>
+                    <span>Won: {formatTokenAmount(stats.won, 18)} {displaySymbol}</span>
                 </div>
             )}
 

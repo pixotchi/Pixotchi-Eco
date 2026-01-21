@@ -266,6 +266,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         winningNumber
         won
         payout
+        bettingToken
         blockHeight
       }
     }
@@ -484,6 +485,7 @@ const GET_MY_ACTIVITY_QUERY = `
           winningNumber
           won
           payout
+          bettingToken
           blockHeight
         }
       }
