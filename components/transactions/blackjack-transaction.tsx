@@ -106,7 +106,7 @@ export default function BlackjackTransaction({
         onButtonClick?.();
 
         try {
-            console.log("[Blackjack] Fetching randomness for", mode);
+
 
             const actionName = mode === "deal" ? "deal" :
                 action === BlackjackAction.HIT ? "hit" :
@@ -117,7 +117,7 @@ export default function BlackjackTransaction({
 
             const result = await blackjackFetchRandomness(landId, actionName, address);
 
-            console.log("[Blackjack] Randomness received, nonce:", result.nonce);
+
 
             // Build transaction call
             let call;
@@ -133,7 +133,7 @@ export default function BlackjackTransaction({
                 throw new Error("Invalid parameters");
             }
 
-            console.log("[Blackjack] Call built:", call.functionName);
+
             setCalls([call]);
             setPhase("ready");
 
@@ -148,7 +148,7 @@ export default function BlackjackTransaction({
 
     // Handle transaction status
     const handleStatus = useCallback((status: LifecycleStatus) => {
-        console.log("[Blackjack] Tx status:", status.statusName);
+
         onStatusUpdate?.(status);
 
         if (status.statusName === 'transactionPending') {

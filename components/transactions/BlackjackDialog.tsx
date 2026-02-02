@@ -315,6 +315,7 @@ export default function BlackjackDialog({
     }, [open]);
 
     // Handle deal complete (combined bet + deal)
+    // Handle deal complete (combined bet + deal)
     const handleDealComplete = useCallback(async (result?: any) => {
         setTxInProgress(null);
 
@@ -330,14 +331,56 @@ export default function BlackjackDialog({
                 result: result.gameResult,
                 payout: result.payout || '0',
                 dealerCards: result.dealerCards || prev.dealerCards,
-                dealerValue: result.dealerValue || prev.dealerValue
+                dealerValue: result.dealerValue || prev.dealerValue,
+                activeHandCount: 1, // Default cleanup
+                hasSplit: false
             }));
-        }
 
-        // Refresh from contract to get actual state
-        await refreshGameState();
-        refetchBalance();
-    }, [refreshGameState, refetchBalance]);
+            // If game ended, state might be cleared (NONE), which is fine. Refresh immediately.
+            await refreshGameState();
+            refetchBalance();
+        } else if (result.cards && result.cards.length > 0) {
+            // Game Started Successfully (Optimistic Update)
+            // This ensures the UI shows cards immediately even if RPC is slow
+            setGameState(prev => ({
+                ...prev,
+                isActive: true,
+                contractPhase: BlackjackPhase.PLAYER_TURN, // Force phase
+                playerCards: result.cards,
+                playerValue: result.handValue ?? 0,
+                // Show dealer up card + hidden
+                dealerCards: result.dealerUpCard ? [result.dealerUpCard, 0] : prev.dealerCards,
+                dealerValue: 0,
+
+                // Reset fresh game state defaults
+                activeHandCount: 1,
+                hasSplit: false,
+                currentHandIndex: 0,
+                result: null,
+                payout: '0'
+            }));
+
+            // Game is active, but RPC might still verify it as NONE (stale).
+            // Poll until we see a valid active phase
+            let attempts = 0;
+            const checkAndRefresh = async () => {
+                const basic = await blackjackGetGameBasic(landId);
+                // If we see active state OR we've waited too long, do full refresh
+                if ((basic && basic.phase !== BlackjackPhase.NONE) || attempts > 5) {
+                    await refreshGameState();
+                    refetchBalance();
+                } else {
+                    attempts++;
+                    setTimeout(checkAndRefresh, 1000);
+                }
+            };
+            checkAndRefresh();
+        } else {
+            // Fallback for unknown state or error
+            await refreshGameState();
+            refetchBalance();
+        }
+    }, [refreshGameState, refetchBalance, landId]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: any) => {
