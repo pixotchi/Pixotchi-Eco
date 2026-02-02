@@ -29,7 +29,8 @@ import {
   QuestFinalizedEvent,
   VillageProductionClaimedEvent,
   CasinoBuiltEvent,
-  RouletteSpinResultEvent
+  RouletteSpinResultEvent,
+  BlackjackResultEvent
 } from '@/lib/types';
 
 const TimeAgo = React.memo(({ timestamp }: { timestamp: string }) => {
@@ -133,6 +134,8 @@ const EventIcon = React.memo(({
         return { iconSrc: "/icons/casino.svg", altText: "Casino Built" };
       case 'RouletteSpinResultEvent':
         return { iconSrc: "/icons/casino.svg", altText: "Roulette Win" };
+      case 'BlackjackResultEvent':
+        return { iconSrc: "/icons/casino.svg", altText: "Blackjack" };
       default:
         return { iconSrc: null, altText: "Unknown Event" };
     }
@@ -513,6 +516,47 @@ export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event:
           <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
         ) : (
           <> and lost.</>
+        )}
+      </p>
+    </EventWrapper>
+  );
+};
+
+// Helper to convert blackjack result enum to human-readable outcome
+function getBlackjackResultText(result: number): { won: boolean; text: string } {
+  // GameResult enum: 0=NONE, 1=PLAYER_WIN, 2=DEALER_WIN, 3=PUSH, 4=PLAYER_BUST, 5=DEALER_BUST, 6=PLAYER_BLACKJACK, 7=DEALER_BLACKJACK, 8=SURRENDERED
+  switch (result) {
+    case 1: return { won: true, text: 'won' };
+    case 5: return { won: true, text: 'won (dealer bust)' };
+    case 6: return { won: true, text: 'hit Blackjack!' };
+    case 2: return { won: false, text: 'lost' };
+    case 4: return { won: false, text: 'busted' };
+    case 7: return { won: false, text: 'lost (dealer Blackjack)' };
+    case 3: return { won: false, text: 'pushed (tie)' };
+    case 8: return { won: false, text: 'surrendered' };
+    default: return { won: false, text: 'finished' };
+  }
+}
+
+export const BlackjackResultEventRenderer = ({ event, userAddress }: { event: BlackjackResultEvent, userAddress?: string | null }) => {
+  const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
+  const payoutFormatted = (Number(event.payout) / 1e18).toFixed(2);
+  const hasPayout = Number(event.payout) > 0;
+
+  // Use the betting token stored in the indexed event for historical accuracy
+  const tokenSymbol = useTokenSymbol(event.bettingToken as `0x${string}`);
+  const displaySymbol = tokenSymbol || 'SEED';
+
+  const { won, text } = getBlackjackResultText(event.result);
+
+  return (
+    <EventWrapper event={event}>
+      <p className="text-sm">
+        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Blackjack</span>
+        {hasPayout ? (
+          <> and {text} <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
+        ) : (
+          <> and {text}.</>
         )}
       </p>
     </EventWrapper>

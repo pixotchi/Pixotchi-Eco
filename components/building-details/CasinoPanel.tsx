@@ -9,6 +9,7 @@ import {
     casinoGetBuildingConfig,
     casinoGetConfig,
     casinoGetStats,
+    blackjackGetStats,
     buildCasinoBuildCall,
     checkCasinoApproval,
     LAND_CONTRACT_ADDRESS,
@@ -18,6 +19,7 @@ import { formatTokenAmount } from '@/lib/utils';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import CasinoDialog from '@/components/transactions/CasinoDialog';
+import BlackjackDialog from '@/components/transactions/BlackjackDialog';
 import { toast } from 'react-hot-toast';
 import { useWalletClient, useAccount } from 'wagmi';
 import { useTokenSymbol } from '@/hooks/useTokenSymbol';
@@ -36,6 +38,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     const [buildingConfig, setBuildingConfig] = useState<{ token: string; cost: bigint } | null>(null);
     const [bettingTokenAddress, setBettingTokenAddress] = useState<string | null>(null);
     const [stats, setStats] = useState<{ wagered: bigint; won: bigint; games: bigint } | null>(null);
+    const [bjStats, setBjStats] = useState<{ wagered: bigint; won: bigint; games: bigint } | null>(null);
 
     // Approval state
     const [hasApproval, setHasApproval] = useState(false);
@@ -44,6 +47,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [casinoOpen, setCasinoOpen] = useState(false);
+    const [blackjackOpen, setBlackjackOpen] = useState(false);
 
     // Load casino state
     const loadCasinoState = useCallback(async () => {
@@ -51,11 +55,12 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             setIsLoading(true);
             setError(null);
 
-            const [built, bConfig, gConfig, casinoStats] = await Promise.all([
+            const [built, bConfig, gConfig, casinoStats, blackjackStats] = await Promise.all([
                 casinoIsBuilt(landId),
                 casinoGetBuildingConfig(),
                 casinoGetConfig(),
-                casinoGetStats(landId)
+                casinoGetStats(landId),
+                blackjackGetStats(landId)
             ]);
 
             setIsBuilt(built);
@@ -80,6 +85,10 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
             if (casinoStats) {
                 setStats({ wagered: casinoStats.totalWagered, won: casinoStats.totalWon, games: casinoStats.gamesPlayed });
+            }
+
+            if (blackjackStats) {
+                setBjStats({ wagered: blackjackStats.totalWagered, won: blackjackStats.totalWon, games: blackjackStats.gamesPlayed });
             }
 
             // Check approval
@@ -199,29 +208,51 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         );
     }
 
-    // Casino is built - show simple panel with "Open Casino" button (like MarketplacePanel)
+    // Casino is built - show game options
     return (
         <div className="text-center py-4 space-y-2">
             <div className="text-muted-foreground text-sm">
-                Play European Roulette with true 2.7% house edge! Fair and secure randomness through onchain block verification.
+                Play Roulette or Blackjack with fair onchain randomness!
                 <div className="mt-2 text-xs text-primary font-medium bg-primary/10 p-2 rounded border border-primary/20 text-left">
                     ⚠️ Info: Active bets expire after 256 blocks (~10 mins). Expired bets are forfeited.
                 </div>
             </div>
 
             {/* Stats summary */}
-            {stats && (
-                <div className="flex justify-center gap-4 text-xs text-muted-foreground py-2">
-                    <span>Games: {stats.games.toString()}</span>
-                    <span>Wagered: {formatTokenAmount(stats.wagered, 18)} {displayBettingSymbol}</span>
-                    <span>Won: {formatTokenAmount(stats.won, 18)} {displayBettingSymbol}</span>
+            {(stats || bjStats) && (
+                <div className="flex flex-col gap-1 text-xs text-muted-foreground py-2">
+                    {stats && (
+                        <div className="flex justify-center gap-4">
+                            <span>🎰 Roulette:</span>
+                            <span>Games: {stats.games.toString()}</span>
+                            <span>Wagered: {formatTokenAmount(stats.wagered, 18)} {displayBettingSymbol}</span>
+                            <span>Won: {formatTokenAmount(stats.won, 18)} {displayBettingSymbol}</span>
+                        </div>
+                    )}
+                    {bjStats && process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== 'false' && (
+                        <div className="flex justify-center gap-4">
+                            <span>♦️ Blackjack:</span>
+                            <span>Games: {bjStats.games.toString()}</span>
+                            <span>Wagered: {formatTokenAmount(bjStats.wagered, 18)} {displayBettingSymbol}</span>
+                            <span>Won: {formatTokenAmount(bjStats.won, 18)} {displayBettingSymbol}</span>
+                        </div>
+                    )}
                 </div>
             )}
 
-            <div className="pt-2">
+            {/* Game buttons */}
+            <div className="pt-2 flex justify-center gap-2">
                 <Button className="h-9 px-3 text-sm" onClick={() => setCasinoOpen(true)}>
-                    Play Roulette
+                    🎰 Play Roulette
                 </Button>
+                {process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== 'false' && (
+                    <Button
+                        className="h-9 px-3 text-sm bg-green-700 hover:bg-green-800"
+                        onClick={() => setBlackjackOpen(true)}
+                    >
+                        ♦️ Play Blackjack
+                    </Button>
+                )}
             </div>
 
             <CasinoDialog
@@ -229,6 +260,13 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                 onOpenChange={setCasinoOpen}
                 landId={landId}
                 onSpinComplete={handleSpinComplete}
+            />
+
+            <BlackjackDialog
+                open={blackjackOpen}
+                onOpenChange={setBlackjackOpen}
+                landId={landId}
+                onGameComplete={handleSpinComplete}
             />
         </div>
     );
