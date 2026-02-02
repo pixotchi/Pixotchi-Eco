@@ -521,7 +521,7 @@ export default function BlackjackDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-lg bg-cover bg-center bg-no-repeat bg-[url('/icons/casino.png')] border-none text-white rounded-xl">
+            <DialogContent className="max-w-lg bg-cover bg-center bg-no-repeat bg-[url('/icons/casinobj.png')] border-none text-white rounded-xl">
                 <DialogHeader>
                     <DialogTitle className="font-pixel text-xl flex items-center justify-between text-white">
                         ♦️ Blackjack
