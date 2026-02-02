@@ -246,7 +246,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - Front door to SEED staking for LEAF rewards.
 
 **Casino (ID 6)** – Gambling (single level)
-- Play european roulette with SEED!
+- Play european roulette and blackjack with SEED!
 
 ### Upgrading Buildings
 - **Cost:** LEAF (checked at in-game rates).
