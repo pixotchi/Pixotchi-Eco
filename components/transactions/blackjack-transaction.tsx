@@ -115,7 +115,7 @@ export default function BlackjackTransaction({
                             action === BlackjackAction.SPLIT ? "split" :
                                 action === BlackjackAction.SURRENDER ? "surrender" : "action";
 
-            const result = await blackjackFetchRandomness(landId, actionName, address);
+            const result = await blackjackFetchRandomness(landId, actionName, address, handIndex);
 
 
 
