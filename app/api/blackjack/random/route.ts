@@ -38,6 +38,8 @@ interface CachedRandomness {
     signature: string;
     timestamp: number;
     signerAddress: string;
+    actionNum?: number;
+    handIndex?: number;
 }
 const nonceRandomnessCache = new Map<string, CachedRandomness>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes - ample time for TX confirmation
@@ -108,7 +110,7 @@ export async function POST(request: NextRequest) {
 
         // Parse request
         const body = await request.json();
-        const { landId, action, playerAddress } = body;
+        const { landId, action, playerAddress, handIndex } = body;
 
         // Validate inputs
         if (!landId || typeof landId !== 'string') {
@@ -117,6 +119,20 @@ export async function POST(request: NextRequest) {
         if (!action || !['deal', 'hit', 'stand', 'double', 'split', 'surrender'].includes(action)) {
             return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }
+
+        // Map action string to uint8
+        let actionNum: number;
+        switch (action) {
+            case 'deal': actionNum = 255; break;
+            case 'hit': actionNum = 0; break;
+            case 'stand': actionNum = 1; break;
+            case 'double': actionNum = 2; break;
+            case 'split': actionNum = 3; break;
+            case 'surrender': actionNum = 4; break;
+            default: actionNum = 0;
+        }
+
+        const handIndexNum = typeof handIndex === 'number' ? handIndex : 0;
 
         // Rate limiting by player address (if provided)
         if (playerAddress) {
@@ -161,16 +177,19 @@ export async function POST(request: NextRequest) {
         // ANTI-CHEAT: Check if randomness was already issued for this (landId, nonce)
         const cachedData = nonceRandomnessCache.get(cacheKey);
         if (cachedData) {
+            // STRICT ACTION LOCKING: Check if user is trying to switch actions
+            // We compare actionNum (255 for deal, 0-4 for others)
+            // Ideally we also check handIndex, but for 'deal' it's always 0.
+            if (cachedData.actionNum !== actionNum || cachedData.handIndex !== handIndexNum) {
+                console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${cachedData.actionNum} requested=${actionNum}`);
+                return NextResponse.json(
+                    { error: 'Action Locked: You cannot change your decision for this turn.' },
+                    { status: 400 }
+                );
+            }
+
             // Return the SAME randomness - prevents shopping for favorable outcomes
             console.log(`[Blackjack Random] CACHE HIT - landId=${landId} nonce=${nonce} (same randomness returned)`);
-
-            // Regenerate signature with cached seed (signature is deterministic for same inputs)
-            const messageHash = keccak256(
-                encodePacked(
-                    ['uint256', 'uint256', 'bytes32'],
-                    [BigInt(landId), BigInt(nonce), cachedData.randomSeed]
-                )
-            );
 
             return NextResponse.json({
                 randomSeed: cachedData.randomSeed,
@@ -185,34 +204,36 @@ export async function POST(request: NextRequest) {
         // Generate NEW cryptographically secure randomness
         const randomSeed = generateRandomSeed();
 
-        // Create the message hash (must match contract exactly)
+        // Create the message hash including action and handIndex
         const messageHash = keccak256(
             encodePacked(
-                ['uint256', 'uint256', 'bytes32'],
-                [BigInt(landId), BigInt(nonce), randomSeed]
+                ['uint256', 'uint256', 'bytes32', 'uint8', 'uint8'],
+                [BigInt(landId), BigInt(nonce), randomSeed, actionNum, handIndexNum]
             )
         );
 
-        // Sign the message with EIP-191 prefix (matches MessageHashUtils.toEthSignedMessageHash)
+        // Sign the message with EIP-191 prefix
         const account = privateKeyToAccount(SIGNER_PRIVATE_KEY as `0x${string}`);
         const signature = await signMessage({
             message: { raw: messageHash },
             privateKey: SIGNER_PRIVATE_KEY as `0x${string}`,
         });
 
-        // ANTI-CHEAT: Cache the randomness for this (landId, nonce)
+        // ANTI-CHEAT: Cache the randomness AND the action/hand for this (landId, nonce)
         nonceRandomnessCache.set(cacheKey, {
             randomSeed,
             signature,
             timestamp: Date.now(),
             signerAddress: account.address,
+            actionNum,   // Store locked action
+            handIndex: handIndexNum
         });
 
         // Set expiry (signature valid for 60 seconds)
         const expiresAt = Math.floor(Date.now() / 1000) + 60;
 
         // Log for auditing
-        console.log(`[Blackjack Random] NEW - landId=${landId} action=${action} nonce=${nonce} seed=${randomSeed.slice(0, 10)}...`);
+        console.log(`[Blackjack Random] NEW - landId=${landId} action=${action}(${actionNum}) hand=${handIndexNum} nonce=${nonce} seed=${randomSeed.slice(0, 10)}...`);
 
         return NextResponse.json({
             randomSeed,

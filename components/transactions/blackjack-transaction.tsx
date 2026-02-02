@@ -44,6 +44,7 @@ interface BlackjackTransactionProps {
         busted?: boolean;
     }) => void;
     onButtonClick?: () => void;
+    onError?: (error: string) => void;
     tokenSymbol?: string;
 }
 
@@ -66,6 +67,7 @@ export default function BlackjackTransaction({
     onStatusUpdate,
     onComplete,
     onButtonClick,
+    onError,
     tokenSymbol = "SEED",
 }: BlackjackTransactionProps) {
     const { address } = useAccount();
@@ -115,7 +117,7 @@ export default function BlackjackTransaction({
                             action === BlackjackAction.SPLIT ? "split" :
                                 action === BlackjackAction.SURRENDER ? "surrender" : "action";
 
-            const result = await blackjackFetchRandomness(landId, actionName, address);
+            const result = await blackjackFetchRandomness(landId, actionName, address, handIndex);
 
 
 
@@ -137,14 +139,22 @@ export default function BlackjackTransaction({
             setCalls([call]);
             setPhase("ready");
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("[Blackjack] Failed:", err);
             const msg = err instanceof Error ? err.message : "Failed to prepare transaction";
+
+            // Special handling for Action Locked error - reset UI to allow user to choose correct action
+            if (msg.includes('Action Locked') && onError) {
+                onError(msg);
+                setPhase('idle'); // Reset internal state
+                return;
+            }
+
             setError(msg);
             setPhase("error");
             toast.error(msg);
         }
-    }, [address, landId, mode, betAmount, action, handIndex, onButtonClick]);
+    }, [address, landId, mode, betAmount, action, handIndex, onButtonClick, onError]);
 
     // Handle transaction status
     const handleStatus = useCallback((status: LifecycleStatus) => {

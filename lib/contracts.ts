@@ -3043,7 +3043,8 @@ export const buildBlackjackRevealActionCall = (landId: bigint) => ({
 export const blackjackFetchRandomness = async (
   landId: bigint,
   action: string,
-  playerAddress?: string
+  playerAddress?: string,
+  handIndex?: number
 ): Promise<{ randomSeed: string; nonce: number; signature: string; expiresAt: number; signerAddress: string }> => {
   const response = await fetch('/api/blackjack/random', {
     method: 'POST',
@@ -3052,6 +3053,7 @@ export const blackjackFetchRandomness = async (
       landId: landId.toString(),
       action,
       playerAddress,
+      handIndex,
     }),
   });
 
