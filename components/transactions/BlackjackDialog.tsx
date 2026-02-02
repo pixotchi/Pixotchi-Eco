@@ -511,6 +511,19 @@ export default function BlackjackDialog({
         setTxInProgress('deal');
     }, [gameState.betAmountInput, balanceVal, config, tokenSymbol]);
 
+    // Handle transaction errors (specifically for Action Locking security feature)
+    const handleTransactionError = useCallback((error: string) => {
+        // If action is locked, specific message
+        if (error.includes('Action Locked')) {
+            toast.error("Action Locked! You must stick to your original decision for this hand.", { duration: 4000 });
+        } else {
+            toast.error(error);
+        }
+
+        // Reset progress state so user can choose the correct button
+        setTxInProgress(null);
+    }, []);
+
     // Get the current hand index for actions
     const getCurrentHandIndex = useCallback((): number => {
         if (!gameState.hasSplit) return 0;
@@ -629,6 +642,7 @@ export default function BlackjackDialog({
                                     buttonClassName="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
                                     onButtonClick={handleDealClick}
                                     onComplete={handleDealComplete}
+                                    onError={handleTransactionError}
                                     tokenSymbol={tokenSymbol}
                                 />
                             )}
@@ -660,6 +674,7 @@ export default function BlackjackDialog({
                                         buttonClassName="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
                                         onButtonClick={() => setTxInProgress(BlackjackAction.HIT)}
                                         onComplete={handleActionComplete}
+                                        onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
                                     />
                                 )}
@@ -675,6 +690,7 @@ export default function BlackjackDialog({
                                         buttonClassName="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
                                         onButtonClick={() => setTxInProgress(BlackjackAction.STAND)}
                                         onComplete={handleActionComplete}
+                                        onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
                                     />
                                 )}
@@ -690,6 +706,7 @@ export default function BlackjackDialog({
                                         buttonClassName="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
                                         onButtonClick={() => setTxInProgress(BlackjackAction.DOUBLE)}
                                         onComplete={handleActionComplete}
+                                        onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
                                     />
                                 )}
@@ -709,6 +726,7 @@ export default function BlackjackDialog({
                                             buttonClassName="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all"
                                             onButtonClick={() => setTxInProgress(BlackjackAction.SPLIT)}
                                             onComplete={handleActionComplete}
+                                            onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                         />
                                     )}
@@ -723,6 +741,7 @@ export default function BlackjackDialog({
                                             buttonClassName="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all"
                                             onButtonClick={() => setTxInProgress(BlackjackAction.SURRENDER)}
                                             onComplete={handleActionComplete}
+                                            onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                         />
                                     )}
@@ -743,6 +762,7 @@ export default function BlackjackDialog({
                                             buttonClassName="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
                                             onButtonClick={() => setTxInProgress(BlackjackAction.SPLIT)}
                                             onComplete={handleActionComplete}
+                                            onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                         />
                                     )}
@@ -757,6 +777,7 @@ export default function BlackjackDialog({
                                             buttonClassName="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
                                             onButtonClick={() => setTxInProgress(BlackjackAction.SURRENDER)}
                                             onComplete={handleActionComplete}
+                                            onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                         />
                                     )}
