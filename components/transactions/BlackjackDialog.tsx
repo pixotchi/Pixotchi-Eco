@@ -325,11 +325,15 @@ export default function BlackjackDialog({
         }
 
         // Check if game ended immediately (blackjack)
+        // Check if game ended immediately (blackjack)
         if (result.gameResult !== undefined) {
             setGameState(prev => ({
                 ...prev,
                 result: result.gameResult,
                 payout: result.payout || '0',
+                // Explicitly set player cards from the event, otherwise they stay empty (fresh game)
+                playerCards: result.cards && result.cards.length > 0 ? result.cards : prev.playerCards,
+                playerValue: result.handValue || prev.playerValue,
                 dealerCards: result.dealerCards || prev.dealerCards,
                 dealerValue: result.dealerValue || prev.dealerValue,
                 activeHandCount: 1, // Default cleanup
