@@ -183,13 +183,29 @@ export default function BlackjackDialog({
                 return;
             }
 
-            // 2. Use the correct currentHandIndex to fetch actions
-            const currentHandIdx = gameBasic.currentHandIndex ?? 0;
+            // 2. Determine the correct hand index (Workaround for contract bug)
+            // Contract doesn't update currentHandIndex when Hand 1 finishes.
+            // We check if the reported hand has actions. If not, and it's a split game, check the next hand.
+            let currentHandIdx = gameBasic.currentHandIndex ?? 0;
 
-            const [gameHands, actions] = await Promise.all([
-                blackjackGetGameHands(landId),
-                blackjackGetActions(landId, currentHandIdx)
-            ]);
+            // Get actions for the reported hand
+            let actions = await blackjackGetActions(landId, currentHandIdx);
+
+            const hasAvailableActions = (acts: any) =>
+                acts && (acts.canHit || acts.canStand || acts.canDouble || acts.canSplit || acts.canSurrender);
+
+            // If reported hand (0) has no actions, but we split, check Hand 1
+            if (gameBasic.hasSplit && currentHandIdx === 0 && !hasAvailableActions(actions)) {
+                // Try fetching actions for Hand 1
+                const nextHandActions = await blackjackGetActions(landId, 1);
+                if (hasAvailableActions(nextHandActions)) {
+                    currentHandIdx = 1;
+                    actions = nextHandActions;
+                }
+            }
+
+            // 3. Fetch game hands now that we have the final index/actions
+            const gameHands = await blackjackGetGameHands(landId);
 
             const isOurGame = gameBasic.player.toLowerCase() === address.toLowerCase();
 
