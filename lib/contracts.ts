@@ -2520,6 +2520,54 @@ export const casinoGetStats = async (landId: bigint): Promise<CasinoStats | null
 };
 
 /**
+ * Get casino building level for a land
+ * Casino is building ID 1 (TownBuildingNaming.CASINO)
+ */
+export const getCasinoLevel = async (landId: bigint): Promise<number> => {
+  const readClient = getReadClient();
+  try {
+    // Try to get town buildings to find casino level
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: [
+          {
+            name: 'townGetBuildingsByLandId',
+            type: 'function',
+            inputs: [{ name: 'landId', type: 'uint256' }],
+            outputs: [{
+              type: 'tuple[]',
+              components: [
+                { name: 'id', type: 'uint8' },
+                { name: 'level', type: 'uint8' },
+                { name: 'maxLevel', type: 'uint8' },
+                { name: 'blockHeightUpgradeInitiated', type: 'uint256' },
+                { name: 'blockHeightUntilUpgradeDone', type: 'uint256' },
+                { name: 'isUpgrading', type: 'bool' },
+                { name: 'levelUpgradeCostLeaf', type: 'uint256' },
+                { name: 'levelUpgradeCostSeedInstant', type: 'uint256' },
+                { name: 'levelUpgradeBlockInterval', type: 'uint256' },
+                { name: 'levelUpgradeCostSeed', type: 'uint256' }
+              ]
+            }],
+            stateMutability: 'view'
+          }
+        ],
+        functionName: 'townGetBuildingsByLandId',
+        args: [landId],
+      });
+    }) as Array<{ id: number; level: number }>;
+
+    // Casino is building ID 1
+    const casino = result.find(b => b.id === 1);
+    return casino ? casino.level : 0;
+  } catch (error) {
+    console.warn('Failed to get casino level:', error);
+    return 0;
+  }
+};
+
+/**
  * Build casino on a land (transaction)
  */
 export const casinoBuild = async (walletClient: WalletClient, landId: bigint): Promise<string> => {
@@ -2689,3 +2737,397 @@ export const approveCasinoTokenSpending = async (
   const receipt = await writeClient.waitForTransactionReceipt({ hash });
   return receipt.status === 'success';
 };
+
+// ============================================================================
+// BLACKJACK FUNCTIONS
+// ============================================================================
+
+import { blackjackAbi, BlackjackPhase, BlackjackAction, BlackjackResult } from '@/public/abi/blackjack-abi';
+export { BlackjackPhase, BlackjackAction, BlackjackResult };
+
+// Types
+export interface BlackjackGameBasic {
+  isActive: boolean;
+  player: string;
+  phase: BlackjackPhase;
+  betAmount: bigint;
+  activeHandCount: number;
+  hasSplit: boolean;
+  dealerUpCard: number;
+  hasPendingAction: boolean;
+  actionCommitBlock: bigint;
+  currentHandIndex: number;
+}
+
+export interface BlackjackGameHands {
+  hand1Cards: number[];
+  hand1Value: number;
+  hand2Cards: number[];
+  hand2Value: number;
+  canReveal: boolean;
+  isExpired: boolean;
+}
+
+export interface BlackjackActions {
+  canHit: boolean;
+  canStand: boolean;
+  canDouble: boolean;
+  canSplit: boolean;
+  canSurrender: boolean;
+  canInsurance: boolean;
+}
+
+export interface BlackjackConfig {
+  minBet: bigint;
+  maxBet: bigint;
+  bettingToken: string;
+  rewardPool: string;
+  enabled: boolean;
+  requiredLevel: number;
+}
+
+export interface BlackjackStats {
+  totalWagered: bigint;
+  totalWon: bigint;
+  gamesPlayed: bigint;
+  blackjacksHit: bigint;
+}
+
+/**
+ * Get basic game state for Blackjack
+ */
+export const blackjackGetGameBasic = async (landId: bigint): Promise<BlackjackGameBasic | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetGameBasic',
+        args: [landId],
+      });
+    }) as [boolean, string, number, bigint, number, boolean, number, boolean, bigint, number];
+
+    return {
+      isActive: result[0],
+      player: result[1],
+      phase: result[2] as BlackjackPhase,
+      betAmount: result[3],
+      activeHandCount: result[4],
+      hasSplit: result[5],
+      dealerUpCard: result[6],
+      hasPendingAction: result[7],
+      actionCommitBlock: result[8],
+      currentHandIndex: result[9],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack game basic:', error);
+    return null;
+  }
+};
+
+/**
+ * Get hand cards and values for Blackjack
+ */
+export const blackjackGetGameHands = async (landId: bigint): Promise<BlackjackGameHands | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetGameHands',
+        args: [landId],
+      });
+    }) as [number[], number, number[], number, boolean, boolean];
+
+    return {
+      hand1Cards: result[0].map(Number),
+      hand1Value: result[1],
+      hand2Cards: result[2].map(Number),
+      hand2Value: result[3],
+      canReveal: result[4],
+      isExpired: result[5],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack game hands:', error);
+    return null;
+  }
+};
+
+/**
+ * Get available actions for current hand
+ */
+export const blackjackGetActions = async (landId: bigint, handIndex: number): Promise<BlackjackActions | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetActions',
+        args: [landId, handIndex],
+      });
+    }) as [boolean, boolean, boolean, boolean, boolean, boolean];
+
+    return {
+      canHit: result[0],
+      canStand: result[1],
+      canDouble: result[2],
+      canSplit: result[3],
+      canSurrender: result[4],
+      canInsurance: result[5],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack actions:', error);
+    return null;
+  }
+};
+
+/**
+ * Get dealer's hand (only full hand after game ends)
+ */
+export const blackjackGetDealerHand = async (landId: bigint): Promise<{ dealerCards: number[]; dealerValue: number } | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetDealerHand',
+        args: [landId],
+      });
+    }) as [number[], number];
+
+    return {
+      dealerCards: result[0].map(Number),
+      dealerValue: result[1],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack dealer hand:', error);
+    return null;
+  }
+};
+
+/**
+ * Get Blackjack config
+ */
+export const blackjackGetConfig = async (): Promise<BlackjackConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetConfig',
+        args: [],
+      });
+    }) as [bigint, bigint, string, string, boolean, number];
+
+    return {
+      minBet: result[0],
+      maxBet: result[1],
+      bettingToken: result[2],
+      rewardPool: result[3],
+      enabled: result[4],
+      requiredLevel: result[5],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack config:', error);
+    return null;
+  }
+};
+
+/**
+ * Get Blackjack stats for a land
+ */
+export const blackjackGetStats = async (landId: bigint): Promise<BlackjackStats | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetStats',
+        args: [landId],
+      });
+    }) as [bigint, bigint, bigint, bigint];
+
+    return {
+      totalWagered: result[0],
+      totalWon: result[1],
+      gamesPlayed: result[2],
+      blackjacksHit: result[3],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack stats:', error);
+    return null;
+  }
+};
+
+/**
+ * Check if Blackjack is available on a land
+ */
+export const blackjackIsAvailable = async (landId: bigint): Promise<{ available: boolean; currentLevel: number; requiredLevel: number } | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackIsAvailable',
+        args: [landId],
+      });
+    }) as [boolean, number, number];
+
+    return {
+      available: result[0],
+      currentLevel: result[1],
+      requiredLevel: result[2],
+    };
+  } catch (error) {
+    console.warn('Failed to check blackjack availability:', error);
+    return null;
+  }
+};
+
+// ============================================================================
+// BLACKJACK BUILD CALLS (for SponsoredTransaction)
+// ============================================================================
+
+/**
+ * Build call data for blackjackBet
+ */
+export const buildBlackjackBetCall = (landId: bigint, amount: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: blackjackAbi,
+  functionName: 'blackjackBet' as const,
+  args: [landId, amount],
+});
+
+/**
+ * Build call data for blackjackDeal
+ */
+export const buildBlackjackDealCall = (landId: bigint, insuranceAmount: bigint = BigInt(0)) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: blackjackAbi,
+  functionName: 'blackjackDeal' as const,
+  args: [landId, insuranceAmount],
+});
+
+/**
+ * Build call data for blackjackRequestAction
+ */
+export const buildBlackjackRequestActionCall = (landId: bigint, handIndex: number, action: BlackjackAction) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: blackjackAbi,
+  functionName: 'blackjackRequestAction' as const,
+  args: [landId, handIndex, action],
+});
+
+/**
+ * Build call data for blackjackRevealAction
+ */
+export const buildBlackjackRevealActionCall = (landId: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: blackjackAbi,
+  functionName: 'blackjackRevealAction' as const,
+  args: [landId],
+});
+
+// ============ Server-Signed Randomness Functions ============
+
+/**
+ * Fetch randomness from server for a Blackjack action
+ */
+export const blackjackFetchRandomness = async (
+  landId: bigint,
+  action: string,
+  playerAddress?: string
+): Promise<{ randomSeed: string; nonce: number; signature: string; expiresAt: number; signerAddress: string }> => {
+  const response = await fetch('/api/blackjack/random', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      landId: landId.toString(),
+      action,
+      playerAddress,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || `Failed to fetch randomness: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+/**
+ * Get current nonce for a land (for display/debugging)
+ */
+export const blackjackGetNonce = async (landId: bigint): Promise<bigint | null> => {
+  try {
+    const result = await getReadClient().readContract({
+      address: LAND_CONTRACT_ADDRESS,
+      abi: blackjackAbi,
+      functionName: 'blackjackGetNonce',
+      args: [landId],
+    }) as bigint;
+    return result;
+  } catch (error) {
+    console.warn('Failed to get blackjack nonce:', error);
+    return null;
+  }
+};
+
+/**
+ * Get randomness signer address from contract
+ */
+export const blackjackGetRandomnessSigner = async (): Promise<string | null> => {
+  try {
+    const result = await getReadClient().readContract({
+      address: LAND_CONTRACT_ADDRESS,
+      abi: blackjackAbi,
+      functionName: 'blackjackGetRandomnessSigner',
+      args: [],
+    }) as string;
+    return result;
+  } catch (error) {
+    console.warn('Failed to get randomness signer:', error);
+    return null;
+  }
+};
+
+/**
+ * Build call data for blackjackDealWithRandom (combined bet + deal with server randomness)
+ */
+export const buildBlackjackDealWithRandomCall = (
+  landId: bigint,
+  amount: bigint,
+  randomSeed: string,
+  nonce: number,
+  signature: string
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: blackjackAbi,
+  functionName: 'blackjackDealWithRandom' as const,
+  args: [landId, amount, randomSeed as `0x${string}`, BigInt(nonce), signature as `0x${string}`],
+});
+
+/**
+ * Build call data for blackjackActionWithRandom (action with server randomness)
+ */
+export const buildBlackjackActionWithRandomCall = (
+  landId: bigint,
+  handIndex: number,
+  action: BlackjackAction,
+  randomSeed: string,
+  nonce: number,
+  signature: string
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: blackjackAbi,
+  functionName: 'blackjackActionWithRandom' as const,
+  args: [landId, handIndex, action, randomSeed as `0x${string}`, BigInt(nonce), signature as `0x${string}`],
+});

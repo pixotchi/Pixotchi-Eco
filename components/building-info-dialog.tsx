@@ -1,10 +1,11 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { BuildingType } from '@/lib/types';
 import { getBuildingName } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
+import { ToggleGroup } from '@/components/ui/toggle-group';
 
 interface BuildingInfoDialogProps {
   open: boolean;
@@ -12,6 +13,50 @@ interface BuildingInfoDialogProps {
   buildingId: number;
   buildingType: BuildingType;
 }
+
+// Roulette game info
+const rouletteInfo = {
+  description: "Play European Roulette with a true 2.7% house edge. Place bets on numbers, colors, or ranges and spin to win tokens!",
+  features: [
+    "European roulette (single zero, 37 pockets)",
+    "Commit-reveal mechanism for provably fair results",
+    "Multiple bet types with different odds",
+    "Win up to 35x your bet on single numbers"
+  ],
+  betTypes: {
+    "Straight (Single Number)": "35:1 payout",
+    "Split (2 Numbers)": "17:1 payout",
+    "Street (3 Numbers)": "11:1 payout",
+    "Corner (4 Numbers)": "8:1 payout",
+    "Six Line (6 Numbers)": "5:1 payout",
+    "Dozen / Column": "2:1 payout",
+    "Red / Black / Odd / Even": "1:1 payout"
+  }
+};
+
+// Blackjack game info
+const blackjackInfo = {
+  description: "Play classic Blackjack against the dealer! Get as close to 21 as possible without going over. Instant cards with server-signed randomness.",
+  features: [
+    "Standard blackjack rules (dealer stands on 17)",
+    "Server-signed randomness for instant card dealing",
+    "Split pairs, double down, and surrender options",
+    "Blackjack (natural 21) pays 3:2"
+  ],
+  actions: {
+    "Hit": "Draw another card",
+    "Stand": "Keep your current hand",
+    "Double Down": "Double bet, take one card",
+    "Split": "Split pairs into two hands",
+    "Surrender": "Forfeit half your bet"
+  },
+  payouts: {
+    "Blackjack (Natural 21)": "3:2 (1.5x bet)",
+    "Win": "1:1 (even money)",
+    "Push (Tie)": "Bet returned",
+    "Surrender": "Half bet returned"
+  }
+};
 
 const buildingInfo = {
   // Village Buildings (Production-Focused)
@@ -102,24 +147,10 @@ const buildingInfo = {
       level3: "18M LEAF (90h)"
     }
   },
-  "town-6": { // Casino (Roulette)
+  "town-6": { // Casino
     name: "Casino",
-    description: "Play European Roulette with a true 2.7% house edge. Place bets on numbers, colors, or ranges and spin to win SEED tokens!",
-    features: [
-      "European roulette (single zero, 37 pockets)",
-      "Commit-reveal mechanism for provably fair results",
-      "Multiple bet types with different odds",
-      "Win up to 35x your bet on single numbers"
-    ],
-    betTypes: {
-      "Straight (Single Number)": "35:1 payout",
-      "Split (2 Numbers)": "17:1 payout",
-      "Street (3 Numbers)": "11:1 payout",
-      "Corner (4 Numbers)": "8:1 payout",
-      "Six Line (6 Numbers)": "5:1 payout",
-      "Dozen / Column": "2:1 payout",
-      "Red / Black / Odd / Even": "1:1 payout"
-    }
+    isCasino: true, // Flag to show game toggle
+    description: "Play Roulette or Blackjack with provably fair on-chain randomness!"
   }
 };
 
@@ -129,6 +160,8 @@ export default function BuildingInfoDialog({
   buildingId,
   buildingType
 }: BuildingInfoDialogProps) {
+  const [selectedGame, setSelectedGame] = useState<'roulette' | 'blackjack'>('roulette');
+
   const buildingName = getBuildingName(buildingId, buildingType === 'town');
   const key = `${buildingType}-${buildingId}` as keyof typeof buildingInfo;
   const info = buildingInfo[key];
@@ -139,6 +172,8 @@ export default function BuildingInfoDialog({
 
   const isProductionBuilding = buildingType === 'village' && 'production' in info;
   const isUtilityBuilding = buildingType === 'town' && 'features' in info;
+  const isCasino = 'isCasino' in info && info.isCasino;
+
   const productionEntries = isProductionBuilding && 'production' in info
     ? Object.entries(info.production as Record<string, string>)
     : null;
@@ -154,17 +189,100 @@ export default function BuildingInfoDialog({
     return key;
   };
 
+  // Get current game info based on toggle
+  const currentGameInfo = selectedGame === 'roulette' ? rouletteInfo : blackjackInfo;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm max-h-[80vh] overflow-y-auto">
         <DialogHeader className="pb-4">
           <DialogTitle className="font-pixel text-lg">{info.name}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            {info.description}
+            {isCasino ? info.description : info.description}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
+          {/* Casino Game Toggle */}
+          {isCasino && (
+            <>
+              <div className="flex justify-center">
+                <ToggleGroup
+                  value={selectedGame}
+                  onValueChange={(v) => setSelectedGame(v as 'roulette' | 'blackjack')}
+                  options={[
+                    { value: 'roulette', label: '🎰 Roulette' },
+                    { value: 'blackjack', label: '♦️ Blackjack' }
+                  ]}
+                  className="bg-muted/50"
+                />
+              </div>
+
+              {/* Game Description */}
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-sm text-muted-foreground">{currentGameInfo.description}</p>
+              </div>
+
+              {/* Features */}
+              <div className="bg-muted/30 rounded-lg p-3">
+                <h4 className="font-semibold text-sm mb-2 text-foreground">Key Features</h4>
+                <ul className="space-y-1.5 text-sm">
+                  {currentGameInfo.features.map((feature, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span className="text-muted-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Roulette bet types */}
+              {selectedGame === 'roulette' && (
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <h4 className="font-semibold text-sm mb-2 text-foreground">Bet Types & Payouts</h4>
+                  <div className="space-y-1.5 text-sm">
+                    {Object.entries(rouletteInfo.betTypes).map(([betType, payout]) => (
+                      <div key={betType} className="flex justify-between items-center">
+                        <span className="text-muted-foreground">{betType}:</span>
+                        <span className="font-medium text-green-600">{payout}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Blackjack actions */}
+              {selectedGame === 'blackjack' && (
+                <>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <h4 className="font-semibold text-sm mb-2 text-foreground">Player Actions</h4>
+                    <div className="space-y-1.5 text-sm">
+                      {Object.entries(blackjackInfo.actions).map(([action, desc]) => (
+                        <div key={action} className="flex justify-between items-center">
+                          <span className="font-medium text-foreground">{action}:</span>
+                          <span className="text-muted-foreground">{desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <h4 className="font-semibold text-sm mb-2 text-foreground">Payouts</h4>
+                    <div className="space-y-1.5 text-sm">
+                      {Object.entries(blackjackInfo.payouts).map(([result, payout]) => (
+                        <div key={result} className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{result}:</span>
+                          <span className="font-medium text-green-600">{payout}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* Non-casino buildings */}
           {isProductionBuilding && productionEntries && (
             <div className="bg-muted/30 rounded-lg p-3">
               <h4 className="font-semibold text-sm mb-2 text-foreground">Production Rates</h4>
@@ -206,24 +324,9 @@ export default function BuildingInfoDialog({
               </div>
             </div>
           )}
-
-          {'betTypes' in info && info.betTypes && (
-            <div className="bg-muted/30 rounded-lg p-3">
-              <h4 className="font-semibold text-sm mb-2 text-foreground">Bet Types & Payouts</h4>
-              <div className="space-y-1.5 text-sm">
-                {Object.entries(info.betTypes as Record<string, string>).map(([betType, payout]) => (
-                  <div key={betType} className="flex justify-between items-center">
-                    <span className="text-muted-foreground">{betType}:</span>
-                    <span className="font-medium text-green-600">{payout as string}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+

@@ -920,6 +920,28 @@ body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dial
   }
 }
 
+/* Blackjack card dealing animation */
+@keyframes deal-card {
+  0% {
+    opacity: 0;
+    transform: translateY(-30px) translateX(30px) rotateY(90deg);
+  }
+  
+  50% {
+    opacity: 1;
+    transform: translateY(-5px) translateX(5px) rotateY(20deg);
+  }
+  
+  100% {
+    opacity: 1;
+    transform: translateY(0) translateX(0) rotateY(0deg);
+  }
+}
+
+.animate-deal-card {
+  animation: deal-card 0.4s ease-out forwards;
+}
+
 @utility animate-accordion-down {
   animation: accordion-down .2s ease-out;
 }

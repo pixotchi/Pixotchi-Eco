@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.54",
+  "version": "1.6.60",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -65,7 +65,7 @@
     "thread-stream": "3.1.0"
   },
   "devDependencies": {
-    "@types/node": "25.1.0",
+    "@types/node": "25.2.0",
     "@types/react": "19.2.10",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.2",
