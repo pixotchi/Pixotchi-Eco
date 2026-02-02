@@ -175,16 +175,21 @@ export default function BlackjackDialog({
         if (!open || !address) return;
 
         try {
-            const [gameBasic, gameHands, actions] = await Promise.all([
-                blackjackGetGameBasic(landId),
-                blackjackGetGameHands(landId),
-                blackjackGetActions(landId, 0)
-            ]);
+            // 1. Fetch Basic Info first to get current hand index
+            const gameBasic = await blackjackGetGameBasic(landId);
 
             if (!gameBasic) {
                 setGameState(prev => ({ ...initialGameState, betAmountInput: prev.betAmountInput }));
                 return;
             }
+
+            // 2. Use the correct currentHandIndex to fetch actions
+            const currentHandIdx = gameBasic.currentHandIndex ?? 0;
+
+            const [gameHands, actions] = await Promise.all([
+                blackjackGetGameHands(landId),
+                blackjackGetActions(landId, currentHandIdx)
+            ]);
 
             const isOurGame = gameBasic.player.toLowerCase() === address.toLowerCase();
 
@@ -235,7 +240,7 @@ export default function BlackjackDialog({
                     dealerValue,
                     hasSplit: gameBasic.hasSplit,
                     activeHandCount: gameBasic.activeHandCount,
-                    currentHandIndex: gameBasic.currentHandIndex ?? 0,
+                    currentHandIndex: currentHandIdx,
                     betAmount: gameBasic.betAmount,
                     canHit: actions?.canHit || false,
                     canStand: actions?.canStand || false,
