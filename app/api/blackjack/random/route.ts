@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
         // ANTI-CHEAT: Check if randomness was already issued for this (landId, nonce)
         const cachedData = nonceRandomnessCache.get(cacheKey);
         if (cachedData) {
-            // STRICT ACTION LOCKING: Check if user is trying to switch actions
+            // STRICT ACTION LOCKING: Check if user is trying to switch action
             // We compare actionNum (255 for deal, 0-4 for others)
             // Ideally we also check handIndex, but for 'deal' it's always 0.
             if (cachedData.actionNum !== actionNum || cachedData.handIndex !== handIndexNum) {
