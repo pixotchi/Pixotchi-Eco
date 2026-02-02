@@ -175,16 +175,37 @@ export default function BlackjackDialog({
         if (!open || !address) return;
 
         try {
-            const [gameBasic, gameHands, actions] = await Promise.all([
-                blackjackGetGameBasic(landId),
-                blackjackGetGameHands(landId),
-                blackjackGetActions(landId, 0)
-            ]);
+            // 1. Fetch Basic Info first to get current hand index
+            const gameBasic = await blackjackGetGameBasic(landId);
 
             if (!gameBasic) {
                 setGameState(prev => ({ ...initialGameState, betAmountInput: prev.betAmountInput }));
                 return;
             }
+
+            // 2. Determine the correct hand index (Workaround for contract bug)
+            // Contract doesn't update currentHandIndex when Hand 1 finishes.
+            // We check if the reported hand has actions. If not, and it's a split game, check the next hand.
+            let currentHandIdx = gameBasic.currentHandIndex ?? 0;
+
+            // Get actions for the reported hand
+            let actions = await blackjackGetActions(landId, currentHandIdx);
+
+            const hasAvailableActions = (acts: any) =>
+                acts && (acts.canHit || acts.canStand || acts.canDouble || acts.canSplit || acts.canSurrender);
+
+            // If reported hand (0) has no actions, but we split, check Hand 1
+            if (gameBasic.hasSplit && currentHandIdx === 0 && !hasAvailableActions(actions)) {
+                // Try fetching actions for Hand 1
+                const nextHandActions = await blackjackGetActions(landId, 1);
+                if (hasAvailableActions(nextHandActions)) {
+                    currentHandIdx = 1;
+                    actions = nextHandActions;
+                }
+            }
+
+            // 3. Fetch game hands now that we have the final index/actions
+            const gameHands = await blackjackGetGameHands(landId);
 
             const isOurGame = gameBasic.player.toLowerCase() === address.toLowerCase();
 
@@ -235,7 +256,7 @@ export default function BlackjackDialog({
                     dealerValue,
                     hasSplit: gameBasic.hasSplit,
                     activeHandCount: gameBasic.activeHandCount,
-                    currentHandIndex: gameBasic.currentHandIndex ?? 0,
+                    currentHandIndex: currentHandIdx,
                     betAmount: gameBasic.betAmount,
                     canHit: actions?.canHit || false,
                     canStand: actions?.canStand || false,
@@ -294,6 +315,7 @@ export default function BlackjackDialog({
     }, [open]);
 
     // Handle deal complete (combined bet + deal)
+    // Handle deal complete (combined bet + deal)
     const handleDealComplete = useCallback(async (result?: any) => {
         setTxInProgress(null);
 
@@ -303,20 +325,66 @@ export default function BlackjackDialog({
         }
 
         // Check if game ended immediately (blackjack)
+        // Check if game ended immediately (blackjack)
         if (result.gameResult !== undefined) {
             setGameState(prev => ({
                 ...prev,
                 result: result.gameResult,
                 payout: result.payout || '0',
+                // Explicitly set player cards from the event, otherwise they stay empty (fresh game)
+                playerCards: result.cards && result.cards.length > 0 ? result.cards : prev.playerCards,
+                playerValue: result.handValue || prev.playerValue,
                 dealerCards: result.dealerCards || prev.dealerCards,
-                dealerValue: result.dealerValue || prev.dealerValue
+                dealerValue: result.dealerValue || prev.dealerValue,
+                activeHandCount: 1, // Default cleanup
+                hasSplit: false
             }));
-        }
 
-        // Refresh from contract to get actual state
-        await refreshGameState();
-        refetchBalance();
-    }, [refreshGameState, refetchBalance]);
+            // If game ended, state might be cleared (NONE), which is fine. Refresh immediately.
+            await refreshGameState();
+            refetchBalance();
+        } else if (result.cards && result.cards.length > 0) {
+            // Game Started Successfully (Optimistic Update)
+            // This ensures the UI shows cards immediately even if RPC is slow
+            setGameState(prev => ({
+                ...prev,
+                isActive: true,
+                contractPhase: BlackjackPhase.PLAYER_TURN, // Force phase
+                playerCards: result.cards,
+                playerValue: result.handValue ?? 0,
+                // Show dealer up card + hidden
+                dealerCards: result.dealerUpCard ? [result.dealerUpCard, 0] : prev.dealerCards,
+                dealerValue: 0,
+
+                // Reset fresh game state defaults
+                activeHandCount: 1,
+                hasSplit: false,
+                currentHandIndex: 0,
+                result: null,
+                payout: '0'
+            }));
+
+            // Game is active, but RPC might still verify it as NONE (stale).
+            // Poll until we see a valid active phase
+            let attempts = 0;
+            const checkAndRefresh = async () => {
+                const basic = await blackjackGetGameBasic(landId);
+                // If we see active state OR we've waited too long, do full refresh
+                if ((basic && basic.phase !== BlackjackPhase.NONE) || attempts > 5) {
+                    await refreshGameState();
+                    refetchBalance();
+                } else {
+                    attempts++;
+                    setTimeout(checkAndRefresh, 1000);
+                }
+            };
+            checkAndRefresh();
+        } else {
+            // Fallback for unknown state or error
+            await refreshGameState();
+            refetchBalance();
+        }
+    }, [refreshGameState, refetchBalance, landId]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: any) => {
@@ -453,7 +521,7 @@ export default function BlackjackDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-lg bg-cover bg-center bg-no-repeat bg-[url('/icons/casino.png')] border-none text-white rounded-xl">
+            <DialogContent className="max-w-lg bg-cover bg-center bg-no-repeat bg-[url('/icons/casinobj.png')] border-none text-white rounded-xl">
                 <DialogHeader>
                     <DialogTitle className="font-pixel text-xl flex items-center justify-between text-white">
                         ♦️ Blackjack

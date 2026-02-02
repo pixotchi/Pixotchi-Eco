@@ -97,8 +97,9 @@ export default function PlayingCard({ value, hidden = false, small = false, clas
 
     return (
         <div
-            className={`${sizeClasses} rounded-lg border-2 border-gray-300 bg-white
-                  flex flex-col items-center justify-center shadow-lg ${className}`}
+            className={`${sizeClasses} rounded-lg border-2 border-white/10
+                  flex flex-col items-center justify-center shadow-lg bg-cover bg-center bg-no-repeat ${className}`}
+            style={{ backgroundImage: "url('/icons/cardbjfront.png')" }}
         >
             <span className={`font-bold ${color === 'red' ? 'text-red-600' : 'text-gray-900'}`}>
                 {rank}
