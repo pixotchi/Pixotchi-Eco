@@ -246,7 +246,7 @@ export type InviteGenerationResult = {
 };
 
 // Types for Ponder Indexer
-export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | CasinoBuiltEvent | RouletteSpinResultEvent;
+export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent;
 
 export type AttackEvent = {
   __typename: "Attack";
@@ -442,6 +442,22 @@ export type RouletteSpinResultEvent = {
   player: string;
   winningNumber: number;
   won: boolean;
+  payout: string;
+  bettingToken: string;
+  blockHeight: string;
+};
+
+// Blackjack Event Types
+// GameResult enum: 0=NONE, 1=PLAYER_WIN, 2=DEALER_WIN, 3=PUSH, 4=PLAYER_BUST, 5=DEALER_BUST, 6=PLAYER_BLACKJACK, 7=DEALER_BLACKJACK, 8=SURRENDERED
+export type BlackjackResultEvent = {
+  __typename: "BlackjackResultEvent";
+  id: string;
+  timestamp: string;
+  landId: string;
+  player: string;
+  result: number; // GameResult enum value
+  playerFinalValue: number;
+  dealerFinalValue: number;
   payout: string;
   bettingToken: string;
   blockHeight: string;

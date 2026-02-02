@@ -30,6 +30,7 @@ import {
   VillageProductionClaimedEventRenderer,
   CasinoBuiltEventRenderer,
   RouletteSpinResultEventRenderer,
+  BlackjackResultEventRenderer,
 } from "@/components/activity";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
@@ -223,6 +224,8 @@ export default function ActivityTab() {
         return <CasinoBuiltEventRenderer key={activity.id} event={activity} userAddress={address} />;
       case "RouletteSpinResultEvent":
         return <RouletteSpinResultEventRenderer key={activity.id} event={activity} userAddress={address} />;
+      case "BlackjackResultEvent":
+        return <BlackjackResultEventRenderer key={activity.id} event={activity} userAddress={address} />;
       default:
         return null;
     }
