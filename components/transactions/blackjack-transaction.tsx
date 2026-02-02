@@ -261,6 +261,8 @@ export default function BlackjackTransaction({
                         // Fallback: Parse BlackjackResult for backward compatibility
                         try {
                             const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackResult' });
+                            // CRITICAL FIX: Only process this if we haven't already processed a GameComplete event
+                            // This prevents duplicate toasts since both events are often emitted together
                             if (decoded.args && !resultData.gameResult) {
                                 const args = decoded.args as any;
                                 const gameResult = args.result as BlackjackResult;
