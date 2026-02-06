@@ -219,7 +219,11 @@ export default function BlackjackDialog({
                     dealerCards = dealerHand.dealerCards;
                     dealerValue = dealerHand.dealerValue;
                 }
-            } else if (gameBasic.dealerUpCard !== undefined) {
+            } else if (
+                gameBasic.dealerUpCard !== undefined &&
+                gameBasic.phase !== BlackjackPhase.NONE &&
+                gameBasic.phase !== BlackjackPhase.BETTING
+            ) {
                 // Show up card + hole card (placeholder)
                 // Fix Bug 1: Allow card 0 (Ace of Spades) to be shown
                 dealerCards = [gameBasic.dealerUpCard, 0];
