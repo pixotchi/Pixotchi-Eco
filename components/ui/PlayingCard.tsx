@@ -130,7 +130,7 @@ export function CardHand({
     return (
         <div className="flex flex-col items-center gap-2">
             <span className="text-white/80 text-sm font-medium">{label}</span>
-            <div className={`flex ${small ? '-space-x-5' : '-space-x-10'} pl-2`}>
+            <div className={`flex ${small ? '-space-x-4' : '-space-x-6'} pl-2`}>
                 {cards.map((card, index) => (
                     <div
                         key={`${card}-${index}`}
