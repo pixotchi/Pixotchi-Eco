@@ -130,19 +130,21 @@ export function CardHand({
     return (
         <div className="flex flex-col items-center gap-2">
             <span className="text-white/80 text-sm font-medium">{label}</span>
-            <div className="flex gap-1">
+            <div className={`flex ${small ? '-space-x-5' : '-space-x-10'} pl-2`}>
                 {cards.map((card, index) => (
                     <div
                         key={`${card}-${index}`}
-                        className="animate-deal-card"
+                        className={`animate-deal-card relative transition-all hover:-translate-y-4 hover:z-10`}
                         style={{
                             animationDelay: `${index * 100}ms`,
+                            zIndex: index, // Ensure newer cards are on top (or bottom, depending on pref. Standard is usually left-to-right on top)
                         }}
                     >
                         <PlayingCard
                             value={card}
                             hidden={hideHoleCard && index === 1}
                             small={small}
+                            className="shadow-2xl"
                         />
                     </div>
                 ))}

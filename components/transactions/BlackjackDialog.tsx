@@ -219,8 +219,9 @@ export default function BlackjackDialog({
                     dealerCards = dealerHand.dealerCards;
                     dealerValue = dealerHand.dealerValue;
                 }
-            } else if (gameBasic.dealerUpCard > 0) {
+            } else if (gameBasic.dealerUpCard !== undefined) {
                 // Show up card + hole card (placeholder)
+                // Fix Bug 1: Allow card 0 (Ace of Spades) to be shown
                 dealerCards = [gameBasic.dealerUpCard, 0];
                 dealerValue = 0;
             }
@@ -436,7 +437,48 @@ export default function BlackjackDialog({
             return;
         }
 
-        // Game didn't end (e.g., hit without bust) - refresh to get updated state
+        // Game didn't end (e.g., hit without bust)
+        // Fix Bug 3: Optimistic Update using event data
+        // If we trust the event log, we can update state immediately without waiting for RPC
+        if (result.cards && result.cards.length > 0) {
+            setGameState(prev => {
+                // If it's a hit, we expect 1 new card.
+                // The event 'BlackjackHit' usually returns just the NEW card in some contracts,
+                // but our decoder in handleStatus seems to return `cards: [newCard]`.
+                // Let's check how `result.cards` is populated in `BlackjackTransaction`.
+                // Looking at `blackjack-transaction.tsx`, for 'action' mode/BlackjackHit:
+                // `cards: [Number(args.newCard)]`
+
+                // So we should APPEND this card to the correct hand
+                const targetHandIndex = result.handIndex ?? prev.currentHandIndex;
+                const newCard = result.cards[0];
+
+                const newPlayerCards = [...prev.playerCards];
+                const newSplitCards = [...prev.splitCards];
+
+                if (targetHandIndex === 1 && prev.hasSplit) {
+                    // Start of split hand or append
+                    newSplitCards.push(newCard);
+                } else {
+                    // Main hand
+                    newPlayerCards.push(newCard);
+                }
+
+                return {
+                    ...prev,
+                    isActive: true,
+                    // Update the specific hand's cards
+                    playerCards: newPlayerCards,
+                    splitCards: newSplitCards,
+                    // Update value
+                    playerValue: targetHandIndex === 0 ? (result.handValue || prev.playerValue) : prev.playerValue,
+                    splitValue: targetHandIndex === 1 ? (result.handValue || prev.splitValue) : prev.splitValue,
+                    contractPhase: BlackjackPhase.PLAYER_TURN
+                };
+            });
+        }
+
+        // Still trigger a refresh in background to eventually sync fully
         await refreshGameState();
         refetchBalance();
     }, [refreshGameState, refetchBalance]);
@@ -560,12 +602,14 @@ export default function BlackjackDialog({
                                 cards={gameState.playerCards}
                                 label={gameState.hasSplit ? "HAND 1" : "YOUR HAND"}
                                 value={gameState.playerValue}
+                                small={gameState.hasSplit} // Fix Bug 2: Use small cards for split to save space
                             />
                             {gameState.hasSplit && gameState.splitCards.length > 0 && (
                                 <CardHand
                                     cards={gameState.splitCards}
                                     label="HAND 2"
                                     value={gameState.splitValue}
+                                    small={true} // Fix Bug 2: Use small cards for split
                                 />
                             )}
                         </div>
