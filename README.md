@@ -66,39 +66,18 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 1. Connect a wallet (Autoconnects if in Mini app).  
 2. Mint your first plant or land with SEED (or strain‑specific tokens).  
 3. Check in daily to grow your plants, upgrade buildings, and complete missions.  
-4. Chat, trade, stake SEED, and compete for ETH rewards as you climb the leaderboard.  
+4. Grow your farm, Chat, stake SEED, and compete for ETH rewards as you climb the leaderboard.  
 
 Built on Base and designed to be fast, simple, and fun.
 
-## Getting started (local)
-**Prerequisites**: Node.js 18+ and npm or pnpm. Redis (or a Redis‑compatible service) is recommended for chat and persistence.
 
-```bash
-npm install
-npm run dev
-```
-
-Copy `.env.example` to `.env.local` and fill in the basics:
-- Base RPC endpoint(s)
-- Redis URL (if using chat and persistence locally)
-- Admin key for the dashboard (for admin features)
-- AI provider keys (OpenAI, Anthropic, or Google)
-- Credentials for Privy or the automation agent (if enabled)
-
-Common scripts:
-```bash
-npm run build   # production build
-npm run start   # start production server (after build)
-npm run lint    # run ESLint
 ```
 
 ## Who is this for?
 - **Players** who enjoy a cozy, streak‑based onchain game.  
 - **Farcaster/Base app users** who want a native, mobile‑friendly Mini App experience.  
-- **Builders** who want to explore or extend a production‑ready Next.js/React onchain game.
+- **Builders** who want to explore a production‑ready Next.js/React onchain game.
 
-## For developers
-Pixotchi uses Next.js + React with Tailwind, and integrates wallets and Base L2. The codebase is organized in `app/`, `components/`, and `lib/`. You can explore features like chat, staking, swapping, missions, and notifications directly in the repository.
 
 ## Contributing
 Issues and pull requests are welcome. Please keep discussions constructive and respectful. If you encounter a security concern, avoid sharing sensitive details publicly and submit a minimal report via issues so we can follow up.
