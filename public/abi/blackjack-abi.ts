@@ -178,28 +178,6 @@ export const blackjackAbi = [
         ]
     },
     {
-        name: 'BlackjackStand',
-        type: 'event',
-        inputs: [
-            { name: 'landId', type: 'uint256', indexed: true },
-            { name: 'player', type: 'address', indexed: true },
-            { name: 'handIndex', type: 'uint8', indexed: false },
-            { name: 'finalValue', type: 'uint8', indexed: false }
-        ]
-    },
-    {
-        name: 'BlackjackDoubled',
-        type: 'event',
-        inputs: [
-            { name: 'landId', type: 'uint256', indexed: true },
-            { name: 'player', type: 'address', indexed: true },
-            { name: 'handIndex', type: 'uint8', indexed: false },
-            { name: 'newCard', type: 'uint8', indexed: false },
-            { name: 'finalValue', type: 'uint8', indexed: false },
-            { name: 'busted', type: 'bool', indexed: false }
-        ]
-    },
-    {
         name: 'BlackjackSplit',
         type: 'event',
         inputs: [
@@ -210,12 +188,13 @@ export const blackjackAbi = [
         ]
     },
     {
-        name: 'BlackjackSurrendered',
+        name: 'BlackjackInsurance',
         type: 'event',
         inputs: [
             { name: 'landId', type: 'uint256', indexed: true },
             { name: 'player', type: 'address', indexed: true },
-            { name: 'returnAmount', type: 'uint256', indexed: false }
+            { name: 'insuranceAmount', type: 'uint256', indexed: false },
+            { name: 'won', type: 'bool', indexed: false }
         ]
     },
     {
@@ -231,13 +210,12 @@ export const blackjackAbi = [
         ]
     },
     {
-        name: 'BlackjackInsurancePaid',
+        name: 'BlackjackExpired',
         type: 'event',
         inputs: [
             { name: 'landId', type: 'uint256', indexed: true },
             { name: 'player', type: 'address', indexed: true },
-            { name: 'insuranceAmount', type: 'uint256', indexed: false },
-            { name: 'payout', type: 'uint256', indexed: false }
+            { name: 'forfeitedAmount', type: 'uint256', indexed: false }
         ]
     },
     // Issue #10: New event for action commit tracking
@@ -261,8 +239,10 @@ export const blackjackAbi = [
             { name: 'player', type: 'address', indexed: true },
             { name: 'result', type: 'uint8', indexed: false },
             { name: 'playerCards', type: 'uint8[]', indexed: false },
+            { name: 'splitCards', type: 'uint8[]', indexed: false },
             { name: 'dealerCards', type: 'uint8[]', indexed: false },
             { name: 'playerFinalValue', type: 'uint8', indexed: false },
+            { name: 'splitFinalValue', type: 'uint8', indexed: false },
             { name: 'dealerFinalValue', type: 'uint8', indexed: false },
             { name: 'payout', type: 'uint256', indexed: false }
         ]
@@ -348,7 +328,7 @@ export enum BlackjackResult {
     DEALER_BLACKJACK = 4,
     PUSH = 5,
     PLAYER_BUST = 6,
-    PLAYER_SURRENDER = 7
+    SURRENDERED = 7
 }
 
 // Card display utilities
@@ -395,7 +375,7 @@ export function getResultText(result: BlackjackResult): string {
         case BlackjackResult.DEALER_BLACKJACK: return 'Dealer Blackjack';
         case BlackjackResult.PUSH: return 'Push';
         case BlackjackResult.PLAYER_BUST: return 'Bust!';
-        case BlackjackResult.PLAYER_SURRENDER: return 'Surrendered';
+        case BlackjackResult.SURRENDERED: return 'Surrendered';
         default: return '';
     }
 }

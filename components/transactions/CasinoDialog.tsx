@@ -54,8 +54,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     // European wheel state
     const [wheelSpinning, setWheelSpinning] = useState(false);
     const [wheelWinningNumber, setWheelWinningNumber] = useState<number | null>(null);
-    const [config, setConfig] = useState<{ minBet: bigint; maxBet: bigint; bettingToken: string; maxBetsPerGame: number } | null>(null);
-    const [hasApproval, setHasApproval] = useState(false);
+    const [config, setConfig] = useState<{ minBet: bigint; maxBet: bigint; bettingToken: string; enabled: boolean; maxBetsPerGame: number } | null>(null);
+    const [allowanceWei, setAllowanceWei] = useState(BigInt(0));
     const [error, setError] = useState<string | null>(null);
     const [pendingGame, setPendingGame] = useState<boolean>(false);
 
@@ -70,6 +70,20 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const totalBetAmount = useMemo(() => {
         return placedBets.reduce((sum, bet) => sum + parseFloat(bet.amount || '0'), 0);
     }, [placedBets]);
+    const totalBetWei = useMemo(() => {
+        try {
+            return placedBets.reduce((sum, bet) => sum + parseUnits(bet.amount || '0', 18), BigInt(0));
+        } catch {
+            return BigInt(0);
+        }
+    }, [placedBets]);
+    const requiredApprovalWei = useMemo(() => {
+        if (!config) return BigInt(0);
+        if (pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing') return BigInt(0);
+        if (totalBetWei > BigInt(0)) return totalBetWei;
+        return config.minBet;
+    }, [config, pendingGame, spinPhase, totalBetWei]);
+    const hasApproval = allowanceWei >= requiredApprovalWei;
 
     // Calculate CORRECT max win by simulating all 37 possible outcomes
     const bestPossibleWin = useMemo(() => {
@@ -138,7 +152,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 const cfg = await casinoGetConfig();
                 const bettingToken = cfg?.bettingToken || PIXOTCHI_TOKEN_ADDRESS;
                 if (cfg) {
-                    setConfig({ minBet: cfg.minBet, maxBet: cfg.maxBet, bettingToken, maxBetsPerGame: Number(cfg.maxBetsPerGame) || 2 });
+                    setConfig({ minBet: cfg.minBet, maxBet: cfg.maxBet, bettingToken, enabled: cfg.enabled, maxBetsPerGame: Number(cfg.maxBetsPerGame) || 2 });
                 }
                 if (landId) {
                     try {
@@ -148,7 +162,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 }
                 if (address) {
                     const approval = await checkCasinoApproval(address, bettingToken);
-                    setHasApproval(approval > BigInt(0));
+                    setAllowanceWei(approval);
                 }
             } catch (e) { console.error('Failed to load casino config:', e); }
         };
@@ -161,6 +175,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     }, []);
 
     const addBet = useCallback((type: CasinoBetType, label: string, numbers: number[]) => {
+        if (config && !config.enabled && !pendingGame) {
+            toast.error('Roulette is currently disabled');
+            return;
+        }
         if (!canAddMoreBets) { toast.error(`Maximum ${maxBets} bets per spin`); return; }
 
         // Validate Min/Max Bet
@@ -194,7 +212,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
         setPlacedBets(prev => [...prev, newBet]);
         toast.success(`Added ${label} bet`);
-    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenSymbol]);
+    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenSymbol, pendingGame]);
 
     const removeBet = useCallback((id: string) => { setPlacedBets(prev => prev.filter(b => b.id !== id)); }, []);
     const clearBets = useCallback(() => { setPlacedBets([]); }, []);
@@ -287,7 +305,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     }, []);
 
     const refreshApproval = useCallback(async () => {
-        if (address) { const approval = await checkCasinoApproval(address, config?.bettingToken || PIXOTCHI_TOKEN_ADDRESS); setHasApproval(approval > BigInt(0)); }
+        if (address) {
+            const approval = await checkCasinoApproval(address, config?.bettingToken || PIXOTCHI_TOKEN_ADDRESS);
+            setAllowanceWei(approval);
+        }
     }, [address, config]);
 
     const getNumberColor = (n: number): string => n === 0 ? 'bg-green-600' : RED_NUMBERS.includes(n) ? 'bg-red-600' : 'bg-gray-900';
@@ -570,7 +591,11 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
                     {/* Action */}
                     <div className="space-y-2">
-                        {!hasApproval ? (
+                        {!pendingGame && config && !config.enabled ? (
+                            <Button className="w-full" disabled variant="secondary">
+                                Roulette disabled
+                            </Button>
+                        ) : !hasApproval ? (
                             <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={(config?.bettingToken || PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`} onSuccess={refreshApproval} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
                         ) : isInsufficientBalance && !pendingGame ? (
                             <Button className="w-full" disabled variant="destructive">

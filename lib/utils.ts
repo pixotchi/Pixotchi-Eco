@@ -108,11 +108,11 @@ export function formatNumber(num: number): string {
 
 /**
  * Format token amount with precision-safe BigInt handling.
- * Avoids Number precision loss for values > 2^53 by using string-based formatting.
+ * Uses a fixed comma-grouped display to avoid locale-dependent grouping quirks
+ * (e.g., "5520" vs "99.309") and to avoid Number precision loss.
  */
 export function formatTokenAmount(amount: bigint, decimals: number = 18): string {
-  const formatted = formatUnits(amount, decimals);
-  return parseFloat(formatted).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return formatTokenAmountPrecise(amount, decimals, 2);
 }
 
 /**
