@@ -49,9 +49,15 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     return () => clearTimeout(t);
   }, [tasksOpen]);
 
-  const seedText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(seed);
-  const leafText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(leaf);
-  const pixotchiText = loading ? <Skeleton className="h-5 w-20" /> : formatTokenShort(pixotchi);
+  const seedValue = formatTokenShort(seed);
+  const leafValue = formatTokenShort(leaf);
+  const pixotchiValue = formatTokenShort(pixotchi);
+  const seedText = loading ? <Skeleton className="h-5 w-20" /> : seedValue;
+  const leafText = loading ? <Skeleton className="h-5 w-20" /> : leafValue;
+  const pixotchiText = loading ? <Skeleton className="h-5 w-20" /> : pixotchiValue;
+  const seedAriaLabel = loading ? "Seed balance loading" : `Seed balance: ${seedValue} SEED`;
+  const leafAriaLabel = loading ? "Leaf balance loading" : `Leaf balance: ${leafValue} LEAF`;
+  const pixotchiAriaLabel = loading ? "PIXOTCHI balance loading" : `PIXOTCHI balance: ${pixotchiValue}`;
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
@@ -67,18 +73,18 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
                 <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{solText}</span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 min-w-0" aria-label={`Seed balance: ${seedText} SEED`}>
+            <div className="flex items-center gap-1.5 min-w-0" aria-label={seedAriaLabel}>
               <img src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{seedText}</span>
             </div>
             {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
             {!isSolana && (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label={`Leaf balance: ${leafText} LEAF`}>
+              <div className="flex items-center gap-1.5 min-w-0" aria-label={leafAriaLabel}>
                 <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
                 <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 min-w-0" aria-label={`PIXOTCHI balance: ${pixotchiText}`}>
+            <div className="flex items-center gap-1.5 min-w-0" aria-label={pixotchiAriaLabel}>
               <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{pixotchiText}</span>
             </div>
@@ -119,5 +125,4 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     </div>
   );
 }
-
 

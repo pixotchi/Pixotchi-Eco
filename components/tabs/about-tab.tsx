@@ -91,16 +91,13 @@ export default function AboutTab() {
     createdAt: number;
   }>>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [showAllRecentCodes, setShowAllRecentCodes] = useState(false);
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState(false);
 
   // Load invite stats and user codes when component mounts
   useEffect(() => {
-    if (address && INVITE_CONFIG.SYSTEM_ENABLED) {
-      loadInviteStats();
-      loadUserCodes();
-    }
     if (address && INVITE_CONFIG.SYSTEM_ENABLED) {
       loadInviteStats();
       loadUserCodes();
@@ -369,7 +366,7 @@ export default function AboutTab() {
                     <h3 className="text-sm font-medium">Your Recent Codes</h3>
                   </div>
                   <div className="space-y-2">
-                    {recentCodes.slice(0, 3).map((codeData) => (
+                    {(showAllRecentCodes ? recentCodes : recentCodes.slice(0, 3)).map((codeData) => (
                       <div
                         key={codeData.code}
                         className={`flex items-center justify-between p-2 bg-muted/50 rounded-lg ${codeData.isUsed ? 'opacity-60' : ''
@@ -411,10 +408,12 @@ export default function AboutTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {/* Could expand to show more */ }}
+                          onClick={() => setShowAllRecentCodes((prev) => !prev)}
                           className="text-xs text-muted-foreground h-6"
                         >
-                          +{recentCodes.length - 3} more codes
+                          {showAllRecentCodes
+                            ? 'Show less'
+                            : `+${recentCodes.length - 3} more codes`}
                         </Button>
                       </div>
                     )}
@@ -551,4 +550,3 @@ export default function AboutTab() {
     </div>
   );
 }
-
