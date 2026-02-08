@@ -37,13 +37,23 @@ interface BlackjackTransactionProps {
     onComplete?: (result?: {
         success: boolean;
         cards?: number[];
+        splitCards?: number[];
         handValue?: number;
+        splitValue?: number;
         dealerUpCard?: number;
         gameResult?: BlackjackResult;
         payout?: string;
         busted?: boolean;
+        lastActionCard?: number;
+        lastActionHandIndex?: number;
+        splitResults?: Array<{
+            result: BlackjackResult;
+            playerFinalValue: number;
+            dealerFinalValue: number;
+            payout: string;
+        }>;
     }) => void;
-    onButtonClick?: () => void;
+    onButtonClick?: () => boolean | void | Promise<boolean | void>;
     onError?: (error: string) => void;
     tokenSymbol?: string;
 }
@@ -54,6 +64,56 @@ const FAILURE_STATUSES = new Set([
 ]);
 
 type Phase = "idle" | "fetching" | "ready" | "pending" | "complete" | "error";
+
+const WIN_RESULTS = new Set<BlackjackResult>([
+    BlackjackResult.PLAYER_WIN,
+    BlackjackResult.PLAYER_BLACKJACK,
+]);
+
+const LOSS_RESULTS = new Set<BlackjackResult>([
+    BlackjackResult.DEALER_WIN,
+    BlackjackResult.DEALER_BLACKJACK,
+    BlackjackResult.PLAYER_BUST,
+]);
+
+const summarizeSplitResult = (results: BlackjackResult[]): BlackjackResult => {
+    if (results.length === 0) return BlackjackResult.NONE;
+
+    const wins = results.filter(r => WIN_RESULTS.has(r)).length;
+    const losses = results.filter(r => LOSS_RESULTS.has(r)).length;
+    const pushes = results.filter(r => r === BlackjackResult.PUSH).length;
+
+    if (wins === results.length) return BlackjackResult.PLAYER_WIN;
+    if (losses === results.length) return BlackjackResult.DEALER_WIN;
+    if (pushes === results.length) return BlackjackResult.PUSH;
+    return BlackjackResult.NONE;
+};
+
+const normalizeSplitHandEvents = (
+    events: Array<{
+        result: BlackjackResult;
+        playerFinalValue: number;
+        dealerFinalValue: number;
+        payoutWei: bigint;
+    }>,
+    totalPayoutWei?: bigint
+) => {
+    if (events.length <= 2) return events;
+
+    // Best-effort: choose two entries whose payouts match total payout when available.
+    if (typeof totalPayoutWei === 'bigint') {
+        for (let i = 0; i < events.length; i++) {
+            for (let j = i + 1; j < events.length; j++) {
+                if (events[i].payoutWei + events[j].payoutWei === totalPayoutWei) {
+                    return [events[i], events[j]];
+                }
+            }
+        }
+    }
+
+    // Fallback to first+last to avoid rendering phantom extra hands.
+    return [events[0], events[events.length - 1]];
+};
 
 export default function BlackjackTransaction({
     mode,
@@ -103,9 +163,14 @@ export default function BlackjackTransaction({
             return;
         }
 
+        const preflightResult = await onButtonClick?.();
+        if (preflightResult === false) {
+            setPhase("idle");
+            return;
+        }
+
         setPhase("fetching");
         setError(null);
-        onButtonClick?.();
 
         try {
 
@@ -143,16 +208,13 @@ export default function BlackjackTransaction({
             console.error("[Blackjack] Failed:", err);
             const msg = err instanceof Error ? err.message : "Failed to prepare transaction";
 
-            // Special handling for Action Locked error - reset UI to allow user to choose correct action
-            if (msg.includes('Action Locked') && onError) {
-                onError(msg);
-                setPhase('idle'); // Reset internal state
-                return;
-            }
-
             setError(msg);
             setPhase("error");
-            toast.error(msg);
+            if (onError) {
+                onError(msg);
+            } else {
+                toast.error(msg);
+            }
         }
     }, [address, landId, mode, betAmount, action, handIndex, onButtonClick, onError]);
 
@@ -192,15 +254,48 @@ export default function BlackjackTransaction({
             }
 
             // Parse events
-            const newReceipts = receipts.filter(r => !processedTxHashes.current.has(r.transactionHash));
+            // OnchainKit can surface duplicate receipts for the same hash; dedupe first.
+            const receiptsByHash = new Map<string, any>();
+            const newReceipts: any[] = [];
+            for (const receipt of receipts) {
+                const txHash = receipt?.transactionHash;
+                if (!txHash) {
+                    newReceipts.push(receipt);
+                    continue;
+                }
+                if (processedTxHashes.current.has(txHash)) continue;
+                if (!receiptsByHash.has(txHash)) {
+                    receiptsByHash.set(txHash, receipt);
+                }
+            }
+            newReceipts.push(...receiptsByHash.values());
             if (newReceipts.length === 0) {
                 onComplete?.({ success: true });
                 setTimeout(() => { setPhase("idle"); setCalls([]); }, 500);
                 return;
             }
-            newReceipts.forEach(r => processedTxHashes.current.add(r.transactionHash));
+            newReceipts.forEach(r => {
+                if (r?.transactionHash) processedTxHashes.current.add(r.transactionHash);
+            });
 
             let resultData: any = { success: true };
+            const handResultEvents: Array<{
+                result: BlackjackResult;
+                playerFinalValue: number;
+                dealerFinalValue: number;
+                payoutWei: bigint;
+            }> = [];
+            const seenBlackjackResultLogs = new Set<string>();
+            let gameCompleteData: {
+                result: BlackjackResult;
+                playerCards: number[];
+                splitCards: number[];
+                dealerCards: number[];
+                playerFinalValue: number;
+                splitFinalValue: number;
+                dealerFinalValue: number;
+                payoutWei: bigint;
+            } | null = null;
 
             for (const receipt of newReceipts) {
                 for (const log of (receipt?.logs || [])) {
@@ -225,7 +320,9 @@ export default function BlackjackTransaction({
                                         cards: [Number(args.newCard)],
                                         handValue: Number(args.newHandValue),
                                         busted: args.busted,
-                                        handIndex: Number(args.handIndex)
+                                        handIndex: Number(args.handIndex),
+                                        lastActionCard: Number(args.newCard),
+                                        lastActionHandIndex: Number(args.handIndex),
                                     };
                                 }
                             } catch { }
@@ -236,79 +333,37 @@ export default function BlackjackTransaction({
                             const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackGameComplete' });
                             if (decoded.args) {
                                 const args = decoded.args as any;
-                                const gameResult = args.result as BlackjackResult;
-                                const payout = formatUnits(args.payout, 18);
-
-                                // Get full card arrays directly from event
-                                const playerCards = Array.isArray(args.playerCards)
-                                    ? args.playerCards.map(Number)
-                                    : [];
-                                const dealerCards = Array.isArray(args.dealerCards)
-                                    ? args.dealerCards.map(Number)
-                                    : [];
-
-                                resultData = {
-                                    ...resultData,
-                                    gameResult,
-                                    cards: playerCards.length > 0 ? playerCards : resultData.cards,
-                                    handValue: Number(args.playerFinalValue),
-                                    dealerCards,
-                                    dealerValue: Number(args.dealerFinalValue),
-                                    payout
+                                gameCompleteData = {
+                                    result: args.result as BlackjackResult,
+                                    playerCards: Array.isArray(args.playerCards) ? args.playerCards.map(Number) : [],
+                                    splitCards: Array.isArray(args.splitCards) ? args.splitCards.map(Number) : [],
+                                    dealerCards: Array.isArray(args.dealerCards) ? args.dealerCards.map(Number) : [],
+                                    playerFinalValue: Number(args.playerFinalValue),
+                                    splitFinalValue: Number(args.splitFinalValue),
+                                    dealerFinalValue: Number(args.dealerFinalValue),
+                                    payoutWei: BigInt(args.payout),
                                 };
-
-                                const txt = getResultText(gameResult);
-                                if (gameResult === BlackjackResult.PLAYER_WIN || gameResult === BlackjackResult.PLAYER_BLACKJACK) {
-                                    toast.success(`${txt} Won ${payout} ${tokenSymbol}!`);
-                                } else if (gameResult === BlackjackResult.PUSH) {
-                                    toast.success('Push!');
-                                } else {
-                                    toast.error(txt);
-                                }
                             }
                         } catch { }
 
-                        // Fallback: Parse BlackjackResult for backward compatibility
+                        // Parse BlackjackResult (single result or per-hand split results)
                         try {
                             const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackResult' });
-                            // CRITICAL FIX: Only process this if we haven't already processed a GameComplete event
-                            // This prevents duplicate toasts since both events are often emitted together
-                            if (decoded.args && !resultData.gameResult) {
+                            if (decoded.args) {
+                                const fallbackLogId = `${log?.data ?? ''}-${Array.isArray(log?.topics) ? log.topics.join('|') : ''}`;
+                                const resultLogKey = `${receipt?.transactionHash ?? 'nohash'}-${String(log?.logIndex ?? log?.transactionLogIndex ?? fallbackLogId)}-BlackjackResult`;
+                                if (seenBlackjackResultLogs.has(resultLogKey)) {
+                                    continue;
+                                }
+                                seenBlackjackResultLogs.add(resultLogKey);
+
                                 const args = decoded.args as any;
-                                const gameResult = args.result as BlackjackResult;
-                                const payout = formatUnits(args.payout, 18);
-                                resultData = {
-                                    ...resultData,
-                                    gameResult,
-                                    handValue: Number(args.playerFinalValue),
-                                    payout,
-                                    dealerValue: Number(args.dealerFinalValue)
-                                };
-
-                                // Infer dealer cards only if BlackjackGameComplete wasn't found
-                                if (!resultData.dealerCards && resultData.dealerUpCard !== undefined) {
-                                    const upCard = resultData.dealerUpCard;
-                                    const finalVal = Number(args.dealerFinalValue);
-                                    let holeCard = 0;
-                                    for (let r = 0; r < 13; r++) {
-                                        const rankVal = (r + 1) > 10 ? 10 : (r + 1);
-                                        const upRank = (upCard % 13) + 1;
-                                        const upVal = upRank > 10 ? 10 : upRank;
-                                        if (rankVal + upVal === finalVal) { holeCard = r; break; }
-                                        if (rankVal === 1 && upVal + 11 === finalVal) { holeCard = r; break; }
-                                        if (upVal === 1 && rankVal + 11 === finalVal) { holeCard = r; break; }
-                                    }
-                                    resultData.dealerCards = [upCard, holeCard];
-                                }
-
-                                const txt = getResultText(gameResult);
-                                if (gameResult === BlackjackResult.PLAYER_WIN || gameResult === BlackjackResult.PLAYER_BLACKJACK) {
-                                    toast.success(`${txt} Won ${payout} ${tokenSymbol}!`);
-                                } else if (gameResult === BlackjackResult.PUSH) {
-                                    toast.success('Push!');
-                                } else {
-                                    toast.error(txt);
-                                }
+                                handResultEvents.push({
+                                    result: args.result as BlackjackResult,
+                                    playerFinalValue: Number(args.playerFinalValue),
+                                    dealerFinalValue: Number(args.dealerFinalValue),
+                                    payoutWei: BigInt(args.payout),
+                                });
                             }
                         } catch { }
 
@@ -325,6 +380,103 @@ export default function BlackjackTransaction({
                             }
                         } catch { }
                     } catch { }
+                }
+            }
+
+            // Finalize result parsing once we have all logs
+            if (gameCompleteData) {
+                resultData = {
+                    ...resultData,
+                    cards: gameCompleteData.playerCards.length > 0 ? gameCompleteData.playerCards : resultData.cards,
+                    splitCards: gameCompleteData.splitCards.length > 0 ? gameCompleteData.splitCards : resultData.splitCards,
+                    dealerCards: gameCompleteData.dealerCards,
+                    handValue: gameCompleteData.playerFinalValue,
+                    splitValue: gameCompleteData.splitFinalValue,
+                    dealerValue: gameCompleteData.dealerFinalValue,
+                    payout: formatUnits(gameCompleteData.payoutWei, 18),
+                };
+            }
+
+            if (handResultEvents.length > 0) {
+                const hasSplitCardsFromComplete = !!gameCompleteData && gameCompleteData.splitCards.length > 0;
+                const isSplitResolution =
+                    hasSplitCardsFromComplete ||
+                    gameCompleteData?.result === BlackjackResult.NONE ||
+                    (!gameCompleteData && handResultEvents.length > 1);
+                if (isSplitResolution) {
+                    const normalizedSplitEvents = normalizeSplitHandEvents(
+                        handResultEvents,
+                        gameCompleteData?.payoutWei
+                    );
+                    const splitResults = normalizedSplitEvents.map((entry) => ({
+                        result: entry.result,
+                        playerFinalValue: entry.playerFinalValue,
+                        dealerFinalValue: entry.dealerFinalValue,
+                        payout: formatUnits(entry.payoutWei, 18),
+                    }));
+                    const totalPayoutWei = gameCompleteData
+                        ? gameCompleteData.payoutWei
+                        : handResultEvents.reduce((sum, entry) => sum + entry.payoutWei, BigInt(0));
+
+                    resultData = {
+                        ...resultData,
+                        splitResults,
+                        gameResult: summarizeSplitResult(normalizedSplitEvents.map(entry => entry.result)),
+                        payout: formatUnits(totalPayoutWei, 18),
+                        dealerValue: gameCompleteData?.dealerFinalValue ?? normalizedSplitEvents[0].dealerFinalValue,
+                    };
+                } else {
+                    const final = handResultEvents[handResultEvents.length - 1];
+                    resultData = {
+                        ...resultData,
+                        gameResult: gameCompleteData?.result !== BlackjackResult.NONE ? gameCompleteData?.result : final.result,
+                        handValue: gameCompleteData?.playerFinalValue ?? final.playerFinalValue,
+                        payout: formatUnits(gameCompleteData?.payoutWei ?? final.payoutWei, 18),
+                        dealerValue: gameCompleteData?.dealerFinalValue ?? final.dealerFinalValue,
+                    };
+                }
+            } else if (gameCompleteData?.result !== undefined) {
+                resultData = {
+                    ...resultData,
+                    gameResult: gameCompleteData.result,
+                };
+            }
+
+            // Infer dealer hole card only when we don't have full dealer cards
+            if (!resultData.dealerCards && resultData.dealerUpCard !== undefined && resultData.dealerValue !== undefined) {
+                const upCard = resultData.dealerUpCard;
+                const finalVal = Number(resultData.dealerValue);
+                let holeCard = 0;
+                for (let r = 0; r < 13; r++) {
+                    const rankVal = (r + 1) > 10 ? 10 : (r + 1);
+                    const upRank = (upCard % 13) + 1;
+                    const upVal = upRank > 10 ? 10 : upRank;
+                    if (rankVal + upVal === finalVal) { holeCard = r; break; }
+                    if (rankVal === 1 && upVal + 11 === finalVal) { holeCard = r; break; }
+                    if (upVal === 1 && rankVal + 11 === finalVal) { holeCard = r; break; }
+                }
+                resultData.dealerCards = [upCard, holeCard];
+            }
+
+            // Emit one toast per successful settlement
+            if (resultData.splitResults && resultData.splitResults.length > 1) {
+                const totalPayout = resultData.payout || "0";
+                const handSummary = resultData.splitResults
+                    .map((hand: { result: BlackjackResult }, idx: number) => `H${idx + 1} ${getResultText(hand.result)}`)
+                    .join(" | ");
+                if (parseFloat(totalPayout) > 0) {
+                    toast.success(`Split resolved: ${handSummary}. Total payout ${totalPayout} ${tokenSymbol}`);
+                } else {
+                    toast.error(`Split resolved: ${handSummary}.`);
+                }
+            } else if (resultData.gameResult !== undefined && resultData.gameResult !== BlackjackResult.NONE) {
+                const txt = getResultText(resultData.gameResult);
+                if (resultData.gameResult === BlackjackResult.PLAYER_WIN || resultData.gameResult === BlackjackResult.PLAYER_BLACKJACK) {
+                    toast.success(`${txt} Won ${resultData.payout || "0"} ${tokenSymbol}!`);
+                } else if (resultData.gameResult === BlackjackResult.PUSH) {
+                    toast.success('Push!');
+                } else {
+                    toast.error(txt);
                 }
             }
 

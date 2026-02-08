@@ -2521,7 +2521,7 @@ export const casinoGetStats = async (landId: bigint): Promise<CasinoStats | null
 
 /**
  * Get casino building level for a land
- * Casino is building ID 1 (TownBuildingNaming.CASINO)
+ * Casino is building ID 6 (TownBuildingNaming.CASINO)
  */
 export const getCasinoLevel = async (landId: bigint): Promise<number> => {
   const readClient = getReadClient();
@@ -2558,8 +2558,8 @@ export const getCasinoLevel = async (landId: bigint): Promise<number> => {
       });
     }) as Array<{ id: number; level: number }>;
 
-    // Casino is building ID 1
-    const casino = result.find(b => b.id === 1);
+    // Casino is building ID 6
+    const casino = result.find(b => b.id === 6);
     return casino ? casino.level : 0;
   } catch (error) {
     console.warn('Failed to get casino level:', error);

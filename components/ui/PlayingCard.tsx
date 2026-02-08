@@ -119,38 +119,51 @@ export function CardHand({
     label,
     value,
     hideHoleCard = false,
-    small = false
+    small = false,
+    statusText,
+    statusClassName
 }: {
     cards: number[];
     label: string;
     value?: number;
     hideHoleCard?: boolean;
     small?: boolean;
+    statusText?: string;
+    statusClassName?: string;
 }) {
     return (
         <div className="flex flex-col items-center gap-2">
             <span className="text-white/80 text-sm font-medium">{label}</span>
-            <div className="flex gap-1">
+            <div className={`flex ${small ? '-space-x-4' : '-space-x-6'} pl-2`}>
                 {cards.map((card, index) => (
                     <div
                         key={`${card}-${index}`}
-                        className="animate-deal-card"
+                        className={`animate-deal-card relative transition-all hover:-translate-y-4 hover:z-10`}
                         style={{
                             animationDelay: `${index * 100}ms`,
+                            zIndex: index, // Ensure newer cards are on top (or bottom, depending on pref. Standard is usually left-to-right on top)
                         }}
                     >
                         <PlayingCard
                             value={card}
                             hidden={hideHoleCard && index === 1}
                             small={small}
+                            className="shadow-2xl"
                         />
                     </div>
                 ))}
             </div>
             {value !== undefined && !hideHoleCard && (
-                <span className={`text-lg font-bold transition-all duration-300 ${value > 21 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
-                    {value > 21 ? 'BUST!' : value}
-                </span>
+                <div className="flex flex-col items-center gap-0.5">
+                    <span className={`text-lg font-bold transition-all duration-300 ${value > 21 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                        {value > 21 ? 'BUST!' : value}
+                    </span>
+                    {statusText && (
+                        <span className={`text-xs font-semibold ${statusClassName || 'text-white/80'}`}>
+                            {statusText}
+                        </span>
+                    )}
+                </div>
             )}
         </div>
     );
