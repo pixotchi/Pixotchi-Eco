@@ -136,7 +136,7 @@ export default function SwapFencePurchaseBundle({
                 try {
                     const payload: Record<string, unknown> = {
                         address,
-                        taskId: 's1_buy_shield',
+                        taskId: 's4_buy_shield',
                     };
                     const txHash = extractTransactionHash(currentTx);
                     if (txHash) {

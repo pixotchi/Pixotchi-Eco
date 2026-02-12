@@ -28,7 +28,7 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats, type EthFollowStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
-import { FollowButton, useTransactions } from 'ethereum-identity-kit';
+import { FollowButton, useTransactions, type FollowingState } from 'ethereum-identity-kit';
 import { Avatar } from '@coinbase/onchainkit/identity';
 import { base } from 'viem/chains';
 import { formatDistanceToNow } from 'date-fns';
@@ -439,6 +439,17 @@ export default function PlantProfileDialog({
     await openExternalUrl(`https://base.blockscout.com/address/${ownerAddress}`);
   };
 
+  const handleFollowButtonClick = (state: FollowingState) => {
+    if (state !== 'Follow') return;
+    if (!connectedAddress || !ownerAddress) return;
+    if (connectedAddress.toLowerCase() === ownerAddress.toLowerCase()) return;
+    fetch('/api/gamification/missions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: connectedAddress, taskId: 's2_follow_player' })
+    }).catch(() => {});
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -698,6 +709,7 @@ export default function PlantProfileDialog({
                 <FollowButton
                   lookupAddress={ownerAddress as `0x${string}`}
                   connectedAddress={connectedAddress}
+                  customOnClick={handleFollowButtonClick}
                   onDisconnectedClick={() => {
                     toast.error('Please connect your wallet to follow users');
                   }}

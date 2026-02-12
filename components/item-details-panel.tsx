@@ -638,7 +638,7 @@ export default function ItemDetailsPanel({
                   onSuccess={(tx: any) => {
                     onPurchaseSuccess();
                     try {
-                      const payload: Record<string, unknown> = { address, taskId: 's1_buy_shield' };
+                      const payload: Record<string, unknown> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
                       if (txHash) {
                         payload.proof = { txHash };
@@ -662,7 +662,7 @@ export default function ItemDetailsPanel({
                   onSuccess={(tx: any) => {
                     onPurchaseSuccess();
                     try {
-                      const payload: Record<string, unknown> = { address, taskId: 's1_buy_shield' };
+                      const payload: Record<string, unknown> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
                       if (txHash) {
                         payload.proof = { txHash };
@@ -689,7 +689,7 @@ export default function ItemDetailsPanel({
                   try {
                     const post = async (currentTx: any, attempt = 0) => {
                       try {
-                        const payload: Record<string, unknown> = { address, taskId: 's1_buy5_elements' };
+                        const payload: Record<string, unknown> = { address, taskId: 's4_buy10_elements' };
                         const txHash = extractTransactionHash(currentTx);
                         if (txHash) {
                           payload.proof = { txHash };

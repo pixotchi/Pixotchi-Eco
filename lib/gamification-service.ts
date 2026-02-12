@@ -29,10 +29,10 @@ function isCombinedMonth(month?: string | null): boolean {
 function createInitialMissionDay(day: GmDay): GmMissionDay {
   return {
     date: day,
-    s1: { buy5: false, buyElementsCount: 0, buyShield: false, claimProduction: false, done: false },
-    s2: { applyResources: false, attackPlant: false, chatMessage: false, done: false },
-    s3: { sendQuest: false, placeOrder: false, claimStake: false, done: false },
-    s4: { makeSwap: false, collectStar: false, playArcade: false, done: false },
+    s1: { makeSwap: false, stakeSeed: false, claimStake: false, placeOrder: false, done: false },
+    s2: { followPlayer: false, chatMessage: false, visitProfile: false, done: false },
+    s3: { applyResources: false, sendQuest: false, claimProduction: false, playCasinoGame: false, done: false },
+    s4: { buy10: false, buyElementsCount: 0, buyShield: false, collectStar: false, playArcade: false, done: false },
     pts: 0,
   };
 }
@@ -42,67 +42,84 @@ function hydrateMissionDay(data: any, day: GmDay): GmMissionDay {
   const normalizeNumber = (value: unknown, fallback = 0) =>
     typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   const normalizeBoolean = (value: unknown) => Boolean(value);
+  const legacyBuyElementsCount = Math.max(
+    0,
+    Math.floor(normalizeNumber(data?.s1?.buyElementsCount, normalizeBoolean(data?.s1?.buy5) ? 5 : 0)),
+  );
+  const buyElementsCount = Math.max(
+    0,
+    Math.floor(normalizeNumber(data?.s4?.buyElementsCount, legacyBuyElementsCount)),
+  );
 
   return {
     date: typeof data?.date === 'string' ? data.date : day,
     s1: {
-      buy5: normalizeBoolean(data?.s1?.buy5),
-      buyElementsCount: Math.max(0, Math.floor(normalizeNumber(data?.s1?.buyElementsCount))),
-      buyShield: normalizeBoolean(data?.s1?.buyShield),
-      claimProduction: normalizeBoolean(data?.s1?.claimProduction),
+      makeSwap: normalizeBoolean(data?.s1?.makeSwap ?? data?.s4?.makeSwap),
+      stakeSeed: normalizeBoolean(data?.s1?.stakeSeed),
+      claimStake: normalizeBoolean(data?.s1?.claimStake ?? data?.s3?.claimStake),
+      placeOrder: normalizeBoolean(data?.s1?.placeOrder ?? data?.s3?.placeOrder),
       done: normalizeBoolean(data?.s1?.done),
     },
     s2: {
-      applyResources: normalizeBoolean(data?.s2?.applyResources),
-      attackPlant: normalizeBoolean(data?.s2?.attackPlant),
+      followPlayer: normalizeBoolean(data?.s2?.followPlayer),
       chatMessage: normalizeBoolean(data?.s2?.chatMessage),
+      visitProfile: normalizeBoolean(data?.s2?.visitProfile),
       done: normalizeBoolean(data?.s2?.done),
     },
     s3: {
+      applyResources: normalizeBoolean(data?.s3?.applyResources ?? data?.s2?.applyResources),
       sendQuest: normalizeBoolean(data?.s3?.sendQuest),
-      placeOrder: normalizeBoolean(data?.s3?.placeOrder),
-      claimStake: normalizeBoolean(data?.s3?.claimStake),
+      claimProduction: normalizeBoolean(data?.s3?.claimProduction ?? data?.s1?.claimProduction),
+      playCasinoGame: normalizeBoolean(data?.s3?.playCasinoGame),
       done: normalizeBoolean(data?.s3?.done),
     },
     s4: {
-      makeSwap: normalizeBoolean(data?.s4?.makeSwap),
+      buy10: normalizeBoolean(data?.s4?.buy10) || buyElementsCount >= 10,
+      buyElementsCount,
+      buyShield: normalizeBoolean(data?.s4?.buyShield ?? data?.s1?.buyShield),
       collectStar: normalizeBoolean(data?.s4?.collectStar),
       playArcade: normalizeBoolean(data?.s4?.playArcade),
       done: normalizeBoolean(data?.s4?.done),
     },
-    pts: Math.min(80, Math.max(0, normalizeNumber(data?.pts))),
+    pts: Math.min(100, Math.max(0, normalizeNumber(data?.pts))),
     completedAt: typeof data?.completedAt === 'number' ? data.completedAt : undefined,
   };
 }
 
 function applyMissionTaskProgress(m: GmMissionDay, taskId: GmTaskId, count: number): void {
   switch (taskId) {
-    case 's1_buy5_elements': {
-      const prev = m.s1.buyElementsCount || 0;
-      const increment = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
-      const next = prev + increment;
-      m.s1.buyElementsCount = next;
-      if (next >= 5) m.s1.buy5 = true;
-      break;
-    }
-    case 's1_buy_shield':
-      m.s1.buyShield = true; break;
-    case 's1_claim_production':
-      m.s1.claimProduction = true; break;
-    case 's2_apply_resources':
-      m.s2.applyResources = true; break;
-    case 's2_attack_plant':
-      m.s2.attackPlant = true; break;
+    case 's1_make_swap':
+      m.s1.makeSwap = true; break;
+    case 's1_stake_seed':
+      m.s1.stakeSeed = true; break;
+    case 's1_claim_stake':
+      m.s1.claimStake = true; break;
+    case 's1_place_order':
+      m.s1.placeOrder = true; break;
+    case 's2_follow_player':
+      m.s2.followPlayer = true; break;
     case 's2_chat_message':
       m.s2.chatMessage = true; break;
+    case 's2_visit_profile':
+      m.s2.visitProfile = true; break;
+    case 's3_apply_resources':
+      m.s3.applyResources = true; break;
     case 's3_send_quest':
       m.s3.sendQuest = true; break;
-    case 's3_place_order':
-      m.s3.placeOrder = true; break;
-    case 's3_claim_stake':
-      m.s3.claimStake = true; break;
-    case 's4_make_swap':
-      m.s4.makeSwap = true; break;
+    case 's3_claim_production':
+      m.s3.claimProduction = true; break;
+    case 's3_play_casino_game':
+      m.s3.playCasinoGame = true; break;
+    case 's4_buy10_elements': {
+      const prev = m.s4.buyElementsCount || 0;
+      const increment = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+      const next = prev + increment;
+      m.s4.buyElementsCount = next;
+      if (next >= 10) m.s4.buy10 = true;
+      break;
+    }
+    case 's4_buy_shield':
+      m.s4.buyShield = true; break;
     case 's4_collect_star':
       m.s4.collectStar = true; break;
     case 's4_play_arcade':
@@ -192,27 +209,27 @@ export async function getMissionDay(address: string, day?: GmDay): Promise<GmMis
 }
 
 function sectionCompleteS1(s1: GmMissionDay['s1']): boolean {
-  return s1.buy5 && s1.buyShield && s1.claimProduction;
+  return s1.makeSwap && s1.stakeSeed && s1.claimStake && s1.placeOrder;
 }
 function sectionCompleteS2(s2: GmMissionDay['s2']): boolean {
-  return s2.applyResources && s2.attackPlant && s2.chatMessage;
+  return s2.followPlayer && s2.chatMessage && s2.visitProfile;
 }
 function sectionCompleteS3(s3: GmMissionDay['s3']): boolean {
-  return s3.sendQuest && s3.placeOrder && s3.claimStake;
+  return s3.applyResources && s3.sendQuest && s3.claimProduction && s3.playCasinoGame;
 }
 function sectionCompleteS4(s4: GmMissionDay['s4']): boolean {
-  return s4.makeSwap && s4.collectStar && s4.playArcade;
+  return s4.buy10 && s4.buyShield && s4.collectStar && s4.playArcade;
 }
 
 function awardPoints(m: GmMissionDay): number {
   let award = 0;
-  if (!m.s1.done && sectionCompleteS1(m.s1)) { m.s1.done = true; award += 20; }
+  if (!m.s1.done && sectionCompleteS1(m.s1)) { m.s1.done = true; award += 30; }
   if (!m.s2.done && sectionCompleteS2(m.s2)) { m.s2.done = true; award += 20; }
-  if (!m.s3.done && sectionCompleteS3(m.s3)) { m.s3.done = true; award += 10; }
-  if (!m.s4.done && sectionCompleteS4(m.s4)) { m.s4.done = true; award += 30; }
+  if (!m.s3.done && sectionCompleteS3(m.s3)) { m.s3.done = true; award += 25; }
+  if (!m.s4.done && sectionCompleteS4(m.s4)) { m.s4.done = true; award += 25; }
   const before = m.pts;
-  m.pts = Math.min(80, m.pts + award);
-  if (m.pts === 80 && !m.completedAt) m.completedAt = Date.now();
+  m.pts = Math.min(100, m.pts + award);
+  if (m.pts === 100 && !m.completedAt) m.completedAt = Date.now();
   return m.pts - before;
 }
 
@@ -480,4 +497,3 @@ export async function getMissionScore(address: string, month?: string): Promise<
     return 0;
   }
 }
-

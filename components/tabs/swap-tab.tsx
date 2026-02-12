@@ -135,7 +135,7 @@ export default function SwapTab() {
     try {
       const payload: Record<string, unknown> = {
         address,
-        taskId: 's4_make_swap',
+        taskId: 's1_make_swap',
         proof: { txHash: hash },
       };
       fetch('/api/gamification/missions', {
@@ -357,5 +357,4 @@ export default function SwapTab() {
     </div>
   );
 }
-
 

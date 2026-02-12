@@ -65,7 +65,7 @@ export default function TasksInfoDialog() {
         <DialogHeader>
           <DialogTitle>Farmer's Tasks</DialogTitle>
           <DialogDescription>
-            Earn up to 80 Rock per day by completing 4 sections. Daily reset at 00:00 UTC.
+            Earn up to 100 Rock per day by completing 4 sections. Daily reset at 00:00 UTC.
           </DialogDescription>
         </DialogHeader>
 
@@ -96,7 +96,7 @@ export default function TasksInfoDialog() {
                   <span className="text-xs text-muted-foreground">Today</span>
                   <Image src="/icons/Volcanic_Rock.svg" alt="Rock" width={16} height={16} />
                 </div>
-                <p className="text-xl font-bold">{missionPts} / 80</p>
+                <p className="text-xl font-bold">{missionPts} / 100</p>
                 <p className="text-[10px] text-muted-foreground">Lifetime: {missionTotal}</p>
               </div>
             </div>
@@ -104,33 +104,36 @@ export default function TasksInfoDialog() {
             {/* Task Sections */}
             <div className="space-y-3 text-sm">
               <div>
-                <div className="font-medium">Section 1 (20 Rock)</div>
+                <div className="font-medium">Section 1 - General (30 Rocks)</div>
                 <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.buy5 ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy at least 5 elements</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.buyShield ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy a shield/fence</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.claimProduction ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim production from any building</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.makeSwap ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Make a SEED swap</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.stakeSeed ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Stake SEED</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.placeOrder ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Place a SEED/LEAF order</li>
                 </ul>
               </div>
               <div>
-                <div className="font-medium">Section 2 (20 Rock)</div>
+                <div className="font-medium">Section 2 - Social (20 Rocks)</div>
                 <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.applyResources ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Apply resources/production to a plant</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.attackPlant ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Attack another plant</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.followPlayer ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Follow a player</li>
                   <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.chatMessage ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a message in public chat</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.visitProfile ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Visit a profile</li>
                 </ul>
               </div>
               <div>
-                <div className="font-medium">Section 3 (10 Rock)</div>
+                <div className="font-medium">Section 3 - Land (25 Rocks)</div>
                 <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.applyResources ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Apply resources/production to a plant</li>
                   <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.sendQuest ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a farmer on a quest</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.placeOrder ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Place a SEED/LEAF order</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimProduction ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim production from any building</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.playCasinoGame ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play a casino game (roulette/blackjack)</li>
                 </ul>
               </div>
               <div>
-                <div className="font-medium">Section 4 (30 Rock)</div>
+                <div className="font-medium">Section 4 - Plant (25 Rocks)</div>
                 <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.makeSwap ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Make a SEED swap</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.buy10 ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy at least 10 elements</li>
+                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.buyShield ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy a shield/fence</li>
                   <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.collectStar ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Collect a star by killing a plant</li>
                   <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.playArcade ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play an arcade game (Box or Spin)</li>
                 </ul>

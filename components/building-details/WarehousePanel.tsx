@@ -183,7 +183,7 @@ export default function WarehousePanel({
             onApplySuccess();
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
             try {
-              const payload: Record<string, unknown> = { address, taskId: 's2_apply_resources' };
+              const payload: Record<string, unknown> = { address, taskId: 's3_apply_resources' };
               const txHash = extractTransactionHash(tx);
               if (txHash) {
                 payload.proof = { txHash };
@@ -234,7 +234,7 @@ export default function WarehousePanel({
             onApplySuccess();
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
             try {
-              const payload: Record<string, unknown> = { address, taskId: 's2_apply_resources' };
+              const payload: Record<string, unknown> = { address, taskId: 's3_apply_resources' };
               const txHash = extractTransactionHash(tx);
               if (txHash) {
                 payload.proof = { txHash };

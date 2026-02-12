@@ -345,7 +345,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   // After successful create order, mark mission progress
   const onOrderSuccess = (tx: any) => {
-    const payload: Record<string, unknown> = { address, taskId: 's3_place_order' };
+    const payload: Record<string, unknown> = { address, taskId: 's1_place_order' };
     const txHash = extractTransactionHash(tx);
     if (txHash) {
       payload.proof = { txHash };
@@ -865,5 +865,4 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     </Dialog>
   );
 }
-
 

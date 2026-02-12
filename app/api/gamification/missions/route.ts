@@ -20,20 +20,21 @@ const ALLOWED_ORIGINS = new Set(
 );
 
 const TASKS_REQUIRING_PROOF: ReadonlySet<GmTaskId> = new Set([
-  's1_buy5_elements',
-  's1_buy_shield',
-  's1_claim_production',
-  's2_apply_resources',
-  's2_attack_plant',
+  's1_make_swap',
+  's1_stake_seed',
+  's1_claim_stake',
+  's1_place_order',
+  's3_apply_resources',
   's3_send_quest',
-  's3_place_order',
-  's3_claim_stake',
-  's4_make_swap',
+  's3_claim_production',
+  's3_play_casino_game',
+  's4_buy10_elements',
+  's4_buy_shield',
   's4_collect_star',
   's4_play_arcade',
 ]);
 
-const MAX_COUNT_PER_UPDATE = 80;
+const MAX_COUNT_PER_UPDATE = 120;
 
 function isAllowedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');

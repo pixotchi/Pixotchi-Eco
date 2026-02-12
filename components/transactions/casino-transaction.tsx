@@ -128,7 +128,7 @@ export default function CasinoTransaction({
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 address,
-                                taskId: "s4_play_casino",
+                                taskId: "s3_play_casino_game",
                                 proof: { txHash },
                             }),
                         }).catch((err) =>

@@ -88,7 +88,7 @@ export default function BundleBuyTransaction({
               try {
                 const payload: Record<string, unknown> = {
                   address,
-                  taskId: 's1_buy5_elements',
+                  taskId: 's4_buy10_elements',
                   count: quantity,
                 };
                 const txHash = extractTransactionHash(currentTx);

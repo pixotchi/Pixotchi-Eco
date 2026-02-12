@@ -523,6 +523,12 @@ export default function LeaderboardTab() {
   const handlePlantImageClick = (plant: LeaderboardPlant) => {
     setSelectedPlantForProfile(plant);
     setProfileDialogOpen(true);
+    if (!address) return;
+    fetch('/api/gamification/missions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, taskId: 's2_visit_profile' })
+    }).catch(() => {});
   };
 
   const isAttackable = (plant: LeaderboardPlant) => !isUserPlant(plant) && !plant.isDead && eligibleAttackers(plant).length > 0 && !hasActiveFence(plant);

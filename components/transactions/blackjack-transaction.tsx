@@ -241,18 +241,6 @@ export default function BlackjackTransaction({
 
             const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
 
-            // Track gamification
-            if (address && mode === "action") {
-                const txHash = extractTransactionHash(receipts[0]);
-                if (txHash) {
-                    fetch("/api/gamification/missions", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ address, taskId: "s4_play_blackjack", proof: { txHash } }),
-                    }).catch(() => { });
-                }
-            }
-
             // Parse events
             // OnchainKit can surface duplicate receipts for the same hash; dedupe first.
             const receiptsByHash = new Map<string, any>();
@@ -477,6 +465,22 @@ export default function BlackjackTransaction({
                     toast.success('Push!');
                 } else {
                     toast.error(txt);
+                }
+            }
+
+            const gameSettled =
+                Boolean(gameCompleteData) ||
+                (resultData.gameResult !== undefined && resultData.gameResult !== BlackjackResult.NONE) ||
+                (Array.isArray(resultData.splitResults) && resultData.splitResults.length > 0);
+
+            if (address && mode === "action" && gameSettled) {
+                const txHash = extractTransactionHash(newReceipts[0] ?? receipts[0]);
+                if (txHash) {
+                    fetch("/api/gamification/missions", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ address, taskId: "s3_play_casino_game", proof: { txHash } }),
+                    }).catch(() => { });
                 }
             }
 
