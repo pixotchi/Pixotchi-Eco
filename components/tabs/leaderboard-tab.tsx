@@ -30,6 +30,7 @@ import { Avatar } from "@coinbase/onchainkit/identity";
 import { base } from "viem/chains";
 import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
+import { CLIENT_ENV } from "@/lib/env-config";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -57,6 +58,8 @@ const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export default function LeaderboardTab() {
+  const gamificationDisabled = CLIENT_ENV.GAMIFICATION_DISABLED;
+  const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
   const { address: evmAddress } = useAccount();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
@@ -79,6 +82,9 @@ export default function LeaderboardTab() {
   const [rocksLoading, setRocksLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rocksError, setRocksError] = useState<string | null>(null);
+  const [rocksDisabledNotice, setRocksDisabledNotice] = useState<string | null>(
+    gamificationDisabled ? gamificationDisabledMessage : null,
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [myPlants, setMyPlants] = useState<Plant[]>([]);
   const [attackDialogOpen, setAttackDialogOpen] = useState(false);
@@ -299,6 +305,14 @@ export default function LeaderboardTab() {
   }, []);
 
   const fetchRocksLeaderboard = useCallback(async () => {
+    if (gamificationDisabled) {
+      setRocksDisabledNotice(gamificationDisabledMessage);
+      setRocksRows([]);
+      setRocksError(null);
+      setRocksLoading(false);
+      return;
+    }
+
     const now = Date.now();
     const cacheAge = now - rocksDataCacheRef.current.timestamp;
 
@@ -311,6 +325,7 @@ export default function LeaderboardTab() {
     if (rocksRows.length === 0) {
       setRocksLoading(true);
     }
+    setRocksDisabledNotice(null);
     setRocksError(null);
     try {
       const res = await fetch('/api/leaderboard/rocks');
@@ -318,6 +333,15 @@ export default function LeaderboardTab() {
         throw new Error(`Failed to fetch rocks leaderboard (${res.status})`);
       }
       const payload = await res.json();
+      if (payload?.disabled) {
+        const message = typeof payload?.message === 'string' && payload.message.trim().length > 0
+          ? payload.message
+          : gamificationDisabledMessage;
+        setRocksDisabledNotice(message);
+        setRocksRows([]);
+        rocksDataCacheRef.current = { data: [], timestamp: now };
+        return;
+      }
       const entries = Array.isArray(payload.leaderboard) ? payload.leaderboard : [];
       const mapped: RocksLeaderboardEntry[] = entries.map((entry: any, index: number) => ({
         rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
@@ -329,6 +353,7 @@ export default function LeaderboardTab() {
       setRocksRows(mapped);
     } catch (fetchError) {
       console.error('❌ [Rocks] Error fetching rocks leaderboard:', fetchError);
+      setRocksDisabledNotice(null);
       setRocksError('Failed to load Rocks leaderboard. Please try again.');
     } finally {
       setRocksLoading(false);
@@ -997,6 +1022,12 @@ export default function LeaderboardTab() {
                 )}
               </div>
             )
+          ) : rocksDisabledNotice ? (
+            <Alert className="mt-4">
+              <Terminal className="h-4 w-4" />
+              <AlertTitle>Temporarily Disabled</AlertTitle>
+              <AlertDescription>{rocksDisabledNotice}</AlertDescription>
+            </Alert>
           ) : (
             rocksLoading && totalRockItems === 0 ? (
               <div className="flex items-center justify-center py-8">

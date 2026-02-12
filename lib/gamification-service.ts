@@ -1,6 +1,7 @@
 import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON, redisScanKeys } from '@/lib/redis';
 import { getTodayDateString } from '@/lib/invite-utils';
 import type { GmDay, GmLeaderEntry, GmMissionDay, GmProgressProof, GmSectionKey, GmStreak, GmTaskId } from './gamification-types';
+import { isGamificationDisabled } from './gamification-feature';
 
 const PX = 'pixotchi:gm:';
 
@@ -142,6 +143,10 @@ export async function normalizeStreakIfMissed(address: string, s: GmStreak): Pro
 }
 
 export async function trackDailyActivity(address: string): Promise<GmStreak> {
+  if (isGamificationDisabled()) {
+    return getStreak(address);
+  }
+
   const day = getTodayDateString();
   const k = keys.streak(address);
   const s = (await redisGetJSON<GmStreak>(k)) || { current: 0, best: 0, lastActive: '' };
@@ -213,6 +218,11 @@ function awardPoints(m: GmMissionDay): number {
 
 export async function markMissionTask(address: string, taskId: GmTaskId, proof?: GmProgressProof, count: number = 1): Promise<GmMissionDay> {
   const d = getTodayDateString();
+  if (isGamificationDisabled()) {
+    const existing = await redisGetJSON<GmMissionDay>(keys.missions(address, d));
+    return hydrateMissionDay(existing, d);
+  }
+
   const k = keys.missions(address, d);
   const safeCount = Number.isFinite(count) && count > 0 ? Math.min(1000, Math.floor(count)) : 1;
   const redisClient = redis;
@@ -470,5 +480,4 @@ export async function getMissionScore(address: string, month?: string): Promise<
     return 0;
   }
 }
-
 

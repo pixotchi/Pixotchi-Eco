@@ -19,6 +19,10 @@ export const CLIENT_ENV = {
   // Feature flags
   INVITE_SYSTEM_ENABLED: process.env.NEXT_PUBLIC_INVITE_SYSTEM_ENABLED === 'true',
   PAYMASTER_ENABLED: process.env.NEXT_PUBLIC_PAYMASTER_ENABLED === 'true',
+  GAMIFICATION_DISABLED: process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED === 'true',
+  GAMIFICATION_DISABLED_MESSAGE:
+    process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED_MESSAGE ||
+    'Tasks and Rocks leaderboard are temporarily disabled while we reset progress for the next mission season.',
   // Base Verify - Free plant claim for verified users
   // Single toggle controls both frontend UI and backend API
   VERIFY_CLAIM_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true',
