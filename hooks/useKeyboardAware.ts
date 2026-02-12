@@ -81,19 +81,20 @@ export function useViewportHeight() {
       document.documentElement.style.setProperty('--vh', `${vh}px`);
       setViewportHeight(window.innerHeight);
     };
+    const handleOrientationChange = () => {
+      // Small delay to account for mobile browser UI adjustments
+      setTimeout(updateHeight, 100);
+    };
 
     updateHeight();
 
     // Update on resize and orientation change
     window.addEventListener('resize', updateHeight);
-    window.addEventListener('orientationchange', () => {
-      // Small delay to account for mobile browser UI adjustments
-      setTimeout(updateHeight, 100);
-    });
+    window.addEventListener('orientationchange', handleOrientationChange);
 
     return () => {
       window.removeEventListener('resize', updateHeight);
-      window.removeEventListener('orientationchange', updateHeight);
+      window.removeEventListener('orientationchange', handleOrientationChange);
     };
   }, []);
 

@@ -190,6 +190,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
+  const [isMiniConnectRetrying, setIsMiniConnectRetrying] = useState(false);
   const lastDismissedRef = useRef<string | null>(null);
 
   // Privy state for debug + button readiness + Solana wallet check
@@ -495,6 +496,30 @@ export default function App() {
     }
   }, [addFrame]);
 
+  const handleMiniAppReconnect = useCallback(() => {
+    if (isMiniConnectRetrying) return;
+
+    setIsMiniConnectRetrying(true);
+    try {
+      const farcasterConnector = (connectors || []).find((c: any) => {
+        const id = (c?.id ?? "").toString().toLowerCase();
+        const name = (c?.name ?? "").toString().toLowerCase();
+        return id.includes("farcaster") || name.includes("farcaster");
+      }) || (connectors || [])[0];
+
+      if (farcasterConnector) {
+        connect({ connector: farcasterConnector as any });
+      } else {
+        window.location.reload();
+      }
+    } catch (error) {
+      console.warn("Mini app reconnect failed, reloading:", error);
+      window.location.reload();
+    } finally {
+      setTimeout(() => setIsMiniConnectRetrying(false), 1200);
+    }
+  }, [connect, connectors, isMiniConnectRetrying]);
+
   const tabs = [
     { id: "dashboard" as Tab, label: "Farm", icon: Leaf },
     { id: "mint" as Tab, label: "Mint", icon: Sparkles },
@@ -720,7 +745,17 @@ export default function App() {
                     )}
                   </>
                 ) : (
-                  <div className="text-muted-foreground text-sm">Connecting…</div>
+                  <div className="space-y-2">
+                    <div className="text-muted-foreground text-sm text-center">Connecting…</div>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleMiniAppReconnect}
+                      disabled={isMiniConnectRetrying}
+                    >
+                      {isMiniConnectRetrying ? "Retrying..." : "Retry Connection"}
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
