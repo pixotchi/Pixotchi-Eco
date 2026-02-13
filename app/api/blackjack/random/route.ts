@@ -182,7 +182,10 @@ async function validateActionAgainstOnchainState(
     }
 
     if (phase !== PHASE_PLAYER_TURN) {
-        return { allowed: false, reason: 'Game is not in player turn' };
+        return {
+            allowed: false,
+            reason: `Game is not in player turn (phase=${phase}, activeHands=${activeHandCount})`
+        };
     }
 
     if (handIndexNum < 0 || handIndexNum >= activeHandCount) {
