@@ -607,6 +607,11 @@ export default function BlackjackDialog({
                     // Update value
                     playerValue: targetHandIndex === 0 ? (result.handValue || prev.playerValue) : prev.playerValue,
                     splitValue: targetHandIndex === 1 ? (result.handValue || prev.splitValue) : prev.splitValue,
+                    // A post-hit hand can no longer double/surrender/split on this turn.
+                    // Fresh on-chain snapshot will follow and finalize exact action flags.
+                    canDouble: false,
+                    canSplit: false,
+                    canSurrender: false,
                     contractPhase: BlackjackPhase.PLAYER_TURN
                 };
             });
@@ -673,6 +678,40 @@ export default function BlackjackDialog({
         (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction);
 
     const handleActionClick = useCallback(async (action: BlackjackAction): Promise<boolean> => {
+        const latestSnapshot = await blackjackGetGameSnapshot(landId);
+        if (!latestSnapshot || latestSnapshot.phase !== BlackjackPhase.PLAYER_TURN) {
+            toast.error('Game state changed. Refreshing...');
+            await refreshGameState();
+            return false;
+        }
+
+        const actionAllowed =
+            (action === BlackjackAction.HIT && latestSnapshot.canHit) ||
+            (action === BlackjackAction.STAND && latestSnapshot.canStand) ||
+            (action === BlackjackAction.DOUBLE && latestSnapshot.canDouble) ||
+            (action === BlackjackAction.SPLIT && latestSnapshot.canSplit) ||
+            (action === BlackjackAction.SURRENDER && latestSnapshot.canSurrender);
+
+        if (!actionAllowed) {
+            toast.error('That action is no longer available for this hand.');
+            await refreshGameState();
+            return false;
+        }
+
+        setGameState(prev => ({
+            ...prev,
+            contractPhase: latestSnapshot.phase,
+            hasSplit: latestSnapshot.hasSplit,
+            activeHandCount: latestSnapshot.activeHandCount,
+            currentHandIndex: latestSnapshot.actionHandIndex,
+            betAmount: latestSnapshot.betAmount,
+            canHit: latestSnapshot.canHit,
+            canStand: latestSnapshot.canStand,
+            canDouble: latestSnapshot.canDouble,
+            canSplit: latestSnapshot.canSplit,
+            canSurrender: latestSnapshot.canSurrender,
+        }));
+
         const requiresAdditionalBet = action === BlackjackAction.DOUBLE || action === BlackjackAction.SPLIT;
         if (!requiresAdditionalBet) {
             setError(null);
@@ -680,7 +719,7 @@ export default function BlackjackDialog({
             return true;
         }
 
-        const requiredWei = gameState.betAmount;
+        const requiredWei = latestSnapshot.betAmount > BigInt(0) ? latestSnapshot.betAmount : gameState.betAmount;
         if (requiredWei <= BigInt(0)) {
             toast.error('Unable to verify additional wager amount. Please refresh.');
             return false;
@@ -721,6 +760,8 @@ export default function BlackjackDialog({
         setTxInProgress(action);
         return true;
     }, [
+        landId,
+        refreshGameState,
         address,
         allowanceWei,
         config,

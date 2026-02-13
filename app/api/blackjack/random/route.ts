@@ -36,6 +36,11 @@ interface CachedRandomness {
 
 const ACTION_LOCK_KEY_PREFIX = 'blackjack:action-lock:';
 const nonceRandomnessCache = new Map<string, CachedRandomness>();
+const PHASE_NONE = 0;
+const PHASE_PLAYER_TURN = 2;
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+type BlackjackActionName = 'deal' | 'hit' | 'stand' | 'double' | 'split' | 'surrender';
 
 function getActionLockKey(landId: string, nonce: bigint): string {
     return `${ACTION_LOCK_KEY_PREFIX}${landId}:${nonce.toString()}`;
@@ -106,6 +111,94 @@ async function cleanupConsumedLock(landId: string, currentNonce: bigint): Promis
 
 function isActionMismatch(cached: CachedRandomness, actionNum: number, handIndexNum: number): boolean {
     return cached.actionNum !== actionNum || cached.handIndex !== handIndexNum;
+}
+
+async function deleteActionLock(lockKey: string): Promise<void> {
+    if (redis) {
+        await redisDel(lockKey);
+    }
+    nonceRandomnessCache.delete(lockKey);
+}
+
+function actionNameFromNum(actionNum: number): BlackjackActionName | null {
+    switch (actionNum) {
+        case 255: return 'deal';
+        case 0: return 'hit';
+        case 1: return 'stand';
+        case 2: return 'double';
+        case 3: return 'split';
+        case 4: return 'surrender';
+        default: return null;
+    }
+}
+
+async function validateActionAgainstOnchainState(
+    publicClient: ReturnType<typeof createPublicClient>,
+    landIdBigInt: bigint,
+    action: BlackjackActionName,
+    handIndexNum: number,
+    playerAddress?: string
+): Promise<{ allowed: boolean; reason?: string }> {
+    const gameBasic = await publicClient.readContract({
+        address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetGameBasic',
+        args: [landIdBigInt],
+    }) as [boolean, string, number, bigint, number, boolean, number, boolean, bigint, number];
+
+    const gamePlayer = String(gameBasic[1] || '');
+    const phase = Number(gameBasic[2]);
+    const activeHandCount = Number(gameBasic[4]);
+
+    if (
+        playerAddress &&
+        gamePlayer &&
+        gamePlayer.toLowerCase() !== ZERO_ADDRESS &&
+        gamePlayer.toLowerCase() !== playerAddress.toLowerCase()
+    ) {
+        return { allowed: false, reason: 'Not your game' };
+    }
+
+    if (action === 'deal') {
+        if (phase !== PHASE_NONE) {
+            return { allowed: false, reason: 'Game already in progress' };
+        }
+        return { allowed: true };
+    }
+
+    if (phase !== PHASE_PLAYER_TURN) {
+        return { allowed: false, reason: 'Game is not in player turn' };
+    }
+
+    if (handIndexNum < 0 || handIndexNum >= activeHandCount) {
+        return { allowed: false, reason: 'Invalid hand index for current game state' };
+    }
+
+    const actions = await publicClient.readContract({
+        address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetActions',
+        args: [landIdBigInt, handIndexNum],
+    }) as [boolean, boolean, boolean, boolean, boolean, boolean];
+
+    const canHit = !!actions[0];
+    const canStand = !!actions[1];
+    const canDouble = !!actions[2];
+    const canSplit = !!actions[3];
+    const canSurrender = !!actions[4];
+
+    const allowed =
+        (action === 'hit' && canHit) ||
+        (action === 'stand' && canStand) ||
+        (action === 'double' && canDouble) ||
+        (action === 'split' && canSplit) ||
+        (action === 'surrender' && canSurrender);
+
+    if (!allowed) {
+        return { allowed: false, reason: `Action ${action} is not currently available` };
+    }
+
+    return { allowed: true };
 }
 
 /**
@@ -225,6 +318,21 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const landIdBigInt = BigInt(landId);
+        const requestedActionValidation = await validateActionAgainstOnchainState(
+            publicClient,
+            landIdBigInt,
+            action as BlackjackActionName,
+            handIndexNum,
+            playerAddress
+        );
+        if (!requestedActionValidation.allowed) {
+            return NextResponse.json(
+                { error: requestedActionValidation.reason || 'Action not available' },
+                { status: 400 }
+            );
+        }
+
         // Best-effort cleanup: previous nonce lock is no longer usable after on-chain increment.
         await cleanupConsumedLock(landId, currentNonce);
         const nonce = Number(currentNonce);
@@ -232,10 +340,43 @@ export async function POST(request: NextRequest) {
 
         // ANTI-CHEAT: Check if randomness was already issued for this (landId, nonce)
         const { data: cachedData, source: cachedSource } = await readActionLock(lockKey);
-        if (cachedData) {
+        let effectiveCachedData = cachedData;
+        let effectiveCachedSource = cachedSource;
+
+        if (effectiveCachedData && isActionMismatch(effectiveCachedData, actionNum, handIndexNum)) {
+            const lockedActionName = actionNameFromNum(effectiveCachedData.actionNum);
+            if (!lockedActionName) {
+                await deleteActionLock(lockKey);
+                effectiveCachedData = null;
+                effectiveCachedSource = 'none';
+            } else {
+                const lockedActionValidation = await validateActionAgainstOnchainState(
+                    publicClient,
+                    landIdBigInt,
+                    lockedActionName,
+                    effectiveCachedData.handIndex,
+                    playerAddress
+                );
+
+                if (!lockedActionValidation.allowed) {
+                    // Recovery path: stale/invalid lock cannot be executed on-chain, clear it.
+                    await deleteActionLock(lockKey);
+                    effectiveCachedData = null;
+                    effectiveCachedSource = 'none';
+                } else {
+                    console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${effectiveCachedData.actionNum} requested=${actionNum}`);
+                    return NextResponse.json(
+                        { error: 'Action Locked: You cannot change your decision for this turn.' },
+                        { status: 400 }
+                    );
+                }
+            }
+        }
+
+        if (effectiveCachedData) {
             // STRICT ACTION LOCKING: Check if user is trying to switch action
-            if (isActionMismatch(cachedData, actionNum, handIndexNum)) {
-                console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${cachedData.actionNum} requested=${actionNum}`);
+            if (isActionMismatch(effectiveCachedData, actionNum, handIndexNum)) {
+                console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${effectiveCachedData.actionNum} requested=${actionNum}`);
                 return NextResponse.json(
                     { error: 'Action Locked: You cannot change your decision for this turn.' },
                     { status: 400 }
@@ -243,16 +384,16 @@ export async function POST(request: NextRequest) {
             }
 
             // Return the SAME randomness - prevents shopping for favorable outcomes
-            console.log(`[Blackjack Random] CACHE HIT - landId=${landId} nonce=${nonce} source=${cachedSource} (same randomness returned)`);
+            console.log(`[Blackjack Random] CACHE HIT - landId=${landId} nonce=${nonce} source=${effectiveCachedSource} (same randomness returned)`);
 
             return NextResponse.json({
-                randomSeed: cachedData.randomSeed,
+                randomSeed: effectiveCachedData.randomSeed,
                 nonce,
-                signature: cachedData.signature,
+                signature: effectiveCachedData.signature,
                 expiresAt: Math.floor(Date.now() / 1000) + 60,
-                signerAddress: cachedData.signerAddress,
+                signerAddress: effectiveCachedData.signerAddress,
                 cached: true, // Flag for debugging
-                source: cachedSource,
+                source: effectiveCachedSource,
             });
         }
 
