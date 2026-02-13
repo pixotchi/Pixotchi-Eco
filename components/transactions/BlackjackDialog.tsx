@@ -19,10 +19,7 @@ import {
     LAND_CONTRACT_ADDRESS,
     PIXOTCHI_TOKEN_ADDRESS,
     blackjackGetConfig,
-    blackjackGetGameBasic,
-    blackjackGetGameHands,
-    blackjackGetActions,
-    blackjackGetDealerHand,
+    blackjackGetGameSnapshot,
     checkCasinoApproval,
     BlackjackPhase,
     BlackjackAction,
@@ -148,6 +145,38 @@ const deriveInitialPlayerActions = (cards: number[]) => {
     };
 };
 
+const areCardsPrefix = (prefix: number[], full: number[]): boolean =>
+    prefix.length <= full.length && prefix.every((card, idx) => full[idx] === card);
+
+const reconcileTurnCards = (
+    prevCards: number[],
+    fetchedCards: number[],
+    phase: BlackjackPhase
+): { cards: number[]; usedFetched: boolean } => {
+    // Outside live turn, trust fetched chain state.
+    if (phase !== BlackjackPhase.PLAYER_TURN) {
+        return { cards: fetchedCards, usedFetched: true };
+    }
+
+    // No local state yet: accept fetched as baseline.
+    if (prevCards.length === 0) {
+        return { cards: fetchedCards, usedFetched: true };
+    }
+
+    // Missing or lagging fetched state: keep local receipt-derived cards.
+    if (fetchedCards.length === 0) {
+        return { cards: prevCards, usedFetched: false };
+    }
+
+    // Fetched advanced from local state -> accept.
+    if (areCardsPrefix(prevCards, fetchedCards)) {
+        return { cards: fetchedCards, usedFetched: true };
+    }
+
+    // Fetched is older/conflicting -> keep local state to avoid card rewrites/flicker.
+    return { cards: prevCards, usedFetched: false };
+};
+
 export default function BlackjackDialog({
     open,
     onOpenChange,
@@ -226,114 +255,115 @@ export default function BlackjackDialog({
         if (!open || !address) return;
 
         try {
-            // 1. Fetch Basic Info first to get current hand index
-            const gameBasic = await blackjackGetGameBasic(landId);
+            const snapshot = await blackjackGetGameSnapshot(landId);
 
-            if (!gameBasic) {
+            if (!snapshot) {
                 setGameState(prev => ({ ...initialGameState, betAmountInput: prev.betAmountInput }));
                 return;
             }
 
-            // 2. Determine the correct hand index (Workaround for contract bug)
-            // Contract doesn't update currentHandIndex when Hand 1 finishes.
-            // We check if the reported hand has actions. If not, and it's a split game, check the next hand.
-            let currentHandIdx = gameBasic.currentHandIndex ?? 0;
+            const normalizedPlayer = (snapshot.player || '').toLowerCase();
+            const isOurGame =
+                normalizedPlayer !== '' &&
+                normalizedPlayer !== '0x0000000000000000000000000000000000000000' &&
+                normalizedPlayer === address.toLowerCase();
 
-            // Get actions for the reported hand
-            let actions = await blackjackGetActions(landId, currentHandIdx);
-
-            const hasAvailableActions = (acts: any) =>
-                acts && (acts.canHit || acts.canStand || acts.canDouble || acts.canSplit || acts.canSurrender);
-
-            // If reported hand (0) has no actions, but we split, check Hand 1
-            if (gameBasic.hasSplit && currentHandIdx === 0 && !hasAvailableActions(actions)) {
-                // Try fetching actions for Hand 1
-                const nextHandActions = await blackjackGetActions(landId, 1);
-                if (hasAvailableActions(nextHandActions)) {
-                    currentHandIdx = 1;
-                    actions = nextHandActions;
-                }
-            }
-
-            // 3. Fetch game hands now that we have the final index/actions
-            const gameHands = await blackjackGetGameHands(landId);
-
-            const isOurGame = gameBasic.player.toLowerCase() === address.toLowerCase();
-
-            // Fetch dealer hand
-            let dealerCards: number[] = [];
-            let dealerValue = 0;
-
-            if (gameBasic.phase === BlackjackPhase.RESOLVED) {
-                const dealerHand = await blackjackGetDealerHand(landId);
-                if (dealerHand) {
-                    dealerCards = dealerHand.dealerCards;
-                    dealerValue = dealerHand.dealerValue;
-                }
-            } else if (
-                gameBasic.dealerUpCard !== undefined &&
-                gameBasic.phase !== BlackjackPhase.NONE &&
-                gameBasic.phase !== BlackjackPhase.BETTING
-            ) {
-                // Show up card + hole card (placeholder)
-                // Fix Bug 1: Allow card 0 (Ace of Spades) to be shown
-                dealerCards = [gameBasic.dealerUpCard, 0];
-                dealerValue = 0;
-            }
-
-            // If game is resolved, keep old cards if new ones are empty (to show final state)
             setGameState(prev => {
-                const hasHands = !!gameHands;
-                const fetchedPlayerCards = hasHands ? gameHands.hand1Cards : prev.playerCards;
-                const fetchedSplitCards = hasHands ? gameHands.hand2Cards : prev.splitCards;
-                const newDealerCards = dealerCards;
-                const shouldPreserveTurnCards =
-                    gameBasic.phase === BlackjackPhase.PLAYER_TURN &&
-                    prev.playerCards.length > 0 &&
-                    fetchedPlayerCards.length === 0;
-                const nextPlayerCards = shouldPreserveTurnCards ? prev.playerCards : fetchedPlayerCards;
-                const nextSplitCards = shouldPreserveTurnCards ? prev.splitCards : fetchedSplitCards;
-                const nextPlayerValue = shouldPreserveTurnCards
-                    ? prev.playerValue
-                    : (hasHands ? gameHands.hand1Value : prev.playerValue);
-                const nextSplitValue = shouldPreserveTurnCards
-                    ? prev.splitValue
-                    : (hasHands ? gameHands.hand2Value : prev.splitValue);
-                const isPlayerTurn = gameBasic.phase === BlackjackPhase.PLAYER_TURN;
+                if (!isOurGame) {
+                    if (prev.result !== null) {
+                        return {
+                            ...prev,
+                            contractPhase: snapshot.phase,
+                            isActive: false,
+                            player: snapshot.player,
+                        };
+                    }
+
+                    return {
+                        ...prev,
+                        contractPhase: snapshot.phase,
+                        isActive: false,
+                        player: snapshot.player,
+                        playerCards: [],
+                        splitCards: [],
+                        dealerCards: [],
+                        playerValue: 0,
+                        splitValue: 0,
+                        dealerValue: 0,
+                        hasSplit: false,
+                        activeHandCount: 1,
+                        currentHandIndex: 0,
+                        betAmount: BigInt(0),
+                        canHit: false,
+                        canStand: false,
+                        canDouble: false,
+                        canSplit: false,
+                        canSurrender: false,
+                    };
+                }
+
+                const playerCardsDecision = reconcileTurnCards(
+                    prev.playerCards,
+                    snapshot.hand1Cards,
+                    snapshot.phase
+                );
+                const splitCardsDecision = reconcileTurnCards(
+                    prev.splitCards,
+                    snapshot.hand2Cards,
+                    snapshot.phase
+                );
+                const nextPlayerCards = playerCardsDecision.cards;
+                const nextSplitCards = splitCardsDecision.cards;
+                const nextPlayerValue = playerCardsDecision.usedFetched ? snapshot.hand1Value : prev.playerValue;
+                const nextSplitValue = splitCardsDecision.usedFetched ? snapshot.hand2Value : prev.splitValue;
+                const isPlayerTurn = snapshot.phase === BlackjackPhase.PLAYER_TURN;
+                let nextDealerCards = snapshot.dealerCards;
+
+                if (isPlayerTurn && nextDealerCards.length === 1) {
+                    nextDealerCards = [nextDealerCards[0], 0];
+                }
+                if (
+                    isPlayerTurn &&
+                    prev.dealerCards.length > 0 &&
+                    nextDealerCards.length > 0 &&
+                    prev.dealerCards[0] !== nextDealerCards[0]
+                ) {
+                    nextDealerCards = prev.dealerCards;
+                }
 
                 // If we have a local result but contract says game is gone/empty, keep old cards
                 if (prev.result !== null && nextPlayerCards.length === 0) {
                     return {
                         ...prev,
-                        contractPhase: gameBasic.phase,
-                        isActive: gameBasic.isActive && isOurGame,
-                        player: gameBasic.player,
+                        contractPhase: snapshot.phase,
+                        isActive: snapshot.isActive,
+                        player: snapshot.player,
                         // Keep existing cards
-                        activeHandCount: gameBasic.activeHandCount,
-                        betAmount: gameBasic.betAmount,
+                        activeHandCount: snapshot.activeHandCount,
+                        betAmount: snapshot.betAmount,
                     };
                 }
 
                 return {
                     ...prev,
-                    contractPhase: gameBasic.phase,
-                    isActive: gameBasic.isActive && isOurGame,
-                    player: gameBasic.player,
+                    contractPhase: snapshot.phase,
+                    isActive: snapshot.isActive,
+                    player: snapshot.player,
                     playerCards: nextPlayerCards,
                     splitCards: nextSplitCards,
-                    dealerCards: newDealerCards.length > 0 ? newDealerCards : prev.dealerCards, // Keep dealer cards if we have them
+                    dealerCards: nextDealerCards.length > 0 ? nextDealerCards : prev.dealerCards, // Keep dealer cards if we have them
                     playerValue: nextPlayerValue,
                     splitValue: nextSplitValue,
-                    dealerValue,
-                    hasSplit: gameBasic.hasSplit,
-                    activeHandCount: gameBasic.activeHandCount,
-                    currentHandIndex: currentHandIdx,
-                    betAmount: gameBasic.betAmount,
-                    canHit: isPlayerTurn ? (actions?.canHit ?? prev.canHit) : false,
-                    canStand: isPlayerTurn ? (actions?.canStand ?? prev.canStand) : false,
-                    canDouble: isPlayerTurn ? (actions?.canDouble ?? prev.canDouble) : false,
-                    canSplit: isPlayerTurn ? (actions?.canSplit ?? prev.canSplit) : false,
-                    canSurrender: isPlayerTurn ? (actions?.canSurrender ?? prev.canSurrender) : false,
+                    dealerValue: snapshot.dealerValue,
+                    hasSplit: snapshot.hasSplit,
+                    activeHandCount: snapshot.activeHandCount,
+                    currentHandIndex: snapshot.actionHandIndex,
+                    betAmount: snapshot.betAmount,
+                    canHit: isPlayerTurn ? snapshot.canHit : false,
+                    canStand: isPlayerTurn ? snapshot.canStand : false,
+                    canDouble: isPlayerTurn ? snapshot.canDouble : false,
+                    canSplit: isPlayerTurn ? snapshot.canSplit : false,
+                    canSurrender: isPlayerTurn ? snapshot.canSurrender : false,
                 };
             });
         } catch (err) {
@@ -462,21 +492,10 @@ export default function BlackjackDialog({
                 splitResults: null,
             }));
 
-            // Game is active, but RPC might still verify it as NONE (stale).
-            // Poll until we see a valid active phase
-            let attempts = 0;
-            const checkAndRefresh = async () => {
-                const basic = await blackjackGetGameBasic(landId);
-                // If we see active state OR we've waited too long, do full refresh
-                if ((basic && basic.phase !== BlackjackPhase.NONE) || attempts > 5) {
-                    await refreshGameState();
-                    refetchBalance();
-                } else {
-                    attempts++;
-                    setTimeout(checkAndRefresh, 1000);
-                }
-            };
-            checkAndRefresh();
+            // Avoid immediate refresh polling here: mixed-lag RPC endpoints can briefly
+            // overwrite fresh receipt-derived cards/actions with stale state.
+            // We still sync on the next explicit refresh/action.
+            refetchBalance();
         } else {
             // Fallback for unknown state or error
             await refreshGameState();

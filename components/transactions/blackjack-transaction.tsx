@@ -430,22 +430,6 @@ export default function BlackjackTransaction({
                 };
             }
 
-            // Infer dealer hole card only when we don't have full dealer cards
-            if (!resultData.dealerCards && resultData.dealerUpCard !== undefined && resultData.dealerValue !== undefined) {
-                const upCard = resultData.dealerUpCard;
-                const finalVal = Number(resultData.dealerValue);
-                let holeCard = 0;
-                for (let r = 0; r < 13; r++) {
-                    const rankVal = (r + 1) > 10 ? 10 : (r + 1);
-                    const upRank = (upCard % 13) + 1;
-                    const upVal = upRank > 10 ? 10 : upRank;
-                    if (rankVal + upVal === finalVal) { holeCard = r; break; }
-                    if (rankVal === 1 && upVal + 11 === finalVal) { holeCard = r; break; }
-                    if (upVal === 1 && rankVal + 11 === finalVal) { holeCard = r; break; }
-                }
-                resultData.dealerCards = [upCard, holeCard];
-            }
-
             // Emit one toast per successful settlement
             if (resultData.splitResults && resultData.splitResults.length > 1) {
                 const totalPayout = resultData.payout || "0";

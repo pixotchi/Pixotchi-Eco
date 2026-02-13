@@ -2777,6 +2777,27 @@ export interface BlackjackActions {
   canInsurance: boolean;
 }
 
+export interface BlackjackGameSnapshot {
+  isActive: boolean;
+  player: string;
+  phase: BlackjackPhase;
+  betAmount: bigint;
+  activeHandCount: number;
+  hasSplit: boolean;
+  actionHandIndex: number;
+  hand1Cards: number[];
+  hand1Value: number;
+  hand2Cards: number[];
+  hand2Value: number;
+  dealerCards: number[];
+  dealerValue: number;
+  canHit: boolean;
+  canStand: boolean;
+  canDouble: boolean;
+  canSplit: boolean;
+  canSurrender: boolean;
+}
+
 export interface BlackjackConfig {
   minBet: bigint;
   maxBet: bigint;
@@ -2822,6 +2843,77 @@ export const blackjackGetGameBasic = async (landId: bigint): Promise<BlackjackGa
     };
   } catch (error) {
     console.warn('Failed to get blackjack game basic:', error);
+    return null;
+  }
+};
+
+/**
+ * Get complete Blackjack game snapshot in one read call
+ */
+export const blackjackGetGameSnapshot = async (landId: bigint): Promise<BlackjackGameSnapshot | null> => {
+  const readClient = getReadClient();
+  try {
+    const raw = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetGameSnapshot',
+        args: [landId],
+      });
+    }, 1, 250) as any;
+
+    // Support both tuple-object and flat array decoding shapes.
+    const snapshot = Array.isArray(raw)
+      ? raw
+      : (raw?.snapshot ?? raw);
+
+    if (!snapshot) return null;
+
+    if (Array.isArray(snapshot)) {
+      return {
+        isActive: !!snapshot[0],
+        player: String(snapshot[1]),
+        phase: Number(snapshot[2]) as BlackjackPhase,
+        betAmount: BigInt(snapshot[3]),
+        activeHandCount: Number(snapshot[4]),
+        hasSplit: !!snapshot[5],
+        actionHandIndex: Number(snapshot[6]),
+        hand1Cards: Array.isArray(snapshot[7]) ? snapshot[7].map(Number) : [],
+        hand1Value: Number(snapshot[8]),
+        hand2Cards: Array.isArray(snapshot[9]) ? snapshot[9].map(Number) : [],
+        hand2Value: Number(snapshot[10]),
+        dealerCards: Array.isArray(snapshot[11]) ? snapshot[11].map(Number) : [],
+        dealerValue: Number(snapshot[12]),
+        canHit: !!snapshot[13],
+        canStand: !!snapshot[14],
+        canDouble: !!snapshot[15],
+        canSplit: !!snapshot[16],
+        canSurrender: !!snapshot[17],
+      };
+    }
+
+    return {
+      isActive: !!snapshot.isActive,
+      player: String(snapshot.player),
+      phase: Number(snapshot.phase) as BlackjackPhase,
+      betAmount: BigInt(snapshot.betAmount),
+      activeHandCount: Number(snapshot.activeHandCount),
+      hasSplit: !!snapshot.hasSplit,
+      actionHandIndex: Number(snapshot.actionHandIndex),
+      hand1Cards: Array.isArray(snapshot.hand1Cards) ? snapshot.hand1Cards.map(Number) : [],
+      hand1Value: Number(snapshot.hand1Value),
+      hand2Cards: Array.isArray(snapshot.hand2Cards) ? snapshot.hand2Cards.map(Number) : [],
+      hand2Value: Number(snapshot.hand2Value),
+      dealerCards: Array.isArray(snapshot.dealerCards) ? snapshot.dealerCards.map(Number) : [],
+      dealerValue: Number(snapshot.dealerValue),
+      canHit: !!snapshot.canHit,
+      canStand: !!snapshot.canStand,
+      canDouble: !!snapshot.canDouble,
+      canSplit: !!snapshot.canSplit,
+      canSurrender: !!snapshot.canSurrender,
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack game snapshot:', error);
     return null;
   }
 };
