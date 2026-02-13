@@ -112,6 +112,8 @@ const initialGameState: GameState = {
     betAmountInput: '0',
 };
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
 const WIN_RESULTS = new Set<BlackjackResult>([
     BlackjackResult.PLAYER_WIN,
     BlackjackResult.PLAYER_BLACKJACK,
@@ -258,17 +260,36 @@ export default function BlackjackDialog({
             const snapshot = await blackjackGetGameSnapshot(landId);
 
             if (!snapshot) {
-                setGameState(prev => ({ ...initialGameState, betAmountInput: prev.betAmountInput }));
+                // Do not hard-reset UI on transient RPC/read failures.
+                // We keep the current state and try again on next refresh/action.
                 return;
             }
 
             const normalizedPlayer = (snapshot.player || '').toLowerCase();
             const isOurGame =
                 normalizedPlayer !== '' &&
-                normalizedPlayer !== '0x0000000000000000000000000000000000000000' &&
+                normalizedPlayer !== ZERO_ADDRESS &&
                 normalizedPlayer === address.toLowerCase();
 
             setGameState(prev => {
+                const snapshotLooksEmpty =
+                    snapshot.phase === BlackjackPhase.NONE &&
+                    (normalizedPlayer === '' || normalizedPlayer === ZERO_ADDRESS) &&
+                    snapshot.hand1Cards.length === 0 &&
+                    snapshot.hand2Cards.length === 0 &&
+                    snapshot.dealerCards.length === 0;
+
+                // Guard against stale RPC regressions: keep active local game if chain snapshot
+                // momentarily reports empty state.
+                if (
+                    prev.isActive &&
+                    prev.contractPhase === BlackjackPhase.PLAYER_TURN &&
+                    snapshotLooksEmpty &&
+                    prev.player.toLowerCase() === address.toLowerCase()
+                ) {
+                    return prev;
+                }
+
                 if (!isOurGame) {
                     if (prev.result !== null) {
                         return {
@@ -444,9 +465,9 @@ export default function BlackjackDialog({
                 splitResults: result.splitResults || null,
                 // Explicitly set player cards from the event, otherwise they stay empty (fresh game)
                 playerCards: result.cards && result.cards.length > 0 ? result.cards : prev.playerCards,
-                playerValue: result.handValue || prev.playerValue,
+                playerValue: result.handValue ?? prev.playerValue,
                 dealerCards: result.dealerCards || prev.dealerCards,
-                dealerValue: result.dealerValue || prev.dealerValue,
+                dealerValue: result.dealerValue ?? prev.dealerValue,
                 activeHandCount: 1, // Default cleanup
                 hasSplit: false
             }));
@@ -519,7 +540,7 @@ export default function BlackjackDialog({
                 // Preserve existing player cards if event doesn't provide them
                 // (e.g., surrender clears game before emitting event)
                 let finalPlayerCards = prev.playerCards;
-                let finalPlayerValue = result.handValue || prev.playerValue;
+                let finalPlayerValue = result.handValue ?? prev.playerValue;
 
                 // Only use event cards if they are provided AND not empty
                 if (result.cards && result.cards.length > 0) {
@@ -528,7 +549,7 @@ export default function BlackjackDialog({
 
                 // Preserve existing dealer cards if event doesn't provide them
                 let finalDealerCards = prev.dealerCards;
-                let finalDealerValue = result.dealerValue || prev.dealerValue;
+                let finalDealerValue = result.dealerValue ?? prev.dealerValue;
 
                 if (result.dealerCards && result.dealerCards.length > 0) {
                     finalDealerCards = result.dealerCards;
@@ -536,7 +557,7 @@ export default function BlackjackDialog({
 
                 // Preserve/update split hand cards for resolved split games
                 let finalSplitCards = prev.splitCards;
-                let finalSplitValue = result.splitValue || prev.splitValue;
+                let finalSplitValue = result.splitValue ?? prev.splitValue;
                 if (result.splitCards && result.splitCards.length > 0) {
                     finalSplitCards = result.splitCards;
                 } else if (
@@ -605,8 +626,8 @@ export default function BlackjackDialog({
                     playerCards: newPlayerCards,
                     splitCards: newSplitCards,
                     // Update value
-                    playerValue: targetHandIndex === 0 ? (result.handValue || prev.playerValue) : prev.playerValue,
-                    splitValue: targetHandIndex === 1 ? (result.handValue || prev.splitValue) : prev.splitValue,
+                    playerValue: targetHandIndex === 0 ? (result.handValue ?? prev.playerValue) : prev.playerValue,
+                    splitValue: targetHandIndex === 1 ? (result.handValue ?? prev.splitValue) : prev.splitValue,
                     // A post-hit hand can no longer double/surrender/split on this turn.
                     // Fresh on-chain snapshot will follow and finalize exact action flags.
                     canDouble: false,
@@ -678,39 +699,54 @@ export default function BlackjackDialog({
         (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction);
 
     const handleActionClick = useCallback(async (action: BlackjackAction): Promise<boolean> => {
-        const latestSnapshot = await blackjackGetGameSnapshot(landId);
+        const localActionAllowed =
+            (action === BlackjackAction.HIT && gameState.canHit) ||
+            (action === BlackjackAction.STAND && gameState.canStand) ||
+            (action === BlackjackAction.DOUBLE && gameState.canDouble) ||
+            (action === BlackjackAction.SPLIT && gameState.canSplit) ||
+            (action === BlackjackAction.SURRENDER && gameState.canSurrender);
+
+        let latestSnapshot = await blackjackGetGameSnapshot(landId);
+
+        // Retry once for transient stale reads before deciding state changed.
         if (!latestSnapshot || latestSnapshot.phase !== BlackjackPhase.PLAYER_TURN) {
-            toast.error('Game state changed. Refreshing...');
+            await new Promise(resolve => setTimeout(resolve, 250));
+            latestSnapshot = await blackjackGetGameSnapshot(landId);
+        }
+
+        if (latestSnapshot && latestSnapshot.phase === BlackjackPhase.PLAYER_TURN) {
+            const actionAllowedOnchain =
+                (action === BlackjackAction.HIT && latestSnapshot.canHit) ||
+                (action === BlackjackAction.STAND && latestSnapshot.canStand) ||
+                (action === BlackjackAction.DOUBLE && latestSnapshot.canDouble) ||
+                (action === BlackjackAction.SPLIT && latestSnapshot.canSplit) ||
+                (action === BlackjackAction.SURRENDER && latestSnapshot.canSurrender);
+
+            if (!actionAllowedOnchain) {
+                toast.error('That action is no longer available for this hand.');
+                await refreshGameState();
+                return false;
+            }
+
+            setGameState(prev => ({
+                ...prev,
+                contractPhase: latestSnapshot.phase,
+                hasSplit: latestSnapshot.hasSplit,
+                activeHandCount: latestSnapshot.activeHandCount,
+                currentHandIndex: latestSnapshot.actionHandIndex,
+                betAmount: latestSnapshot.betAmount,
+                canHit: latestSnapshot.canHit,
+                canStand: latestSnapshot.canStand,
+                canDouble: latestSnapshot.canDouble,
+                canSplit: latestSnapshot.canSplit,
+                canSurrender: latestSnapshot.canSurrender,
+            }));
+        } else if (!localActionAllowed) {
+            // Snapshot unavailable/stale and local state also says action is not valid.
+            toast.error('Game state is syncing. Please try again.');
             await refreshGameState();
             return false;
         }
-
-        const actionAllowed =
-            (action === BlackjackAction.HIT && latestSnapshot.canHit) ||
-            (action === BlackjackAction.STAND && latestSnapshot.canStand) ||
-            (action === BlackjackAction.DOUBLE && latestSnapshot.canDouble) ||
-            (action === BlackjackAction.SPLIT && latestSnapshot.canSplit) ||
-            (action === BlackjackAction.SURRENDER && latestSnapshot.canSurrender);
-
-        if (!actionAllowed) {
-            toast.error('That action is no longer available for this hand.');
-            await refreshGameState();
-            return false;
-        }
-
-        setGameState(prev => ({
-            ...prev,
-            contractPhase: latestSnapshot.phase,
-            hasSplit: latestSnapshot.hasSplit,
-            activeHandCount: latestSnapshot.activeHandCount,
-            currentHandIndex: latestSnapshot.actionHandIndex,
-            betAmount: latestSnapshot.betAmount,
-            canHit: latestSnapshot.canHit,
-            canStand: latestSnapshot.canStand,
-            canDouble: latestSnapshot.canDouble,
-            canSplit: latestSnapshot.canSplit,
-            canSurrender: latestSnapshot.canSurrender,
-        }));
 
         const requiresAdditionalBet = action === BlackjackAction.DOUBLE || action === BlackjackAction.SPLIT;
         if (!requiresAdditionalBet) {
@@ -719,7 +755,9 @@ export default function BlackjackDialog({
             return true;
         }
 
-        const requiredWei = latestSnapshot.betAmount > BigInt(0) ? latestSnapshot.betAmount : gameState.betAmount;
+        const requiredWei = latestSnapshot && latestSnapshot.betAmount > BigInt(0)
+            ? latestSnapshot.betAmount
+            : gameState.betAmount;
         if (requiredWei <= BigInt(0)) {
             toast.error('Unable to verify additional wager amount. Please refresh.');
             return false;
@@ -823,6 +861,10 @@ export default function BlackjackDialog({
 
     if (!open) return null;
 
+    const showDealerHand =
+        gameState.dealerCards.length > 0 ||
+        (uiPhase === 'result' && gameState.result !== null);
+
     return (
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent className="max-w-lg bg-cover bg-center bg-no-repeat bg-[url('/icons/casinobj.png')] border-none text-white rounded-xl">
@@ -835,11 +877,11 @@ export default function BlackjackDialog({
 
                 <div className="space-y-6 py-4">
                     {/* Dealer Hand */}
-                    {gameState.dealerCards.length > 0 && (
+                    {showDealerHand && (
                         <CardHand
                             cards={gameState.dealerCards}
                             label="DEALER"
-                            value={uiPhase === 'result' ? gameState.dealerValue : undefined}
+                            value={uiPhase === 'result' && gameState.result !== null ? gameState.dealerValue : undefined}
                             hideHoleCard={uiPhase !== 'result' && gameState.dealerCards.length > 1}
                         />
                     )}

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, keccak256, encodePacked, type Hex } from 'viem';
+import { createPublicClient, keccak256, encodePacked, type Hex } from 'viem';
 import { privateKeyToAccount, signMessage } from 'viem/accounts';
 import { base } from 'viem/chains';
 import { blackjackAbi } from '@/public/abi/blackjack-abi';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { redis, redisCompareAndSetJSON, redisDel, redisGetJSON } from '@/lib/redis';
+import { createResilientTransport, getRpcEndpoints } from '@/lib/rpc-transport';
 
 /**
  * Server-Signed Randomness API for Blackjack
@@ -41,6 +42,20 @@ const PHASE_PLAYER_TURN = 2;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 type BlackjackActionName = 'deal' | 'hit' | 'stand' | 'double' | 'split' | 'surrender';
+
+function getBlackjackRpcEndpoints(): string[] {
+    const configuredEndpoints = getRpcEndpoints();
+    const explicitBaseRpc = process.env.BASE_RPC_URL?.trim();
+
+    // Keep BASE_RPC_URL as an optional server-side override, but still include
+    // the shared resilient endpoint list as fallbacks.
+    if (!explicitBaseRpc) return configuredEndpoints;
+
+    return [
+        explicitBaseRpc,
+        ...configuredEndpoints.filter((url) => url !== explicitBaseRpc),
+    ];
+}
 
 function getActionLockKey(landId: string, nonce: bigint): string {
     return `${ACTION_LOCK_KEY_PREFIX}${landId}:${nonce.toString()}`;
@@ -295,10 +310,12 @@ export async function POST(request: NextRequest) {
         // Clean up old entries
         cleanupRateLimits();
 
-        // Create public client to read nonce
+        // Use the shared resilient RPC transport (same endpoint set/fallback strategy
+        // as the rest of the app) instead of a single hardcoded public RPC.
+        const blackjackRpcEndpoints = getBlackjackRpcEndpoints();
         const publicClient = createPublicClient({
             chain: base,
-            transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org'),
+            transport: createResilientTransport(blackjackRpcEndpoints),
         });
 
         // Get current nonce from contract
