@@ -28,11 +28,11 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats, type EthFollowStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
-import { FollowButton, useTransactions, type FollowingState } from 'ethereum-identity-kit';
+import { FollowButton, fetchFollowState, useTransactions } from 'ethereum-identity-kit';
 import { Avatar } from '@coinbase/onchainkit/identity';
 import { base } from 'viem/chains';
 import { formatDistanceToNow } from 'date-fns';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 type TwitterMediaLite = { type?: string | null; url?: string | null };
 type TwitterPostLite = {
@@ -114,8 +114,8 @@ const getPlatformIcon = (platform: string) => {
   const Fallback = platformFallbackIcon[key] ?? GlobeIcon;
   return asset
     ? ({ className }: { className?: string }) => (
-        <Image src={asset} alt={platform} width={16} height={16} className={className ?? ''} />
-      )
+      <Image src={asset} alt={platform} width={16} height={16} className={className ?? ''} />
+    )
     : Fallback;
 };
 
@@ -152,10 +152,11 @@ export default function PlantProfileDialog({
     return walletAddressOverride ?? null;
   }, [plant?.owner, walletAddressOverride]);
   const plantId = plant?.id ?? null;
-  
+
   // Get TransactionModal state to detect when it's open/closed
-  const { txModalOpen } = useTransactions();
-  
+  const { txModalOpen, selectedList: efpSelectedList, lists: efpLists } = useTransactions();
+  const queryClient = useQueryClient();
+
   // Close plant profile dialog when TransactionModal opens
   useEffect(() => {
     if (txModalOpen && open) {
@@ -239,7 +240,7 @@ export default function PlantProfileDialog({
     return selections.slice(0, 5);
   }, [identitySummary]);
   const primaryIdentity = primaryIdentities[0] ?? null;
-  
+
   const socialIconHandles = useMemo(() => {
     const handles = identitySummary?.handles ?? [];
     const order = ['farcaster', 'twitter', 'github', 'zora', 'talent-protocol', 'email', 'website'];
@@ -397,22 +398,139 @@ export default function PlantProfileDialog({
 
   // Track previous TransactionModal state to detect when it closes
   const prevTxModalOpenRef = React.useRef(txModalOpen);
-  const lastViewedOwnerRef = React.useRef<string | null>(null);
+  const followTxTargetRef = React.useRef<string | null>(null);
+  const followMissionRunRef = React.useRef<{ target: string; token: number } | null>(null);
 
-  useEffect(() => {
-    if (ownerAddress) {
-      lastViewedOwnerRef.current = ownerAddress.toLowerCase();
+  const fetchIsFollowingOwner = useCallback(
+    async (lookupAddress: string, fresh: boolean): Promise<boolean> => {
+      if (!connectedAddress) return false;
+
+      const selectedListForProbe =
+        efpSelectedList && efpSelectedList !== 'new list' ? efpSelectedList : undefined;
+      const primaryListForProbe = efpLists?.primary_list ?? undefined;
+      const probes: Array<string | number | undefined> = [undefined];
+
+      if (selectedListForProbe !== undefined) probes.push(selectedListForProbe);
+      if (primaryListForProbe !== undefined && !probes.includes(primaryListForProbe)) {
+        probes.push(primaryListForProbe);
+      }
+
+      for (const listProbe of probes) {
+        try {
+          const status = await fetchFollowState({
+            lookupAddressOrName: lookupAddress,
+            connectedAddress,
+            list: listProbe as any,
+            type: 'following',
+            fresh,
+          });
+          if (status?.state?.follow) return true;
+        } catch { }
+      }
+
+      return false;
+    },
+    [connectedAddress, efpSelectedList, efpLists?.primary_list],
+  );
+
+  const postFollowMissionProgress = useCallback(async (): Promise<boolean> => {
+    if (!connectedAddress) return false;
+    try {
+      const response = await fetch('/api/gamification/missions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: connectedAddress, taskId: 's2_follow_player' })
+      });
+      return response.ok;
+    } catch {
+      return false;
     }
-  }, [ownerAddress]);
-  
+  }, [connectedAddress]);
+
+  const verifyFollowAndTrackMission = useCallback(
+    async (
+      lookupAddress: string,
+      options?: {
+        attempts?: number;
+        delayMs?: number;
+        token?: number;
+      },
+    ): Promise<boolean> => {
+      const attempts = options?.attempts ?? 15;
+      const delayMs = options?.delayMs ?? 1500;
+
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        if (options?.token && followMissionRunRef.current?.token !== options.token) {
+          return false;
+        }
+
+        const isFollowing = await fetchIsFollowingOwner(lookupAddress, true);
+        if (isFollowing) {
+          await queryClient.refetchQueries({ queryKey: ['followingState'], exact: false });
+          const tracked = await postFollowMissionProgress();
+          if (tracked) return true;
+        }
+
+        if (attempt < attempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+
+      return false;
+    },
+    [fetchIsFollowingOwner, postFollowMissionProgress, queryClient],
+  );
+
+  const handleFollowButtonIntent = useCallback(() => {
+    if (!connectedAddress || !ownerAddress) return;
+    if (connectedAddress.toLowerCase() === ownerAddress.toLowerCase()) return;
+
+    const lookupAddress = ownerAddress.toLowerCase();
+    const token = Date.now();
+    followTxTargetRef.current = lookupAddress;
+    followMissionRunRef.current = { target: lookupAddress, token };
+
+    // Start tracking on click so mission detection survives dialog unmount/race conditions.
+    const run = async () => {
+      const wasFollowingBeforeClick = await fetchIsFollowingOwner(lookupAddress, true);
+      if (followMissionRunRef.current?.token !== token) return;
+
+      // If already following, this action is likely Unfollow/Block/Mute. Do not count mission.
+      if (wasFollowingBeforeClick) return;
+
+      await verifyFollowAndTrackMission(lookupAddress, { attempts: 24, delayMs: 1500, token });
+    };
+
+    void run();
+  }, [connectedAddress, ownerAddress, fetchIsFollowingOwner, verifyFollowAndTrackMission]);
+
   // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
   useEffect(() => {
+    const canFollowOwner =
+      !!connectedAddress &&
+      !!ownerAddress &&
+      connectedAddress.toLowerCase() !== ownerAddress.toLowerCase();
+
+    // Capture follow target when tx modal opens. Do not depend on dialog open state.
+    if (!prevTxModalOpenRef.current && txModalOpen && canFollowOwner && !followTxTargetRef.current) {
+      followTxTargetRef.current = ownerAddress.toLowerCase();
+    }
+
     // If TransactionModal was open and now it's closed, refresh stats
     if (prevTxModalOpenRef.current && !txModalOpen) {
       refreshEfpStats();
+      void queryClient.refetchQueries({ queryKey: ['followingState'], exact: false });
+
+      // Tx close fallback: verify follow state and award mission when follow succeeded.
+      if (canFollowOwner) {
+        const lookupAddress = followTxTargetRef.current ?? ownerAddress.toLowerCase();
+        void verifyFollowAndTrackMission(lookupAddress, { attempts: 18, delayMs: 1500 });
+      }
+
+      followTxTargetRef.current = null;
     }
     prevTxModalOpenRef.current = txModalOpen;
-  }, [txModalOpen, refreshEfpStats]);
+  }, [txModalOpen, connectedAddress, ownerAddress, queryClient, refreshEfpStats, verifyFollowAndTrackMission]);
 
   if (!ownerAddress) return null;
 
@@ -437,17 +555,6 @@ export default function PlantProfileDialog({
   const handleViewOnBlockscout = async () => {
     if (!ownerAddress) return;
     await openExternalUrl(`https://base.blockscout.com/address/${ownerAddress}`);
-  };
-
-  const handleFollowButtonClick = (state: FollowingState) => {
-    if (state !== 'Follow') return;
-    if (!connectedAddress || !ownerAddress) return;
-    if (connectedAddress.toLowerCase() === ownerAddress.toLowerCase()) return;
-    fetch('/api/gamification/missions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: connectedAddress, taskId: 's2_follow_player' })
-    }).catch(() => {});
   };
 
   return (
@@ -481,9 +588,8 @@ export default function PlantProfileDialog({
               <div className="absolute -bottom-8 left-6">
                 <div className="relative">
                   <div
-                    className={`w-24 h-24 border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center ${
-                      isWalletVariant ? 'rounded-full' : 'rounded-xl'
-                    }`}
+                    className={`w-24 h-24 border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center ${isWalletVariant ? 'rounded-full' : 'rounded-xl'
+                      }`}
                   >
                     {showPrimaryLoading ? (
                       <Skeleton className="h-full w-full" />
@@ -512,216 +618,215 @@ export default function PlantProfileDialog({
               </div>
             </div>
             <div className="flex flex-col gap-1 px-6 pb-5 pt-6">
-          {/* Plant Info */}
-          <div className="mt-6 mb-2 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <DialogTitle className="text-2xl font-bold truncate">
-                {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
-              </DialogTitle>
-              {displaySubtitle && !showPrimaryLoading && (
-                <DialogDescription className="text-sm mt-1">
-                  {displaySubtitle}
-                </DialogDescription>
-              )}
-              {hasPlant && plant?.timePlantBorn && !showPrimaryLoading && !isWalletVariant && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  Planted on {new Date(Number(plant.timePlantBorn) * 1000).toLocaleDateString()}
-                </div>
-              )}
-            </div>
-            {canShowPostsButton && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-3"
-                onClick={() => setPostsDialogOpen(true)}
-              >
-                View X posts{twitterPosts.length > 0 ? ` (${twitterPosts.length})` : ''}
-              </Button>
-            )}
-          </div>
-
-          {/* Plant & Owner Stats Row */}
-          <div className="mb-3 flex flex-col gap-2.5 text-sm">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Game Stats</span>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              {hasPlant && plant && (
-                <>
-                  <div className="flex items-center gap-1.5">
-                    <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} />
-                    <span className="font-semibold">{plant.stars}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                    <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
-                    <span className="text-xs text-muted-foreground uppercase">Rewards</span>
-                  </div>
-                </>
-              )}
-              {loading ? (
-                <>
-                  <div className="flex items-center gap-1.5">
-                    <Skeleton className="h-4 w-4 rounded" />
-                    <Skeleton className="h-4 w-8" />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Skeleton className="h-4 w-4 rounded" />
-                    <Skeleton className="h-4 w-8" />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Skeleton className="h-4 w-4 rounded" />
-                    <Skeleton className="h-4 w-12" />
-                    <Skeleton className="h-3 w-12" />
-                  </div>
-                </>
-              ) : ownerStats ? (
-                <>
-                  <div className="flex items-center gap-1.5">
-                    <Image src="/icons/plant1.svg" alt="Plants" width={16} height={16} />
-                    <span className="font-semibold">{ownerStats.totalPlants}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Image src="/icons/bee-house.svg" alt="Lands" width={16} height={16} />
-                    <span className="font-semibold">{ownerStats.totalLands}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={16} height={16} />
-                    <span className="font-semibold">{formatStaked(ownerStats.stakedSeed)}</span>
-                    <span className="text-xs text-muted-foreground uppercase">Staked</span>
-                  </div>
-                </>
-              ) : null}
-            </div>
-            {combinedSocialHandles.length > 0 && (
-              <div className="mt-3 flex flex-col gap-1.5">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Social Info</span>
-                <div className="flex flex-wrap items-center gap-2">
-                {combinedSocialHandles.map((handle) => {
-                  const Icon = getPlatformIcon(handle.platform);
-                  const url = getIdentityUrl(handle.platform, handle.value, handle.url);
-                  return (
-                    <button
-                      key={`${handle.platform}-${handle.value}-inline`}
-                      type="button"
-                      className={`flex items-center gap-1.5 text-left transition ${url ? 'hover:text-primary' : 'cursor-default text-muted-foreground'}`}
-                      onClick={() => {
-                        if (url) openExternalUrl(url);
-                      }}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="font-semibold">
-                        {formatIdentityValue(handle.platform, handle.value)}
-                      </span>
-                    </button>
-                  );
-                })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <>
-            <div className="space-y-2.5 mb-4">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
-                <div className="flex items-center gap-2">
-                  {isNameLoading ? (
-                    <Skeleton className="h-4 w-32" />
-                  ) : ownerName ? (
-                    <span className="text-sm text-primary font-medium">{ownerName}</span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground italic">No ENS/Basename found</span>
+              {/* Plant Info */}
+              <div className="mt-6 mb-2 flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <DialogTitle className="text-2xl font-bold truncate">
+                    {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
+                  </DialogTitle>
+                  {displaySubtitle && !showPrimaryLoading && (
+                    <DialogDescription className="text-sm mt-1">
+                      {displaySubtitle}
+                    </DialogDescription>
+                  )}
+                  {hasPlant && plant?.timePlantBorn && !showPrimaryLoading && !isWalletVariant && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Planted on {new Date(Number(plant.timePlantBorn) * 1000).toLocaleDateString()}
+                    </div>
                   )}
                 </div>
+                {canShowPostsButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3"
+                    onClick={() => setPostsDialogOpen(true)}
+                  >
+                    View X posts{twitterPosts.length > 0 ? ` (${twitterPosts.length})` : ''}
+                  </Button>
+                )}
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleCopyAddress}
-                className="flex-1 h-10 font-mono text-sm justify-between"
-                disabled={!ownerAddress}
-              >
-                <span className="truncate">{ownerAddress ? formatAddress(ownerAddress, 6, 4) : '—'}</span>
-                <Copy className="w-4 h-4 flex-shrink-0" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleViewOnBlockscout}
-                className="h-10 w-10 p-0"
-                disabled={!ownerAddress}
-              >
-                <ExternalLink className="w-4 h-4" />
-              </Button>
-              {showOtherButton && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-10 px-3"
-                  onClick={() => setOtherDialogOpen(true)}
-                >
-                  Other
-                </Button>
-              )}
-            </div>
 
-          {/* EFP Social Stats - Followers/Following */}
-          <div className="flex flex-col items-center gap-1.5 py-3 border-t border-border">
-            <div className="flex items-center justify-center gap-3">
-            {efpLoading ? (
+              {/* Plant & Owner Stats Row */}
+              <div className="mb-3 flex flex-col gap-2.5 text-sm">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Game Stats</span>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  {hasPlant && plant && (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} />
+                        <span className="font-semibold">{plant.stars}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                        <span className="font-semibold">{formatEthShort(plant.rewards)}</span>
+                        <span className="text-xs text-muted-foreground uppercase">Rewards</span>
+                      </div>
+                    </>
+                  )}
+                  {loading ? (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-8" />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-8" />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-12" />
+                        <Skeleton className="h-3 w-12" />
+                      </div>
+                    </>
+                  ) : ownerStats ? (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <Image src="/icons/plant1.svg" alt="Plants" width={16} height={16} />
+                        <span className="font-semibold">{ownerStats.totalPlants}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Image src="/icons/bee-house.svg" alt="Lands" width={16} height={16} />
+                        <span className="font-semibold">{ownerStats.totalLands}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={16} height={16} />
+                        <span className="font-semibold">{formatStaked(ownerStats.stakedSeed)}</span>
+                        <span className="text-xs text-muted-foreground uppercase">Staked</span>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+                {combinedSocialHandles.length > 0 && (
+                  <div className="mt-3 flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Social Info</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {combinedSocialHandles.map((handle) => {
+                        const Icon = getPlatformIcon(handle.platform);
+                        const url = getIdentityUrl(handle.platform, handle.value, handle.url);
+                        return (
+                          <button
+                            key={`${handle.platform}-${handle.value}-inline`}
+                            type="button"
+                            className={`flex items-center gap-1.5 text-left transition ${url ? 'hover:text-primary' : 'cursor-default text-muted-foreground'}`}
+                            onClick={() => {
+                              if (url) openExternalUrl(url);
+                            }}
+                          >
+                            <Icon className="h-4 w-4" />
+                            <span className="font-semibold">
+                              {formatIdentityValue(handle.platform, handle.value)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <>
-                <div className="flex flex-col items-center">
-                  <Skeleton className="h-6 w-12 mb-1" />
-                  <Skeleton className="h-3 w-16" />
+                <div className="space-y-2.5 mb-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
+                    <div className="flex items-center gap-2">
+                      {isNameLoading ? (
+                        <Skeleton className="h-4 w-32" />
+                      ) : ownerName ? (
+                        <span className="text-sm text-primary font-medium">{ownerName}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">No ENS/Basename found</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="h-8 w-px bg-border" />
-                <div className="flex flex-col items-center">
-                  <Skeleton className="h-6 w-12 mb-1" />
-                  <Skeleton className="h-3 w-16" />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyAddress}
+                    className="flex-1 h-10 font-mono text-sm justify-between"
+                    disabled={!ownerAddress}
+                  >
+                    <span className="truncate">{ownerAddress ? formatAddress(ownerAddress, 6, 4) : '—'}</span>
+                    <Copy className="w-4 h-4 flex-shrink-0" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleViewOnBlockscout}
+                    className="h-10 w-10 p-0"
+                    disabled={!ownerAddress}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </Button>
+                  {showOtherButton && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 px-3"
+                      onClick={() => setOtherDialogOpen(true)}
+                    >
+                      Other
+                    </Button>
+                  )}
                 </div>
+
+                {/* EFP Social Stats - Followers/Following */}
+                <div className="flex flex-col items-center gap-1.5 py-3 border-t border-border">
+                  <div className="flex items-center justify-center gap-3">
+                    {efpLoading ? (
+                      <>
+                        <div className="flex flex-col items-center">
+                          <Skeleton className="h-6 w-12 mb-1" />
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                        <div className="h-8 w-px bg-border" />
+                        <div className="flex flex-col items-center">
+                          <Skeleton className="h-6 w-12 mb-1" />
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                      </>
+                    ) : efpStats ? (
+                      <>
+                        <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
+                          <span className="text-xl font-bold">{formatCount(efpStats.followersCount)}</span>
+                          <span className="text-xs text-muted-foreground">Followers</span>
+                        </div>
+                        <div className="h-8 w-px bg-border" />
+                        <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
+                          <span className="text-xl font-bold">{formatCount(efpStats.followingCount)}</span>
+                          <span className="text-xs text-muted-foreground">Following</span>
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">No social data available</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Follow Button Section */}
+                {connectedAddress &&
+                  ownerAddress &&
+                  connectedAddress.toLowerCase() !== ownerAddress.toLowerCase() && (
+                    <div className="flex justify-center pt-4 border-t border-border">
+                      <div className="w-full" onClickCapture={handleFollowButtonIntent}>
+                        <FollowButton
+                          lookupAddress={ownerAddress as `0x${string}`}
+                          connectedAddress={connectedAddress}
+                          onDisconnectedClick={() => {
+                            toast.error('Please connect your wallet to follow users');
+                          }}
+                          className="w-full h-10 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                  )}
+
               </>
-            ) : efpStats ? (
-              <>
-                <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
-                  <span className="text-xl font-bold">{formatCount(efpStats.followersCount)}</span>
-                  <span className="text-xs text-muted-foreground">Followers</span>
-                </div>
-                <div className="h-8 w-px bg-border" />
-                <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
-                  <span className="text-xl font-bold">{formatCount(efpStats.followingCount)}</span>
-                  <span className="text-xs text-muted-foreground">Following</span>
-                </div>
-              </>
-            ) : (
-              <span className="text-xs text-muted-foreground italic">No social data available</span>
-            )}
             </div>
           </div>
-
-          {/* Follow Button Section */}
-          {connectedAddress &&
-           ownerAddress &&
-           connectedAddress.toLowerCase() !== ownerAddress.toLowerCase() && (
-            <div className="flex justify-center pt-4 border-t border-border">
-              <div className="w-full">
-                <FollowButton
-                  lookupAddress={ownerAddress as `0x${string}`}
-                  connectedAddress={connectedAddress}
-                  customOnClick={handleFollowButtonClick}
-                  onDisconnectedClick={() => {
-                    toast.error('Please connect your wallet to follow users');
-                  }}
-                  className="w-full h-10 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                />
-              </div>
-            </div>
-          )}
-
-          </>
-          </div>
-        </div>
         </DialogContent>
       </Dialog>
       <Dialog open={postsDialogOpen} onOpenChange={setPostsDialogOpen}>
@@ -730,9 +835,8 @@ export default function PlantProfileDialog({
             <DialogTitle className="text-lg font-semibold">Recent posts</DialogTitle>
             <DialogDescription>
               {twitterUsername
-                ? `Latest ${twitterPosts.length || 10} posts from @${twitterUsername} via Memory Protocol${
-                    twitterLastUpdated ? ` • updated ${twitterLastUpdated}` : ''
-                  }.`
+                ? `Latest ${twitterPosts.length || 10} posts from @${twitterUsername} via Memory Protocol${twitterLastUpdated ? ` • updated ${twitterLastUpdated}` : ''
+                }.`
                 : `Latest ${twitterPosts.length || 10} posts via Memory Protocol.`}
             </DialogDescription>
           </DialogHeader>
@@ -749,72 +853,72 @@ export default function PlantProfileDialog({
                 ) : null}
               </div>
               <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
-              {twitterPosts.map((post: TwitterPostLite) => {
-                const postAge = formatTwitterPostAge(post.createdAt);
-                const metrics = [
-                  { key: 'likes', label: 'Likes', value: post.metrics?.likes, icon: Heart },
-                  { key: 'reposts', label: 'Reposts', value: post.metrics?.reposts, icon: Repeat2 },
-                  { key: 'quotes', label: 'Quotes', value: post.metrics?.quotes, icon: Quote },
-                  { key: 'replies', label: 'Replies', value: post.metrics?.replies, icon: MessageCircle },
-                  { key: 'bookmarks', label: 'Bookmarks', value: post.metrics?.bookmarks, icon: Bookmark },
-                ].filter((metric) => typeof metric.value === 'number' && (metric.value ?? 0) > 0);
-                const mediaCount = Array.isArray(post.media)
-                  ? post.media.filter((item: TwitterMediaLite | null | undefined) => item?.url).length
-                  : 0;
-                return (
-                  <div
-                    key={post.id}
-                    className="rounded-xl border border-border/60 bg-background/95 p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md"
-                  >
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                      {post.text || '(No text)'}
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      {postAge ? <span>{postAge}</span> : null}
-                      {post.url ? (
-                        <>
-                          <span className="opacity-60">•</span>
-                          <a
-                            href={post.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                          >
-                            <ExternalLink className="h-3 w-3" aria-hidden />
-                            Open on X
-                          </a>
-                        </>
-                      ) : null}
-                    </div>
-                    {metrics.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {metrics.map((metric) => {
-                          const Icon = metric.icon;
-                          return (
-                            <span
-                              key={metric.key}
-                              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground"
+                {twitterPosts.map((post: TwitterPostLite) => {
+                  const postAge = formatTwitterPostAge(post.createdAt);
+                  const metrics = [
+                    { key: 'likes', label: 'Likes', value: post.metrics?.likes, icon: Heart },
+                    { key: 'reposts', label: 'Reposts', value: post.metrics?.reposts, icon: Repeat2 },
+                    { key: 'quotes', label: 'Quotes', value: post.metrics?.quotes, icon: Quote },
+                    { key: 'replies', label: 'Replies', value: post.metrics?.replies, icon: MessageCircle },
+                    { key: 'bookmarks', label: 'Bookmarks', value: post.metrics?.bookmarks, icon: Bookmark },
+                  ].filter((metric) => typeof metric.value === 'number' && (metric.value ?? 0) > 0);
+                  const mediaCount = Array.isArray(post.media)
+                    ? post.media.filter((item: TwitterMediaLite | null | undefined) => item?.url).length
+                    : 0;
+                  return (
+                    <div
+                      key={post.id}
+                      className="rounded-xl border border-border/60 bg-background/95 p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md"
+                    >
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                        {post.text || '(No text)'}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {postAge ? <span>{postAge}</span> : null}
+                        {post.url ? (
+                          <>
+                            <span className="opacity-60">•</span>
+                            <a
+                              href={post.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                             >
-                              <Icon className="h-3.5 w-3.5 text-primary" aria-hidden />
-                              <span>{metric.value}</span>
-                              <span className="sr-only">{metric.label}</span>
-                            </span>
-                          );
-                        })}
+                              <ExternalLink className="h-3 w-3" aria-hidden />
+                              Open on X
+                            </a>
+                          </>
+                        ) : null}
                       </div>
-                    )}
-                    {mediaCount > 0 && (
-                      <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-                        <ImageIcon className="h-3.5 w-3.5" aria-hidden />
-                        <span>
-                          {mediaCount} attachment{mediaCount > 1 ? 's' : ''} available on X
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      {metrics.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {metrics.map((metric) => {
+                            const Icon = metric.icon;
+                            return (
+                              <span
+                                key={metric.key}
+                                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground"
+                              >
+                                <Icon className="h-3.5 w-3.5 text-primary" aria-hidden />
+                                <span>{metric.value}</span>
+                                <span className="sr-only">{metric.label}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {mediaCount > 0 && (
+                        <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                          <ImageIcon className="h-3.5 w-3.5" aria-hidden />
+                          <span>
+                            {mediaCount} attachment{mediaCount > 1 ? 's' : ''} available on X
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </>
           ) : (
             <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
