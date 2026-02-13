@@ -318,6 +318,11 @@ export default function BlackjackDialog({
                     snapshot.hand1Cards.length === 0 &&
                     snapshot.hand2Cards.length === 0 &&
                     snapshot.dealerCards.length === 0;
+                const prevPlayer = (prev.player || '').toLowerCase();
+                const prevLikelyOurGame =
+                    prevPlayer === '' ||
+                    prevPlayer === ZERO_ADDRESS ||
+                    prevPlayer === address.toLowerCase();
 
                 // Guard against stale RPC regressions: keep active local game if chain snapshot
                 // momentarily reports empty state.
@@ -325,8 +330,26 @@ export default function BlackjackDialog({
                     prev.isActive &&
                     prev.contractPhase === BlackjackPhase.PLAYER_TURN &&
                     snapshotLooksEmpty &&
-                    prev.player.toLowerCase() === address.toLowerCase()
+                    prevLikelyOurGame
                 ) {
+                    return prev;
+                }
+
+                const splitStateRegressed =
+                    prev.isActive &&
+                    prev.contractPhase === BlackjackPhase.PLAYER_TURN &&
+                    prev.hasSplit &&
+                    snapshot.phase === BlackjackPhase.PLAYER_TURN &&
+                    (
+                        !snapshot.hasSplit ||
+                        snapshot.activeHandCount < 2 ||
+                        snapshot.hand2Cards.length === 0
+                    );
+
+                // Guard against mixed-RPC lag right after split:
+                // once local state has split hands, do not regress back to single-hand
+                // UI until on-chain snapshot confirms the split state.
+                if (splitStateRegressed) {
                     return prev;
                 }
 
@@ -605,6 +628,7 @@ export default function BlackjackDialog({
                     ...prev,
                     isActive: true,
                     contractPhase: BlackjackPhase.PLAYER_TURN, // Force phase
+                    player: address || prev.player,
                     playerCards: dealtCards,
                     playerValue: result.handValue ?? 0,
                     // Keep current wager in local state so mid-game DOUBLE/SPLIT funding checks
@@ -639,7 +663,7 @@ export default function BlackjackDialog({
         } finally {
             setTxInProgress(null);
         }
-    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries, landId, gameState.betAmountInput]);
+    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries, landId, gameState.betAmountInput, address]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: any) => {
