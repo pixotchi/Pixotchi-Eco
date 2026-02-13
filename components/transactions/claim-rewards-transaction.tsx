@@ -11,7 +11,7 @@ import {
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -51,10 +51,8 @@ export default function ClaimRewardsTransaction({
     args: [BigInt(plantId)],
   }], [plantId]);
 
-  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
-
-  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  // Normalize to raw serializable calls for embedded-wallet compatibility.
+  // Builder attribution is handled at Wagmi client level via `dataSuffix`.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]),
     [calls]
@@ -83,7 +81,6 @@ export default function ClaimRewardsTransaction({
         onError={onError}
         onStatus={handleOnStatus}
         isSponsored={false}
-        capabilities={builderCapabilities}
         resetAfter={2000}
       >
         <TransactionButton
@@ -104,4 +101,3 @@ export default function ClaimRewardsTransaction({
     </div>
   );
 }
-

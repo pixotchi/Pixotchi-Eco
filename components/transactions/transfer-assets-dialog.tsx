@@ -14,7 +14,6 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
 import { Land, Plant } from "@/lib/types";
-import { appendBuilderSuffix } from "@/lib/builder-code";
 
 interface TransferAssetsDialogProps {
   open: boolean;
@@ -444,17 +443,16 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     if (!walletClient || !address) return;
                     try {
                       setLoading(true);
-                      // Encode function data and append builder code suffix for ERC-8021 attribution
+                      // Encode function data; Builder attribution is appended by Wagmi client `dataSuffix`.
                       const abi = [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }] as const;
                       const encodedData = encodeFunctionData({
                         abi,
                         functionName: 'setApprovalForAll',
                         args: [BATCH_ROUTER_ADDRESS, true],
                       });
-                      const dataWithSuffix = appendBuilderSuffix(encodedData);
                       const hash = await walletClient.sendTransaction({
                         to: PIXOTCHI_NFT_ADDRESS,
-                        data: dataWithSuffix,
+                        data: encodedData,
                         account: walletClient.account!,
                         chain: undefined,
                       });
@@ -480,17 +478,16 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     if (!walletClient || !address) return;
                     try {
                       setLoading(true);
-                      // Encode function data and append builder code suffix for ERC-8021 attribution
+                      // Encode function data; Builder attribution is appended by Wagmi client `dataSuffix`.
                       const abi = [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }] as const;
                       const encodedData = encodeFunctionData({
                         abi,
                         functionName: 'setApprovalForAll',
                         args: [BATCH_ROUTER_ADDRESS, true],
                       });
-                      const dataWithSuffix = appendBuilderSuffix(encodedData);
                       const hash = await walletClient.sendTransaction({
                         to: LAND_CONTRACT_ADDRESS,
-                        data: dataWithSuffix,
+                        data: encodedData,
                         account: walletClient.account!,
                         chain: undefined,
                       });
@@ -569,5 +566,4 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     </>
   );
 }
-
 

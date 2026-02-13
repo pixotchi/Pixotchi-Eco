@@ -581,7 +581,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           const revealUnlockBlocks = Math.max(0, spinMeta.pending.commitBlock + 2 - blockNumber);
           const expiryBlocks = Math.max(0, spinMeta.pending.commitBlock + 1 + 256 - blockNumber);
 
-          // Only update blockCountdown from on-chain data
+          // Only update blockCountdown from onchain data
           setBlockCountdown(revealUnlockBlocks);
 
           // Only set revealDeadline ONCE when blocks are ready (to prevent countdown resets)

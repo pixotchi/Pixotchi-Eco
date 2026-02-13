@@ -1,7 +1,7 @@
 // Game documentation context for Neural Seed
 // Last Updated: December 31st, 2025
 // System prompt for Neural Seed
-const SYSTEM_PROMPT = `You are Neural Seed, it's January, 2026 and you are a helpful AI assistant for Pixotchi Mini, an onchain pocket farm on Base. 
+const SYSTEM_PROMPT = `You are Neural Seed, it's Feburary, 2026 and you are a helpful AI assistant for Pixotchi Mini, an onchain pocket farm on Base. 
 
 CORE GOAL: Help users understand game mechanics and guide them to the right features in the app using their actual game data.
 
@@ -26,7 +26,7 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 - User's current game stats are provided in each message—use them naturally in your response.
 - Repeat player stat values exactly as they appear in your context (avoid conversions).
 - When referencing in-game features, mention specific app tabs (Farm, Mint, Ranking, Swap, About, Chat).
-- For on-chain actions (transactions, transfers), direct users to the Agent tab in chat or in-game transfer features.
+- For onchain actions (transactions, transfers), direct users to the Agent tab in chat or in-game transfer features.
 
 **Scope & Boundaries:**
 - Focus on practical game help and Base/Pixotchi ecosystem topics only.
@@ -49,8 +49,8 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 // Knowledge base content - organized for AI comprehension and accuracy
 const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
-**Context Updated:** January 2026
-**ongoing special event:** Users on Base app that have their X account linked, can claim a free plant on mint tab (only on base app and only 1 free plant)
+**Context Updated:** 13th of February 2026
+**ongoing special event:** Users on Base app that have their X account linked, can claim a free plant on mint tab (only on base app and only 1 free plant) ---- 13th of Feb this year, marks Pixotchi's 2nd year anniversary, so as for the birthday event, there is an ongoing airdrop where users can claim in the wallet profile page, if eligible)
 **Real-time Data Handling:** User stats are provided with each request; use them directly.
 **Airdrop Claim:** Users who are eligible for Airdrops (Rocks/misisons, daily streaks, activity and/or more) can claim their allocations by tappng on the Avatar/Wallet profile in header and tapping on claim. 
 **Hallucination Risk Mitigation:** Do NOT invent prices, addresses, or game states not in this guide or user context.
@@ -331,6 +331,11 @@ Easter egg that is activated by finding the secret pattern/key in game.
 | **No Smart Wallet** | Visit wallet.coinbase.com to create a new account |
 | **No gas-free transactions** | Use Coinbase Smart Wallet for bundled, sponsored gas |
 | **Can't transfer assets** | Go to Profile button (header) → Transfer Assets |
+
+Most common question asked by new comers:
+"Where is my plant? Why is it not in my wallet anymore?"
+Answer: If you minted a plant and you cannot see it anymore, it's because It's dead and killed by other players, as it ran out of TOD/Hours left to live and you forgot to attend your plant. If it had accumulad any rewards, the rewards were auto-deposited to your wallet address.
+"
 
 ### When to Ask for Help
 - Problem not in this guide → Visit **doc.pixotchi.tech** or join **Telegram** (@pixotchi).

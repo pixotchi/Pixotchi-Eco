@@ -14,7 +14,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider as CoreWagmiProvider } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
-import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
+import { wagmiMiniAppConfig, wagmiMiniAppBaseAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { FrameProvider } from "@/lib/frame-context";
 import { sdk } from "@farcaster/miniapp-sdk";
@@ -40,6 +40,7 @@ import packageJson from '@/package.json';
 
 // Surface types for auth provider selection
 type AuthSurface = 'privy' | 'base' | 'privysolana';
+const BASE_APP_CLIENT_FID = 309857;
 
 // Solana RPC config for Privy - mainnet only
 const getSolanaRpcConfig = () => {
@@ -226,6 +227,7 @@ export function Providers(props: { children: ReactNode }) {
 
   function WagmiRouter({ children }: { children: ReactNode }) {
     const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
+    const [isBaseAppMiniClient, setIsBaseAppMiniClient] = useState<boolean>(false);
     const [surface, setSurface] = useState<AuthSurface>('privy');
     const [isInitialized, setIsInitialized] = useState(false);
 
@@ -243,6 +245,19 @@ export function Providers(props: { children: ReactNode }) {
           setIsMiniApp(Boolean(flag));
 
           if (Boolean(flag)) {
+            // Base App auto-appends Builder attribution. Avoid duplicate suffix there.
+            try {
+              const maybeContext: any = (sdk as any).context;
+              const context = typeof maybeContext?.then === 'function'
+                ? await maybeContext
+                : maybeContext;
+              const clientFid = Number(context?.client?.clientFid);
+              if (cancelToken || !mounted) return;
+              setIsBaseAppMiniClient(clientFid === BASE_APP_CLIENT_FID);
+            } catch {
+              if (cancelToken || !mounted) return;
+              setIsBaseAppMiniClient(false);
+            }
             if (cancelToken || !mounted) return;
             setIsInitialized(true);
             return;
@@ -286,8 +301,11 @@ export function Providers(props: { children: ReactNode }) {
 
     // Mini App: use Farcaster connector.
     if (isMiniApp) {
+      const miniAppWagmiConfig = isBaseAppMiniClient
+        ? wagmiMiniAppBaseAppConfig
+        : wagmiMiniAppConfig;
       return (
-        <CoreWagmiProvider config={wagmiMiniAppConfig}>
+        <CoreWagmiProvider config={miniAppWagmiConfig}>
           <TransactionProvider
             defaultChainId={8453}
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}

@@ -3,8 +3,8 @@
 /**
  * Builder Codes (ERC-8021) Integration
  * 
- * This module provides utilities for appending Base Builder Code attribution
- * to all onchain transactions from Pixotchi.
+ * This module provides utilities for Base Builder Code attribution and
+ * transaction-call normalization for wallet compatibility.
  * 
  * Builder Codes enable:
  * - Analytics tracking on Base.dev
@@ -68,15 +68,17 @@ export function getDataSuffix(): string | undefined {
 }
 
 /**
- * Get the capabilities object for OnchainKit Transaction component.
- * Includes the dataSuffix for builder code attribution.
+ * Get a wallet_sendCalls capability payload for data suffix attribution.
+ * Note: Prefer client-level `dataSuffix` in Wagmi config for primary integration.
  * 
- * @returns WalletCapabilities object with dataSuffix, or undefined if not configured
+ * @returns Capability payload with `dataSuffix.value`, or undefined if not configured
  */
-export function getBuilderCapabilities(): { dataSuffix: string } | undefined {
+export function getBuilderCapabilities():
+  | { dataSuffix: { value: string; optional: true } }
+  | undefined {
   const suffix = getDataSuffix();
   if (!suffix) return undefined;
-  return { dataSuffix: suffix };
+  return { dataSuffix: { value: suffix, optional: true } };
 }
 
 /**
@@ -109,21 +111,18 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
 }
 
 /**
- * Transform OnchainKit calls to include builder code suffix in the calldata.
+ * Transform OnchainKit calls into raw serializable calls (`to`, `data`, `value`).
  * 
- * This is necessary because OnchainKit only passes capabilities (including dataSuffix)
- * to wallets that support wallet_sendCalls (ERC-5792). For EOA wallets like Rabby,
- * MetaMask, etc., the capabilities are ignored.
- * 
- * By pre-encoding the calldata with the suffix, we ensure builder attribution
- * works across ALL wallet types.
+ * Attribution should be handled by client-level `dataSuffix` in Wagmi config.
+ * This helper is focused on compatibility with embedded wallets that cannot
+ * structured-clone ABI function objects.
  * 
  * IMPORTANT: This function also ensures calls are converted to raw format
  * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
  * function objects that cannot be structured-cloned for postMessage communication.
  * 
  * @param calls - Array of transaction calls (OnchainKit format)
- * @returns Transformed calls with builder suffix baked into calldata (raw format)
+ * @returns Transformed raw calls without mutating calldata suffix
  */
 export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
@@ -134,8 +133,6 @@ export function transformCallsWithBuilderCode<T extends {
   data?: `0x${string}`;
   value?: bigint;
 }>(calls: T[]): T[] {
-  const suffix = getDataSuffix();
-
   return calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding
     // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
@@ -147,21 +144,21 @@ export function transformCallsWithBuilderCode<T extends {
         args: call.args || [],
       });
 
-      // Return as raw call with pre-encoded data (and suffix if configured)
+      // Return as raw call with pre-encoded data
       // Create a completely new object without any reference to the original ABI
       return {
         to: call.address || call.to,
-        data: suffix ? appendBuilderSuffix(encodedData) : encodedData,
+        data: encodedData,
         value: call.value,
       } as T;
     }
 
-    // If call already has data, optionally append suffix
+    // If call already has data, pass through as raw call
     if (call.data) {
       // Create a new object to ensure no non-serializable properties are retained
       return {
         to: call.to,
-        data: suffix ? appendBuilderSuffix(call.data) : call.data,
+        data: call.data,
         value: call.value,
       } as T;
     }
@@ -175,4 +172,3 @@ export function transformCallsWithBuilderCode<T extends {
     } as T;
   });
 }
-

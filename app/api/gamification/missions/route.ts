@@ -100,7 +100,7 @@ async function getTransactionReceiptWithRetry(
 }
 
 /**
- * Validates on-chain proof for a task.
+ * Validates onchain proof for a task.
  * For smart wallets, we only verify the transaction exists and succeeded.
  * The sender address check is skipped for smart wallets since they use different addresses.
  */

@@ -14,7 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -44,11 +44,8 @@ export default function SponsoredTransaction({
   const { isSponsored } = usePaymaster();
   const { address } = useAccount();
 
-  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
-
-  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
-  // This ensures builder attribution works across ALL wallet types
+  // Normalize to raw serializable calls for embedded-wallet compatibility.
+  // Builder attribution is handled at Wagmi client level via `dataSuffix`.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]
@@ -102,7 +99,6 @@ export default function SponsoredTransaction({
       calls={transformedCalls}
       onError={handleOnError}
       isSponsored={isSponsored}
-      capabilities={builderCapabilities}
       resetAfter={2000}
     >
       <TransactionButton

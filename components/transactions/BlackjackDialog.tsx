@@ -219,7 +219,7 @@ export default function BlackjackDialog({
 
     // Transaction in progress tracking - tracks specific action for hiding other buttons
     const [txInProgress, setTxInProgress] = useState<'deal' | BlackjackAction | null>(null);
-    // Action buttons are only shown when on-chain action state is trusted.
+    // Action buttons are only shown when onchain action state is trusted.
     const [actionButtonsReady, setActionButtonsReady] = useState(false);
     const [actionButtonsSyncing, setActionButtonsSyncing] = useState(false);
     const [actionButtonsSyncFailed, setActionButtonsSyncFailed] = useState(false);
@@ -348,7 +348,7 @@ export default function BlackjackDialog({
 
                 // Guard against mixed-RPC lag right after split:
                 // once local state has split hands, do not regress back to single-hand
-                // UI until on-chain snapshot confirms the split state.
+                // UI until onchain snapshot confirms the split state.
                 if (splitStateRegressed) {
                     return prev;
                 }
@@ -518,7 +518,7 @@ export default function BlackjackDialog({
                         enabled: cfg.enabled,
                     });
 
-                    // Default bet input to on-chain minimum whenever config is loaded.
+                    // Default bet input to onchain minimum whenever config is loaded.
                     setGameState(prev => ({
                         ...prev,
                         betAmountInput: formatUnits(cfg.minBet, 18),
@@ -652,7 +652,7 @@ export default function BlackjackDialog({
                     splitResults: null,
                 }));
 
-                // Don't show actions until we have trusted on-chain flags.
+                // Don't show actions until we have trusted onchain flags.
                 await syncActionButtonsWithRetries();
                 refetchBalance();
             } else {
@@ -677,53 +677,53 @@ export default function BlackjackDialog({
         // Check if game ended - we have all data from event, don't need to refresh
         if (result.gameResult !== undefined) {
             setGameState(prev => {
-                    // Preserve existing player cards if event doesn't provide them
-                    // (e.g., surrender clears game before emitting event)
-                    let finalPlayerCards = prev.playerCards;
-                    let finalPlayerValue = result.handValue ?? prev.playerValue;
+                // Preserve existing player cards if event doesn't provide them
+                // (e.g., surrender clears game before emitting event)
+                let finalPlayerCards = prev.playerCards;
+                let finalPlayerValue = result.handValue ?? prev.playerValue;
 
-                    // Only use event cards if they are provided AND not empty
-                    if (result.cards && result.cards.length > 0) {
-                        finalPlayerCards = result.cards;
-                    }
+                // Only use event cards if they are provided AND not empty
+                if (result.cards && result.cards.length > 0) {
+                    finalPlayerCards = result.cards;
+                }
 
-                    // Preserve existing dealer cards if event doesn't provide them
-                    let finalDealerCards = prev.dealerCards;
-                    let finalDealerValue = result.dealerValue ?? prev.dealerValue;
+                // Preserve existing dealer cards if event doesn't provide them
+                let finalDealerCards = prev.dealerCards;
+                let finalDealerValue = result.dealerValue ?? prev.dealerValue;
 
-                    if (result.dealerCards && result.dealerCards.length > 0) {
-                        finalDealerCards = result.dealerCards;
-                    }
+                if (result.dealerCards && result.dealerCards.length > 0) {
+                    finalDealerCards = result.dealerCards;
+                }
 
-                    // Preserve/update split hand cards for resolved split games
-                    let finalSplitCards = prev.splitCards;
-                    let finalSplitValue = result.splitValue ?? prev.splitValue;
-                    if (result.splitCards && result.splitCards.length > 0) {
-                        finalSplitCards = result.splitCards;
-                    } else if (
-                        prev.hasSplit &&
-                        result.lastActionHandIndex === 1 &&
-                        typeof result.lastActionCard === 'number'
-                    ) {
-                        // Backward-compatible fallback for older contracts where GameComplete
-                        // does not include split hand cards.
-                        finalSplitCards = [...prev.splitCards, result.lastActionCard];
-                    }
+                // Preserve/update split hand cards for resolved split games
+                let finalSplitCards = prev.splitCards;
+                let finalSplitValue = result.splitValue ?? prev.splitValue;
+                if (result.splitCards && result.splitCards.length > 0) {
+                    finalSplitCards = result.splitCards;
+                } else if (
+                    prev.hasSplit &&
+                    result.lastActionHandIndex === 1 &&
+                    typeof result.lastActionCard === 'number'
+                ) {
+                    // Backward-compatible fallback for older contracts where GameComplete
+                    // does not include split hand cards.
+                    finalSplitCards = [...prev.splitCards, result.lastActionCard];
+                }
 
-                    return {
-                        ...prev,
-                        result: result.gameResult,
-                        payout: result.payout || '0',
-                        splitResults: result.splitResults || null,
-                        dealerCards: finalDealerCards,
-                        dealerValue: finalDealerValue,
-                        playerCards: finalPlayerCards,
-                        playerValue: finalPlayerValue,
-                        splitCards: finalSplitCards,
-                        splitValue: finalSplitValue,
-                        isActive: false, // Game ended
-                        contractPhase: BlackjackPhase.RESOLVED,
-                    };
+                return {
+                    ...prev,
+                    result: result.gameResult,
+                    payout: result.payout || '0',
+                    splitResults: result.splitResults || null,
+                    dealerCards: finalDealerCards,
+                    dealerValue: finalDealerValue,
+                    playerCards: finalPlayerCards,
+                    playerValue: finalPlayerValue,
+                    splitCards: finalSplitCards,
+                    splitValue: finalSplitValue,
+                    isActive: false, // Game ended
+                    contractPhase: BlackjackPhase.RESOLVED,
+                };
             });
             setActionButtonsReady(false);
             setActionButtonsSyncing(false);
@@ -777,47 +777,47 @@ export default function BlackjackDialog({
             result.cards.length > 0
         ) {
             setGameState(prev => {
-                    // If it's a hit, we expect 1 new card.
-                    // The event 'BlackjackHit' usually returns just the NEW card in some contracts,
-                    // but our decoder in handleStatus seems to return `cards: [newCard]`.
-                    // Let's check how `result.cards` is populated in `BlackjackTransaction`.
-                    // Looking at `blackjack-transaction.tsx`, for 'action' mode/BlackjackHit:
-                    // `cards: [Number(args.newCard)]`
+                // If it's a hit, we expect 1 new card.
+                // The event 'BlackjackHit' usually returns just the NEW card in some contracts,
+                // but our decoder in handleStatus seems to return `cards: [newCard]`.
+                // Let's check how `result.cards` is populated in `BlackjackTransaction`.
+                // Looking at `blackjack-transaction.tsx`, for 'action' mode/BlackjackHit:
+                // `cards: [Number(args.newCard)]`
 
-                    // So we should APPEND this card to the correct hand
-                    const targetHandIndex = result.handIndex ?? prev.currentHandIndex;
-                    const newCard = Number(result.cards[0]);
-                    if (!isValidCardId(newCard)) {
-                        return prev;
-                    }
+                // So we should APPEND this card to the correct hand
+                const targetHandIndex = result.handIndex ?? prev.currentHandIndex;
+                const newCard = Number(result.cards[0]);
+                if (!isValidCardId(newCard)) {
+                    return prev;
+                }
 
-                    const newPlayerCards = [...prev.playerCards];
-                    const newSplitCards = [...prev.splitCards];
+                const newPlayerCards = [...prev.playerCards];
+                const newSplitCards = [...prev.splitCards];
 
-                    if (targetHandIndex === 1 && prev.hasSplit) {
-                        // Start of split hand or append
-                        newSplitCards.push(newCard);
-                    } else {
-                        // Main hand
-                        newPlayerCards.push(newCard);
-                    }
+                if (targetHandIndex === 1 && prev.hasSplit) {
+                    // Start of split hand or append
+                    newSplitCards.push(newCard);
+                } else {
+                    // Main hand
+                    newPlayerCards.push(newCard);
+                }
 
-                    return {
-                        ...prev,
-                        isActive: true,
-                        // Update the specific hand's cards
-                        playerCards: newPlayerCards,
-                        splitCards: newSplitCards,
-                        // Update value
-                        playerValue: targetHandIndex === 0 ? (result.handValue ?? prev.playerValue) : prev.playerValue,
-                        splitValue: targetHandIndex === 1 ? (result.handValue ?? prev.splitValue) : prev.splitValue,
-                        // A post-hit hand can no longer double/surrender/split on this turn.
-                        // Fresh on-chain snapshot will follow and finalize exact action flags.
-                        canDouble: false,
-                        canSplit: false,
-                        canSurrender: false,
-                        contractPhase: BlackjackPhase.PLAYER_TURN
-                    };
+                return {
+                    ...prev,
+                    isActive: true,
+                    // Update the specific hand's cards
+                    playerCards: newPlayerCards,
+                    splitCards: newSplitCards,
+                    // Update value
+                    playerValue: targetHandIndex === 0 ? (result.handValue ?? prev.playerValue) : prev.playerValue,
+                    splitValue: targetHandIndex === 1 ? (result.handValue ?? prev.splitValue) : prev.splitValue,
+                    // A post-hit hand can no longer double/surrender/split on this turn.
+                    // Fresh onchain snapshot will follow and finalize exact action flags.
+                    canDouble: false,
+                    canSplit: false,
+                    canSurrender: false,
+                    contractPhase: BlackjackPhase.PLAYER_TURN
+                };
             });
         }
 
@@ -852,7 +852,7 @@ export default function BlackjackDialog({
 
         // Warn if closing mid-game but allow it
         if (gameState.isActive && uiPhase !== 'result') {
-            toast('Game still active - your bet remains on-chain', { icon: '⚠️' });
+            toast('Game still active - your bet remains onchain', { icon: '⚠️' });
         }
 
         onOpenChange(false);
@@ -1175,20 +1175,20 @@ export default function BlackjackDialog({
                     {uiPhase === 'result' && gameState.result !== null && (
                         <div className="text-center py-4">
                             {!(gameState.splitResults && gameState.splitResults.length > 1) && (
-                            <div className={`text-2xl font-bold ${gameState.result === BlackjackResult.PLAYER_WIN ||
-                                gameState.result === BlackjackResult.PLAYER_BLACKJACK
-                                ? 'text-green-400'
-                                : gameState.result === BlackjackResult.PUSH
-                                    ? 'text-yellow-400'
-                                    : 'text-red-400'
-                                }`}>
-                                {getResultText(gameState.result)}
-                                {gameState.result === BlackjackResult.PLAYER_BLACKJACK && (
-                                    <div className="text-sm font-normal text-green-300 mt-1">
-                                        (Natural Blackjack - 3:2 Payout!)
-                                    </div>
-                                )}
-                            </div>
+                                <div className={`text-2xl font-bold ${gameState.result === BlackjackResult.PLAYER_WIN ||
+                                    gameState.result === BlackjackResult.PLAYER_BLACKJACK
+                                    ? 'text-green-400'
+                                    : gameState.result === BlackjackResult.PUSH
+                                        ? 'text-yellow-400'
+                                        : 'text-red-400'
+                                    }`}>
+                                    {getResultText(gameState.result)}
+                                    {gameState.result === BlackjackResult.PLAYER_BLACKJACK && (
+                                        <div className="text-sm font-normal text-green-300 mt-1">
+                                            (Natural Blackjack - 3:2 Payout!)
+                                        </div>
+                                    )}
+                                </div>
                             )}
                             {parseFloat(gameState.payout) > 0 && (
                                 <div className="text-lg text-white mt-2">
@@ -1271,7 +1271,7 @@ export default function BlackjackDialog({
                                         ? 'Syncing valid actions...'
                                         : actionButtonsSyncFailed
                                             ? 'Unable to verify valid actions right now. Please reopen Blackjack.'
-                                            : 'Waiting for trusted on-chain action state...'}
+                                            : 'Waiting for trusted onchain action state...'}
                                 </p>
                             )}
                             {txInProgress === null && actionButtonsReady && (canDoubleUi || canSplitUi) && additionalActionBetWei > BigInt(0) && (!hasBalanceForAdditionalAction || needsAdditionalApproval) && (

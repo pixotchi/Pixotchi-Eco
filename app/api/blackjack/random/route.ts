@@ -14,7 +14,7 @@ import { createResilientTransport, getRpcEndpoints } from '@/lib/rpc-transport';
  * for use in the smart contract. This allows single-transaction gameplay.
  * 
  * ANTI-CHEAT: Once randomness is issued for a (landId, nonce), the same randomness
- * is returned for all subsequent requests until the nonce is consumed on-chain.
+ * is returned for all subsequent requests until the nonce is consumed onchain.
  * This prevents users from "shopping" for favorable outcomes by canceling and retrying.
  */
 
@@ -353,7 +353,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Best-effort cleanup: previous nonce lock is no longer usable after on-chain increment.
+        // Best-effort cleanup: previous nonce lock is no longer usable after onchain increment.
         await cleanupConsumedLock(landId, currentNonce);
         const nonce = Number(currentNonce);
         const lockKey = getActionLockKey(landId, currentNonce);
@@ -379,7 +379,7 @@ export async function POST(request: NextRequest) {
                 );
 
                 if (!lockedActionValidation.allowed) {
-                    // Recovery path: stale/invalid lock cannot be executed on-chain, clear it.
+                    // Recovery path: stale/invalid lock cannot be executed onchain, clear it.
                     await deleteActionLock(lockKey);
                     effectiveCachedData = null;
                     effectiveCachedSource = 'none';

@@ -1,5 +1,4 @@
 import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
-import { appendBuilderSuffix } from './builder-code';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
 import UniswapAbi from '@/public/abi/Uniswap.json';
@@ -264,7 +263,7 @@ export const SPIN_GAME_ABI = [
   },
 ] as const;
 
-// Kill Cooldown Extension ABI (for on-chain rate limiting)
+// Kill Cooldown Extension ABI (for onchain rate limiting)
 export const KILL_COOLDOWN_ABI = [
   {
     inputs: [{ name: "wallet", type: "address" }],
@@ -1066,17 +1065,16 @@ export const transferPlants = async (
 
   for (const id of plantIds) {
     try {
-      // Encode function data and append builder code suffix for ERC-8021 attribution
+      // Encode function data; Builder attribution is appended by Wagmi client `dataSuffix`.
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, BigInt(id)],
       });
-      const dataWithSuffix = appendBuilderSuffix(encodedData);
 
       const hash = await walletClient.sendTransaction({
         to: PIXOTCHI_NFT_ADDRESS,
-        data: dataWithSuffix,
+        data: encodedData,
         account: walletClient.account,
         chain: base,
       });
@@ -1109,17 +1107,16 @@ export const transferLands = async (
 
   for (const id of landTokenIds) {
     try {
-      // Encode function data and append builder code suffix for ERC-8021 attribution
+      // Encode function data; Builder attribution is appended by Wagmi client `dataSuffix`.
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, id],
       });
-      const dataWithSuffix = appendBuilderSuffix(encodedData);
 
       const hash = await walletClient.sendTransaction({
         to: LAND_CONTRACT_ADDRESS,
-        data: dataWithSuffix,
+        data: encodedData,
         account: walletClient.account,
         chain: base,
       });
@@ -2252,12 +2249,11 @@ export const routerBatchTransfer = async (
     throw new Error('No assets to transfer');
   }
 
-  // Append builder code suffix for ERC-8021 attribution
-  const dataWithSuffix = appendBuilderSuffix(encodedData);
+  // Builder attribution is appended by Wagmi client `dataSuffix`.
 
   hash = await walletClient.sendTransaction({
     to: BATCH_ROUTER_ADDRESS,
-    data: dataWithSuffix,
+    data: encodedData,
     account: walletClient.account,
     chain: base,
   });
@@ -2270,7 +2266,7 @@ export const routerBatchTransfer = async (
 // -------------------- KILL COOLDOWN HELPERS --------------------
 
 /**
- * Get kill cooldown status from the on-chain KillCooldown extension.
+ * Get kill cooldown status from the onchain KillCooldown extension.
  * @param walletAddress The wallet address to check
  * @returns Object with canKill boolean and remainingSeconds
  */

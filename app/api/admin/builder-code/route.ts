@@ -32,7 +32,7 @@ export async function GET() {
     suffixBytes: dataSuffix ? (dataSuffix.length - 2) / 2 : null,
     error,
     integrationPoints: {
-      description: 'Dual approach: capabilities for ERC-5792 wallets + pre-encoded calldata for EOA wallets',
+      description: 'Client-level Wagmi dataSuffix attribution (primary path for sendCalls + sendTransaction)',
       onchainKit: [
         'components/transactions/sponsored-transaction.tsx',
         'components/transactions/universal-transaction.tsx',
@@ -40,15 +40,10 @@ export async function GET() {
         'components/transactions/claim-rewards-transaction.tsx',
         'components/transactions/plant-name-transaction.tsx',
       ],
-      legacy: [
-        'components/transactions/transfer-assets-dialog.tsx',
-        'lib/contracts.ts:transferPlants',
-        'lib/contracts.ts:transferLands',
-        'lib/contracts.ts:routerBatchTransfer',
-      ],
+      legacy: [],
       walletSupport: {
-        smartWallets: 'capabilities.dataSuffix via wallet_sendCalls (ERC-5792)',
-        eoaWallets: 'Pre-encoded calldata with suffix baked in',
+        smartWallets: 'Viem client dataSuffix + wallet_sendCalls (ERC-5792)',
+        eoaWallets: 'Viem client dataSuffix + eth_sendTransaction path',
       },
     },
     verificationLinks: {
