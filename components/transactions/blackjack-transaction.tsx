@@ -36,6 +36,7 @@ interface BlackjackTransactionProps {
     onStatusUpdate?: (status: LifecycleStatus) => void;
     onComplete?: (result?: {
         success: boolean;
+        actionTaken?: BlackjackAction;
         cards?: number[];
         splitCards?: number[];
         handValue?: number;
@@ -46,6 +47,8 @@ interface BlackjackTransactionProps {
         busted?: boolean;
         lastActionCard?: number;
         lastActionHandIndex?: number;
+        splitHand1Card?: number;
+        splitHand2Card?: number;
         splitResults?: Array<{
             result: BlackjackResult;
             playerFinalValue: number;
@@ -273,7 +276,10 @@ export default function BlackjackTransaction({
                 if (r?.transactionHash) processedTxHashes.current.add(r.transactionHash);
             });
 
-            let resultData: any = { success: true };
+            let resultData: any = {
+                success: true,
+                actionTaken: mode === "action" ? action : undefined,
+            };
             const handResultEvents: Array<{
                 result: BlackjackResult;
                 playerFinalValue: number;
@@ -318,6 +324,18 @@ export default function BlackjackTransaction({
                                         handIndex: Number(args.handIndex),
                                         lastActionCard: Number(args.newCard),
                                         lastActionHandIndex: Number(args.handIndex),
+                                    };
+                                }
+                            } catch { }
+
+                            try {
+                                const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackSplit' });
+                                if (decoded.args) {
+                                    const args = decoded.args as any;
+                                    resultData = {
+                                        ...resultData,
+                                        splitHand1Card: Number(args.hand1Card),
+                                        splitHand2Card: Number(args.hand2Card),
                                     };
                                 }
                             } catch { }

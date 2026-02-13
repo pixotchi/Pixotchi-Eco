@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { parseUnits, formatUnits } from 'viem';
 import { useAccount, useBalance } from 'wagmi';
-import { CardHand, getCardValue } from '@/components/ui/PlayingCard';
+import { CardHand, getCardValue, calculateHandValue } from '@/components/ui/PlayingCard';
 import { useTokenSymbol } from '@/hooks/useTokenSymbol';
 import { formatTokenAmount } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
@@ -149,6 +149,9 @@ const deriveInitialPlayerActions = (cards: number[]) => {
 
 const areCardsPrefix = (prefix: number[], full: number[]): boolean =>
     prefix.length <= full.length && prefix.every((card, idx) => full[idx] === card);
+
+const isValidCardId = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < 52;
 
 const hasTrustedActionState = (snapshot: any): boolean => {
     if (!snapshot || snapshot.phase !== BlackjackPhase.PLAYER_TURN) return false;
@@ -360,20 +363,41 @@ export default function BlackjackDialog({
                     };
                 }
 
-                const playerCardsDecision = reconcileTurnCards(
-                    prev.playerCards,
-                    snapshot.hand1Cards,
-                    snapshot.phase
-                );
-                const splitCardsDecision = reconcileTurnCards(
-                    prev.splitCards,
-                    snapshot.hand2Cards,
-                    snapshot.phase
-                );
-                const nextPlayerCards = playerCardsDecision.cards;
-                const nextSplitCards = splitCardsDecision.cards;
-                const nextPlayerValue = playerCardsDecision.usedFetched ? snapshot.hand1Value : prev.playerValue;
-                const nextSplitValue = splitCardsDecision.usedFetched ? snapshot.hand2Value : prev.splitValue;
+                const splitTransition =
+                    snapshot.phase === BlackjackPhase.PLAYER_TURN &&
+                    snapshot.hasSplit &&
+                    !prev.hasSplit &&
+                    snapshot.hand1Cards.length > 0 &&
+                    snapshot.hand2Cards.length > 0;
+
+                let nextPlayerCards: number[];
+                let nextSplitCards: number[];
+                let nextPlayerValue: number;
+                let nextSplitValue: number;
+
+                if (splitTransition) {
+                    // Split is a valid non-prefix transition for hand1 (card2 is replaced),
+                    // so force-accept fetched cards here.
+                    nextPlayerCards = snapshot.hand1Cards;
+                    nextSplitCards = snapshot.hand2Cards;
+                    nextPlayerValue = snapshot.hand1Value;
+                    nextSplitValue = snapshot.hand2Value;
+                } else {
+                    const playerCardsDecision = reconcileTurnCards(
+                        prev.playerCards,
+                        snapshot.hand1Cards,
+                        snapshot.phase
+                    );
+                    const splitCardsDecision = reconcileTurnCards(
+                        prev.splitCards,
+                        snapshot.hand2Cards,
+                        snapshot.phase
+                    );
+                    nextPlayerCards = playerCardsDecision.cards;
+                    nextSplitCards = splitCardsDecision.cards;
+                    nextPlayerValue = playerCardsDecision.usedFetched ? snapshot.hand1Value : prev.playerValue;
+                    nextSplitValue = splitCardsDecision.usedFetched ? snapshot.hand2Value : prev.splitValue;
+                }
                 const isPlayerTurn = snapshot.phase === BlackjackPhase.PLAYER_TURN;
                 let nextDealerCards = snapshot.dealerCards;
 
@@ -687,10 +711,47 @@ export default function BlackjackDialog({
             return;
         }
 
-        // Game didn't end (e.g., hit without bust)
-        // Fix Bug 3: Optimistic Update using event data
-        // If we trust the event log, we can update state immediately without waiting for RPC
-        if (result.cards && result.cards.length > 0) {
+        if (
+            result.actionTaken === BlackjackAction.SPLIT &&
+            isValidCardId(result.splitHand1Card) &&
+            isValidCardId(result.splitHand2Card)
+        ) {
+            setGameState(prev => {
+                const originalHand1Card = prev.playerCards[0];
+                const originalHand2Card = prev.playerCards[1];
+
+                const nextHand1 =
+                    typeof originalHand1Card === 'number'
+                        ? [originalHand1Card, result.splitHand1Card]
+                        : prev.playerCards;
+                const nextHand2 =
+                    typeof originalHand2Card === 'number'
+                        ? [originalHand2Card, result.splitHand2Card]
+                        : (prev.splitCards.length > 0 ? prev.splitCards : [result.splitHand2Card]);
+
+                return {
+                    ...prev,
+                    hasSplit: true,
+                    activeHandCount: 2,
+                    currentHandIndex: 0,
+                    playerCards: nextHand1,
+                    splitCards: nextHand2,
+                    playerValue: calculateHandValue(nextHand1),
+                    splitValue: calculateHandValue(nextHand2),
+                    canSplit: false,
+                    canSurrender: false,
+                    contractPhase: BlackjackPhase.PLAYER_TURN,
+                };
+            });
+        }
+
+        // Game didn't end (e.g., hit/double without settlement)
+        // Optimistic update from BlackjackHit event (single new card).
+        if (
+            (result.actionTaken === BlackjackAction.HIT || result.actionTaken === BlackjackAction.DOUBLE) &&
+            result.cards &&
+            result.cards.length > 0
+        ) {
             setGameState(prev => {
                     // If it's a hit, we expect 1 new card.
                     // The event 'BlackjackHit' usually returns just the NEW card in some contracts,
@@ -701,7 +762,10 @@ export default function BlackjackDialog({
 
                     // So we should APPEND this card to the correct hand
                     const targetHandIndex = result.handIndex ?? prev.currentHandIndex;
-                    const newCard = result.cards[0];
+                    const newCard = Number(result.cards[0]);
+                    if (!isValidCardId(newCard)) {
+                        return prev;
+                    }
 
                     const newPlayerCards = [...prev.playerCards];
                     const newSplitCards = [...prev.splitCards];
