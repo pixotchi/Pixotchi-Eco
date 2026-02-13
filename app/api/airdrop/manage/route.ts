@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
+import { createPublicClient, http, formatUnits } from 'viem';
+import { base } from 'viem/chains';
 
 const ADMIN_KEY = process.env.ADMIN_INVITE_KEY;
 
@@ -9,6 +11,18 @@ const AIRDROP_TOKENS = {
     LEAF: '0xE78ee52349D7b031E2A6633E07c037C3147DB116',
     PIXOTCHI: '0xa2ef17bb7eea1143196678337069dfa24d37d2ac',
 } as const;
+
+const SERVER_WALLET = '0x2b6BB031aD45E2d5E6A715e50a3F67d1C10ea5B9';
+
+const ERC20_BALANCE_ABI = [
+    {
+        inputs: [{ name: 'account', type: 'address' }],
+        name: 'balanceOf',
+        outputs: [{ name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+] as const;
 
 /**
  * POST /api/airdrop/manage
@@ -195,14 +209,78 @@ export async function GET(req: NextRequest) {
         // Sort by address
         recipients.sort((a, b) => a.address.localeCompare(b.address));
 
+        // Calculate totals
+        const requirements = {
+            seed: { total: 0, remaining: 0 },
+            leaf: { total: 0, remaining: 0 },
+            pixotchi: { total: 0, remaining: 0 },
+        };
+
+        for (const r of recipients) {
+            const seedVal = parseFloat(r.seed) || 0;
+            const leafVal = parseFloat(r.leaf) || 0;
+            const pixotchiVal = parseFloat(r.pixotchi) || 0;
+
+            requirements.seed.total += seedVal;
+            requirements.leaf.total += leafVal;
+            requirements.pixotchi.total += pixotchiVal;
+
+            if (!r.claimed) {
+                requirements.seed.remaining += seedVal;
+                requirements.leaf.remaining += leafVal;
+                requirements.pixotchi.remaining += pixotchiVal;
+            }
+        }
+
+        // Fetch server wallet balances
+        let balances = { seed: '0', leaf: '0', pixotchi: '0' };
+        try {
+            const client = createPublicClient({
+                chain: base,
+                transport: http(process.env.NEXT_PUBLIC_RPC_NODE || 'https://mainnet.base.org'),
+            });
+
+            const [seedBal, leafBal, pixotchiBal] = await Promise.all([
+                client.readContract({
+                    address: AIRDROP_TOKENS.SEED as `0x${string}`,
+                    abi: ERC20_BALANCE_ABI,
+                    functionName: 'balanceOf',
+                    args: [SERVER_WALLET as `0x${string}`],
+                }),
+                client.readContract({
+                    address: AIRDROP_TOKENS.LEAF as `0x${string}`,
+                    abi: ERC20_BALANCE_ABI,
+                    functionName: 'balanceOf',
+                    args: [SERVER_WALLET as `0x${string}`],
+                }),
+                client.readContract({
+                    address: AIRDROP_TOKENS.PIXOTCHI as `0x${string}`,
+                    abi: ERC20_BALANCE_ABI,
+                    functionName: 'balanceOf',
+                    args: [SERVER_WALLET as `0x${string}`],
+                }),
+            ]);
+
+            balances = {
+                seed: formatUnits(seedBal as bigint, 18),
+                leaf: formatUnits(leafBal as bigint, 18),
+                pixotchi: formatUnits(pixotchiBal as bigint, 18),
+            };
+        } catch (err) {
+            console.error('[AIRDROP_MANAGE] Balance fetch error:', err);
+        }
+
         return NextResponse.json({
             success: true,
-            meta: meta ? {
-                uploadedAt: meta.uploadedAt,
+            meta: {
+                uploadedAt: meta?.uploadedAt,
                 totalRecipients: recipients.length,
                 claimedCount,
                 tokens: AIRDROP_TOKENS,
-            } : null,
+                serverWallet: SERVER_WALLET,
+                requirements,
+                balances,
+            },
             recipients,
         });
 

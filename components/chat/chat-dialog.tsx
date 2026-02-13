@@ -1,28 +1,28 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useChat } from './chat-context';
 import ChatMessages from './chat-messages';
 import ChatInput from './chat-input';
 import AITypingIndicator from './ai-typing-indicator';
 import { ToggleGroup } from '@/components/ui/toggle-group';
-import { Button } from '../ui/button';
 import Image from 'next/image';
 import AgentPermissionsPanel from './AgentPermissionsPanel';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useFrameContext } from '@/lib/frame-context';
 import { useTransactions } from 'ethereum-identity-kit';
 import { CLIENT_ENV } from '@/lib/env-config';
+import { createPortal } from 'react-dom';
 
 interface ChatDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-function ChatDialogContent() {
+function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
   const { mode, setMode, isAITyping } = useChat();
-  const { isSmartWallet, isLoading: smartLoading } = useSmartWallet();
+  const { isSmartWallet } = useSmartWallet();
   const fc = useFrameContext();
   const isInMiniApp = Boolean(fc?.isInMiniApp);
 
@@ -33,7 +33,16 @@ function ChatDialogContent() {
   const isAgentAvailable = CLIENT_ENV.AGENT_ENABLED && isSmartWallet && !isInMiniApp;
 
   return (
-    <DialogContent className="max-w-md w-full h-[80vh] flex flex-col">
+    <DialogContent
+      className={`max-w-md w-full h-[80vh] flex flex-col ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
+      aria-hidden={txModalOpen || undefined}
+      onInteractOutside={(event) => {
+        if (txModalOpen) event.preventDefault();
+      }}
+      onPointerDownOutside={(event) => {
+        if (txModalOpen) event.preventDefault();
+      }}
+    >
       <DialogHeader className="border-b border-border">
         <DialogTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -87,15 +96,21 @@ function ChatDialogContent() {
 export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
   const { txModalOpen } = useTransactions();
 
-  useEffect(() => {
-    if (txModalOpen && open) {
-      onOpenChange(false);
-    }
-  }, [txModalOpen, open, onOpenChange]);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <ChatDialogContent />
-    </Dialog>
+    <>
+      {open && txModalOpen && typeof document !== 'undefined'
+        ? createPortal(
+          <div
+            className="fixed inset-0 z-[2500] bg-black/60 backdrop-blur-sm pointer-events-none"
+            aria-hidden="true"
+          />,
+          document.body
+        )
+        : null}
+
+      <Dialog open={open} onOpenChange={onOpenChange} modal={!txModalOpen}>
+        <ChatDialogContent txModalOpen={txModalOpen} />
+      </Dialog>
+    </>
   );
 }

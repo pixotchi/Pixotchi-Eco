@@ -44,6 +44,8 @@ export default function ClaimRewardsTransaction({
   disabled = false,
   minimal = false
 }: ClaimRewardsTransactionProps) {
+  const builderCapabilities = getBuilderCapabilities();
+
   const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
@@ -51,10 +53,8 @@ export default function ClaimRewardsTransaction({
     args: [BigInt(plantId)],
   }], [plantId]);
 
-  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
-  const builderCapabilities = getBuilderCapabilities();
-
-  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  // Normalize to raw serializable calls for embedded-wallet compatibility.
+  // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]),
     [calls]
@@ -104,4 +104,3 @@ export default function ClaimRewardsTransaction({
     </div>
   );
 }
-

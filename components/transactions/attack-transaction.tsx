@@ -1,10 +1,8 @@
 "use client";
 
 import React from 'react';
-import { useAccount } from 'wagmi';
 import SponsoredTransaction from './sponsored-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { extractTransactionHash } from '@/lib/transaction-utils';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -42,7 +40,6 @@ export default function AttackTransaction({
   showToast = false,
   onStatusUpdate,
 }: AttackTransactionProps) {
-  const { address } = useAccount();
   const calls = [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
@@ -53,20 +50,8 @@ export default function AttackTransaction({
   return (
     <SponsoredTransaction
       calls={calls}
-      onSuccess={(tx) => { 
-        if (address) { 
-          const payload: Record<string, unknown> = { address, taskId: 's2_attack_plant' };
-          const txHash = extractTransactionHash(tx);
-          if (txHash) {
-            payload.proof = { txHash };
-          }
-          fetch('/api/gamification/missions', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(payload) 
-          }).catch(err => console.warn('Gamification tracking failed (non-critical):', err)); 
-        }
-        onSuccess?.(tx); 
+      onSuccess={(tx) => {
+        onSuccess?.(tx);
       }}
       onError={onError}
       buttonText={buttonText}
@@ -77,5 +62,4 @@ export default function AttackTransaction({
     />
   );
 }
-
 

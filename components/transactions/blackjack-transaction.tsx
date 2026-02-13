@@ -36,6 +36,7 @@ interface BlackjackTransactionProps {
     onStatusUpdate?: (status: LifecycleStatus) => void;
     onComplete?: (result?: {
         success: boolean;
+        actionTaken?: BlackjackAction;
         cards?: number[];
         splitCards?: number[];
         handValue?: number;
@@ -46,6 +47,8 @@ interface BlackjackTransactionProps {
         busted?: boolean;
         lastActionCard?: number;
         lastActionHandIndex?: number;
+        splitHand1Card?: number;
+        splitHand2Card?: number;
         splitResults?: Array<{
             result: BlackjackResult;
             playerFinalValue: number;
@@ -53,7 +56,7 @@ interface BlackjackTransactionProps {
             payout: string;
         }>;
     }) => void;
-    onButtonClick?: () => boolean | void | Promise<boolean | void>;
+    onButtonClick?: () => boolean | void | { handIndex?: number } | Promise<boolean | void | { handIndex?: number }>;
     onError?: (error: string) => void;
     tokenSymbol?: string;
 }
@@ -132,6 +135,7 @@ export default function BlackjackTransaction({
 }: BlackjackTransactionProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
+    const builderCapabilities = getBuilderCapabilities();
     const processedTxHashes = useRef<Set<string>>(new Set());
     const successHandledRef = useRef(false);
 
@@ -139,10 +143,8 @@ export default function BlackjackTransaction({
     const [error, setError] = useState<string | null>(null);
     const [calls, setCalls] = useState<any[]>([]);
 
-    // Builder code capabilities
-    const builderCapabilities = getBuilderCapabilities();
-
-    // Transform calls with builder code
+    // Normalize to raw serializable calls for embedded-wallet compatibility.
+    // Builder attribution is appended by transform helper + wallet_sendCalls capability.
     const transformedCalls = useMemo(() => {
         if (calls.length === 0) return [];
         return transformCallsWithBuilderCode(calls);
@@ -169,6 +171,13 @@ export default function BlackjackTransaction({
             return;
         }
 
+        let resolvedHandIndex = handIndex;
+        if (preflightResult && typeof preflightResult === "object") {
+            if (typeof preflightResult.handIndex === "number") {
+                resolvedHandIndex = preflightResult.handIndex;
+            }
+        }
+
         setPhase("fetching");
         setError(null);
 
@@ -182,7 +191,7 @@ export default function BlackjackTransaction({
                             action === BlackjackAction.SPLIT ? "split" :
                                 action === BlackjackAction.SURRENDER ? "surrender" : "action";
 
-            const result = await blackjackFetchRandomness(landId, actionName, address, handIndex);
+            const result = await blackjackFetchRandomness(landId, actionName, address, resolvedHandIndex);
 
 
 
@@ -194,7 +203,7 @@ export default function BlackjackTransaction({
                 );
             } else if (mode === "action" && action !== undefined) {
                 call = buildBlackjackActionWithRandomCall(
-                    landId, handIndex, action, result.randomSeed, result.nonce, result.signature
+                    landId, resolvedHandIndex, action, result.randomSeed, result.nonce, result.signature
                 );
             } else {
                 throw new Error("Invalid parameters");
@@ -241,18 +250,6 @@ export default function BlackjackTransaction({
 
             const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
 
-            // Track gamification
-            if (address && mode === "action") {
-                const txHash = extractTransactionHash(receipts[0]);
-                if (txHash) {
-                    fetch("/api/gamification/missions", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ address, taskId: "s4_play_blackjack", proof: { txHash } }),
-                    }).catch(() => { });
-                }
-            }
-
             // Parse events
             // OnchainKit can surface duplicate receipts for the same hash; dedupe first.
             const receiptsByHash = new Map<string, any>();
@@ -278,7 +275,10 @@ export default function BlackjackTransaction({
                 if (r?.transactionHash) processedTxHashes.current.add(r.transactionHash);
             });
 
-            let resultData: any = { success: true };
+            let resultData: any = {
+                success: true,
+                actionTaken: mode === "action" ? action : undefined,
+            };
             const handResultEvents: Array<{
                 result: BlackjackResult;
                 playerFinalValue: number;
@@ -323,6 +323,18 @@ export default function BlackjackTransaction({
                                         handIndex: Number(args.handIndex),
                                         lastActionCard: Number(args.newCard),
                                         lastActionHandIndex: Number(args.handIndex),
+                                    };
+                                }
+                            } catch { }
+
+                            try {
+                                const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackSplit' });
+                                if (decoded.args) {
+                                    const args = decoded.args as any;
+                                    resultData = {
+                                        ...resultData,
+                                        splitHand1Card: Number(args.hand1Card),
+                                        splitHand2Card: Number(args.hand2Card),
                                     };
                                 }
                             } catch { }
@@ -442,22 +454,6 @@ export default function BlackjackTransaction({
                 };
             }
 
-            // Infer dealer hole card only when we don't have full dealer cards
-            if (!resultData.dealerCards && resultData.dealerUpCard !== undefined && resultData.dealerValue !== undefined) {
-                const upCard = resultData.dealerUpCard;
-                const finalVal = Number(resultData.dealerValue);
-                let holeCard = 0;
-                for (let r = 0; r < 13; r++) {
-                    const rankVal = (r + 1) > 10 ? 10 : (r + 1);
-                    const upRank = (upCard % 13) + 1;
-                    const upVal = upRank > 10 ? 10 : upRank;
-                    if (rankVal + upVal === finalVal) { holeCard = r; break; }
-                    if (rankVal === 1 && upVal + 11 === finalVal) { holeCard = r; break; }
-                    if (upVal === 1 && rankVal + 11 === finalVal) { holeCard = r; break; }
-                }
-                resultData.dealerCards = [upCard, holeCard];
-            }
-
             // Emit one toast per successful settlement
             if (resultData.splitResults && resultData.splitResults.length > 1) {
                 const totalPayout = resultData.payout || "0";
@@ -477,6 +473,22 @@ export default function BlackjackTransaction({
                     toast.success('Push!');
                 } else {
                     toast.error(txt);
+                }
+            }
+
+            const gameSettled =
+                Boolean(gameCompleteData) ||
+                (resultData.gameResult !== undefined && resultData.gameResult !== BlackjackResult.NONE) ||
+                (Array.isArray(resultData.splitResults) && resultData.splitResults.length > 0);
+
+            if (address && mode === "action" && gameSettled) {
+                const txHash = extractTransactionHash(newReceipts[0] ?? receipts[0]);
+                if (txHash) {
+                    fetch("/api/gamification/missions", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ address, taskId: "s3_play_casino_game", proof: { txHash } }),
+                    }).catch(() => { });
                 }
             }
 

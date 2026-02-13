@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
-import { appendBuilderSuffix } from './builder-code';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
+import { appendBuilderSuffix } from './builder-code';
 import UniswapAbi from '@/public/abi/Uniswap.json';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
@@ -264,7 +264,7 @@ export const SPIN_GAME_ABI = [
   },
 ] as const;
 
-// Kill Cooldown Extension ABI (for on-chain rate limiting)
+// Kill Cooldown Extension ABI (for onchain rate limiting)
 export const KILL_COOLDOWN_ABI = [
   {
     inputs: [{ name: "wallet", type: "address" }],
@@ -1066,7 +1066,7 @@ export const transferPlants = async (
 
   for (const id of plantIds) {
     try {
-      // Encode function data and append builder code suffix for ERC-8021 attribution
+      // Encode function data and append builder code suffix for ERC-8021 attribution.
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
@@ -1109,7 +1109,7 @@ export const transferLands = async (
 
   for (const id of landTokenIds) {
     try {
-      // Encode function data and append builder code suffix for ERC-8021 attribution
+      // Encode function data and append builder code suffix for ERC-8021 attribution.
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
@@ -2252,7 +2252,7 @@ export const routerBatchTransfer = async (
     throw new Error('No assets to transfer');
   }
 
-  // Append builder code suffix for ERC-8021 attribution
+  // Append builder code suffix for ERC-8021 attribution.
   const dataWithSuffix = appendBuilderSuffix(encodedData);
 
   hash = await walletClient.sendTransaction({
@@ -2270,7 +2270,7 @@ export const routerBatchTransfer = async (
 // -------------------- KILL COOLDOWN HELPERS --------------------
 
 /**
- * Get kill cooldown status from the on-chain KillCooldown extension.
+ * Get kill cooldown status from the onchain KillCooldown extension.
  * @param walletAddress The wallet address to check
  * @returns Object with canKill boolean and remainingSeconds
  */
@@ -2777,6 +2777,27 @@ export interface BlackjackActions {
   canInsurance: boolean;
 }
 
+export interface BlackjackGameSnapshot {
+  isActive: boolean;
+  player: string;
+  phase: BlackjackPhase;
+  betAmount: bigint;
+  activeHandCount: number;
+  hasSplit: boolean;
+  actionHandIndex: number;
+  hand1Cards: number[];
+  hand1Value: number;
+  hand2Cards: number[];
+  hand2Value: number;
+  dealerCards: number[];
+  dealerValue: number;
+  canHit: boolean;
+  canStand: boolean;
+  canDouble: boolean;
+  canSplit: boolean;
+  canSurrender: boolean;
+}
+
 export interface BlackjackConfig {
   minBet: bigint;
   maxBet: bigint;
@@ -2822,6 +2843,77 @@ export const blackjackGetGameBasic = async (landId: bigint): Promise<BlackjackGa
     };
   } catch (error) {
     console.warn('Failed to get blackjack game basic:', error);
+    return null;
+  }
+};
+
+/**
+ * Get complete Blackjack game snapshot in one read call
+ */
+export const blackjackGetGameSnapshot = async (landId: bigint): Promise<BlackjackGameSnapshot | null> => {
+  const readClient = getReadClient();
+  try {
+    const raw = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetGameSnapshot',
+        args: [landId],
+      });
+    }, 1, 250) as any;
+
+    // Support both tuple-object and flat array decoding shapes.
+    const snapshot = Array.isArray(raw)
+      ? raw
+      : (raw?.snapshot ?? raw);
+
+    if (!snapshot) return null;
+
+    if (Array.isArray(snapshot)) {
+      return {
+        isActive: !!snapshot[0],
+        player: String(snapshot[1]),
+        phase: Number(snapshot[2]) as BlackjackPhase,
+        betAmount: BigInt(snapshot[3]),
+        activeHandCount: Number(snapshot[4]),
+        hasSplit: !!snapshot[5],
+        actionHandIndex: Number(snapshot[6]),
+        hand1Cards: Array.isArray(snapshot[7]) ? snapshot[7].map(Number) : [],
+        hand1Value: Number(snapshot[8]),
+        hand2Cards: Array.isArray(snapshot[9]) ? snapshot[9].map(Number) : [],
+        hand2Value: Number(snapshot[10]),
+        dealerCards: Array.isArray(snapshot[11]) ? snapshot[11].map(Number) : [],
+        dealerValue: Number(snapshot[12]),
+        canHit: !!snapshot[13],
+        canStand: !!snapshot[14],
+        canDouble: !!snapshot[15],
+        canSplit: !!snapshot[16],
+        canSurrender: !!snapshot[17],
+      };
+    }
+
+    return {
+      isActive: !!snapshot.isActive,
+      player: String(snapshot.player),
+      phase: Number(snapshot.phase) as BlackjackPhase,
+      betAmount: BigInt(snapshot.betAmount),
+      activeHandCount: Number(snapshot.activeHandCount),
+      hasSplit: !!snapshot.hasSplit,
+      actionHandIndex: Number(snapshot.actionHandIndex),
+      hand1Cards: Array.isArray(snapshot.hand1Cards) ? snapshot.hand1Cards.map(Number) : [],
+      hand1Value: Number(snapshot.hand1Value),
+      hand2Cards: Array.isArray(snapshot.hand2Cards) ? snapshot.hand2Cards.map(Number) : [],
+      hand2Value: Number(snapshot.hand2Value),
+      dealerCards: Array.isArray(snapshot.dealerCards) ? snapshot.dealerCards.map(Number) : [],
+      dealerValue: Number(snapshot.dealerValue),
+      canHit: !!snapshot.canHit,
+      canStand: !!snapshot.canStand,
+      canDouble: !!snapshot.canDouble,
+      canSplit: !!snapshot.canSplit,
+      canSurrender: !!snapshot.canSurrender,
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack game snapshot:', error);
     return null;
   }
 };

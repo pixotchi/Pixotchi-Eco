@@ -321,7 +321,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
                 // Trigger claim production task for gamification
                 try {
-                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
+                  const payload: Record<string, unknown> = { address, taskId: 's3_claim_production' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };

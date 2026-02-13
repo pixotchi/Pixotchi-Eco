@@ -442,10 +442,22 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    calls={[buildStakeCall(amount)]}
                    buttonText="Stake"
                    disabled={disableStakeBtn}
-                   onSuccess={() => {
+                   onSuccess={(tx: any) => {
                      setAmount("");
                      refresh();
                      window.dispatchEvent(new Event('balances:refresh'));
+                     try {
+                       const payload: Record<string, unknown> = { address, taskId: 's1_stake_seed' };
+                       const txHash = extractTransactionHash(tx);
+                       if (txHash) {
+                         payload.proof = { txHash };
+                       }
+                       fetch('/api/gamification/missions', {
+                         method: 'POST',
+                         headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify(payload)
+                       });
+                     } catch {}
                    }}
                  />
               </div>
@@ -475,7 +487,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                 refresh();
                 window.dispatchEvent(new Event('balances:refresh'));
                 try {
-                  const payload: Record<string, unknown> = { address, taskId: 's3_claim_stake' };
+                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_stake' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };
@@ -495,5 +507,4 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   </Dialog>
   );
 }
-
 

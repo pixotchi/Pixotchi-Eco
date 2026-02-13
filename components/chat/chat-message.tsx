@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ChatMessage, AIChatMessage } from "@/lib/types";
 import { differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from "date-fns";
 import { useAccount } from "wagmi";
@@ -74,6 +74,15 @@ export default function ChatMessageComponent({
   
   const { name } = usePrimaryName(message.address);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  const trackProfileVisit = useCallback(() => {
+    if (!address) return;
+    fetch('/api/gamification/missions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, taskId: 's2_visit_profile' })
+    }).catch(() => {});
+  }, [address]);
   
   let displayName = '';
   if (isAIMessage) {
@@ -100,7 +109,10 @@ export default function ChatMessageComponent({
   const profileTrigger = canOpenProfile ? (
     <button
       type="button"
-      onClick={() => setProfileOpen(true)}
+      onClick={() => {
+        setProfileOpen(true);
+        trackProfileVisit();
+      }}
       className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
       aria-label={`Open profile for ${displayName}`}
     >

@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.64",
+  "version": "1.6.70",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -28,8 +28,8 @@
     "@solana-program/token": "0.10.0",
     "bs58": "6.0.0",
     "wagmi": "2.19.4",
-    "viem": "2.45.1",
-    "ox": "0.12.0",
+    "viem": "2.45.3",
+    "ox": "0.12.1",
     "ethers": "6.16.0",
     "permissionless": "0.3.4",
     "next": "16.1.6",
@@ -45,28 +45,28 @@
     "tailwind-merge": "3.4.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "@tanstack/react-query": "5.90.20",
+    "@tanstack/react-query": "5.90.21",
     "zod": "4.3.6",
     "nanoid": "5.1.6",
     "date-fns": "4.1.0",
-    "ai": "6.0.77",
-    "@ai-sdk/openai": "3.0.25",
-    "@ai-sdk/google": "3.0.22",
-    "@ai-sdk/anthropic": "3.0.37",
+    "ai": "6.0.85",
+    "@ai-sdk/openai": "3.0.28",
+    "@ai-sdk/google": "3.0.29",
+    "@ai-sdk/anthropic": "3.0.43",
     "@vercel/analytics": "1.6.1",
     "@vercel/speed-insights": "1.3.1",
     "@upstash/redis": "1.36.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "ethereum-identity-kit": "0.2.66",
+    "ethereum-identity-kit": "0.2.68",
     "siwe": "3.0.0",
     "@reown/appkit": "1.8.17",
-    "@walletconnect/ethereum-provider": "2.23.4",
-    "pino": "10.3.0",
+    "@walletconnect/ethereum-provider": "2.23.5",
+    "pino": "10.3.1",
     "thread-stream": "3.1.0"
   },
   "devDependencies": {
-    "@types/node": "25.2.1",
-    "@types/react": "19.2.13",
+    "@types/node": "25.2.3",
+    "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "10.0.0",
     "eslint-config-next": "16.1.6",
@@ -82,8 +82,8 @@
     "typescript": "5.9.3"
   },
   "overrides": {
-    "pino": "10.3.0",
+    "pino": "10.3.1",
     "thread-stream": "3.1.0",
-    "viem": "2.45.1"
+    "viem": "2.45.3"
   }
 }

@@ -76,7 +76,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
                 window.dispatchEvent(new Event('balances:refresh'));
                 window.dispatchEvent(new Event('buildings:refresh'));
                 try {
-                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_production' };
+                  const payload: Record<string, unknown> = { address, taskId: 's3_claim_production' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };

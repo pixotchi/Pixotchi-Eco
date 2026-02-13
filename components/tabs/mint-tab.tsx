@@ -709,7 +709,7 @@ export default function MintTab() {
 
     setSolanaMintLoading(true);
     try {
-      // V2: Check if we have a valid quote (no swap data needed - contract does on-chain swap)
+      // V2: Check if we have a valid quote (no swap data needed - contract does onchain swap)
       if (!bridge.state.quote || !bridge.state.quote.wsolAmount || bridge.state.quote.wsolAmount <= BigInt(0)) {
         solWarn('[SolanaMint] No valid quote, fetching new quote...');
         const freshQuote = await bridge.getQuote('mint', { strain: selectedStrain.id });
@@ -728,7 +728,7 @@ export default function MintTab() {
         });
       }
 
-      // Prepare the mint transaction (V2 - on-chain swap)
+      // Prepare the mint transaction (V2 - onchain swap)
       solLog('[SolanaMint] Preparing mint transaction...', {
         currentBridgeState: {
           status: bridge.state.status,

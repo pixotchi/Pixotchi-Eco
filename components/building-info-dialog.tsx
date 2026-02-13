@@ -150,7 +150,7 @@ const buildingInfo = {
   "town-6": { // Casino
     name: "Casino",
     isCasino: true, // Flag to show game toggle
-    description: "Play Roulette or Blackjack with provably fair on-chain randomness!"
+    description: "Play Roulette or Blackjack with provably fair onchain randomness!"
   }
 };
 

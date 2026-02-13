@@ -1,16 +1,19 @@
 export type GmDay = string; // YYYY-MM-DD UTC
 
 export type GmTaskId =
-  | 's1_buy5_elements'
-  | 's1_buy_shield'
-  | 's1_claim_production'
-  | 's2_apply_resources'
-  | 's2_attack_plant'
+  | 's1_make_swap'
+  | 's1_stake_seed'
+  | 's1_claim_stake'
+  | 's1_place_order'
+  | 's2_follow_player'
   | 's2_chat_message'
+  | 's2_visit_profile'
+  | 's3_apply_resources'
   | 's3_send_quest'
-  | 's3_place_order'
-  | 's3_claim_stake'
-  | 's4_make_swap'
+  | 's3_claim_production'
+  | 's3_play_casino_game'
+  | 's4_buy10_elements'
+  | 's4_buy_shield'
   | 's4_collect_star'
   | 's4_play_arcade';
 
@@ -19,31 +22,34 @@ export type GmSectionKey = 's1' | 's2' | 's3' | 's4';
 export type GmMissionDay = {
   date: GmDay;
   s1: {
-    buy5: boolean;
-    buyElementsCount: number;
-    buyShield: boolean;
-    claimProduction: boolean;
+    makeSwap: boolean;
+    stakeSeed: boolean;
+    claimStake: boolean;
+    placeOrder: boolean;
     done: boolean;
   };
   s2: {
-    applyResources: boolean;
-    attackPlant: boolean;
+    followPlayer: boolean;
     chatMessage: boolean;
+    visitProfile: boolean;
     done: boolean;
   };
   s3: {
+    applyResources: boolean;
     sendQuest: boolean;
-    placeOrder: boolean;
-    claimStake: boolean;
+    claimProduction: boolean;
+    playCasinoGame: boolean;
     done: boolean;
   };
   s4: {
-    makeSwap: boolean;
+    buy10: boolean;
+    buyElementsCount: number;
+    buyShield: boolean;
     collectStar: boolean;
     playArcade: boolean;
     done: boolean;
   };
-  pts: number; // 0..80
+  pts: number; // 0..100
   completedAt?: number;
 };
 
@@ -59,5 +65,4 @@ export type GmProgressProof = {
 };
 
 export type GmLeaderEntry = { address: string; value: number };
-
 

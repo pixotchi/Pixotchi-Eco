@@ -44,7 +44,7 @@ import type { Transaction } from '@solana/web3.js';
 
 // ============ Types ============
 
-export type BridgeStatus = 
+export type BridgeStatus =
   | 'idle'
   | 'building'
   | 'quoting'
@@ -100,15 +100,17 @@ export interface SolanaBridgeHook {
 const GET_ALL_STRAIN_INFO_ABI = [{
   inputs: [],
   name: 'getAllStrainInfo',
-  outputs: [{ name: '', type: 'tuple[]', components: [
-    { name: 'id', type: 'uint256' },
-    { name: 'mintPrice', type: 'uint256' },
-    { name: 'totalSupply', type: 'uint256' },
-    { name: 'totalMinted', type: 'uint256' },
-    { name: 'maxSupply', type: 'uint256' },
-    { name: 'name', type: 'string' },
-    { name: 'isActive', type: 'bool' },
-  ]}],
+  outputs: [{
+    name: '', type: 'tuple[]', components: [
+      { name: 'id', type: 'uint256' },
+      { name: 'mintPrice', type: 'uint256' },
+      { name: 'totalSupply', type: 'uint256' },
+      { name: 'totalMinted', type: 'uint256' },
+      { name: 'maxSupply', type: 'uint256' },
+      { name: 'name', type: 'string' },
+      { name: 'isActive', type: 'bool' },
+    ]
+  }],
   stateMutability: 'view',
   type: 'function',
 }] as const;
@@ -116,7 +118,7 @@ const GET_ALL_STRAIN_INFO_ABI = [{
 async function getMintPriceInSeed(strain: number): Promise<bigint> {
   const config = getPixotchiSolanaConfig();
   const readClient = getReadClient();
-  
+
   // Try to get price from twin adapter if configured
   if (config.twinAdapter) {
     try {
@@ -131,7 +133,7 @@ async function getMintPriceInSeed(strain: number): Promise<bigint> {
       console.warn('[SolanaBridge] Failed to get price from adapter, using fallback:', err);
     }
   }
-  
+
   // Fallback: Get price directly from Pixotchi contract
   const PIXOTCHI_NFT = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
   const strains = await readClient.readContract({
@@ -139,12 +141,12 @@ async function getMintPriceInSeed(strain: number): Promise<bigint> {
     abi: GET_ALL_STRAIN_INFO_ABI,
     functionName: 'getAllStrainInfo',
   }) as Array<{ id: bigint; mintPrice: bigint; name: string }>;
-  
+
   const strainData = strains.find(s => Number(s.id) === strain);
   if (!strainData) {
     throw new Error(`Strain ${strain} not found`);
   }
-  
+
   if (DEBUG_BRIDGE) console.log('[SolanaBridge] Got mint price from fallback:', Number(strainData.mintPrice) / 1e18, 'SEED');
   return strainData.mintPrice;
 }
@@ -152,7 +154,7 @@ async function getMintPriceInSeed(strain: number): Promise<bigint> {
 async function getShopItemPriceInSeed(itemId: number): Promise<bigint> {
   const config = getPixotchiSolanaConfig();
   if (!config.twinAdapter) throw new Error('Twin adapter not configured');
-  
+
   const readClient = getReadClient();
   const price = await readClient.readContract({
     address: getAddress(config.twinAdapter),
@@ -160,14 +162,14 @@ async function getShopItemPriceInSeed(itemId: number): Promise<bigint> {
     functionName: 'getShopItemPriceInSeed',
     args: [BigInt(itemId)],
   }) as bigint;
-  
+
   return price;
 }
 
 async function getGardenItemPriceInSeed(itemId: number): Promise<bigint> {
   const config = getPixotchiSolanaConfig();
   if (!config.twinAdapter) throw new Error('Twin adapter not configured');
-  
+
   const readClient = getReadClient();
   const price = await readClient.readContract({
     address: getAddress(config.twinAdapter),
@@ -175,14 +177,14 @@ async function getGardenItemPriceInSeed(itemId: number): Promise<bigint> {
     functionName: 'getGardenItemPriceInSeed',
     args: [BigInt(itemId)],
   }) as bigint;
-  
+
   return price;
 }
 
 async function getNameChangePriceInSeed(): Promise<bigint> {
   const config = getPixotchiSolanaConfig();
   if (!config.twinAdapter) throw new Error('Twin adapter not configured');
-  
+
   const readClient = getReadClient();
   const price = await readClient.readContract({
     address: getAddress(config.twinAdapter),
@@ -190,7 +192,7 @@ async function getNameChangePriceInSeed(): Promise<bigint> {
     functionName: 'getNameChangePriceInSeed',
     args: [],
   }) as bigint;
-  
+
   return price;
 }
 
@@ -212,7 +214,7 @@ function getTwinAdapterAddress(): string | undefined {
 async function quoteMintCost(strain: number, slippage: number = DEFAULT_SLIPPAGE): Promise<SolanaQuoteResult> {
   const seedPrice = await getMintPriceInSeed(strain);
   const adapterAddress = getTwinAdapterAddress();
-  
+
   if (DEBUG_BRIDGE) {
     console.log('[SolanaBridge] quoteMintCost:', {
       strain,
@@ -220,7 +222,7 @@ async function quoteMintCost(strain: number, slippage: number = DEFAULT_SLIPPAGE
       adapterAddress: adapterAddress || 'MISSING',
     });
   }
-  
+
   if (!adapterAddress) {
     return {
       wsolAmount: BigInt(0),
@@ -232,7 +234,7 @@ async function quoteMintCost(strain: number, slippage: number = DEFAULT_SLIPPAGE
       error: 'Twin adapter address not configured. Please check your Solana bridge configuration.',
     };
   }
-  
+
   return getWsolToSeedQuote(seedPrice, adapterAddress, slippage);
 }
 
@@ -269,7 +271,7 @@ async function quoteNameChangeCost(slippage: number = DEFAULT_SLIPPAGE): Promise
 
 export function useSolanaBridge(): SolanaBridgeHook {
   const { solanaAddress, isTwinSetup, isConnected } = useSolanaWallet();
-  
+
   const [state, setState] = useState<BridgeState>({
     status: 'idle',
     transaction: null,
@@ -277,14 +279,14 @@ export function useSolanaBridge(): SolanaBridgeHook {
     signature: null,
     error: null,
   });
-  
+
   const needsSetup = isConnected && !isTwinSetup;
-  
+
   // Helper to update state
   const updateState = useCallback((updates: Partial<BridgeState>) => {
     setState(prev => ({ ...prev, ...updates }));
   }, []);
-  
+
   // Reset state
   const reset = useCallback(() => {
     setState({
@@ -295,7 +297,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       error: null,
     });
   }, []);
-  
+
   // Get quote for action
   const getQuote = useCallback(async (
     actionType: BridgeActionType,
@@ -303,9 +305,9 @@ export function useSolanaBridge(): SolanaBridgeHook {
   ): Promise<SolanaQuoteResult | null> => {
     try {
       updateState({ status: 'quoting', error: null });
-      
+
       let quote: SolanaQuoteResult | null = null;
-      
+
       switch (actionType) {
         case 'mint':
           quote = await quoteMintCost(params?.strain as number ?? 0);
@@ -330,13 +332,13 @@ export function useSolanaBridge(): SolanaBridgeHook {
             swapData: '',
           };
       }
-      
+
       // Update state with the quote so prepareMint can reuse it
       if (quote) {
-        updateState({ 
-          quote, 
-          status: quote.error ? 'error' : 'idle', 
-          error: quote.error || null 
+        updateState({
+          quote,
+          status: quote.error ? 'error' : 'idle',
+          error: quote.error || null
         });
         if (DEBUG_BRIDGE) {
           console.log('[SolanaBridge] getQuote stored in state (V2):', {
@@ -348,7 +350,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       } else {
         updateState({ status: 'error', error: 'Failed to get quote' });
       }
-      
+
       return quote;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to get quote';
@@ -357,16 +359,16 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [updateState]);
-  
+
   // Prepare setup transaction
   const prepareSetup = useCallback(async (): Promise<BridgeTransaction | null> => {
     if (!solanaAddress) {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     updateState({ status: 'building', error: null });
-    
+
     try {
       const tx = await buildSetupTransaction(solanaAddress);
       updateState({ status: 'ready', transaction: tx });
@@ -377,7 +379,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, updateState]);
-  
+
   // Prepare mint transaction
   const prepareMint = useCallback(async (strain: number): Promise<BridgeTransaction | null> => {
     if (!solanaAddress) {
@@ -385,35 +387,35 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: errorMsg });
       return null;
     }
-    
+
     if (needsSetup) {
       const errorMsg = 'Please setup bridge access first';
       updateState({ status: 'error', error: errorMsg });
       return null;
     }
-    
+
     // Check if we already have a valid quote in state
-    // V2: No swap data needed - contract does on-chain swaps
+    // V2: No swap data needed - contract does onchain swaps
     const existingQuote = state.quote;
     const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
-    
+
     if (!hasValidExistingQuote) {
       updateState({ status: 'quoting', error: null });
     } else {
       if (DEBUG_BRIDGE) console.log('[SolanaBridge] Using existing quote from state');
       updateState({ status: 'building', error: null });
     }
-    
+
     try {
       if (DEBUG_BRIDGE) {
-        console.log('[SolanaBridge] prepareMint starting (V2 - on-chain swap):', {
+        console.log('[SolanaBridge] prepareMint starting (V2 - onchain swap):', {
           strain,
           solanaAddress,
           needsSetup,
           hasExistingQuote: hasValidExistingQuote,
         });
       }
-      
+
       // Use existing quote if valid, otherwise fetch new one
       let quote: SolanaQuoteResult;
       if (hasValidExistingQuote) {
@@ -435,7 +437,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
           });
         }
       }
-      
+
       if (!isQuoteValid(quote)) {
         const errorMsg = quote.error || 'Failed to get valid quote';
         if (DEBUG_BRIDGE) {
@@ -449,12 +451,12 @@ export function useSolanaBridge(): SolanaBridgeHook {
         updateState({ status: 'error', error: errorMsg });
         return null;
       }
-      
-      // V2: No swap data validation needed - contract does on-chain swaps
-      
+
+      // V2: No swap data validation needed - contract does onchain swaps
+
       // Update state with quote before building transaction
       updateState({ quote, status: 'building', error: null });
-      
+
       if (DEBUG_BRIDGE) console.log('[SolanaBridge] Building mint transaction...');
       const tx = await buildMintTransaction(solanaAddress, strain, quote);
       if (DEBUG_BRIDGE) console.log('[SolanaBridge] Mint transaction built successfully');
@@ -474,7 +476,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, needsSetup, updateState, state.quote]);
-  
+
   // Prepare shop item transaction
   const prepareShopItem = useCallback(async (
     plantId: number,
@@ -484,27 +486,27 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     if (needsSetup) {
       updateState({ error: 'Please setup bridge access first' });
       return null;
     }
-    
+
     // Reuse existing valid quote if present; otherwise fetch a fresh one
     const existingQuote = state.quote;
     const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
 
     updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
-    
+
     try {
       const quote = hasValidExistingQuote ? existingQuote! : await quoteShopItemCost(itemId);
-      
+
       if (!isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from BaseSwap');
       }
-      
+
       updateState({ quote, status: 'building' });
-      
+
       const tx = await buildShopItemTransaction(solanaAddress, plantId, itemId, quote);
       updateState({ status: 'ready', transaction: tx });
       return tx;
@@ -514,7 +516,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, needsSetup, updateState, state.quote]);
-  
+
   // Prepare garden item transaction
   const prepareGardenItem = useCallback(async (
     plantId: number,
@@ -524,27 +526,27 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     if (needsSetup) {
       updateState({ error: 'Please setup bridge access first' });
       return null;
     }
-    
+
     // Reuse existing valid quote if present; otherwise fetch a fresh one
     const existingQuote = state.quote;
     const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
 
     updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
-    
+
     try {
       const quote = hasValidExistingQuote ? existingQuote! : await quoteGardenItemCost(itemId);
-      
+
       if (!isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from BaseSwap');
       }
-      
+
       updateState({ quote, status: 'building' });
-      
+
       const tx = await buildGardenItemTransaction(solanaAddress, plantId, itemId, quote);
       updateState({ status: 'ready', transaction: tx });
       return tx;
@@ -554,16 +556,16 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, needsSetup, updateState, state.quote]);
-  
+
   // Prepare box game transaction
   const prepareBoxGame = useCallback(async (plantId: number): Promise<BridgeTransaction | null> => {
     if (!solanaAddress) {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     updateState({ status: 'building', error: null });
-    
+
     try {
       const tx = await buildBoxGameTransaction(solanaAddress, plantId);
       updateState({ status: 'ready', transaction: tx });
@@ -574,16 +576,16 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, updateState]);
-  
+
   // Prepare spin game transaction
   const prepareSpinGame = useCallback(async (plantId: number): Promise<BridgeTransaction | null> => {
     if (!solanaAddress) {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     updateState({ status: 'building', error: null });
-    
+
     try {
       const tx = await buildSpinGameTransaction(solanaAddress, plantId);
       updateState({ status: 'ready', transaction: tx });
@@ -594,7 +596,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, updateState]);
-  
+
   // Prepare attack transaction
   const prepareAttack = useCallback(async (
     fromId: number,
@@ -604,9 +606,9 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     updateState({ status: 'building', error: null });
-    
+
     try {
       const tx = await buildAttackTransaction(solanaAddress, fromId, toId);
       updateState({ status: 'ready', transaction: tx });
@@ -617,16 +619,16 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, updateState]);
-  
+
   // Prepare claim rewards transaction
   const prepareClaimRewards = useCallback(async (plantId: number): Promise<BridgeTransaction | null> => {
     if (!solanaAddress) {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     updateState({ status: 'building', error: null });
-    
+
     try {
       const tx = await buildClaimRewardsTransaction(solanaAddress, plantId);
       updateState({ status: 'ready', transaction: tx });
@@ -637,7 +639,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, updateState]);
-  
+
   // Prepare set name transaction
   const prepareSetName = useCallback(async (
     plantId: number,
@@ -647,28 +649,28 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ error: 'No Solana wallet connected' });
       return null;
     }
-    
+
     if (needsSetup) {
       updateState({ error: 'Please setup bridge access first' });
       return null;
     }
-    
+
     // Reuse existing valid quote if present; otherwise fetch a fresh one
     const existingQuote = state.quote;
     const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
 
     updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
-    
+
     try {
       const quote = hasValidExistingQuote ? existingQuote! : await quoteNameChangeCost();
-      
+
       // Name change might be free
       if (quote.seedAmount > BigInt(0) && !isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from BaseSwap');
       }
-      
+
       updateState({ quote, status: 'building' });
-      
+
       const tx = await buildSetNameTransaction(solanaAddress, plantId, name, quote);
       updateState({ status: 'ready', transaction: tx });
       return tx;
@@ -678,7 +680,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
   }, [solanaAddress, needsSetup, updateState, state.quote]);
-  
+
   // Execute prepared transaction
   const execute = useCallback(async (
     signTransaction: (transaction: Transaction) => Promise<Transaction>
@@ -687,45 +689,45 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ error: 'No transaction prepared or wallet not connected' });
       return null;
     }
-    
+
     updateState({ status: 'signing' });
-    
+
     try {
       // Check SOL balance first
       const balanceCheck = await checkSolBalance(
         solanaAddress,
         state.transaction.params.solAmount
       );
-      
+
       if (!balanceCheck.hasEnough) {
         throw new Error(
           `Insufficient SOL balance. Have: ${balanceCheck.formatted.balance} SOL, Need: ${balanceCheck.formatted.required} SOL`
         );
       }
-      
+
       updateState({ status: 'bridging' });
-      
+
       // Execute the actual bridge transaction
       const result = await executeBridgeTransaction({
         solanaPublicKey: solanaAddress,
         params: state.transaction.params,
         signTransaction,
       });
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Bridge transaction failed');
       }
-      
+
       updateState({ status: 'success', signature: result.signature });
       return result.signature;
-      
+
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transaction failed';
       updateState({ status: 'error', error: message });
       return null;
     }
   }, [state.transaction, solanaAddress, updateState]);
-  
+
   return {
     state,
     needsSetup,

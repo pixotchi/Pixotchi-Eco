@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import { formatUnits } from 'viem';
 import {
     casinoIsBuilt,
     casinoGetBuildingConfig,
@@ -21,7 +20,7 @@ import ApproveTransaction from '@/components/transactions/approve-transaction';
 import CasinoDialog from '@/components/transactions/CasinoDialog';
 import BlackjackDialog from '@/components/transactions/BlackjackDialog';
 import { toast } from 'react-hot-toast';
-import { useWalletClient, useAccount } from 'wagmi';
+import { useWalletClient, useAccount, useBalance } from 'wagmi';
 import { useTokenSymbol } from '@/hooks/useTokenSymbol';
 
 interface CasinoPanelProps {
@@ -33,6 +32,20 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     const { data: walletClient } = useWalletClient();
     const { address } = useAccount();
 
+    const formatWholeNumber = useCallback((num: bigint): string => {
+        const text = num.toString();
+        return text.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }, []);
+
+    // Build cost is configured as a token amount and is expected to be whole-token in practice.
+    // Round to nearest whole token for stable UX (avoids 499,999.99-style display from tiny wei drift).
+    const formatBuildCostRounded = useCallback((amount: bigint, decimals: number): string => {
+        if (amount <= BigInt(0)) return '0';
+        const divisor = BigInt(10) ** BigInt(decimals);
+        const roundedWhole = (amount + (divisor / BigInt(2))) / divisor;
+        return formatWholeNumber(roundedWhole);
+    }, [formatWholeNumber]);
+
     // State
     const [isBuilt, setIsBuilt] = useState<boolean | null>(null);
     const [buildingConfig, setBuildingConfig] = useState<{ token: string; cost: bigint } | null>(null);
@@ -41,13 +54,33 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     const [bjStats, setBjStats] = useState<{ wagered: bigint; won: bigint; games: bigint } | null>(null);
 
     // Approval state
-    const [hasApproval, setHasApproval] = useState(false);
+    const [allowanceWei, setAllowanceWei] = useState(BigInt(0));
 
     // UI State
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [casinoOpen, setCasinoOpen] = useState(false);
     const [blackjackOpen, setBlackjackOpen] = useState(false);
+
+    const { data: buildTokenBalance, refetch: refetchBuildTokenBalance } = useBalance({
+        address,
+        token: buildingConfig?.token as `0x${string}` | undefined,
+        query: {
+            enabled: !!address && !!buildingConfig && !isBuilt,
+        },
+    });
+
+    const buildTokenDecimals = buildTokenBalance?.decimals ?? 18;
+    const buildCostWei = buildingConfig?.cost ?? BigInt(0);
+    const isBuildBalanceLoaded = !address || !buildingConfig || !!buildTokenBalance;
+    const hasSufficientBalance =
+        !!buildingConfig &&
+        !!buildTokenBalance &&
+        buildTokenBalance.value >= buildCostWei;
+    const hasApproval = allowanceWei >= buildCostWei;
+    const buildCostDisplay = buildingConfig
+        ? formatBuildCostRounded(buildingConfig.cost, buildTokenDecimals)
+        : '...';
 
     // Load casino state
     const loadCasinoState = useCallback(async () => {
@@ -94,11 +127,9 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             // Check approval
             if (address && !built) {
                 const approval = await checkCasinoApproval(address, tokenAddress as `0x${string}`);
-                // We need to check if approval >= cost
-                const required = bConfig ? bConfig.buildingCost : BigInt(0);
-                setHasApproval(approval >= required);
+                setAllowanceWei(approval);
             } else {
-                setHasApproval(true); // Default to true if already built or no address
+                setAllowanceWei(BigInt(0));
             }
 
         } catch (err) {
@@ -130,12 +161,13 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     // Handle approval success
     const onApproveSuccess = useCallback(async () => {
         toast.success("Token approved!");
+        await refetchBuildTokenBalance();
         // Re-check approval
         if (address && buildingConfig) {
             const approval = await checkCasinoApproval(address, buildingConfig.token);
-            setHasApproval(approval >= buildingConfig.cost);
+            setAllowanceWei(approval);
         }
-    }, [address, buildingConfig]);
+    }, [address, buildingConfig, refetchBuildTokenBalance]);
 
     // Handle spin complete (refresh stats)
     const handleSpinComplete = useCallback(async () => {
@@ -170,9 +202,17 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Instant Build:</span>
                             <span className="font-semibold">
-                                {buildingConfig ? formatTokenAmount(buildingConfig.cost, 18) : '...'} {displaySymbol}
+                                {buildCostDisplay} {displaySymbol}
                             </span>
                         </div>
+                        {address && buildingConfig && (
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">Your Balance:</span>
+                                <span className={hasSufficientBalance ? "font-medium" : "font-medium text-destructive"}>
+                                    {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : '...'} {displaySymbol}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-2">
@@ -180,7 +220,19 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                             <span className="text-sm font-medium">Build Casino</span>
                         </div>
 
-                        {!hasApproval && buildingConfig ? (
+                        {!address || !walletClient ? (
+                            <Button className="w-full" variant="secondary" disabled>
+                                Connect wallet to build
+                            </Button>
+                        ) : (buildingConfig && !isBuildBalanceLoaded) ? (
+                            <Button className="w-full" variant="secondary" disabled>
+                                Checking balance...
+                            </Button>
+                        ) : (buildingConfig && !hasSufficientBalance) ? (
+                            <Button className="w-full" variant="secondary" disabled>
+                                Insufficient balance
+                            </Button>
+                        ) : (!hasApproval && buildingConfig) ? (
                             <ApproveTransaction
                                 spenderAddress={LAND_CONTRACT_ADDRESS}
                                 tokenAddress={buildingConfig.token as `0x${string}`}
@@ -193,9 +245,9 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                                 calls={[buildCasinoBuildCall(landId)]}
                                 onSuccess={onBuildSuccess}
                                 onError={(err) => setError(err.message)}
-                                buttonText={`Build (${buildingConfig ? formatTokenAmount(buildingConfig.cost, 18) : '...'} ${displaySymbol})`}
+                                buttonText={`Build (${buildCostDisplay} ${displaySymbol})`}
                                 buttonClassName="w-full"
-                                disabled={!walletClient || !buildingConfig || !hasApproval}
+                                disabled={!walletClient || !buildingConfig || !hasApproval || !hasSufficientBalance}
                             />
                         )}
                     </div>

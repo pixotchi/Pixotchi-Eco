@@ -444,7 +444,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     if (!walletClient || !address) return;
                     try {
                       setLoading(true);
-                      // Encode function data and append builder code suffix for ERC-8021 attribution
+                      // Encode function data and append builder code suffix for ERC-8021 attribution.
                       const abi = [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }] as const;
                       const encodedData = encodeFunctionData({
                         abi,
@@ -480,7 +480,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     if (!walletClient || !address) return;
                     try {
                       setLoading(true);
-                      // Encode function data and append builder code suffix for ERC-8021 attribution
+                      // Encode function data and append builder code suffix for ERC-8021 attribution.
                       const abi = [{ inputs:[{name:'operator',type:'address'},{name:'approved',type:'bool'}], name:'setApprovalForAll', outputs:[], stateMutability:'nonpayable', type:'function' }] as const;
                       const encodedData = encodeFunctionData({
                         abi,
@@ -569,5 +569,3 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     </>
   );
 }
-
-

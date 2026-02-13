@@ -32,7 +32,7 @@ export async function GET() {
     suffixBytes: dataSuffix ? (dataSuffix.length - 2) / 2 : null,
     error,
     integrationPoints: {
-      description: 'Dual approach: capabilities for ERC-5792 wallets + pre-encoded calldata for EOA wallets',
+      description: 'Dual integration: capabilities.dataSuffix for wallet_sendCalls + calldata suffix appending for sendTransaction fallbacks',
       onchainKit: [
         'components/transactions/sponsored-transaction.tsx',
         'components/transactions/universal-transaction.tsx',
@@ -48,7 +48,7 @@ export async function GET() {
       ],
       walletSupport: {
         smartWallets: 'capabilities.dataSuffix via wallet_sendCalls (ERC-5792)',
-        eoaWallets: 'Pre-encoded calldata with suffix baked in',
+        eoaWallets: 'Pre-encoded calldata with suffix appended',
       },
     },
     verificationLinks: {

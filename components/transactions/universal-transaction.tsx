@@ -39,11 +39,10 @@ export default function UniversalTransaction({
 
   // Determine if this transaction should be sponsored
   const isSponsored = forceUnsponsored ? false : paymasterEnabled;
-
-  // Get builder code capabilities for ERC-8021 attribution (for smart wallets with ERC-5792)
   const builderCapabilities = getBuilderCapabilities();
 
-  // Transform calls to include builder suffix in calldata (for EOA wallets without ERC-5792)
+  // Normalize to raw serializable calls for embedded-wallet compatibility.
+  // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]

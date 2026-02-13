@@ -98,9 +98,9 @@
      * - overlay (300): Background overlays for modals
      * - modal (400): Standard modals and dialogs
      * - modal-nested (500): Modals that open from other modals
-     * - transaction (600): Transaction modals (always above other modals)
-     * - toast (700): Toast notifications (always visible)
-     * - tooltip (800): Tooltips (highest priority)
+     * - transaction (3000): Transaction modals (always above other modals)
+     * - toast (3100): Toast notifications (always visible)
+     * - tooltip (3200): Tooltips (highest priority)
      */
     --z-base: 0;
     --z-dropdown: 100;
@@ -108,9 +108,9 @@
     --z-overlay: 300;
     --z-modal: 400;
     --z-modal-nested: 500;
-    --z-transaction: 600;
-    --z-toast: 700;
-    --z-tooltip: 800;
+    --z-transaction: 3000;
+    --z-toast: 3100;
+    --z-tooltip: 3200;
   }
 
   .dark {
@@ -579,9 +579,9 @@
  * 4. Modal overlays (--z-overlay: 300)
  * 5. Standard modals (--z-modal: 400)
  * 6. Nested modals (--z-modal-nested: 500)
- * 7. Transaction modals (--z-transaction: 600)
- * 8. Toast notifications (--z-toast: 700)
- * 9. Tooltips (--z-tooltip: 800)
+ * 7. Transaction modals (--z-transaction: 3000)
+ * 8. Toast notifications (--z-toast: 3100)
+ * 9. Tooltips (--z-tooltip: 3200)
  */
 
 /* Data attribute selectors for controlled layering */
@@ -635,13 +635,13 @@
 /* 
  * Ethereum Identity Kit Transaction Modal
  * Must appear above standard dialogs (z-modal: 400) but below toasts
- * Uses --z-transaction (600) for consistent layering
+ * Uses --z-transaction (3000) for consistent layering
  */
 [class*="transaction-modal"],
 [class*="TransactionModal"],
 [data-ethereum-identity-kit-transaction-modal],
 .ethereum-identity-kit-transaction-modal {
-  z-index: var(--z-transaction);
+  z-index: var(--z-transaction) !important;
 }
 
 /* TransactionModal overlay sits just below the modal content */
@@ -649,13 +649,13 @@
 [class*="TransactionModalOverlay"],
 [data-ethereum-identity-kit-transaction-modal-overlay],
 .ethereum-identity-kit-transaction-overlay {
-  z-index: calc(var(--z-transaction) - 1);
+  z-index: calc(var(--z-transaction) - 1) !important;
 }
 
 /* TransactionModal content sits at the transaction layer */
 [class*="transaction-modal-content"],
 [class*="TransactionModalContent"] {
-  z-index: var(--z-transaction);
+  z-index: var(--z-transaction) !important;
 }
 
 /* 
@@ -670,7 +670,7 @@ body>div[data-radix-portal] {
 /* Portals containing transaction modals get elevated */
 body>div[data-radix-portal]:has([class*="transaction-modal"]),
 body>div[data-radix-portal]:has([class*="TransactionModal"]) {
-  z-index: var(--z-transaction);
+  z-index: var(--z-transaction) !important;
 }
 
 /* React Hot Toast containers */
@@ -717,16 +717,6 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   transform: none;
   scale: 1;
 }
-
-/* 
- * Dialog overlay pointer-events passthrough when TransactionModal is open
- * This allows clicks to reach the TransactionModal through the Dialog overlay
- */
-body:has([class*="transaction-modal"]:not([aria-hidden="true"])) [data-radix-dialog-overlay],
-body:has([class*="TransactionModal"]:not([aria-hidden="true"])) [data-radix-dialog-overlay] {
-  pointer-events: none;
-}
-
 
 /* Tutorial art subtle float */
 @keyframes float-soft {

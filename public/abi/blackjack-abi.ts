@@ -64,6 +64,41 @@ export const blackjackAbi = [
         "type": "function"
     },
     {
+        "inputs": [
+            { "internalType": "uint256", "name": "landId", "type": "uint256" }
+        ],
+        "name": "blackjackGetGameSnapshot",
+        outputs: [
+            {
+                internalType: 'tuple',
+                name: 'snapshot',
+                type: 'tuple',
+                components: [
+                    { internalType: 'bool', name: 'isActive', type: 'bool' },
+                    { internalType: 'address', name: 'player', type: 'address' },
+                    { internalType: 'uint8', name: 'phase', type: 'uint8' },
+                    { internalType: 'uint256', name: 'betAmount', type: 'uint256' },
+                    { internalType: 'uint8', name: 'activeHandCount', type: 'uint8' },
+                    { internalType: 'bool', name: 'hasSplit', type: 'bool' },
+                    { internalType: 'uint8', name: 'actionHandIndex', type: 'uint8' },
+                    { internalType: 'uint8[]', name: 'hand1Cards', type: 'uint8[]' },
+                    { internalType: 'uint8', name: 'hand1Value', type: 'uint8' },
+                    { internalType: 'uint8[]', name: 'hand2Cards', type: 'uint8[]' },
+                    { internalType: 'uint8', name: 'hand2Value', type: 'uint8' },
+                    { internalType: 'uint8[]', name: 'dealerCards', type: 'uint8[]' },
+                    { internalType: 'uint8', name: 'dealerValue', type: 'uint8' },
+                    { internalType: 'bool', name: 'canHit', type: 'bool' },
+                    { internalType: 'bool', name: 'canStand', type: 'bool' },
+                    { internalType: 'bool', name: 'canDouble', type: 'bool' },
+                    { internalType: 'bool', name: 'canSplit', type: 'bool' },
+                    { internalType: 'bool', name: 'canSurrender', type: 'bool' }
+                ]
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
         name: 'blackjackGetGameHands',
         type: 'function',
         inputs: [{ name: 'landId', type: 'uint256' }],

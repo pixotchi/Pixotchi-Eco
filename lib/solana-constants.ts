@@ -55,29 +55,29 @@ export const BRIDGE_CONFIG = {
   // Includes: Transfer + Aerodrome Swap + BaseSwap Swap + Game Logic + Mint + Overheads
   // Actual usage ~1.2M observed, setting 3M for safety margin
   complexGasLimit: BigInt(3000000),
-  
+
   // Medium gas limit for simple game actions (Attack, Arcade)
   // Includes: Logic + Score Updates + Event Emission
   mediumGasLimit: BigInt(400000),
-  
+
   // Minimum bridge amount in SOL (lamports)
   minBridgeAmount: BigInt(1000000), // 0.001 SOL
-  
+
   // Estimated time for bridge confirmation (ms)
   estimatedBridgeTime: 30000, // 30 seconds
-  
+
   // Bridge fee in SOL (estimate)
   bridgeFeeEstimate: 0.003, // 0.003 SOL
-  
+
   // Default slippage for app-side quotes (7% for cross-chain)
   defaultSlippagePercent: 7,
-  
+
   // Contract-level extra slippage buffer (basis points)
   // Applied on top of app slippage for safety
   contractExtraSlippageBps: 200, // 2%
-  
+
   // Total effective slippage: ~9% (7% app + 2% contract buffer)
-  
+
   // Max slippage allowed (basis points)
   maxSlippageBps: 1000, // 10%
 } as const;
@@ -95,7 +95,7 @@ export const BRIDGE_ABI = [
 ] as const;
 
 // ============ SolanaTwinAdapterV2 ABI ============
-// V2: On-chain swaps via Aerodrome + BaseSwap - NO external swap calldata needed
+// V2: onchain swaps via Aerodrome + BaseSwap - NO external swap calldata needed
 
 export const SOLANA_TWIN_ADAPTER_ABI = [
   // View functions - SEED price getters
@@ -372,15 +372,15 @@ export function isSolanaEnabled(): boolean {
  */
 export function validateSolanaConfig(): { valid: boolean; missing: string[] } {
   const missing: string[] = [];
-  
+
   if (!process.env.NEXT_PUBLIC_SOLANA_ENABLED) {
     missing.push('NEXT_PUBLIC_SOLANA_ENABLED');
   }
-  
+
   if (!process.env.NEXT_PUBLIC_SOLANA_TWIN_ADAPTER) {
     missing.push('NEXT_PUBLIC_SOLANA_TWIN_ADAPTER');
   }
-  
+
   return {
     valid: missing.length === 0,
     missing,

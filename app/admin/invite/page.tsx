@@ -532,7 +532,26 @@ export default function AdminInviteDashboard() {
     if (isAuthenticated && activeTab === 'broadcast') {
       fetchBroadcastMessages();
     }
-  }, [isAuthenticated, activeTab, fetchBroadcastMessages]);
+    if (isAuthenticated && activeTab === 'airdrop') {
+      const fetchAirdropData = async () => {
+        setAirdropLoading(true);
+        try {
+          const res = await fetch('/api/airdrop/manage', {
+            headers: { 'Authorization': `Bearer ${adminKey}` }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setAirdropData(data);
+          }
+        } catch (err) {
+          console.error('Failed to auto-fetch airdrop data:', err);
+        } finally {
+          setAirdropLoading(false);
+        }
+      };
+      fetchAirdropData();
+    }
+  }, [isAuthenticated, activeTab, fetchBroadcastMessages, adminKey]);
 
   const performCleanup = async (action: string, target?: string) => {
     const actionNames = {
@@ -3467,11 +3486,68 @@ export default function AdminInviteDashboard() {
               </CardContent>
             </Card>
 
+            {/* Server Wallet Status */}
+            {airdropData?.meta?.balances && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {(['SEED', 'LEAF', 'PIXOTCHI'] as const).map((token) => {
+                  const key = token.toLowerCase() as 'seed' | 'leaf' | 'pixotchi';
+                  const balance = parseFloat(airdropData.meta.balances?.[key] || '0');
+                  const remaining = airdropData.meta.requirements?.[key]?.remaining || 0;
+                  const isInsufficient = balance < remaining;
+
+                  return (
+                    <Card key={token} className={isInsufficient ? 'border-destructive/50' : ''}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium flex items-center justify-between">
+                          {token} Balance
+                          {isInsufficient && <AlertTriangle className="w-4 h-4 text-destructive" />}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{balance.toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                          <div className="flex justify-between">
+                            <span>Total Needed:</span>
+                            <span className="font-medium text-foreground">
+                              {airdropData.meta.requirements?.[key]?.total.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Remaining:</span>
+                            <span className={`font-medium ${isInsufficient ? 'text-destructive' : 'text-foreground'}`}>
+                              {remaining.toLocaleString()}
+                            </span>
+                          </div>
+                          {isInsufficient && (
+                            <div className="text-destructive font-semibold text-[10px] mt-1">
+                              Insufficient funds! Need {(remaining - balance).toLocaleString()} more.
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-3 h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${isInsufficient ? 'bg-destructive' : 'bg-primary'}`}
+                            style={{ width: `${Math.min(100, (balance / (remaining || 1)) * 100)}%` }}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Stats & Recipients */}
             {airdropData && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Recipients ({airdropData.recipients?.length || 0})</CardTitle>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Recipients ({airdropData.recipients?.length || 0})</span>
+                    <div className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
+                      <Shield className="w-3 h-3" />
+                      <span className="font-mono">{airdropData.meta?.serverWallet}</span>
+                    </div>
+                  </CardTitle>
                   {airdropData.meta && (
                     <CardDescription>
                       Claimed: {airdropData.meta.claimedCount || 0} / {airdropData.meta.totalRecipients || 0}

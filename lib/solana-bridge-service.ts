@@ -4,7 +4,7 @@
  * 
  * MAINNET ONLY - No devnet support
  * 
- * V2: Contract does on-chain swaps via Aerodrome + BaseSwap
+ * V2: Contract does onchain swaps via Aerodrome + BaseSwap
  * No external swap calldata needed - significantly smaller transaction size
  */
 
@@ -72,7 +72,7 @@ export interface BridgeTransaction {
 const BRIDGE_FEE_LAMPORTS = BigInt(3_000_000);
 
 // ============ Transaction Builders ============
-// V2: On-chain swaps - no external swap calldata needed
+// V2: onchain swaps - no external swap calldata needed
 
 /**
  * Build a setup transaction (approves wSOL to adapter)
@@ -118,7 +118,7 @@ export async function buildSetupTransaction(
 
 /**
  * Build a mint transaction
- * V2: No swap calldata needed - contract does on-chain swap
+ * V2: No swap calldata needed - contract does onchain swap
  */
 export async function buildMintTransaction(
   solanaPublicKey: string,
@@ -126,7 +126,7 @@ export async function buildMintTransaction(
   quote: SolanaQuoteResult
 ): Promise<BridgeTransaction> {
   try {
-    console.log('[buildMintTransaction] Starting (V2 - on-chain swap):', {
+    console.log('[buildMintTransaction] Starting (V2 - onchain swap):', {
       solanaPublicKey,
       strain,
       wsolAmount: quote.wsolAmount?.toString(),
@@ -162,7 +162,7 @@ export async function buildMintTransaction(
     }
 
     // V2: Simple call - no swapTarget/swapData needed
-    // Contract does on-chain swap via Aerodrome + BaseSwap
+    // Contract does onchain swap via Aerodrome + BaseSwap
     console.log('[buildMintTransaction] Encoding function data (V2)...');
     const callData = encodeFunctionData({
       abi: SOLANA_TWIN_ADAPTER_ABI,
@@ -202,7 +202,7 @@ export async function buildMintTransaction(
 
 /**
  * Build a shop item purchase transaction
- * V2: No swap calldata needed - contract does on-chain swap
+ * V2: No swap calldata needed - contract does onchain swap
  */
 export async function buildShopItemTransaction(
   solanaPublicKey: string,
@@ -253,7 +253,7 @@ export async function buildShopItemTransaction(
 
 /**
  * Build a garden item purchase transaction
- * V2: No swap calldata needed - contract does on-chain swap
+ * V2: No swap calldata needed - contract does onchain swap
  */
 export async function buildGardenItemTransaction(
   solanaPublicKey: string,
@@ -458,7 +458,7 @@ export async function buildClaimRewardsTransaction(
 
 /**
  * Build a set name transaction
- * V2: No swap calldata needed - contract does on-chain swap
+ * V2: No swap calldata needed - contract does onchain swap
  */
 export async function buildSetNameTransaction(
   solanaPublicKey: string,
