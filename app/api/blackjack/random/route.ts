@@ -133,7 +133,7 @@ function actionNameFromNum(actionNum: number): BlackjackActionName | null {
 }
 
 async function validateActionAgainstOnchainState(
-    publicClient: ReturnType<typeof createPublicClient>,
+    publicClient: any,
     landIdBigInt: bigint,
     action: BlackjackActionName,
     handIndexNum: number,
