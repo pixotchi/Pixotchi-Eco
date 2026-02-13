@@ -448,199 +448,203 @@ export default function BlackjackDialog({
     // Handle deal complete (combined bet + deal)
     // Handle deal complete (combined bet + deal)
     const handleDealComplete = useCallback(async (result?: any) => {
-        setTxInProgress(null);
-
-        if (!result) {
-            setError('Transaction failed. Please try again.');
-            return;
-        }
-
-        // Check if game ended immediately (blackjack)
-        // Check if game ended immediately (blackjack)
-        if (result.gameResult !== undefined) {
-            setGameState(prev => ({
-                ...prev,
-                result: result.gameResult,
-                payout: result.payout || '0',
-                splitResults: result.splitResults || null,
-                // Explicitly set player cards from the event, otherwise they stay empty (fresh game)
-                playerCards: result.cards && result.cards.length > 0 ? result.cards : prev.playerCards,
-                playerValue: result.handValue ?? prev.playerValue,
-                dealerCards: result.dealerCards || prev.dealerCards,
-                dealerValue: result.dealerValue ?? prev.dealerValue,
-                activeHandCount: 1, // Default cleanup
-                hasSplit: false
-            }));
-
-            // If game ended, state might be cleared (NONE), which is fine. Refresh immediately.
-            await refreshGameState();
-            refetchBalance();
-        } else if (result.cards && result.cards.length > 0) {
-            // Game Started Successfully (Optimistic Update)
-            // This ensures the UI shows cards immediately even if RPC is slow
-            const dealtCards = Array.isArray(result.cards) ? result.cards.map(Number) : [];
-            const optimisticActions = deriveInitialPlayerActions(dealtCards);
-            let optimisticBetAmountWei = BigInt(0);
-            try {
-                optimisticBetAmountWei = parseUnits(gameState.betAmountInput || '0', 18);
-            } catch {
-                optimisticBetAmountWei = BigInt(0);
+        try {
+            if (!result) {
+                setError('Transaction failed. Please try again.');
+                return;
             }
-            setGameState(prev => ({
-                ...prev,
-                isActive: true,
-                contractPhase: BlackjackPhase.PLAYER_TURN, // Force phase
-                playerCards: dealtCards,
-                playerValue: result.handValue ?? 0,
-                // Keep current wager in local state so mid-game DOUBLE/SPLIT funding checks
-                // are available immediately, before the next RPC refresh.
-                betAmount: optimisticBetAmountWei > BigInt(0) ? optimisticBetAmountWei : prev.betAmount,
-                // Show dealer up card + hidden
-                dealerCards: result.dealerUpCard !== undefined ? [result.dealerUpCard, 0] : prev.dealerCards,
-                dealerValue: 0,
-                canHit: optimisticActions.canHit,
-                canStand: optimisticActions.canStand,
-                canDouble: optimisticActions.canDouble,
-                canSplit: optimisticActions.canSplit,
-                canSurrender: optimisticActions.canSurrender,
 
-                // Reset fresh game state defaults
-                activeHandCount: 1,
-                hasSplit: false,
-                currentHandIndex: 0,
-                result: null,
-                payout: '0',
-                splitResults: null,
-            }));
+            // Check if game ended immediately (blackjack)
+            // Check if game ended immediately (blackjack)
+            if (result.gameResult !== undefined) {
+                setGameState(prev => ({
+                    ...prev,
+                    result: result.gameResult,
+                    payout: result.payout || '0',
+                    splitResults: result.splitResults || null,
+                    // Explicitly set player cards from the event, otherwise they stay empty (fresh game)
+                    playerCards: result.cards && result.cards.length > 0 ? result.cards : prev.playerCards,
+                    playerValue: result.handValue ?? prev.playerValue,
+                    dealerCards: result.dealerCards || prev.dealerCards,
+                    dealerValue: result.dealerValue ?? prev.dealerValue,
+                    activeHandCount: 1, // Default cleanup
+                    hasSplit: false
+                }));
 
-            // Avoid immediate refresh polling here: mixed-lag RPC endpoints can briefly
-            // overwrite fresh receipt-derived cards/actions with stale state.
-            // We still sync on the next explicit refresh/action.
-            refetchBalance();
-        } else {
-            // Fallback for unknown state or error
-            await refreshGameState();
-            refetchBalance();
+                // If game ended, state might be cleared (NONE), which is fine. Refresh immediately.
+                await refreshGameState();
+                refetchBalance();
+            } else if (result.cards && result.cards.length > 0) {
+                // Game Started Successfully (Optimistic Update)
+                // This ensures the UI shows cards immediately even if RPC is slow
+                const dealtCards = Array.isArray(result.cards) ? result.cards.map(Number) : [];
+                const optimisticActions = deriveInitialPlayerActions(dealtCards);
+                let optimisticBetAmountWei = BigInt(0);
+                try {
+                    optimisticBetAmountWei = parseUnits(gameState.betAmountInput || '0', 18);
+                } catch {
+                    optimisticBetAmountWei = BigInt(0);
+                }
+                setGameState(prev => ({
+                    ...prev,
+                    isActive: true,
+                    contractPhase: BlackjackPhase.PLAYER_TURN, // Force phase
+                    playerCards: dealtCards,
+                    playerValue: result.handValue ?? 0,
+                    // Keep current wager in local state so mid-game DOUBLE/SPLIT funding checks
+                    // are available immediately, before the next RPC refresh.
+                    betAmount: optimisticBetAmountWei > BigInt(0) ? optimisticBetAmountWei : prev.betAmount,
+                    // Show dealer up card + hidden
+                    dealerCards: result.dealerUpCard !== undefined ? [result.dealerUpCard, 0] : prev.dealerCards,
+                    dealerValue: 0,
+                    canHit: optimisticActions.canHit,
+                    canStand: optimisticActions.canStand,
+                    canDouble: optimisticActions.canDouble,
+                    canSplit: optimisticActions.canSplit,
+                    canSurrender: optimisticActions.canSurrender,
+
+                    // Reset fresh game state defaults
+                    activeHandCount: 1,
+                    hasSplit: false,
+                    currentHandIndex: 0,
+                    result: null,
+                    payout: '0',
+                    splitResults: null,
+                }));
+
+                // Avoid immediate refresh polling here: mixed-lag RPC endpoints can briefly
+                // overwrite fresh receipt-derived cards/actions with stale state.
+                // We still sync on the next explicit refresh/action.
+                refetchBalance();
+            } else {
+                // Fallback for unknown state or error
+                await refreshGameState();
+                refetchBalance();
+            }
+        } finally {
+            setTxInProgress(null);
         }
     }, [refreshGameState, refetchBalance, landId, gameState.betAmountInput]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: any) => {
-        setTxInProgress(null);
+        try {
+            if (!result) {
+                // Transaction failed, refresh state anyway
+                await refreshGameState();
+                return;
+            }
 
-        if (!result) {
-            // Transaction failed, refresh state anyway
+            // Check if game ended - we have all data from event, don't need to refresh
+            if (result.gameResult !== undefined) {
+                setGameState(prev => {
+                    // Preserve existing player cards if event doesn't provide them
+                    // (e.g., surrender clears game before emitting event)
+                    let finalPlayerCards = prev.playerCards;
+                    let finalPlayerValue = result.handValue ?? prev.playerValue;
+
+                    // Only use event cards if they are provided AND not empty
+                    if (result.cards && result.cards.length > 0) {
+                        finalPlayerCards = result.cards;
+                    }
+
+                    // Preserve existing dealer cards if event doesn't provide them
+                    let finalDealerCards = prev.dealerCards;
+                    let finalDealerValue = result.dealerValue ?? prev.dealerValue;
+
+                    if (result.dealerCards && result.dealerCards.length > 0) {
+                        finalDealerCards = result.dealerCards;
+                    }
+
+                    // Preserve/update split hand cards for resolved split games
+                    let finalSplitCards = prev.splitCards;
+                    let finalSplitValue = result.splitValue ?? prev.splitValue;
+                    if (result.splitCards && result.splitCards.length > 0) {
+                        finalSplitCards = result.splitCards;
+                    } else if (
+                        prev.hasSplit &&
+                        result.lastActionHandIndex === 1 &&
+                        typeof result.lastActionCard === 'number'
+                    ) {
+                        // Backward-compatible fallback for older contracts where GameComplete
+                        // does not include split hand cards.
+                        finalSplitCards = [...prev.splitCards, result.lastActionCard];
+                    }
+
+                    return {
+                        ...prev,
+                        result: result.gameResult,
+                        payout: result.payout || '0',
+                        splitResults: result.splitResults || null,
+                        dealerCards: finalDealerCards,
+                        dealerValue: finalDealerValue,
+                        playerCards: finalPlayerCards,
+                        playerValue: finalPlayerValue,
+                        splitCards: finalSplitCards,
+                        splitValue: finalSplitValue,
+                        isActive: false, // Game ended
+                        contractPhase: BlackjackPhase.RESOLVED,
+                    };
+                });
+
+                // Don't call refreshGameState() - it will overwrite our preserved cards
+                // with empty data from the cleared contract
+                refetchBalance();
+                return;
+            }
+
+            // Game didn't end (e.g., hit without bust)
+            // Fix Bug 3: Optimistic Update using event data
+            // If we trust the event log, we can update state immediately without waiting for RPC
+            if (result.cards && result.cards.length > 0) {
+                setGameState(prev => {
+                    // If it's a hit, we expect 1 new card.
+                    // The event 'BlackjackHit' usually returns just the NEW card in some contracts,
+                    // but our decoder in handleStatus seems to return `cards: [newCard]`.
+                    // Let's check how `result.cards` is populated in `BlackjackTransaction`.
+                    // Looking at `blackjack-transaction.tsx`, for 'action' mode/BlackjackHit:
+                    // `cards: [Number(args.newCard)]`
+
+                    // So we should APPEND this card to the correct hand
+                    const targetHandIndex = result.handIndex ?? prev.currentHandIndex;
+                    const newCard = result.cards[0];
+
+                    const newPlayerCards = [...prev.playerCards];
+                    const newSplitCards = [...prev.splitCards];
+
+                    if (targetHandIndex === 1 && prev.hasSplit) {
+                        // Start of split hand or append
+                        newSplitCards.push(newCard);
+                    } else {
+                        // Main hand
+                        newPlayerCards.push(newCard);
+                    }
+
+                    return {
+                        ...prev,
+                        isActive: true,
+                        // Update the specific hand's cards
+                        playerCards: newPlayerCards,
+                        splitCards: newSplitCards,
+                        // Update value
+                        playerValue: targetHandIndex === 0 ? (result.handValue ?? prev.playerValue) : prev.playerValue,
+                        splitValue: targetHandIndex === 1 ? (result.handValue ?? prev.splitValue) : prev.splitValue,
+                        // A post-hit hand can no longer double/surrender/split on this turn.
+                        // Fresh on-chain snapshot will follow and finalize exact action flags.
+                        canDouble: false,
+                        canSplit: false,
+                        canSurrender: false,
+                        contractPhase: BlackjackPhase.PLAYER_TURN
+                    };
+                });
+            }
+
+            // Still trigger a refresh in background to eventually sync fully
             await refreshGameState();
-            return;
-        }
-
-        // Check if game ended - we have all data from event, don't need to refresh
-        if (result.gameResult !== undefined) {
-            setGameState(prev => {
-                // Preserve existing player cards if event doesn't provide them
-                // (e.g., surrender clears game before emitting event)
-                let finalPlayerCards = prev.playerCards;
-                let finalPlayerValue = result.handValue ?? prev.playerValue;
-
-                // Only use event cards if they are provided AND not empty
-                if (result.cards && result.cards.length > 0) {
-                    finalPlayerCards = result.cards;
-                }
-
-                // Preserve existing dealer cards if event doesn't provide them
-                let finalDealerCards = prev.dealerCards;
-                let finalDealerValue = result.dealerValue ?? prev.dealerValue;
-
-                if (result.dealerCards && result.dealerCards.length > 0) {
-                    finalDealerCards = result.dealerCards;
-                }
-
-                // Preserve/update split hand cards for resolved split games
-                let finalSplitCards = prev.splitCards;
-                let finalSplitValue = result.splitValue ?? prev.splitValue;
-                if (result.splitCards && result.splitCards.length > 0) {
-                    finalSplitCards = result.splitCards;
-                } else if (
-                    prev.hasSplit &&
-                    result.lastActionHandIndex === 1 &&
-                    typeof result.lastActionCard === 'number'
-                ) {
-                    // Backward-compatible fallback for older contracts where GameComplete
-                    // does not include split hand cards.
-                    finalSplitCards = [...prev.splitCards, result.lastActionCard];
-                }
-
-                return {
-                    ...prev,
-                    result: result.gameResult,
-                    payout: result.payout || '0',
-                    splitResults: result.splitResults || null,
-                    dealerCards: finalDealerCards,
-                    dealerValue: finalDealerValue,
-                    playerCards: finalPlayerCards,
-                    playerValue: finalPlayerValue,
-                    splitCards: finalSplitCards,
-                    splitValue: finalSplitValue,
-                    isActive: false, // Game ended
-                    contractPhase: BlackjackPhase.RESOLVED,
-                };
-            });
-
-            // Don't call refreshGameState() - it will overwrite our preserved cards
-            // with empty data from the cleared contract
             refetchBalance();
-            return;
+        } finally {
+            setTxInProgress(null);
         }
-
-        // Game didn't end (e.g., hit without bust)
-        // Fix Bug 3: Optimistic Update using event data
-        // If we trust the event log, we can update state immediately without waiting for RPC
-        if (result.cards && result.cards.length > 0) {
-            setGameState(prev => {
-                // If it's a hit, we expect 1 new card.
-                // The event 'BlackjackHit' usually returns just the NEW card in some contracts,
-                // but our decoder in handleStatus seems to return `cards: [newCard]`.
-                // Let's check how `result.cards` is populated in `BlackjackTransaction`.
-                // Looking at `blackjack-transaction.tsx`, for 'action' mode/BlackjackHit:
-                // `cards: [Number(args.newCard)]`
-
-                // So we should APPEND this card to the correct hand
-                const targetHandIndex = result.handIndex ?? prev.currentHandIndex;
-                const newCard = result.cards[0];
-
-                const newPlayerCards = [...prev.playerCards];
-                const newSplitCards = [...prev.splitCards];
-
-                if (targetHandIndex === 1 && prev.hasSplit) {
-                    // Start of split hand or append
-                    newSplitCards.push(newCard);
-                } else {
-                    // Main hand
-                    newPlayerCards.push(newCard);
-                }
-
-                return {
-                    ...prev,
-                    isActive: true,
-                    // Update the specific hand's cards
-                    playerCards: newPlayerCards,
-                    splitCards: newSplitCards,
-                    // Update value
-                    playerValue: targetHandIndex === 0 ? (result.handValue ?? prev.playerValue) : prev.playerValue,
-                    splitValue: targetHandIndex === 1 ? (result.handValue ?? prev.splitValue) : prev.splitValue,
-                    // A post-hit hand can no longer double/surrender/split on this turn.
-                    // Fresh on-chain snapshot will follow and finalize exact action flags.
-                    canDouble: false,
-                    canSplit: false,
-                    canSurrender: false,
-                    contractPhase: BlackjackPhase.PLAYER_TURN
-                };
-            });
-        }
-
-        // Still trigger a refresh in background to eventually sync fully
-        await refreshGameState();
-        refetchBalance();
     }, [refreshGameState, refetchBalance]);
 
     // Handle approval success
@@ -698,7 +702,7 @@ export default function BlackjackDialog({
         gameState.canSplit &&
         (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction);
 
-    const handleActionClick = useCallback(async (action: BlackjackAction): Promise<boolean> => {
+    const handleActionClick = useCallback(async (action: BlackjackAction): Promise<boolean | { handIndex: number }> => {
         const localActionAllowed =
             (action === BlackjackAction.HIT && gameState.canHit) ||
             (action === BlackjackAction.STAND && gameState.canStand) ||
@@ -748,11 +752,16 @@ export default function BlackjackDialog({
             return false;
         }
 
+        const resolvedHandIndex =
+            latestSnapshot && latestSnapshot.phase === BlackjackPhase.PLAYER_TURN
+                ? latestSnapshot.actionHandIndex
+                : (gameState.hasSplit ? gameState.currentHandIndex : 0);
+
         const requiresAdditionalBet = action === BlackjackAction.DOUBLE || action === BlackjackAction.SPLIT;
         if (!requiresAdditionalBet) {
             setError(null);
             setTxInProgress(action);
-            return true;
+            return { handIndex: resolvedHandIndex };
         }
 
         const requiredWei = latestSnapshot && latestSnapshot.betAmount > BigInt(0)
@@ -796,7 +805,7 @@ export default function BlackjackDialog({
 
         setError(null);
         setTxInProgress(action);
-        return true;
+        return { handIndex: resolvedHandIndex };
     }, [
         landId,
         refreshGameState,
@@ -805,6 +814,13 @@ export default function BlackjackDialog({
         config,
         currentBalanceWei,
         gameState.betAmount,
+        gameState.canHit,
+        gameState.canStand,
+        gameState.canDouble,
+        gameState.canSplit,
+        gameState.canSurrender,
+        gameState.hasSplit,
+        gameState.currentHandIndex,
         refetchBalance,
         tokenSymbol
     ]);

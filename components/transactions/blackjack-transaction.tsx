@@ -53,7 +53,7 @@ interface BlackjackTransactionProps {
             payout: string;
         }>;
     }) => void;
-    onButtonClick?: () => boolean | void | Promise<boolean | void>;
+    onButtonClick?: () => boolean | void | { handIndex?: number } | Promise<boolean | void | { handIndex?: number }>;
     onError?: (error: string) => void;
     tokenSymbol?: string;
 }
@@ -169,6 +169,13 @@ export default function BlackjackTransaction({
             return;
         }
 
+        let resolvedHandIndex = handIndex;
+        if (preflightResult && typeof preflightResult === "object") {
+            if (typeof preflightResult.handIndex === "number") {
+                resolvedHandIndex = preflightResult.handIndex;
+            }
+        }
+
         setPhase("fetching");
         setError(null);
 
@@ -182,7 +189,7 @@ export default function BlackjackTransaction({
                             action === BlackjackAction.SPLIT ? "split" :
                                 action === BlackjackAction.SURRENDER ? "surrender" : "action";
 
-            const result = await blackjackFetchRandomness(landId, actionName, address, handIndex);
+            const result = await blackjackFetchRandomness(landId, actionName, address, resolvedHandIndex);
 
 
 
@@ -194,7 +201,7 @@ export default function BlackjackTransaction({
                 );
             } else if (mode === "action" && action !== undefined) {
                 call = buildBlackjackActionWithRandomCall(
-                    landId, handIndex, action, result.randomSeed, result.nonce, result.signature
+                    landId, resolvedHandIndex, action, result.randomSeed, result.nonce, result.signature
                 );
             } else {
                 throw new Error("Invalid parameters");
