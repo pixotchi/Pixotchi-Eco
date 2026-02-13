@@ -429,12 +429,21 @@ export default function BlackjackDialog({
             // This ensures the UI shows cards immediately even if RPC is slow
             const dealtCards = Array.isArray(result.cards) ? result.cards.map(Number) : [];
             const optimisticActions = deriveInitialPlayerActions(dealtCards);
+            let optimisticBetAmountWei = BigInt(0);
+            try {
+                optimisticBetAmountWei = parseUnits(gameState.betAmountInput || '0', 18);
+            } catch {
+                optimisticBetAmountWei = BigInt(0);
+            }
             setGameState(prev => ({
                 ...prev,
                 isActive: true,
                 contractPhase: BlackjackPhase.PLAYER_TURN, // Force phase
                 playerCards: dealtCards,
                 playerValue: result.handValue ?? 0,
+                // Keep current wager in local state so mid-game DOUBLE/SPLIT funding checks
+                // are available immediately, before the next RPC refresh.
+                betAmount: optimisticBetAmountWei > BigInt(0) ? optimisticBetAmountWei : prev.betAmount,
                 // Show dealer up card + hidden
                 dealerCards: result.dealerUpCard !== undefined ? [result.dealerUpCard, 0] : prev.dealerCards,
                 dealerValue: 0,
@@ -473,7 +482,7 @@ export default function BlackjackDialog({
             await refreshGameState();
             refetchBalance();
         }
-    }, [refreshGameState, refetchBalance, landId]);
+    }, [refreshGameState, refetchBalance, landId, gameState.betAmountInput]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: any) => {
@@ -635,12 +644,14 @@ export default function BlackjackDialog({
     const additionalActionBetWei = gameState.betAmount > BigInt(0) ? gameState.betAmount : BigInt(0);
     const hasBalanceForAdditionalAction = currentBalanceWei >= additionalActionBetWei;
     const hasAllowanceForAdditionalAction = allowanceWei >= additionalActionBetWei;
+    const needsAdditionalApproval =
+        additionalActionBetWei > BigInt(0) && !hasAllowanceForAdditionalAction;
     const disableDoubleForFunding =
         gameState.canDouble &&
-        (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction || !hasAllowanceForAdditionalAction);
+        (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction);
     const disableSplitForFunding =
         gameState.canSplit &&
-        (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction || !hasAllowanceForAdditionalAction);
+        (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction);
 
     const handleActionClick = useCallback(async (action: BlackjackAction): Promise<boolean> => {
         const requiresAdditionalBet = action === BlackjackAction.DOUBLE || action === BlackjackAction.SPLIT;
@@ -917,11 +928,11 @@ export default function BlackjackDialog({
                                     : (gameState.hasSplit ? `Playing Hand ${getCurrentHandIndex() + 1}` : 'Your Turn')
                                 }
                             </p>
-                            {txInProgress === null && (gameState.canDouble || gameState.canSplit) && additionalActionBetWei > BigInt(0) && (!hasBalanceForAdditionalAction || !hasAllowanceForAdditionalAction) && (
+                            {txInProgress === null && (gameState.canDouble || gameState.canSplit) && additionalActionBetWei > BigInt(0) && (!hasBalanceForAdditionalAction || needsAdditionalApproval) && (
                                 <p className="text-center text-red-300 text-xs">
                                     {!hasBalanceForAdditionalAction
                                         ? `Insufficient balance for Double/Split (needs ${formatUnits(additionalActionBetWei, 18)} ${tokenSymbol})`
-                                        : `Insufficient approval for Double/Split (needs ${formatUnits(additionalActionBetWei, 18)} ${tokenSymbol})`}
+                                        : `Approval may be too low for Double/Split (needs ${formatUnits(additionalActionBetWei, 18)} ${tokenSymbol}). We will re-check on click.`}
                                 </p>
                             )}
 
