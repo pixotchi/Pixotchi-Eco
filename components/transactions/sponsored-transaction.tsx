@@ -14,7 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -43,9 +43,10 @@ export default function SponsoredTransaction({
 }: SponsoredTransactionProps) {
   const { isSponsored } = usePaymaster();
   const { address } = useAccount();
+  const builderCapabilities = getBuilderCapabilities();
 
   // Normalize to raw serializable calls for embedded-wallet compatibility.
-  // Builder attribution is handled at Wagmi client level via `dataSuffix`.
+  // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]
@@ -99,6 +100,7 @@ export default function SponsoredTransaction({
       calls={transformedCalls}
       onError={handleOnError}
       isSponsored={isSponsored}
+      capabilities={builderCapabilities}
       resetAfter={2000}
     >
       <TransactionButton

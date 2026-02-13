@@ -14,7 +14,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -51,6 +51,7 @@ export function PlantNameTransaction({
 
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
+  const builderCapabilities = getBuilderCapabilities();
 
   const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
@@ -60,7 +61,7 @@ export function PlantNameTransaction({
   }], [plantId, newName]);
 
   // Normalize to raw serializable calls for embedded-wallet compatibility.
-  // Builder attribution is handled at Wagmi client level via `dataSuffix`.
+  // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]),
     [calls]
@@ -89,6 +90,7 @@ export function PlantNameTransaction({
         onError={onError}
         onStatus={handleOnStatus}
         isSponsored={isSponsored}
+        capabilities={builderCapabilities}
         resetAfter={2000}
       >
         <TransactionButton

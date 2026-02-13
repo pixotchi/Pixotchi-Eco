@@ -22,7 +22,7 @@ import { toast } from "react-hot-toast";
 import { decodeEventLog, formatUnits } from "viem";
 import { extractTransactionHash } from "@/lib/transaction-utils";
 import { useAccount } from "wagmi";
-import { transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface BlackjackTransactionProps {
     mode: "deal" | "action";
@@ -135,6 +135,7 @@ export default function BlackjackTransaction({
 }: BlackjackTransactionProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
+    const builderCapabilities = getBuilderCapabilities();
     const processedTxHashes = useRef<Set<string>>(new Set());
     const successHandledRef = useRef(false);
 
@@ -143,7 +144,7 @@ export default function BlackjackTransaction({
     const [calls, setCalls] = useState<any[]>([]);
 
     // Normalize to raw serializable calls for embedded-wallet compatibility.
-    // Builder attribution is handled at Wagmi client level via `dataSuffix`.
+    // Builder attribution is appended by transform helper + wallet_sendCalls capability.
     const transformedCalls = useMemo(() => {
         if (calls.length === 0) return [];
         return transformCallsWithBuilderCode(calls);
@@ -549,6 +550,7 @@ export default function BlackjackTransaction({
                 onStatus={handleStatus}
                 calls={transformedCalls}
                 isSponsored={isSponsored}
+                capabilities={builderCapabilities}
                 resetAfter={2000}
             >
                 <TransactionButton

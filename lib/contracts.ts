@@ -1,6 +1,7 @@
 import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
+import { appendBuilderSuffix } from './builder-code';
 import UniswapAbi from '@/public/abi/Uniswap.json';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { leafAbi } from '../public/abi/leaf-abi';
@@ -1065,16 +1066,17 @@ export const transferPlants = async (
 
   for (const id of plantIds) {
     try {
-      // Encode function data; Builder attribution is appended by Wagmi client `dataSuffix`.
+      // Encode function data and append builder code suffix for ERC-8021 attribution.
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, BigInt(id)],
       });
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
 
       const hash = await walletClient.sendTransaction({
         to: PIXOTCHI_NFT_ADDRESS,
-        data: encodedData,
+        data: dataWithSuffix,
         account: walletClient.account,
         chain: base,
       });
@@ -1107,16 +1109,17 @@ export const transferLands = async (
 
   for (const id of landTokenIds) {
     try {
-      // Encode function data; Builder attribution is appended by Wagmi client `dataSuffix`.
+      // Encode function data and append builder code suffix for ERC-8021 attribution.
       const encodedData = encodeFunctionData({
         abi: ERC721_MIN_ABI,
         functionName: 'transferFrom',
         args: [from, to, id],
       });
+      const dataWithSuffix = appendBuilderSuffix(encodedData);
 
       const hash = await walletClient.sendTransaction({
         to: LAND_CONTRACT_ADDRESS,
-        data: encodedData,
+        data: dataWithSuffix,
         account: walletClient.account,
         chain: base,
       });
@@ -2249,11 +2252,12 @@ export const routerBatchTransfer = async (
     throw new Error('No assets to transfer');
   }
 
-  // Builder attribution is appended by Wagmi client `dataSuffix`.
+  // Append builder code suffix for ERC-8021 attribution.
+  const dataWithSuffix = appendBuilderSuffix(encodedData);
 
   hash = await walletClient.sendTransaction({
     to: BATCH_ROUTER_ADDRESS,
-    data: encodedData,
+    data: dataWithSuffix,
     account: walletClient.account,
     chain: base,
   });

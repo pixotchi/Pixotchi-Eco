@@ -13,7 +13,7 @@ import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
-import { transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
@@ -35,9 +35,10 @@ export default function SmartWalletTransaction({
   showToast = true
 }: SmartWalletTransactionProps) {
   const { isSponsored } = usePaymaster();
+  const builderCapabilities = getBuilderCapabilities();
 
   // Normalize to raw serializable calls for embedded-wallet compatibility.
-  // Builder attribution is handled at Wagmi client level via `dataSuffix`.
+  // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]
@@ -82,6 +83,7 @@ export default function SmartWalletTransaction({
       calls={transformedCalls}
       onError={handleOnError}
       isSponsored={isSponsored}
+      capabilities={builderCapabilities}
       resetAfter={2000}
     >
       <TransactionButton

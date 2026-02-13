@@ -24,6 +24,7 @@ const BUILDER_CODE = CLIENT_ENV.BUILDER_CODE;
 // Cache the computed suffix to avoid recomputation
 let cachedDataSuffix: string | null = null;
 let cacheInitialized = false;
+let autoAppendHandledByHost = false;
 
 /**
  * Generate the ERC-8021 dataSuffix for transaction attribution
@@ -68,6 +69,18 @@ export function getDataSuffix(): string | undefined {
 }
 
 /**
+ * Configure whether attribution suffix append/capability should be skipped
+ * because host client is appending attribution automatically (e.g. Base App).
+ */
+export function setHostHandlesBuilderAttribution(enabled: boolean): void {
+  autoAppendHandledByHost = enabled;
+}
+
+function shouldSkipClientSideAttributionAppend(): boolean {
+  return autoAppendHandledByHost;
+}
+
+/**
  * Get a wallet_sendCalls capability payload for data suffix attribution.
  * Note: Prefer client-level `dataSuffix` in Wagmi config for primary integration.
  * 
@@ -76,6 +89,7 @@ export function getDataSuffix(): string | undefined {
 export function getBuilderCapabilities():
   | { dataSuffix: { value: string; optional: true } }
   | undefined {
+  if (shouldSkipClientSideAttributionAppend()) return undefined;
   const suffix = getDataSuffix();
   if (!suffix) return undefined;
   return { dataSuffix: { value: suffix, optional: true } };
@@ -103,6 +117,7 @@ export function getBuilderCode(): string | undefined {
  * @returns The data with builder suffix appended, or original data if no suffix configured
  */
 export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
+  if (shouldSkipClientSideAttributionAppend()) return encodedData;
   const suffix = getDataSuffix();
   if (!suffix) return encodedData;
 
@@ -113,16 +128,16 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
 /**
  * Transform OnchainKit calls into raw serializable calls (`to`, `data`, `value`).
  * 
- * Attribution should be handled by client-level `dataSuffix` in Wagmi config.
- * This helper is focused on compatibility with embedded wallets that cannot
- * structured-clone ABI function objects.
+ * Builder attribution is appended directly into calldata to ensure coverage
+ * for wallet flows that do not propagate ERC-5792 `dataSuffix` capability.
+ * This helper also normalizes call shape for embedded-wallet compatibility.
  * 
  * IMPORTANT: This function also ensures calls are converted to raw format
  * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
  * function objects that cannot be structured-cloned for postMessage communication.
  * 
  * @param calls - Array of transaction calls (OnchainKit format)
- * @returns Transformed raw calls without mutating calldata suffix
+ * @returns Transformed raw calls with suffix appended when configured
  */
 export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
@@ -133,6 +148,8 @@ export function transformCallsWithBuilderCode<T extends {
   data?: `0x${string}`;
   value?: bigint;
 }>(calls: T[]): T[] {
+  const suffix = getDataSuffix();
+
   return calls.map((call) => {
     // If call has abi/functionName, it's a contract call that needs encoding
     // ALWAYS encode to raw format to ensure compatibility with Privy embedded wallets
@@ -148,17 +165,17 @@ export function transformCallsWithBuilderCode<T extends {
       // Create a completely new object without any reference to the original ABI
       return {
         to: call.address || call.to,
-        data: encodedData,
+        data: suffix ? appendBuilderSuffix(encodedData) : encodedData,
         value: call.value,
       } as T;
     }
 
-    // If call already has data, pass through as raw call
+    // If call already has data, append suffix for attribution.
     if (call.data) {
       // Create a new object to ensure no non-serializable properties are retained
       return {
         to: call.to,
-        data: call.data,
+        data: suffix ? appendBuilderSuffix(call.data) : call.data,
         value: call.value,
       } as T;
     }

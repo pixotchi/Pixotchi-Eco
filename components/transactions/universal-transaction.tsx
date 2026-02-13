@@ -12,7 +12,7 @@ import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
-import { transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
@@ -39,9 +39,10 @@ export default function UniversalTransaction({
 
   // Determine if this transaction should be sponsored
   const isSponsored = forceUnsponsored ? false : paymasterEnabled;
+  const builderCapabilities = getBuilderCapabilities();
 
   // Normalize to raw serializable calls for embedded-wallet compatibility.
-  // Builder attribution is handled at Wagmi client level via `dataSuffix`.
+  // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
     transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
     [calls]
@@ -84,6 +85,7 @@ export default function UniversalTransaction({
       calls={transformedCalls}
       onError={handleOnError}
       isSponsored={isSponsored}
+      capabilities={builderCapabilities}
       resetAfter={2000}
     >
       <TransactionButton

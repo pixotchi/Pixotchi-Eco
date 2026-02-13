@@ -19,6 +19,7 @@ import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { FrameProvider } from "@/lib/frame-context";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
+import { setHostHandlesBuilderAttribution } from "@/lib/builder-code";
 import dynamic from "next/dynamic";
 import { BalanceProvider } from "@/lib/balance-context";
 import { LoadingProvider } from "@/lib/loading-context";
@@ -253,15 +254,21 @@ export function Providers(props: { children: ReactNode }) {
                 : maybeContext;
               const clientFid = Number(context?.client?.clientFid);
               if (cancelToken || !mounted) return;
-              setIsBaseAppMiniClient(clientFid === BASE_APP_CLIENT_FID);
+              const isBaseClient = clientFid === BASE_APP_CLIENT_FID;
+              setIsBaseAppMiniClient(isBaseClient);
+              setHostHandlesBuilderAttribution(isBaseClient);
             } catch {
               if (cancelToken || !mounted) return;
               setIsBaseAppMiniClient(false);
+              setHostHandlesBuilderAttribution(false);
             }
             if (cancelToken || !mounted) return;
             setIsInitialized(true);
             return;
           }
+
+          // Web surfaces should append attribution client-side.
+          setHostHandlesBuilderAttribution(false);
 
           // Step 2: Use the already-determined auth surface
           if (cancelToken || !mounted) return;
