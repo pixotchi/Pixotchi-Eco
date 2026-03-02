@@ -140,6 +140,13 @@ export const blackjackAbi = [
         stateMutability: 'view'
     },
     {
+        name: 'blackjackGetGameToken',
+        type: 'function',
+        inputs: [{ name: 'landId', type: 'uint256' }],
+        outputs: [{ name: 'bettingToken', type: 'address' }],
+        stateMutability: 'view'
+    },
+    {
         name: 'blackjackGetConfig',
         type: 'function',
         inputs: [],
@@ -154,9 +161,38 @@ export const blackjackAbi = [
         stateMutability: 'view'
     },
     {
+        name: 'blackjackGetTokenConfig',
+        type: 'function',
+        inputs: [{ name: 'token', type: 'address' }],
+        outputs: [
+            { name: 'supported', type: 'bool' },
+            { name: 'minBet', type: 'uint256' },
+            { name: 'maxBet', type: 'uint256' },
+            { name: 'rewardPool', type: 'address' },
+            { name: 'enabled', type: 'bool' },
+            { name: 'requiredLevel', type: 'uint8' }
+        ],
+        stateMutability: 'view'
+    },
+    {
         name: 'blackjackGetStats',
         type: 'function',
         inputs: [{ name: 'landId', type: 'uint256' }],
+        outputs: [
+            { name: 'totalWagered', type: 'uint256' },
+            { name: 'totalWon', type: 'uint256' },
+            { name: 'gamesPlayed', type: 'uint256' },
+            { name: 'blackjacksHit', type: 'uint256' }
+        ],
+        stateMutability: 'view'
+    },
+    {
+        name: 'blackjackGetStatsByToken',
+        type: 'function',
+        inputs: [
+            { name: 'landId', type: 'uint256' },
+            { name: 'token', type: 'address' }
+        ],
         outputs: [
             { name: 'totalWagered', type: 'uint256' },
             { name: 'totalWon', type: 'uint256' },
@@ -184,7 +220,8 @@ export const blackjackAbi = [
         inputs: [
             { name: 'landId', type: 'uint256', indexed: true },
             { name: 'player', type: 'address', indexed: true },
-            { name: 'amount', type: 'uint256', indexed: false }
+            { name: 'amount', type: 'uint256', indexed: false },
+            { name: 'bettingToken', type: 'address', indexed: false }
         ]
     },
     {
@@ -241,7 +278,8 @@ export const blackjackAbi = [
             { name: 'result', type: 'uint8', indexed: false },
             { name: 'playerFinalValue', type: 'uint8', indexed: false },
             { name: 'dealerFinalValue', type: 'uint8', indexed: false },
-            { name: 'payout', type: 'uint256', indexed: false }
+            { name: 'payout', type: 'uint256', indexed: false },
+            { name: 'bettingToken', type: 'address', indexed: false }
         ]
     },
     {
@@ -250,7 +288,8 @@ export const blackjackAbi = [
         inputs: [
             { name: 'landId', type: 'uint256', indexed: true },
             { name: 'player', type: 'address', indexed: true },
-            { name: 'forfeitedAmount', type: 'uint256', indexed: false }
+            { name: 'forfeitedAmount', type: 'uint256', indexed: false },
+            { name: 'bettingToken', type: 'address', indexed: false }
         ]
     },
     // Issue #10: New event for action commit tracking
@@ -279,7 +318,26 @@ export const blackjackAbi = [
             { name: 'playerFinalValue', type: 'uint8', indexed: false },
             { name: 'splitFinalValue', type: 'uint8', indexed: false },
             { name: 'dealerFinalValue', type: 'uint8', indexed: false },
-            { name: 'payout', type: 'uint256', indexed: false }
+            { name: 'payout', type: 'uint256', indexed: false },
+            { name: 'bettingToken', type: 'address', indexed: false }
+        ]
+    },
+    {
+        name: 'BlackjackTokenConfigUpdated',
+        type: 'event',
+        inputs: [
+            { name: 'token', type: 'address', indexed: true },
+            { name: 'minBet', type: 'uint256', indexed: false },
+            { name: 'maxBet', type: 'uint256', indexed: false },
+            { name: 'rewardPool', type: 'address', indexed: false },
+            { name: 'enabled', type: 'bool', indexed: false }
+        ]
+    },
+    {
+        name: 'BlackjackTokenRemoved',
+        type: 'event',
+        inputs: [
+            { name: 'token', type: 'address', indexed: true }
         ]
     },
     // Dealer draws a card during dealer play phase
@@ -300,6 +358,20 @@ export const blackjackAbi = [
         inputs: [
             { name: 'landId', type: 'uint256' },
             { name: 'amount', type: 'uint256' },
+            { name: 'randomSeed', type: 'bytes32' },
+            { name: 'nonce', type: 'uint256' },
+            { name: 'signature', type: 'bytes' }
+        ],
+        outputs: [],
+        stateMutability: 'nonpayable'
+    },
+    {
+        name: 'blackjackDealWithRandomForToken',
+        type: 'function',
+        inputs: [
+            { name: 'landId', type: 'uint256' },
+            { name: 'amount', type: 'uint256' },
+            { name: 'token', type: 'address' },
             { name: 'randomSeed', type: 'bytes32' },
             { name: 'nonce', type: 'uint256' },
             { name: 'signature', type: 'bytes' }
@@ -334,6 +406,33 @@ export const blackjackAbi = [
         inputs: [],
         outputs: [{ name: 'signer', type: 'address' }],
         stateMutability: 'view'
+    },
+    {
+        name: 'blackjackInitializeMultiTokenSupport',
+        type: 'function',
+        inputs: [],
+        outputs: [],
+        stateMutability: 'nonpayable'
+    },
+    {
+        name: 'blackjackSetTokenConfig',
+        type: 'function',
+        inputs: [
+            { name: 'token', type: 'address' },
+            { name: 'minBet', type: 'uint256' },
+            { name: 'maxBet', type: 'uint256' },
+            { name: 'rewardPool', type: 'address' },
+            { name: 'enabled', type: 'bool' }
+        ],
+        outputs: [],
+        stateMutability: 'nonpayable'
+    },
+    {
+        name: 'blackjackRemoveToken',
+        type: 'function',
+        inputs: [{ name: 'token', type: 'address' }],
+        outputs: [],
+        stateMutability: 'nonpayable'
     }
 ] as const;
 

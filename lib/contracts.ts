@@ -17,6 +17,7 @@ export const STAKE_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.STAKE_CONTRACT_ADDRE
 export const PIXOTCHI_NFT_ADDRESS = getAddress('0xeb4e16c804AE9275a655AbBc20cD0658A91F9235');
 export const PIXOTCHI_TOKEN_ADDRESS = getAddress('0x546D239032b24eCEEE0cb05c92FC39090846adc7');
 export const CREATOR_TOKEN_ADDRESS = getAddress('0xa2ef17bb7eea1143196678337069dfa24d37d2ac');
+export const CRYPTICPOET_TOKEN_ADDRESS = getAddress('0x787b7B7117848C1F9Fc79A8Fa543202c231C1Edb');
 // Known token addresses for reference
 export const JESSE_TOKEN_ADDRESS = getAddress('0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59');
 export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;
@@ -2327,6 +2328,15 @@ export type CasinoConfig = {
   maxBetsPerGame: bigint;
 };
 
+export type CasinoTokenConfig = {
+  supported: boolean;
+  minBet: bigint;
+  maxBet: bigint;
+  rewardPool: string;
+  enabled: boolean;
+  maxBetsPerGame: bigint;
+};
+
 export type CasinoActiveBet = {
   isActive: boolean;
   numBets: bigint;
@@ -2335,6 +2345,10 @@ export type CasinoActiveBet = {
   player: string;
   canReveal: boolean;
   isExpired: boolean;
+};
+
+export type CasinoActiveBetV2 = CasinoActiveBet & {
+  bettingToken: string;
 };
 
 export type CasinoBetDetails = {
@@ -2420,6 +2434,48 @@ export const casinoGetConfig = async (): Promise<CasinoConfig | null> => {
   }
 };
 
+export const casinoGetSupportedTokens = async (): Promise<string[]> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetSupportedTokens',
+      });
+    }) as string[];
+    return result;
+  } catch (error) {
+    console.warn('Failed to get casino supported tokens:', error);
+    return [];
+  }
+};
+
+export const casinoGetTokenConfig = async (token: string): Promise<CasinoTokenConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetTokenConfig',
+        args: [token as `0x${string}`],
+      });
+    }) as [boolean, bigint, bigint, string, boolean, bigint];
+    return {
+      supported: result[0],
+      minBet: result[1],
+      maxBet: result[2],
+      rewardPool: result[3],
+      enabled: result[4],
+      maxBetsPerGame: result[5],
+    };
+  } catch (error) {
+    console.warn('Failed to get casino token config:', error);
+    return null;
+  }
+};
+
 /**
  * Get active game details for a land (multi-bet version)
  */
@@ -2445,6 +2501,33 @@ export const casinoGetActiveBet = async (landId: bigint): Promise<CasinoActiveBe
     };
   } catch (error) {
     console.warn('Failed to get active bet:', error);
+    return null;
+  }
+};
+
+export const casinoGetActiveBetV2 = async (landId: bigint): Promise<CasinoActiveBetV2 | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetActiveBetV2',
+        args: [landId],
+      });
+    }) as [boolean, bigint, bigint, bigint, string, boolean, boolean, string];
+    return {
+      isActive: result[0],
+      numBets: result[1],
+      totalBetAmount: result[2],
+      revealBlock: result[3],
+      player: result[4],
+      canReveal: result[5],
+      isExpired: result[6],
+      bettingToken: result[7],
+    };
+  } catch (error) {
+    console.warn('Failed to get active bet v2:', error);
     return null;
   }
 };
@@ -2515,6 +2598,28 @@ export const casinoGetStats = async (landId: bigint): Promise<CasinoStats | null
     };
   } catch (error) {
     console.warn('Failed to get casino stats:', error);
+    return null;
+  }
+};
+
+export const casinoGetStatsByToken = async (landId: bigint, token: string): Promise<CasinoStats | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: casinoAbi,
+        functionName: 'casinoGetStatsByToken',
+        args: [landId, token as `0x${string}`],
+      });
+    }) as [bigint, bigint, bigint];
+    return {
+      totalWagered: result[0],
+      totalWon: result[1],
+      gamesPlayed: result[2],
+    };
+  } catch (error) {
+    console.warn('Failed to get casino token stats:', error);
     return null;
   }
 };
@@ -2609,6 +2714,28 @@ export const casinoPlaceBets = async (
   return hash;
 };
 
+export const casinoPlaceBetsWithToken = async (
+  walletClient: WalletClient,
+  landId: bigint,
+  token: string,
+  betTypes: CasinoBetType[],
+  betNumbersArray: number[][],
+  betAmounts: bigint[]
+): Promise<string> => {
+  if (!walletClient.account) throw new Error('No account connected');
+
+  const hash = await walletClient.writeContract({
+    address: LAND_CONTRACT_ADDRESS,
+    abi: casinoAbi,
+    functionName: 'casinoPlaceBetsWithToken',
+    args: [landId, token as `0x${string}`, betTypes, betNumbersArray, betAmounts],
+    account: walletClient.account,
+    chain: base,
+  });
+
+  return hash;
+};
+
 /**
  * Reveal the casino spin result (transaction)
  * Returns the transaction hash, result must be parsed from receipt logs
@@ -2651,6 +2778,19 @@ export const buildCasinoPlaceBetsCall = (
   abi: casinoAbi,
   functionName: 'casinoPlaceBets' as const,
   args: [landId, betTypes, betNumbersArray, betAmounts],
+});
+
+export const buildCasinoPlaceBetsWithTokenCall = (
+  landId: bigint,
+  token: string,
+  betTypes: CasinoBetType[],
+  betNumbersArray: number[][],
+  betAmounts: bigint[]
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: casinoAbi,
+  functionName: 'casinoPlaceBetsWithToken' as const,
+  args: [landId, token as `0x${string}`, betTypes, betNumbersArray, betAmounts],
 });
 
 /**
@@ -2802,6 +2942,15 @@ export interface BlackjackConfig {
   minBet: bigint;
   maxBet: bigint;
   bettingToken: string;
+  rewardPool: string;
+  enabled: boolean;
+  requiredLevel: number;
+}
+
+export interface BlackjackTokenConfig {
+  supported: boolean;
+  minBet: bigint;
+  maxBet: bigint;
   rewardPool: string;
   enabled: boolean;
   requiredLevel: number;
@@ -3001,6 +3150,24 @@ export const blackjackGetDealerHand = async (landId: bigint): Promise<{ dealerCa
   }
 };
 
+export const blackjackGetGameToken = async (landId: bigint): Promise<string | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetGameToken',
+        args: [landId],
+      });
+    }) as string;
+    return result;
+  } catch (error) {
+    console.warn('Failed to get blackjack game token:', error);
+    return null;
+  }
+};
+
 /**
  * Get Blackjack config
  */
@@ -3030,6 +3197,32 @@ export const blackjackGetConfig = async (): Promise<BlackjackConfig | null> => {
   }
 };
 
+export const blackjackGetTokenConfig = async (token: string): Promise<BlackjackTokenConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetTokenConfig',
+        args: [token as `0x${string}`],
+      });
+    }) as [boolean, bigint, bigint, string, boolean, number];
+
+    return {
+      supported: result[0],
+      minBet: result[1],
+      maxBet: result[2],
+      rewardPool: result[3],
+      enabled: result[4],
+      requiredLevel: result[5],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack token config:', error);
+    return null;
+  }
+};
+
 /**
  * Get Blackjack stats for a land
  */
@@ -3053,6 +3246,30 @@ export const blackjackGetStats = async (landId: bigint): Promise<BlackjackStats 
     };
   } catch (error) {
     console.warn('Failed to get blackjack stats:', error);
+    return null;
+  }
+};
+
+export const blackjackGetStatsByToken = async (landId: bigint, token: string): Promise<BlackjackStats | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: blackjackAbi,
+        functionName: 'blackjackGetStatsByToken',
+        args: [landId, token as `0x${string}`],
+      });
+    }) as [bigint, bigint, bigint, bigint];
+
+    return {
+      totalWagered: result[0],
+      totalWon: result[1],
+      gamesPlayed: result[2],
+      blackjacksHit: result[3],
+    };
+  } catch (error) {
+    console.warn('Failed to get blackjack token stats:', error);
     return null;
   }
 };
@@ -3136,7 +3353,8 @@ export const blackjackFetchRandomness = async (
   landId: bigint,
   action: string,
   playerAddress?: string,
-  handIndex?: number
+  handIndex?: number,
+  bettingToken?: string
 ): Promise<{ randomSeed: string; nonce: number; signature: string; expiresAt: number; signerAddress: string }> => {
   const response = await fetch('/api/blackjack/random', {
     method: 'POST',
@@ -3146,6 +3364,7 @@ export const blackjackFetchRandomness = async (
       action,
       playerAddress,
       handIndex,
+      bettingToken,
     }),
   });
 
@@ -3207,6 +3426,27 @@ export const buildBlackjackDealWithRandomCall = (
   abi: blackjackAbi,
   functionName: 'blackjackDealWithRandom' as const,
   args: [landId, amount, randomSeed as `0x${string}`, BigInt(nonce), signature as `0x${string}`],
+});
+
+export const buildBlackjackDealWithRandomForTokenCall = (
+  landId: bigint,
+  amount: bigint,
+  token: string,
+  randomSeed: string,
+  nonce: number,
+  signature: string
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: blackjackAbi,
+  functionName: 'blackjackDealWithRandomForToken' as const,
+  args: [
+    landId,
+    amount,
+    token as `0x${string}`,
+    randomSeed as `0x${string}`,
+    BigInt(nonce),
+    signature as `0x${string}`,
+  ],
 });
 
 /**

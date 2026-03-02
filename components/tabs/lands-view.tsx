@@ -193,7 +193,7 @@ export default function LandsView() {
       if (fetchBuildingDataPendingRef.current === landId) {
         setVillageBuildings(villageData || []);
 
-        // Add prebuilt buildings to town data (Warehouse ID 3, Stake House ID 1, Casino ID 6)
+        // Add prebuilt buildings to town data (Warehouse ID 3, Stake House ID 1, Casino ID 6, Barracks ID 8)
         const prebuiltBuildings = [
           {
             id: 1, // Stake House
@@ -238,6 +238,22 @@ export default function LandsView() {
             levelUpgradeCostLeaf: BigInt(0),
             levelUpgradeCostSeedInstant: BigInt(0),
             levelUpgradeCostSeed: BigInt("500000000000000000000"), // 500 SEED default
+            levelUpgradeBlockInterval: BigInt(0),
+            isUpgrading: false,
+            blockHeightUpgradeInitiated: BigInt(0),
+            blockHeightUntilUpgradeDone: BigInt(0)
+          },
+          {
+            id: 8, // Barracks (coming soon preview)
+            level: 0,
+            maxLevel: 1,
+            productionRatePlantPointsPerDay: BigInt(0),
+            productionRatePlantLifetimePerDay: BigInt(0),
+            accumulatedPoints: BigInt(0),
+            accumulatedLifetime: BigInt(0),
+            levelUpgradeCostLeaf: BigInt(0),
+            levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeCostSeed: BigInt(0),
             levelUpgradeBlockInterval: BigInt(0),
             isUpgrading: false,
             blockHeightUpgradeInitiated: BigInt(0),

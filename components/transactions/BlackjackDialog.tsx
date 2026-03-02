@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +9,8 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 import { parseUnits, formatUnits } from 'viem';
 import { useAccount, useBalance } from 'wagmi';
 import { CardHand, getCardValue, calculateHandValue } from '@/components/ui/PlayingCard';
-import { useTokenSymbol } from '@/hooks/useTokenSymbol';
-import { formatTokenAmount } from '@/lib/utils';
+import { useTokenMetadata } from '@/hooks/useTokenMetadata';
+import { formatTokenAmount, formatTokenAmountRounded, getCasinoTokenImage } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { toast } from 'react-hot-toast';
@@ -17,9 +18,9 @@ import ApproveTransaction from './approve-transaction';
 import BlackjackTransaction from './blackjack-transaction';
 import {
     LAND_CONTRACT_ADDRESS,
-    PIXOTCHI_TOKEN_ADDRESS,
-    blackjackGetConfig,
+    blackjackGetGameToken,
     blackjackGetGameSnapshot,
+    blackjackGetTokenConfig,
     checkCasinoApproval,
     BlackjackPhase,
     BlackjackAction,
@@ -32,6 +33,7 @@ interface BlackjackDialogProps {
     onOpenChange: (open: boolean) => void;
     landId: bigint;
     onGameComplete?: () => void;
+    selectedToken: string | null;
 }
 
 /**
@@ -209,7 +211,8 @@ export default function BlackjackDialog({
     open,
     onOpenChange,
     landId,
-    onGameComplete
+    onGameComplete,
+    selectedToken
 }: BlackjackDialogProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
@@ -235,14 +238,26 @@ export default function BlackjackDialog({
     const [allowanceWei, setAllowanceWei] = useState(BigInt(0));
     const [error, setError] = useState<string | null>(null);
 
-    // Token info
+    const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
+
     const { data: balanceData, refetch: refetchBalance } = useBalance({
         address: address,
-        token: config?.bettingToken as `0x${string}` || PIXOTCHI_TOKEN_ADDRESS,
-        query: { enabled: !!address && open }
+        token: config?.bettingToken as `0x${string}` | undefined,
+        query: { enabled: !!address && open && !!config?.bettingToken }
     });
 
-    const tokenSymbol = useTokenSymbol(config?.bettingToken) || 'SEED';
+    const tokenSymbol = tokenSymbolRaw || 'TOKEN';
+    const formattedMinBet = useMemo(() => (
+        config ? formatTokenAmountRounded(config.minBet, tokenDecimals) : '0'
+    ), [config, tokenDecimals]);
+    const formattedMaxBet = useMemo(() => (
+        config ? formatTokenAmountRounded(config.maxBet, tokenDecimals) : '0'
+    ), [config, tokenDecimals]);
+    const tokenLogo = useMemo(() => getCasinoTokenImage(config?.bettingToken), [config?.bettingToken]);
+    const betInputWidth = useMemo(() => {
+        const visibleChars = Math.max(gameState.betAmountInput.length, formattedMinBet.length, 4);
+        return `calc(${Math.min(visibleChars + 1, 20)}ch + 1.25rem)`;
+    }, [gameState.betAmountInput, formattedMinBet]);
     const balanceVal = balanceData
         ? parseFloat(formatUnits(balanceData.value, balanceData.decimals))
         : 0;
@@ -250,12 +265,12 @@ export default function BlackjackDialog({
     const requiredApprovalWei = useMemo(() => {
         if (!config) return BigInt(0);
         try {
-            const amount = parseUnits(gameState.betAmountInput || '0', 18);
+            const amount = parseUnits(gameState.betAmountInput || '0', tokenDecimals);
             return amount > BigInt(0) ? amount : config.minBet;
         } catch {
             return config.minBet;
         }
-    }, [config, gameState.betAmountInput]);
+    }, [config, gameState.betAmountInput, tokenDecimals]);
     const hasApproval = allowanceWei >= requiredApprovalWei;
 
     // Derive UI phase from contract state (simplified for server randomness)
@@ -509,25 +524,35 @@ export default function BlackjackDialog({
             if (!open) return;
 
             try {
-                const cfg = await blackjackGetConfig();
-                if (cfg) {
+                const snapshot = await blackjackGetGameSnapshot(landId);
+                const effectiveToken = snapshot?.isActive
+                    ? await blackjackGetGameToken(landId)
+                    : selectedToken;
+
+                if (!effectiveToken) {
+                    setConfig(null);
+                    setAllowanceWei(BigInt(0));
+                    return;
+                }
+
+                const cfg = await blackjackGetTokenConfig(effectiveToken);
+                if (cfg?.supported || snapshot?.isActive) {
                     setConfig({
-                        minBet: cfg.minBet,
-                        maxBet: cfg.maxBet,
-                        bettingToken: cfg.bettingToken,
-                        enabled: cfg.enabled,
+                        minBet: cfg?.minBet ?? BigInt(0),
+                        maxBet: cfg?.maxBet ?? BigInt(0),
+                        bettingToken: effectiveToken,
+                        enabled: cfg?.enabled ?? false,
                     });
 
-                    // Default bet input to onchain minimum whenever config is loaded.
-                    setGameState(prev => ({
-                        ...prev,
-                        betAmountInput: formatUnits(cfg.minBet, 18),
-                    }));
-
                     if (address) {
-                        const allowance = await checkCasinoApproval(address, cfg.bettingToken);
+                        const allowance = await checkCasinoApproval(address, effectiveToken);
                         setAllowanceWei(allowance);
+                    } else {
+                        setAllowanceWei(BigInt(0));
                     }
+                } else {
+                    setConfig(null);
+                    setAllowanceWei(BigInt(0));
                 }
             } catch (err) {
                 console.error('Failed to load blackjack config:', err);
@@ -535,7 +560,15 @@ export default function BlackjackDialog({
         };
 
         loadConfig();
-    }, [open, address]);
+    }, [open, address, landId, selectedToken]);
+
+    useEffect(() => {
+        if (!open || !config || gameState.contractPhase !== BlackjackPhase.NONE) return;
+        setGameState(prev => ({
+            ...prev,
+            betAmountInput: formattedMinBet,
+        }));
+    }, [config?.bettingToken, config?.minBet, gameState.contractPhase, open, formattedMinBet]);
 
     // Refresh game state on open
     useEffect(() => {
@@ -571,7 +604,7 @@ export default function BlackjackDialog({
         if (!open) {
             setGameState({
                 ...initialGameState,
-                betAmountInput: config ? formatUnits(config.minBet, 18) : initialGameState.betAmountInput,
+                betAmountInput: config ? formattedMinBet : initialGameState.betAmountInput,
             });
             setTxInProgress(null);
             setError(null);
@@ -579,7 +612,7 @@ export default function BlackjackDialog({
             setActionButtonsSyncing(false);
             setActionButtonsSyncFailed(false);
         }
-    }, [open, config]);
+    }, [open, config, formattedMinBet]);
 
     // Handle deal complete (combined bet + deal)
     // Handle deal complete (combined bet + deal)
@@ -620,7 +653,7 @@ export default function BlackjackDialog({
                 const optimisticActions = deriveInitialPlayerActions(dealtCards);
                 let optimisticBetAmountWei = BigInt(0);
                 try {
-                    optimisticBetAmountWei = parseUnits(gameState.betAmountInput || '0', 18);
+                    optimisticBetAmountWei = parseUnits(gameState.betAmountInput || '0', tokenDecimals);
                 } catch {
                     optimisticBetAmountWei = BigInt(0);
                 }
@@ -864,11 +897,11 @@ export default function BlackjackDialog({
     // Bet amount in wei
     const betAmountWei = useMemo(() => {
         try {
-            return parseUnits(gameState.betAmountInput || '0', 18);
+            return parseUnits(gameState.betAmountInput || '0', tokenDecimals);
         } catch {
             return BigInt(0);
         }
-    }, [gameState.betAmountInput]);
+    }, [gameState.betAmountInput, tokenDecimals]);
 
     const currentActionHandIndex = gameState.hasSplit ? gameState.currentHandIndex : 0;
     const currentActionCards =
@@ -1011,7 +1044,7 @@ export default function BlackjackDialog({
         }
 
         const actionLabel = action === BlackjackAction.DOUBLE ? 'double' : 'split';
-        const requiredAmount = formatUnits(requiredWei, 18);
+        const requiredAmount = formatTokenAmountRounded(requiredWei, tokenDecimals);
 
         if (latestBalanceWei < requiredWei) {
             toast.error(`Insufficient balance to ${actionLabel}. Need ${requiredAmount} ${tokenSymbol}.`);
@@ -1041,6 +1074,7 @@ export default function BlackjackDialog({
         canSurrenderUi,
         actionButtonsReady,
         refetchBalance,
+        tokenDecimals,
         tokenSymbol
     ]);
 
@@ -1060,20 +1094,20 @@ export default function BlackjackDialog({
                 setError('Blackjack is currently disabled');
                 return false;
             }
-            const amountWei = parseUnits(gameState.betAmountInput, 18);
+            const amountWei = parseUnits(gameState.betAmountInput, tokenDecimals);
             if (amountWei < config.minBet) {
-                setError(`Minimum bet is ${formatUnits(config.minBet, 18)} ${tokenSymbol}`);
+                setError(`Minimum bet is ${formattedMinBet} ${tokenSymbol}`);
                 return false;
             }
             if (amountWei > config.maxBet) {
-                setError(`Maximum bet is ${formatUnits(config.maxBet, 18)} ${tokenSymbol}`);
+                setError(`Maximum bet is ${formattedMaxBet} ${tokenSymbol}`);
                 return false;
             }
         }
         setError(null);
         setTxInProgress('deal');
         return true;
-    }, [gameState.betAmountInput, balanceVal, config, tokenSymbol]);
+    }, [gameState.betAmountInput, balanceVal, config, tokenSymbol, tokenDecimals, formattedMinBet, formattedMaxBet]);
 
     // Handle transaction errors (specifically for Action Locking security feature)
     const handleTransactionError = useCallback((error: string) => {
@@ -1191,8 +1225,10 @@ export default function BlackjackDialog({
                                 </div>
                             )}
                             {parseFloat(gameState.payout) > 0 && (
-                                <div className="text-lg text-white mt-2">
-                                    {gameState.splitResults && gameState.splitResults.length > 1 ? 'Total Payout' : 'Payout'}: {gameState.payout} {tokenSymbol}
+                                <div className="mt-2 inline-flex items-center gap-1 text-lg text-white">
+                                    <span>{gameState.splitResults && gameState.splitResults.length > 1 ? 'Total Payout:' : 'Payout:'}</span>
+                                    <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                                    <span>{gameState.payout} {tokenSymbol}</span>
                                 </div>
                             )}
                         </div>
@@ -1205,25 +1241,34 @@ export default function BlackjackDialog({
                                 <label className="text-sm text-white/80 mb-2 block">Bet Amount</label>
                                 <div className="flex gap-2">
                                     <Input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
                                         value={gameState.betAmountInput}
                                         onChange={(e) => setGameState(prev => ({ ...prev, betAmountInput: e.target.value }))}
-                                        className="bg-white/10 border-white/20 text-white"
-                                        min="1"
-                                        step="1"
+                                        className="min-w-[6.5rem] w-auto flex-none px-2 tabular-nums bg-white/10 border-white/20 text-white"
+                                        min={formattedMinBet}
+                                        step="any"
                                         disabled={txInProgress !== null}
+                                        style={{ width: betInputWidth }}
                                     />
-                                    <span className="flex items-center text-white/80">{tokenSymbol}</span>
+                                    <span className="inline-flex items-center gap-1 text-white/80">
+                                        <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                                        {tokenSymbol}
+                                    </span>
                                 </div>
                                 {error && <p className="text-red-400 text-sm mt-1">{error}</p>}
-                                <p className="text-white/60 text-sm mt-1">
-                                    Balance: {formatTokenAmount(balanceData?.value || BigInt(0), balanceData?.decimals || 18)} {tokenSymbol}
+                                <div className="mt-1 space-y-1">
+                                <p className="flex items-center gap-1 text-white/60 text-sm">
+                                    <span>Balance:</span>
+                                    <Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />
+                                    <span>{formatTokenAmount(balanceData?.value || BigInt(0), balanceData?.decimals || tokenDecimals)} {tokenSymbol}</span>
                                 </p>
                                 {config && (
-                                    <p className="text-white/40 text-xs mt-1">
-                                        Min: {formatUnits(config.minBet, 18)} | Max: {formatUnits(config.maxBet, 18)} {tokenSymbol}
+                                    <p className="text-white/40 text-xs">
+                                        Min: {formattedMinBet} | Max: {formattedMaxBet} {tokenSymbol}
                                     </p>
                                 )}
+                                </div>
                             </div>
 
                             {config && !config.enabled ? (
@@ -1250,6 +1295,8 @@ export default function BlackjackDialog({
                                     onComplete={handleDealComplete}
                                     onError={handleTransactionError}
                                     tokenSymbol={tokenSymbol}
+                                    tokenDecimals={tokenDecimals}
+                                    bettingToken={config?.bettingToken ?? null}
                                 />
                             )}
                         </div>
@@ -1277,8 +1324,8 @@ export default function BlackjackDialog({
                             {txInProgress === null && actionButtonsReady && (canDoubleUi || canSplitUi) && additionalActionBetWei > BigInt(0) && (!hasBalanceForAdditionalAction || needsAdditionalApproval) && (
                                 <p className="text-center text-red-300 text-xs">
                                     {!hasBalanceForAdditionalAction
-                                        ? `Insufficient balance for Double/Split (needs ${formatUnits(additionalActionBetWei, 18)} ${tokenSymbol})`
-                                        : `Approval may be too low for Double/Split (needs ${formatUnits(additionalActionBetWei, 18)} ${tokenSymbol}). We will re-check on click.`}
+                                        ? `Insufficient balance for Double/Split (needs ${formatTokenAmountRounded(additionalActionBetWei, tokenDecimals)} ${tokenSymbol})`
+                                        : `Approval may be too low for Double/Split (needs ${formatTokenAmountRounded(additionalActionBetWei, tokenDecimals)} ${tokenSymbol}). We will re-check on click.`}
                                 </p>
                             )}
 
@@ -1298,6 +1345,8 @@ export default function BlackjackDialog({
                                         onComplete={handleActionComplete}
                                         onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
+                                        tokenDecimals={tokenDecimals}
+                                        bettingToken={config?.bettingToken ?? null}
                                     />
                                 )}
                                 {/* STAND */}
@@ -1314,6 +1363,8 @@ export default function BlackjackDialog({
                                         onComplete={handleActionComplete}
                                         onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
+                                        tokenDecimals={tokenDecimals}
+                                        bettingToken={config?.bettingToken ?? null}
                                     />
                                 )}
                                 {/* DOUBLE */}
@@ -1330,6 +1381,8 @@ export default function BlackjackDialog({
                                         onComplete={handleActionComplete}
                                         onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
+                                        tokenDecimals={tokenDecimals}
+                                        bettingToken={config?.bettingToken ?? null}
                                     />
                                 )}
                             </div>
@@ -1350,6 +1403,8 @@ export default function BlackjackDialog({
                                             onComplete={handleActionComplete}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
+                                            tokenDecimals={tokenDecimals}
+                                            bettingToken={config?.bettingToken ?? null}
                                         />
                                     )}
                                     {canSurrenderUi && (
@@ -1365,6 +1420,8 @@ export default function BlackjackDialog({
                                             onComplete={handleActionComplete}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
+                                            tokenDecimals={tokenDecimals}
+                                            bettingToken={config?.bettingToken ?? null}
                                         />
                                     )}
                                 </div>
@@ -1386,6 +1443,8 @@ export default function BlackjackDialog({
                                             onComplete={handleActionComplete}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
+                                            tokenDecimals={tokenDecimals}
+                                            bettingToken={config?.bettingToken ?? null}
                                         />
                                     )}
                                     {txInProgress === BlackjackAction.SURRENDER && (
@@ -1401,6 +1460,8 @@ export default function BlackjackDialog({
                                             onComplete={handleActionComplete}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
+                                            tokenDecimals={tokenDecimals}
+                                            bettingToken={config?.bettingToken ?? null}
                                         />
                                     )}
                                 </div>

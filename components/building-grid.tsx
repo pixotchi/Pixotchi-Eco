@@ -8,6 +8,7 @@ import { casinoIsBuilt } from '@/lib/contracts';
 
 // Casino feature flag - hide casino building when disabled
 const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
+const BARRACKS_BUILDING_ID = 8;
 
 interface BuildingGridProps {
   buildings: BuildingData[];
@@ -40,27 +41,30 @@ const BuildingItem = React.memo(({
   }, [building.id, buildingType]);
 
   const isCasino = buildingType === 'town' && building.id === 6;
+  const isComingSoon = buildingType === 'town' && building.id === BARRACKS_BUILDING_ID;
   // For Casino, use casinoBuiltState; for others, use building.level
   const effectiveLevel = isCasino && casinoBuiltState ? 1 : building.level;
-  const isMaxLevel = effectiveLevel >= building.maxLevel;
+  const isMaxLevel = !isComingSoon && effectiveLevel >= building.maxLevel;
 
   return (
     <div className="space-y-1">
       {/* Building Icon Button */}
       <div className="flex justify-center">
         <button
-          onClick={() => onBuildingSelect(building)}
-          className={`building-button p-0.5 transition-all rounded-md building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${isSelected ? 'bg-primary' : 'bg-transparent'
+          type="button"
+          onClick={isComingSoon ? undefined : () => onBuildingSelect(building)}
+          disabled={isComingSoon}
+          className={`building-button p-0.5 transition-all rounded-md building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:cursor-default disabled:opacity-100 ${isSelected ? 'bg-primary' : 'bg-transparent'
             }`}
         >
-          <div className={`building-element flex items-center justify-center p-2 transition-all rounded-md w-16 h-16 relative ${isSelected ? 'bg-primary/10' : 'bg-card hover:bg-accent'
+          <div className={`building-element flex items-center justify-center p-2 transition-all rounded-md w-16 h-16 relative ${isSelected ? 'bg-primary/10' : `bg-card ${isComingSoon ? '' : 'hover:bg-accent'}`
             }`}>
             <Image
               src={buildingIcon}
               alt={buildingName}
               width={40}
               height={40}
-              className={`building-icon ${effectiveLevel === 0 ? 'filter grayscale opacity-50' : ''
+              className={`building-icon ${effectiveLevel === 0 || isComingSoon ? 'filter grayscale opacity-50' : ''
                 }`}
               style={{ width: 'auto', height: 'auto' }}
             />
@@ -81,7 +85,7 @@ const BuildingItem = React.memo(({
           {buildingName}
         </div>
         <div className="text-xs text-muted-foreground">
-          Lv. {effectiveLevel}/{building.maxLevel}
+          {isComingSoon ? 'Coming Soon' : `Lv. ${effectiveLevel}/${building.maxLevel}`}
         </div>
 
         {/* Upgrade Status */}
