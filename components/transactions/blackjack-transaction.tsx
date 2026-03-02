@@ -14,6 +14,7 @@ import GlobalTransactionToast from './global-transaction-toast';
 import {
     blackjackFetchRandomness,
     buildBlackjackDealWithRandomCall,
+    buildBlackjackDealWithRandomForTokenCall,
     buildBlackjackActionWithRandomCall,
     BlackjackAction,
 } from "@/lib/contracts";
@@ -59,6 +60,8 @@ interface BlackjackTransactionProps {
     onButtonClick?: () => boolean | void | { handIndex?: number } | Promise<boolean | void | { handIndex?: number }>;
     onError?: (error: string) => void;
     tokenSymbol?: string;
+    tokenDecimals?: number;
+    bettingToken?: string | null;
 }
 
 const FAILURE_STATUSES = new Set([
@@ -132,6 +135,8 @@ export default function BlackjackTransaction({
     onButtonClick,
     onError,
     tokenSymbol = "SEED",
+    tokenDecimals = 18,
+    bettingToken = null,
 }: BlackjackTransactionProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
@@ -191,16 +196,35 @@ export default function BlackjackTransaction({
                             action === BlackjackAction.SPLIT ? "split" :
                                 action === BlackjackAction.SURRENDER ? "surrender" : "action";
 
-            const result = await blackjackFetchRandomness(landId, actionName, address, resolvedHandIndex);
+            const result = await blackjackFetchRandomness(
+                landId,
+                actionName,
+                address,
+                resolvedHandIndex,
+                mode === "deal" ? bettingToken ?? undefined : undefined
+            );
 
 
 
             // Build transaction call
             let call;
             if (mode === "deal" && betAmount) {
-                call = buildBlackjackDealWithRandomCall(
-                    landId, betAmount, result.randomSeed, result.nonce, result.signature
-                );
+                call = bettingToken
+                    ? buildBlackjackDealWithRandomForTokenCall(
+                        landId,
+                        betAmount,
+                        bettingToken,
+                        result.randomSeed,
+                        result.nonce,
+                        result.signature
+                    )
+                    : buildBlackjackDealWithRandomCall(
+                        landId,
+                        betAmount,
+                        result.randomSeed,
+                        result.nonce,
+                        result.signature
+                    );
             } else if (mode === "action" && action !== undefined) {
                 call = buildBlackjackActionWithRandomCall(
                     landId, resolvedHandIndex, action, result.randomSeed, result.nonce, result.signature
@@ -225,7 +249,7 @@ export default function BlackjackTransaction({
                 toast.error(msg);
             }
         }
-    }, [address, landId, mode, betAmount, action, handIndex, onButtonClick, onError]);
+    }, [address, landId, mode, betAmount, action, handIndex, onButtonClick, onError, bettingToken]);
 
     // Handle transaction status
     const handleStatus = useCallback((status: LifecycleStatus) => {
@@ -405,7 +429,7 @@ export default function BlackjackTransaction({
                     handValue: gameCompleteData.playerFinalValue,
                     splitValue: gameCompleteData.splitFinalValue,
                     dealerValue: gameCompleteData.dealerFinalValue,
-                    payout: formatUnits(gameCompleteData.payoutWei, 18),
+                    payout: formatUnits(gameCompleteData.payoutWei, tokenDecimals),
                 };
             }
 
@@ -424,7 +448,7 @@ export default function BlackjackTransaction({
                         result: entry.result,
                         playerFinalValue: entry.playerFinalValue,
                         dealerFinalValue: entry.dealerFinalValue,
-                        payout: formatUnits(entry.payoutWei, 18),
+                        payout: formatUnits(entry.payoutWei, tokenDecimals),
                     }));
                     const totalPayoutWei = gameCompleteData
                         ? gameCompleteData.payoutWei
@@ -434,7 +458,7 @@ export default function BlackjackTransaction({
                         ...resultData,
                         splitResults,
                         gameResult: summarizeSplitResult(normalizedSplitEvents.map(entry => entry.result)),
-                        payout: formatUnits(totalPayoutWei, 18),
+                        payout: formatUnits(totalPayoutWei, tokenDecimals),
                         dealerValue: gameCompleteData?.dealerFinalValue ?? normalizedSplitEvents[0].dealerFinalValue,
                     };
                 } else {
@@ -443,7 +467,7 @@ export default function BlackjackTransaction({
                         ...resultData,
                         gameResult: gameCompleteData?.result !== BlackjackResult.NONE ? gameCompleteData?.result : final.result,
                         handValue: gameCompleteData?.playerFinalValue ?? final.playerFinalValue,
-                        payout: formatUnits(gameCompleteData?.payoutWei ?? final.payoutWei, 18),
+                        payout: formatUnits(gameCompleteData?.payoutWei ?? final.payoutWei, tokenDecimals),
                         dealerValue: gameCompleteData?.dealerFinalValue ?? final.dealerFinalValue,
                     };
                 }
@@ -495,7 +519,7 @@ export default function BlackjackTransaction({
             setTimeout(() => { setPhase("idle"); setCalls([]); }, 500);
             onComplete?.(resultData);
         }
-    }, [mode, action, address, tokenSymbol, onComplete, onStatusUpdate]);
+    }, [mode, action, address, tokenDecimals, tokenSymbol, onComplete, onStatusUpdate]);
 
     // Get button text
     const getButtonText = () => {

@@ -1,26 +1,26 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Image from 'next/image';
 import EuropeanRouletteWheel from '@/components/ui/EuropeanRouletteWheel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, X, Trash2 } from 'lucide-react';
 import { parseUnits, formatUnits } from 'viem';
-import { usePublicClient, useAccount, useBalance } from 'wagmi';
+import { useAccount, useBalance } from 'wagmi';
 import {
-    casinoGetActiveBet,
-    casinoGetConfig,
+    casinoGetActiveBetV2,
+    casinoGetTokenConfig,
     checkCasinoApproval,
     LAND_CONTRACT_ADDRESS,
-    PIXOTCHI_TOKEN_ADDRESS,
 } from '@/lib/contracts';
 import { CasinoBetType, CASINO_PAYOUT_MULTIPLIERS, RED_NUMBERS } from '@/public/abi/casino-abi';
 import ApproveTransaction from './approve-transaction';
 import CasinoTransaction from './casino-transaction';
 import { toast } from 'react-hot-toast';
-import { useTokenSymbol } from '@/hooks/useTokenSymbol';
-import { formatTokenAmount } from '@/lib/utils';
+import { useTokenMetadata } from '@/hooks/useTokenMetadata';
+import { formatTokenAmount, formatTokenAmountRounded, getCasinoTokenImage } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
@@ -30,6 +30,7 @@ interface CasinoDialogProps {
     onOpenChange: (open: boolean) => void;
     landId: bigint;
     onSpinComplete?: () => void;
+    selectedToken: string | null;
 }
 
 interface PlacedBet {
@@ -41,8 +42,7 @@ interface PlacedBet {
     payout: string;
 }
 
-export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete }: CasinoDialogProps) {
-    const publicClient = usePublicClient();
+export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete, selectedToken }: CasinoDialogProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
 
@@ -59,24 +59,36 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const [error, setError] = useState<string | null>(null);
     const [pendingGame, setPendingGame] = useState<boolean>(false);
 
+    const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
+    const tokenSymbol = tokenSymbolRaw || 'TOKEN';
+    const formattedMinBet = useMemo(() => (
+        config ? formatTokenAmountRounded(config.minBet, tokenDecimals) : '0'
+    ), [config, tokenDecimals]);
+    const formattedMaxBet = useMemo(() => (
+        config ? formatTokenAmountRounded(config.maxBet, tokenDecimals) : '0'
+    ), [config, tokenDecimals]);
+    const tokenLogo = useMemo(() => getCasinoTokenImage(config?.bettingToken), [config?.bettingToken]);
+    const betInputWidth = useMemo(() => {
+        const visibleChars = Math.max(currentBetAmount.length, formattedMinBet.length, 4);
+        return `calc(${Math.min(visibleChars + 1, 18)}ch + 1.25rem)`;
+    }, [currentBetAmount, formattedMinBet]);
+
     const { data: balanceData, refetch: refetchBalance } = useBalance({
         address: address,
-        token: config?.bettingToken as `0x${string}` || PIXOTCHI_TOKEN_ADDRESS,
-        query: { enabled: !!address }
+        token: config?.bettingToken as `0x${string}` | undefined,
+        query: { enabled: !!address && !!config?.bettingToken }
     });
-
-    const tokenSymbol = useTokenSymbol(config?.bettingToken) || 'SEED';
 
     const totalBetAmount = useMemo(() => {
         return placedBets.reduce((sum, bet) => sum + parseFloat(bet.amount || '0'), 0);
     }, [placedBets]);
     const totalBetWei = useMemo(() => {
         try {
-            return placedBets.reduce((sum, bet) => sum + parseUnits(bet.amount || '0', 18), BigInt(0));
+            return placedBets.reduce((sum, bet) => sum + parseUnits(bet.amount || '0', tokenDecimals), BigInt(0));
         } catch {
             return BigInt(0);
         }
-    }, [placedBets]);
+    }, [placedBets, tokenDecimals]);
     const requiredApprovalWei = useMemo(() => {
         if (!config) return BigInt(0);
         if (pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing') return BigInt(0);
@@ -149,25 +161,59 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     useEffect(() => {
         const loadConfig = async () => {
             try {
-                const cfg = await casinoGetConfig();
-                const bettingToken = cfg?.bettingToken || PIXOTCHI_TOKEN_ADDRESS;
-                if (cfg) {
-                    setConfig({ minBet: cfg.minBet, maxBet: cfg.maxBet, bettingToken, enabled: cfg.enabled, maxBetsPerGame: Number(cfg.maxBetsPerGame) || 2 });
+                const activeGame = landId ? await casinoGetActiveBetV2(landId) : null;
+                const effectiveToken = activeGame?.isActive ? activeGame.bettingToken : selectedToken;
+
+                if (!effectiveToken) {
+                    setConfig(null);
+                    setPendingGame(false);
+                    setAllowanceWei(BigInt(0));
+                    return;
                 }
-                if (landId) {
-                    try {
-                        const activeGame = await casinoGetActiveBet(landId);
-                        if (activeGame && activeGame.isActive) { setPendingGame(true); setSpinPhase('revealing'); }
-                    } catch (e) { console.error('Failed to check active game:', e); }
+
+                const tokenConfig = await casinoGetTokenConfig(effectiveToken);
+                if (tokenConfig?.supported || activeGame?.isActive) {
+                    setConfig({
+                        minBet: tokenConfig?.minBet ?? BigInt(0),
+                        maxBet: tokenConfig?.maxBet ?? BigInt(0),
+                        bettingToken: effectiveToken,
+                        enabled: tokenConfig?.enabled ?? false,
+                        maxBetsPerGame: Number(tokenConfig?.maxBetsPerGame ?? BigInt(2)) || 2,
+                    });
+                } else {
+                    setConfig(null);
                 }
+
+                if (activeGame?.isActive) {
+                    setPendingGame(true);
+                    setSpinPhase('revealing');
+                } else {
+                    setPendingGame(false);
+                    setSpinPhase('idle');
+                }
+
                 if (address) {
-                    const approval = await checkCasinoApproval(address, bettingToken);
+                    const approval = await checkCasinoApproval(address, effectiveToken);
                     setAllowanceWei(approval);
+                } else {
+                    setAllowanceWei(BigInt(0));
                 }
             } catch (e) { console.error('Failed to load casino config:', e); }
         };
         if (open) loadConfig();
-    }, [open, address, landId]);
+    }, [open, address, landId, selectedToken]);
+
+    useEffect(() => {
+        if (!open || pendingGame || !config) return;
+        setPlacedBets([]);
+        setResult(null);
+        setError(null);
+    }, [config?.bettingToken, open, pendingGame, config]);
+
+    useEffect(() => {
+        if (!open || pendingGame || !config) return;
+        setCurrentBetAmount(formatTokenAmountRounded(config.minBet, tokenDecimals));
+    }, [config?.bettingToken, config?.minBet, open, pendingGame, tokenDecimals]);
 
     // Callback when wheel animation ends
     const handleWheelSpinEnd = useCallback(() => {
@@ -184,21 +230,21 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         // Validate Min/Max Bet
         if (config) {
             try {
-                const amountVal = parseUnits(currentBetAmount, 18); // assuming 18 decimals for now, or use token decimals if available
+                const amountVal = parseUnits(currentBetAmount, tokenDecimals);
 
                 // Min check (per bet)
                 if (amountVal < config.minBet) {
-                    toast.error(`Minimum bet is ${formatUnits(config.minBet, 18)} ${tokenSymbol}`);
+                    toast.error(`Minimum bet is ${formattedMinBet} ${tokenSymbol}`);
                     return;
                 }
 
                 // Max check (Total Wager)
-                const currentTotal = placedBets.reduce((acc, b) => acc + parseUnits(b.amount, 18), BigInt(0));
+                const currentTotal = placedBets.reduce((acc, b) => acc + parseUnits(b.amount, tokenDecimals), BigInt(0));
                 const projectedTotal = currentTotal + amountVal;
 
                 if (projectedTotal > config.maxBet) {
                     const remaining = config.maxBet - currentTotal;
-                    toast.error(`Total bet limit is ${formatUnits(config.maxBet, 18)} ${tokenSymbol}. You can add max ${formatUnits(remaining > BigInt(0) ? remaining : BigInt(0), 18)}`);
+                    toast.error(`Total bet limit is ${formattedMaxBet} ${tokenSymbol}. You can add max ${formatTokenAmountRounded(remaining > BigInt(0) ? remaining : BigInt(0), tokenDecimals)} ${tokenSymbol}`);
                     return;
                 }
             } catch (e) {
@@ -212,7 +258,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
         setPlacedBets(prev => [...prev, newBet]);
         toast.success(`Added ${label} bet`);
-    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenSymbol, pendingGame]);
+    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet]);
 
     const removeBet = useCallback((id: string) => { setPlacedBets(prev => prev.filter(b => b.id !== id)); }, []);
     const clearBets = useCallback(() => { setPlacedBets([]); }, []);
@@ -224,7 +270,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     // Prepare bet data for CasinoTransaction
     const betTypes = useMemo(() => placedBets.map(b => b.type), [placedBets]);
     const betNumbersArray = useMemo(() => placedBets.map(b => b.numbers), [placedBets]);
-    const betAmounts = useMemo(() => placedBets.map(b => parseUnits(b.amount, 18)), [placedBets]);
+    const betAmounts = useMemo(() => placedBets.map(b => parseUnits(b.amount, tokenDecimals)), [placedBets, tokenDecimals]);
 
     // Handle place bets completion
     const handlePlaceBetsComplete = useCallback((result?: {}) => {
@@ -305,8 +351,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     }, []);
 
     const refreshApproval = useCallback(async () => {
-        if (address) {
-            const approval = await checkCasinoApproval(address, config?.bettingToken || PIXOTCHI_TOKEN_ADDRESS);
+        if (address && config?.bettingToken) {
+            const approval = await checkCasinoApproval(address, config.bettingToken);
             setAllowanceWei(approval);
         }
     }, [address, config]);
@@ -465,8 +511,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 )}
                                 {placedBets.length > 0 && (
                                     <div className="flex justify-between mt-2 pt-2 border-t border-border text-xs">
-                                        <span>Total: <strong>{totalBetAmount.toFixed(2)} {tokenSymbol}</strong></span>
-                                        <span className="text-green-500">Max Win: <strong>{bestPossibleWin.toFixed(2)} {tokenSymbol}</strong></span>
+                                        <span>Total: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmount.toFixed(2)} {tokenSymbol}</strong></span>
+                                        <span className="text-green-500">Max Win: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)} {tokenSymbol}</strong></span>
                                     </div>
                                 )}
                             </div>
@@ -474,24 +520,49 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             {/* Result Banner */}
                             {result && !isSpinning && (
                                 <div className={`mt-3 text-center p-2 rounded-lg text-sm border font-medium ${result.won ? 'bg-green-600/90 text-white border-green-400' : 'bg-black/60 text-white/90 border-white/20'}`}>
-                                    <span className="font-bold">{result.won ? `🎉 Won ${parseFloat(result.payout).toFixed(2)} ${tokenSymbol}!` : 'No win'}</span>
+                                    {result.won ? (
+                                        <span className="inline-flex items-center gap-1 font-bold">
+                                            <span>🎉 Won</span>
+                                            <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                                            <span>{parseFloat(result.payout).toFixed(2)} {tokenSymbol}!</span>
+                                        </span>
+                                    ) : (
+                                        <span className="font-bold">No win</span>
+                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
 
                     {/* Bet Amount */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <label className="text-xs text-white font-medium">Bet:</label>
                         <Input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             value={currentBetAmount}
                             onChange={(e) => setCurrentBetAmount(e.target.value)}
-                            className="w-16 h-7 text-xs bg-black/40 border-white/20 text-white placeholder:text-white/50"
-                            min="1"
+                            className="h-7 min-w-[5.5rem] w-auto flex-none px-2 text-xs tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50"
+                            min={formattedMinBet}
+                            step="any"
+                            style={{ width: betInputWidth }}
                         />
-                        <span className="text-xs text-white/90 font-bold">{tokenSymbol}</span>
-                        {balanceData && <span className={`text-xs ml-auto font-medium ${isInsufficientBalance ? 'text-red-400' : 'text-white/80'}`}>Bal: {formatTokenAmount(balanceData.value, balanceData.decimals)}</span>}
+                        <span className="inline-flex items-center gap-1 text-xs text-white/90 font-bold">
+                            <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                            {tokenSymbol}
+                        </span>
+                        {config && (
+                            <span className="text-[11px] text-white/60">
+                                Min: {formattedMinBet} | Max: {formattedMaxBet} {tokenSymbol}
+                            </span>
+                        )}
+                        {balanceData && (
+                            <span className={`inline-flex items-center gap-1 text-xs ml-auto font-medium ${isInsufficientBalance ? 'text-red-400' : 'text-white/80'}`}>
+                                <span>Bal:</span>
+                                <Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />
+                                <span>{formatTokenAmount(balanceData.value, balanceData.decimals)} {tokenSymbol}</span>
+                            </span>
+                        )}
                     </div>
 
                     {/* BETTING TABLE - Fully Responsive Fit */}
@@ -596,7 +667,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 Roulette disabled
                             </Button>
                         ) : !hasApproval ? (
-                            <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={(config?.bettingToken || PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`} onSuccess={refreshApproval} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
+                            <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={config?.bettingToken as `0x${string}`} onSuccess={refreshApproval} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
                         ) : isInsufficientBalance && !pendingGame ? (
                             <Button className="w-full" disabled variant="destructive">
                                 Insufficient Balance
@@ -611,6 +682,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 onStatusUpdate={handleStatusUpdate}
                                 onComplete={handleRevealComplete}
                                 tokenSymbol={tokenSymbol}
+                                tokenDecimals={tokenDecimals}
                             />
                         ) : placedBets.length === 0 ? (
                             <Button className="w-full" disabled>
@@ -630,6 +702,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 onComplete={handlePlaceBetsComplete}
                                 onButtonClick={handleSpinButtonClick}
                                 tokenSymbol={tokenSymbol}
+                                tokenDecimals={tokenDecimals}
+                                bettingToken={config?.bettingToken ?? null}
                             />
                         )}
                         {error && <p className="text-xs text-destructive text-center">{error}</p>}

@@ -33,6 +33,25 @@ export const casinoAbi = [
     },
     {
         "type": "event",
+        "name": "CasinoTokenConfigUpdated",
+        "inputs": [
+            { "name": "token", "type": "address", "indexed": true },
+            { "name": "minBet", "type": "uint256", "indexed": false },
+            { "name": "maxBet", "type": "uint256", "indexed": false },
+            { "name": "rewardPool", "type": "address", "indexed": false },
+            { "name": "enabled", "type": "bool", "indexed": false },
+            { "name": "maxBetsPerGame", "type": "uint256", "indexed": false }
+        ]
+    },
+    {
+        "type": "event",
+        "name": "CasinoTokenRemoved",
+        "inputs": [
+            { "name": "token", "type": "address", "indexed": true }
+        ]
+    },
+    {
+        "type": "event",
         "name": "RouletteBetPlaced",
         "inputs": [
             { "name": "landId", "type": "uint256", "indexed": true },
@@ -40,7 +59,8 @@ export const casinoAbi = [
             { "name": "betType", "type": "uint8", "indexed": false },
             { "name": "amount", "type": "uint256", "indexed": false },
             { "name": "betIndex", "type": "uint256", "indexed": false },
-            { "name": "revealBlock", "type": "uint256", "indexed": false }
+            { "name": "revealBlock", "type": "uint256", "indexed": false },
+            { "name": "bettingToken", "type": "address", "indexed": false }
         ]
     },
     {
@@ -51,7 +71,8 @@ export const casinoAbi = [
             { "name": "player", "type": "address", "indexed": true },
             { "name": "winningNumber", "type": "uint8", "indexed": false },
             { "name": "won", "type": "bool", "indexed": false },
-            { "name": "payout", "type": "uint256", "indexed": false }
+            { "name": "payout", "type": "uint256", "indexed": false },
+            { "name": "bettingToken", "type": "address", "indexed": false }
         ]
     },
     {
@@ -60,7 +81,8 @@ export const casinoAbi = [
         "inputs": [
             { "name": "landId", "type": "uint256", "indexed": true },
             { "name": "player", "type": "address", "indexed": true },
-            { "name": "forfeitedAmount", "type": "uint256", "indexed": false }
+            { "name": "forfeitedAmount", "type": "uint256", "indexed": false },
+            { "name": "bettingToken", "type": "address", "indexed": false }
         ]
     },
     // ============ Building Functions ============
@@ -103,6 +125,19 @@ export const casinoAbi = [
     },
     {
         "type": "function",
+        "name": "casinoPlaceBetsWithToken",
+        "inputs": [
+            { "name": "landId", "type": "uint256" },
+            { "name": "token", "type": "address" },
+            { "name": "betTypes", "type": "uint8[]" },
+            { "name": "betNumbersArray", "type": "uint8[][]" },
+            { "name": "betAmounts", "type": "uint256[]" }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
         "name": "casinoReveal",
         "inputs": [{ "name": "landId", "type": "uint256" }],
         "outputs": [
@@ -123,6 +158,22 @@ export const casinoAbi = [
             { "name": "player", "type": "address" },
             { "name": "canReveal", "type": "bool" },
             { "name": "isExpired", "type": "bool" }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "casinoGetActiveBetV2",
+        "inputs": [{ "name": "landId", "type": "uint256" }],
+        "outputs": [
+            { "name": "isActive", "type": "bool" },
+            { "name": "numBets", "type": "uint256" },
+            { "name": "totalBetAmount", "type": "uint256" },
+            { "name": "revealBlock", "type": "uint256" },
+            { "name": "player", "type": "address" },
+            { "name": "canReveal", "type": "bool" },
+            { "name": "isExpired", "type": "bool" },
+            { "name": "bettingToken", "type": "address" }
         ],
         "stateMutability": "view"
     },
@@ -156,8 +207,43 @@ export const casinoAbi = [
     },
     {
         "type": "function",
+        "name": "casinoGetSupportedTokens",
+        "inputs": [],
+        "outputs": [{ "name": "tokens", "type": "address[]" }],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "casinoGetTokenConfig",
+        "inputs": [{ "name": "token", "type": "address" }],
+        "outputs": [
+            { "name": "supported", "type": "bool" },
+            { "name": "minBet", "type": "uint256" },
+            { "name": "maxBet", "type": "uint256" },
+            { "name": "rewardPool", "type": "address" },
+            { "name": "enabled", "type": "bool" },
+            { "name": "maxBetsPerGame", "type": "uint256" }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
         "name": "casinoGetStats",
         "inputs": [{ "name": "landId", "type": "uint256" }],
+        "outputs": [
+            { "name": "totalWagered", "type": "uint256" },
+            { "name": "totalWon", "type": "uint256" },
+            { "name": "gamesPlayed", "type": "uint256" }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "casinoGetStatsByToken",
+        "inputs": [
+            { "name": "landId", "type": "uint256" },
+            { "name": "token", "type": "address" }
+        ],
         "outputs": [
             { "name": "totalWagered", "type": "uint256" },
             { "name": "totalWon", "type": "uint256" },
@@ -253,6 +339,34 @@ export const casinoAbi = [
         "type": "function",
         "name": "casinoInitializeMultiBet",
         "inputs": [],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "casinoInitializeMultiTokenSupport",
+        "inputs": [],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "casinoSetTokenConfig",
+        "inputs": [
+            { "name": "token", "type": "address" },
+            { "name": "minBet", "type": "uint256" },
+            { "name": "maxBet", "type": "uint256" },
+            { "name": "rewardPool", "type": "address" },
+            { "name": "enabled", "type": "bool" },
+            { "name": "maxBetsPerGame", "type": "uint256" }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "casinoRemoveToken",
+        "inputs": [{ "name": "token", "type": "address" }],
         "outputs": [],
         "stateMutability": "nonpayable"
     }

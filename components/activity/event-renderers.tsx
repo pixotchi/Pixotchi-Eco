@@ -13,7 +13,7 @@ const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
   '1': { name: 'Fence', icon: '/icons/Fence.png' },
 };
 import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward } from '@/lib/utils';
-import { useTokenSymbol } from '@/hooks/useTokenSymbol';
+import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { useReadContract } from 'wagmi';
 import { casinoAbi } from '@/public/abi/casino-abi';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
@@ -502,11 +502,9 @@ export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: Casino
 
 export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event: RouletteSpinResultEvent, userAddress?: string | null }) => {
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
-  const payoutFormatted = (Number(event.payout) / 1e18).toFixed(2);
-
-  // Use the betting token stored in the indexed event for historical accuracy
-  const tokenSymbol = useTokenSymbol(event.bettingToken as `0x${string}`);
-  const displaySymbol = tokenSymbol || 'SEED';
+  const { symbol: tokenSymbol, decimals: tokenDecimals } = useTokenMetadata(event.bettingToken as `0x${string}`);
+  const payoutFormatted = formatTokenAmount(BigInt(event.payout), tokenDecimals);
+  const displaySymbol = tokenSymbol || 'TOKEN';
 
   return (
     <EventWrapper event={event}>
@@ -524,12 +522,10 @@ export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event:
 
 export const BlackjackResultEventRenderer = ({ event, userAddress }: { event: BlackjackResultEvent, userAddress?: string | null }) => {
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
-  const payoutFormatted = (Number(event.payout) / 1e18).toFixed(2);
+  const { symbol: tokenSymbol, decimals: tokenDecimals } = useTokenMetadata(event.bettingToken as `0x${string}`);
+  const payoutFormatted = formatTokenAmount(BigInt(event.payout), tokenDecimals);
   const won = Number(event.payout) > 0;
-
-  // Use the betting token stored in the indexed event for historical accuracy
-  const tokenSymbol = useTokenSymbol(event.bettingToken as `0x${string}`);
-  const displaySymbol = tokenSymbol || 'SEED';
+  const displaySymbol = tokenSymbol || 'TOKEN';
 
   return (
     <EventWrapper event={event}>

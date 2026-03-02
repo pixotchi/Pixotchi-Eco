@@ -33,6 +33,7 @@ interface CachedRandomness {
     signerAddress: string;
     actionNum: number;
     handIndex: number;
+    bettingToken: string;
 }
 
 const ACTION_LOCK_KEY_PREFIX = 'blackjack:action-lock:';
@@ -71,7 +72,8 @@ function isCachedRandomness(value: unknown): value is CachedRandomness {
         typeof candidate.timestamp === 'number' &&
         typeof candidate.signerAddress === 'string' &&
         typeof candidate.actionNum === 'number' &&
-        typeof candidate.handIndex === 'number'
+        typeof candidate.handIndex === 'number' &&
+        typeof candidate.bettingToken === 'string'
     );
 }
 
@@ -124,8 +126,17 @@ async function cleanupConsumedLock(landId: string, currentNonce: bigint): Promis
     nonceRandomnessCache.delete(consumedKey);
 }
 
-function isActionMismatch(cached: CachedRandomness, actionNum: number, handIndexNum: number): boolean {
-    return cached.actionNum !== actionNum || cached.handIndex !== handIndexNum;
+function isLockMismatch(
+    cached: CachedRandomness,
+    actionNum: number,
+    handIndexNum: number,
+    bettingToken: string
+): boolean {
+    return (
+        cached.actionNum !== actionNum ||
+        cached.handIndex !== handIndexNum ||
+        cached.bettingToken.toLowerCase() !== bettingToken.toLowerCase()
+    );
 }
 
 async function deleteActionLock(lockKey: string): Promise<void> {
@@ -152,7 +163,8 @@ async function validateActionAgainstOnchainState(
     landIdBigInt: bigint,
     action: BlackjackActionName,
     handIndexNum: number,
-    playerAddress?: string
+    playerAddress?: string,
+    bettingToken?: string
 ): Promise<{ allowed: boolean; reason?: string }> {
     const gameBasic = await publicClient.readContract({
         address: LAND_CONTRACT_ADDRESS as `0x${string}`,
@@ -177,6 +189,20 @@ async function validateActionAgainstOnchainState(
     if (action === 'deal') {
         if (phase !== PHASE_NONE) {
             return { allowed: false, reason: 'Game already in progress' };
+        }
+        if (!bettingToken) {
+            return { allowed: false, reason: 'Betting token is required for deal' };
+        }
+
+        const tokenConfig = await publicClient.readContract({
+            address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+            abi: blackjackAbi,
+            functionName: 'blackjackGetTokenConfig',
+            args: [bettingToken as `0x${string}`],
+        }) as [boolean, bigint, bigint, string, boolean, number];
+
+        if (!tokenConfig[0] || !tokenConfig[4]) {
+            return { allowed: false, reason: 'Selected token is not enabled for Blackjack' };
         }
         return { allowed: true };
     }
@@ -273,7 +299,7 @@ export async function POST(request: NextRequest) {
 
         // Parse request
         const body = await request.json();
-        const { landId, action, playerAddress, handIndex } = body;
+        const { landId, action, playerAddress, handIndex, bettingToken } = body;
 
         // Validate inputs
         if (!landId || typeof landId !== 'string') {
@@ -284,6 +310,9 @@ export async function POST(request: NextRequest) {
         }
         if (handIndex !== undefined && (!Number.isInteger(handIndex) || handIndex < 0 || handIndex > 1)) {
             return NextResponse.json({ error: 'Invalid handIndex' }, { status: 400 });
+        }
+        if (action === 'deal' && (typeof bettingToken !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(bettingToken))) {
+            return NextResponse.json({ error: 'Invalid bettingToken' }, { status: 400 });
         }
 
         // Map action string to uint8
@@ -338,13 +367,34 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        let effectiveBettingToken = '';
+        if (action === 'deal') {
+            effectiveBettingToken = bettingToken;
+        } else {
+            try {
+                effectiveBettingToken = await publicClient.readContract({
+                    address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+                    abi: blackjackAbi,
+                    functionName: 'blackjackGetGameToken',
+                    args: [BigInt(landId)],
+                }) as string;
+            } catch (err) {
+                console.error('Failed to read active blackjack token from contract:', err);
+                return NextResponse.json(
+                    { error: 'Failed to read active game token' },
+                    { status: 500 }
+                );
+            }
+        }
+
         const landIdBigInt = BigInt(landId);
         const requestedActionValidation = await validateActionAgainstOnchainState(
             publicClient,
             landIdBigInt,
             action as BlackjackActionName,
             handIndexNum,
-            playerAddress
+            playerAddress,
+            effectiveBettingToken
         );
         if (!requestedActionValidation.allowed) {
             return NextResponse.json(
@@ -363,7 +413,7 @@ export async function POST(request: NextRequest) {
         let effectiveCachedData = cachedData;
         let effectiveCachedSource = cachedSource;
 
-        if (effectiveCachedData && isActionMismatch(effectiveCachedData, actionNum, handIndexNum)) {
+        if (effectiveCachedData && isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken)) {
             const lockedActionName = actionNameFromNum(effectiveCachedData.actionNum);
             if (!lockedActionName) {
                 await deleteActionLock(lockKey);
@@ -375,7 +425,8 @@ export async function POST(request: NextRequest) {
                     landIdBigInt,
                     lockedActionName,
                     effectiveCachedData.handIndex,
-                    playerAddress
+                    playerAddress,
+                    effectiveCachedData.bettingToken
                 );
 
                 if (!lockedActionValidation.allowed) {
@@ -395,7 +446,7 @@ export async function POST(request: NextRequest) {
 
         if (effectiveCachedData) {
             // STRICT ACTION LOCKING: Check if user is trying to switch action
-            if (isActionMismatch(effectiveCachedData, actionNum, handIndexNum)) {
+            if (isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken)) {
                 console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${effectiveCachedData.actionNum} requested=${actionNum}`);
                 return NextResponse.json(
                     { error: 'Action Locked: You cannot change your decision for this turn.' },
@@ -412,6 +463,7 @@ export async function POST(request: NextRequest) {
                 signature: effectiveCachedData.signature,
                 expiresAt: Math.floor(Date.now() / 1000) + 60,
                 signerAddress: effectiveCachedData.signerAddress,
+                bettingToken: effectiveCachedData.bettingToken,
                 cached: true, // Flag for debugging
                 source: effectiveCachedSource,
             });
@@ -423,8 +475,8 @@ export async function POST(request: NextRequest) {
         // Create the message hash including action and handIndex
         const messageHash = keccak256(
             encodePacked(
-                ['uint256', 'uint256', 'bytes32', 'uint8', 'uint8'],
-                [BigInt(landId), currentNonce, randomSeed, actionNum, handIndexNum]
+                ['uint256', 'uint256', 'bytes32', 'uint8', 'uint8', 'address'],
+                [BigInt(landId), currentNonce, randomSeed, actionNum, handIndexNum, effectiveBettingToken as `0x${string}`]
             )
         );
 
@@ -442,13 +494,14 @@ export async function POST(request: NextRequest) {
             timestamp: Date.now(),
             signerAddress: account.address,
             actionNum,   // Store locked action
-            handIndex: handIndexNum
+            handIndex: handIndexNum,
+            bettingToken: effectiveBettingToken
         };
         const lockResult = await createActionLockIfAbsent(lockKey, proposedLock);
 
         if (!lockResult.created) {
             // Another request won the race. Enforce action lock against stored decision.
-            if (isActionMismatch(lockResult.data, actionNum, handIndexNum)) {
+            if (isLockMismatch(lockResult.data, actionNum, handIndexNum, effectiveBettingToken)) {
                 console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${lockResult.data.actionNum} requested=${actionNum}`);
                 return NextResponse.json(
                     { error: 'Action Locked: You cannot change your decision for this turn.' },
@@ -462,6 +515,7 @@ export async function POST(request: NextRequest) {
                 signature: lockResult.data.signature,
                 expiresAt: Math.floor(Date.now() / 1000) + 60,
                 signerAddress: lockResult.data.signerAddress,
+                bettingToken: lockResult.data.bettingToken,
                 cached: true,
                 source: lockResult.source,
             });
@@ -479,6 +533,7 @@ export async function POST(request: NextRequest) {
             signature,
             expiresAt,
             signerAddress: account.address,
+            bettingToken: effectiveBettingToken,
             cached: false,
             source: lockResult.source,
         });
@@ -518,4 +573,3 @@ export async function GET() {
         }, { status: 500 });
     }
 }
-

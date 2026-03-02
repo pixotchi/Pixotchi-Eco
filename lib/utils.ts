@@ -1,7 +1,7 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { formatUnits } from "viem";
-import { ADDRESS_REGEX } from "./contracts";
+import { ADDRESS_REGEX, CREATOR_TOKEN_ADDRESS, CRYPTICPOET_TOKEN_ADDRESS, PIXOTCHI_TOKEN_ADDRESS } from "./contracts";
 import { ADDRESS_TRUNCATION } from "./constants";
 import { type Plant } from "./types";
 import { formatDuration as formatDurationDateFns, intervalToDuration } from "date-fns";
@@ -166,6 +166,53 @@ export function formatTokenAmountPrecise(
 }
 
 /**
+ * Format a token amount with rounding and no grouping separators.
+ * This is useful for editable inputs and config-driven labels where tiny onchain dust
+ * should not leak into the UI (for example, 24999.999999999997902848 -> 25000).
+ */
+export function formatTokenAmountRounded(
+  amount: bigint,
+  decimals: number = 18,
+  maxDisplayDecimals: number = 6
+): string {
+  if (amount === BigInt(0)) return '0';
+
+  const isNegative = amount < BigInt(0);
+  const absAmount = isNegative ? -amount : amount;
+  const displayDecimals = Math.max(0, Math.min(decimals, maxDisplayDecimals));
+  const roundingFactor = BigInt(10) ** BigInt(Math.max(0, decimals - displayDecimals));
+  const roundedAmount =
+    displayDecimals === decimals
+      ? absAmount
+      : (absAmount + (roundingFactor / BigInt(2))) / roundingFactor;
+
+  const amountStr = roundedAmount
+    .toString()
+    .padStart(displayDecimals + 1, '0');
+  const splitIndex = amountStr.length - displayDecimals;
+  const wholePart = amountStr.slice(0, splitIndex) || '0';
+  const fractionalPart =
+    displayDecimals > 0
+      ? amountStr.slice(splitIndex).replace(/0+$/, '')
+      : '';
+  const sign = isNegative ? '-' : '';
+
+  return fractionalPart.length > 0
+    ? `${sign}${wholePart}.${fractionalPart}`
+    : `${sign}${wholePart}`;
+}
+
+export function getCasinoTokenImage(tokenAddress: string | null | undefined): string {
+  if (!tokenAddress) return '/PixotchiKit/COIN.svg';
+
+  const normalized = tokenAddress.toLowerCase();
+  if (normalized === PIXOTCHI_TOKEN_ADDRESS.toLowerCase()) return '/PixotchiKit/COIN.svg';
+  if (normalized === CREATOR_TOKEN_ADDRESS.toLowerCase()) return '/icons/cc.png';
+  if (normalized === CRYPTICPOET_TOKEN_ADDRESS.toLowerCase()) return '/icons/poet.png';
+  return '/PixotchiKit/COIN.svg';
+}
+
+/**
  * Helper to add thousand separators to a whole number string.
  * Works with arbitrarily large numbers without precision loss.
  */
@@ -298,7 +345,8 @@ const TOWN_BUILDINGS: { [key: number]: string } = {
   3: "Ware House",
   5: "Marketplace",
   6: "Casino",
-  7: "Farmer House"
+  7: "Farmer House",
+  8: "Barracks",
 };
 
 const VILLAGE_BUILDINGS: { [key: number]: string } = {
@@ -316,7 +364,8 @@ const BUILDING_ICON_MAP: { [key: string]: string } = {
   "Ware House": "/icons/ware-house.svg",
   "Marketplace": "/icons/marketplace.svg",
   "Casino": "/icons/casino.svg",
-  "Farmer House": "/icons/farmer-house.svg"
+  "Farmer House": "/icons/farmer-house.svg",
+  "Barracks": "/icons/barracks.png",
 };
 
 // Building name and icon caching

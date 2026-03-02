@@ -4,6 +4,7 @@ import { useMemo, useRef, useCallback } from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import {
     buildCasinoPlaceBetsCall,
+    buildCasinoPlaceBetsWithTokenCall,
     buildCasinoRevealCall,
 } from "@/lib/contracts";
 import { casinoAbi, CasinoBetType } from "@/public/abi/casino-abi";
@@ -32,6 +33,8 @@ interface CasinoTransactionProps {
     }) => void;
     onButtonClick?: () => void;
     tokenSymbol?: string;
+    tokenDecimals?: number;
+    bettingToken?: string | null;
 }
 
 const FAILURE_STATUSES = new Set([
@@ -59,6 +62,8 @@ export default function CasinoTransaction({
     onComplete,
     onButtonClick,
     tokenSymbol = "SEED",
+    tokenDecimals = 18,
+    bettingToken = null,
 }: CasinoTransactionProps) {
     const { address } = useAccount();
 
@@ -70,7 +75,9 @@ export default function CasinoTransaction({
             if (!betTypes?.length || !betNumbersArray?.length || !betAmounts?.length) {
                 return [];
             }
-            const call = buildCasinoPlaceBetsCall(landId, betTypes, betNumbersArray, betAmounts);
+            const call = bettingToken
+                ? buildCasinoPlaceBetsWithTokenCall(landId, bettingToken, betTypes, betNumbersArray, betAmounts)
+                : buildCasinoPlaceBetsCall(landId, betTypes, betNumbersArray, betAmounts);
             return [call];
         }
 
@@ -80,7 +87,7 @@ export default function CasinoTransaction({
         }
 
         return [];
-    }, [mode, landId, betTypes, betNumbersArray, betAmounts]);
+    }, [mode, landId, betTypes, betNumbersArray, betAmounts, bettingToken]);
 
     const handleButtonClick = useCallback(() => {
         transactionInitiatedRef.current = true;
@@ -161,7 +168,7 @@ export default function CasinoTransaction({
                             const args = decoded.args as any;
                             const winningNumber = Number(args.winningNumber);
                             const won = Boolean(args.won);
-                            const payout = formatUnits(args.payout ?? BigInt(0), 18);
+                            const payout = formatUnits(args.payout ?? BigInt(0), tokenDecimals);
 
                             revealResult = {
                                 winningNumber,
@@ -195,7 +202,7 @@ export default function CasinoTransaction({
 
             onComplete?.(revealResult);
         }
-    }, [mode, onComplete, onStatusUpdate, address, tokenSymbol]);
+    }, [mode, onComplete, onStatusUpdate, address, tokenDecimals, tokenSymbol]);
 
     let defaultText = "Submit";
     if (mode === "placeBets") defaultText = "🎲 Place Bets";
