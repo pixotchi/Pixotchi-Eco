@@ -22,6 +22,7 @@ const BUILDING_LAYERS = {
   "Farmer House": "farmerhouse-layer.png",
   "Marketplace": "marketplace-layer.png",
   "Casino": "casino-layer.png",
+  "Barracks": "barrackslayer.png",
 } as const;
 
 const LandImage = ({

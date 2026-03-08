@@ -28,6 +28,8 @@ import {
   QuestStartedEventRenderer,
   QuestFinalizedEventRenderer,
   VillageProductionClaimedEventRenderer,
+  BarracksBuiltEventRenderer,
+  BarracksRaidEventRenderer,
   CasinoBuiltEventRenderer,
   RouletteSpinResultEventRenderer,
   BlackjackResultEventRenderer,
@@ -219,6 +221,10 @@ export default function ActivityTab() {
         return <QuestFinalizedEventRenderer key={activity.id} event={activity} userAddress={address} />;
       case "VillageProductionClaimedEvent":
         return <VillageProductionClaimedEventRenderer key={activity.id} event={activity} />;
+      case "BarracksBuiltEvent":
+        return <BarracksBuiltEventRenderer key={activity.id} event={activity} />;
+      case "BarracksRaidEvent":
+        return <BarracksRaidEventRenderer key={activity.id} event={activity} />;
       // Casino Event Renderers
       case "CasinoBuiltEvent":
         return <CasinoBuiltEventRenderer key={activity.id} event={activity} userAddress={address} />;

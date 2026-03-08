@@ -13,7 +13,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Land, BuildingData, BuildingType } from "@/lib/types";
-import { getLandsByOwner, getVillageBuildingsByLandId, getTownBuildingsByLandId, checkLeafTokenApproval, getLandById, checkLandSpeedUpApproval, checkLandMintApproval } from "@/lib/contracts";
+import {
+  barracksGetLandState,
+  checkLeafTokenApproval,
+  checkLandMintApproval,
+  checkLandSpeedUpApproval,
+  getLandById,
+  getLandsByOwner,
+  getTownBuildingsByLandId,
+  getVillageBuildingsByLandId,
+} from "@/lib/contracts";
+import { CLIENT_ENV } from "@/lib/env-config";
 import { formatTokenAmount, formatAddress, formatXP } from "@/lib/utils";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
@@ -31,6 +41,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 
 export default function LandsView() {
+  const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
   // Gate: Solana wallets cannot use Land features
   const isSolana = useIsSolanaWallet();
 
@@ -69,6 +80,7 @@ export default function LandsView() {
   const fetchDataPendingRef = useRef<string | null>(null);
   const fetchApprovalStatusPendingRef = useRef<string | null>(null);
   const fetchBuildingDataPendingRef = useRef<bigint | null>(null);
+  const fetchBuildingDataQueuedRef = useRef(false);
 
   // Token approval state for land interactions
   const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
@@ -170,6 +182,7 @@ export default function LandsView() {
       setTownBuildings([]);
       setSelectedBuilding(null);
       fetchBuildingDataPendingRef.current = null;
+      fetchBuildingDataQueuedRef.current = false;
       return;
     }
 
@@ -177,6 +190,7 @@ export default function LandsView() {
 
     // Prevent duplicate calls for the same land
     if (fetchBuildingDataPendingRef.current === landId) {
+      fetchBuildingDataQueuedRef.current = true;
       return;
     }
 
@@ -184,16 +198,17 @@ export default function LandsView() {
     setBuildingsLoading(true);
 
     try {
-      const [villageData, townData] = await Promise.all([
+      const [villageData, townData, barracksState] = await Promise.all([
         getVillageBuildingsByLandId(landId),
-        getTownBuildingsByLandId(landId)
+        getTownBuildingsByLandId(landId),
+        BARRACKS_ENABLED ? barracksGetLandState(landId) : Promise.resolve(null),
       ]);
 
       // Only update if land hasn't changed during the fetch
       if (fetchBuildingDataPendingRef.current === landId) {
         setVillageBuildings(villageData || []);
 
-        // Add prebuilt buildings to town data (Warehouse ID 3, Stake House ID 1, Casino ID 6, Barracks ID 8)
+        // Add prebuilt utility buildings that are not part of TownFacet output
         const prebuiltBuildings = [
           {
             id: 1, // Stake House
@@ -227,25 +242,12 @@ export default function LandsView() {
             blockHeightUpgradeInitiated: BigInt(0),
             blockHeightUntilUpgradeDone: BigInt(0)
           },
-          {
-            id: 6, // Casino
-            level: 0, // Not built yet - users need to call casinoBuild()
-            maxLevel: 1,
-            productionRatePlantPointsPerDay: BigInt(0),
-            productionRatePlantLifetimePerDay: BigInt(0),
-            accumulatedPoints: BigInt(0),
-            accumulatedLifetime: BigInt(0),
-            levelUpgradeCostLeaf: BigInt(0),
-            levelUpgradeCostSeedInstant: BigInt(0),
-            levelUpgradeCostSeed: BigInt("500000000000000000000"), // 500 SEED default
-            levelUpgradeBlockInterval: BigInt(0),
-            isUpgrading: false,
-            blockHeightUpgradeInitiated: BigInt(0),
-            blockHeightUntilUpgradeDone: BigInt(0)
-          },
-          {
-            id: 8, // Barracks (coming soon preview)
-            level: 0,
+        ];
+
+        if (BARRACKS_ENABLED) {
+          prebuiltBuildings.push({
+            id: 8, // Barracks
+            level: barracksState?.isBuilt ? 1 : 0,
             maxLevel: 1,
             productionRatePlantPointsPerDay: BigInt(0),
             productionRatePlantLifetimePerDay: BigInt(0),
@@ -258,8 +260,8 @@ export default function LandsView() {
             isUpgrading: false,
             blockHeightUpgradeInitiated: BigInt(0),
             blockHeightUntilUpgradeDone: BigInt(0)
-          }
-        ];
+          });
+        }
 
         // Combine prebuilt buildings with contract data, avoiding duplicates
         const allTownBuildings = [...prebuiltBuildings];
@@ -271,6 +273,8 @@ export default function LandsView() {
             }
           });
         }
+
+        allTownBuildings.sort((a, b) => Number(a.id) - Number(b.id));
 
         setTownBuildings(allTownBuildings);
 
@@ -313,8 +317,15 @@ export default function LandsView() {
         setBuildingsLoading(false);
         fetchBuildingDataPendingRef.current = null;
       }
+
+      if (fetchBuildingDataQueuedRef.current && selectedLand?.tokenId === landId) {
+        fetchBuildingDataQueuedRef.current = false;
+        setTimeout(() => {
+          void fetchBuildingData();
+        }, 0);
+      }
     }
-  }, [selectedLand, buildingType]); // Removed selectedBuilding to prevent infinite loop (updates trigger Effect -> calls func -> updates state -> triggers Effect)
+  }, [BARRACKS_ENABLED, selectedLand, buildingType]); // Removed selectedBuilding to prevent infinite loop (updates trigger Effect -> calls func -> updates state -> triggers Effect)
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
   useEffect(() => {

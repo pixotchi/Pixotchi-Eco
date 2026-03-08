@@ -1,6 +1,17 @@
 import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
-import { Plant, ShopItem, Strain, GardenItem, Land, FenceV2State } from './types';
+import {
+  Plant,
+  ShopItem,
+  Strain,
+  GardenItem,
+  Land,
+  FenceV2State,
+  BarracksConfig,
+  BarracksLandState,
+  BarracksRaidPreview,
+  BarracksRaidReport,
+} from './types';
 import { appendBuilderSuffix } from './builder-code';
 import UniswapAbi from '@/public/abi/Uniswap.json';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
@@ -159,6 +170,197 @@ export const ERC20_BALANCE_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
+  },
+] as const;
+
+const barracksAbi = [
+  {
+    type: 'function',
+    name: 'barracksGetConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{
+      type: 'tuple',
+      components: [
+        { name: 'initialized', type: 'bool' },
+        { name: 'enabled', type: 'bool' },
+        { name: 'buildToken', type: 'address' },
+        { name: 'buildCost', type: 'uint256' },
+        { name: 'buildReceiver', type: 'address' },
+        { name: 'trainingToken', type: 'address' },
+        { name: 'trainingCost', type: 'uint256' },
+        { name: 'trainingReceiver', type: 'address' },
+        { name: 'trainingTimePerTroop', type: 'uint256' },
+        { name: 'attackCooldown', type: 'uint256' },
+        { name: 'defenseCooldown', type: 'uint256' },
+        { name: 'lootPercentageBps', type: 'uint16' },
+        { name: 'casualtyScaleBps', type: 'uint16' },
+        { name: 'successfulRaidXP', type: 'uint256' },
+        { name: 'successfulDefenseXP', type: 'uint256' },
+        { name: 'troopAttackStrength', type: 'uint256' },
+        { name: 'troopDefenseStrength', type: 'uint256' },
+        { name: 'troopCarryPoints', type: 'uint256' },
+        { name: 'troopCarryLifetime', type: 'uint256' },
+        { name: 'maxTroopsPerLand', type: 'uint256' },
+      ],
+    }],
+  },
+  {
+    type: 'function',
+    name: 'barracksGetLandState',
+    stateMutability: 'view',
+    inputs: [{ name: 'landId', type: 'uint256' }],
+    outputs: [{
+      type: 'tuple',
+      components: [
+        { name: 'isBuilt', type: 'bool' },
+        { name: 'stationedTroops', type: 'uint256' },
+        { name: 'trainingQueueAmount', type: 'uint256' },
+        { name: 'readyToClaimTroops', type: 'uint256' },
+        { name: 'trainingStartedAt', type: 'uint256' },
+        { name: 'trainingEndsAt', type: 'uint256' },
+        { name: 'nextTroopReadyAt', type: 'uint256' },
+        { name: 'lastAttackAt', type: 'uint256' },
+        { name: 'lastDefendedAt', type: 'uint256' },
+        { name: 'attackCooldownEndsAt', type: 'uint256' },
+        { name: 'defenseCooldownEndsAt', type: 'uint256' },
+        { name: 'totalTroops', type: 'uint256' },
+      ],
+    }],
+  },
+  {
+    type: 'function',
+    name: 'barracksGetEligibleAttackableLandIds',
+    stateMutability: 'view',
+    inputs: [{ name: 'attackerLandId', type: 'uint256' }],
+    outputs: [{ name: 'landIds', type: 'uint256[]' }],
+  },
+  {
+    type: 'function',
+    name: 'barracksGetLastOutgoingReport',
+    stateMutability: 'view',
+    inputs: [{ name: 'landId', type: 'uint256' }],
+    outputs: [{
+      type: 'tuple',
+      components: [
+        { name: 'raidId', type: 'uint256' },
+        { name: 'timestamp', type: 'uint256' },
+        { name: 'attackerLandId', type: 'uint256' },
+        { name: 'defenderLandId', type: 'uint256' },
+        { name: 'attackerWon', type: 'bool' },
+        { name: 'troopsSent', type: 'uint256' },
+        { name: 'attackerTroopsBefore', type: 'uint256' },
+        { name: 'defenderTroopsBefore', type: 'uint256' },
+        { name: 'attackerTroopsLost', type: 'uint256' },
+        { name: 'defenderTroopsLost', type: 'uint256' },
+        { name: 'survivingAttackers', type: 'uint256' },
+        { name: 'survivingDefenders', type: 'uint256' },
+        { name: 'attackerPower', type: 'uint256' },
+        { name: 'defenderPower', type: 'uint256' },
+        { name: 'pendingPointsSettled', type: 'uint256' },
+        { name: 'pendingLifetimeSettled', type: 'uint256' },
+        { name: 'pointsStolen', type: 'uint256' },
+        { name: 'lifetimeStolen', type: 'uint256' },
+      ],
+    }],
+  },
+  {
+    type: 'function',
+    name: 'barracksGetLastIncomingReport',
+    stateMutability: 'view',
+    inputs: [{ name: 'landId', type: 'uint256' }],
+    outputs: [{
+      type: 'tuple',
+      components: [
+        { name: 'raidId', type: 'uint256' },
+        { name: 'timestamp', type: 'uint256' },
+        { name: 'attackerLandId', type: 'uint256' },
+        { name: 'defenderLandId', type: 'uint256' },
+        { name: 'attackerWon', type: 'bool' },
+        { name: 'troopsSent', type: 'uint256' },
+        { name: 'attackerTroopsBefore', type: 'uint256' },
+        { name: 'defenderTroopsBefore', type: 'uint256' },
+        { name: 'attackerTroopsLost', type: 'uint256' },
+        { name: 'defenderTroopsLost', type: 'uint256' },
+        { name: 'survivingAttackers', type: 'uint256' },
+        { name: 'survivingDefenders', type: 'uint256' },
+        { name: 'attackerPower', type: 'uint256' },
+        { name: 'defenderPower', type: 'uint256' },
+        { name: 'pendingPointsSettled', type: 'uint256' },
+        { name: 'pendingLifetimeSettled', type: 'uint256' },
+        { name: 'pointsStolen', type: 'uint256' },
+        { name: 'lifetimeStolen', type: 'uint256' },
+      ],
+    }],
+  },
+  {
+    type: 'function',
+    name: 'barracksPreviewRaid',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'attackerLandId', type: 'uint256' },
+      { name: 'defenderLandId', type: 'uint256' },
+      { name: 'troopsToSend', type: 'uint256' },
+    ],
+    outputs: [{
+      type: 'tuple',
+      components: [
+        { name: 'statusCode', type: 'uint8' },
+        { name: 'attackerWon', type: 'bool' },
+        { name: 'troopsRequested', type: 'uint256' },
+        { name: 'attackerTroopsBefore', type: 'uint256' },
+        { name: 'defenderTroopsBefore', type: 'uint256' },
+        { name: 'attackerTroopsLost', type: 'uint256' },
+        { name: 'defenderTroopsLost', type: 'uint256' },
+        { name: 'survivingAttackers', type: 'uint256' },
+        { name: 'survivingDefenders', type: 'uint256' },
+        { name: 'attackerPower', type: 'uint256' },
+        { name: 'defenderPower', type: 'uint256' },
+        { name: 'pendingPoints', type: 'uint256' },
+        { name: 'pendingLifetime', type: 'uint256' },
+        { name: 'carryPointsCap', type: 'uint256' },
+        { name: 'carryLifetimeCap', type: 'uint256' },
+        { name: 'estimatedPointsLoot', type: 'uint256' },
+        { name: 'estimatedLifetimeLoot', type: 'uint256' },
+        { name: 'attackerCooldownEndsAt', type: 'uint256' },
+        { name: 'defenderCooldownEndsAt', type: 'uint256' },
+      ],
+    }],
+  },
+  {
+    type: 'function',
+    name: 'barracksBuild',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'landId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'barracksTrainTroops',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'landId', type: 'uint256' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'barracksClaimTroops',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'landId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'barracksAttack',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'attackerLandId', type: 'uint256' },
+      { name: 'defenderLandId', type: 'uint256' },
+      { name: 'troopsToSend', type: 'uint256' },
+    ],
+    outputs: [],
   },
 ] as const;
 
@@ -1047,6 +1249,40 @@ export const getLandById = async (landId: bigint): Promise<Land | null> => {
   }
 };
 
+export const getLandsByIds = async (
+  landIds: bigint[],
+  options: { chunkSize?: number } = {},
+): Promise<Land[]> => {
+  if (landIds.length === 0) return [];
+
+  const { chunkSize = 25 } = options;
+  const readClient = getReadClient();
+  const lands: Land[] = [];
+
+  for (let i = 0; i < landIds.length; i += chunkSize) {
+    const chunk = landIds.slice(i, i + chunkSize);
+    const chunkResults = await retryWithBackoff(async () => {
+      return readClient.multicall({
+        allowFailure: true,
+        contracts: chunk.map((landId) => ({
+          address: LAND_CONTRACT_ADDRESS,
+          abi: landAbi,
+          functionName: 'landGetById' as const,
+          args: [landId],
+        })),
+      });
+    });
+
+    for (const entry of chunkResults) {
+      if (entry.status === 'success' && entry.result) {
+        lands.push(entry.result as Land);
+      }
+    }
+  }
+
+  return lands;
+};
+
 // -------------------- ASSET TRANSFERS --------------------
 
 /**
@@ -1930,6 +2166,241 @@ export const getTownBuildingsByLandId = async (landId: bigint): Promise<any[]> =
     return buildings as any[];
   });
 };
+
+const normalizeBarracksConfig = (value: any): BarracksConfig => ({
+  initialized: Boolean(value?.initialized ?? value?.[0] ?? false),
+  enabled: Boolean(value?.enabled ?? value?.[1] ?? false),
+  buildToken: String(value?.buildToken ?? value?.[2] ?? ZERO_ADDRESS),
+  buildCost: BigInt(value?.buildCost ?? value?.[3] ?? 0),
+  buildReceiver: String(value?.buildReceiver ?? value?.[4] ?? ZERO_ADDRESS),
+  trainingToken: String(value?.trainingToken ?? value?.[5] ?? ZERO_ADDRESS),
+  trainingCost: BigInt(value?.trainingCost ?? value?.[6] ?? 0),
+  trainingReceiver: String(value?.trainingReceiver ?? value?.[7] ?? ZERO_ADDRESS),
+  trainingTimePerTroop: BigInt(value?.trainingTimePerTroop ?? value?.[8] ?? 0),
+  attackCooldown: BigInt(value?.attackCooldown ?? value?.[9] ?? 0),
+  defenseCooldown: BigInt(value?.defenseCooldown ?? value?.[10] ?? 0),
+  lootPercentageBps: Number(value?.lootPercentageBps ?? value?.[11] ?? 0),
+  casualtyScaleBps: Number(value?.casualtyScaleBps ?? value?.[12] ?? 0),
+  successfulRaidXP: BigInt(value?.successfulRaidXP ?? value?.[13] ?? 0),
+  successfulDefenseXP: BigInt(value?.successfulDefenseXP ?? value?.[14] ?? 0),
+  troopAttackStrength: BigInt(value?.troopAttackStrength ?? value?.[15] ?? 0),
+  troopDefenseStrength: BigInt(value?.troopDefenseStrength ?? value?.[16] ?? 0),
+  troopCarryPoints: BigInt(value?.troopCarryPoints ?? value?.[17] ?? 0),
+  troopCarryLifetime: BigInt(value?.troopCarryLifetime ?? value?.[18] ?? 0),
+  maxTroopsPerLand: BigInt(value?.maxTroopsPerLand ?? value?.[19] ?? 0),
+});
+
+const normalizeBarracksLandState = (value: any): BarracksLandState => ({
+  isBuilt: Boolean(value?.isBuilt ?? value?.[0] ?? false),
+  stationedTroops: BigInt(value?.stationedTroops ?? value?.[1] ?? 0),
+  trainingQueueAmount: BigInt(value?.trainingQueueAmount ?? value?.[2] ?? 0),
+  readyToClaimTroops: BigInt(value?.readyToClaimTroops ?? value?.[3] ?? 0),
+  trainingStartedAt: BigInt(value?.trainingStartedAt ?? value?.[4] ?? 0),
+  trainingEndsAt: BigInt(value?.trainingEndsAt ?? value?.[5] ?? 0),
+  nextTroopReadyAt: BigInt(value?.nextTroopReadyAt ?? value?.[6] ?? 0),
+  lastAttackAt: BigInt(value?.lastAttackAt ?? value?.[7] ?? 0),
+  lastDefendedAt: BigInt(value?.lastDefendedAt ?? value?.[8] ?? 0),
+  attackCooldownEndsAt: BigInt(value?.attackCooldownEndsAt ?? value?.[9] ?? 0),
+  defenseCooldownEndsAt: BigInt(value?.defenseCooldownEndsAt ?? value?.[10] ?? 0),
+  totalTroops: BigInt(value?.totalTroops ?? value?.[11] ?? 0),
+});
+
+const normalizeBarracksRaidReport = (value: any): BarracksRaidReport => ({
+  raidId: BigInt(value?.raidId ?? value?.[0] ?? 0),
+  timestamp: BigInt(value?.timestamp ?? value?.[1] ?? 0),
+  attackerLandId: BigInt(value?.attackerLandId ?? value?.[2] ?? 0),
+  defenderLandId: BigInt(value?.defenderLandId ?? value?.[3] ?? 0),
+  attackerWon: Boolean(value?.attackerWon ?? value?.[4] ?? false),
+  troopsSent: BigInt(value?.troopsSent ?? value?.[5] ?? 0),
+  attackerTroopsBefore: BigInt(value?.attackerTroopsBefore ?? value?.[6] ?? 0),
+  defenderTroopsBefore: BigInt(value?.defenderTroopsBefore ?? value?.[7] ?? 0),
+  attackerTroopsLost: BigInt(value?.attackerTroopsLost ?? value?.[8] ?? 0),
+  defenderTroopsLost: BigInt(value?.defenderTroopsLost ?? value?.[9] ?? 0),
+  survivingAttackers: BigInt(value?.survivingAttackers ?? value?.[10] ?? 0),
+  survivingDefenders: BigInt(value?.survivingDefenders ?? value?.[11] ?? 0),
+  attackerPower: BigInt(value?.attackerPower ?? value?.[12] ?? 0),
+  defenderPower: BigInt(value?.defenderPower ?? value?.[13] ?? 0),
+  pendingPointsSettled: BigInt(value?.pendingPointsSettled ?? value?.[14] ?? 0),
+  pendingLifetimeSettled: BigInt(value?.pendingLifetimeSettled ?? value?.[15] ?? 0),
+  pointsStolen: BigInt(value?.pointsStolen ?? value?.[16] ?? 0),
+  lifetimeStolen: BigInt(value?.lifetimeStolen ?? value?.[17] ?? 0),
+});
+
+const normalizeBarracksRaidPreview = (value: any): BarracksRaidPreview => ({
+  statusCode: Number(value?.statusCode ?? value?.[0] ?? 0),
+  attackerWon: Boolean(value?.attackerWon ?? value?.[1] ?? false),
+  troopsRequested: BigInt(value?.troopsRequested ?? value?.[2] ?? 0),
+  attackerTroopsBefore: BigInt(value?.attackerTroopsBefore ?? value?.[3] ?? 0),
+  defenderTroopsBefore: BigInt(value?.defenderTroopsBefore ?? value?.[4] ?? 0),
+  attackerTroopsLost: BigInt(value?.attackerTroopsLost ?? value?.[5] ?? 0),
+  defenderTroopsLost: BigInt(value?.defenderTroopsLost ?? value?.[6] ?? 0),
+  survivingAttackers: BigInt(value?.survivingAttackers ?? value?.[7] ?? 0),
+  survivingDefenders: BigInt(value?.survivingDefenders ?? value?.[8] ?? 0),
+  attackerPower: BigInt(value?.attackerPower ?? value?.[9] ?? 0),
+  defenderPower: BigInt(value?.defenderPower ?? value?.[10] ?? 0),
+  pendingPoints: BigInt(value?.pendingPoints ?? value?.[11] ?? 0),
+  pendingLifetime: BigInt(value?.pendingLifetime ?? value?.[12] ?? 0),
+  carryPointsCap: BigInt(value?.carryPointsCap ?? value?.[13] ?? 0),
+  carryLifetimeCap: BigInt(value?.carryLifetimeCap ?? value?.[14] ?? 0),
+  estimatedPointsLoot: BigInt(value?.estimatedPointsLoot ?? value?.[15] ?? 0),
+  estimatedLifetimeLoot: BigInt(value?.estimatedLifetimeLoot ?? value?.[16] ?? 0),
+  attackerCooldownEndsAt: BigInt(value?.attackerCooldownEndsAt ?? value?.[17] ?? 0),
+  defenderCooldownEndsAt: BigInt(value?.defenderCooldownEndsAt ?? value?.[18] ?? 0),
+});
+
+export const barracksGetConfig = async (): Promise<BarracksConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: barracksAbi,
+        functionName: 'barracksGetConfig',
+      });
+    });
+    return normalizeBarracksConfig(result);
+  } catch (error) {
+    console.warn('Failed to get barracks config:', error);
+    return null;
+  }
+};
+
+export const barracksGetLandState = async (landId: bigint): Promise<BarracksLandState | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: barracksAbi,
+        functionName: 'barracksGetLandState',
+        args: [landId],
+      });
+    });
+    return normalizeBarracksLandState(result);
+  } catch (error) {
+    console.warn('Failed to get barracks land state:', error);
+    return null;
+  }
+};
+
+export const barracksGetEligibleAttackableLandIds = async (attackerLandId: bigint): Promise<bigint[]> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: barracksAbi,
+        functionName: 'barracksGetEligibleAttackableLandIds',
+        args: [attackerLandId],
+      });
+    });
+    return Array.isArray(result) ? (result as bigint[]) : [];
+  } catch (error) {
+    console.warn('Failed to get eligible barracks targets:', error);
+    return [];
+  }
+};
+
+export const barracksGetLastOutgoingReport = async (landId: bigint): Promise<BarracksRaidReport | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: barracksAbi,
+        functionName: 'barracksGetLastOutgoingReport',
+        args: [landId],
+      });
+    });
+    return normalizeBarracksRaidReport(result);
+  } catch (error) {
+    console.warn('Failed to get last outgoing barracks report:', error);
+    return null;
+  }
+};
+
+export const barracksGetLastIncomingReport = async (landId: bigint): Promise<BarracksRaidReport | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: barracksAbi,
+        functionName: 'barracksGetLastIncomingReport',
+        args: [landId],
+      });
+    });
+    return normalizeBarracksRaidReport(result);
+  } catch (error) {
+    console.warn('Failed to get last incoming barracks report:', error);
+    return null;
+  }
+};
+
+export const barracksPreviewRaid = async (
+  attackerLandId: bigint,
+  defenderLandId: bigint,
+  troopsToSend: bigint,
+): Promise<BarracksRaidPreview | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: barracksAbi,
+        functionName: 'barracksPreviewRaid',
+        args: [attackerLandId, defenderLandId, troopsToSend],
+      });
+    });
+    return normalizeBarracksRaidPreview(result);
+  } catch (error) {
+    console.warn('Failed to preview barracks raid:', error);
+    return null;
+  }
+};
+
+export const checkBarracksApproval = async (
+  address: string,
+  tokenAddress: string,
+): Promise<bigint> => {
+  return checkTokenApprovalForToken(
+    address,
+    tokenAddress as `0x${string}`,
+    LAND_CONTRACT_ADDRESS,
+  );
+};
+
+export const buildBarracksBuildCall = (landId: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: barracksAbi,
+  functionName: 'barracksBuild' as const,
+  args: [landId],
+});
+
+export const buildBarracksTrainCall = (landId: bigint, amount: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: barracksAbi,
+  functionName: 'barracksTrainTroops' as const,
+  args: [landId, amount],
+});
+
+export const buildBarracksClaimCall = (landId: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: barracksAbi,
+  functionName: 'barracksClaimTroops' as const,
+  args: [landId],
+});
+
+export const buildBarracksAttackCall = (
+  attackerLandId: bigint,
+  defenderLandId: bigint,
+  troopsToSend: bigint,
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: barracksAbi,
+  functionName: 'barracksAttack' as const,
+  args: [attackerLandId, defenderLandId, troopsToSend],
+});
 
 export interface LandBuildingsBatchResult {
   landId: bigint;
