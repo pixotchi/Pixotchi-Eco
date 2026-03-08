@@ -312,6 +312,7 @@ export default function BarracksPanel({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [targetsLoading, setTargetsLoading] = useState(false);
   const [targetsError, setTargetsError] = useState<string | null>(null);
+  const [, setCountdownTick] = useState(0);
   const [buildAllowance, setBuildAllowance] = useState(ZERO_BIGINT);
   const [trainingAllowance, setTrainingAllowance] = useState(ZERO_BIGINT);
   const [trainAmount, setTrainAmount] = useState("1");
@@ -361,6 +362,23 @@ export default function BarracksPanel({
     [eligibleTargets, selectedTargetLandId],
   );
   const pause = useCallback((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)), []);
+  const hasLiveCountdown = useMemo(
+    () =>
+      [
+        landState?.trainingEndsAt ?? ZERO_BIGINT,
+        landState?.attackCooldownEndsAt ?? ZERO_BIGINT,
+        landState?.defenseCooldownEndsAt ?? ZERO_BIGINT,
+        preview?.attackerCooldownEndsAt ?? ZERO_BIGINT,
+        preview?.defenderCooldownEndsAt ?? ZERO_BIGINT,
+      ].some((timestamp) => secondsUntil(timestamp) > 0),
+    [
+      landState?.attackCooldownEndsAt,
+      landState?.defenseCooldownEndsAt,
+      landState?.trainingEndsAt,
+      preview?.attackerCooldownEndsAt,
+      preview?.defenderCooldownEndsAt,
+    ],
+  );
 
   const applySnapshot = useCallback((snapshot: BarracksSnapshot) => {
     setConfig(snapshot.config);
@@ -521,6 +539,16 @@ export default function BarracksPanel({
     parsedAttackTroops,
     selectedTargetLandId,
   ]);
+
+  useEffect(() => {
+    if (!hasLiveCountdown) return;
+
+    const interval = setInterval(() => {
+      setCountdownTick((current) => current + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [hasLiveCountdown]);
 
   const dispatchRefreshEvents = useCallback(() => {
     onUpdate();
