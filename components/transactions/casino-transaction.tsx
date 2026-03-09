@@ -177,7 +177,7 @@ export default function CasinoTransaction({
                             };
 
                             if (won) {
-                                toast.success(`🎉 You won ${payout} ${tokenSymbol}!`, {
+                                toast.success(`🎉 Payout ${payout} ${tokenSymbol}!`, {
                                     id: "casino-result",
                                 });
                             } else {

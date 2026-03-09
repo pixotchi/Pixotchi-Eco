@@ -24,6 +24,7 @@ import { formatTokenAmount, formatTokenAmountRounded, getCasinoTokenImage } from
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+import { loadBetPreference, storeBetPreference } from '@/lib/casino-bet-preferences';
 
 interface CasinoDialogProps {
     open: boolean;
@@ -212,8 +213,20 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
     useEffect(() => {
         if (!open || pendingGame || !config) return;
-        setCurrentBetAmount(formatTokenAmountRounded(config.minBet, tokenDecimals));
-    }, [config?.bettingToken, config?.minBet, open, pendingGame, tokenDecimals]);
+        setCurrentBetAmount(loadBetPreference({
+            game: 'roulette',
+            token: config.bettingToken,
+            minBet: config.minBet,
+            maxBet: config.maxBet,
+            decimals: tokenDecimals,
+            fallback: formattedMinBet,
+        }));
+    }, [config?.bettingToken, config?.minBet, config?.maxBet, open, pendingGame, tokenDecimals, formattedMinBet]);
+
+    useEffect(() => {
+        if (!config?.bettingToken) return;
+        storeBetPreference('roulette', config.bettingToken, currentBetAmount, tokenDecimals);
+    }, [config?.bettingToken, currentBetAmount, tokenDecimals]);
 
     // Callback when wheel animation ends
     const handleWheelSpinEnd = useCallback(() => {
@@ -512,7 +525,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 {placedBets.length > 0 && (
                                     <div className="flex justify-between mt-2 pt-2 border-t border-border text-xs">
                                         <span>Total: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmount.toFixed(2)} {tokenSymbol}</strong></span>
-                                        <span className="text-green-500">Max Win: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)} {tokenSymbol}</strong></span>
+                                        <span className="text-green-500">Max Payout: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)} {tokenSymbol}</strong></span>
                                     </div>
                                 )}
                             </div>
@@ -522,7 +535,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 <div className={`mt-3 text-center p-2 rounded-lg text-sm border font-medium ${result.won ? 'bg-green-600/90 text-white border-green-400' : 'bg-black/60 text-white/90 border-white/20'}`}>
                                     {result.won ? (
                                         <span className="inline-flex items-center gap-1 font-bold">
-                                            <span>🎉 Won</span>
+                                            <span>🎉 Payout</span>
                                             <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
                                             <span>{parseFloat(result.payout).toFixed(2)} {tokenSymbol}!</span>
                                         </span>

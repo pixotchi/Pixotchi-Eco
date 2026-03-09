@@ -492,7 +492,7 @@ export default function BlackjackTransaction({
             } else if (resultData.gameResult !== undefined && resultData.gameResult !== BlackjackResult.NONE) {
                 const txt = getResultText(resultData.gameResult);
                 if (resultData.gameResult === BlackjackResult.PLAYER_WIN || resultData.gameResult === BlackjackResult.PLAYER_BLACKJACK) {
-                    toast.success(`${txt} Won ${resultData.payout || "0"} ${tokenSymbol}!`);
+                    toast.success(`${txt} Payout ${resultData.payout || "0"} ${tokenSymbol}!`);
                 } else if (resultData.gameResult === BlackjackResult.PUSH) {
                     toast.success('Push!');
                 } else {
