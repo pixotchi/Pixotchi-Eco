@@ -243,7 +243,7 @@ function ReportCard({
           </div>
         </div>
         <div className={`text-xs font-semibold ${success ? "text-green-600" : "text-red-600"}`}>
-          {success ? "Success" : "Failed"}
+          {success ? "Won" : "Lost"}
         </div>
       </div>
 
