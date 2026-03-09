@@ -28,6 +28,8 @@ import {
   QuestStartedEvent,
   QuestFinalizedEvent,
   VillageProductionClaimedEvent,
+  BarracksBuiltEvent,
+  BarracksRaidEvent,
   CasinoBuiltEvent,
   RouletteSpinResultEvent,
   BlackjackResultEvent
@@ -130,6 +132,13 @@ const EventIcon = React.memo(({
           return { iconSrc: buildingIcons[buildingName] || "/icons/bee-house.svg", altText: buildingName };
         }
         return { iconSrc: "/icons/bee-house.svg", altText: "Production" };
+      case 'BarracksRaidEvent':
+        return {
+          iconSrc: event?.attackerWon ? "/icons/Attackwon.svg" : "/icons/Attacklost.svg",
+          altText: event?.attackerWon ? "Raid Won" : "Raid Lost"
+        };
+      case 'BarracksBuiltEvent':
+        return { iconSrc: "/icons/barracks.png", altText: "Barracks Built" };
       case 'CasinoBuiltEvent':
         return { iconSrc: "/icons/casino.svg", altText: "Casino Built" };
       case 'RouletteSpinResultEvent':
@@ -486,6 +495,25 @@ export const VillageProductionClaimedEventRenderer = ({ event }: { event: Villag
     </EventWrapper>
   );
 };
+
+export const BarracksBuiltEventRenderer = ({ event }: { event: BarracksBuiltEvent }) => (
+  <EventWrapper event={event}>
+    <p className="text-sm">
+      <span className="font-bold">Land #{event.landId}</span> built Barracks.
+    </p>
+  </EventWrapper>
+);
+
+export const BarracksRaidEventRenderer = ({ event }: { event: BarracksRaidEvent }) => (
+  <EventWrapper event={event}>
+    <p className="text-sm">
+      <span className="font-bold">Land #{event.attackerLandId}</span>
+      {" attacked "}
+      <span className="font-bold">Land #{event.defenderLandId}</span>
+      {event.attackerWon ? " and won." : " and lost."}
+    </p>
+  </EventWrapper>
+);
 
 // Casino/Roulette Event Renderers
 export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: CasinoBuiltEvent, userAddress?: string | null }) => {

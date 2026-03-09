@@ -62,6 +62,8 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 ### Key Terms Explained
 - **PTS:** Points used for leaderboard ranking and earning ETH rewards.
 - **TOD (Time of Death):** Hours remaining before a plant dies if not cared for.
+- **Unclaimed Productions:** PTS and TOD that Village buildings have generated but have not been claimed to Warehouse yet.
+- **Claim to Warehouse:** Move land production out of building output and into the land's stored Warehouse balances so it can be applied to plants.
 - **$SEED:** Main in-game token; used to buy items, speed upgrades, and trade for ETH/LEAF.
 - **$LEAF:** Currency used exclusively for building upgrades and given as staking rewards. IT IS NOT SWAPPABLE. YOU CAN ONLY EARN IT BY STAKING SEED OR DOING ARCADE GAMES, QUESTS ETC or using MARKETPLACE OF LAND to trade against other user's orders.)
 - **$PIXOTCHI:** Pixotchi's Creator Token on Zora. Deployed in Decemeber 2025 to add a new layer of gamification and community engagement. It's only feature right now is the ability to batch claim production from your buildings (Need to hold 1M $PIXOTCHI in your wallet to unlock).
@@ -106,6 +108,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 | **Get SEED** | Swap tab → Input ETH → Confirm | Instant, taxed at 5% (includes LP, burn, rewards) |
 | **Upgrade Building** | Farm → Lands → Select building → Approve LEAF → Upgrade | Use SEED to speed up the upgrade timer |
 | **Attack Plant** | Ranking tab → Select plant with ⚔️ icon → Choose attacker → Attack | 30% win chance; can only attack once per 30 min |
+| **Raid Land** | Farm → Lands → Barracks → Raid | Both lands need Barracks; target must have unclaimed productions and no defense cooldown |
 | **Stake SEED** | Status bar → Stake → Approve SEED → Stake | Converts SEED to LEAF at staking app ratio |
 | **Claim LEAF** | Status bar → Stake → Claim rewards | Earned from staking or Farmer House quests |
 | **Unstake SEED** | Status bar → Stake → Unstake tab → Unstake | Converts LEAF back to SEED; check current ratio in-game |
@@ -205,6 +208,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - Land Mint Costs 500 SEED
 - Contain **Village** (production buildings) and **Town** (utility buildings).
 - Generate passive **PTS & TOD** for all your plants.
+- Built Barracks can train troops and launch land raids for a share of other players' unclaimed productions.
 - Upgraded using **LEAF**; speed up with **SEED**.
 - Batch Claim productions from your buildings (if own more than 1 land) with $PIXOTCHI (Need to hold 1M $PIXOTCHI in your wallet to unlock).
 
@@ -247,6 +251,49 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 **Casino (ID 6)** – Gambling (single level)
 - Play european roulette and blackjack with SEED!
+
+**Barracks (ID 8)** - Land combat hub (single level in current rollout)
+- Built instantly with its own token cost, then unlocks troop training, raids, and battle reports.
+- Trains Swordsmen and stores troops per land, not per wallet.
+- Only lands with a built Barracks can attack or be attacked.
+
+#### Barracks, Troops & Raids
+
+**What Barracks does**
+- Barracks is the land PvP building. It has separate Train, Raid, and History views in the building panel.
+- Current live rollout uses 1 troop type: **Swordsman**.
+- Troops belong to the land NFT itself. If land ownership changes, the land keeps its Barracks state and troop state.
+
+**Training**
+- Troops train in a queue per land.
+- Training has no player speed-up option in the current Barracks rollout.
+- Exact build cost, training cost, training time, max capacity, carry values, cooldowns, and XP rewards are admin-configurable and shown in the Barracks info dialog in-game.
+
+**Who can be attacked**
+- A land raid is only possible if both lands have a built Barracks.
+- You cannot raid your own land.
+- Target land must not be on defense cooldown.
+- Target land must have raidable **unclaimed productions** available.
+- If players ask why a target is missing from the raid dropdown, the usual reason is: no Barracks, same owner, no unclaimed productions, or cooldown still active.
+
+**How raids resolve**
+- Raids resolve instantly in one transaction. There is no travel time in the current version.
+- The game compares attacking power and defending power based on troop counts and troop stats.
+- Ties go to the defender.
+- Both sides take casualties. The stronger side loses fewer troops, the weaker side loses more, and very one-sided fights can still wipe the weaker army.
+
+**What gets stolen**
+- Barracks does **not** steal already claimed Warehouse balances.
+- It raids a configurable share of the defender's current **unclaimed productions**.
+- During a successful raid, the defender's relevant unclaimed productions first **claim to Warehouse**.
+- The stolen share is moved into the attacker's Warehouse balances.
+- The defender keeps the remainder in their own Warehouse balances.
+- Loot is also capped by the carrying power of the surviving attackers, so sending too few troops limits the final haul.
+
+**Cooldowns and reports**
+- After a raid, the attacker gets an attack cooldown and the defender gets a defense cooldown.
+- Barracks stores a **Last Attack** and **Last Defense** report for each land.
+- The public Activity tab only shows a simple result such as one land attacking another and winning or losing. Detailed troop losses and loot are shown inside the Barracks History view for the involved land.
 
 ### Upgrading Buildings
 - **Cost:** LEAF (checked at in-game rates).
@@ -331,6 +378,8 @@ Easter egg that is activated by finding the secret pattern/key in game.
 | **No Smart Wallet** | Visit wallet.coinbase.com to create a new account |
 | **No gas-free transactions** | Use Coinbase Smart Wallet for bundled, sponsored gas |
 | **Can't transfer assets** | Go to Profile button (header) → Transfer Assets |
+| **No raid targets** | Open Barracks → Raid. Targets need a built Barracks, unclaimed productions, and no defense cooldown |
+| **Raid shows low loot** | Loot only comes from unclaimed productions and is capped by surviving troop carry values |
 
 Most common question asked by new comers:
 "Where is my plant? Why is it not in my wallet anymore?"
@@ -351,6 +400,7 @@ Answer: If you minted a plant and you cannot see it anymore, it's because It's d
 - Exact ETH/token prices → Check Swap tab for live prices and charts.
 - Exact burn amounts → Check contract on Basescan.
 - Current plant balances or in-game inventory → Not provided in every request.
+- Exact live Barracks troop cost, cooldown, loot %, or carry numbers unless shown in user context → Check the Barracks info dialog in the Farm → Lands view.
 
 **I Will Not Invent:**
 - ❌ Item costs different from the table.
@@ -445,6 +495,7 @@ export function generateConversationTitle(firstMessage: string): string {
   if (cleaned.includes('mint') && cleaned.includes('land')) return 'Minting Land';
   if (cleaned.includes('plant') && (cleaned.includes('care') || cleaned.includes('feed'))) return 'Plant Care';
   if (cleaned.includes('swap') || cleaned.includes('token')) return 'Token Swapping';
+  if (cleaned.includes('barracks') || cleaned.includes('swordsman')) return 'Combat & Attacks';
   if (cleaned.includes('land') || cleaned.includes('building')) return 'Land Management';
   if (cleaned.includes('item') || cleaned.includes('shop')) return 'Items & Shop';
   if (cleaned.includes('attack') || cleaned.includes('raid')) return 'Combat & Attacks';

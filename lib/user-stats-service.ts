@@ -3,6 +3,7 @@ import {
   getLandsByOwner, 
   getTokenBalance, 
   getLeafBalance,
+  barracksGetLandState,
   getVillageBuildingsByLandId,
   getTownBuildingsByLandId,
   getLandBuildingsBatch,
@@ -74,6 +75,8 @@ export interface UserGameStats {
   totalLandXP: number;
   totalStoredPTS: number;
   totalStoredTOD: number;
+  landsWithCasino: number;
+  landsWithBarracks: number;
   
   // Detailed Land Information (per-land breakdown)
   landDetails: Array<{
@@ -83,6 +86,8 @@ export interface UserGameStats {
     experiencePoints: number;
     storedPTS: number;
     storedTOD: number;
+    casinoBuilt: boolean;
+    barracksBuilt: boolean;
     villageBuildings: Array<{
       type: string;
       level: number;
@@ -180,6 +185,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     const totalLandXP = lands.reduce((sum, l) => sum + Number(l.experiencePoints), 0);
     const totalStoredPTS = lands.reduce((sum, l) => sum + Number(l.accumulatedPlantPoints), 0);
     const totalStoredTOD = lands.reduce((sum, l) => sum + Number(l.accumulatedPlantLifetime), 0);
+    let landsWithCasino = 0;
+    let landsWithBarracks = 0;
 
     // Fetch building data for all lands
     let villageBuildings: Array<{ type: string; level: number; dailyPTSProduction: number; dailyTODProduction: number; }> = [];
@@ -214,6 +221,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       experiencePoints: number;
       storedPTS: number;
       storedTOD: number;
+      casinoBuilt: boolean;
+      barracksBuilt: boolean;
       villageBuildings: Array<{
         type: string;
         level: number;
@@ -236,15 +245,18 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       try {
         let villageData: any[] = [];
         let townData: any[] = [];
+        let barracksState: Awaited<ReturnType<typeof barracksGetLandState>> = null;
         const landKey = land.tokenId.toString();
         const preloaded = landBuildingMap.get(landKey);
         if (preloaded) {
           villageData = preloaded.village ?? [];
           townData = preloaded.town ?? [];
+          barracksState = await barracksGetLandState(land.tokenId);
         } else {
-          [villageData, townData] = await Promise.all([
+          [villageData, townData, barracksState] = await Promise.all([
             getVillageBuildingsByLandId(land.tokenId),
-            getTownBuildingsByLandId(land.tokenId)
+            getTownBuildingsByLandId(land.tokenId),
+            barracksGetLandState(land.tokenId),
           ]);
         }
 
@@ -307,6 +319,15 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           { id: 1, level: 1 }, // Stake House
           { id: 3, level: 1 }  // Warehouse
         ];
+        const casinoBuilt = townData.some((building: any) => building.id === 6 && building.level > 0);
+        const barracksBuilt = Boolean(barracksState?.isBuilt);
+
+        if (casinoBuilt) {
+          landsWithCasino += 1;
+        }
+        if (barracksBuilt) {
+          landsWithBarracks += 1;
+        }
         
         // Add prebuilt buildings first
         prebuiltTownBuildings.forEach((prebuilt) => {
@@ -366,6 +387,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           experiencePoints: Math.round(Number(land.experiencePoints) / 1e18),
           storedPTS: Math.round(Number(land.accumulatedPlantPoints) / 1e18),
           storedTOD: Math.round(Number(land.accumulatedPlantLifetime) / 1e18),
+          casinoBuilt,
+          barracksBuilt,
           villageBuildings: landVillageBuildings,
           townBuildings: landTownBuildings
         });
@@ -382,6 +405,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           experiencePoints: Math.round(Number(land.experiencePoints) / 1e18),
           storedPTS: Math.round(Number(land.accumulatedPlantPoints) / 1e18),
           storedTOD: Math.round(Number(land.accumulatedPlantLifetime) / 1e18),
+          casinoBuilt: false,
+          barracksBuilt: false,
           villageBuildings: [],
           townBuildings: [
             {
@@ -550,6 +575,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       totalLandXP: Math.round(totalLandXP / 1e18), // Convert from wei
       totalStoredPTS: Math.round(totalStoredPTS / 1e18), // Convert from wei
       totalStoredTOD: Math.round(totalStoredTOD / 1e18), // Convert from wei
+      landsWithCasino,
+      landsWithBarracks,
       
       // Detailed Land Information (per-land breakdown)
       landDetails,
@@ -645,7 +672,9 @@ export function formatStatsForAI(stats: UserGameStats): string {
       totalLands: formatInteger(stats.totalLands),
       totalLandXP: formatInteger(stats.totalLandXP / 1e18),
       totalStoredPTS: formatFromWei(stats.totalStoredPTS, 2),
-      totalStoredTOD: formatHoursFromWeiSeconds(stats.totalStoredTOD)
+      totalStoredTOD: formatHoursFromWeiSeconds(stats.totalStoredTOD),
+      landsWithCasino: formatInteger(stats.landsWithCasino),
+      landsWithBarracks: formatInteger(stats.landsWithBarracks),
     },
     
     // Detailed Land Information (each land with its buildings)
@@ -656,6 +685,8 @@ export function formatStatsForAI(stats: UserGameStats): string {
       experiencePoints: formatInteger(land.experiencePoints),
       storedPTS: formatDecimal(land.storedPTS, 2),
       storedTOD: formatHoursFromSeconds(land.storedTOD),
+      casinoBuilt: land.casinoBuilt ? "Built" : "Not built",
+      barracksBuilt: land.barracksBuilt ? "Built" : "Not built",
       villageBuildings: land.villageBuildings.length > 0 ? 
         land.villageBuildings.map(building => ({
           type: building.type,

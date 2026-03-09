@@ -3,13 +3,13 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { BuildingData, BuildingType } from '@/lib/types';
+import { CLIENT_ENV } from '@/lib/env-config';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { casinoIsBuilt } from '@/lib/contracts';
 
 // Casino feature flag - hide casino building when disabled
 const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
-const BARRACKS_BUILDING_ID = 8;
-
+const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
 interface BuildingGridProps {
   buildings: BuildingData[];
   buildingType: BuildingType;
@@ -41,10 +41,9 @@ const BuildingItem = React.memo(({
   }, [building.id, buildingType]);
 
   const isCasino = buildingType === 'town' && building.id === 6;
-  const isComingSoon = buildingType === 'town' && building.id === BARRACKS_BUILDING_ID;
   // For Casino, use casinoBuiltState; for others, use building.level
   const effectiveLevel = isCasino && casinoBuiltState ? 1 : building.level;
-  const isMaxLevel = !isComingSoon && effectiveLevel >= building.maxLevel;
+  const isMaxLevel = effectiveLevel >= building.maxLevel;
 
   return (
     <div className="space-y-1">
@@ -52,19 +51,18 @@ const BuildingItem = React.memo(({
       <div className="flex justify-center">
         <button
           type="button"
-          onClick={isComingSoon ? undefined : () => onBuildingSelect(building)}
-          disabled={isComingSoon}
+          onClick={() => onBuildingSelect(building)}
           className={`building-button p-0.5 transition-all rounded-md building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:cursor-default disabled:opacity-100 ${isSelected ? 'bg-primary' : 'bg-transparent'
             }`}
         >
-          <div className={`building-element flex items-center justify-center p-2 transition-all rounded-md w-16 h-16 relative ${isSelected ? 'bg-primary/10' : `bg-card ${isComingSoon ? '' : 'hover:bg-accent'}`
+          <div className={`building-element flex items-center justify-center p-2 transition-all rounded-md w-16 h-16 relative ${isSelected ? 'bg-primary/10' : 'bg-card hover:bg-accent'
             }`}>
             <Image
               src={buildingIcon}
               alt={buildingName}
               width={40}
               height={40}
-              className={`building-icon ${effectiveLevel === 0 || isComingSoon ? 'filter grayscale opacity-50' : ''
+              className={`building-icon ${effectiveLevel === 0 ? 'filter grayscale opacity-50' : ''
                 }`}
               style={{ width: 'auto', height: 'auto' }}
             />
@@ -85,7 +83,7 @@ const BuildingItem = React.memo(({
           {buildingName}
         </div>
         <div className="text-xs text-muted-foreground">
-          {isComingSoon ? 'Coming Soon' : `Lv. ${effectiveLevel}/${building.maxLevel}`}
+          {`Lv. ${effectiveLevel}/${building.maxLevel}`}
         </div>
 
         {/* Upgrade Status */}
@@ -124,8 +122,12 @@ export default function BuildingGrid({
 
   // Filter out casino (ID 6) if feature is disabled
   const visibleBuildings = useMemo(() => {
-    if (!CASINO_ENABLED && buildingType === 'town') {
-      return buildings.filter(b => b.id !== 6);
+    if (buildingType === 'town') {
+      return buildings.filter((building) => {
+        if (!CASINO_ENABLED && building.id === 6) return false;
+        if (!BARRACKS_ENABLED && building.id === 8) return false;
+        return true;
+      });
     }
     return buildings;
   }, [buildings, buildingType]);

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
+import { CLIENT_ENV } from '@/lib/env-config';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
@@ -17,9 +18,11 @@ import FarmerHousePanel from './building-details/FarmerHousePanel';
 import MarketplacePanel from './building-details/MarketplacePanel';
 import StakeHousePanel from './building-details/StakeHousePanel';
 import CasinoPanel from './building-details/CasinoPanel';
+import BarracksPanel from './building-details/BarracksPanel';
 
 // Casino feature flag - hide casino when disabled
 const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
+const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
 
 interface BuildingDetailsPanelProps {
   selectedBuilding: BuildingData | null;
@@ -79,6 +82,7 @@ function BuildingDetailsPanel({
   const buildingIcon = getBuildingIcon(buildingName);
 
   const isPrebuiltTown = buildingType === 'town' && (selectedBuilding.id === 1 || selectedBuilding.id === 3);
+  const isBarracks = buildingType === 'town' && selectedBuilding.id === 8;
   // isCasino is defined above via useEffect
 
   const renderBuildingContent = () => {
@@ -142,6 +146,15 @@ function BuildingDetailsPanel({
               onQuestUpdate={onUpgradeSuccess}
             />
           );
+        case 8: // Barracks
+          if (!BARRACKS_ENABLED) return null;
+          return (
+            <BarracksPanel
+              landId={landId}
+              currentBlock={currentBlock}
+              onUpdate={onUpgradeSuccess}
+            />
+          );
         default:
           return (
             <div className="text-center py-4 space-y-2 text-muted-foreground text-sm">
@@ -190,7 +203,7 @@ function BuildingDetailsPanel({
       <CardContent className="space-y-4">
         {renderBuildingContent()}
 
-        {!isPrebuiltTown && !isCasino && (
+        {!isPrebuiltTown && !isCasino && !isBarracks && (
           <UpgradePanel
             building={selectedBuilding}
             landId={landId}

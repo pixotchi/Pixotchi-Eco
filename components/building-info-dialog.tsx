@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { BuildingType } from '@/lib/types';
-import { getBuildingName } from '@/lib/utils';
-import { Card, CardContent } from '@/components/ui/card';
+import { BarracksConfig, BuildingType } from '@/lib/types';
+import { formatDuration, formatTokenAmountPrecise } from '@/lib/utils';
 import { ToggleGroup } from '@/components/ui/toggle-group';
+import { barracksGetConfig } from '@/lib/contracts';
 
 interface BuildingInfoDialogProps {
   open: boolean;
@@ -151,8 +152,185 @@ const buildingInfo = {
     name: "Casino",
     isCasino: true, // Flag to show game toggle
     description: "Play Roulette or Blackjack with provably fair onchain randomness!"
+  },
+  "town-8": { // Barracks
+    name: "Barracks",
+    isBarracks: true,
+    description: "Raise Swordsmen, strike rival Barracks, and bring home loot from their unclaimed productions."
   }
 };
+
+const PLANT_POINTS_DECIMALS = 12;
+const XP_DECIMALS = 18;
+
+function formatBarracksPoints(value: bigint): string {
+  return formatTokenAmountPrecise(value, PLANT_POINTS_DECIMALS, 2);
+}
+
+function formatBarracksXp(value: bigint): string {
+  return formatTokenAmountPrecise(value, XP_DECIMALS, 0);
+}
+
+function formatPercentFromBps(bps: number): string {
+  const percent = bps / 100;
+  return Number.isInteger(percent) ? `${percent}%` : `${percent.toFixed(2).replace(/\.?0+$/, '')}%`;
+}
+
+function InfoSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-muted/30 rounded-lg p-3">
+      <h4 className="font-semibold text-sm mb-2 text-foreground">{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+function InfoStatTile({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md bg-background/60 p-2">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function BarracksInfoContent({ open }: { open: boolean }) {
+  const [config, setConfig] = useState<BarracksConfig | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConfig() {
+      if (!open) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const nextConfig = await barracksGetConfig();
+        if (cancelled) return;
+
+        if (!nextConfig) {
+          setError('Barracks rules are unavailable right now.');
+          setConfig(null);
+          return;
+        }
+
+        setConfig(nextConfig);
+      } catch (err) {
+        console.error('Failed to load barracks config for info dialog:', err);
+        if (!cancelled) {
+          setError('Barracks rules are unavailable right now.');
+          setConfig(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  if (loading && !config) {
+    return (
+      <InfoSection title="Command Brief">
+        <p className="text-sm text-muted-foreground">Loading current Barracks rules...</p>
+      </InfoSection>
+    );
+  }
+
+  if (!config) {
+    return (
+      <InfoSection title="Command Brief">
+        <p className="text-sm text-muted-foreground">
+          {error || 'Barracks rules are unavailable right now.'}
+        </p>
+      </InfoSection>
+    );
+  }
+
+  const attackCooldown = formatDuration(Number(config.attackCooldown));
+  const defenseCooldown = formatDuration(Number(config.defenseCooldown));
+  const lootShare = formatPercentFromBps(config.lootPercentageBps);
+  const troopCarryPoints = formatBarracksPoints(config.troopCarryPoints);
+  const troopCarryLifetime = formatDuration(Number(config.troopCarryLifetime));
+  const raidXp = formatBarracksXp(config.successfulRaidXP);
+  const defenseXp = formatBarracksXp(config.successfulDefenseXP);
+
+  return (
+    <>
+      <InfoSection title="Battle Values">
+        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Troop Type: <span className="text-foreground">Swordsman</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <InfoStatTile
+            label="Strenght"
+            value={
+              <span className="inline-flex items-center gap-1.5">
+                <span>{config.troopAttackStrength.toString()}</span>
+                <Image src="/icons/attackpwr.svg" alt="Attack power" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
+                <span>/</span>
+                <span>{config.troopDefenseStrength.toString()}</span>
+                <Image src="/icons/defpwr.svg" alt="Defense power" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
+              </span>
+            }
+          />
+          <InfoStatTile
+            label="Can Carry PTS/TOD"
+            value={`${troopCarryPoints}/${troopCarryLifetime}`}
+          />
+          <InfoStatTile
+            label="Raid/Defense XP"
+            value={`${raidXp}/${defenseXp}`}
+          />
+          <InfoStatTile label="Loot share" value={lootShare} />
+        </div>
+      </InfoSection>
+
+      <InfoSection title="How Raids Work">
+        <ul className="space-y-1.5 text-sm text-muted-foreground">
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>When a raid wins, the defender&apos;s unclaimed productions claim to Warehouse first. The attacker steals up to {lootShare}, capped by surviving troop carry ability. Stolen PTS and TOD are added to the attacker&apos;s Warehouse.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Both sides take losses in battle. The stronger force loses fewer troops, the weaker force loses more, and very one-sided fights can still wipe the weaker army. Ties go to the defender.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Lands without a Barracks, lands on defense cooldown, and lands with no unclaimed productions cannot be attacked.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>After a raid, the attacker needs to wait {attackCooldown} before the next strike, and the defender gets {defenseCooldown} of protection.</span>
+          </li>
+        </ul>
+      </InfoSection>
+    </>
+  );
+}
 
 export default function BuildingInfoDialog({
   open,
@@ -162,7 +340,6 @@ export default function BuildingInfoDialog({
 }: BuildingInfoDialogProps) {
   const [selectedGame, setSelectedGame] = useState<'roulette' | 'blackjack'>('roulette');
 
-  const buildingName = getBuildingName(buildingId, buildingType === 'town');
   const key = `${buildingType}-${buildingId}` as keyof typeof buildingInfo;
   const info = buildingInfo[key];
 
@@ -173,6 +350,7 @@ export default function BuildingInfoDialog({
   const isProductionBuilding = buildingType === 'village' && 'production' in info;
   const isUtilityBuilding = buildingType === 'town' && 'features' in info;
   const isCasino = 'isCasino' in info && info.isCasino;
+  const isBarracks = 'isBarracks' in info && info.isBarracks;
 
   const productionEntries = isProductionBuilding && 'production' in info
     ? Object.entries(info.production as Record<string, string>)
@@ -194,7 +372,7 @@ export default function BuildingInfoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm max-h-[80vh] overflow-y-auto">
+      <DialogContent className={`max-h-[80vh] overflow-y-auto ${isBarracks ? 'max-w-md' : 'max-w-sm'}`}>
         <DialogHeader className="pb-4">
           <DialogTitle className="font-pixel text-lg">{info.name}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -283,6 +461,8 @@ export default function BuildingInfoDialog({
           )}
 
           {/* Non-casino buildings */}
+          {isBarracks && <BarracksInfoContent open={open} />}
+
           {isProductionBuilding && productionEntries && (
             <div className="bg-muted/30 rounded-lg p-3">
               <h4 className="font-semibold text-sm mb-2 text-foreground">Production Rates</h4>
@@ -329,4 +509,3 @@ export default function BuildingInfoDialog({
     </Dialog>
   );
 }
-

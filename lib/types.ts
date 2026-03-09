@@ -125,6 +125,87 @@ export type BuildingData = {
 
 export type BuildingType = 'village' | 'town';
 
+export type BarracksConfig = {
+  initialized: boolean;
+  enabled: boolean;
+  buildToken: string;
+  buildCost: bigint;
+  buildReceiver: string;
+  trainingToken: string;
+  trainingCost: bigint;
+  trainingReceiver: string;
+  trainingTimePerTroop: bigint;
+  attackCooldown: bigint;
+  defenseCooldown: bigint;
+  lootPercentageBps: number;
+  casualtyScaleBps: number;
+  successfulRaidXP: bigint;
+  successfulDefenseXP: bigint;
+  troopAttackStrength: bigint;
+  troopDefenseStrength: bigint;
+  troopCarryPoints: bigint;
+  troopCarryLifetime: bigint;
+  maxTroopsPerLand: bigint;
+};
+
+export type BarracksLandState = {
+  isBuilt: boolean;
+  stationedTroops: bigint;
+  trainingQueueAmount: bigint;
+  readyToClaimTroops: bigint;
+  trainingStartedAt: bigint;
+  trainingEndsAt: bigint;
+  nextTroopReadyAt: bigint;
+  lastAttackAt: bigint;
+  lastDefendedAt: bigint;
+  attackCooldownEndsAt: bigint;
+  defenseCooldownEndsAt: bigint;
+  totalTroops: bigint;
+};
+
+export type BarracksRaidReport = {
+  raidId: bigint;
+  timestamp: bigint;
+  attackerLandId: bigint;
+  defenderLandId: bigint;
+  attackerWon: boolean;
+  troopsSent: bigint;
+  attackerTroopsBefore: bigint;
+  defenderTroopsBefore: bigint;
+  attackerTroopsLost: bigint;
+  defenderTroopsLost: bigint;
+  survivingAttackers: bigint;
+  survivingDefenders: bigint;
+  attackerPower: bigint;
+  defenderPower: bigint;
+  pendingPointsSettled: bigint;
+  pendingLifetimeSettled: bigint;
+  pointsStolen: bigint;
+  lifetimeStolen: bigint;
+};
+
+export type BarracksRaidPreview = {
+  statusCode: number;
+  attackerWon: boolean;
+  troopsRequested: bigint;
+  attackerTroopsBefore: bigint;
+  defenderTroopsBefore: bigint;
+  attackerTroopsLost: bigint;
+  defenderTroopsLost: bigint;
+  survivingAttackers: bigint;
+  survivingDefenders: bigint;
+  attackerPower: bigint;
+  defenderPower: bigint;
+  pendingPoints: bigint;
+  pendingLifetime: bigint;
+  carryPointsCap: bigint;
+  carryLifetimeCap: bigint;
+  estimatedPointsLoot: bigint;
+  estimatedLifetimeLoot: bigint;
+  attackerCooldownEndsAt: bigint;
+  defenderCooldownEndsAt: bigint;
+};
+
 // Transaction types
 export type TransactionStatus = 'idle' | 'pending' | 'success' | 'error';
 
@@ -246,7 +327,7 @@ export type InviteGenerationResult = {
 };
 
 // Types for Ponder Indexer
-export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent;
+export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent;
 
 export type AttackEvent = {
   __typename: "Attack";
@@ -419,6 +500,28 @@ export type VillageProductionClaimedEvent = {
   timestamp: string;
   landId: string;
   buildingId: number;
+  blockHeight: string;
+};
+
+export type BarracksBuiltEvent = {
+  __typename: "BarracksBuiltEvent";
+  id: string;
+  timestamp: string;
+  landId: string;
+  builder: string;
+  token: string;
+  cost: string;
+  blockHeight: string;
+};
+
+export type BarracksRaidEvent = {
+  __typename: "BarracksRaidEvent";
+  id: string;
+  timestamp: string;
+  raidId: string;
+  attackerLandId: string;
+  defenderLandId: string;
+  attackerWon: boolean;
   blockHeight: string;
 };
 

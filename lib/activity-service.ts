@@ -522,30 +522,131 @@ const GET_MY_ACTIVITY_QUERY = `
   }
 `;
 
+const GET_ALL_BARRACKS_ACTIVITY_QUERY = `
+  query GetAllBarracksActivity {
+    barracksBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+      items {
+        __typename
+        id
+        timestamp
+        landId
+        builder
+        token
+        cost
+        blockHeight
+      }
+    }
+    barracksRaidEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+      items {
+        __typename
+        id
+        timestamp
+        raidId
+        attackerLandId
+        defenderLandId
+        attackerWon
+        blockHeight
+      }
+    }
+  }
+`;
+
+const GET_MY_BARRACKS_ACTIVITY_QUERY = `
+  query GetMyBarracksActivity($landIds: [BigInt!]) {
+    barracksBuiltEvents(
+      orderBy: "timestamp",
+      orderDirection: "desc",
+      limit: 100,
+      where: { landId_in: $landIds }
+    ) {
+      items {
+        __typename
+        id
+        timestamp
+        landId
+        builder
+        token
+        cost
+        blockHeight
+      }
+    }
+    barracksRaidEvents(
+      orderBy: "timestamp",
+      orderDirection: "desc",
+      limit: 100,
+      where: { OR: [{ attackerLandId_in: $landIds }, { defenderLandId_in: $landIds }] }
+    ) {
+      items {
+        __typename
+        id
+        timestamp
+        raidId
+        attackerLandId
+        defenderLandId
+        attackerWon
+        blockHeight
+      }
+    }
+  }
+`;
+
+async function fetchGraphQLData(query: string, variables?: Record<string, unknown>) {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables }),
+    next: { revalidate: 60 }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GraphQL request failed: ${response.statusText}`);
+  }
+
+  const json = await response.json();
+
+  if (json.errors) {
+    console.error('GraphQL Errors:', json.errors);
+    throw new Error('Error fetching activity data');
+  }
+
+  return json.data;
+}
+
+async function fetchOptionalBarracksActivity(): Promise<ActivityEvent[]> {
+  try {
+    const data = await fetchGraphQLData(GET_ALL_BARRACKS_ACTIVITY_QUERY);
+    return [
+      ...(data.barracksBuiltEvents?.items || []),
+      ...(data.barracksRaidEvents?.items || []),
+    ];
+  } catch (error) {
+    console.warn('Barracks activity is not available on the indexer yet:', error);
+    return [];
+  }
+}
+
+async function fetchOptionalMyBarracksActivity(landIds: string[]): Promise<ActivityEvent[]> {
+  try {
+    const data = await fetchGraphQLData(GET_MY_BARRACKS_ACTIVITY_QUERY, { landIds });
+    return [
+      ...(data.barracksBuiltEvents?.items || []),
+      ...(data.barracksRaidEvents?.items || []),
+    ];
+  } catch (error) {
+    console.warn('Personal Barracks activity is not available on the indexer yet:', error);
+    return [];
+  }
+}
+
 
 export async function getAllActivity(): Promise<ActivityEvent[]> {
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: GET_ALL_ACTIVITY_QUERY }),
-      next: { revalidate: 60 } // Revalidate every 60 seconds
-    });
-
-    if (!response.ok) {
-      throw new Error(`GraphQL request failed: ${response.statusText}`);
-    }
-
-    const json = await response.json();
-
-    if (json.errors) {
-      console.error('GraphQL Errors:', json.errors);
-      throw new Error('Error fetching activity data');
-    }
-
-    const { data } = json;
+    const [data, barracksEvents] = await Promise.all([
+      fetchGraphQLData(GET_ALL_ACTIVITY_QUERY),
+      fetchOptionalBarracksActivity(),
+    ]);
 
     const allActivities: ActivityEvent[] = [
       ...(data.attacks?.items || []),
@@ -567,6 +668,7 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
       ...(data.casinoBuiltEvents?.items || []),
       ...(data.rouletteSpinResultEvents?.items || []),
       ...(data.blackjackResultEvents?.items || []),
+      ...barracksEvents,
     ];
 
     const deduped = dedupePlayedEvents(allActivities);
@@ -602,34 +704,14 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
   }
 
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: GET_MY_ACTIVITY_QUERY,
-        variables: {
-          plantIds,
-          landIds,
-          playerAddress: address
-        }
+    const [data, barracksEvents] = await Promise.all([
+      fetchGraphQLData(GET_MY_ACTIVITY_QUERY, {
+        plantIds,
+        landIds,
+        playerAddress: address
       }),
-      next: { revalidate: 60 }
-    });
-
-    if (!response.ok) {
-      throw new Error(`GraphQL request failed: ${response.statusText}`);
-    }
-
-    const json = await response.json();
-
-    if (json.errors) {
-      console.error('GraphQL Errors:', json.errors);
-      throw new Error('Error fetching personal activity data');
-    }
-
-    const { data } = json;
+      fetchOptionalMyBarracksActivity(landIds),
+    ]);
 
     const myActivities: ActivityEvent[] = [
       ...(data.attacks?.items || []),
@@ -651,6 +733,7 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
       ...(data.casinoBuiltEvents?.items || []),
       ...(data.rouletteSpinResultEvents?.items || []),
       ...(data.blackjackResultEvents?.items || []),
+      ...barracksEvents,
     ];
 
     const deduped = dedupePlayedEvents(myActivities);

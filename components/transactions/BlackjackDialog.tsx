@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ import {
     BlackjackResult,
 } from '@/lib/contracts';
 import { getResultText } from '@/public/abi/blackjack-abi';
+import { loadBetPreference, storeBetPreference } from '@/lib/casino-bet-preferences';
 
 interface BlackjackDialogProps {
     open: boolean;
@@ -219,6 +220,7 @@ export default function BlackjackDialog({
 
     // Core game state - derived from contract
     const [gameState, setGameState] = useState<GameState>(initialGameState);
+    const refreshGenerationRef = useRef(0);
 
     // Transaction in progress tracking - tracks specific action for hiding other buttons
     const [txInProgress, setTxInProgress] = useState<'deal' | BlackjackAction | null>(null);
@@ -297,6 +299,10 @@ export default function BlackjackDialog({
         }
     }, [gameState.contractPhase, gameState.result]);
 
+    const invalidatePendingRefreshes = useCallback(() => {
+        refreshGenerationRef.current += 1;
+    }, []);
+
     // Fetch complete game state from contract
     const refreshGameState = useCallback(async (): Promise<boolean> => {
         if (!open || !address) {
@@ -304,8 +310,14 @@ export default function BlackjackDialog({
             return false;
         }
 
+        const refreshGeneration = refreshGenerationRef.current;
+
         try {
             const snapshot = await blackjackGetGameSnapshot(landId);
+
+            if (refreshGeneration !== refreshGenerationRef.current) {
+                return false;
+            }
 
             if (!snapshot) {
                 // Do not hard-reset UI on transient RPC/read failures.
@@ -327,6 +339,10 @@ export default function BlackjackDialog({
             }
 
             setGameState(prev => {
+                if (refreshGeneration !== refreshGenerationRef.current) {
+                    return prev;
+                }
+
                 const snapshotLooksEmpty =
                     snapshot.phase === BlackjackPhase.NONE &&
                     (normalizedPlayer === '' || normalizedPlayer === ZERO_ADDRESS) &&
@@ -566,9 +582,21 @@ export default function BlackjackDialog({
         if (!open || !config || gameState.contractPhase !== BlackjackPhase.NONE) return;
         setGameState(prev => ({
             ...prev,
-            betAmountInput: formattedMinBet,
+            betAmountInput: loadBetPreference({
+                game: 'blackjack',
+                token: config.bettingToken,
+                minBet: config.minBet,
+                maxBet: config.maxBet,
+                decimals: tokenDecimals,
+                fallback: formattedMinBet,
+            }),
         }));
-    }, [config?.bettingToken, config?.minBet, gameState.contractPhase, open, formattedMinBet]);
+    }, [config?.bettingToken, config?.minBet, config?.maxBet, gameState.contractPhase, open, formattedMinBet, tokenDecimals]);
+
+    useEffect(() => {
+        if (!config?.bettingToken) return;
+        storeBetPreference('blackjack', config.bettingToken, gameState.betAmountInput, tokenDecimals);
+    }, [config?.bettingToken, gameState.betAmountInput, tokenDecimals]);
 
     // Refresh game state on open
     useEffect(() => {
@@ -602,17 +630,18 @@ export default function BlackjackDialog({
     // Clear state on close
     useEffect(() => {
         if (!open) {
-            setGameState({
+            invalidatePendingRefreshes();
+            setGameState(prev => ({
                 ...initialGameState,
-                betAmountInput: config ? formattedMinBet : initialGameState.betAmountInput,
-            });
+                betAmountInput: prev.betAmountInput,
+            }));
             setTxInProgress(null);
             setError(null);
             setActionButtonsReady(false);
             setActionButtonsSyncing(false);
             setActionButtonsSyncFailed(false);
         }
-    }, [open, config, formattedMinBet]);
+    }, [open, invalidatePendingRefreshes]);
 
     // Handle deal complete (combined bet + deal)
     // Handle deal complete (combined bet + deal)
@@ -626,6 +655,7 @@ export default function BlackjackDialog({
             // Check if game ended immediately (blackjack)
             // Check if game ended immediately (blackjack)
             if (result.gameResult !== undefined) {
+                invalidatePendingRefreshes();
                 setGameState(prev => ({
                     ...prev,
                     result: result.gameResult,
@@ -643,8 +673,6 @@ export default function BlackjackDialog({
                 setActionButtonsSyncing(false);
                 setActionButtonsSyncFailed(false);
 
-                // If game ended, state might be cleared (NONE), which is fine. Refresh immediately.
-                await refreshGameState();
                 refetchBalance();
             } else if (result.cards && result.cards.length > 0) {
                 // Game Started Successfully (Optimistic Update)
@@ -696,7 +724,7 @@ export default function BlackjackDialog({
         } finally {
             setTxInProgress(null);
         }
-    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries, landId, gameState.betAmountInput, address]);
+    }, [invalidatePendingRefreshes, refetchBalance, syncActionButtonsWithRetries, landId, gameState.betAmountInput, address]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: any) => {
@@ -870,11 +898,12 @@ export default function BlackjackDialog({
 
     // Play again
     const handlePlayAgain = useCallback(() => {
+        invalidatePendingRefreshes();
         setGameState(prev => ({ ...initialGameState, betAmountInput: prev.betAmountInput }));
         setError(null);
         refetchBalance();
         if (onGameComplete) onGameComplete();
-    }, [refetchBalance, onGameComplete]);
+    }, [invalidatePendingRefreshes, refetchBalance, onGameComplete]);
 
     // Close handler - allow closing even mid-game (user may want to abandon)
     const handleClose = useCallback(() => {
