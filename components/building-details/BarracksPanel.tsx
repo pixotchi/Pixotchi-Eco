@@ -646,6 +646,11 @@ export default function BarracksPanel({
   const needsBuildApproval = !!config && config.buildCost > ZERO_BIGINT && buildAllowance < config.buildCost;
   const needsTrainingApproval =
     !!config && trainCostTotal > ZERO_BIGINT && trainingAllowance < trainCostTotal;
+  const isBuildBalanceLoaded =
+    !address ||
+    !buildTokenAddress ||
+    buildTokenAddress === ZERO_ADDRESS ||
+    !!buildTokenBalance;
   const hasBuildBalance =
     config?.buildCost === ZERO_BIGINT ||
     (buildTokenBalance ? buildTokenBalance.value >= (config?.buildCost ?? ZERO_BIGINT) : false);
@@ -679,57 +684,80 @@ export default function BarracksPanel({
 
   if (!landState.isBuilt) {
     return (
-      <div className="space-y-4 pt-4 border-t border-border">
-        <StandardContainer className="space-y-3">
-          <div>
-            <div className="text-sm font-semibold">Build Barracks</div>
-            <div className="text-xs text-muted-foreground">
-              Instant construction unlocks troop training and land raids.
+      <div className="space-y-4">
+        <div className="text-center py-4 space-y-2">
+          <div className="text-muted-foreground text-sm">
+            Build a Barracks to train troops and raid nearby lands.
+          </div>
+        </div>
+
+        <div className="space-y-4 pt-4 border-t border-border">
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm">Build Cost:</h4>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Instant Build:</span>
+              <span className="font-semibold">
+                {buildCostDisplay} {buildTokenSymbol}
+              </span>
             </div>
+            {address && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Your Balance:</span>
+                <span className={hasBuildBalance ? "font-medium" : "font-medium text-destructive"}>
+                  {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."} {buildTokenSymbol}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <StatTile label="Build Cost" value={`${buildCostDisplay} ${buildTokenSymbol}`} />
-            <StatTile
-              label="Your Balance"
-              value={`${buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."} ${buildTokenSymbol}`}
-              hint={hasBuildBalance ? "Ready" : "Insufficient"}
-            />
-          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Build Barracks</span>
+            </div>
 
-          {!config.enabled ? (
-            <DisabledTransaction buttonText="Barracks Disabled" buttonClassName="w-full" />
-          ) : needsBuildApproval ? (
-            <ApproveTransaction
-              spenderAddress={LAND_CONTRACT_ADDRESS}
-              tokenAddress={config.buildToken as `0x${string}`}
-              buttonText={`Approve ${buildTokenSymbol}`}
-              buttonClassName="w-full"
-              onSuccess={async () => {
-                toast.success(`${buildTokenSymbol} approved`);
-                await refreshAfterApproval("build");
-              }}
-              onError={(error) => toast.error(`Approval failed: ${error.message || error}`)}
-            />
-          ) : !hasBuildBalance ? (
-            <DisabledTransaction
-              buttonText={`Insufficient ${buildTokenSymbol}`}
-              buttonClassName="w-full"
-            />
-          ) : (
-            <SponsoredTransaction
-              calls={[buildBarracksBuildCall(landId)]}
-              buttonText={`Build Barracks (${buildCostDisplay} ${buildTokenSymbol})`}
-              buttonClassName="w-full"
-              disabled={!config.enabled}
-              onSuccess={async () => {
-                toast.success("Barracks built");
-                await refreshAfterSuccess();
-              }}
-              onError={(error) => toast.error(`Build failed: ${error.message || error}`)}
-            />
-          )}
-        </StandardContainer>
+            {!config.enabled ? (
+              <Button className="w-full" variant="secondary" disabled>
+                Barracks disabled
+              </Button>
+            ) : !address ? (
+              <Button className="w-full" variant="secondary" disabled>
+                Connect wallet to build
+              </Button>
+            ) : !isBuildBalanceLoaded ? (
+              <Button className="w-full" variant="secondary" disabled>
+                Checking balance...
+              </Button>
+            ) : needsBuildApproval ? (
+              <ApproveTransaction
+                spenderAddress={LAND_CONTRACT_ADDRESS}
+                tokenAddress={config.buildToken as `0x${string}`}
+                buttonText={`Approve ${buildTokenSymbol} to Build`}
+                buttonClassName="w-full"
+                onSuccess={async () => {
+                  toast.success(`${buildTokenSymbol} approved`);
+                  await refreshAfterApproval("build");
+                }}
+                onError={(error) => toast.error(`Approval failed: ${error.message || error}`)}
+              />
+            ) : !hasBuildBalance ? (
+              <Button className="w-full" variant="secondary" disabled>
+                Insufficient balance
+              </Button>
+            ) : (
+              <SponsoredTransaction
+                calls={[buildBarracksBuildCall(landId)]}
+                buttonText={`Build (${buildCostDisplay} ${buildTokenSymbol})`}
+                buttonClassName="w-full"
+                disabled={!config.enabled}
+                onSuccess={async () => {
+                  toast.success("Barracks built");
+                  await refreshAfterSuccess();
+                }}
+                onError={(error) => toast.error(`Build failed: ${error.message || error}`)}
+              />
+            )}
+          </div>
+        </div>
       </div>
     );
   }
