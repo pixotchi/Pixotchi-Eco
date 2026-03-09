@@ -15,6 +15,7 @@ import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Land, BuildingData, BuildingType } from "@/lib/types";
 import {
   barracksGetLandState,
+  casinoIsBuilt,
   checkLeafTokenApproval,
   checkLandMintApproval,
   checkLandSpeedUpApproval,
@@ -42,6 +43,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 
 export default function LandsView() {
   const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
+  const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
   // Gate: Solana wallets cannot use Land features
   const isSolana = useIsSolanaWallet();
 
@@ -198,10 +200,11 @@ export default function LandsView() {
     setBuildingsLoading(true);
 
     try {
-      const [villageData, townData, barracksState] = await Promise.all([
+      const [villageData, townData, barracksState, casinoBuilt] = await Promise.all([
         getVillageBuildingsByLandId(landId),
         getTownBuildingsByLandId(landId),
         BARRACKS_ENABLED ? barracksGetLandState(landId) : Promise.resolve(null),
+        CASINO_ENABLED ? casinoIsBuilt(landId) : Promise.resolve(false),
       ]);
 
       // Only update if land hasn't changed during the fetch
@@ -242,6 +245,22 @@ export default function LandsView() {
             blockHeightUpgradeInitiated: BigInt(0),
             blockHeightUntilUpgradeDone: BigInt(0)
           },
+          ...(CASINO_ENABLED ? [{
+            id: 6, // Casino
+            level: casinoBuilt ? 1 : 0,
+            maxLevel: 1,
+            productionRatePlantPointsPerDay: BigInt(0),
+            productionRatePlantLifetimePerDay: BigInt(0),
+            accumulatedPoints: BigInt(0),
+            accumulatedLifetime: BigInt(0),
+            levelUpgradeCostLeaf: BigInt(0),
+            levelUpgradeCostSeedInstant: BigInt(0),
+            levelUpgradeCostSeed: BigInt(0),
+            levelUpgradeBlockInterval: BigInt(0),
+            isUpgrading: false,
+            blockHeightUpgradeInitiated: BigInt(0),
+            blockHeightUntilUpgradeDone: BigInt(0)
+          }] : []),
         ];
 
         if (BARRACKS_ENABLED) {
