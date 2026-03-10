@@ -3,7 +3,7 @@ import {
   getLandsByOwner, 
   getTokenBalance, 
   getLeafBalance,
-  barracksGetLandState,
+  barracksGetLandStateV2,
   getVillageBuildingsByLandId,
   getTownBuildingsByLandId,
   getLandBuildingsBatch,
@@ -24,6 +24,9 @@ import { Plant, Land, BuildingData } from './types';
 import { redis } from './redis';
 import { VILLAGE_BUILDING_NAMES, TOWN_BUILDING_NAMES } from './constants';
 
+const ZERO_BIGINT = BigInt(0);
+const HOME_DEFENSE_MAX_BPS = 1000;
+
 // Building type names as shown to users
 const getVillageBuildingName = (buildingId: number): string => {
   return VILLAGE_BUILDING_NAMES[buildingId as keyof typeof VILLAGE_BUILDING_NAMES] || `Village Building ${buildingId}`;
@@ -31,6 +34,40 @@ const getVillageBuildingName = (buildingId: number): string => {
 
 const getTownBuildingName = (buildingId: number): string => {
   return TOWN_BUILDING_NAMES[buildingId as keyof typeof TOWN_BUILDING_NAMES] || `Town Building ${buildingId}`;
+};
+
+const isProductionBuilding = (building: Pick<BuildingData, 'maxLevel' | 'productionRatePlantPointsPerDay' | 'productionRatePlantLifetimePerDay'>): boolean => {
+  return (
+    building.maxLevel > 0 &&
+    (building.productionRatePlantPointsPerDay > ZERO_BIGINT ||
+      building.productionRatePlantLifetimePerDay > ZERO_BIGINT)
+  );
+};
+
+const getHomeDefenseBonusBps = (buildings: BuildingData[]): number => {
+  const productionBuildings = buildings.filter(isProductionBuilding);
+  if (productionBuildings.length === 0) return 0;
+
+  const totalLevels = productionBuildings.reduce((sum, building) => sum + building.level, 0);
+  const totalMaxLevels = productionBuildings.reduce((sum, building) => sum + building.maxLevel, 0);
+
+  if (totalLevels === 0 || totalMaxLevels === 0) {
+    return 0;
+  }
+
+  return Math.min(
+    HOME_DEFENSE_MAX_BPS,
+    Math.floor((totalLevels * HOME_DEFENSE_MAX_BPS) / totalMaxLevels),
+  );
+};
+
+const formatBarracksCooldown = (timestamp: bigint): string => {
+  if (timestamp <= ZERO_BIGINT) return 'Not active';
+
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (timestamp <= now) return 'Not active';
+
+  return formatDuration(Number(timestamp - now));
 };
 
 // User stats interface matching what AI should receive
@@ -88,6 +125,16 @@ export interface UserGameStats {
     storedTOD: number;
     casinoBuilt: boolean;
     barracksBuilt: boolean;
+    barracks: {
+      stationedSwordsmen: string;
+      stationedPhalanx: string;
+      readySwordsmen: string;
+      readyPhalanx: string;
+      trainingQueue: string;
+      attackCooldown: string;
+      defenseCooldown: string;
+      homeDefenseBonus: string;
+    } | null;
     villageBuildings: Array<{
       type: string;
       level: number;
@@ -223,6 +270,16 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       storedTOD: number;
       casinoBuilt: boolean;
       barracksBuilt: boolean;
+      barracks: {
+        stationedSwordsmen: string;
+        stationedPhalanx: string;
+        readySwordsmen: string;
+        readyPhalanx: string;
+        trainingQueue: string;
+        attackCooldown: string;
+        defenseCooldown: string;
+        homeDefenseBonus: string;
+      } | null;
       villageBuildings: Array<{
         type: string;
         level: number;
@@ -245,18 +302,18 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       try {
         let villageData: any[] = [];
         let townData: any[] = [];
-        let barracksState: Awaited<ReturnType<typeof barracksGetLandState>> = null;
+        let barracksState: Awaited<ReturnType<typeof barracksGetLandStateV2>> = null;
         const landKey = land.tokenId.toString();
         const preloaded = landBuildingMap.get(landKey);
         if (preloaded) {
           villageData = preloaded.village ?? [];
           townData = preloaded.town ?? [];
-          barracksState = await barracksGetLandState(land.tokenId);
+          barracksState = await barracksGetLandStateV2(land.tokenId);
         } else {
           [villageData, townData, barracksState] = await Promise.all([
             getVillageBuildingsByLandId(land.tokenId),
             getTownBuildingsByLandId(land.tokenId),
-            barracksGetLandState(land.tokenId),
+            barracksGetLandStateV2(land.tokenId),
           ]);
         }
 
@@ -321,6 +378,20 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         ];
         const casinoBuilt = townData.some((building: any) => building.id === 6 && building.level > 0);
         const barracksBuilt = Boolean(barracksState?.isBuilt);
+        const homeDefenseBonusBps = getHomeDefenseBonusBps(villageData as BuildingData[]);
+        const barracksInfo = barracksBuilt
+          ? {
+              stationedSwordsmen: barracksState?.stationedSwordsmanTroops?.toString() ?? '0',
+              stationedPhalanx: barracksState?.stationedPhalanxTroops?.toString() ?? '0',
+              readySwordsmen: barracksState?.readyToClaimSwordsmanTroops?.toString() ?? '0',
+              readyPhalanx: barracksState?.readyToClaimPhalanxTroops?.toString() ?? '0',
+              trainingQueue:
+                `${barracksState?.trainingQueueAmount?.toString() ?? '0'} ${Number(barracksState?.trainingQueueTroopType ?? 0) === 1 ? 'phalanx' : 'swordsman'}`,
+              attackCooldown: formatBarracksCooldown(barracksState?.attackCooldownEndsAt ?? ZERO_BIGINT),
+              defenseCooldown: formatBarracksCooldown(barracksState?.defenseCooldownEndsAt ?? ZERO_BIGINT),
+              homeDefenseBonus: `${(homeDefenseBonusBps / 100).toFixed(1).replace(/\.0$/, '')}%`,
+            }
+          : null;
 
         if (casinoBuilt) {
           landsWithCasino += 1;
@@ -389,6 +460,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           storedTOD: Math.round(Number(land.accumulatedPlantLifetime) / 1e18),
           casinoBuilt,
           barracksBuilt,
+          barracks: barracksInfo,
           villageBuildings: landVillageBuildings,
           townBuildings: landTownBuildings
         });
@@ -407,6 +479,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           storedTOD: Math.round(Number(land.accumulatedPlantLifetime) / 1e18),
           casinoBuilt: false,
           barracksBuilt: false,
+          barracks: null,
           villageBuildings: [],
           townBuildings: [
             {
@@ -687,6 +760,7 @@ export function formatStatsForAI(stats: UserGameStats): string {
       storedTOD: formatHoursFromSeconds(land.storedTOD),
       casinoBuilt: land.casinoBuilt ? "Built" : "Not built",
       barracksBuilt: land.barracksBuilt ? "Built" : "Not built",
+      barracks: land.barracksBuilt && land.barracks ? land.barracks : "Not built",
       villageBuildings: land.villageBuildings.length > 0 ? 
         land.villageBuildings.map(building => ({
           type: building.type,

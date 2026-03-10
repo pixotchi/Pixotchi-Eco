@@ -71,6 +71,9 @@ type BarracksSnapshotV2 = {
 const RAID_STATUS_OK = 0;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BIGINT = BigInt(0);
+const SECONDS_PER_MINUTE = BigInt(60);
+const SECONDS_PER_HOUR = BigInt(3600);
+const SECONDS_PER_DAY = BigInt(86400);
 const PLANT_POINTS_DECIMALS = 12;
 const BARRACKS_PREVIEW_ENABLED = CLIENT_ENV.BARRACKS_PREVIEW_ENABLED;
 const HOME_DEFENSE_MAX_BPS = 1000;
@@ -158,16 +161,16 @@ function formatBarracksLifetime(value: bigint): string {
 function formatDurationFromBigInt(seconds: bigint): string {
   if (seconds <= ZERO_BIGINT) return "0s";
 
-  const days = seconds / 86_400n;
-  const hours = (seconds % 86_400n) / 3_600n;
-  const minutes = (seconds % 3_600n) / 60n;
-  const secs = seconds % 60n;
+  const days = seconds / SECONDS_PER_DAY;
+  const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR;
+  const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE;
+  const secs = seconds % SECONDS_PER_MINUTE;
 
   let result = "";
   if (days > 0) result += `${days.toString()}d `;
   if (hours > 0) result += `${hours.toString()}h `;
-  if (minutes > 0 && days === 0n) result += `${minutes.toString()}m `;
-  if (secs > 0 && hours === 0n && days === 0n) result += `${secs.toString()}s`;
+  if (minutes > 0 && days === ZERO_BIGINT) result += `${minutes.toString()}m `;
+  if (secs > 0 && hours === ZERO_BIGINT && days === ZERO_BIGINT) result += `${secs.toString()}s`;
 
   return result.trim() || "0s";
 }

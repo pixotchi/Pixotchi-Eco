@@ -254,33 +254,37 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 **Barracks (ID 8)** - Land combat hub (single level in current rollout)
 - Built instantly with its own token cost, then unlocks troop training, raids, and battle reports.
-- Trains Swordsmen and stores troops per land, not per wallet.
+- Trains Swordsmen and Phalanx, and stores troops per land, not per wallet.
 - Only lands with a built Barracks can attack or be attacked.
 
 #### Barracks, Troops & Raids
 
 **What Barracks does**
 - Barracks is the land PvP building. It has separate Train, Raid, and History views in the building panel.
-- Current live rollout uses 1 troop type: **Swordsman**.
+- Current live rollout uses 2 troop types: **Swordsman** and **Phalanx**.
+- **Swordsman** is the offense-leaning troop. **Phalanx** is the defense-leaning troop with much weaker raid carry value.
 - Troops belong to the land NFT itself. If land ownership changes, the land keeps its Barracks state and troop state.
 
 **Training**
-- Troops train in a queue per land.
+- Troops train in a single queue per land. A land can queue either Swordsmen or Phalanx at one time.
 - Training has no player speed-up option in the current Barracks rollout.
-- Exact build cost, training cost, training time, max capacity, carry values, cooldowns, and XP rewards are admin-configurable and shown in the Barracks info dialog in-game.
+- Exact build cost, training cost, training time, carry values, cooldowns, and XP rewards are admin-configurable and shown in the Barracks info dialog in-game.
 
 **Who can be attacked**
 - A land raid is only possible if both lands have a built Barracks.
 - You cannot raid your own land.
+- The attacker must not be on attack cooldown.
 - Target land must not be on defense cooldown.
 - Target land must have raidable **unclaimed productions** available.
-- If players ask why a target is missing from the raid dropdown, the usual reason is: no Barracks, same owner, no unclaimed productions, or cooldown still active.
+- If players ask why a target is missing from the raid dropdown, the usual reason is: no Barracks, same owner, no unclaimed productions, attacker cooldown, or defender cooldown.
 
 **How raids resolve**
 - Raids resolve instantly in one transaction. There is no travel time in the current version.
-- The game compares attacking power and defending power based on troop counts and troop stats.
+- The game compares attacking power and defending power based on troop counts, troop stats, and the defender's home defense bonus.
+- Defending lands get up to a **10% defense bonus** based on how upgraded their production buildings are.
+- On defense, **Phalanx absorbs casualties before Swordsmen** while any defending Phalanx remains.
 - Ties go to the defender.
-- Both sides take casualties. The stronger side loses fewer troops, the weaker side loses more, and very one-sided fights can still wipe the weaker army.
+- Both sides take casualties. The stronger side loses fewer troops, the weaker side loses more, and full wipes require a much larger mismatch than before.
 
 **What gets stolen**
 - Barracks does **not** steal already claimed Warehouse balances.
@@ -378,7 +382,7 @@ Easter egg that is activated by finding the secret pattern/key in game.
 | **No Smart Wallet** | Visit wallet.coinbase.com to create a new account |
 | **No gas-free transactions** | Use Coinbase Smart Wallet for bundled, sponsored gas |
 | **Can't transfer assets** | Go to Profile button (header) → Transfer Assets |
-| **No raid targets** | Open Barracks → Raid. Targets need a built Barracks, unclaimed productions, and no defense cooldown |
+| **Cannot attack right now** | Open Barracks → Raid. Common reasons are attack cooldown, defender cooldown, no built Barracks on one side, same owner, or no raidable unclaimed production |
 | **Raid shows low loot** | Loot only comes from unclaimed productions and is capped by surviving troop carry values |
 
 Most common question asked by new comers:
@@ -495,7 +499,7 @@ export function generateConversationTitle(firstMessage: string): string {
   if (cleaned.includes('mint') && cleaned.includes('land')) return 'Minting Land';
   if (cleaned.includes('plant') && (cleaned.includes('care') || cleaned.includes('feed'))) return 'Plant Care';
   if (cleaned.includes('swap') || cleaned.includes('token')) return 'Token Swapping';
-  if (cleaned.includes('barracks') || cleaned.includes('swordsman')) return 'Combat & Attacks';
+  if (cleaned.includes('barracks') || cleaned.includes('swordsman') || cleaned.includes('phalanx')) return 'Combat & Attacks';
   if (cleaned.includes('land') || cleaned.includes('building')) return 'Land Management';
   if (cleaned.includes('item') || cleaned.includes('shop')) return 'Items & Shop';
   if (cleaned.includes('attack') || cleaned.includes('raid')) return 'Combat & Attacks';
