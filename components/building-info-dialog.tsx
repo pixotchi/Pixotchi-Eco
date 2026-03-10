@@ -356,19 +356,11 @@ function BarracksInfoContent({ open }: { open: boolean }) {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
-            <span>Both sides take losses in battle. The stronger force loses fewer troops, the weaker force loses more, and very one-sided fights can still wipe the weaker army. Ties go to the defender.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-0.5">•</span>
             <span>Defending at home grants up to a 10% defense bonus based on how upgraded your production buildings are. Maxed production reaches the full bonus.</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
-            <span>When defending, Phalanx absorbs casualties before Swordsmen. A defensive frontline must be wiped before offensive troops start dying.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-0.5">•</span>
-            <span>Lands without a Barracks, lands on defense cooldown, and lands with no unclaimed productions cannot be attacked.</span>
+            <span>Lands without a Barracks, lands on defense cooldown, and lands with no productions cannot be attacked.</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
