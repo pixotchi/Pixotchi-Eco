@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
-import { CLIENT_ENV } from '@/lib/env-config';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
@@ -18,11 +17,11 @@ import FarmerHousePanel from './building-details/FarmerHousePanel';
 import MarketplacePanel from './building-details/MarketplacePanel';
 import StakeHousePanel from './building-details/StakeHousePanel';
 import CasinoPanel from './building-details/CasinoPanel';
-import BarracksPanel from './building-details/BarracksPanel';
+import BarracksPanelV2 from './building-details/BarracksPanelV2';
 
 // Casino feature flag - hide casino when disabled
 const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
-const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
+const BARRACKS_ENABLED = process.env.NEXT_PUBLIC_BARRACKS_ENABLED === 'true';
 
 interface BuildingDetailsPanelProps {
   selectedBuilding: BuildingData | null;
@@ -36,6 +35,7 @@ interface BuildingDetailsPanelProps {
   onSeedApprovalSuccess?: () => void;
   warehousePoints?: bigint;
   warehouseLifetime?: bigint;
+  villageBuildings?: BuildingData[];
 }
 
 function BuildingDetailsPanel({
@@ -49,7 +49,8 @@ function BuildingDetailsPanel({
   seedAllowance = BigInt(0),
   onSeedApprovalSuccess,
   warehousePoints,
-  warehouseLifetime
+  warehouseLifetime,
+  villageBuildings = [],
 }: BuildingDetailsPanelProps) {
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [casinoBuiltState, setCasinoBuiltState] = useState<boolean | null>(null);
@@ -149,10 +150,11 @@ function BuildingDetailsPanel({
         case 8: // Barracks
           if (!BARRACKS_ENABLED) return null;
           return (
-            <BarracksPanel
+            <BarracksPanelV2
               landId={landId}
               currentBlock={currentBlock}
               onUpdate={onUpgradeSuccess}
+              villageBuildings={villageBuildings}
             />
           );
         default:
