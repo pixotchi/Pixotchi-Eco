@@ -1210,37 +1210,23 @@ export default function BarracksPanelV2({
               {previewError ? (
                 <div className="text-sm text-destructive">{previewError}</div>
               ) : preview ? (
-                <>
-                  <div className="text-sm text-muted-foreground">{getPreviewMessage(preview)}</div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="space-y-3 mt-1">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-muted-foreground">Attack / Defense</div>
-                      <div className="font-semibold">
-                        {preview.attackerPower.toString()} / {preview.defenderPower.toString()}
+                      <div className="text-sm font-semibold text-foreground">
+                        {preview.statusCode === RAID_STATUS_OK ? "Projected Outcome" : "Raid Unavailable"}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {getPreviewMessage(preview)}
                       </div>
                     </div>
-                    <div>
-                      <div className="text-muted-foreground">Estimated PTS</div>
-                      <div className="font-semibold text-primary">
-                        {formatBarracksPoints(preview.estimatedPointsLoot)}
+                    {preview.statusCode === RAID_STATUS_OK && (
+                      <div className={`text-xs font-semibold ${preview.attackerWon ? "text-green-600" : "text-red-600"}`}>
+                        {preview.attackerWon ? "Won" : "Lost"}
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Estimated TOD</div>
-                      <div className="font-semibold text-primary">
-                        {formatBarracksLifetime(preview.estimatedLifetimeLoot)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Requested</div>
-                      <div className="font-semibold">
-                        {preview.swordsmenRequested.toString()} / {preview.phalanxRequested.toString()}
-                      </div>
-                    </div>
-                    <div className="col-span-2 text-xs text-muted-foreground">
-                      Defender power includes up to a 10% home bonus from production building levels.
-                    </div>
+                    )}
                   </div>
+
                   <div className="space-y-3">
                     <BattleReportTable
                       label="Attacker"
@@ -1259,7 +1245,22 @@ export default function BarracksPanelV2({
                       phalanxLost={preview.defenderPhalanxLost}
                     />
                   </div>
-                </>
+
+                  {preview.statusCode === RAID_STATUS_OK && (
+                    <>
+                      <div className="rounded-md bg-primary/10 px-3 py-2 text-sm">
+                        <span className="font-semibold">Estimated Loot:</span>{" "}
+                        <span className="text-primary">{formatBarracksPoints(preview.estimatedPointsLoot)} PTS</span>
+                        <span className="text-muted-foreground"> / </span>
+                        <span className="text-primary">{formatBarracksLifetime(preview.estimatedLifetimeLoot)} TOD</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span>Power: {preview.attackerPower.toString()} vs {preview.defenderPower.toString()}</span>
+                        <span>(Includes 10% home base bonus)</span>
+                      </div>
+                    </>
+                  )}
+                </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
                   Choose an eligible target land and enter troop counts to preview the raid.
