@@ -293,26 +293,48 @@ function TroopCount({
   );
 }
 
-function TroopLossSummary({
+function BattleReportTable({
   label,
-  swordsmen,
-  phalanx,
+  landId,
+  swordsmenSent,
+  phalanxSent,
+  swordsmenLost,
+  phalanxLost,
 }: {
   label: string;
-  swordsmen: bigint;
-  phalanx: bigint;
+  landId?: bigint;
+  swordsmenSent: bigint;
+  phalanxSent: bigint;
+  swordsmenLost: bigint;
+  phalanxLost: bigint;
 }) {
   return (
-    <div className="rounded-md border border-border/70 bg-muted/40 p-3">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-3 grid grid-cols-[1fr,auto] gap-x-3 gap-y-2 text-sm">
-        <div className="text-muted-foreground">Swordsman</div>
-        <div className="font-semibold">
-          <TroopCount type="swordsman" amount={swordsmen} />
+    <div className="rounded-md border border-border/70 overflow-hidden bg-background">
+      <div className="bg-muted/60 px-3 py-1.5 border-b border-border/70 text-xs font-semibold text-foreground tracking-wide uppercase flex justify-between items-center">
+        <span>{label}</span>
+        {landId && <span className="text-muted-foreground">Land #{landId.toString()}</span>}
+      </div>
+      <div className="w-full">
+        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 border-b border-border/40 bg-muted/10 items-center">
+          <div></div>
+          <div className="flex justify-center">
+            <Image src="/icons/swordsman.svg" alt="Swordsman" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
+          </div>
+          <div className="flex justify-center">
+            <Image src="/icons/phalanx.svg" alt="Phalanx" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
+          </div>
         </div>
-        <div className="text-muted-foreground">Phalanx</div>
-        <div className="font-semibold">
-          <TroopCount type="phalanx" amount={phalanx} />
+        
+        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 text-sm items-center hover:bg-muted/5 transition-colors">
+          <div className="text-muted-foreground text-xs">Troops</div>
+          <div className="text-center font-medium">{swordsmenSent.toString()}</div>
+          <div className="text-center font-medium">{phalanxSent.toString()}</div>
+        </div>
+        
+        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 text-sm border-t border-border/40 items-center hover:bg-muted/5 transition-colors">
+          <div className="text-muted-foreground text-xs">Casualties</div>
+          <div className={`text-center font-medium ${swordsmenLost > ZERO_BIGINT ? "text-destructive" : ""}`}>{swordsmenLost.toString()}</div>
+          <div className={`text-center font-medium ${phalanxLost > ZERO_BIGINT ? "text-destructive" : ""}`}>{phalanxLost.toString()}</div>
         </div>
       </div>
     </div>
@@ -361,26 +383,22 @@ function ReportCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <TroopLossSummary
-          label="Attacker Sent"
-          swordsmen={report.swordsmenSent}
-          phalanx={report.phalanxSent}
+      <div className="space-y-3">
+        <BattleReportTable
+          label="Attacker"
+          landId={report.attackerLandId}
+          swordsmenSent={report.swordsmenSent}
+          phalanxSent={report.phalanxSent}
+          swordsmenLost={report.attackerSwordsmenLost}
+          phalanxLost={report.attackerPhalanxLost}
         />
-        <TroopLossSummary
-          label="Attacker Lost"
-          swordsmen={report.attackerSwordsmenLost}
-          phalanx={report.attackerPhalanxLost}
-        />
-        <TroopLossSummary
-          label="Defender Present"
-          swordsmen={report.defenderSwordsmenBefore}
-          phalanx={report.defenderPhalanxBefore}
-        />
-        <TroopLossSummary
-          label="Defender Lost"
-          swordsmen={report.defenderSwordsmenLost}
-          phalanx={report.defenderPhalanxLost}
+        <BattleReportTable
+          label="Defender"
+          landId={report.defenderLandId}
+          swordsmenSent={report.defenderSwordsmenBefore}
+          phalanxSent={report.defenderPhalanxBefore}
+          swordsmenLost={report.defenderSwordsmenLost}
+          phalanxLost={report.defenderPhalanxLost}
         />
       </div>
 
@@ -1223,16 +1241,22 @@ export default function BarracksPanelV2({
                       Defender power includes up to a 10% home bonus from production building levels.
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <TroopLossSummary
-                      label="Attacker Losses"
-                      swordsmen={preview.attackerSwordsmenLost}
-                      phalanx={preview.attackerPhalanxLost}
+                  <div className="space-y-3">
+                    <BattleReportTable
+                      label="Attacker"
+                      landId={landId}
+                      swordsmenSent={preview.swordsmenRequested}
+                      phalanxSent={preview.phalanxRequested}
+                      swordsmenLost={preview.attackerSwordsmenLost}
+                      phalanxLost={preview.attackerPhalanxLost}
                     />
-                    <TroopLossSummary
-                      label="Defender Losses"
-                      swordsmen={preview.defenderSwordsmenLost}
-                      phalanx={preview.defenderPhalanxLost}
+                    <BattleReportTable
+                      label="Defender"
+                      landId={selectedTargetLandId || undefined}
+                      swordsmenSent={preview.defenderSwordsmenBefore}
+                      phalanxSent={preview.defenderPhalanxBefore}
+                      swordsmenLost={preview.defenderSwordsmenLost}
+                      phalanxLost={preview.defenderPhalanxLost}
                     />
                   </div>
                 </>
