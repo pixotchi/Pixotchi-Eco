@@ -175,6 +175,12 @@ function formatDurationFromBigInt(seconds: bigint): string {
   return result.trim() || "0s";
 }
 
+function formatQueueHint(troopName: string, readyAt: bigint): string {
+  return secondsUntil(readyAt) > 0
+    ? `${troopName} ready in ${formatRemaining(readyAt)}`
+    : `${troopName} ready`;
+}
+
 function formatPercentFromBps(bps: number): string {
   const percent = bps / 100;
   if (Number.isInteger(percent)) {
@@ -984,7 +990,7 @@ export default function BarracksPanelV2({
             }
             hint={
               trainingQueueActive
-                ? `${queueTroopOption.name} ready in ${formatRemaining(landState.trainingEndsAt)}`
+                ? formatQueueHint(queueTroopOption.name, landState.trainingEndsAt)
                 : "One training queue shared across both troop types"
             }
           />
