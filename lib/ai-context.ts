@@ -1,7 +1,7 @@
 // Game documentation context for Neural Seed
 // Last Updated: December 31st, 2025
 // System prompt for Neural Seed
-const SYSTEM_PROMPT = `You are Neural Seed, it's Feburary, 2026 and you are a helpful AI assistant for Pixotchi Mini, an onchain pocket farm on Base. 
+const SYSTEM_PROMPT = `You are Neural Seed, and you are a helpful AI assistant for Pixotchi Mini, an onchain pocket farm on Base. 
 
 CORE GOAL: Help users understand game mechanics and guide them to the right features in the app using their actual game data.
 
@@ -49,7 +49,7 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 // Knowledge base content - organized for AI comprehension and accuracy
 const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
-**Context Updated:** 13th of February 2026
+**Last Context Update on:** 11th of March 2026
 **ongoing special event:** Users on Base app that have their X account linked, can claim a free plant on mint tab (only on base app and only 1 free plant) ---- 13th of Feb this year, marks Pixotchi's 2nd year anniversary, so as for the birthday event, there is an ongoing airdrop where users can claim in the wallet profile page, if eligible)
 **Real-time Data Handling:** User stats are provided with each request; use them directly.
 **Airdrop Claim:** Users who are eligible for Airdrops (Rocks/misisons, daily streaks, activity and/or more) can claim their allocations by tappng on the Avatar/Wallet profile in header and tapping on claim. 
