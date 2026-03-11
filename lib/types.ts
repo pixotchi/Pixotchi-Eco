@@ -148,6 +148,36 @@ export type BarracksConfig = {
   maxTroopsPerLand: bigint;
 };
 
+export type BarracksTroopId = 'swordsman' | 'phalanx';
+
+export type BarracksTroopConfigV2 = {
+  trainingToken: string;
+  trainingCost: bigint;
+  trainingReceiver: string;
+  trainingTimePerTroop: bigint;
+  troopAttackStrength: bigint;
+  troopDefenseStrength: bigint;
+  troopCarryPoints: bigint;
+  troopCarryLifetime: bigint;
+  maxTroopsPerLand: bigint;
+};
+
+export type BarracksConfigV2 = {
+  initialized: boolean;
+  enabled: boolean;
+  buildToken: string;
+  buildCost: bigint;
+  buildReceiver: string;
+  attackCooldown: bigint;
+  defenseCooldown: bigint;
+  lootPercentageBps: number;
+  casualtyScaleBps: number;
+  successfulRaidXP: bigint;
+  successfulDefenseXP: bigint;
+  swordsman: BarracksTroopConfigV2;
+  phalanx: BarracksTroopConfigV2;
+};
+
 export type BarracksLandState = {
   isBuilt: boolean;
   stationedTroops: bigint;
@@ -161,6 +191,25 @@ export type BarracksLandState = {
   attackCooldownEndsAt: bigint;
   defenseCooldownEndsAt: bigint;
   totalTroops: bigint;
+};
+
+export type BarracksLandStateV2 = {
+  isBuilt: boolean;
+  stationedSwordsmanTroops: bigint;
+  stationedPhalanxTroops: bigint;
+  trainingQueueTroopType: number;
+  trainingQueueAmount: bigint;
+  readyToClaimSwordsmanTroops: bigint;
+  readyToClaimPhalanxTroops: bigint;
+  trainingStartedAt: bigint;
+  trainingEndsAt: bigint;
+  nextTroopReadyAt: bigint;
+  lastAttackAt: bigint;
+  lastDefendedAt: bigint;
+  attackCooldownEndsAt: bigint;
+  defenseCooldownEndsAt: bigint;
+  totalSwordsmanTroops: bigint;
+  totalPhalanxTroops: bigint;
 };
 
 export type BarracksRaidReport = {
@@ -184,6 +233,34 @@ export type BarracksRaidReport = {
   lifetimeStolen: bigint;
 };
 
+export type BarracksRaidReportV2 = {
+  raidId: bigint;
+  timestamp: bigint;
+  attackerLandId: bigint;
+  defenderLandId: bigint;
+  attackerWon: boolean;
+  swordsmenSent: bigint;
+  phalanxSent: bigint;
+  attackerSwordsmenBefore: bigint;
+  attackerPhalanxBefore: bigint;
+  defenderSwordsmenBefore: bigint;
+  defenderPhalanxBefore: bigint;
+  attackerSwordsmenLost: bigint;
+  attackerPhalanxLost: bigint;
+  defenderSwordsmenLost: bigint;
+  defenderPhalanxLost: bigint;
+  survivingAttackerSwordsmen: bigint;
+  survivingAttackerPhalanx: bigint;
+  survivingDefenderSwordsmen: bigint;
+  survivingDefenderPhalanx: bigint;
+  attackerPower: bigint;
+  defenderPower: bigint;
+  pendingPointsSettled: bigint;
+  pendingLifetimeSettled: bigint;
+  pointsStolen: bigint;
+  lifetimeStolen: bigint;
+};
+
 export type BarracksRaidPreview = {
   statusCode: number;
   attackerWon: boolean;
@@ -194,6 +271,35 @@ export type BarracksRaidPreview = {
   defenderTroopsLost: bigint;
   survivingAttackers: bigint;
   survivingDefenders: bigint;
+  attackerPower: bigint;
+  defenderPower: bigint;
+  pendingPoints: bigint;
+  pendingLifetime: bigint;
+  carryPointsCap: bigint;
+  carryLifetimeCap: bigint;
+  estimatedPointsLoot: bigint;
+  estimatedLifetimeLoot: bigint;
+  attackerCooldownEndsAt: bigint;
+  defenderCooldownEndsAt: bigint;
+};
+
+export type BarracksRaidPreviewV2 = {
+  statusCode: number;
+  attackerWon: boolean;
+  swordsmenRequested: bigint;
+  phalanxRequested: bigint;
+  attackerSwordsmenBefore: bigint;
+  attackerPhalanxBefore: bigint;
+  defenderSwordsmenBefore: bigint;
+  defenderPhalanxBefore: bigint;
+  attackerSwordsmenLost: bigint;
+  attackerPhalanxLost: bigint;
+  defenderSwordsmenLost: bigint;
+  defenderPhalanxLost: bigint;
+  survivingAttackerSwordsmen: bigint;
+  survivingAttackerPhalanx: bigint;
+  survivingDefenderSwordsmen: bigint;
+  survivingDefenderPhalanx: bigint;
   attackerPower: bigint;
   defenderPower: bigint;
   pendingPoints: bigint;

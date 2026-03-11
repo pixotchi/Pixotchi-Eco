@@ -14,7 +14,7 @@ import {
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Land, BuildingData, BuildingType } from "@/lib/types";
 import {
-  barracksGetLandState,
+  barracksGetLandStateV2,
   casinoIsBuilt,
   checkLeafTokenApproval,
   checkLandMintApproval,
@@ -203,7 +203,7 @@ export default function LandsView() {
       const [villageData, townData, barracksState, casinoBuilt] = await Promise.all([
         getVillageBuildingsByLandId(landId),
         getTownBuildingsByLandId(landId),
-        BARRACKS_ENABLED ? barracksGetLandState(landId) : Promise.resolve(null),
+        BARRACKS_ENABLED ? barracksGetLandStateV2(landId) : Promise.resolve(null),
         CASINO_ENABLED ? casinoIsBuilt(landId) : Promise.resolve(false),
       ]);
 
@@ -691,6 +691,7 @@ export default function LandsView() {
                     onSeedApprovalSuccess={fetchApprovalStatus}
                     warehousePoints={selectedLand.accumulatedPlantPoints}
                     warehouseLifetime={selectedLand.accumulatedPlantLifetime}
+                    villageBuildings={villageBuildings}
                   />
                 )}
               </div>

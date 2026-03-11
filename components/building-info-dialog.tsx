@@ -3,10 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { BarracksConfig, BuildingType } from '@/lib/types';
+import { BarracksConfigV2, BarracksTroopConfigV2, BuildingType } from '@/lib/types';
 import { formatDuration, formatTokenAmountPrecise } from '@/lib/utils';
 import { ToggleGroup } from '@/components/ui/toggle-group';
-import { barracksGetConfig } from '@/lib/contracts';
+import { barracksGetConfigV2 } from '@/lib/contracts';
 
 interface BuildingInfoDialogProps {
   open: boolean;
@@ -206,8 +206,56 @@ function InfoStatTile({
   );
 }
 
+function BarracksTroopTile({
+  title,
+  role,
+  icon,
+  troop,
+}: {
+  title: string;
+  role: string;
+  icon: string;
+  troop: BarracksTroopConfigV2;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-muted/40 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="inline-flex items-center gap-2">
+          <Image src={icon} alt={title} width={18} height={18} className="h-4.5 w-4.5 object-contain" />
+          <div>
+            <div className="text-sm font-semibold text-foreground">{title}</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{role}</div>
+          </div>
+        </div>
+        <div className="text-[11px] text-muted-foreground">
+          {formatDuration(Number(troop.trainingTimePerTroop))} train
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <InfoStatTile
+          label="Strenght"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              <span>{troop.troopAttackStrength.toString()}</span>
+              <Image src="/icons/attackpwr.svg" alt="Attack power" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
+              <span>/</span>
+              <span>{troop.troopDefenseStrength.toString()}</span>
+              <Image src="/icons/defpwr.svg" alt="Defense power" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
+            </span>
+          }
+        />
+        <InfoStatTile
+          label="Can Carry PTS/TOD"
+          value={`${formatBarracksPoints(troop.troopCarryPoints)}/${formatDuration(Number(troop.troopCarryLifetime))}`}
+        />
+      </div>
+    </div>
+  );
+}
+
 function BarracksInfoContent({ open }: { open: boolean }) {
-  const [config, setConfig] = useState<BarracksConfig | null>(null);
+  const [configV2, setConfigV2] = useState<BarracksConfigV2 | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -221,21 +269,21 @@ function BarracksInfoContent({ open }: { open: boolean }) {
         setLoading(true);
         setError(null);
 
-        const nextConfig = await barracksGetConfig();
+        const nextConfigV2 = await barracksGetConfigV2();
         if (cancelled) return;
 
-        if (!nextConfig) {
+        if (!nextConfigV2) {
           setError('Barracks rules are unavailable right now.');
-          setConfig(null);
+          setConfigV2(null);
           return;
         }
 
-        setConfig(nextConfig);
+        setConfigV2(nextConfigV2);
       } catch (err) {
         console.error('Failed to load barracks config for info dialog:', err);
         if (!cancelled) {
           setError('Barracks rules are unavailable right now.');
-          setConfig(null);
+          setConfigV2(null);
         }
       } finally {
         if (!cancelled) {
@@ -251,7 +299,7 @@ function BarracksInfoContent({ open }: { open: boolean }) {
     };
   }, [open]);
 
-  if (loading && !config) {
+  if (loading && !configV2) {
     return (
       <InfoSection title="Command Brief">
         <p className="text-sm text-muted-foreground">Loading current Barracks rules...</p>
@@ -259,7 +307,7 @@ function BarracksInfoContent({ open }: { open: boolean }) {
     );
   }
 
-  if (!config) {
+  if (!configV2) {
     return (
       <InfoSection title="Command Brief">
         <p className="text-sm text-muted-foreground">
@@ -269,42 +317,34 @@ function BarracksInfoContent({ open }: { open: boolean }) {
     );
   }
 
-  const attackCooldown = formatDuration(Number(config.attackCooldown));
-  const defenseCooldown = formatDuration(Number(config.defenseCooldown));
-  const lootShare = formatPercentFromBps(config.lootPercentageBps);
-  const troopCarryPoints = formatBarracksPoints(config.troopCarryPoints);
-  const troopCarryLifetime = formatDuration(Number(config.troopCarryLifetime));
-  const raidXp = formatBarracksXp(config.successfulRaidXP);
-  const defenseXp = formatBarracksXp(config.successfulDefenseXP);
+  const effectiveAttackCooldown = formatDuration(Number(configV2.attackCooldown));
+  const effectiveDefenseCooldown = formatDuration(Number(configV2.defenseCooldown));
+  const effectiveLootShare = formatPercentFromBps(configV2.lootPercentageBps);
+  const raidXp = formatBarracksXp(configV2.successfulRaidXP);
+  const defenseXp = formatBarracksXp(configV2.successfulDefenseXP);
 
   return (
     <>
       <InfoSection title="Battle Values">
-        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Troop Type: <span className="text-foreground">Swordsman</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <InfoStatTile
-            label="Strenght"
-            value={
-              <span className="inline-flex items-center gap-1.5">
-                <span>{config.troopAttackStrength.toString()}</span>
-                <Image src="/icons/attackpwr.svg" alt="Attack power" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
-                <span>/</span>
-                <span>{config.troopDefenseStrength.toString()}</span>
-                <Image src="/icons/defpwr.svg" alt="Defense power" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
-              </span>
-            }
-          />
-          <InfoStatTile
-            label="Can Carry PTS/TOD"
-            value={`${troopCarryPoints}/${troopCarryLifetime}`}
-          />
-          <InfoStatTile
-            label="Raid/Defense XP"
-            value={`${raidXp}/${defenseXp}`}
-          />
-          <InfoStatTile label="Loot share" value={lootShare} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <InfoStatTile label="Raid/Defense XP" value={`${raidXp}/${defenseXp}`} />
+            <InfoStatTile label="Loot share" value={effectiveLootShare} />
+          </div>
+          <div className="space-y-2">
+            <BarracksTroopTile
+              title="Swordsman"
+              role="Offense"
+              icon="/icons/swordsman.svg"
+              troop={configV2.swordsman}
+            />
+            <BarracksTroopTile
+              title="Phalanx"
+              role="Defense"
+              icon="/icons/phalanx.svg"
+              troop={configV2.phalanx}
+            />
+          </div>
         </div>
       </InfoSection>
 
@@ -312,19 +352,19 @@ function BarracksInfoContent({ open }: { open: boolean }) {
         <ul className="space-y-1.5 text-sm text-muted-foreground">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
-            <span>When a raid wins, the defender&apos;s unclaimed productions claim to Warehouse first. The attacker steals up to {lootShare}, capped by surviving troop carry ability. Stolen PTS and TOD are added to the attacker&apos;s Warehouse.</span>
+            <span>When a raid wins, the defender&apos;s unclaimed productions claim to Warehouse first. The attacker steals up to {effectiveLootShare}, capped by surviving troop carry ability. Stolen PTS and TOD are added to the attacker&apos;s Warehouse.</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
-            <span>Both sides take losses in battle. The stronger force loses fewer troops, the weaker force loses more, and very one-sided fights can still wipe the weaker army. Ties go to the defender.</span>
+            <span>Defending at home grants up to a 10% defense bonus based on how upgraded your production buildings are. Maxed production reaches the full bonus.</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
-            <span>Lands without a Barracks, lands on defense cooldown, and lands with no unclaimed productions cannot be attacked.</span>
+            <span>Lands without a Barracks, lands on defense cooldown, and lands with no productions cannot be attacked.</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
-            <span>After a raid, the attacker needs to wait {attackCooldown} before the next strike, and the defender gets {defenseCooldown} of protection.</span>
+            <span>After a raid, the attacker needs to wait {effectiveAttackCooldown} before the next strike, and the defender gets {effectiveDefenseCooldown} of protection.</span>
           </li>
         </ul>
       </InfoSection>
