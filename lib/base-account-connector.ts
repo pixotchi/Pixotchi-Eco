@@ -13,6 +13,7 @@ import {
   createBasePublicChatSession,
   requestBasePublicChatNonce,
 } from "@/lib/chat-auth-client";
+import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 type CreateProviderOptions = Parameters<typeof createBaseAccountSDK>[0];
 
@@ -47,6 +48,7 @@ export function baseAccountConnector(
     let accountsChanged: ((accounts: string[]) => void) | undefined;
     let chainChanged: ((chainId: string | number) => void) | undefined;
     let disconnect: ((error?: unknown) => void) | undefined;
+    let lastKnownAccounts: `0x${string}`[] = [];
 
     const metadata: CreateProviderOptions = {
       appName: parameters.appName ?? "Pixotchi Mini",
@@ -71,7 +73,12 @@ export function baseAccountConnector(
         method,
       })) as string[];
 
-      return accounts.map((account) => getAddress(account));
+      const normalized = accounts.map((account) => getAddress(account));
+      if (normalized.length > 0) {
+        lastKnownAccounts = normalized;
+      }
+
+      return normalized;
     };
 
     const requestWalletConnectAuth = async (requestedChainId?: number) => {
@@ -110,12 +117,22 @@ export function baseAccountConnector(
         ],
       })) as WalletConnectResult;
 
-      const accounts = (response.accounts ?? []).map((account) => getAddress(account.address));
+      const walletConnectAccounts = (response.accounts ?? []).map((account) => getAddress(account.address));
       const primaryAccount = response.accounts?.[0];
       const siweCapability = primaryAccount?.capabilities?.signInWithEthereum;
 
       if (!primaryAccount?.address || !siweCapability?.message || !siweCapability.signature) {
         throw new Error("Base authentication was not completed.");
+      }
+
+      try {
+        await sessionStorageManager.setPendingBaseChatAuth({
+          address: getAddress(primaryAccount.address),
+          message: siweCapability.message,
+          signature: siweCapability.signature,
+        });
+      } catch (error) {
+        console.warn("[base-account] Failed to persist Base chat auth payload for retry:", error);
       }
 
       try {
@@ -128,7 +145,13 @@ export function baseAccountConnector(
         console.warn("[base-account] Base chat session bootstrap failed:", error);
       }
 
-      return accounts;
+      const providerAccounts = await requestAccounts("eth_accounts").catch(() => []);
+      const nextAccounts = providerAccounts.length > 0 ? providerAccounts : walletConnectAccounts;
+      if (nextAccounts.length > 0) {
+        lastKnownAccounts = nextAccounts;
+      }
+
+      return nextAccounts;
     };
 
     return {
@@ -182,6 +205,10 @@ export function baseAccountConnector(
 
       async disconnect() {
         const baseProvider = await getOrCreateProvider();
+        lastKnownAccounts = [];
+        await sessionStorageManager.clearPendingBaseChatAuth().catch((error) => {
+          console.warn("[base-account] Failed to clear pending Base chat auth on disconnect:", error);
+        });
         if (accountsChanged) {
           baseProvider.removeListener("accountsChanged", accountsChanged);
           accountsChanged = undefined;
@@ -202,7 +229,8 @@ export function baseAccountConnector(
       },
 
       async getAccounts() {
-        return requestAccounts("eth_accounts");
+        const accounts = await requestAccounts("eth_accounts");
+        return accounts.length > 0 ? accounts : lastKnownAccounts;
       },
 
       async getChainId() {
@@ -280,14 +308,27 @@ export function baseAccountConnector(
 
       onAccountsChanged(accounts: string[]) {
         if (accounts.length === 0) {
+          lastKnownAccounts = [];
           this.onDisconnect();
           return;
         }
-        void clearPublicChatSession().catch((error) => {
-          console.warn("[base-account] Failed to clear public chat session after account change:", error);
-        });
+        const normalizedAccounts = accounts.map((account) => getAddress(account));
+        const accountChanged =
+          normalizedAccounts.length !== lastKnownAccounts.length ||
+          normalizedAccounts.some((account, index) => account !== lastKnownAccounts[index]);
+
+        lastKnownAccounts = normalizedAccounts;
+
+        if (accountChanged) {
+          void sessionStorageManager.clearPendingBaseChatAuth().catch((error) => {
+            console.warn("[base-account] Failed to clear pending Base chat auth after account change:", error);
+          });
+          void clearPublicChatSession().catch((error) => {
+            console.warn("[base-account] Failed to clear public chat session after account change:", error);
+          });
+        }
         config.emitter.emit("change", {
-          accounts: accounts.map((account) => getAddress(account)),
+          accounts: lastKnownAccounts,
         });
       },
 
@@ -297,6 +338,10 @@ export function baseAccountConnector(
       },
 
       async onDisconnect(_error?: unknown) {
+        lastKnownAccounts = [];
+        await sessionStorageManager.clearPendingBaseChatAuth().catch((error) => {
+          console.warn("[base-account] Failed to clear pending Base chat auth on disconnect:", error);
+        });
         await clearPublicChatSession().catch((error) => {
           console.warn("[base-account] Failed to clear public chat session on disconnect:", error);
         });

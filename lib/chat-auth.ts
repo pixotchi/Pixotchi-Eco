@@ -1,13 +1,14 @@
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient } from 'viem';
 import { base } from 'viem/chains';
 import { SiweMessage } from 'siwe';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
 import { PrivyClient } from '@privy-io/server-auth';
 import { getTwinAddress } from '@/lib/solana-twin';
 import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
+import { createResilientTransport } from '@/lib/rpc-transport';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 export type ChatSessionProvider = 'privy' | 'farcaster' | 'base';
@@ -71,7 +72,7 @@ return 0
 
 const basePublicClient = createPublicClient({
   chain: base,
-  transport: http(base.rpcUrls.default.http[0]),
+  transport: createResilientTransport(),
 });
 
 export class ChatAuthError extends Error {
@@ -444,11 +445,6 @@ export async function verifyBaseChatIdentity(
     throw new ChatAuthError('SIWE nonce is missing.', 400);
   }
 
-  const nonceConsumed = await consumeBaseAuthNonce(siweMessage.nonce);
-  if (!nonceConsumed) {
-    throw new ChatAuthError('Invalid or reused Base authentication nonce.', 400);
-  }
-
   const isValid = await basePublicClient.verifyMessage({
     address: payload.address as `0x${string}`,
     message: payload.message,
@@ -457,6 +453,11 @@ export async function verifyBaseChatIdentity(
 
   if (!isValid) {
     throw new ChatAuthError('Invalid Base authentication signature.', 401);
+  }
+
+  const nonceConsumed = await consumeBaseAuthNonce(siweMessage.nonce);
+  if (!nonceConsumed) {
+    throw new ChatAuthError('Invalid or reused Base authentication nonce.', 400);
   }
 
   return {

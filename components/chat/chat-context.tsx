@@ -16,6 +16,7 @@ import { useAccount } from 'wagmi';
 import { useFrameContext } from '@/lib/frame-context';
 import {
   clearPublicChatSession,
+  createBasePublicChatSession,
   createFarcasterPublicChatSession,
   createPrivyPublicChatSession,
   getCurrentPublicChatSession,
@@ -480,6 +481,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             }
           }
 
+          if (!nextSession) {
+            const pendingBaseAuth = sessionStorageManager.getPendingBaseChatAuth();
+
+            if (pendingBaseAuth?.address?.toLowerCase() === chatAddress.toLowerCase()) {
+              try {
+                nextSession = await createBasePublicChatSession({
+                  address: pendingBaseAuth.address,
+                  message: pendingBaseAuth.message,
+                  signature: pendingBaseAuth.signature,
+                });
+                await sessionStorageManager.clearPendingBaseChatAuth();
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
+                if (
+                  errorMessage.includes('nonce') ||
+                  errorMessage.includes('signature') ||
+                  errorMessage.includes('unexpected') ||
+                  errorMessage.includes('required')
+                ) {
+                  await sessionStorageManager.clearPendingBaseChatAuth();
+                }
+                console.warn('[chat] Failed to bootstrap Base public chat session:', error);
+              }
+            }
+          }
+
           if (nextSession && nextSession.address.toLowerCase() !== chatAddress.toLowerCase()) {
             await clearPublicChatSession();
             nextSession = null;
@@ -487,6 +514,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
           if (!cancelled) {
             setPublicChatSession(nextSession);
+          }
+
+          if (nextSession?.address?.toLowerCase() === chatAddress.toLowerCase()) {
+            await sessionStorageManager.clearPendingBaseChatAuth().catch(() => {
+              // Ignore cleanup failures once session is established.
+            });
           }
         }
       } catch (bootstrapError) {

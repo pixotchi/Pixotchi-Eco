@@ -198,6 +198,7 @@ export default function App() {
   const [expectedPrivyAddress, setExpectedPrivyAddress] = useState<string | null>(null);
   const lastDismissedRef = useRef<string | null>(null);
   const privySessionResetRef = useRef(false);
+  const baseAutologinAttemptRef = useRef(false);
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const normalizedAddress = address?.toLowerCase() ?? null;
 
@@ -283,7 +284,7 @@ export default function App() {
       }
     },
   });
-  const { connect, connectors } = useConnect();
+  const { connect, connectAsync, connectors } = useConnect();
 
   const isConnected = useMemo(() => {
     if (isMiniApp) return isEvmConnected;
@@ -413,6 +414,12 @@ export default function App() {
 
   // One-shot autologin after surface switch
   useEffect(() => {
+    if (surface !== 'base' || isConnected) {
+      baseAutologinAttemptRef.current = false;
+    }
+  }, [isConnected, surface]);
+
+  useEffect(() => {
     if (isConnected) return;
 
     let mounted = true;
@@ -434,10 +441,22 @@ export default function App() {
           await sessionStorageManager.removeAutologin();
           if (mounted) login();
         } else if (auto === 'base' && surface === 'base') {
+          if (baseAutologinAttemptRef.current) {
+            return;
+          }
+
           const base = (connectors || []).find((c: any) => c.id === 'baseAccount') || (connectors || [])[0];
           if (base) {
-            await sessionStorageManager.removeAutologin();
-            if (mounted) connect({ connector: base as any });
+            baseAutologinAttemptRef.current = true;
+
+            try {
+              if (!mounted) return;
+              await connectAsync({ connector: base as any });
+              await sessionStorageManager.removeAutologin();
+            } catch (error) {
+              baseAutologinAttemptRef.current = false;
+              throw error;
+            }
           }
         }
       } catch (error) {
@@ -450,7 +469,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [isConnected, privyReady, surface, connectors, connect, login]);
+  }, [connectAsync, connectors, isConnected, login, privyReady, surface]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets

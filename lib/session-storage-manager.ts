@@ -2,12 +2,18 @@
 // Provides thread-safe access to sessionStorage with proper error handling
 
 type AuthSurface = 'privy' | 'base' | 'coinbase' | 'privysolana' | null;
+type PendingBaseChatAuth = {
+  address: string;
+  message: string;
+  signature: `0x${string}`;
+};
 
 class SessionStorageManager {
   private static instance: SessionStorageManager;
   private readonly KEY_AUTH_SURFACE = 'pixotchi:authSurface';
   private readonly KEY_AUTOLOGIN = 'pixotchi:autologin';
   private readonly KEY_PRIVY_AUTH_ADDRESS = 'pixotchi:privyAuthAddress';
+  private readonly KEY_BASE_CHAT_AUTH = 'pixotchi:baseChatAuth';
   private lock: Promise<void> = Promise.resolve();
 
   private constructor() {}
@@ -142,6 +148,67 @@ class SessionStorageManager {
     return this.lock;
   }
 
+  getPendingBaseChatAuth(): PendingBaseChatAuth | null {
+    if (typeof window === 'undefined') return null;
+
+    try {
+      const stored = sessionStorage.getItem(this.KEY_BASE_CHAT_AUTH);
+      if (!stored) return null;
+
+      const parsed = JSON.parse(stored) as Partial<PendingBaseChatAuth>;
+      if (
+        typeof parsed?.address !== 'string' ||
+        typeof parsed?.message !== 'string' ||
+        typeof parsed?.signature !== 'string'
+      ) {
+        return null;
+      }
+
+      return {
+        address: parsed.address.toLowerCase(),
+        message: parsed.message,
+        signature: parsed.signature as `0x${string}`,
+      };
+    } catch (error) {
+      console.warn('Failed to read pending Base chat auth from sessionStorage:', error);
+      return null;
+    }
+  }
+
+  async setPendingBaseChatAuth(payload: PendingBaseChatAuth): Promise<void> {
+    const normalized: PendingBaseChatAuth = {
+      ...payload,
+      address: payload.address.toLowerCase(),
+    };
+
+    this.lock = this.lock.then(async () => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        sessionStorage.setItem(this.KEY_BASE_CHAT_AUTH, JSON.stringify(normalized));
+      } catch (error) {
+        console.error('Failed to set pending Base chat auth in sessionStorage:', error);
+        throw error;
+      }
+    });
+
+    return this.lock;
+  }
+
+  async clearPendingBaseChatAuth(): Promise<void> {
+    this.lock = this.lock.then(async () => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        sessionStorage.removeItem(this.KEY_BASE_CHAT_AUTH);
+      } catch (error) {
+        console.warn('Failed to clear pending Base chat auth from sessionStorage:', error);
+      }
+    });
+
+    return this.lock;
+  }
+
   // Batch set both auth surface and autologin atomically
   async setAuthSurfaceAndAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana'): Promise<void> {
     this.lock = this.lock.then(async () => {
@@ -167,6 +234,7 @@ class SessionStorageManager {
         sessionStorage.removeItem(this.KEY_AUTH_SURFACE);
         sessionStorage.removeItem(this.KEY_AUTOLOGIN);
         sessionStorage.removeItem(this.KEY_PRIVY_AUTH_ADDRESS);
+        sessionStorage.removeItem(this.KEY_BASE_CHAT_AUTH);
       } catch (error) {
         console.warn('Failed to clear auth state from sessionStorage:', error);
       }
