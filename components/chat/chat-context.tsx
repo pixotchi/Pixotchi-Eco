@@ -17,6 +17,7 @@ interface ChatContextState {
   error: string | null;
   mode: ChatMode;
   setMode: (mode: ChatMode) => void;
+  setChatOpen: (open: boolean) => void;
   sendMessage: (message: string) => Promise<void>;
   isSending: boolean;
   conversationId: string | null;
@@ -40,6 +41,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<ChatMode>('public');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isAITyping, setIsAITyping] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [publicMessageVersion, setPublicMessageVersion] = useState(0);
 
   // Cache messages per mode so switching tabs doesn't bleed content across modes
   const messageCacheRef = useRef<{ public: AnyChatMessage[]; ai: AnyChatMessage[]; agent: AnyChatMessage[] }>({ public: [], ai: [], agent: [] });
@@ -71,7 +74,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages(targetCached);
     // Proactively reload messages for dedicated tab experience
     if (next === 'public') {
-      fetchHistory(true, 'public');
+      if (isChatOpen) {
+        fetchHistory(true, 'public');
+      }
     } else if (next === 'ai') {
       fetchHistory(true, 'ai');
     } else if (next === 'agent') {
@@ -130,7 +135,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Only track unread for public chat for now, as that's the primary use case
   useEffect(() => {
     // We check the latest messages in the 'public' cache + current messages if mode is public
-    const publicMessages = mode === 'public' ? messages : (messageCacheRef.current.public || []);
+    const publicMessages = mode === 'public' && isChatOpen
+      ? messages
+      : (messageCacheRef.current.public || []);
 
     if (publicMessages.length === 0) {
       setUnreadCount(0);
@@ -148,7 +155,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }).length;
 
     setUnreadCount(count);
-  }, [messages, mode, lastReadTimestamp, chatAddress]);
+  }, [messages, mode, lastReadTimestamp, chatAddress, isChatOpen, publicMessageVersion]);
 
   const markAsRead = useCallback(() => {
     const now = Date.now();
@@ -158,6 +165,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // note: Message loading is now handled directly in setMode() to prevent race conditions
+
+  const updatePublicMessages = useCallback((next: AnyChatMessage[]) => {
+    messageCacheRef.current.public = next;
+    setPublicMessageVersion((version) => version + 1);
+
+    if (modeRef.current === 'public' && isChatOpen) {
+      setMessages(next);
+    }
+  }, [isChatOpen]);
 
   const fetchHistory = useCallback(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
     if (showLoading) setLoading(true);
@@ -171,10 +187,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           throw new Error('Failed to fetch messages');
         }
         const data = await response.json();
-        if (modeRef.current !== requestedMode) return; // ignore stale result after tab switch
         const next = data.messages || [];
-        setMessages(next);
-        messageCacheRef.current.public = next;
+        updatePublicMessages(next);
       } else if (requestedMode === 'ai' && chatAddress) {
         // Fetch AI messages using the API endpoint like the original
         const params = new URLSearchParams({
@@ -211,15 +225,51 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [mode, conversationId, chatAddress]);
+  }, [mode, conversationId, chatAddress, updatePublicMessages]);
 
-  // Original behavior: set up polling regardless of dialog visibility
+  const fetchPublicPreview = useCallback(async () => {
+    try {
+      const response = await fetch('/api/chat/messages?limit=50');
+      if (!response.ok) {
+        throw new Error('Failed to fetch public preview');
+      }
+
+      const data = await response.json();
+      const next = data.messages || [];
+      updatePublicMessages(next);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [updatePublicMessages]);
+
   useEffect(() => {
     if (mode === 'public') {
+      if (!isChatOpen) {
+        return () => {
+          if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+          }
+        };
+      }
+
       fetchHistory(true, 'public');
-      const interval = setInterval(() => { fetchHistory(false, 'public'); }, 10000);
+      const refreshPublicChat = () => {
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          fetchHistory(false, 'public');
+        }
+      };
+
+      const interval = setInterval(refreshPublicChat, 5000);
+      const handleVisibilityChange = () => refreshPublicChat();
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+      }
+
       return () => {
         clearInterval(interval);
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+        }
         // Abort any pending fetch requests
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -238,7 +288,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const agentCache = messageCacheRef.current['agent'] || [];
       setMessages(agentCache);
     }
-  }, [mode, chatAddress, fetchHistory]);
+  }, [mode, chatAddress, fetchHistory, isChatOpen]);
+
+  useEffect(() => {
+    if (!chatAddress) {
+      return;
+    }
+
+    if (isChatOpen) {
+      return;
+    }
+
+    const refreshPreview = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        fetchPublicPreview();
+      }
+    };
+
+    refreshPreview();
+    const interval = setInterval(refreshPreview, 15000);
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', refreshPreview);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', refreshPreview);
+      }
+    };
+  }, [fetchPublicPreview, isChatOpen, chatAddress]);
 
   const sendMessage = async (messageText: string) => {
     if (!chatAddress || !messageText.trim()) return;
@@ -394,7 +474,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         } else {
           // For public chat, add the returned message
           const newMessage = data.message;
-          setMessages(prev => [...prev.filter(m => m.id !== optimisticId), newMessage]);
+          setMessages(prev => {
+            const next = [...prev.filter(m => m.id !== optimisticId), newMessage];
+            messageCacheRef.current.public = next;
+            setPublicMessageVersion((version) => version + 1);
+            return next;
+          });
         }
       }
 
@@ -421,6 +506,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     error,
     mode,
     setMode,
+    setChatOpen: setIsChatOpen,
     sendMessage,
     isSending,
     conversationId,

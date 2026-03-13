@@ -7,11 +7,15 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { PLANT_STRAINS } from '@/lib/constants';
 import { getAgentAIProvider, getAgentModelConfig } from '@/lib/ai-config';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 // Removed generic AgentKit/Vercel AI tools to avoid requiring RPC URLs in this route
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const runtime = 'nodejs';
+
+const AGENT_CHAT_IP_LIMIT_PER_MINUTE = 12;
+const AGENT_CHAT_ADDRESS_COOLDOWN_SECONDS = 15;
 
 // No AgentKit instance needed here; all onchain actions go through /api/agent/mint
 
@@ -21,6 +25,28 @@ export async function POST(req: NextRequest) {
     const { prompt, userAddress, conversationHistory, preparedSpendCalls } = body || {};
     if (!prompt || typeof prompt !== 'string') {
       return new Response(JSON.stringify({ error: 'Missing prompt' }), { status: 400 });
+    }
+
+    const rateLimitResponse = await enforceRateLimit(req, {
+      scope: 'api:agent:chat',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(req),
+          limit: AGENT_CHAT_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+        {
+          kind: 'address',
+          identifier: typeof userAddress === 'string' ? userAddress : null,
+          limit: 1,
+          windowSeconds: AGENT_CHAT_ADDRESS_COOLDOWN_SECONDS,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
     }
 
     // Use centralized strains (mintPriceSeed in SEED units)
@@ -301,5 +327,3 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: e?.message || 'Agent error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
-
-

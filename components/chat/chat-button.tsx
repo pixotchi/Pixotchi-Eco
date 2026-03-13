@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import Image from "next/image";
@@ -17,7 +17,13 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
   const isSolana = useIsSolanaWallet();
   const { solanaAddress } = useSolanaWallet();
   const [showChat, setShowChat] = useState(false);
-  const { unreadCount, markAsRead } = useChat();
+  const { unreadCount, markAsRead, setChatOpen } = useChat();
+
+  useEffect(() => {
+    return () => {
+      setChatOpen(false);
+    };
+  }, [setChatOpen]);
 
   // Only show chat button when wallet is connected
   if (!isConnected && !(isSolana && solanaAddress)) {
@@ -26,6 +32,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
 
   const handleOpenChat = () => {
     setShowChat(true);
+    setChatOpen(true);
     markAsRead();
   };
 
@@ -56,7 +63,10 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
       {showChat && (
         <ChatDialog
           open={showChat}
-          onOpenChange={setShowChat}
+          onOpenChange={(open) => {
+            setShowChat(open);
+            setChatOpen(open);
+          }}
         />
       )}
     </>
