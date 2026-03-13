@@ -30,7 +30,11 @@ import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
-import { clearPublicChatSession } from "@/lib/chat-auth-client";
+import {
+  clearPublicChatSession,
+  createBasePublicChatSession,
+  requestBasePublicChatNonce,
+} from "@/lib/chat-auth-client";
 import { clearMiniAppBypassCookies, setMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 
@@ -207,6 +211,7 @@ export default function App() {
   const { ready: privyReady, authenticated, user } = usePrivy();
   const { isOpen: isPrivyModalOpen } = useModalStatus();
   const { logout } = useLogout();
+  const { connect, connectAsync, connectors } = useConnect();
 
   // Check if user has a Solana wallet connected via Privy
   const hasSolanaWallet = useMemo(() => {
@@ -264,6 +269,57 @@ export default function App() {
     }
   }, [authenticated, disconnect, logout, persistPrivyAuthenticatedAddress]);
 
+  const completeBaseAuthentication = useCallback(async (baseConnector: any) => {
+    const nonce = await requestBasePublicChatNonce();
+    const domain = typeof window !== "undefined" ? window.location.host : undefined;
+    const uri = typeof window !== "undefined" ? window.location.origin : undefined;
+
+    const result = await connectAsync({
+      capabilities: {
+        signInWithEthereum: {
+          chainId: "0x2105",
+          nonce,
+          ...(domain ? { domain } : {}),
+          ...(uri ? { uri } : {}),
+          statement: "Sign in to Pixotchi",
+          version: "1",
+        },
+      },
+      connector: baseConnector,
+      withCapabilities: true,
+    } as any);
+
+    const primaryAccount = Array.isArray((result as any)?.accounts)
+      ? (result as any).accounts[0]
+      : null;
+    const baseAddress =
+      typeof primaryAccount === "string"
+        ? primaryAccount
+        : primaryAccount?.address;
+    const siweCapability =
+      typeof primaryAccount === "string"
+        ? null
+        : primaryAccount?.capabilities?.signInWithEthereum;
+
+    if (
+      typeof baseAddress !== "string" ||
+      typeof siweCapability?.message !== "string" ||
+      typeof siweCapability?.signature !== "string"
+    ) {
+      throw new Error("Base authentication was not completed.");
+    }
+
+    const payload = {
+      address: baseAddress.toLowerCase(),
+      message: siweCapability.message,
+      signature: siweCapability.signature as `0x${string}`,
+    };
+
+    await sessionStorageManager.setPendingBaseChatAuth(payload);
+    await createBasePublicChatSession(payload);
+    await sessionStorageManager.clearPendingBaseChatAuth();
+  }, [connectAsync]);
+
   const { login } = useLogin({
     onComplete: ({ loginAccount }) => {
       const loginAddress =
@@ -285,8 +341,6 @@ export default function App() {
       }
     },
   });
-  const { connect, connectAsync, connectors } = useConnect();
-
   const isConnected = useMemo(() => {
     if (isMiniApp) return isEvmConnected;
     if (!surfaceInitialized) return false;
@@ -461,9 +515,24 @@ export default function App() {
 
             try {
               if (!mounted) return;
-              await connectAsync({ connector: base as any });
+              await completeBaseAuthentication(base as any);
               await sessionStorageManager.removeAutologin();
             } catch (error) {
+              try {
+                disconnect();
+              } catch (disconnectError) {
+                console.warn('Failed to disconnect Base wallet after auth failure:', disconnectError);
+              }
+              await sessionStorageManager.removeAutologin().catch((storageError) => {
+                console.warn('Failed to clear Base autologin after auth failure:', storageError);
+              });
+              await sessionStorageManager.clearPendingBaseChatAuth().catch((storageError) => {
+                console.warn('Failed to clear pending Base auth after auth failure:', storageError);
+              });
+              await clearPublicChatSession().catch((chatError) => {
+                console.warn('Failed to clear Base chat session after auth failure:', chatError);
+              });
+              toast.error(error instanceof Error ? error.message : 'Base authentication failed. Please try again.');
               baseAutologinAttemptRef.current = false;
               throw error;
             }
@@ -479,7 +548,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [connectAsync, connectors, isConnected, login, privyReady, surface]);
+  }, [completeBaseAuthentication, connectors, disconnect, isConnected, login, privyReady, surface]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets

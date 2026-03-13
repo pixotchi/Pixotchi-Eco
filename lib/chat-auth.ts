@@ -98,35 +98,72 @@ function normalizeAddress(address: string): string {
   return address.toLowerCase();
 }
 
-function getExpectedBaseUrls(request: NextRequest): URL[] {
-  const candidates: URL[] = [];
-  const originHeader = request.headers.get('origin');
-  if (originHeader) {
-    try {
-      candidates.push(new URL(originHeader));
-    } catch {
-      // Ignore malformed origin headers.
-    }
+function pushUrlCandidate(candidates: URL[], candidate: string | null | undefined): void {
+  if (!candidate) {
+    return;
   }
 
   try {
-    candidates.push(new URL(request.nextUrl.origin));
+    candidates.push(new URL(candidate));
   } catch {
-    // Ignore malformed request origins and fall back to env if needed.
+    // Ignore malformed URL candidates.
+  }
+}
+
+function pushHostCandidate(
+  candidates: URL[],
+  host: string | null | undefined,
+  protocol: string | null | undefined,
+): void {
+  if (!host) {
+    return;
   }
 
-  const explicitBaseUrl = process.env.NEXT_PUBLIC_URL?.trim();
-  if (explicitBaseUrl) {
+  const trimmedHost = host.trim();
+  if (!trimmedHost) {
+    return;
+  }
+
+  const normalizedProtocol = (protocol?.trim() || 'https').replace(/:$/, '');
+  pushUrlCandidate(candidates, `${normalizedProtocol}://${trimmedHost}`);
+}
+
+function normalizeOrigin(origin: string): string {
+  return origin.toLowerCase();
+}
+
+function normalizeSiweDomain(domain: string): string {
+  const trimmed = domain.trim().toLowerCase();
+
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     try {
-      candidates.push(new URL(explicitBaseUrl));
+      return new URL(trimmed).host.toLowerCase();
     } catch {
-      // Ignore malformed configured base urls.
+      return trimmed;
     }
   }
 
+  return trimmed;
+}
+
+function getExpectedBaseUrls(request: NextRequest): URL[] {
+  const candidates: URL[] = [];
+  const originHeader = request.headers.get('origin');
+  const hostHeader = request.headers.get('host');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+
+  pushUrlCandidate(candidates, originHeader);
+  pushUrlCandidate(candidates, request.nextUrl.origin);
+  pushHostCandidate(candidates, forwardedHost, forwardedProto);
+  pushHostCandidate(candidates, hostHeader, forwardedProto);
+
+  const explicitBaseUrl = process.env.NEXT_PUBLIC_URL?.trim();
+  pushUrlCandidate(candidates, explicitBaseUrl);
+
   const deduped = new Map<string, URL>();
   candidates.forEach((candidate) => {
-    deduped.set(candidate.origin, candidate);
+    deduped.set(normalizeOrigin(candidate.origin), candidate);
   });
 
   return Array.from(deduped.values());
@@ -519,15 +556,15 @@ export async function verifyBaseChatIdentity(
   }
 
   const expectedUrls = getExpectedBaseUrls(request);
-  const expectedDomains = new Set(expectedUrls.map((url) => url.host));
-  const expectedOrigins = new Set(expectedUrls.map((url) => url.origin));
+  const expectedDomains = new Set(expectedUrls.map((url) => normalizeSiweDomain(url.host)));
+  const expectedOrigins = new Set(expectedUrls.map((url) => normalizeOrigin(url.origin)));
   const normalizedAddress = normalizeAddress(payload.address);
 
   if (normalizeAddress(siweMessage.address) !== normalizedAddress) {
     throw new ChatAuthError('SIWE address does not match the connected wallet.', 400);
   }
 
-  if (!expectedDomains.has(siweMessage.domain)) {
+  if (!expectedDomains.has(normalizeSiweDomain(siweMessage.domain))) {
     throw new ChatAuthError('Unexpected SIWE domain.', 400);
   }
 
@@ -537,7 +574,7 @@ export async function verifyBaseChatIdentity(
 
   if (siweMessage.uri) {
     try {
-      if (!expectedOrigins.has(new URL(siweMessage.uri).origin)) {
+      if (!expectedOrigins.has(normalizeOrigin(new URL(siweMessage.uri).origin))) {
         throw new ChatAuthError('Unexpected SIWE origin.', 400);
       }
     } catch (error) {
