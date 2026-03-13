@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, encodeFunctionData } from 'viem';
 import { base } from 'viem/chains';
+import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { LAND_CONTRACT_ADDRESS, getLandsByOwner, getLandBuildingsBatch } from '@/lib/contracts';
 
@@ -42,6 +43,11 @@ const KNOWN_LIMITS = {
 };
 
 export async function GET(request: NextRequest) {
+  if (!validateAdminKey(request)) {
+    const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
+    return NextResponse.json(error.body, { status: error.status });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');
   const maxBatchParam = searchParams.get('maxBatch');

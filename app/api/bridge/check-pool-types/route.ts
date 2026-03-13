@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
 
@@ -32,6 +33,9 @@ const POOL_ABI = [
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   try {
     const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
 

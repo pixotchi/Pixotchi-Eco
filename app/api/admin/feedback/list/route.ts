@@ -1,10 +1,17 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { redis, redisGetJSON } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    if (!validateAdminKey(request)) {
+      const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
+      return NextResponse.json(error.body, { status: error.status });
+    }
+
     if (!redis) {
-      return Response.json(
+      return NextResponse.json(
         { error: 'Database unavailable' },
         { status: 503 }
       );
@@ -14,7 +21,7 @@ export async function GET(request: Request) {
     const feedbackIds = (await redis.zrange('pixotchi:feedback:list', 0, -1)) as string[];
 
     if (!feedbackIds || feedbackIds.length === 0) {
-      return Response.json({
+      return NextResponse.json({
         success: true,
         feedback: [],
         total: 0,
@@ -30,14 +37,14 @@ export async function GET(request: Request) {
       }
     }
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       feedback: feedbackList,
       total: feedbackList.length,
     });
   } catch (error) {
     logger.error('Feedback list error:', error);
-    return Response.json(
+    return NextResponse.json(
       { error: 'Failed to fetch feedback' },
       { status: 500 }
     );

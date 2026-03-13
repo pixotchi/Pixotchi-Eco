@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, parseAbiItem, type Address } from 'viem';
 import { base } from 'viem/chains';
 
@@ -13,6 +14,9 @@ const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 const BRIDGE_CONTRACT = '0x3eff766C76a1be2Ce1aCF2B69c78bCae257D5188' as Address;
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   const searchParams = request.nextUrl.searchParams;
   const messageHash = searchParams.get('hash');
 
