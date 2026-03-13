@@ -757,7 +757,7 @@ export default function App() {
                   </Button>
                 )}
 
-                <ChatButton />
+                {isConnected ? <ChatButton /> : null}
 
                 {isConnected ? (
                   <Button
