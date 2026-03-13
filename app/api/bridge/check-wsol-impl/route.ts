@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
 
@@ -14,6 +15,9 @@ const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   try {
     const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
 

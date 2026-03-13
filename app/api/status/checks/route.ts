@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { runStatusChecks } from '@/lib/status-checks';
+import { getCachedStatusSnapshot } from '@/lib/status-checks';
 
 export const revalidate = 0;
 
 export async function GET() {
   try {
-    const snapshot = await runStatusChecks();
+    const snapshot = await getCachedStatusSnapshot();
     return NextResponse.json(snapshot, {
       headers: {
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
       },
     });
   } catch (error: any) {
@@ -18,4 +18,3 @@ export async function GET() {
     }, { status: 500 });
   }
 }
-

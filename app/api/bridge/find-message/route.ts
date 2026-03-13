@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { Connection, PublicKey } from '@solana/web3.js';
 
 // Solana Bridge Program on Mainnet
@@ -18,6 +19,9 @@ const OUTGOING_MESSAGE_DISCRIMINATOR = [150, 255, 197, 226, 200, 215, 31, 29];
 const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   const searchParams = request.nextUrl.searchParams;
   const txSignature = searchParams.get('tx');
 

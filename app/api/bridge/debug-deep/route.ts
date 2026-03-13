@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, formatUnits, encodeFunctionData, type Address, parseAbi } from 'viem';
 import { base } from 'viem/chains';
 
@@ -23,6 +24,9 @@ const TWIN = '0x71256e3d36435b0cc7ac41a43ee123d2aab43275' as Address;
 const PIXOTCHI = '0xeb4e16c804AE9275a655AbBc20cD0658A91F9235' as Address;
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   try {
     const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
 
@@ -223,4 +227,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

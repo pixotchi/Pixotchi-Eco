@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import { CLIENT_ENV } from '@/lib/env-config';
-import { runStatusChecks } from '@/lib/status-checks';
+import { getCachedStatusSnapshot } from '@/lib/status-checks';
 import { StatusPageClient } from '@/components/status/StatusPageClient';
 
 export const metadata: Metadata = {
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 export const revalidate = 0;
 
 export default async function StatusPage() {
-  const snapshot = await runStatusChecks();
+  const snapshot = await getCachedStatusSnapshot();
   const refreshMinutes = CLIENT_ENV.STATUS_REFRESH_MINUTES || 15;
   const showManualRefresh = CLIENT_ENV.STATUS_SHOW_REFRESH_BUTTON;
   return (
@@ -33,4 +33,3 @@ export default async function StatusPage() {
     />
   );
 }
-

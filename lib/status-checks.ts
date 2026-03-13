@@ -1,5 +1,6 @@
 import { CLIENT_ENV, listRpcHttpEndpoints } from './env-config';
-import { redis } from './redis';
+import { redis, redisGetJSON, redisSetJSON } from './redis';
+import { fetchIndexerGraphQL } from './indexer-client';
 
 type StatusLevel = 'operational' | 'degraded' | 'outage' | 'unknown';
 
@@ -23,6 +24,12 @@ const APP_HEALTH_URL = process.env.STATUS_APP_HEALTH_URL || CLIENT_ENV.APP_URL;
 const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
 const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
 const BASE_STATUS_URL = process.env.STATUS_BASE_STATUS_URL || 'https://status.base.org/api/v2/summary.json';
+const STATUS_CACHE_KEY = 'status:checks:snapshot:v1';
+const DEFAULT_STATUS_CACHE_TTL_SECONDS = Number(process.env.STATUS_SNAPSHOT_TTL_SECONDS || 300);
+
+let inFlightSnapshot: Promise<StatusSnapshot> | null = null;
+let memorySnapshot: StatusSnapshot | null = null;
+let memorySnapshotExpiresAt = 0;
 
 const normalizeUrl = (url?: string | null) => {
   if (!url) return null;
@@ -141,28 +148,19 @@ async function checkAppReachability(): Promise<StatusService> {
 }
 
 async function checkIndexer(): Promise<StatusService> {
-  const url = process.env.NEXT_PUBLIC_PONDER_API_URL || 'https://api.mini.pixotchi.tech/graphql';
-  const payload = {
-    query: `
+  const { error, ms } = await measure(async () => {
+    const query = `
       query StatusPing {
         attacks(limit: 1) { items { id } }
       }
-    `.trim(),
-  };
+    `.trim();
 
-  const { error, ms } = await measure(async () => {
-    const response = await withTimeout((signal) => fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      cache: 'no-store',
-      signal,
-    }), DEFAULT_TIMEOUT_MS);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const json = await response.json();
-    if (!json?.data?.attacks) {
+    const result = await withTimeout(
+      (signal) => fetchIndexerGraphQL<{ attacks?: { items?: Array<{ id: string }> } }>(query, undefined, { signal }),
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    if (!result?.attacks) {
       throw new Error('No data');
     }
   });
@@ -437,5 +435,48 @@ export const runStatusChecks = async (): Promise<StatusSnapshot> => {
   };
 };
 
-export type { StatusLevel };
+function getStatusCacheTtlSeconds(): number {
+  return Number.isFinite(DEFAULT_STATUS_CACHE_TTL_SECONDS) && DEFAULT_STATUS_CACHE_TTL_SECONDS > 0
+    ? DEFAULT_STATUS_CACHE_TTL_SECONDS
+    : 300;
+}
 
+function rememberSnapshot(snapshot: StatusSnapshot) {
+  memorySnapshot = snapshot;
+  memorySnapshotExpiresAt = Date.now() + (getStatusCacheTtlSeconds() * 1000);
+}
+
+export async function getCachedStatusSnapshot(forceRefresh: boolean = false): Promise<StatusSnapshot> {
+  const now = Date.now();
+
+  if (!forceRefresh && memorySnapshot && memorySnapshotExpiresAt > now) {
+    return memorySnapshot;
+  }
+
+  if (!forceRefresh) {
+    const cached = await redisGetJSON<StatusSnapshot>(STATUS_CACHE_KEY);
+    if (cached) {
+      rememberSnapshot(cached);
+      return cached;
+    }
+  }
+
+  if (inFlightSnapshot) {
+    return inFlightSnapshot;
+  }
+
+  inFlightSnapshot = (async () => {
+    const snapshot = await runStatusChecks();
+    rememberSnapshot(snapshot);
+    await redisSetJSON(STATUS_CACHE_KEY, snapshot, getStatusCacheTtlSeconds());
+    return snapshot;
+  })();
+
+  try {
+    return await inFlightSnapshot;
+  } finally {
+    inFlightSnapshot = null;
+  }
+}
+
+export type { StatusLevel };

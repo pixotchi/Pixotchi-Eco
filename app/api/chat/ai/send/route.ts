@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendAIMessage, checkAIRateLimit, updateAIRateLimit, validateAIMessage } from '@/lib/ai-service';
+import { sendAIMessage, validateAIMessage } from '@/lib/ai-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 
 // Extend timeout for AI processing
 export const maxDuration = 60; // 60 seconds
 export const dynamic = 'force-dynamic';
+
+const AI_CHAT_IP_LIMIT_PER_MINUTE = 30;
+const AI_CHAT_ADDRESS_COOLDOWN_SECONDS = 10;
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,13 +43,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check rate limit
-    const canSend = await checkAIRateLimit(address);
-    if (!canSend) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please wait before sending another message to the AI.' },
-        { status: 429 }
-      );
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:chat:ai:send',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: AI_CHAT_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+        {
+          kind: 'address',
+          identifier: address,
+          limit: 1,
+          windowSeconds: AI_CHAT_ADDRESS_COOLDOWN_SECONDS,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
     }
 
     console.log('🤖 Processing AI message...');
@@ -61,15 +78,6 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to process AI message. Please try again.' },
         { status: 500 }
       );
-    }
-
-    // Update rate limit
-    console.log('📝 Updating AI rate limit...');
-    try {
-      await updateAIRateLimit(address);
-      console.log('✅ AI rate limit updated');
-    } catch (error) {
-      console.warn('⚠️ AI rate limit update failed (non-critical):', error);
     }
 
     return NextResponse.json({

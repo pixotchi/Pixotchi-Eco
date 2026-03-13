@@ -114,10 +114,14 @@ export const SERVER_ENV = {
 
   // CORS configuration for admin endpoints only
   ALLOWED_ADMIN_ORIGINS: process.env.ALLOWED_ADMIN_ORIGINS,
+  ALLOWED_PUBLIC_API_ORIGINS: process.env.ALLOWED_PUBLIC_API_ORIGINS,
   // Neynar integration
   NEYNAR_API_KEY: process.env.NEYNAR_API_KEY,
   NEYNAR_APP_ID: process.env.NEYNAR_APP_ID,
   MEMORY_API_KEY: process.env.MEMORY_API_KEY,
+  INDEXER_UPSTREAM_URL: process.env.INDEXER_UPSTREAM_URL,
+  INDEXER_SHARED_SECRET: process.env.INDEXER_SHARED_SECRET,
+  STATUS_SNAPSHOT_TTL_SECONDS: process.env.STATUS_SNAPSHOT_TTL_SECONDS,
 } as const;
 
 // Validation function to ensure sensitive data isn't exposed
@@ -144,7 +148,8 @@ if (process.env.NODE_ENV === 'development') {
 if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
   const required: Array<{ key: string; present: boolean }> = [
     { key: 'NEXT_PUBLIC_URL', present: Boolean(process.env.NEXT_PUBLIC_URL) },
-    { key: 'NEXT_PUBLIC_PONDER_API_URL', present: Boolean(process.env.NEXT_PUBLIC_PONDER_API_URL) },
+    { key: 'INDEXER_UPSTREAM_URL', present: Boolean(process.env.INDEXER_UPSTREAM_URL || process.env.NEXT_PUBLIC_PONDER_API_URL) },
+    { key: 'INDEXER_SHARED_SECRET', present: Boolean(process.env.INDEXER_SHARED_SECRET) },
     { key: 'NEXT_PUBLIC_CDP_CLIENT_API_KEY', present: Boolean(process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY) },
     { key: 'NEXT_PUBLIC_PRIVY_APP_ID', present: Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID) },
   ];

@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, encodeFunctionData, decodeFunctionResult, formatUnits, type Address } from 'viem';
 import { base } from 'viem/chains';
 
@@ -34,6 +35,9 @@ const ERC20_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   const searchParams = request.nextUrl.searchParams;
   const twin = searchParams.get('twin') as Address;
   const strain = searchParams.get('strain') || '4';

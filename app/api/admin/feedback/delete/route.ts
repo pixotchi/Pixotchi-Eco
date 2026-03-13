@@ -1,10 +1,17 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { redis, redisDel } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    if (!validateAdminKey(request)) {
+      const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
+      return NextResponse.json(error.body, { status: error.status });
+    }
+
     if (!redis) {
-      return Response.json(
+      return NextResponse.json(
         { error: 'Database unavailable' },
         { status: 503 }
       );
@@ -24,7 +31,7 @@ export async function POST(request: Request) {
       }
 
       logger.info('All feedback deleted by admin');
-      return Response.json({
+      return NextResponse.json({
         success: true,
         message: `Deleted ${feedbackIds?.length || 0} feedback messages`,
         deletedCount: feedbackIds?.length || 0,
@@ -35,19 +42,19 @@ export async function POST(request: Request) {
       await redis.zrem('pixotchi:feedback:list', feedbackId);
 
       logger.info(`Feedback deleted: ${feedbackId}`);
-      return Response.json({
+      return NextResponse.json({
         success: true,
         message: 'Feedback deleted',
       });
     } else {
-      return Response.json(
+      return NextResponse.json(
         { error: 'Must provide feedbackId or deleteAll flag' },
         { status: 400 }
       );
     }
   } catch (error) {
     logger.error('Feedback deletion error:', error);
-    return Response.json(
+    return NextResponse.json(
       { error: 'Failed to delete feedback' },
       { status: 500 }
     );

@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
 
@@ -18,6 +19,9 @@ const PIXOTCHI_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   const searchParams = request.nextUrl.searchParams;
   const adapter = searchParams.get('adapter') as Address;
 

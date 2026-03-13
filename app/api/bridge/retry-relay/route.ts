@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, keccak256, encodeAbiParameters, toHex, padHex, encodeFunctionData, type Hex, type Address } from 'viem';
 import { base } from 'viem/chains';
 import { Connection, PublicKey } from '@solana/web3.js';
@@ -47,6 +48,9 @@ const VALIDATOR_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   const searchParams = request.nextUrl.searchParams;
   const pubkey = searchParams.get('pubkey');
   const gasLimitParam = searchParams.get('gasLimit');
@@ -319,4 +323,3 @@ function buildIncomingPayload(outgoing: OutgoingMessageData): { ty: number; data
   
   throw new Error('Unsupported message type');
 }
-

@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { createPublicClient, http, formatUnits, encodeFunctionData, decodeFunctionResult, type Address, keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { base } from 'viem/chains';
 
@@ -54,6 +55,9 @@ const ADAPTER_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
+  const accessDenied = requireBridgeDebugAccess(request);
+  if (accessDenied) return accessDenied;
+
   const searchParams = request.nextUrl.searchParams;
   const twin = (searchParams.get('twin') || '0x71256e3d36435b0cc7ac41a43ee123d2aab43275') as Address;
   const strain = searchParams.get('strain') || '4';

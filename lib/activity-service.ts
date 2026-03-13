@@ -1,8 +1,12 @@
+import 'server-only';
+
+import { unstable_cache } from 'next/cache';
 import { ActivityEvent, PlayedEvent } from './types';
 import { getPlantsByOwner, getLandsByOwner } from './contracts';
+import { fetchIndexerGraphQL } from './indexer-client';
 
-// Updated to use unified indexer endpoint
-const API_URL = process.env.NEXT_PUBLIC_PONDER_API_URL || 'https://api.mini.pixotchi.tech/graphql';
+const ALL_ACTIVITY_CACHE_SECONDS = 3;
+const MY_ACTIVITY_CACHE_SECONDS = 5;
 
 // Filter activities to last 24 hours
 function filterLast24Hours(activities: ActivityEvent[]): ActivityEvent[] {
@@ -591,27 +595,7 @@ const GET_MY_BARRACKS_ACTIVITY_QUERY = `
 `;
 
 async function fetchGraphQLData(query: string, variables?: Record<string, unknown>) {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-    next: { revalidate: 60 }
-  });
-
-  if (!response.ok) {
-    throw new Error(`GraphQL request failed: ${response.statusText}`);
-  }
-
-  const json = await response.json();
-
-  if (json.errors) {
-    console.error('GraphQL Errors:', json.errors);
-    throw new Error('Error fetching activity data');
-  }
-
-  return json.data;
+  return fetchIndexerGraphQL<any>(query, variables, { revalidate: ALL_ACTIVITY_CACHE_SECONDS });
 }
 
 async function fetchOptionalBarracksActivity(): Promise<ActivityEvent[]> {
@@ -754,4 +738,24 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
     console.error('Failed to fetch personal activity:', error);
     return [];
   }
-} 
+}
+
+export const getCachedAllActivity = unstable_cache(
+  async () => getAllActivity(),
+  ['activity:all:v1'],
+  { revalidate: ALL_ACTIVITY_CACHE_SECONDS, tags: ['activity:all'] },
+);
+
+export function getCachedMyActivity(address: string): Promise<ActivityEvent[]> {
+  const normalizedAddress = address.toLowerCase();
+  const cachedGetter = unstable_cache(
+    async () => getMyActivity(normalizedAddress),
+    ['activity:my:v1', normalizedAddress],
+    {
+      revalidate: MY_ACTIVITY_CACHE_SECONDS,
+      tags: [`activity:${normalizedAddress}`],
+    },
+  );
+
+  return cachedGetter();
+}
