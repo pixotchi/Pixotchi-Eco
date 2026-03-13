@@ -5,13 +5,19 @@ import { INVITE_CONFIG } from '@/lib/invite-utils';
 const CHAT_SESSION_COOKIE = 'pixotchi_chat_session';
 const MINIAPP_BYPASS_COOKIE = 'pixotchi_miniapp';
 const MINIAPP_BYPASS_ADDRESS_COOKIE = 'pixotchi_miniapp_address';
-const EDGE_PROTECTED_API_PATHS = new Set([
+const EDGE_SESSION_REQUIRED_API_PATHS = new Set([
   '/api/chat/messages',
   '/api/chat/send',
   '/api/chat/ai/messages',
   '/api/chat/ai/send',
   '/api/agent/chat',
   '/api/agent/mint',
+]);
+const EDGE_SAME_ORIGIN_ONLY_API_PATHS = new Set([
+  '/api/chat/auth/session',
+  '/api/chat/auth/base/nonce',
+  '/api/broadcast/active',
+  '/api/ens/resolve',
 ]);
 
 function parseOrigins(value?: string): string[] {
@@ -21,8 +27,12 @@ function parseOrigins(value?: string): string[] {
     .filter(Boolean);
 }
 
-function isEdgeProtectedApiPath(pathname: string): boolean {
-  return EDGE_PROTECTED_API_PATHS.has(pathname);
+function isEdgeSessionRequiredApiPath(pathname: string): boolean {
+  return EDGE_SESSION_REQUIRED_API_PATHS.has(pathname);
+}
+
+function isEdgeSameOriginOnlyApiPath(pathname: string): boolean {
+  return EDGE_SAME_ORIGIN_ONLY_API_PATHS.has(pathname);
 }
 
 function hasChatAuthArtifacts(request: NextRequest): boolean {
@@ -67,7 +77,7 @@ export async function proxy(request: NextRequest) {
   // Create response
   const response = NextResponse.next();
 
-  if (isEdgeProtectedApiPath(pathname)) {
+  if (isEdgeSessionRequiredApiPath(pathname) || isEdgeSameOriginOnlyApiPath(pathname)) {
     if (isCrossSiteBrowserRequest(request)) {
       return NextResponse.json(
         { error: 'Cross-site browser access is not allowed for this endpoint.' },
@@ -79,7 +89,9 @@ export async function proxy(request: NextRequest) {
         },
       );
     }
+  }
 
+  if (isEdgeSessionRequiredApiPath(pathname)) {
     if (request.method !== 'OPTIONS' && !hasChatAuthArtifacts(request)) {
       return NextResponse.json(
         { error: 'Authentication required for chat access.' },
