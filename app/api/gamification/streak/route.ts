@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   createChatAuthRequiredResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { getStreak, trackDailyActivity } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
@@ -45,7 +45,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { session, sessionId } = await getChatSessionFromRequest(request);
+    const body = await request.json().catch(() => ({}));
+    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
+      fallbackAddress,
+    });
 
     if (!session) {
       return createChatAuthRequiredResponse({

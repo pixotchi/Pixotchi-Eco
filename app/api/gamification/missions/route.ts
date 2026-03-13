@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   createChatAuthRequiredResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { getMissionDay, markMissionTask, getMissionScore } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
@@ -191,7 +191,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { session, sessionId } = await getChatSessionFromRequest(request);
+    const body = await request.json();
+    const { taskId, proof, count } = body || {};
+    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
+      fallbackAddress,
+    });
 
     if (!session) {
       return createChatAuthRequiredResponse({
@@ -200,8 +205,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const body = await request.json();
-    const { taskId, proof, count } = body || {};
     const address = session.address;
     if (!taskId) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });

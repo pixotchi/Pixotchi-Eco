@@ -53,6 +53,7 @@ import { isSolanaEnabled } from "@/lib/solana-constants";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { AirdropClaimCard } from "@/components/airdrop-claim-card";
 import { clearPublicChatSession } from "@/lib/chat-auth-client";
+import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 // Compact ETH Mode toggle row for Connection card
@@ -396,6 +397,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       } catch (chatSessionError) {
         console.warn('Failed to clear public chat session:', chatSessionError);
       }
+
+      clearMiniAppBypassCookies();
 
       // Clear URL query parameters and redirect to root
       if (typeof window !== 'undefined') {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   createChatAuthRequiredResponse,
   createChatUnavailableResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { getRecentMessages } from '@/lib/chat-service';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
@@ -12,7 +12,7 @@ const CHAT_READ_ADDRESS_LIMIT_PER_MINUTE = 240;
 
 export async function GET(request: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionFromRequest(request);
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });

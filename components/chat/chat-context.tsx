@@ -9,7 +9,6 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { quickAuth } from '@farcaster/miniapp-sdk';
 import { usePrivy, useToken } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
 import { useAccount } from 'wagmi';
@@ -17,7 +16,6 @@ import { useFrameContext } from '@/lib/frame-context';
 import {
   clearPublicChatSession,
   createBasePublicChatSession,
-  createFarcasterPublicChatSession,
   createPrivyPublicChatSession,
   getCurrentPublicChatSession,
   type PublicChatSession,
@@ -89,9 +87,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const previousChatAddressRef = useRef<string | null>(null);
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
 
-  const publicChatAddress = publicChatSession?.address ?? null;
-  const publicChatAuthenticated = Boolean(publicChatSession?.authenticated && publicChatAddress);
+  const publicChatAddress = isMiniApp ? (chatAddress ?? null) : (publicChatSession?.address ?? null);
+  const publicChatAuthenticated = isMiniApp
+    ? Boolean(chatAddress)
+    : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
+  const getMiniAppBypassHeaders = useCallback((): HeadersInit => {
+    if (!isMiniApp || !chatAddress) {
+      return {};
+    }
+
+    return {
+      'x-pixotchi-address': chatAddress,
+      'x-pixotchi-miniapp': '1',
+    };
+  }, [chatAddress, isMiniApp]);
 
   useEffect(() => {
     return () => {
@@ -296,6 +306,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         const response = await fetch('/api/chat/messages?limit=50', {
           cache: 'no-store',
+          headers: getMiniAppBypassHeaders(),
         });
         if (response.status === 401) {
           await handleChatAuthFailure();
@@ -325,6 +336,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         const response = await fetch(`/api/chat/ai/messages?${params}`, {
           cache: 'no-store',
+          headers: getMiniAppBypassHeaders(),
         });
         if (response.status === 401) {
           await handleChatAuthFailure();
@@ -357,7 +369,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     }
-  }, [chatAddress, conversationId, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
+  }, [chatAddress, conversationId, getMiniAppBypassHeaders, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
 
   const fetchPublicPreview = useCallback(async () => {
     if (!publicChatAuthenticated) {
@@ -367,6 +379,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch('/api/chat/messages?limit=50', {
         cache: 'no-store',
+        headers: getMiniAppBypassHeaders(),
       });
       if (response.status === 401) {
         await handleChatAuthFailure();
@@ -382,7 +395,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(err);
     }
-  }, [handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
+  }, [getMiniAppBypassHeaders, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
 
   useEffect(() => {
     const currentSurface = !isMiniApp
@@ -407,18 +420,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    if (isMiniApp) {
+      bootstrapKeyRef.current = bootstrapKey;
+      setPublicChatSession(null);
+      setPublicChatLoading(false);
+      return;
+    }
+
     const shouldBootstrapPrivy =
-      !isMiniApp &&
       (currentSurface === 'privy' || currentSurface === 'privysolana') &&
       privyReady &&
       authenticated &&
       Boolean(chatAddress) &&
       (currentSurface !== 'privysolana' || Boolean(solanaAddress));
 
-    const shouldCheckBase = !isMiniApp && currentSurface === 'base';
-    const shouldBootstrapMiniApp = isMiniApp;
+    const shouldCheckBase = currentSurface === 'base';
 
-    if (!shouldBootstrapPrivy && !shouldCheckBase && !shouldBootstrapMiniApp) {
+    if (!shouldBootstrapPrivy && !shouldCheckBase) {
       bootstrapKeyRef.current = null;
       setPublicChatSession(null);
       setPublicChatLoading(false);
@@ -432,23 +450,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setPublicChatLoading(true);
 
       try {
-        if (shouldBootstrapMiniApp) {
-          const { token } = await quickAuth.getToken();
-          if (!token) {
-            throw new Error('Farcaster Quick Auth token unavailable.');
-          }
-
-          const nextSession = await createFarcasterPublicChatSession({
-            expectedAddress: chatAddress,
-            token,
-          });
-
-          if (!cancelled) {
-            setPublicChatSession(nextSession);
-          }
-          return;
-        }
-
         if (shouldBootstrapPrivy) {
           const accessToken = await getAccessToken();
           if (!accessToken) {
@@ -813,7 +814,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             preparedSpendCalls,
             prompt: messageText,
           }),
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...getMiniAppBypassHeaders(),
+          },
           method: 'POST',
           signal,
         });
@@ -851,7 +855,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               ? { message: messageText }
               : { message: messageText },
           ),
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...getMiniAppBypassHeaders(),
+          },
           method: 'POST',
           signal,
         });

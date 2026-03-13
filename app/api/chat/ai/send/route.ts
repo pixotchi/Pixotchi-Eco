@@ -3,7 +3,7 @@ import { sendAIMessage, validateAIMessage } from '@/lib/ai-service';
 import {
   createChatAuthRequiredResponse,
   createChatUnavailableResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 
@@ -15,7 +15,7 @@ const AI_CHAT_ADDRESS_COOLDOWN_SECONDS = 10;
 
 export async function POST(request: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionFromRequest(request);
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });

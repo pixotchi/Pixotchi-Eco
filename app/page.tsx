@@ -31,6 +31,7 @@ import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import { clearPublicChatSession } from "@/lib/chat-auth-client";
+import { clearMiniAppBypassCookies, setMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 // Import broadcast component
@@ -353,6 +354,15 @@ export default function App() {
     if (!surfaceInitialized) return;
     setExpectedPrivyAddress(sessionStorageManager.getPrivyAuthenticatedAddress());
   }, [authenticated, isEvmConnected, surface, surfaceInitialized]);
+
+  useEffect(() => {
+    if (isMiniApp && normalizedAddress) {
+      setMiniAppBypassCookies(normalizedAddress);
+      return;
+    }
+
+    clearMiniAppBypassCookies();
+  }, [isMiniApp, normalizedAddress]);
 
   useEffect(() => {
     if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress) return;

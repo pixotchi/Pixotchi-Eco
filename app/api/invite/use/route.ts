@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   createChatAuthRequiredResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { markCodeAsUsed, markUserAsValidated } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
@@ -15,7 +15,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    const { session, sessionId } = await getChatSessionFromRequest(request);
+    const body = await request.json();
+    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
+      fallbackAddress,
+    });
 
     if (!session) {
       return createChatAuthRequiredResponse({
@@ -24,7 +28,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const body = await request.json();
     const { code } = body || {};
 
     if (!code || typeof code !== 'string') {

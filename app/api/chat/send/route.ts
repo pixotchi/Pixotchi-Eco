@@ -9,7 +9,7 @@ import {
 import {
   createChatAuthRequiredResponse,
   createChatUnavailableResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { markMissionTask, trackDailyActivity } from '@/lib/gamification-service';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
@@ -19,7 +19,7 @@ const CHAT_SEND_ADDRESS_LIMIT_PER_MINUTE = 20;
 
 export async function POST(request: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionFromRequest(request);
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });

@@ -4,7 +4,7 @@ import { parseUnits, encodeFunctionData, maxUint256, createPublicClient } from '
 import { base as baseChain } from 'viem/chains';
 import {
   createChatAuthRequiredResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
@@ -29,7 +29,7 @@ const AGENT_MINT_ADDRESS_LIMIT_PER_MINUTE = 3;
 
 export async function POST(req: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionFromRequest(req);
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(req);
 
     if (!session) {
       return createChatAuthRequiredResponse({

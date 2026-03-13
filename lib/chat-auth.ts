@@ -8,6 +8,7 @@ import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick
 import { PrivyClient } from '@privy-io/server-auth';
 import { getTwinAddress } from '@/lib/solana-twin';
 import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
+import { MINIAPP_BYPASS_ADDRESS_COOKIE, MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
 import { createResilientTransport } from '@/lib/rpc-transport';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
@@ -97,18 +98,47 @@ function normalizeAddress(address: string): string {
   return address.toLowerCase();
 }
 
-function getConfiguredBaseUrl(request: NextRequest): URL {
-  const explicitBaseUrl = process.env.NEXT_PUBLIC_URL?.trim();
-  if (explicitBaseUrl) {
-    return new URL(explicitBaseUrl);
-  }
-
+function getExpectedBaseUrls(request: NextRequest): URL[] {
+  const candidates: URL[] = [];
   const originHeader = request.headers.get('origin');
   if (originHeader) {
-    return new URL(originHeader);
+    try {
+      candidates.push(new URL(originHeader));
+    } catch {
+      // Ignore malformed origin headers.
+    }
   }
 
-  return new URL(request.nextUrl.origin);
+  try {
+    candidates.push(new URL(request.nextUrl.origin));
+  } catch {
+    // Ignore malformed request origins and fall back to env if needed.
+  }
+
+  const explicitBaseUrl = process.env.NEXT_PUBLIC_URL?.trim();
+  if (explicitBaseUrl) {
+    try {
+      candidates.push(new URL(explicitBaseUrl));
+    } catch {
+      // Ignore malformed configured base urls.
+    }
+  }
+
+  const deduped = new Map<string, URL>();
+  candidates.forEach((candidate) => {
+    deduped.set(candidate.origin, candidate);
+  });
+
+  return Array.from(deduped.values());
+}
+
+function getConfiguredBaseUrl(request: NextRequest): URL {
+  const expectedUrls = getExpectedBaseUrls(request);
+  if (expectedUrls.length > 0) {
+    return expectedUrls[0];
+  }
+
+  return new URL('https://mini.pixotchi.tech');
 }
 
 function getExpectedDomain(request: NextRequest): string {
@@ -239,6 +269,82 @@ export async function getChatSessionFromRequest(request: NextRequest): Promise<{
   return {
     session,
     sessionId,
+  };
+}
+
+function getMiniAppBypassAddressFromRequest(
+  request: NextRequest,
+  fallbackAddress?: string | null,
+): string | null {
+  const miniAppMarker =
+    request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value === '1' ||
+    request.headers.get('x-pixotchi-miniapp') === '1';
+
+  if (!miniAppMarker) {
+    return null;
+  }
+
+  const url = new URL(request.url);
+  const candidates = [
+    request.headers.get('x-pixotchi-address'),
+    request.cookies.get(MINIAPP_BYPASS_ADDRESS_COOKIE)?.value ?? null,
+    url.searchParams.get('address'),
+    fallbackAddress ?? null,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    const decoded = decodeURIComponent(candidate).trim();
+    if (!isValidEthereumAddressFormat(decoded)) {
+      continue;
+    }
+
+    return normalizeAddress(decoded);
+  }
+
+  return null;
+}
+
+export async function getChatSessionOrMiniAppBypassFromRequest(
+  request: NextRequest,
+  options?: {
+    fallbackAddress?: string | null;
+  },
+): Promise<{
+  session: ChatSessionRecord | null;
+  sessionId: string | null;
+  viaMiniAppBypass: boolean;
+}> {
+  const { session, sessionId } = await getChatSessionFromRequest(request);
+
+  if (session) {
+    return {
+      session,
+      sessionId,
+      viaMiniAppBypass: false,
+    };
+  }
+
+  const bypassAddress = getMiniAppBypassAddressFromRequest(request, options?.fallbackAddress);
+  if (!bypassAddress) {
+    return {
+      session: null,
+      sessionId,
+      viaMiniAppBypass: false,
+    };
+  }
+
+  return {
+    session: {
+      address: bypassAddress,
+      createdAt: Date.now(),
+      id: 'miniapp-bypass',
+      method: 'farcaster-miniapp',
+      provider: 'farcaster',
+    },
+    sessionId,
+    viaMiniAppBypass: true,
   };
 }
 
@@ -412,15 +518,16 @@ export async function verifyBaseChatIdentity(
     throw new ChatAuthError('Invalid SIWE message.', 400);
   }
 
-  const expectedDomain = getExpectedDomain(request);
-  const expectedOrigin = getConfiguredBaseUrl(request).origin;
+  const expectedUrls = getExpectedBaseUrls(request);
+  const expectedDomains = new Set(expectedUrls.map((url) => url.host));
+  const expectedOrigins = new Set(expectedUrls.map((url) => url.origin));
   const normalizedAddress = normalizeAddress(payload.address);
 
   if (normalizeAddress(siweMessage.address) !== normalizedAddress) {
     throw new ChatAuthError('SIWE address does not match the connected wallet.', 400);
   }
 
-  if (siweMessage.domain !== expectedDomain) {
+  if (!expectedDomains.has(siweMessage.domain)) {
     throw new ChatAuthError('Unexpected SIWE domain.', 400);
   }
 
@@ -430,7 +537,7 @@ export async function verifyBaseChatIdentity(
 
   if (siweMessage.uri) {
     try {
-      if (new URL(siweMessage.uri).origin !== expectedOrigin) {
+      if (!expectedOrigins.has(new URL(siweMessage.uri).origin)) {
         throw new ChatAuthError('Unexpected SIWE origin.', 400);
       }
     } catch (error) {

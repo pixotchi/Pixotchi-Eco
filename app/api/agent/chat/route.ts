@@ -7,7 +7,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import {
   createChatAuthRequiredResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { PLANT_STRAINS } from '@/lib/constants';
 import { getAgentAIProvider, getAgentModelConfig } from '@/lib/ai-config';
@@ -25,7 +25,7 @@ const AGENT_CHAT_ADDRESS_COOLDOWN_SECONDS = 15;
 
 export async function POST(req: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionFromRequest(req);
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(req);
 
     if (!session) {
       return createChatAuthRequiredResponse({
