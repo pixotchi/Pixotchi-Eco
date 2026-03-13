@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { ChatMessage, ChatRateLimit, ChatStats, AdminChatMessage } from './types';
 import { resolvePrimaryName } from './ens-resolver';
 import { ADDRESS_TRUNCATION } from './constants';
+import { redisScanKeys } from './redis';
 
 const CHAT_MESSAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
@@ -12,6 +13,76 @@ const SPAM_DETECTION_TTL = 30; // 30 seconds for duplicate message detection
 const RATE_LIMIT_WINDOW = 3; // seconds between messages
 const MAX_MESSAGE_LENGTH = 200;
 const MIN_MESSAGE_LENGTH = 1;
+const CHAT_MESSAGE_INDEX_KEY = 'chat:messages:index';
+
+async function cleanupChatMessageIndex(now: number = Date.now()): Promise<void> {
+  if (!redis) return;
+  const cutoff = now - (CHAT_MESSAGE_TTL * 1000);
+  await redis.zremrangebyscore(CHAT_MESSAGE_INDEX_KEY, '-inf', cutoff);
+}
+
+async function backfillChatMessageIndex(): Promise<void> {
+  if (!redis) return;
+
+  const legacyKeys = await redisScanKeys('chat:messages:*');
+  if (legacyKeys.length === 0) return;
+
+  const pipeline = redis.pipeline();
+  for (const key of legacyKeys) {
+    const timestamp = Number(key.split(':')[2] || 0);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) continue;
+    pipeline.zadd(CHAT_MESSAGE_INDEX_KEY, { score: timestamp, member: key });
+  }
+  await pipeline.exec();
+  await cleanupChatMessageIndex();
+}
+
+async function getIndexedMessageKeys(start: number, stop: number): Promise<string[]> {
+  if (!redis) return [];
+
+  let keys = await redis.zrange(CHAT_MESSAGE_INDEX_KEY, start, stop, { rev: true }) as string[];
+  if (keys.length === 0) {
+    await backfillChatMessageIndex();
+    keys = await redis.zrange(CHAT_MESSAGE_INDEX_KEY, start, stop, { rev: true }) as string[];
+  }
+  return keys;
+}
+
+async function loadMessages<T extends ChatMessage | AdminChatMessage>(keys: string[]): Promise<T[]> {
+  if (!redis || keys.length === 0) {
+    return [];
+  }
+
+  const dataArray = await redis.mget(...keys);
+  const messages: T[] = [];
+
+  for (let index = 0; index < keys.length; index += 1) {
+    const data = dataArray[index];
+    if (!data) {
+      await redis.zrem(CHAT_MESSAGE_INDEX_KEY, keys[index]);
+      continue;
+    }
+
+    try {
+      const message = (typeof data === 'object' && data !== null)
+        ? data as T
+        : JSON.parse(String(data)) as T;
+
+      if (!message.displayName) {
+        const resolved = await resolvePrimaryName(message.address);
+        if (resolved) {
+          message.displayName = resolved;
+        }
+      }
+
+      messages.push(message);
+    } catch (error) {
+      console.error('Error parsing chat message:', error);
+    }
+  }
+
+  return messages;
+}
 
 // Helper function to create message hash for spam detection
 function createMessageHash(message: string): string {
@@ -53,7 +124,11 @@ export async function storeMessage(address: string, message: string): Promise<Ch
 
   // Store message with TTL
   const messageKey = `chat:messages:${timestamp}:${messageId}`;
-  await redis.set(messageKey, JSON.stringify(chatMessage), { ex: CHAT_MESSAGE_TTL });
+  const pipeline = redis.pipeline();
+  pipeline.set(messageKey, JSON.stringify(chatMessage), { ex: CHAT_MESSAGE_TTL });
+  pipeline.zadd(CHAT_MESSAGE_INDEX_KEY, { score: timestamp, member: messageKey });
+  pipeline.zremrangebyscore(CHAT_MESSAGE_INDEX_KEY, '-inf', timestamp - (CHAT_MESSAGE_TTL * 1000));
+  await pipeline.exec();
 
   // Skip stats update to avoid potential hanging
   console.log('📊 Skipping stats update to avoid hanging');
@@ -67,48 +142,9 @@ export async function getRecentMessages(limit: number = 50): Promise<ChatMessage
     return [];
   }
 
-  const keys = await redis.keys('chat:messages:*');
-
-  if (keys.length === 0) return [];
-
-  // Sort keys by timestamp (descending)
-  keys.sort((a, b) => {
-    const timestampA = parseInt(a.split(':')[2]);
-    const timestampB = parseInt(b.split(':')[2]);
-    return timestampB - timestampA;
-  });
-
-  // Get the most recent messages using simple redis.get() calls (like invite system)
-  const recentKeys = keys.slice(0, limit);
-  const messages: ChatMessage[] = [];
-
-  for (const key of recentKeys) {
-    try {
-      const data = await redis.get(key);
-      if (data) {
-        let message;
-        if (typeof data === 'object' && data !== null) {
-          message = data;
-        } else if (typeof data === 'string') {
-          message = JSON.parse(data);
-        } else {
-          const dataString = String(data);
-          message = JSON.parse(dataString);
-        }
-
-        if (!message.displayName) {
-          const resolved = await resolvePrimaryName(message.address);
-          if (resolved) {
-            message.displayName = resolved;
-          }
-        }
-
-        messages.push(message);
-      }
-    } catch (error) {
-      console.error('Error parsing chat message:', error);
-    }
-  }
+  await cleanupChatMessageIndex();
+  const recentKeys = await getIndexedMessageKeys(0, Math.max(limit - 1, 0));
+  const messages = await loadMessages<ChatMessage>(recentKeys);
 
   // Sort by timestamp (ascending for display)
   return messages.sort((a, b) => a.timestamp - b.timestamp);
@@ -264,42 +300,24 @@ export async function getChatStats(): Promise<ChatStats> {
     };
   }
 
-  const keys = await redis.keys('chat:messages:*');
   const now = Date.now();
   const oneDayAgo = now - (24 * 60 * 60 * 1000);
+  await cleanupChatMessageIndex(now);
 
-  // Count messages from last 24h
-  let messagesLast24h = 0;
+  const totalMessages = await redis.zcard(CHAT_MESSAGE_INDEX_KEY);
+  const messagesLast24h = await redis.zcount(CHAT_MESSAGE_INDEX_KEY, oneDayAgo, '+inf');
+  const recentKeys = await redis.zrange(CHAT_MESSAGE_INDEX_KEY, oneDayAgo, '+inf', { byScore: true }) as string[];
   const uniqueUsers = new Set<string>();
 
-  for (const key of keys) {
-    const timestamp = parseInt(key.split(':')[2]);
-    if (timestamp >= oneDayAgo) {
-      messagesLast24h++;
-
-      // Get user address for unique count
-      try {
-        const messageData = await redis.get(key);
-        if (messageData) {
-          let message;
-          if (typeof messageData === 'object' && messageData !== null) {
-            message = messageData;
-          } else if (typeof messageData === 'string') {
-            message = JSON.parse(messageData);
-          } else {
-            const dataString = String(messageData);
-            message = JSON.parse(dataString);
-          }
-          uniqueUsers.add(message.address);
-        }
-      } catch (error) {
-        console.error('Error parsing message for stats:', error);
-      }
+  const recentMessages = await loadMessages<ChatMessage>(recentKeys);
+  for (const message of recentMessages) {
+    if (message.address) {
+      uniqueUsers.add(message.address);
     }
   }
 
   return {
-    totalMessages: keys.length,
+    totalMessages,
     activeUsers: uniqueUsers.size,
     messagesLast24h
   };
@@ -311,48 +329,9 @@ export async function getAllMessagesForAdmin(): Promise<AdminChatMessage[]> {
     return [];
   }
 
-  const keys = await redis.keys('chat:messages:*');
-
-  if (keys.length === 0) return [];
-
-  // Sort keys by timestamp (descending)
-  keys.sort((a, b) => {
-    const timestampA = parseInt(a.split(':')[2]);
-    const timestampB = parseInt(b.split(':')[2]);
-    return timestampB - timestampA;
-  });
-
-  const messages: AdminChatMessage[] = [];
-
-  for (const key of keys) {
-    try {
-      const data = await redis.get(key);
-      if (!data) continue;
-
-      let message: AdminChatMessage;
-      if (typeof data === 'object' && data !== null) {
-        message = data as AdminChatMessage;
-      } else if (typeof data === 'string') {
-        message = JSON.parse(data) as AdminChatMessage;
-      } else {
-        const dataString = String(data);
-        message = JSON.parse(dataString) as AdminChatMessage;
-      }
-
-      if (!message.displayName) {
-        const resolved = await resolvePrimaryName(message.address);
-        if (resolved) {
-          message.displayName = resolved;
-        }
-      }
-
-      messages.push(message);
-    } catch (error) {
-      console.error('Error parsing admin chat message:', error);
-    }
-  }
-
-  return messages;
+  await cleanupChatMessageIndex();
+  const keys = await getIndexedMessageKeys(0, -1);
+  return loadMessages<AdminChatMessage>(keys);
 }
 
 // Delete a specific message
@@ -361,12 +340,10 @@ export async function deleteMessage(messageId: string, timestamp: number): Promi
     return false;
   }
 
-  const keys = await redis.keys(`chat:messages:${timestamp}:${messageId}`);
-
-  if (keys.length === 0) return false;
-
-  await redis.del(keys[0]);
-  return true;
+  const key = `chat:messages:${timestamp}:${messageId}`;
+  const deleted = await redis.del(key);
+  await redis.zrem(CHAT_MESSAGE_INDEX_KEY, key);
+  return Number(deleted) > 0;
 }
 
 // Delete all messages
@@ -375,14 +352,18 @@ export async function deleteAllMessages(): Promise<number> {
     return 0;
   }
 
-  const keys = await redis.keys('chat:messages:*');
+  await cleanupChatMessageIndex();
+  const keys = await redis.zrange(CHAT_MESSAGE_INDEX_KEY, 0, -1) as string[];
 
   if (keys.length === 0) return 0;
 
-  await redis.del(...keys);
+  const pipeline = redis.pipeline();
+  pipeline.del(...keys);
+  pipeline.del(CHAT_MESSAGE_INDEX_KEY);
 
   // Reset stats
-  await redis.del('chat:stats:total');
+  pipeline.del('chat:stats:total');
+  await pipeline.exec();
 
   return keys.length;
 }
@@ -397,18 +378,17 @@ export async function cleanupOldData(): Promise<void> {
   const oneDayAgo = now - (24 * 60 * 60 * 1000);
 
   // Clean old messages
-  const messageKeys = await redis.keys('chat:messages:*');
-  const oldMessageKeys = messageKeys.filter(key => {
-    const timestamp = parseInt(key.split(':')[2]);
-    return timestamp < oneDayAgo;
-  });
+  const oldMessageKeys = await redis.zrange(CHAT_MESSAGE_INDEX_KEY, '-inf', oneDayAgo - 1, { byScore: true }) as string[];
 
   if (oldMessageKeys.length > 0) {
-    await redis.del(...oldMessageKeys);
+    const pipeline = redis.pipeline();
+    pipeline.del(...oldMessageKeys);
+    pipeline.zremrangebyscore(CHAT_MESSAGE_INDEX_KEY, '-inf', oneDayAgo - 1);
+    await pipeline.exec();
   }
 
   // Clean old spam tracking
-  const spamKeys = await redis.keys('chat:spam:*');
+  const spamKeys = await redisScanKeys('chat:spam:*');
   if (spamKeys.length > 0) {
     await redis.del(...spamKeys);
   }

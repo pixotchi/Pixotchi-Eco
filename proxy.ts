@@ -2,6 +2,25 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 
+const STRICT_PUBLIC_API_PREFIXES = [
+  '/api/activity/',
+  '/api/agent/',
+  '/api/chat/ai/send',
+  '/api/status/checks',
+  '/api/1inch',
+];
+
+function parseOrigins(value?: string): string[] {
+  return (value || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function matchesPrefix(pathname: string, prefixes: string[]): boolean {
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(prefix));
+}
+
 export async function proxy(request: NextRequest) {
   // Get the pathname of the request
   const pathname = request.nextUrl.pathname;
@@ -28,6 +47,12 @@ export async function proxy(request: NextRequest) {
   // CORS headers for API routes - be lenient for Farcaster miniapp embedding
   if (pathname.startsWith('/api/')) {
     const origin = request.headers.get('origin');
+    const requestOrigin = request.nextUrl.origin;
+    const allowedPublicApiOrigins = new Set([
+      requestOrigin,
+      ...parseOrigins(process.env.ALLOWED_PUBLIC_API_ORIGINS),
+    ]);
+    const isStrictPublicRoute = matchesPrefix(pathname, STRICT_PUBLIC_API_PREFIXES);
     
     // Special handling for admin routes - restrict to known origins
     if (pathname.startsWith('/api/invite/admin/') || pathname.startsWith('/api/gamification/admin/') || pathname.startsWith('/api/admin/')) {
@@ -54,14 +79,27 @@ export async function proxy(request: NextRequest) {
         return new Response('Forbidden', { status: 403 });
       }
     } else {
-      // Allow all origins for public API routes since we can be embedded anywhere
-      if (origin) {
-        response.headers.set('Access-Control-Allow-Origin', origin);
-        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp');
-        response.headers.set('Access-Control-Max-Age', '86400');
-        // Ensure caches vary by Origin when ACAO is dynamic
-        response.headers.append('Vary', 'Origin');
+      if (isStrictPublicRoute) {
+        if (origin && !allowedPublicApiOrigins.has(origin)) {
+          return new Response('Forbidden', { status: 403 });
+        }
+
+        if (origin && allowedPublicApiOrigins.has(origin)) {
+          response.headers.set('Access-Control-Allow-Origin', origin);
+          response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+          response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp');
+          response.headers.set('Access-Control-Max-Age', '86400');
+          response.headers.append('Vary', 'Origin');
+        }
+      } else {
+        // Allow all origins for low-cost public API routes since we can be embedded anywhere
+        if (origin) {
+          response.headers.set('Access-Control-Allow-Origin', origin);
+          response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+          response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp');
+          response.headers.set('Access-Control-Max-Age', '86400');
+          response.headers.append('Vary', 'Origin');
+        }
       }
     }
     
