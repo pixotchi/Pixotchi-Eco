@@ -49,19 +49,20 @@ export function useInviteValidation() {
         }
         
       } catch (error) {
-        console.error('Invite validation check failed, failing open:', error);
-        
-        // FAIL OPEN: Allow access if validation server is down or times out
-        // We still check local storage first to respect previous valid state if any,
-        // but if this is a new user and server is down, we let them in.
-        
-        // Strategy:
-        // 1. If previously validated in local storage, trust it.
-        // 2. If NOT previously validated, STILL allow entry (fail open) to prevent blocking legitimate users during outages.
-        // This essentially disables the gate during network errors.
-        
-        setUserValidated(true);
-        
+        console.error('Invite validation check failed, failing closed:', error);
+
+        const cachedValidated = localStorage.getItem(keys.INVITE_VALIDATED) === 'true';
+        const cachedAddress = localStorage.getItem(keys.USER_ADDRESS);
+        const matchesCurrentAddress = Boolean(address) && cachedAddress === address.toLowerCase();
+
+        if (cachedValidated && matchesCurrentAddress) {
+          setUserValidated(true);
+        } else {
+          localStorage.removeItem(keys.INVITE_VALIDATED);
+          localStorage.removeItem(keys.USER_ADDRESS);
+          localStorage.removeItem(keys.VALIDATED_CODE);
+          setUserValidated(false);
+        }
       } finally {
         setCheckingValidation(false);
       }

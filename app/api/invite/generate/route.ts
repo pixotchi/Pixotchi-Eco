@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  createChatAuthRequiredResponse,
+  getChatSessionOrMiniAppBypassFromRequest,
+} from '@/lib/chat-auth';
 import { generateInviteCode } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { createErrorResponse } from '@/lib/auth-utils';
@@ -11,16 +15,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    const body = await request.json();
-    const { address } = body;
+    const body = await request.json().catch(() => ({}));
+    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
+      fallbackAddress,
+    });
 
-    if (!address || typeof address !== 'string' || !address.startsWith('0x')) {
-      const error = createErrorResponse('Valid wallet address is required', 400, 'INVALID_ADDRESS');
-      return NextResponse.json(error.body, { status: error.status });
+    if (!session) {
+      return createChatAuthRequiredResponse({
+        clearCookie: Boolean(sessionId),
+        message: 'Authentication required.',
+      });
     }
 
-    // Generate invite code using existing service (which has built-in rate limiting)
-    const result = await generateInviteCode(address);
+    const result = await generateInviteCode(session.address);
 
     if (result.success) {
     return NextResponse.json({

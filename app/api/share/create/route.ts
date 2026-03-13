@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 import { redisSetJSON } from '@/lib/redis';
 import type { MintShareData } from '@/lib/types';
 
 export const runtime = 'edge';
+
+const SHARE_CREATE_IP_LIMIT = 60;
+const SHARE_CREATE_WINDOW_SECONDS = 600;
 
 // Generate a short, URL-safe ID (8 chars base62)
 function generateShortId(): string {
@@ -18,6 +22,22 @@ function generateShortId(): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:share:create',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: SHARE_CREATE_IP_LIMIT,
+          windowSeconds: SHARE_CREATE_WINDOW_SECONDS,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const data: MintShareData = await request.json();
 
     // Validate required fields
@@ -60,4 +80,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

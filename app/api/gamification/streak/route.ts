@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  createChatAuthRequiredResponse,
+  getChatSessionOrMiniAppBypassFromRequest,
+} from '@/lib/chat-auth';
 import { getStreak, trackDailyActivity } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 import { getGamificationDisabledMessage, isGamificationDisabled } from '@/lib/gamification-feature';
@@ -41,11 +45,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const body = await request.json();
-    const { address } = body || {};
-    if (!address || !isValidEthereumAddressFormat(address)) {
-      return NextResponse.json({ error: 'Valid wallet address is required' }, { status: 400 });
+    const body = await request.json().catch(() => ({}));
+    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
+      fallbackAddress,
+    });
+
+    if (!session) {
+      return createChatAuthRequiredResponse({
+        clearCookie: Boolean(sessionId),
+        message: 'Authentication required.',
+      });
     }
+
+    const address = session.address;
     const streak = await trackDailyActivity(address);
     return NextResponse.json({ success: true, streak });
   } catch (error) {

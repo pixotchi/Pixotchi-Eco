@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useChat } from '@/components/chat/chat-context';
 
 interface InviteCodeInputProps {
   onValidated: (code: string) => void;
@@ -20,10 +21,13 @@ export default function InviteCodeInput({
   autoSubmit = false 
 }: InviteCodeInputProps) {
   const { address } = useAccount();
+  const { publicChatAuthenticated, publicChatLoading } = useChat();
   const [code, setCode] = useState(initialCode);
   const [isValidating, setIsValidating] = useState(false);
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const requiresSecureSession = Boolean(address);
+  const sessionUnavailable = requiresSecureSession && !publicChatAuthenticated;
 
   // Auto-submit if initial code is provided and autoSubmit is true
   useEffect(() => {
@@ -48,6 +52,16 @@ export default function InviteCodeInput({
       return;
     }
 
+    if (sessionUnavailable) {
+      const message = publicChatLoading
+        ? 'Finishing secure session setup. Please try again in a moment.'
+        : 'Your secure session is not ready. Please reconnect and try again.';
+      setErrorMessage(message);
+      setIsValid(false);
+      toast.error(message);
+      return;
+    }
+
     setIsValidating(true);
     setErrorMessage('');
 
@@ -66,7 +80,13 @@ export default function InviteCodeInput({
         
         // Mark code as used if wallet is connected
         if (address) {
-          await markCodeAsUsed(code, address);
+          const useResult = await markCodeAsUsed(code, address);
+          if (!useResult.success) {
+            setIsValid(false);
+            setErrorMessage(useResult.error || 'Failed to activate invite code. Please try again.');
+            toast.error(useResult.error || 'Failed to activate invite code. Please try again.');
+            return;
+          }
         }
         
         onValidated(code);
@@ -85,9 +105,9 @@ export default function InviteCodeInput({
     }
   };
 
-  const markCodeAsUsed = async (inviteCode: string, userAddress: string) => {
+  const markCodeAsUsed = async (inviteCode: string, userAddress: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      await fetch('/api/invite/use', {
+      const response = await fetch('/api/invite/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -95,9 +115,22 @@ export default function InviteCodeInput({
           address: userAddress 
         }),
       });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.success) {
+        return {
+          success: false,
+          error: typeof data?.error === 'string' ? data.error : 'Failed to activate invite code.',
+        };
+      }
+
+      return { success: true };
     } catch (error) {
       console.error('Error marking code as used:', error);
-      // Don't show error to user as validation already succeeded
+      return {
+        success: false,
+        error: 'Failed to activate invite code. Please try again.',
+      };
     }
   };
 
@@ -138,13 +171,21 @@ export default function InviteCodeInput({
             <p className="text-sm text-red-600 text-center">{errorMessage}</p>
           )}
 
+          {sessionUnavailable && (
+            <p className="text-xs text-muted-foreground text-center">
+              {publicChatLoading
+                ? 'Finishing secure session setup...'
+                : 'Secure session unavailable. Reconnect your wallet and try again.'}
+            </p>
+          )}
+
           <p className="text-xs text-muted-foreground text-center">
             You can get code by asking our current farmers!
           </p>
 
           <Button 
             onClick={handleValidate}
-            disabled={!code || code.length !== 8 || isValidating}
+            disabled={!code || code.length !== 8 || isValidating || sessionUnavailable}
             className="w-full"
           >
             {isValidating ? 'Validating...' : 'Validate Code'}

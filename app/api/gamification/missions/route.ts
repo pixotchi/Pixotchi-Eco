@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  createChatAuthRequiredResponse,
+  getChatSessionOrMiniAppBypassFromRequest,
+} from '@/lib/chat-auth';
 import { getMissionDay, markMissionTask, getMissionScore } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 import type { GmProgressProof, GmTaskId } from '@/lib/gamification-types';
@@ -188,10 +192,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { address, taskId, proof, count } = body || {};
-    if (!address || !isValidEthereumAddressFormat(address)) {
-      return NextResponse.json({ error: 'Valid wallet address is required' }, { status: 400 });
+    const { taskId, proof, count } = body || {};
+    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
+      fallbackAddress,
+    });
+
+    if (!session) {
+      return createChatAuthRequiredResponse({
+        clearCookie: Boolean(sessionId),
+        message: 'Authentication required.',
+      });
     }
+
+    const address = session.address;
     if (!taskId) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
     }

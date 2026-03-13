@@ -1,117 +1,154 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  storeMessage, 
-  checkRateLimit, 
-  updateRateLimit, 
-  checkSpam, 
-  validateMessage 
+import {
+  checkRateLimit,
+  checkSpam,
+  storeMessage,
+  updateRateLimit,
+  validateMessage,
 } from '@/lib/chat-service';
+import {
+  createChatAuthRequiredResponse,
+  createChatUnavailableResponse,
+  getChatSessionOrMiniAppBypassFromRequest,
+} from '@/lib/chat-auth';
 import { markMissionTask, trackDailyActivity } from '@/lib/gamification-service';
-import { isValidEthereumAddressFormat } from '@/lib/utils';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
+
+const CHAT_SEND_IP_LIMIT_PER_MINUTE = 20;
+const CHAT_SEND_ADDRESS_LIMIT_PER_MINUTE = 20;
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { message, address } = body;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request);
 
-    // Validate required fields
-    if (!message || !address) {
+    if (!session) {
+      return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
+    }
+
+    const body = await request.json();
+    const message = typeof body?.message === 'string' ? body.message : '';
+    const senderAddress = session.address;
+
+    if (!message.trim()) {
       return NextResponse.json(
-        { error: 'Message and address are required' },
-        { status: 400 }
+        { error: 'Message is required' },
+        {
+          headers: {
+            'Cache-Control': 'private, no-store',
+          },
+          status: 400,
+        },
       );
     }
 
-    // Validate message content
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:chat:send',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: CHAT_SEND_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+        {
+          kind: 'address',
+          identifier: senderAddress,
+          limit: CHAT_SEND_ADDRESS_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const messageError = validateMessage(message);
     if (messageError) {
       return NextResponse.json(
         { error: messageError },
-        { status: 400 }
+        {
+          headers: {
+            'Cache-Control': 'private, no-store',
+          },
+          status: 400,
+        },
       );
     }
 
-    // Basic address validation (wallet connection is sufficient for public chat)
-    if (!isValidEthereumAddressFormat(address)) {
-      return NextResponse.json(
-        { error: 'Invalid wallet address format' },
-        { status: 400 }
-      );
-    }
-
-    // Check rate limit
-    const canSend = await checkRateLimit(address);
+    const canSend = await checkRateLimit(senderAddress);
     if (!canSend) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please wait before sending another message.' },
-        { status: 429 }
+        {
+          headers: {
+            'Cache-Control': 'private, no-store',
+          },
+          status: 429,
+        },
       );
     }
 
-    // Check for spam
-    const isSpam = await checkSpam(message, address);
+    const isSpam = await checkSpam(message, senderAddress);
     if (isSpam) {
       return NextResponse.json(
         { error: 'Duplicate or spam message detected' },
-        { status: 429 }
+        {
+          headers: {
+            'Cache-Control': 'private, no-store',
+          },
+          status: 429,
+        },
       );
     }
 
-    console.log('📝 Storing message...');
-    
-    // Store the message (OnchainKit will handle names client-side)
     let chatMessage;
     try {
-      chatMessage = await storeMessage(address, message);
-      console.log('✅ Message stored successfully');
+      chatMessage = await storeMessage(senderAddress, message);
     } catch (error) {
-      console.error('❌ Message storage failed:', error);
-      return NextResponse.json(
-        { error: 'Failed to store message' },
-        { status: 500 }
-      );
+      console.error('Public chat message storage failed:', error);
+      return createChatUnavailableResponse('Failed to store message.');
     }
 
-    // Update rate limit (with timeout)
-    console.log('📝 Updating rate limit...');
     try {
-      const updatePromise = updateRateLimit(address);
-      let timeoutId: NodeJS.Timeout;
+      const updatePromise = updateRateLimit(senderAddress);
+      let timeoutId: NodeJS.Timeout | null = null;
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('Rate limit update timeout')), 3000);
       });
+
       await Promise.race([updatePromise, timeoutPromise]);
-      clearTimeout(timeoutId!);
-      console.log('✅ Rate limit updated');
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     } catch (error) {
-      console.error('❌ Rate limit update failed:', error);
-      // Don't fail the request, but log the error for monitoring
-      // Rate limit update failure is non-critical but should be monitored
+      console.error('Public chat rate limit update failed:', error);
     }
 
-    // Gamification: mark chat task and streak activity (fire-and-forget, non-blocking)
-    // These are best-effort operations - failures shouldn't block the request
     Promise.allSettled([
-      markMissionTask(address, 's2_chat_message').catch(err => {
-        console.warn('Failed to mark mission task:', err);
+      markMissionTask(senderAddress, 's2_chat_message').catch((error) => {
+        console.warn('Failed to mark mission task:', error);
       }),
-      trackDailyActivity(address).catch(err => {
-        console.warn('Failed to track daily activity:', err);
-      })
-    ]).catch(err => {
-      console.warn('Gamification tracking failed:', err);
+      trackDailyActivity(senderAddress).catch((error) => {
+        console.warn('Failed to track daily activity:', error);
+      }),
+    ]).catch((error) => {
+      console.warn('Gamification tracking failed:', error);
     });
 
-    return NextResponse.json({
-      success: true,
-      message: chatMessage
-    });
-
+    return NextResponse.json(
+      {
+        message: chatMessage,
+        success: true,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store',
+        },
+      },
+    );
   } catch (error) {
     console.error('Error sending chat message:', error);
-    return NextResponse.json(
-      { error: 'Failed to send message' },
-      { status: 500 }
-    );
+    return createChatUnavailableResponse('Failed to send message.');
   }
 }

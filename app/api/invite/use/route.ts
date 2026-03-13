@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  createChatAuthRequiredResponse,
+  getChatSessionOrMiniAppBypassFromRequest,
+} from '@/lib/chat-auth';
 import { markCodeAsUsed, markUserAsValidated } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { createErrorResponse } from '@/lib/auth-utils';
@@ -12,20 +16,27 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { code, address } = body;
+    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
+    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
+      fallbackAddress,
+    });
+
+    if (!session) {
+      return createChatAuthRequiredResponse({
+        clearCookie: Boolean(sessionId),
+        message: 'Authentication required.',
+      });
+    }
+
+    const { code } = body || {};
 
     if (!code || typeof code !== 'string') {
       const error = createErrorResponse('Invite code is required', 400, 'MISSING_CODE');
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    if (!address || typeof address !== 'string' || !address.startsWith('0x')) {
-      const error = createErrorResponse('Valid wallet address is required', 400, 'INVALID_ADDRESS');
-      return NextResponse.json(error.body, { status: error.status });
-    }
-
     // Mark invite code as used
-    const useResult = await markCodeAsUsed(code, address);
+    const useResult = await markCodeAsUsed(code, session.address);
 
     if (!useResult.success) {
       const error = createErrorResponse(useResult.error || 'Failed to use invite code', 400, 'USE_FAILED');
@@ -33,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Mark user as validated
-      const validationSuccess = await markUserAsValidated(address);
+      const validationSuccess = await markUserAsValidated(session.address);
 
       if (!validationSuccess) {
         console.error('Failed to mark user as validated after using invite code');

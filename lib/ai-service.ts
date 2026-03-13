@@ -303,6 +303,33 @@ export async function getAIConversationMessages(conversationId: string, limit: n
   }
 }
 
+export async function getAIConversationForAddress(
+  address: string,
+  conversationId: string,
+): Promise<AIConversation | null> {
+  if (!redis) {
+    return null;
+  }
+
+  const conversationKey = `ai:conversations:${address.toLowerCase()}:${conversationId}`;
+
+  try {
+    const data = await redis.get(conversationKey);
+    if (!data) {
+      return null;
+    }
+
+    if (typeof data === 'object') {
+      return data as AIConversation;
+    }
+
+    return JSON.parse(data as string) as AIConversation;
+  } catch (error) {
+    console.error('Error fetching AI conversation metadata:', error);
+    return null;
+  }
+}
+
 // Send message to AI and get response
 export async function sendAIMessage(address: string, message: string): Promise<{
   userMessage: AIChatMessage;
