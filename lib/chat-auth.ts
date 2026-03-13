@@ -146,6 +146,17 @@ function normalizeSiweDomain(domain: string): string {
   return trimmed;
 }
 
+function getExpectedBaseDomains(urls: URL[]): Set<string> {
+  const domains = new Set<string>();
+
+  urls.forEach((url) => {
+    domains.add(normalizeSiweDomain(url.host));
+    domains.add(normalizeSiweDomain(url.hostname));
+  });
+
+  return domains;
+}
+
 function normalizeBaseSiweMessage(message: string): string {
   return message
     .replace(/\r\n/g, '\n')
@@ -658,7 +669,7 @@ export async function verifyBaseChatIdentity(
   }
 
   const expectedUrls = getExpectedBaseUrls(request);
-  const expectedDomains = new Set(expectedUrls.map((url) => normalizeSiweDomain(url.host)));
+  const expectedDomains = getExpectedBaseDomains(expectedUrls);
   const expectedOrigins = new Set(expectedUrls.map((url) => normalizeOrigin(url.origin)));
   const normalizedAddress = normalizeAddress(payload.address);
 
