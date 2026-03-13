@@ -146,6 +146,105 @@ function normalizeSiweDomain(domain: string): string {
   return trimmed;
 }
 
+function normalizeBaseSiweMessage(message: string): string {
+  return message
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trimStart())
+    .join('\n')
+    .replace(/^(Chain ID:\s*)(0x[0-9a-fA-F]+)\s*$/m, (_match, prefix, hexValue) => {
+      try {
+        return `${prefix}${Number.parseInt(hexValue, 16)}`;
+      } catch {
+        return `${prefix}${hexValue}`;
+      }
+    })
+    .trim();
+}
+
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function inspectBaseSiweMessage(message: string) {
+  const normalized = normalizeBaseSiweMessage(message);
+  const rawLines = message.replace(/\r\n/g, '\n').split('\n');
+  const normalizedLines = normalized.split('\n');
+  const hints: string[] = [];
+
+  if (rawLines.some((line) => /^\s+0x[a-fA-F0-9]{40}\s*$/.test(line))) {
+    hints.push('address line is indented');
+  }
+
+  if (rawLines.some((line) => /^\s*Chain ID:\s*0x[0-9a-fA-F]+\s*$/.test(line))) {
+    hints.push('chain id is hex');
+  }
+
+  if (!rawLines.some((line) => /^Issued At:\s+/i.test(line.trim()))) {
+    hints.push('issued at is missing');
+  }
+
+  if (rawLines.some((line) => /\t/.test(line))) {
+    hints.push('message contains tab indentation');
+  }
+
+  if (!/wants you to sign in with your Ethereum account:/i.test(rawLines[0] ?? '')) {
+    hints.push('first line does not match standard SIWE header');
+  }
+
+  const compactLineDump = (lines: string[]) =>
+    lines.map((line, index) => `${index + 1}:${JSON.stringify(line)}`).join(' | ');
+
+  return {
+    hints,
+    normalized,
+    normalizedLines: compactLineDump(normalizedLines),
+    rawLines: compactLineDump(rawLines),
+  };
+}
+
+function parseBaseSiweMessage(message: string): SiweMessage {
+  try {
+    return new SiweMessage(message);
+  } catch (rawError) {
+    const normalizedMessage = normalizeBaseSiweMessage(message);
+
+    try {
+      return new SiweMessage(normalizedMessage);
+    } catch (normalizedError) {
+      const inspection = inspectBaseSiweMessage(message);
+      const rawReason = formatErrorMessage(rawError);
+      const normalizedReason = formatErrorMessage(normalizedError);
+
+      console.error('[chat-auth] Base SIWE parse failed:', {
+        hints: inspection.hints,
+        normalizedReason,
+        rawLines: inspection.rawLines,
+        rawReason,
+        normalizedLines: inspection.normalizedLines,
+      });
+
+      const debugReason = normalizedReason !== rawReason
+        ? `raw=${rawReason}; normalized=${normalizedReason}`
+        : rawReason;
+      const hintText = inspection.hints.length > 0
+        ? ` Hints: ${inspection.hints.join(', ')}.`
+        : '';
+
+      throw new ChatAuthError(
+        process.env.NODE_ENV === 'production'
+          ? 'Invalid SIWE message.'
+          : `Invalid SIWE message. ${debugReason}.${hintText}`,
+        400,
+      );
+    }
+  }
+}
+
 function getExpectedBaseUrls(request: NextRequest): URL[] {
   const candidates: URL[] = [];
   const originHeader = request.headers.get('origin');
@@ -550,8 +649,11 @@ export async function verifyBaseChatIdentity(
 
   let siweMessage: SiweMessage;
   try {
-    siweMessage = new SiweMessage(payload.message);
-  } catch {
+    siweMessage = parseBaseSiweMessage(payload.message);
+  } catch (error) {
+    if (error instanceof ChatAuthError) {
+      throw error;
+    }
     throw new ChatAuthError('Invalid SIWE message.', 400);
   }
 

@@ -273,6 +273,7 @@ export default function App() {
     const nonce = await requestBasePublicChatNonce();
     const domain = typeof window !== "undefined" ? window.location.host : undefined;
     const uri = typeof window !== "undefined" ? window.location.origin : undefined;
+    const issuedAt = new Date().toISOString();
 
     const result = await connectAsync({
       capabilities: {
@@ -280,6 +281,7 @@ export default function App() {
           chainId: "0x2105",
           nonce,
           ...(domain ? { domain } : {}),
+          issuedAt,
           ...(uri ? { uri } : {}),
           statement: "Sign in to Pixotchi",
           version: "1",
