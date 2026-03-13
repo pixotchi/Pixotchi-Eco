@@ -7,6 +7,7 @@ class SessionStorageManager {
   private static instance: SessionStorageManager;
   private readonly KEY_AUTH_SURFACE = 'pixotchi:authSurface';
   private readonly KEY_AUTOLOGIN = 'pixotchi:autologin';
+  private readonly KEY_PRIVY_AUTH_ADDRESS = 'pixotchi:privyAuthAddress';
   private lock: Promise<void> = Promise.resolve();
 
   private constructor() {}
@@ -98,6 +99,49 @@ class SessionStorageManager {
     return this.lock;
   }
 
+  getPrivyAuthenticatedAddress(): string | null {
+    if (typeof window === 'undefined') return null;
+
+    try {
+      const stored = sessionStorage.getItem(this.KEY_PRIVY_AUTH_ADDRESS);
+      return stored ? stored.toLowerCase() : null;
+    } catch (error) {
+      console.warn('Failed to read Privy authenticated address from sessionStorage:', error);
+      return null;
+    }
+  }
+
+  async setPrivyAuthenticatedAddress(address: string): Promise<void> {
+    const normalized = address.toLowerCase();
+
+    this.lock = this.lock.then(async () => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        sessionStorage.setItem(this.KEY_PRIVY_AUTH_ADDRESS, normalized);
+      } catch (error) {
+        console.error('Failed to set Privy authenticated address in sessionStorage:', error);
+        throw error;
+      }
+    });
+
+    return this.lock;
+  }
+
+  async removePrivyAuthenticatedAddress(): Promise<void> {
+    this.lock = this.lock.then(async () => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        sessionStorage.removeItem(this.KEY_PRIVY_AUTH_ADDRESS);
+      } catch (error) {
+        console.warn('Failed to remove Privy authenticated address from sessionStorage:', error);
+      }
+    });
+
+    return this.lock;
+  }
+
   // Batch set both auth surface and autologin atomically
   async setAuthSurfaceAndAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana'): Promise<void> {
     this.lock = this.lock.then(async () => {
@@ -111,7 +155,23 @@ class SessionStorageManager {
         throw error;
       }
     });
-    
+
+    return this.lock;
+  }
+
+  async clearAuthState(): Promise<void> {
+    this.lock = this.lock.then(async () => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        sessionStorage.removeItem(this.KEY_AUTH_SURFACE);
+        sessionStorage.removeItem(this.KEY_AUTOLOGIN);
+        sessionStorage.removeItem(this.KEY_PRIVY_AUTH_ADDRESS);
+      } catch (error) {
+        console.warn('Failed to clear auth state from sessionStorage:', error);
+      }
+    });
+
     return this.lock;
   }
 }

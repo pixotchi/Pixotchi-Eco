@@ -3,13 +3,13 @@
 import { useMiniKit, useAddFrame } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useFrameContext } from "@/lib/frame-context";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { useEffect, useState, useCallback, useRef, Activity } from "react";
 import { Button } from "@/components/ui/button";
-import { PageLoader, BasePageLoader } from "@/components/ui/loading";
+import { BasePageLoader } from "@/components/ui/loading";
 import { Tab } from "@/lib/types";
 import { WalletProfile } from "@/components/wallet-profile";
-import { PlusCircle, User, Leaf, Sparkles, Info, Repeat, History, LandPlot, Trophy } from "lucide-react";
+import { PlusCircle, Leaf, Sparkles, Info, Repeat, History, Trophy } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { ThemeSelector } from "@/components/theme-selector";
@@ -18,12 +18,12 @@ import { INVITE_CONFIG, getLocalStorageKeys } from "@/lib/invite-utils";
 import InviteGate from "@/components/invite-gate";
 import { ChatButton } from "@/components/chat";
 import StatusBar from "@/components/status-bar";
-import { usePrivy, useWallets, useLogin } from "@privy-io/react-auth";
+import { usePrivy, useLogin, useLogout, useModalStatus } from "@privy-io/react-auth";
 import { SignInWithBaseButton } from "@base-org/account-ui/react";
-import { clearAppCaches } from "@/lib/cache-utils";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
+import toast from "react-hot-toast";
 
 // Import custom hooks
 import { useInviteValidation } from "@/hooks/useInviteValidation";
@@ -185,16 +185,25 @@ export default function App() {
   const { context } = useMiniKit();
   const fc = useFrameContext();
   const { address, isConnected: isEvmConnected } = useAccount();
+  const { disconnect } = useDisconnect();
   const { theme } = useTheme();
   const { startIfFirstVisit } = useSlideshow();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [isMiniConnectRetrying, setIsMiniConnectRetrying] = useState(false);
+  const [surface, setSurface] = useState<'privy' | 'base' | 'privysolana' | null>(null);
+  const [surfaceInitialized, setSurfaceInitialized] = useState(false);
+  const [expectedPrivyAddress, setExpectedPrivyAddress] = useState<string | null>(null);
   const lastDismissedRef = useRef<string | null>(null);
+  const privySessionResetRef = useRef(false);
+  const isMiniApp = Boolean(fc?.isInMiniApp);
+  const normalizedAddress = address?.toLowerCase() ?? null;
 
   // Privy state for debug + button readiness + Solana wallet check
   const { ready: privyReady, authenticated, user } = usePrivy();
+  const { isOpen: isPrivyModalOpen } = useModalStatus();
+  const { logout } = useLogout();
 
   // Check if user has a Solana wallet connected via Privy
   const hasSolanaWallet = useMemo(() => {
@@ -205,12 +214,97 @@ export default function App() {
     ) ?? false;
   }, [authenticated, user]);
 
-  // Combined connection check: EVM wallet OR Solana wallet
-  const isConnected = isEvmConnected || hasSolanaWallet;
+  const persistPrivyAuthenticatedAddress = useCallback(async (nextAddress: string | null) => {
+    setExpectedPrivyAddress(nextAddress);
 
-  // For Solana users, use their Twin address as the "address" for the app
-  // This will be populated by the SolanaWalletContext
-  const effectiveAddress = address; // EVM address or undefined for Solana users
+    if (!nextAddress) {
+      await sessionStorageManager.removePrivyAuthenticatedAddress();
+      return;
+    }
+
+    await sessionStorageManager.setPrivyAuthenticatedAddress(nextAddress);
+  }, []);
+
+  const resetPrivySession = useCallback(async (message?: string) => {
+    if (privySessionResetRef.current) return;
+
+    privySessionResetRef.current = true;
+
+    try {
+      await sessionStorageManager.removeAutologin();
+      await persistPrivyAuthenticatedAddress(null);
+
+      if (authenticated && logout) {
+        try {
+          await logout();
+        } catch (error) {
+          console.warn('Privy logout during session reset failed:', error);
+        }
+      }
+
+      try {
+        disconnect();
+      } catch (error) {
+        console.warn('Wallet disconnect during Privy session reset failed:', error);
+      }
+
+      if (message) {
+        toast.error(message);
+      }
+    } finally {
+      setTimeout(() => {
+        privySessionResetRef.current = false;
+      }, 250);
+    }
+  }, [authenticated, disconnect, logout, persistPrivyAuthenticatedAddress]);
+
+  const { login } = useLogin({
+    onComplete: ({ loginAccount }) => {
+      const loginAddress =
+        loginAccount?.type === 'wallet' &&
+        loginAccount.chainType === 'ethereum' &&
+        typeof loginAccount.address === 'string'
+          ? loginAccount.address.toLowerCase()
+          : normalizedAddress;
+
+      if (loginAddress) {
+        void persistPrivyAuthenticatedAddress(loginAddress);
+      } else {
+        void persistPrivyAuthenticatedAddress(null);
+      }
+    },
+    onError: () => {
+      if (surface === 'privy') {
+        void resetPrivySession('Privy login was cancelled. Please sign the message to continue.');
+      }
+    },
+  });
+  const { connect, connectors } = useConnect();
+
+  const isConnected = useMemo(() => {
+    if (isMiniApp) return isEvmConnected;
+    if (!surfaceInitialized) return false;
+
+    switch (surface) {
+      case 'privy':
+        return privyReady && authenticated && isEvmConnected;
+      case 'privysolana':
+        return privyReady && authenticated && hasSolanaWallet;
+      case 'base':
+        return isEvmConnected;
+      default:
+        return false;
+    }
+  }, [
+    authenticated,
+    hasSolanaWallet,
+    isEvmConnected,
+    isMiniApp,
+    privyReady,
+    surface,
+    surfaceInitialized,
+  ]);
+  const isWebPrivySurface = !isMiniApp && surface === 'privy';
 
   // Enable intelligent tab prefetching
   useTabPrefetching(activeTab, isConnected);
@@ -234,16 +328,6 @@ export default function App() {
   const viewportHeight = useViewportHeight();
   const isKeyboardNavigation = useKeyboardNavigation();
 
-  // Additional Privy/Wagmi hooks
-  const { login } = useLogin();
-  const { wallets } = useWallets();
-  const { connect, connectors } = useConnect();
-
-  // Initialize surface as null on server to avoid SSR hydration mismatch
-  // sessionStorage doesn't exist on server, so we populate this on client mount
-  const [surface, setSurface] = useState<'privy' | 'base' | 'privysolana' | null>(null);
-  const [surfaceInitialized, setSurfaceInitialized] = useState(false);
-
   // Populate surface from sessionStorage on client mount only
   useEffect(() => {
     if (surfaceInitialized) return;
@@ -259,6 +343,57 @@ export default function App() {
 
     setSurfaceInitialized(true);
   }, [surfaceInitialized]);
+
+  useEffect(() => {
+    if (!surfaceInitialized) return;
+    setExpectedPrivyAddress(sessionStorageManager.getPrivyAuthenticatedAddress());
+  }, [authenticated, isEvmConnected, surface, surfaceInitialized]);
+
+  useEffect(() => {
+    if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress) return;
+    if (expectedPrivyAddress) return;
+
+    void persistPrivyAuthenticatedAddress(normalizedAddress);
+  }, [
+    authenticated,
+    expectedPrivyAddress,
+    isWebPrivySurface,
+    normalizedAddress,
+    persistPrivyAuthenticatedAddress,
+    privyReady,
+  ]);
+
+  useEffect(() => {
+    if (!isWebPrivySurface || !privyReady || authenticated || !isEvmConnected || isPrivyModalOpen) {
+      return;
+    }
+
+    void resetPrivySession('Privy login was cancelled. Please sign the message to continue.');
+  }, [
+    authenticated,
+    isEvmConnected,
+    isPrivyModalOpen,
+    isWebPrivySurface,
+    privyReady,
+    resetPrivySession,
+  ]);
+
+  useEffect(() => {
+    if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress || !expectedPrivyAddress) {
+      return;
+    }
+
+    if (expectedPrivyAddress !== normalizedAddress) {
+      void resetPrivySession('Wallet changed. Please sign in again.');
+    }
+  }, [
+    authenticated,
+    expectedPrivyAddress,
+    isWebPrivySurface,
+    normalizedAddress,
+    privyReady,
+    resetPrivySession,
+  ]);
 
   // Back navigation control: enable web navigation integration inside Mini App
   useEffect(() => {
@@ -277,7 +412,6 @@ export default function App() {
     if (isConnected) return;
 
     let mounted = true;
-    let timeoutId: NodeJS.Timeout | null = null;
 
     const handleAutologin = async () => {
       try {
@@ -311,7 +445,6 @@ export default function App() {
 
     return () => {
       mounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [isConnected, privyReady, surface, connectors, connect, login]);
 
