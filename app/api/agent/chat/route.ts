@@ -1,10 +1,14 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { generateText, tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 // Use centralized strain data for Agent
 import { z } from 'zod';
+import {
+  createChatAuthRequiredResponse,
+  getChatSessionFromRequest,
+} from '@/lib/chat-auth';
 import { PLANT_STRAINS } from '@/lib/constants';
 import { getAgentAIProvider, getAgentModelConfig } from '@/lib/ai-config';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
@@ -21,10 +25,20 @@ const AGENT_CHAT_ADDRESS_COOLDOWN_SECONDS = 15;
 
 export async function POST(req: NextRequest) {
   try {
+    const { session, sessionId } = await getChatSessionFromRequest(req);
+
+    if (!session) {
+      return createChatAuthRequiredResponse({
+        clearCookie: Boolean(sessionId),
+        message: 'Authentication required.',
+      });
+    }
+
     const body = await req.json();
-    const { prompt, userAddress, conversationHistory, preparedSpendCalls } = body || {};
+    const { prompt, conversationHistory, preparedSpendCalls } = body || {};
+    const userAddress = session.address;
     if (!prompt || typeof prompt !== 'string') {
-      return new Response(JSON.stringify({ error: 'Missing prompt' }), { status: 400 });
+      return NextResponse.json({ error: 'Missing prompt' }, { status: 400 });
     }
 
     const rateLimitResponse = await enforceRateLimit(req, {
@@ -38,7 +52,7 @@ export async function POST(req: NextRequest) {
         },
         {
           kind: 'address',
-          identifier: typeof userAddress === 'string' ? userAddress : null,
+          identifier: userAddress,
           limit: 1,
           windowSeconds: AGENT_CHAT_ADDRESS_COOLDOWN_SECONDS,
         },
@@ -130,7 +144,10 @@ export async function POST(req: NextRequest) {
 
         const response = await fetch(mintUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            cookie: req.headers.get('cookie') ?? '',
+          },
           body: JSON.stringify(requestBody),
         });
 
@@ -312,10 +329,7 @@ export async function POST(req: NextRequest) {
       })
     });
 
-    return new Response(
-      JSON.stringify({ success: true, text, toolResults }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
+    return NextResponse.json({ success: true, text, toolResults });
   } catch (e: any) {
     console.error('[AGENT_CHAT] Error:', {
       message: e?.message,
@@ -324,6 +338,6 @@ export async function POST(req: NextRequest) {
       cause: e?.cause,
       error: e
     });
-    return new Response(JSON.stringify({ error: e?.message || 'Agent error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return NextResponse.json({ error: e?.message || 'Agent error' }, { status: 500 });
   }
 }

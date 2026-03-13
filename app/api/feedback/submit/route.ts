@@ -1,8 +1,29 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 import { redis, redisSetJSON } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
-export async function POST(request: Request) {
+const FEEDBACK_IP_LIMIT = 5;
+const FEEDBACK_WINDOW_SECONDS = 900;
+
+export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:feedback:submit',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: FEEDBACK_IP_LIMIT,
+          windowSeconds: FEEDBACK_WINDOW_SECONDS,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const body = await request.json();
     const { 
       address, 
@@ -15,14 +36,14 @@ export async function POST(request: Request) {
 
     // Validation
     if (!address || typeof address !== 'string') {
-      return Response.json(
+      return NextResponse.json(
         { error: 'Invalid address' },
         { status: 400 }
       );
     }
 
     if (!message || typeof message !== 'string') {
-      return Response.json(
+      return NextResponse.json(
         { error: 'Invalid message' },
         { status: 400 }
       );
@@ -30,14 +51,14 @@ export async function POST(request: Request) {
 
     const trimmedMessage = message.trim();
     if (trimmedMessage.length < 10 || trimmedMessage.length > 1000) {
-      return Response.json(
+      return NextResponse.json(
         { error: 'Message must be between 10 and 1000 characters' },
         { status: 400 }
       );
     }
 
     if (!redis) {
-      return Response.json(
+      return NextResponse.json(
         { error: 'Database unavailable' },
         { status: 503 }
       );
@@ -76,13 +97,13 @@ export async function POST(request: Request) {
       isMiniApp,
     });
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       message: 'Feedback submitted successfully',
     });
   } catch (error) {
     logger.error('Feedback submission error:', error);
-    return Response.json(
+    return NextResponse.json(
       { error: 'Failed to submit feedback' },
       { status: 500 }
     );

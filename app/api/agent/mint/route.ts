@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { parseUnits, encodeFunctionData, maxUint256, createPublicClient } from 'viem';
 import { base as baseChain } from 'viem/chains';
+import {
+  createChatAuthRequiredResponse,
+  getChatSessionFromRequest,
+} from '@/lib/chat-auth';
 import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 import { createResilientTransport } from '@/lib/rpc-transport';
 
 // Create a single CDP client instance per runtime
@@ -19,18 +24,53 @@ function getClient() {
 // Cache for agent smart account
 let agentSmartAccount: any = null;
 
+const AGENT_MINT_IP_LIMIT_PER_MINUTE = 10;
+const AGENT_MINT_ADDRESS_LIMIT_PER_MINUTE = 3;
+
 export async function POST(req: NextRequest) {
   try {
+    const { session, sessionId } = await getChatSessionFromRequest(req);
+
+    if (!session) {
+      return createChatAuthRequiredResponse({
+        clearCookie: Boolean(sessionId),
+        message: 'Authentication required.',
+      });
+    }
+
+    const rateLimitResponse = await enforceRateLimit(req, {
+      scope: 'api:agent:mint',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(req),
+          limit: AGENT_MINT_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+        {
+          kind: 'address',
+          identifier: session.address,
+          limit: AGENT_MINT_ADDRESS_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const body = await req.json();
-    const { userAddress, count, strainId, totalSeedRequired, preparedSpendCalls } = body;
+    const { count, strainId, totalSeedRequired } = body || {};
+    const userAddress = session.address;
 
     console.log('[AGENT_MINT] Request received:', {
       userAddress,
       count,
       strainId,
       totalSeedRequired,
-      hasPreparedSpendCalls: Array.isArray(preparedSpendCalls) && preparedSpendCalls.length > 0,
-      preparedSpendCallsCount: Array.isArray(preparedSpendCalls) ? preparedSpendCalls.length : 0
+      hasPreparedSpendCalls: false,
+      preparedSpendCallsCount: 0,
     });
 
     if (!userAddress || !count || !totalSeedRequired) {
@@ -52,116 +92,65 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // NOTE: preparedSpendCalls from Base Account SDK are designed to execute from USER's account
-    // via spend permission. However, we're executing from AGENT account server-side with CDP.
-    // This might cause issues. We'll log the calls and attempt execution, but if it fails,
-    // we should fall back to CDP's useSpendPermission flow which is designed for server-side.
     let preCalls: Array<{ to: `0x${string}`; value: bigint; data: `0x${string}` }> = [];
     let usingPreparedSpendCalls = false;
 
-    if (Array.isArray(preparedSpendCalls) && preparedSpendCalls.length > 0) {
-      usingPreparedSpendCalls = true;
-      console.log('[AGENT_MINT] Using preparedSpendCalls from Base Account:', {
-        count: preparedSpendCalls.length,
-        calls: preparedSpendCalls.map((c: any, i: number) => ({
-          index: i,
-          to: c.to,
-          value: c.value,
-          dataLength: c.data?.length || 0,
-          dataPreview: c.data?.substring(0, 50) || 'no data'
-        }))
-      });
-      
-      try {
-        preCalls = preparedSpendCalls.map((c: any) => ({
-          to: c.to as `0x${string}`,
-          value: c.value ? (typeof c.value === 'string' ? BigInt(c.value) : BigInt(c.value)) : BigInt(0),
-          data: (c.data || '0x') as `0x${string}`,
-        }));
+    const allPermissions = await client.evm.listSpendPermissions({
+      address: userAddress as `0x${string}`,
+    });
 
-        // Validate preCalls before proceeding
-        if (preCalls.length === 0) {
-            throw new Error('preparedSpendCalls converted to empty preCalls array');
-        }
-        
-        console.log('[AGENT_MINT] Converted preCalls:', {
-          count: preCalls.length,
-          calls: preCalls.map((c, i) => ({
-            index: i,
-            to: c.to,
-            value: c.value.toString(),
-            dataLength: c.data.length,
-            dataPreview: c.data.substring(0, 50)
-          }))
-        });
-      } catch (e: any) {
-        console.error('[AGENT_MINT] Error converting preparedSpendCalls:', {
-          error: e?.message,
-          stack: e?.stack,
-          preparedSpendCalls
-        });
-        return NextResponse.json({ error: `Invalid preparedSpendCalls format: ${e?.message}` }, { status: 400 });
-      }
-    } else {
-      // Legacy flow: pull via CDP spend permissions
-      const allPermissions = await client.evm.listSpendPermissions({
-        address: userAddress as `0x${string}`,
-      });
+    const agentPermissions = allPermissions.spendPermissions?.filter(
+      (p: any) => p.permission.spender.toLowerCase() === agentSmartAccount.address.toLowerCase()
+    ) || [];
 
-      const agentPermissions = allPermissions.spendPermissions?.filter(
-        (p: any) => p.permission.spender.toLowerCase() === agentSmartAccount.address.toLowerCase()
-      ) || [];
+    if (agentPermissions.length === 0) {
+      return NextResponse.json({
+        error: 'No spend permissions found. Please grant spend permission to the agent first.'
+      }, { status: 400 });
+    }
 
-      if (agentPermissions.length === 0) {
-        return NextResponse.json({ 
-          error: 'No spend permissions found. Please grant spend permission to the agent first.' 
-        }, { status: 400 });
-      }
+    const seedPermission = agentPermissions.find(
+      (p: any) => p.permission.token.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase()
+    );
 
-      // Find SEED token permission
-      const seedPermission = agentPermissions.find(
-        (p: any) => p.permission.token.toLowerCase() === PIXOTCHI_TOKEN_ADDRESS.toLowerCase()
-      );
+    if (!seedPermission) {
+      return NextResponse.json({
+        error: 'No SEED token spend permission found. Please grant SEED spend permission.'
+      }, { status: 400 });
+    }
 
-      if (!seedPermission) {
-        return NextResponse.json({ 
-          error: 'No SEED token spend permission found. Please grant SEED spend permission.' 
-        }, { status: 400 });
-      }
+    const requiredAmount = parseUnits(
+      (typeof totalSeedRequired === 'number' ? totalSeedRequired.toFixed(6) : String(totalSeedRequired)),
+      18
+    );
+    const availableAllowance = BigInt(seedPermission.permission.allowance);
 
-      const requiredAmount = parseUnits(
-        (typeof totalSeedRequired === 'number' ? totalSeedRequired.toFixed(6) : String(totalSeedRequired)),
-        18
-      );
-      const availableAllowance = BigInt(seedPermission.permission.allowance);
+    const now = Math.floor(Date.now() / 1000);
+    const startTime = typeof seedPermission.permission.start === 'string'
+      ? parseInt(seedPermission.permission.start)
+      : seedPermission.permission.start;
+    const endTime = typeof seedPermission.permission.end === 'string'
+      ? parseInt(seedPermission.permission.end)
+      : seedPermission.permission.end;
+    const isTimeValid = now >= startTime && now <= endTime;
+    if (!isTimeValid) {
+      return NextResponse.json({ error: 'Spend permission not active (start/end window).' }, { status: 400 });
+    }
+    if (requiredAmount > availableAllowance) {
+      return NextResponse.json({ error: 'Insufficient spend permission allowance.' }, { status: 400 });
+    }
 
-      const now = Math.floor(Date.now() / 1000);
-      const startTime = typeof seedPermission.permission.start === 'string'
-        ? parseInt(seedPermission.permission.start)
-        : seedPermission.permission.start;
-      const endTime = typeof seedPermission.permission.end === 'string'
-        ? parseInt(seedPermission.permission.end)
-        : seedPermission.permission.end;
-      const isTimeValid = now >= startTime && now <= endTime;
-      if (!isTimeValid) {
-        return NextResponse.json({ error: 'Spend permission not active (start/end window).' }, { status: 400 });
-      }
-      if (requiredAmount > availableAllowance) {
-        return NextResponse.json({ error: 'Insufficient spend permission allowance.' }, { status: 400 });
-      }
+    const spendValue = requiredAmount > availableAllowance ? availableAllowance : requiredAmount;
 
-      const spendValue = requiredAmount > availableAllowance ? availableAllowance : requiredAmount;
+    const spendResult = await agentSmartAccount.useSpendPermission({
+      spendPermission: seedPermission.permission,
+      value: spendValue.toString(),
+      network: 'base',
+    });
 
-      const spendResult = await agentSmartAccount.useSpendPermission({
-        spendPermission: seedPermission.permission,
-        value: spendValue.toString(),
-        network: 'base',
-      });
-
-      const spendReceipt = await agentSmartAccount.waitForUserOperation(spendResult);
-      if (spendReceipt.status !== 'complete') {
-        return NextResponse.json({ error: 'Spend permission transaction failed' }, { status: 500 });
-      }
+    const spendReceipt = await agentSmartAccount.waitForUserOperation(spendResult);
+    if (spendReceipt.status !== 'complete') {
+      return NextResponse.json({ error: 'Spend permission transaction failed' }, { status: 500 });
     }
 
     // Build approve (SEED -> NFT) and mint calls from Agent Smart Account

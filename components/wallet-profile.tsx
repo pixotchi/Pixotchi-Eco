@@ -52,6 +52,7 @@ import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana
 import { isSolanaEnabled } from "@/lib/solana-constants";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { AirdropClaimCard } from "@/components/airdrop-claim-card";
+import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 // Compact ETH Mode toggle row for Connection card
@@ -388,6 +389,12 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         await sessionStorageManager.clearAuthState();
       } catch (storageError) {
         console.warn('Failed to clear auth preferences:', storageError);
+      }
+
+      try {
+        await clearPublicChatSession();
+      } catch (chatSessionError) {
+        console.warn('Failed to clear public chat session:', chatSessionError);
       }
 
       // Clear URL query parameters and redirect to root

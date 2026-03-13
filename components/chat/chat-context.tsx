@@ -1,38 +1,69 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
-import { useAccount } from 'wagmi';
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { quickAuth } from '@farcaster/miniapp-sdk';
+import { usePrivy, useToken } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
+import { useAccount } from 'wagmi';
+import { useFrameContext } from '@/lib/frame-context';
+import {
+  clearPublicChatSession,
+  createFarcasterPublicChatSession,
+  createPrivyPublicChatSession,
+  getCurrentPublicChatSession,
+  type PublicChatSession,
+} from '@/lib/chat-auth-client';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { PLANT_STRAINS } from '@/lib/constants';
+import { sessionStorageManager } from '@/lib/session-storage-manager';
+import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
 import { useIsSolanaWallet, useSolanaWallet } from '@/components/solana';
 
-// Combined message type for simplicity in the context
 type AnyChatMessage = ChatMessage | AIChatMessage;
 
 interface ChatContextState {
-  messages: AnyChatMessage[];
-  loading: boolean;
-  error: string | null;
-  mode: ChatMode;
-  setMode: (mode: ChatMode) => void;
-  setChatOpen: (open: boolean) => void;
-  sendMessage: (message: string) => Promise<void>;
-  isSending: boolean;
   conversationId: string | null;
-  setConversationId: (id: string | null) => void;
+  error: string | null;
   isAITyping: boolean;
-  unreadCount: number;
+  isSending: boolean;
+  loading: boolean;
   markAsRead: () => void;
+  messages: AnyChatMessage[];
+  mode: ChatMode;
+  publicChatAddress: string | null;
+  publicChatAuthenticated: boolean;
+  publicChatLoading: boolean;
+  sendMessage: (message: string) => Promise<void>;
+  setChatOpen: (open: boolean) => void;
+  setConversationId: (id: string | null) => void;
+  setMode: (mode: ChatMode) => void;
+  unreadCount: number;
 }
 
 const ChatContext = createContext<ChatContextState | undefined>(undefined);
 
+function delay(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { address } = useAccount();
+  const { authenticated, ready: privyReady } = usePrivy();
+  const { getAccessToken } = useToken();
+  const fc = useFrameContext();
+  const isMiniApp = Boolean(fc?.isInMiniApp);
   const isSolana = useIsSolanaWallet();
-  const { effectiveAddress } = useSolanaWallet();
+  const { effectiveAddress, solanaAddress } = useSolanaWallet();
   const chatAddress = isSolana ? effectiveAddress : address;
   const [messages, setMessages] = useState<AnyChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,15 +74,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isAITyping, setIsAITyping] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [publicMessageVersion, setPublicMessageVersion] = useState(0);
+  const [publicChatSession, setPublicChatSession] = useState<PublicChatSession | null>(null);
+  const [publicChatLoading, setPublicChatLoading] = useState(false);
 
-  // Cache messages per mode so switching tabs doesn't bleed content across modes
-  const messageCacheRef = useRef<{ public: AnyChatMessage[]; ai: AnyChatMessage[]; agent: AnyChatMessage[] }>({ public: [], ai: [], agent: [] });
-  const modeRef = useRef<ChatMode>("public");
-
-  // AbortController for cancelling pending fetch requests
+  const messageCacheRef = useRef<{ public: AnyChatMessage[]; ai: AnyChatMessage[]; agent: AnyChatMessage[] }>({
+    agent: [],
+    ai: [],
+    public: [],
+  });
+  const modeRef = useRef<ChatMode>('public');
   const abortControllerRef = useRef<AbortController | null>(null);
+  const bootstrapKeyRef = useRef<string | null>(null);
+  const previousChatAddressRef = useRef<string | null>(null);
+  const previousPublicIdentityAddressRef = useRef<string | null>(null);
 
-  // Cleanup: abort pending requests on unmount
+  const publicChatAddress = publicChatSession?.address ?? null;
+  const publicChatAuthenticated = Boolean(publicChatSession?.authenticated && publicChatAddress);
+  const publicIdentityAddress = publicChatAddress ?? null;
+
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -60,36 +100,106 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const handleChatAuthFailure = useCallback(async () => {
+    setPublicChatSession(null);
+    setConversationId(null);
+    messageCacheRef.current.public = [];
+    messageCacheRef.current.ai = [];
+    setPublicMessageVersion((version) => version + 1);
+
+    if (modeRef.current === 'public' || modeRef.current === 'ai') {
+      setMessages([]);
+    }
+
+    try {
+      await clearPublicChatSession();
+    } catch {
+      // Ignore cleanup failures after an auth rejection.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'public' && mode !== 'ai') {
+      return;
+    }
+
+    if (publicChatLoading) {
+      setLoading(true);
+      return;
+    }
+
+    if (!publicChatAuthenticated) {
+      setLoading(false);
+    }
+  }, [mode, publicChatAuthenticated, publicChatLoading]);
+
+  useEffect(() => {
+    if (publicChatAuthenticated) {
+      return;
+    }
+
+    messageCacheRef.current.public = [];
+    messageCacheRef.current.ai = [];
+    setConversationId(null);
+    setPublicMessageVersion((version) => version + 1);
+
+    if (modeRef.current === 'public' || modeRef.current === 'ai') {
+      setMessages([]);
+    }
+  }, [publicChatAuthenticated]);
+
+  useEffect(() => {
+    const previousAddress = previousPublicIdentityAddressRef.current;
+    if (previousAddress && previousAddress !== publicIdentityAddress) {
+      messageCacheRef.current.ai = [];
+      setConversationId(null);
+
+      if (modeRef.current === 'ai') {
+        setMessages([]);
+      }
+    }
+
+    previousPublicIdentityAddressRef.current = publicIdentityAddress;
+  }, [publicIdentityAddress]);
+
+  useEffect(() => {
+    const previousAddress = previousChatAddressRef.current;
+    if (previousAddress && !chatAddress) {
+      void clearPublicChatSession().catch(() => {
+        // Ignore cleanup failures during disconnect.
+      });
+    }
+
+    previousChatAddressRef.current = chatAddress ?? null;
+  }, [chatAddress]);
+
   const setMode = (next: ChatMode) => {
-    // Save current mode messages before switching
     if (mode) {
       messageCacheRef.current[mode] = messages;
     }
 
-    // Get target mode messages
     const targetCached = messageCacheRef.current[next] || [];
 
-    // Set new mode and messages
     setModeState(next);
     setMessages(targetCached);
-    // Proactively reload messages for dedicated tab experience
+
     if (next === 'public') {
-      if (isChatOpen) {
-        fetchHistory(true, 'public');
+      if (isChatOpen && publicChatAuthenticated) {
+        void fetchHistory(true, 'public');
       }
     } else if (next === 'ai') {
-      fetchHistory(true, 'ai');
+      void fetchHistory(true, 'ai');
     } else if (next === 'agent') {
       setMessages(messageCacheRef.current.agent || []);
     }
   };
 
-  // Persist mode selection in localStorage like the original
   useEffect(() => {
     const savedMode = localStorage.getItem('chat-mode') as ChatMode;
     if (savedMode && ['public', 'ai', 'agent'].includes(savedMode)) {
       setMode(savedMode);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -97,31 +207,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     modeRef.current = mode;
   }, [mode]);
 
-  // Persist agent-mode messages to localStorage
   useEffect(() => {
     try {
-      // Avoid dependency on the ref object identity; serialize on messages change when in agent mode
       if (mode === 'agent') {
         localStorage.setItem('agent-chat-history', JSON.stringify(messages));
         messageCacheRef.current.agent = messages;
       }
-    } catch { }
+    } catch {
+      // Ignore localStorage failures.
+    }
   }, [mode, messages]);
 
-  // Restore agent-mode messages on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('agent-chat-history');
       if (saved) {
         const parsed: AnyChatMessage[] = JSON.parse(saved);
         messageCacheRef.current.agent = parsed;
-        if (mode === 'agent') setMessages(parsed);
+        if (mode === 'agent') {
+          setMessages(parsed);
+        }
       }
-    } catch { }
+    } catch {
+      // Ignore localStorage failures.
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
   const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -131,10 +243,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return Date.now();
   });
 
-  // Calculate unread count whenever messages or lastReadTimestamp changes
-  // Only track unread for public chat for now, as that's the primary use case
   useEffect(() => {
-    // We check the latest messages in the 'public' cache + current messages if mode is public
     const publicMessages = mode === 'public' && isChatOpen
       ? messages
       : (messageCacheRef.current.public || []);
@@ -144,18 +253,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Sort to be sure we're checking correctly (though they should be sorted already)
-    // Count how many are newer than lastReadTimestamp
-    // Also ignore messages sent by the current user to avoid self-unread
-    const count = publicMessages.filter(m => {
-      const isNew = m.timestamp > lastReadTimestamp;
-      // Check if message is from current user
-      const isFromMe = chatAddress && m.address && m.address.toLowerCase() === chatAddress.toLowerCase();
+    const count = publicMessages.filter((message) => {
+      const isNew = message.timestamp > lastReadTimestamp;
+      const isFromMe = publicIdentityAddress && message.address
+        ? message.address.toLowerCase() === publicIdentityAddress.toLowerCase()
+        : false;
       return isNew && !isFromMe;
     }).length;
 
     setUnreadCount(count);
-  }, [messages, mode, lastReadTimestamp, chatAddress, isChatOpen, publicMessageVersion]);
+  }, [isChatOpen, lastReadTimestamp, messages, mode, publicIdentityAddress, publicMessageVersion]);
 
   const markAsRead = useCallback(() => {
     const now = Date.now();
@@ -163,8 +270,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('chat-last-read', now.toString());
     setUnreadCount(0);
   }, []);
-
-  // note: Message loading is now handled directly in setMode() to prevent race conditions
 
   const updatePublicMessages = useCallback((next: AnyChatMessage[]) => {
     messageCacheRef.current.public = next;
@@ -176,46 +281,70 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [isChatOpen]);
 
   const fetchHistory = useCallback(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
-    if (showLoading) setLoading(true);
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
       if (requestedMode === 'public') {
-        // Fetch public messages using the API endpoint like the original
-        const response = await fetch('/api/chat/messages?limit=50');
+        if (!publicChatAuthenticated) {
+          updatePublicMessages([]);
+          return;
+        }
+
+        const response = await fetch('/api/chat/messages?limit=50', {
+          cache: 'no-store',
+        });
+        if (response.status === 401) {
+          await handleChatAuthFailure();
+          return;
+        }
         if (!response.ok) {
           throw new Error('Failed to fetch messages');
         }
         const data = await response.json();
         const next = data.messages || [];
         updatePublicMessages(next);
-      } else if (requestedMode === 'ai' && chatAddress) {
-        // Fetch AI messages using the API endpoint like the original
+      } else if (requestedMode === 'ai') {
+        if (!publicChatAuthenticated) {
+          setConversationId(null);
+          messageCacheRef.current.ai = [];
+          setMessages([]);
+          return;
+        }
+
         const params = new URLSearchParams({
-          address: chatAddress,
-          limit: '50'
+          limit: '50',
         });
 
         if (conversationId) {
           params.append('conversationId', conversationId);
         }
 
-        const response = await fetch(`/api/chat/ai/messages?${params}`);
+        const response = await fetch(`/api/chat/ai/messages?${params}`, {
+          cache: 'no-store',
+        });
+        if (response.status === 401) {
+          await handleChatAuthFailure();
+          return;
+        }
         if (!response.ok) {
           throw new Error('Failed to fetch AI messages');
         }
 
         const data = await response.json();
-        if (modeRef.current !== requestedMode) return; // ignore stale result after tab switch
+        if (modeRef.current !== requestedMode) {
+          return;
+        }
         const next = data.messages || [];
         setMessages(next);
         messageCacheRef.current.ai = next;
-        if (data.conversationId && !conversationId) {
+        if (typeof data.conversationId === 'string' && data.conversationId !== conversationId) {
           setConversationId(data.conversationId);
         }
       } else if (requestedMode === 'agent' && chatAddress) {
-        const agentCache = messageCacheRef.current['agent'] || [];
-        setMessages(agentCache);
+        setMessages(messageCacheRef.current.agent || []);
       } else {
         setMessages([]);
       }
@@ -223,13 +352,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setError('Failed to fetch message history.');
       console.error(err);
     } finally {
-      if (showLoading) setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  }, [mode, conversationId, chatAddress, updatePublicMessages]);
+  }, [chatAddress, conversationId, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
 
   const fetchPublicPreview = useCallback(async () => {
+    if (!publicChatAuthenticated) {
+      return;
+    }
+
     try {
-      const response = await fetch('/api/chat/messages?limit=50');
+      const response = await fetch('/api/chat/messages?limit=50', {
+        cache: 'no-store',
+      });
+      if (response.status === 401) {
+        await handleChatAuthFailure();
+        return;
+      }
       if (!response.ok) {
         throw new Error('Failed to fetch public preview');
       }
@@ -240,11 +381,143 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(err);
     }
-  }, [updatePublicMessages]);
+  }, [handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
+
+  useEffect(() => {
+    const currentSurface = !isMiniApp
+      ? sessionStorageManager.getAuthSurface()
+      : null;
+    const bootstrapKey = [
+      isMiniApp ? 'miniapp' : currentSurface ?? 'unknown',
+      chatAddress?.toLowerCase() ?? 'none',
+      solanaAddress ?? 'none',
+      authenticated ? '1' : '0',
+      privyReady ? '1' : '0',
+    ].join(':');
+
+    if (bootstrapKeyRef.current === bootstrapKey) {
+      return;
+    }
+
+    if (!chatAddress) {
+      bootstrapKeyRef.current = null;
+      setPublicChatSession(null);
+      setPublicChatLoading(false);
+      return;
+    }
+
+    const shouldBootstrapPrivy =
+      !isMiniApp &&
+      (currentSurface === 'privy' || currentSurface === 'privysolana') &&
+      privyReady &&
+      authenticated &&
+      Boolean(chatAddress) &&
+      (currentSurface !== 'privysolana' || Boolean(solanaAddress));
+
+    const shouldCheckBase = !isMiniApp && currentSurface === 'base';
+    const shouldBootstrapMiniApp = isMiniApp;
+
+    if (!shouldBootstrapPrivy && !shouldCheckBase && !shouldBootstrapMiniApp) {
+      bootstrapKeyRef.current = null;
+      setPublicChatSession(null);
+      setPublicChatLoading(false);
+      return;
+    }
+
+    bootstrapKeyRef.current = bootstrapKey;
+    let cancelled = false;
+
+    const bootstrapPublicChat = async () => {
+      setPublicChatLoading(true);
+
+      try {
+        if (shouldBootstrapMiniApp) {
+          const { token } = await quickAuth.getToken();
+          if (!token) {
+            throw new Error('Farcaster Quick Auth token unavailable.');
+          }
+
+          const nextSession = await createFarcasterPublicChatSession({
+            expectedAddress: chatAddress,
+            token,
+          });
+
+          if (!cancelled) {
+            setPublicChatSession(nextSession);
+          }
+          return;
+        }
+
+        if (shouldBootstrapPrivy) {
+          const accessToken = await getAccessToken();
+          if (!accessToken) {
+            throw new Error('Privy access token unavailable.');
+          }
+
+          const nextSession = await createPrivyPublicChatSession({
+            accessToken,
+            expectedAddress: chatAddress,
+            ...(currentSurface === 'privysolana' ? { solanaAddress } : {}),
+          });
+
+          if (!cancelled) {
+            setPublicChatSession(nextSession);
+          }
+          return;
+        }
+
+        if (shouldCheckBase) {
+          let nextSession: PublicChatSession | null = null;
+
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            nextSession = await getCurrentPublicChatSession();
+            if (nextSession?.address?.toLowerCase() === chatAddress.toLowerCase()) {
+              break;
+            }
+
+            if (attempt < 2) {
+              await delay(250);
+            }
+          }
+
+          if (nextSession && nextSession.address.toLowerCase() !== chatAddress.toLowerCase()) {
+            await clearPublicChatSession();
+            nextSession = null;
+          }
+
+          if (!cancelled) {
+            setPublicChatSession(nextSession);
+          }
+        }
+      } catch (bootstrapError) {
+        console.error('[chat] Failed to bootstrap public chat session:', bootstrapError);
+        if (!cancelled) {
+          setPublicChatSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPublicChatLoading(false);
+        }
+      }
+    };
+
+    void bootstrapPublicChat();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authenticated,
+    chatAddress,
+    getAccessToken,
+    isMiniApp,
+    privyReady,
+    solanaAddress,
+  ]);
 
   useEffect(() => {
     if (mode === 'public') {
-      if (!isChatOpen) {
+      if (!isChatOpen || !publicChatAuthenticated) {
         return () => {
           if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -252,10 +525,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      fetchHistory(true, 'public');
+      void fetchHistory(true, 'public');
       const refreshPublicChat = () => {
         if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-          fetchHistory(false, 'public');
+          void fetchHistory(false, 'public');
         }
       };
 
@@ -270,38 +543,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (typeof document !== 'undefined') {
           document.removeEventListener('visibilitychange', handleVisibilityChange);
         }
-        // Abort any pending fetch requests
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
         }
       };
-    } else if (mode === 'ai' && chatAddress) {
-      fetchHistory(true, 'ai');
-      return () => {
-        // Abort any pending fetch requests
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-      };
-    } else if (mode === 'agent') {
-      // For agent mode, explicitly ensure we have empty messages if cache is empty
-      const agentCache = messageCacheRef.current['agent'] || [];
-      setMessages(agentCache);
     }
-  }, [mode, chatAddress, fetchHistory, isChatOpen]);
+
+    if (mode === 'ai' && publicChatAuthenticated) {
+      void fetchHistory(true, 'ai');
+      return () => {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      };
+    }
+
+    if (mode === 'agent') {
+      setMessages(messageCacheRef.current.agent || []);
+    }
+  }, [fetchHistory, isChatOpen, mode, publicChatAuthenticated]);
 
   useEffect(() => {
-    if (!chatAddress) {
-      return;
-    }
-
-    if (isChatOpen) {
+    if (!publicChatAuthenticated || isChatOpen) {
       return;
     }
 
     const refreshPreview = () => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-        fetchPublicPreview();
+        void fetchPublicPreview();
       }
     };
 
@@ -318,17 +587,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         document.removeEventListener('visibilitychange', refreshPreview);
       }
     };
-  }, [fetchPublicPreview, isChatOpen, chatAddress]);
+  }, [fetchPublicPreview, isChatOpen, publicChatAuthenticated]);
 
   const sendMessage = async (messageText: string) => {
-    if (!chatAddress || !messageText.trim()) return;
+    if (!messageText.trim()) {
+      return;
+    }
 
-    // Cancel any previous request
+    if (mode !== 'public' && !chatAddress) {
+      return;
+    }
+
+    if ((mode === 'public' || mode === 'ai' || mode === 'agent') && !publicChatAuthenticated) {
+      toast.error(
+        mode === 'agent'
+          ? 'Agent chat is not ready yet.'
+          : (mode === 'ai' ? 'AI chat is not ready yet.' : 'Public chat is not ready yet.'),
+      );
+      return;
+    }
+
+    if (mode === 'public' && !publicChatAddress) {
+      toast.error('Public chat is not ready yet.');
+      return;
+    }
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
 
-    // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
@@ -336,126 +623,210 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     const endpoint = mode === 'ai' ? '/api/chat/ai/send' : '/api/chat/send';
-
+    const senderAddress = mode === 'public'
+      ? publicChatAddress
+      : ((mode === 'ai' || mode === 'agent') ? publicIdentityAddress : chatAddress);
     const optimisticId = `optimistic-${Date.now()}`;
     const optimisticUserMessage: AnyChatMessage = mode === 'ai'
-      ? { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), type: 'user', model: '', displayName: 'You', conversationId: conversationId || '' }
-      : { id: optimisticId, address: chatAddress, message: messageText, timestamp: Date.now(), displayName: 'You' };
+      ? {
+        address: senderAddress!,
+        conversationId: conversationId || '',
+        displayName: 'You',
+        id: optimisticId,
+        message: messageText,
+        model: '',
+        timestamp: Date.now(),
+        type: 'user',
+      }
+      : {
+        address: senderAddress!,
+        displayName: 'You',
+        id: optimisticId,
+        message: messageText,
+        timestamp: Date.now(),
+      };
 
-    setMessages(prev => {
-      const next = [...prev, optimisticUserMessage];
+    setMessages((previous) => {
+      const next = [...previous, optimisticUserMessage];
+      if (mode === 'public') {
+        messageCacheRef.current.public = next;
+        setPublicMessageVersion((version) => version + 1);
+      }
       if (mode === 'agent') {
         messageCacheRef.current.agent = next;
-        try { localStorage.setItem('agent-chat-history', JSON.stringify(next)); } catch { }
+        try {
+          localStorage.setItem('agent-chat-history', JSON.stringify(next));
+        } catch {
+          // Ignore localStorage failures.
+        }
       }
       return next;
     });
-    if (mode === 'ai' || mode === 'agent') setIsAITyping(true);
+
+    if (mode === 'ai' || mode === 'agent') {
+      setIsAITyping(true);
+    }
 
     try {
       if (mode === 'agent') {
-        // Get recent conversation history for context
-        const agentMessages = messageCacheRef.current['agent'] || [];
-        const conversationHistory = agentMessages.slice(-6).map(msg => ({
-          role: (msg as any).displayName === 'Agent' ? 'assistant' : 'user',
-          content: msg.message
+        const agentMessages = messageCacheRef.current.agent || [];
+        const conversationHistory = agentMessages.slice(-6).map((message) => ({
+          content: message.message,
+          role: (message as any).displayName === 'Agent' ? 'assistant' : 'user',
         }));
 
-        // Best-effort: prepare Base Account spend calls on the client
-        let preparedSpendCalls: Array<{ to: `0x${string}`; value: string; data: `0x${string}` }> | undefined;
+        let preparedSpendCalls: Array<{ data: `0x${string}`; to: `0x${string}`; value: string }> | undefined;
         try {
-          const wallet = await fetch('/api/agent/wallet', { signal }).then(r => r.json()).catch(() => null);
+          const wallet = await fetch('/api/agent/wallet', { signal }).then((response) => response.json()).catch(() => null);
           const spender = wallet?.smartAccountAddress as `0x${string}` | undefined;
           if (spender && address) {
-            const [{ createBaseAccountSDK }, spendMod, viem] = await Promise.all([
+            const [{ createBaseAccountSDK }, spendModule, viem] = await Promise.all([
               import('@base-org/account' as any),
               import('@base-org/account/spend-permission' as any),
-              import('viem')
+              import('viem'),
             ]);
             const sdk = createBaseAccountSDK({ appName: 'Pixotchi Agent' } as any);
             const provider = sdk.getProvider();
-            try { await provider.request({ method: 'eth_requestAccounts' }); } catch { }
-            try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch { }
-            const perms = await spendMod.fetchPermissions({ account: address as `0x${string}`, chainId: 8453, spender, provider }).catch(() => []);
-            const SEED = PIXOTCHI_TOKEN_ADDRESS;
-            const seedPerm = (perms || []).find((p: any) => `${p.permission?.token}`.toLowerCase() === SEED.toLowerCase());
-            if (seedPerm) {
-              // Robustly infer mint count from current or recent user messages; clamp to 1..5 per agent policy
-              const extractCount = (txt: string): number | null => {
-                const m = txt.match(/\b(\d{1,2})\b/);
-                if (!m) return null;
-                const n = parseInt(m[1], 10);
-                if (isNaN(n)) return null;
-                return Math.max(1, Math.min(5, n));
+            try {
+              await provider.request({ method: 'eth_requestAccounts' });
+            } catch {
+              // Ignore manual connect failures here.
+            }
+            try {
+              await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] });
+            } catch {
+              // Ignore chain switch failures here.
+            }
+            const permissions = await spendModule.fetchPermissions({
+              account: address as `0x${string}`,
+              chainId: 8453,
+              provider,
+              spender,
+            }).catch(() => []);
+            const seedToken = PIXOTCHI_TOKEN_ADDRESS;
+            const seedPermission = (permissions || []).find(
+              (permission: any) => `${permission.permission?.token}`.toLowerCase() === seedToken.toLowerCase(),
+            );
+
+            if (seedPermission) {
+              const extractCount = (text: string): number | null => {
+                const match = text.match(/\b(\d{1,2})\b/);
+                if (!match) {
+                  return null;
+                }
+                const parsed = parseInt(match[1], 10);
+                if (Number.isNaN(parsed)) {
+                  return null;
+                }
+                return Math.max(1, Math.min(5, parsed));
               };
+
               let inferredCount = extractCount(messageText);
               if (inferredCount == null) {
-                for (let i = agentMessages.length - 1; i >= 0; i--) {
-                  const m = agentMessages[i] as any;
-                  const isUser = m?.displayName !== 'Agent';
-                  if (!isUser) continue;
-                  const n = extractCount(m?.message || '');
-                  if (n != null) { inferredCount = n; break; }
+                for (let index = agentMessages.length - 1; index >= 0; index -= 1) {
+                  const previousMessage = agentMessages[index] as any;
+                  const isUserMessage = previousMessage?.displayName !== 'Agent';
+                  if (!isUserMessage) {
+                    continue;
+                  }
+                  const count = extractCount(previousMessage?.message || '');
+                  if (count != null) {
+                    inferredCount = count;
+                    break;
+                  }
                 }
               }
-              if (inferredCount == null) inferredCount = 1;
+              if (inferredCount == null) {
+                inferredCount = 1;
+              }
 
-              // Use the same hardcoded strains as the server (SEED units)
-              const STRAINS = PLANT_STRAINS;
-              // Default to ZEST in agent mode unless user explicitly specifies another strain
-              let chosen: typeof STRAINS[number] = STRAINS.find(s => s.id === 4) || STRAINS[0];
+              const strains = PLANT_STRAINS;
+              let chosenStrain: typeof strains[number] = strains.find((strain) => strain.id === 4) || strains[0];
               const idMatch = /strain\s*(\d{1,2})/i.exec(messageText);
               if (idMatch) {
-                const sid = parseInt(idMatch[1], 10);
-                const found = STRAINS.find(s => s.id === sid);
-                if (found) chosen = found as typeof STRAINS[number];
-              } else if (Array.isArray(STRAINS)) {
+                const strainId = parseInt(idMatch[1], 10);
+                const found = strains.find((strain) => strain.id === strainId);
+                if (found) {
+                  chosenStrain = found as typeof strains[number];
+                }
+              } else if (Array.isArray(strains)) {
                 const lower = messageText.toLowerCase();
-                const byName = STRAINS.find(s => lower.includes(String(s.name || '').toLowerCase()));
-                if (byName) chosen = byName as typeof STRAINS[number];
+                const byName = strains.find((strain) => lower.includes(String(strain.name || '').toLowerCase()));
+                if (byName) {
+                  chosenStrain = byName as typeof strains[number];
+                }
               }
-              const unit = chosen?.mintPriceSeed || (STRAINS.find(s => s.id === 4)?.mintPriceSeed || 10); // SEED units
-              const total = unit * inferredCount;
+
+              const unitCost = chosenStrain?.mintPriceSeed || (strains.find((strain) => strain.id === 4)?.mintPriceSeed || 10);
+              const total = unitCost * inferredCount;
               const requiredWei = viem.parseUnits(total.toFixed(6), 18);
-              const spendCalls = await spendMod.prepareSpendCallData(seedPerm, requiredWei).catch(() => []);
+              const spendCalls = await spendModule.prepareSpendCallData(seedPermission, requiredWei).catch(() => []);
               if (Array.isArray(spendCalls) && spendCalls.length > 0) {
-                preparedSpendCalls = spendCalls.map((c: any) => ({ to: c.to as `0x${string}`, value: String(c.value ?? 0), data: (c.data || '0x') as `0x${string}` }));
+                preparedSpendCalls = spendCalls.map((call: any) => ({
+                  data: (call.data || '0x') as `0x${string}`,
+                  to: call.to as `0x${string}`,
+                  value: String(call.value ?? 0),
+                }));
               }
             }
           }
-        } catch { }
+        } catch {
+          // Spend-call preparation is best-effort only.
+        }
 
         const response = await fetch('/api/agent/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            conversationHistory,
+            preparedSpendCalls,
             prompt: messageText,
-            userAddress: chatAddress, // Use effective (Twin) address for spend permission validation
-            conversationHistory, // Pass conversation context
-            preparedSpendCalls
           }),
-          signal
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          signal,
         });
+        if (response.status === 401) {
+          await handleChatAuthFailure();
+          throw new Error('Agent chat is unavailable for this session.');
+        }
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           throw new Error(err.error || 'Failed to send agent prompt');
         }
         const data = await response.json();
         const replyText = typeof data?.text === 'string' ? data.text : (data?.success ? 'Done.' : '');
-        const agentReply: AnyChatMessage = { id: `agent-${Date.now()}`, address, message: replyText, timestamp: Date.now(), displayName: 'Agent' } as any;
-        setMessages(prev => {
-          const next = [...prev, agentReply];
+        const agentReply: AnyChatMessage = {
+          address,
+          displayName: 'Agent',
+          id: `agent-${Date.now()}`,
+          message: replyText,
+          timestamp: Date.now(),
+        } as any;
+        setMessages((previous) => {
+          const next = [...previous, agentReply];
           messageCacheRef.current.agent = next;
-          try { localStorage.setItem('agent-chat-history', JSON.stringify(next)); } catch { }
+          try {
+            localStorage.setItem('agent-chat-history', JSON.stringify(next));
+          } catch {
+            // Ignore localStorage failures.
+          }
           return next;
         });
       } else {
         const response = await fetch(endpoint, {
-          method: 'POST',
+          body: JSON.stringify(
+            mode === 'ai'
+              ? { message: messageText }
+              : { message: messageText },
+          ),
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: messageText, address: chatAddress, conversationId }),
-          signal
+          method: 'POST',
+          signal,
         });
+
+        if (response.status === 401) {
+          await handleChatAuthFailure();
+          throw new Error(mode === 'ai' ? 'AI chat is unavailable for this session.' : 'Public chat is unavailable for this session.');
+        }
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -465,55 +836,55 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
 
         if (mode === 'ai') {
-          const { userMessage, aiResponse } = data;
-          if (!conversationId) {
+          const { aiResponse, userMessage } = data;
+          if (!conversationId && userMessage.conversationId) {
             setConversationId(userMessage.conversationId);
           }
-          // Replace optimistic user message and add AI response
-          setMessages(prev => [...prev.filter(m => m.id !== optimisticId), userMessage, aiResponse]);
+          setMessages((previous) => [...previous.filter((message) => message.id !== optimisticId), userMessage, aiResponse]);
         } else {
-          // For public chat, add the returned message
           const newMessage = data.message;
-          setMessages(prev => {
-            const next = [...prev.filter(m => m.id !== optimisticId), newMessage];
+          setMessages((previous) => {
+            const next = [...previous.filter((message) => message.id !== optimisticId), newMessage];
             messageCacheRef.current.public = next;
             setPublicMessageVersion((version) => version + 1);
             return next;
           });
         }
       }
-
     } catch (err: any) {
-      // Don't show error if request was intentionally aborted
       if (err.name === 'AbortError') {
-        console.log('Request was cancelled');
-        setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        setMessages((previous) => previous.filter((message) => message.id !== optimisticId));
       } else {
         const friendlyMessage = err.message || 'An unexpected error occurred.';
         setError(friendlyMessage);
         toast.error(friendlyMessage);
-        setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        setMessages((previous) => previous.filter((message) => message.id !== optimisticId));
       }
     } finally {
       setIsSending(false);
-      if (mode === 'ai' || mode === 'agent') setIsAITyping(false);
+      if (mode === 'ai' || mode === 'agent') {
+        setIsAITyping(false);
+      }
     }
   };
 
   const value = {
-    messages,
-    loading,
-    error,
-    mode,
-    setMode,
-    setChatOpen: setIsChatOpen,
-    sendMessage,
-    isSending,
     conversationId,
-    setConversationId,
+    error,
     isAITyping,
+    isSending,
+    loading,
+    markAsRead,
+    messages,
+    mode,
+    publicChatAddress,
+    publicChatAuthenticated,
+    publicChatLoading,
+    sendMessage,
+    setChatOpen: setIsChatOpen,
+    setConversationId,
+    setMode,
     unreadCount,
-    markAsRead
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

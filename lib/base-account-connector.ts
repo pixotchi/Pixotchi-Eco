@@ -8,6 +8,11 @@ import {
   UserRejectedRequestError,
 } from "viem";
 import { createBaseAccountSDK, type ProviderInterface } from "@base-org/account";
+import {
+  clearPublicChatSession,
+  createBasePublicChatSession,
+  requestBasePublicChatNonce,
+} from "@/lib/chat-auth-client";
 
 type CreateProviderOptions = Parameters<typeof createBaseAccountSDK>[0];
 
@@ -21,6 +26,18 @@ type BaseAccountConnectorParameters = CreateProviderOptions & {
 
 const USER_REJECTION_PATTERN =
   /(user closed modal|accounts received is empty|user denied|request rejected)/i;
+
+type WalletConnectResult = {
+  accounts?: Array<{
+    address: `0x${string}`;
+    capabilities?: {
+      signInWithEthereum?: {
+        message?: string;
+        signature?: `0x${string}`;
+      };
+    };
+  }>;
+};
 
 export function baseAccountConnector(
   parameters: BaseAccountConnectorParameters = {}
@@ -57,6 +74,63 @@ export function baseAccountConnector(
       return accounts.map((account) => getAddress(account));
     };
 
+    const requestWalletConnectAuth = async (requestedChainId?: number) => {
+      const baseProvider = await getOrCreateProvider();
+      const chainHex = numberToHex(requestedChainId ?? config.chains[0]?.id ?? 8453);
+      let nonce: string | null = null;
+
+      try {
+        nonce = await requestBasePublicChatNonce();
+      } catch (error) {
+        console.warn("[base-account] Failed to fetch Base auth nonce, falling back to wallet connect only:", error);
+      }
+
+      if (!nonce) {
+        return requestAccounts("eth_requestAccounts");
+      }
+
+      const domain = typeof window !== "undefined" ? window.location.host : undefined;
+      const uri = typeof window !== "undefined" ? window.location.origin : undefined;
+
+      const response = (await baseProvider.request({
+        method: "wallet_connect",
+        params: [
+          {
+            version: "1",
+            capabilities: {
+              signInWithEthereum: {
+                chainId: chainHex,
+                nonce,
+                ...(domain ? { domain } : {}),
+                ...(uri ? { uri } : {}),
+                statement: "Sign in to Pixotchi",
+              },
+            },
+          },
+        ],
+      })) as WalletConnectResult;
+
+      const accounts = (response.accounts ?? []).map((account) => getAddress(account.address));
+      const primaryAccount = response.accounts?.[0];
+      const siweCapability = primaryAccount?.capabilities?.signInWithEthereum;
+
+      if (!primaryAccount?.address || !siweCapability?.message || !siweCapability.signature) {
+        throw new Error("Base authentication was not completed.");
+      }
+
+      try {
+        await createBasePublicChatSession({
+          address: getAddress(primaryAccount.address),
+          message: siweCapability.message,
+          signature: siweCapability.signature,
+        });
+      } catch (error) {
+        console.warn("[base-account] Base chat session bootstrap failed:", error);
+      }
+
+      return accounts;
+    };
+
     return {
       id: "baseAccount",
       name: parameters.displayName ?? "Sign in with Base",
@@ -65,7 +139,7 @@ export function baseAccountConnector(
       async connect({ chainId, withCapabilities } = {}) {
         try {
           const baseProvider = await getOrCreateProvider();
-          const accounts = await requestAccounts("eth_requestAccounts");
+          const accounts = await requestWalletConnectAuth(chainId);
 
           if (!accountsChanged) {
             accountsChanged = this.onAccountsChanged.bind(this);
@@ -209,6 +283,9 @@ export function baseAccountConnector(
           this.onDisconnect();
           return;
         }
+        void clearPublicChatSession().catch((error) => {
+          console.warn("[base-account] Failed to clear public chat session after account change:", error);
+        });
         config.emitter.emit("change", {
           accounts: accounts.map((account) => getAddress(account)),
         });
@@ -220,6 +297,9 @@ export function baseAccountConnector(
       },
 
       async onDisconnect(_error?: unknown) {
+        await clearPublicChatSession().catch((error) => {
+          console.warn("[base-account] Failed to clear public chat session on disconnect:", error);
+        });
         config.emitter.emit("disconnect");
         const baseProvider = await getOrCreateProvider();
         if (accountsChanged) {
@@ -238,5 +318,3 @@ export function baseAccountConnector(
     };
   });
 }
-
-

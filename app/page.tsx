@@ -30,6 +30,7 @@ import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
+import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 // Import broadcast component
@@ -233,6 +234,9 @@ export default function App() {
     try {
       await sessionStorageManager.removeAutologin();
       await persistPrivyAuthenticatedAddress(null);
+      await clearPublicChatSession().catch((error) => {
+        console.warn('Failed to clear public chat session during Privy reset:', error);
+      });
 
       if (authenticated && logout) {
         try {

@@ -9,13 +9,15 @@ import { useBalances } from '@/lib/balance-context';
 import { parseUnits } from 'viem';
 
 export default function ChatInput() {
-  const { sendMessage, isSending, mode } = useChat();
+  const { sendMessage, isSending, mode, publicChatAuthenticated, publicChatLoading } = useChat();
   const [message, setMessage] = useState('');
   const { seedBalance, loading: balanceLoading } = useBalances();
   
   const isAIMode = mode === 'ai';
   const MIN_REQUIRED_SEED = parseUnits('10', 18);
   const insufficientForAgent = mode === 'agent' && !balanceLoading && seedBalance < MIN_REQUIRED_SEED;
+  const sharedChatUnavailable = (mode === 'public' || isAIMode || mode === 'agent') && !publicChatAuthenticated;
+  const inputDisabled = isSending || insufficientForAgent || sharedChatUnavailable;
 
   const handleSend = async () => {
     if (!message.trim()) return;
@@ -37,13 +39,34 @@ export default function ChatInput() {
           SEED balance insufficient for Agent tasks. (Minimum 10 needed, Visit Swap)
         </div>
       )}
+      {sharedChatUnavailable && (
+        <div className="text-xs text-muted-foreground" role="note">
+          {publicChatLoading
+            ? 'Connecting chat...'
+            : (
+              mode === 'agent'
+                ? 'Agent chat is unavailable for this session.'
+                : (isAIMode ? 'AI chat is unavailable for this session.' : 'Public chat is unavailable for this session.')
+            )}
+        </div>
+      )}
       <div className="flex items-center gap-2">
       <Input
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyPress={handleKeyPress}
-        placeholder={mode === 'agent' ? (insufficientForAgent ? "SEED balance insufficient (min 10). Visit Swap." : "Ask the agent to mint plants...") : (isAIMode ? "Ask about Pixotchi..." : "Type a message...")}
-        disabled={isSending || insufficientForAgent}
+        placeholder={
+          mode === 'agent'
+            ? (
+              insufficientForAgent
+                ? "SEED balance insufficient (min 10). Visit Swap."
+                : (sharedChatUnavailable ? "Agent chat unavailable" : "Ask the agent to mint plants...")
+            )
+            : (isAIMode
+              ? (sharedChatUnavailable ? "AI chat unavailable" : "Ask about Pixotchi...")
+              : (sharedChatUnavailable ? "Public chat unavailable" : "Type a message..."))
+        }
+        disabled={inputDisabled}
         className="flex-1"
         maxLength={mode === 'agent' ? 200 : (isAIMode ? 300 : 200)}
         aria-label={mode === 'agent' ? "Ask onchain agent" : (isAIMode ? "Ask AI assistant a question" : "Type a chat message")}
@@ -52,7 +75,7 @@ export default function ChatInput() {
       />
       <Button
         onClick={handleSend}
-        disabled={isSending || !message.trim() || insufficientForAgent}
+        disabled={inputDisabled || !message.trim()}
         size="icon"
         aria-label={isSending ? "Sending message..." : (mode === 'agent' ? "Send prompt to agent" : (isAIMode ? "Send question to AI" : "Send chat message"))}
         aria-describedby="chat-character-count"

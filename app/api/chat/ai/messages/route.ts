@@ -1,59 +1,115 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAIConversationMessages, getOrCreateConversation } from '@/lib/ai-service';
-import { isValidEthereumAddressFormat } from '@/lib/utils';
+import {
+  getAIConversationForAddress,
+  getAIConversationMessages,
+  getOrCreateConversation,
+} from '@/lib/ai-service';
+import {
+  createChatAuthRequiredResponse,
+  createChatUnavailableResponse,
+  getChatSessionFromRequest,
+} from '@/lib/chat-auth';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
+
+export const dynamic = 'force-dynamic';
+
+const AI_CHAT_READ_IP_LIMIT_PER_MINUTE = 120;
+const AI_CHAT_READ_ADDRESS_LIMIT_PER_MINUTE = 240;
 
 export async function GET(request: NextRequest) {
   try {
+    const { session, sessionId } = await getChatSessionFromRequest(request);
+
+    if (!session) {
+      return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
+    }
+
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:chat:ai:messages',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: AI_CHAT_READ_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+        {
+          kind: 'address',
+          identifier: session.address,
+          limit: AI_CHAT_READ_ADDRESS_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const { searchParams } = new URL(request.url);
-    const address = searchParams.get('address');
     const conversationId = searchParams.get('conversationId');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    
-    // Validate required parameters
-    if (!address) {
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+
+    if (!Number.isFinite(limit) || limit < 1) {
       return NextResponse.json(
-        { error: 'Address parameter is required' },
-        { status: 400 }
+        { error: 'Limit must be a positive number.' },
+        {
+          headers: {
+            'Cache-Control': 'private, no-store',
+          },
+          status: 400,
+        },
       );
     }
 
-    // Validate address format
-    if (!isValidEthereumAddressFormat(address)) {
-      return NextResponse.json(
-        { error: 'Invalid wallet address format' },
-        { status: 400 }
-      );
-    }
-    
-    // Validate limit
     if (limit > 100) {
       return NextResponse.json(
         { error: 'Limit cannot exceed 100' },
-        { status: 400 }
+        {
+          headers: {
+            'Cache-Control': 'private, no-store',
+          },
+          status: 400,
+        },
       );
     }
 
     let finalConversationId = conversationId;
-    
-    // If no conversationId provided, get or create one for the user
+
     if (!finalConversationId) {
-      finalConversationId = await getOrCreateConversation(address);
+      finalConversationId = await getOrCreateConversation(session.address);
+    } else {
+      const conversation = await getAIConversationForAddress(session.address, finalConversationId);
+      if (!conversation) {
+        return NextResponse.json(
+          { error: 'Conversation not found.' },
+          {
+            headers: {
+              'Cache-Control': 'private, no-store',
+            },
+            status: 404,
+          },
+        );
+      }
     }
 
-    // Get messages for the conversation
     const messages = await getAIConversationMessages(finalConversationId, limit);
 
-    return NextResponse.json({
-      messages,
-      conversationId: finalConversationId,
-      count: messages.length,
-      timestamp: Date.now()
-    });
+    return NextResponse.json(
+      {
+        messages,
+        conversationId: finalConversationId,
+        count: messages.length,
+        timestamp: Date.now(),
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store',
+        },
+      },
+    );
   } catch (error) {
     console.error('Error fetching AI chat messages:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch AI messages' },
-      { status: 500 }
-    );
+    return createChatUnavailableResponse('Failed to fetch AI messages.');
   }
 }
