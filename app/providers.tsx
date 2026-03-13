@@ -37,6 +37,7 @@ import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper'
 import { SafeArea } from "@coinbase/onchainkit/minikit";
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
+import { usePathname } from "next/navigation";
 import packageJson from '@/package.json';
 
 // Surface types for auth provider selection
@@ -438,7 +439,7 @@ export function Providers(props: { children: ReactNode }) {
                               <SolanaWalletProvider>
                                 <BalanceProvider>
                                   <LoadingProvider>
-                                    <ChatProvider>
+                                    <RouteAwareChatProvider>
                                       <TutorialBundle>
                                         {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
                                         {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
@@ -477,7 +478,7 @@ export function Providers(props: { children: ReactNode }) {
                                       <TasksInfoDialog />
                                       <SecretGardenListener />
                                       <SnowEffect />
-                                    </ChatProvider>
+                                    </RouteAwareChatProvider>
                                   </LoadingProvider>
                                 </BalanceProvider>
                               </SolanaWalletProvider>
@@ -495,4 +496,15 @@ export function Providers(props: { children: ReactNode }) {
       </ServerThemeProvider>
     </ErrorBoundary>
   );
+}
+
+function RouteAwareChatProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const isStatusRoute = pathname === '/status' || pathname.startsWith('/status/');
+
+  if (isStatusRoute) {
+    return <>{children}</>;
+  }
+
+  return <ChatProvider>{children}</ChatProvider>;
 }
