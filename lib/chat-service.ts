@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { ChatMessage, ChatRateLimit, ChatStats, AdminChatMessage } from './types';
 import { resolvePrimaryName } from './ens-resolver';
 import { ADDRESS_TRUNCATION } from './constants';
-import { redisScanKeys, withPrefix } from './redis';
+import { withPrefix } from './redis';
 
 const CHAT_MESSAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
@@ -58,6 +58,14 @@ async function scanChatKeys(pattern: string): Promise<string[]> {
   return Array.from(new Set([...rawKeys, ...prefixedKeys]));
 }
 
+function extractChatMessageTimestamp(key: string): number {
+  const match = key.match(/(?:^|:)chat:messages:(\d+):/);
+  if (!match) return 0;
+
+  const timestamp = Number(match[1]);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 async function cleanupChatMessageIndex(now: number = Date.now()): Promise<void> {
   if (!redis) return;
   const cutoff = now - (CHAT_MESSAGE_TTL * 1000);
@@ -72,7 +80,7 @@ async function backfillChatMessageIndex(): Promise<void> {
 
   const pipeline = redis.pipeline();
   for (const key of legacyKeys) {
-    const timestamp = Number(key.split(':')[2] || 0);
+    const timestamp = extractChatMessageTimestamp(key);
     if (!Number.isFinite(timestamp) || timestamp <= 0) continue;
     pipeline.zadd(CHAT_MESSAGE_INDEX_KEY, { score: timestamp, member: key });
   }
