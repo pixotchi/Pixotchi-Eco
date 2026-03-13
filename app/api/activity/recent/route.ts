@@ -10,7 +10,7 @@ export async function GET() {
       { activities, count: activities.length },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30',
+          'Cache-Control': 'no-store',
         },
       },
     );

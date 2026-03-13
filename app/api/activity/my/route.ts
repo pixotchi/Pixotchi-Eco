@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       { activities, count: activities.length },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          'Cache-Control': 'no-store',
         },
       },
     );
