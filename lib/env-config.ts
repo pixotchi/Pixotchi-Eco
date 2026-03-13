@@ -128,6 +128,7 @@ export const SERVER_ENV = {
 export const validateEnvSecurity = () => {
   const sensitiveKeys = [
     'ADMIN_INVITE_KEY',
+    'PRIVY_APP_SECRET',
     'REDIS_TOKEN',
     'UPSTASH_REDIS_REST_TOKEN',
     'KV_REST_API_TOKEN',
@@ -152,6 +153,7 @@ if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
     { key: 'INDEXER_SHARED_SECRET', present: Boolean(process.env.INDEXER_SHARED_SECRET) },
     { key: 'NEXT_PUBLIC_CDP_CLIENT_API_KEY', present: Boolean(process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY) },
     { key: 'NEXT_PUBLIC_PRIVY_APP_ID', present: Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID) },
+    { key: 'PRIVY_APP_SECRET', present: Boolean(process.env.PRIVY_APP_SECRET) },
   ];
   const missing = required.filter(r => !r.present).map(r => r.key);
   if (missing.length > 0) {
