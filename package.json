@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.84",
+  "version": "1.6.85",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -29,7 +29,7 @@
     "bs58": "6.0.0",
     "wagmi": "2.19.5",
     "viem": "2.47.2",
-    "ox": "0.14.1",
+    "ox": "0.14.2",
     "ethers": "6.16.0",
     "permissionless": "0.3.4",
     "next": "16.1.6",

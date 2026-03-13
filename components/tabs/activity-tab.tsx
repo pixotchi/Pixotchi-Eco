@@ -1,16 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
-import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-client";
 import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, User, Globe } from "lucide-react";
+import { Terminal } from "lucide-react";
 import {
   AttackEventRenderer,
   KilledEventRenderer,
@@ -46,7 +45,6 @@ const ITEMS_PER_PAGE = 12;
 
 export default function ActivityTab() {
   const { address, isConnected } = useAccount();
-  const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
   const { isTabVisible } = useTabVisibility();
@@ -60,10 +58,11 @@ export default function ActivityTab() {
   const [shopItemMap, setShopItemMap] = useState<ItemMap>({});
   const [gardenItemMap, setGardenItemMap] = useState<ItemMap>({});
   const [currentPage, setCurrentPage] = useState(1);
-  const { shopItems, gardenItems, isLoading: catalogsLoading } = useItemCatalogs();
+  const { shopItems, gardenItems } = useItemCatalogs();
 
   // Request deduplication ref to prevent multiple simultaneous calls
   const fetchActivitiesPendingRef = useRef<string | null>(null);
+  const allActivitiesRef = useRef<ProcessedActivityEvent[]>([]);
 
   const bundleItemConsumedEvents = (activities: ActivityEvent[]): ProcessedActivityEvent[] => {
     const bundledMap = new Map<string, BundledItemConsumedEvent>();
@@ -106,7 +105,7 @@ export default function ActivityTab() {
 
   const fetchActivities = useCallback(async () => {
     // Create a unique key for this fetch based on parameters
-    const fetchKey = `${view}-${myAddress || 'all'}-${shopItems.length}-${gardenItems.length}`;
+    const fetchKey = `${view}-${myAddress || 'all'}`;
 
     // Prevent duplicate calls with the same parameters
     if (fetchActivitiesPendingRef.current === fetchKey) {
@@ -116,23 +115,11 @@ export default function ActivityTab() {
     fetchActivitiesPendingRef.current = fetchKey;
 
     try {
-      // Only show full page loader on initial load
-      if (allActivities.length === 0) {
+      // Only show full page loader on first load for the selected view
+      if (allActivitiesRef.current.length === 0) {
         setLoading(true);
       }
       setError(null);
-
-      const newShopItemMap: ItemMap = {};
-      shopItems.forEach((item: ShopItem) => {
-        newShopItemMap[item.id] = item.name;
-      });
-      setShopItemMap(newShopItemMap);
-
-      const newGardenItemMap: ItemMap = {};
-      gardenItems.forEach((item: GardenItem) => {
-        newGardenItemMap[item.id] = item.name;
-      });
-      setGardenItemMap(newGardenItemMap);
 
       let recentActivities: ActivityEvent[] = [];
 
@@ -154,7 +141,7 @@ export default function ActivityTab() {
       if (fetchActivitiesPendingRef.current === fetchKey) {
         const processedActivities = bundleItemConsumedEvents(recentActivities);
         setAllActivities(processedActivities);
-        setCurrentPage(1); // Reset to first page when activities change
+        setCurrentPage(1);
       }
     } catch (err) {
       console.error(err);
@@ -169,31 +156,35 @@ export default function ActivityTab() {
         fetchActivitiesPendingRef.current = null;
       }
     }
-  }, [view, myAddress, shopItems, gardenItems]);
+  }, [view, myAddress]);
+
+  useEffect(() => {
+    allActivitiesRef.current = allActivities;
+  }, [allActivities]);
+
+  useEffect(() => {
+    const newShopItemMap: ItemMap = {};
+    shopItems.forEach((item: ShopItem) => {
+      newShopItemMap[item.id] = item.name;
+    });
+    setShopItemMap(newShopItemMap);
+
+    const newGardenItemMap: ItemMap = {};
+    gardenItems.forEach((item: GardenItem) => {
+      newGardenItemMap[item.id] = item.name;
+    });
+    setGardenItemMap(newGardenItemMap);
+  }, [shopItems, gardenItems]);
 
   // Note: Removed auto-reset effect that caused race condition when switching to 'my' view
   // The UI now handles missing wallet/address gracefully in renderContent()
 
-  useEffect(() => {
-    fetchActivities();
-  }, [fetchActivities]);
-
   // Refresh when tab becomes visible
-  useEffect(() => {
-    if (isVisible) {
-      console.log('🔄 [Activity] Tab visible, refreshing...');
-      fetchActivities();
-    }
-  }, [isVisible, fetchActivities]);
-
   useEffect(() => {
     if (!isVisible) return;
 
-    const interval = setInterval(() => {
-      fetchActivities();
-    }, 5000);
-
-    return () => clearInterval(interval);
+    console.log('🔄 [Activity] Tab visible, refreshing...');
+    fetchActivities();
   }, [isVisible, fetchActivities]);
 
   const renderActivity = (activity: ProcessedActivityEvent) => {

@@ -52,6 +52,7 @@ import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana
 import { isSolanaEnabled } from "@/lib/solana-constants";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { AirdropClaimCard } from "@/components/airdrop-claim-card";
+import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 // Compact ETH Mode toggle row for Connection card
 const EthModeToggleRow = () => {
@@ -382,10 +383,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       // This ensures wallet disconnection happens after session cleanup
       disconnect();
 
-      // Clear auth surface preference to reset state
+      // Clear auth state to reset any surface and wallet-binding metadata
       try {
-        sessionStorage.removeItem('pixotchi:authSurface');
-        sessionStorage.removeItem('pixotchi:autologin');
+        await sessionStorageManager.clearAuthState();
       } catch (storageError) {
         console.warn('Failed to clear auth preferences:', storageError);
       }
