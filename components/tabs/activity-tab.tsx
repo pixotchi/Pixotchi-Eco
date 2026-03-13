@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { getAllActivity, getMyActivity } from "@/lib/activity-service";
+import { getAllActivity, getMyActivity } from "@/lib/activity-client";
 import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, User, Globe } from "lucide-react";
