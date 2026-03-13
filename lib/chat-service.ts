@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { ChatMessage, ChatRateLimit, ChatStats, AdminChatMessage } from './types';
 import { resolvePrimaryName } from './ens-resolver';
 import { ADDRESS_TRUNCATION } from './constants';
-import { redisScanKeys } from './redis';
+import { redisScanKeys, withPrefix } from './redis';
 
 const CHAT_MESSAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
@@ -15,6 +15,49 @@ const MAX_MESSAGE_LENGTH = 200;
 const MIN_MESSAGE_LENGTH = 1;
 const CHAT_MESSAGE_INDEX_KEY = 'chat:messages:index';
 
+async function scanRawKeys(pattern: string, count: number = 1000): Promise<string[]> {
+  if (!redis) return [];
+
+  try {
+    let cursor = 0;
+    const results: string[] = [];
+
+    do {
+      const resp: any = await (redis as any).scan(cursor, { match: pattern, count });
+      if (Array.isArray(resp)) {
+        cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
+        results.push(...((resp[1] || []) as string[]));
+      } else if (resp && typeof resp === 'object' && 'cursor' in resp) {
+        cursor = Number(resp.cursor) || 0;
+        results.push(...((resp.keys || []) as string[]));
+      } else {
+        break;
+      }
+    } while (cursor !== 0);
+
+    return results;
+  } catch {
+    try {
+      const keys = await redis.keys(pattern);
+      return keys as string[];
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function scanChatKeys(pattern: string): Promise<string[]> {
+  const rawPattern = pattern;
+  const prefixedPattern = withPrefix(pattern);
+
+  const [rawKeys, prefixedKeys] = await Promise.all([
+    scanRawKeys(rawPattern),
+    scanRawKeys(prefixedPattern),
+  ]);
+
+  return Array.from(new Set([...rawKeys, ...prefixedKeys]));
+}
+
 async function cleanupChatMessageIndex(now: number = Date.now()): Promise<void> {
   if (!redis) return;
   const cutoff = now - (CHAT_MESSAGE_TTL * 1000);
@@ -24,7 +67,7 @@ async function cleanupChatMessageIndex(now: number = Date.now()): Promise<void> 
 async function backfillChatMessageIndex(): Promise<void> {
   if (!redis) return;
 
-  const legacyKeys = await redisScanKeys('chat:messages:*');
+  const legacyKeys = await scanChatKeys('chat:messages:*');
   if (legacyKeys.length === 0) return;
 
   const pipeline = redis.pipeline();
@@ -388,7 +431,7 @@ export async function cleanupOldData(): Promise<void> {
   }
 
   // Clean old spam tracking
-  const spamKeys = await redisScanKeys('chat:spam:*');
+  const spamKeys = await scanChatKeys('chat:spam:*');
   if (spamKeys.length > 0) {
     await redis.del(...spamKeys);
   }
