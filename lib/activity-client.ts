@@ -3,6 +3,7 @@ import { ActivityEvent } from './types';
 async function fetchActivity(endpoint: string): Promise<ActivityEvent[]> {
   const response = await fetch(endpoint, {
     method: 'GET',
+    cache: 'no-store',
     headers: {
       Accept: 'application/json',
     },

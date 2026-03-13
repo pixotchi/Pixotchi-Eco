@@ -5,8 +5,8 @@ import { ActivityEvent, PlayedEvent } from './types';
 import { getPlantsByOwner, getLandsByOwner } from './contracts';
 import { fetchIndexerGraphQL } from './indexer-client';
 
-const ALL_ACTIVITY_CACHE_SECONDS = 15;
-const MY_ACTIVITY_CACHE_SECONDS = 30;
+const ALL_ACTIVITY_CACHE_SECONDS = 3;
+const MY_ACTIVITY_CACHE_SECONDS = 5;
 
 // Filter activities to last 24 hours
 function filterLast24Hours(activities: ActivityEvent[]): ActivityEvent[] {
@@ -738,7 +738,7 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
     console.error('Failed to fetch personal activity:', error);
     return [];
   }
-} 
+}
 
 export const getCachedAllActivity = unstable_cache(
   async () => getAllActivity(),
