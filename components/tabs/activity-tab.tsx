@@ -186,6 +186,16 @@ export default function ActivityTab() {
     }
   }, [isVisible, fetchActivities]);
 
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const interval = setInterval(() => {
+      fetchActivities();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isVisible, fetchActivities]);
+
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {
       case "Attack":
