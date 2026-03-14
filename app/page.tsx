@@ -389,85 +389,117 @@ export default function App() {
     const domain = typeof window !== "undefined" ? window.location.host : undefined;
     const uri = typeof window !== "undefined" ? window.location.origin : undefined;
     const issuedAt = new Date().toISOString();
-    let baseAddress = normalizedAddress;
+    const signInWithEthereum = {
+      chainId: "0x2105",
+      nonce,
+      ...(domain ? { domain } : {}),
+      issuedAt,
+      ...(uri ? { uri } : {}),
+      statement: "Sign in to Pixotchi",
+      version: "1",
+    };
 
-    if (!baseAddress) {
-      try {
-        const connectResult = await connectAsync({
-          connector: baseConnector,
-        } as any);
-        baseAddress = getPrimaryAccountAddress((connectResult as any)?.accounts)?.toLowerCase() ?? null;
-      } catch (error) {
-        if (!isAlreadyConnectedError(error)) {
-          throw error;
-        }
+    const extractBasePayload = (
+      authResult: unknown,
+      fallbackAddress?: string | null,
+    ): {
+      address: string;
+      message: string;
+      signature: `0x${string}`;
+    } | null => {
+      const primaryAccount = Array.isArray((authResult as any)?.accounts)
+        ? (authResult as any).accounts[0]
+        : null;
+      const capabilityAddress =
+        typeof primaryAccount === "string"
+          ? primaryAccount.toLowerCase()
+          : typeof primaryAccount?.address === "string"
+            ? primaryAccount.address.toLowerCase()
+            : fallbackAddress?.toLowerCase() ?? null;
+      const siweCapability =
+        typeof primaryAccount === "string"
+          ? null
+          : primaryAccount?.capabilities?.signInWithEthereum;
+
+      if (
+        siweCapability &&
+        typeof siweCapability === "object" &&
+        typeof (siweCapability as { message?: unknown }).message === "string" &&
+        typeof (siweCapability as { signature?: unknown }).signature !== "string"
+      ) {
+        throw new Error((siweCapability as { message: string }).message);
+      }
+
+      if (
+        !capabilityAddress ||
+        typeof siweCapability?.message !== "string" ||
+        typeof siweCapability?.signature !== "string"
+      ) {
+        return null;
+      }
+
+      return {
+        address: capabilityAddress,
+        message: siweCapability.message,
+        signature: siweCapability.signature as `0x${string}`,
+      };
+    };
+
+    let payload: {
+      address: string;
+      message: string;
+      signature: `0x${string}`;
+    } | null = null;
+
+    try {
+      const connectResult = await connectAsync({
+        capabilities: {
+          signInWithEthereum,
+        },
+        connector: baseConnector,
+        withCapabilities: true,
+      } as any);
+
+      payload = extractBasePayload(connectResult, normalizedAddress);
+    } catch (error) {
+      if (!isAlreadyConnectedError(error)) {
+        throw error;
       }
     }
 
-    const provider = typeof baseConnector?.getProvider === "function"
-      ? await baseConnector.getProvider()
-      : baseConnector?.provider;
+    if (!payload) {
+      let baseAddress = normalizedAddress;
+      const provider = typeof baseConnector?.getProvider === "function"
+        ? await baseConnector.getProvider()
+        : baseConnector?.provider;
 
-    if (!provider?.request) {
-      throw new Error("Base provider unavailable.");
-    }
+      if (!provider?.request) {
+        throw new Error("Base provider unavailable.");
+      }
 
-    if (!baseAddress) {
-      const connectedAccounts = await provider.request({
-        method: "eth_accounts",
-      });
-      baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
-    }
+      if (!baseAddress) {
+        const connectedAccounts = await provider.request({
+          method: "eth_accounts",
+        });
+        baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
+      }
 
-    const authResult = await provider.request({
-      method: "wallet_connect",
-      params: [{
-        capabilities: {
-          signInWithEthereum: {
-            chainId: "0x2105",
-            nonce,
-            ...(domain ? { domain } : {}),
-            issuedAt,
-            ...(uri ? { uri } : {}),
-            statement: "Sign in to Pixotchi",
-            version: "1",
+      const authResult = await provider.request({
+        method: "wallet_connect",
+        params: [{
+          capabilities: {
+            signInWithEthereum,
           },
-        },
-        version: "1",
-      }],
-    });
+          version: "1",
+        }],
+      });
 
-    const primaryAccount = Array.isArray((authResult as any)?.accounts)
-      ? (authResult as any).accounts[0]
-      : null;
-    const capabilityAddress =
-      typeof primaryAccount?.address === "string"
-        ? primaryAccount.address.toLowerCase()
-        : null;
-    const siweCapability = primaryAccount?.capabilities?.signInWithEthereum;
-
-    if (
-      siweCapability &&
-      typeof siweCapability === "object" &&
-      typeof (siweCapability as { message?: unknown }).message === "string" &&
-      typeof (siweCapability as { signature?: unknown }).signature !== "string"
-    ) {
-      throw new Error((siweCapability as { message: string }).message);
+      payload = extractBasePayload(authResult, baseAddress);
     }
 
-    if (
-      !(capabilityAddress ?? baseAddress) ||
-      typeof siweCapability?.message !== "string" ||
-      typeof siweCapability?.signature !== "string"
-    ) {
+    if (!payload) {
       throw new Error("Base authentication was not completed.");
     }
-
-    const payload = {
-      address: (capabilityAddress ?? baseAddress)!,
-      message: siweCapability.message,
-      signature: siweCapability.signature as `0x${string}`,
-    };
 
     await sessionStorageManager.setPendingBaseChatAuth(payload);
     await createBasePublicChatSession(payload);
