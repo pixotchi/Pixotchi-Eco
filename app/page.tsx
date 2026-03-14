@@ -12,7 +12,7 @@ import { WalletProfile } from "@/components/wallet-profile";
 import { PlusCircle, Leaf, Sparkles, Info, Repeat, History, Trophy } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
-import { stringToHex } from "viem";
+import { getAddress, stringToHex } from "viem";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { INVITE_CONFIG, getLocalStorageKeys } from "@/lib/invite-utils";
@@ -515,8 +515,10 @@ export default function App() {
       throw new Error("Coinbase Wallet account unavailable.");
     }
 
+    const checksummedAddress = getAddress(baseAddress);
+
     const message = buildFallbackSiweMessage({
-      address: baseAddress,
+      address: checksummedAddress,
       chainId: 8453,
       ...(domain ? { domain } : {}),
       issuedAt,
@@ -527,7 +529,7 @@ export default function App() {
 
     const signature = await provider.request({
       method: "personal_sign",
-      params: [stringToHex(message), baseAddress],
+      params: [stringToHex(message), checksummedAddress],
     });
 
     if (typeof signature !== "string") {
