@@ -18,6 +18,7 @@ import {
   createBasePublicChatSession,
   createPrivyPublicChatSession,
   getCurrentPublicChatSession,
+  PUBLIC_CHAT_SESSION_EVENT,
   type PublicChatSession,
 } from '@/lib/chat-auth-client';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -75,6 +76,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [publicMessageVersion, setPublicMessageVersion] = useState(0);
   const [publicChatSession, setPublicChatSession] = useState<PublicChatSession | null>(null);
   const [publicChatLoading, setPublicChatLoading] = useState(false);
+  const [publicChatSessionVersion, setPublicChatSessionVersion] = useState(0);
 
   const messageCacheRef = useRef<{ public: AnyChatMessage[]; ai: AnyChatMessage[]; agent: AnyChatMessage[] }>({
     agent: [],
@@ -108,6 +110,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handlePublicChatSession = (event: Event) => {
+      const detail = (event as CustomEvent<{ session: PublicChatSession | null }>).detail;
+      const nextSession = detail?.session ?? null;
+
+      setPublicChatSession((current) => {
+        if (
+          current?.address?.toLowerCase() === nextSession?.address?.toLowerCase() &&
+          current?.provider === nextSession?.provider &&
+          current?.method === nextSession?.method
+        ) {
+          return current;
+        }
+
+        return nextSession;
+      });
+      setPublicChatSessionVersion((version) => version + 1);
+    };
+
+    window.addEventListener(PUBLIC_CHAT_SESSION_EVENT, handlePublicChatSession as EventListener);
+    return () => {
+      window.removeEventListener(PUBLIC_CHAT_SESSION_EVENT, handlePublicChatSession as EventListener);
     };
   }, []);
 
@@ -407,6 +438,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       solanaAddress ?? 'none',
       authenticated ? '1' : '0',
       privyReady ? '1' : '0',
+      publicChatSessionVersion.toString(),
     ].join(':');
 
     if (bootstrapKeyRef.current === bootstrapKey) {
@@ -545,6 +577,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     chatAddress,
     getAccessToken,
     isMiniApp,
+    publicChatSessionVersion,
     privyReady,
     solanaAddress,
   ]);

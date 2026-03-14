@@ -8,6 +8,8 @@ export type PublicChatSession = {
   sourceAddress?: string;
 };
 
+export const PUBLIC_CHAT_SESSION_EVENT = 'pixotchi:public-chat-session';
+
 type PrivyChatSessionRequest = {
   accessToken: string;
   expectedAddress?: string | null;
@@ -49,6 +51,16 @@ async function parseSessionResponse(response: Response): Promise<PublicChatSessi
   return response.json() as Promise<PublicChatSession>;
 }
 
+function emitPublicChatSessionEvent(session: PublicChatSession | null) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(PUBLIC_CHAT_SESSION_EVENT, {
+    detail: { session },
+  }));
+}
+
 export async function getCurrentPublicChatSession(): Promise<PublicChatSession | null> {
   const response = await fetch('/api/chat/auth/session', {
     cache: 'no-store',
@@ -76,7 +88,9 @@ export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessio
     method: 'POST',
   });
 
-  return parseSessionResponse(response);
+  const session = await parseSessionResponse(response);
+  emitPublicChatSessionEvent(session);
+  return session;
 }
 
 export async function createFarcasterPublicChatSession(payload: Omit<FarcasterChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
@@ -93,7 +107,9 @@ export async function createFarcasterPublicChatSession(payload: Omit<FarcasterCh
     method: 'POST',
   });
 
-  return parseSessionResponse(response);
+  const session = await parseSessionResponse(response);
+  emitPublicChatSessionEvent(session);
+  return session;
 }
 
 export async function createBasePublicChatSession(payload: Omit<BaseChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
@@ -110,7 +126,9 @@ export async function createBasePublicChatSession(payload: Omit<BaseChatSessionR
     method: 'POST',
   });
 
-  return parseSessionResponse(response);
+  const session = await parseSessionResponse(response);
+  emitPublicChatSessionEvent(session);
+  return session;
 }
 
 export async function clearPublicChatSession(): Promise<void> {
@@ -123,6 +141,8 @@ export async function clearPublicChatSession(): Promise<void> {
   if (!response.ok) {
     throw new Error(await parseError(response));
   }
+
+  emitPublicChatSessionEvent(null);
 }
 
 export async function requestBasePublicChatNonce(): Promise<string> {
