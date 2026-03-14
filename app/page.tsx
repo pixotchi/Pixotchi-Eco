@@ -1127,17 +1127,6 @@ export default function App() {
     );
   }
 
-  if (surface === 'base' && !isConnected && isBaseAuthPending) {
-    return (
-      <div className="flex flex-col h-dvh bg-background items-center justify-center p-4">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi Logo" width={64} height={64} className="opacity-50" />
-          <BasePageLoader text={baseAuthStatus === 'checking' ? 'Checking Base session...' : 'Completing Base sign-in...'} />
-        </div>
-      </div>
-    );
-  }
-
   // Show invite gate if wallet is connected but not validated (and system is enabled)
   if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !userValidated) {
     return (
