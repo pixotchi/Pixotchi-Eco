@@ -154,7 +154,11 @@ export function Providers(props: { children: ReactNode }) {
         clearAppCaches({
           unregisterServiceWorkers: true,
           reloadAfter: true,
-          preserveLocalStorageKeys: ["pixotchi:tutorial", "pixotchi:cache_version"],
+          preserveLocalStorageKeys: [
+            "pixotchi:tutorial",
+            "pixotchi:cache_version",
+            ...sessionStorageManager.getPersistentLocalStorageKeys(),
+          ],
           // Only clear our own keys to avoid racing Privy/OnchainKit first-load state
           onlyPrefixes: ["pixotchi", "pixotchi:"]
         });

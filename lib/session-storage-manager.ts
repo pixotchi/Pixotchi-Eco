@@ -1,5 +1,6 @@
-// Centralized sessionStorage manager to prevent race conditions
-// Provides thread-safe access to sessionStorage with proper error handling
+// Centralized client-side storage manager to prevent race conditions.
+// Durable auth state uses localStorage so it survives new tabs/windows.
+// One-shot auth flow state remains in sessionStorage so it stays tab-scoped.
 
 type AuthSurface = 'privy' | 'base' | 'coinbase' | 'privysolana' | null;
 type PendingBaseChatAuth = {
@@ -21,6 +22,80 @@ class SessionStorageManager {
   private lock: Promise<void> = Promise.resolve();
 
   private constructor() {}
+
+  getPersistentLocalStorageKeys(): string[] {
+    return [
+      this.KEY_AUTH_SURFACE,
+      this.KEY_PRIVY_AUTH_ADDRESS,
+      this.KEY_BASE_AUTH_ADDRESS,
+    ];
+  }
+
+  private getDurableItem(key: string): string | null {
+    if (typeof window === 'undefined') return null;
+
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored !== null) {
+        return stored;
+      }
+    } catch (error) {
+      console.warn(`Failed to read ${key} from localStorage:`, error);
+    }
+
+    try {
+      const stored = sessionStorage.getItem(key);
+      if (stored !== null) {
+        try {
+          localStorage.setItem(key, stored);
+        } catch {
+          // Ignore localStorage sync failures and continue with sessionStorage value.
+        }
+        return stored;
+      }
+    } catch (error) {
+      console.warn(`Failed to read ${key} from sessionStorage fallback:`, error);
+    }
+
+    return null;
+  }
+
+  private setDurableItem(key: string, value: string): void {
+    let stored = false;
+    let lastError: unknown;
+
+    try {
+      localStorage.setItem(key, value);
+      stored = true;
+    } catch (error) {
+      lastError = error;
+    }
+
+    try {
+      sessionStorage.setItem(key, value);
+      stored = true;
+    } catch (error) {
+      lastError = lastError ?? error;
+    }
+
+    if (!stored && lastError) {
+      throw lastError;
+    }
+  }
+
+  private removeDurableItem(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn(`Failed to remove ${key} from localStorage:`, error);
+    }
+
+    try {
+      sessionStorage.removeItem(key);
+    } catch (error) {
+      console.warn(`Failed to remove ${key} from sessionStorage:`, error);
+    }
+  }
 
   private emitAuthSurfaceChange(surface: AuthSurface): void {
     if (typeof window === 'undefined') return;
@@ -48,13 +123,13 @@ class SessionStorageManager {
     if (typeof window === 'undefined') return null;
     
     try {
-      const stored = sessionStorage.getItem(this.KEY_AUTH_SURFACE);
+      const stored = this.getDurableItem(this.KEY_AUTH_SURFACE);
       if (stored === 'privy' || stored === 'base' || stored === 'coinbase' || stored === 'privysolana') {
         return stored as AuthSurface;
       }
       return null;
     } catch (error) {
-      console.warn('Failed to read auth surface from sessionStorage:', error);
+      console.warn('Failed to read auth surface from client storage:', error);
       return null;
     }
   }
@@ -71,10 +146,10 @@ class SessionStorageManager {
       if (typeof window === 'undefined') return;
       
       try {
-        sessionStorage.setItem(this.KEY_AUTH_SURFACE, surface);
+        this.setDurableItem(this.KEY_AUTH_SURFACE, surface);
         this.emitAuthSurfaceChange(surface);
       } catch (error) {
-        console.error('Failed to set auth surface in sessionStorage:', error);
+        console.error('Failed to set auth surface in client storage:', error);
         throw error;
       }
     });
@@ -133,10 +208,10 @@ class SessionStorageManager {
     if (typeof window === 'undefined') return null;
 
     try {
-      const stored = sessionStorage.getItem(this.KEY_PRIVY_AUTH_ADDRESS);
+      const stored = this.getDurableItem(this.KEY_PRIVY_AUTH_ADDRESS);
       return stored ? stored.toLowerCase() : null;
     } catch (error) {
-      console.warn('Failed to read Privy authenticated address from sessionStorage:', error);
+      console.warn('Failed to read Privy authenticated address from client storage:', error);
       return null;
     }
   }
@@ -148,9 +223,9 @@ class SessionStorageManager {
       if (typeof window === 'undefined') return;
 
       try {
-        sessionStorage.setItem(this.KEY_PRIVY_AUTH_ADDRESS, normalized);
+        this.setDurableItem(this.KEY_PRIVY_AUTH_ADDRESS, normalized);
       } catch (error) {
-        console.error('Failed to set Privy authenticated address in sessionStorage:', error);
+        console.error('Failed to set Privy authenticated address in client storage:', error);
         throw error;
       }
     });
@@ -163,9 +238,9 @@ class SessionStorageManager {
       if (typeof window === 'undefined') return;
 
       try {
-        sessionStorage.removeItem(this.KEY_PRIVY_AUTH_ADDRESS);
+        this.removeDurableItem(this.KEY_PRIVY_AUTH_ADDRESS);
       } catch (error) {
-        console.warn('Failed to remove Privy authenticated address from sessionStorage:', error);
+        console.warn('Failed to remove Privy authenticated address from client storage:', error);
       }
     });
 
@@ -176,10 +251,10 @@ class SessionStorageManager {
     if (typeof window === 'undefined') return null;
 
     try {
-      const stored = sessionStorage.getItem(this.KEY_BASE_AUTH_ADDRESS);
+      const stored = this.getDurableItem(this.KEY_BASE_AUTH_ADDRESS);
       return stored ? stored.toLowerCase() : null;
     } catch (error) {
-      console.warn('Failed to read Base authenticated address from sessionStorage:', error);
+      console.warn('Failed to read Base authenticated address from client storage:', error);
       return null;
     }
   }
@@ -191,9 +266,9 @@ class SessionStorageManager {
       if (typeof window === 'undefined') return;
 
       try {
-        sessionStorage.setItem(this.KEY_BASE_AUTH_ADDRESS, normalized);
+        this.setDurableItem(this.KEY_BASE_AUTH_ADDRESS, normalized);
       } catch (error) {
-        console.error('Failed to set Base authenticated address in sessionStorage:', error);
+        console.error('Failed to set Base authenticated address in client storage:', error);
         throw error;
       }
     });
@@ -206,9 +281,9 @@ class SessionStorageManager {
       if (typeof window === 'undefined') return;
 
       try {
-        sessionStorage.removeItem(this.KEY_BASE_AUTH_ADDRESS);
+        this.removeDurableItem(this.KEY_BASE_AUTH_ADDRESS);
       } catch (error) {
-        console.warn('Failed to remove Base authenticated address from sessionStorage:', error);
+        console.warn('Failed to remove Base authenticated address from client storage:', error);
       }
     });
 
@@ -335,7 +410,7 @@ class SessionStorageManager {
       if (typeof window === 'undefined') return;
       
       try {
-        sessionStorage.setItem(this.KEY_AUTH_SURFACE, surface);
+        this.setDurableItem(this.KEY_AUTH_SURFACE, surface);
         sessionStorage.setItem(this.KEY_AUTOLOGIN, surface);
         this.emitAuthSurfaceChange(surface);
       } catch (error) {
@@ -352,10 +427,10 @@ class SessionStorageManager {
       if (typeof window === 'undefined') return;
 
       try {
-        sessionStorage.removeItem(this.KEY_AUTH_SURFACE);
+        this.removeDurableItem(this.KEY_AUTH_SURFACE);
         sessionStorage.removeItem(this.KEY_AUTOLOGIN);
-        sessionStorage.removeItem(this.KEY_PRIVY_AUTH_ADDRESS);
-        sessionStorage.removeItem(this.KEY_BASE_AUTH_ADDRESS);
+        this.removeDurableItem(this.KEY_PRIVY_AUTH_ADDRESS);
+        this.removeDurableItem(this.KEY_BASE_AUTH_ADDRESS);
         sessionStorage.removeItem(this.KEY_BASE_CHAT_AUTH);
         this.emitAuthSurfaceChange(null);
       } catch (error) {

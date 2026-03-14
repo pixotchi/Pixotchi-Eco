@@ -12,7 +12,7 @@ export default function ChatInput() {
   const { sendMessage, isSending, mode, publicChatAuthenticated, publicChatLoading } = useChat();
   const [message, setMessage] = useState('');
   const { seedBalance, loading: balanceLoading } = useBalances();
-  
+
   const isAIMode = mode === 'ai';
   const MIN_REQUIRED_SEED = parseUnits('10', 18);
   const insufficientForAgent = mode === 'agent' && !balanceLoading && seedBalance < MIN_REQUIRED_SEED;
@@ -46,59 +46,59 @@ export default function ChatInput() {
             : (
               mode === 'agent'
                 ? 'Agent chat is unavailable for this session.'
-                : (isAIMode ? 'AI chat is unavailable for this session.' : 'Public chat is unavailable for this session.')
+                : (isAIMode ? 'AI chat is unavailable, refresh the app.' : 'Public chat is unavailable, refresh the app.')
             )}
         </div>
       )}
       <div className="flex items-center gap-2">
-      <Input
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyPress={handleKeyPress}
-        placeholder={
-          mode === 'agent'
-            ? (
-              insufficientForAgent
-                ? "SEED balance insufficient (min 10). Visit Swap."
-                : (sharedChatUnavailable ? "Agent chat unavailable" : "Ask the agent to mint plants...")
-            )
-            : (isAIMode
-              ? (sharedChatUnavailable ? "AI chat unavailable" : "Ask about Pixotchi...")
-              : (sharedChatUnavailable ? "Public chat unavailable" : "Type a message..."))
-        }
-        disabled={inputDisabled}
-        className="flex-1"
-        maxLength={mode === 'agent' ? 200 : (isAIMode ? 300 : 200)}
-        aria-label={mode === 'agent' ? "Ask onchain agent" : (isAIMode ? "Ask AI assistant a question" : "Type a chat message")}
-        aria-describedby="chat-character-count"
-        aria-invalid={message.length > (mode === 'agent' ? 200 : (isAIMode ? 300 : 200))}
-      />
-      <Button
-        onClick={handleSend}
-        disabled={inputDisabled || !message.trim()}
-        size="icon"
-        aria-label={isSending ? "Sending message..." : (mode === 'agent' ? "Send prompt to agent" : (isAIMode ? "Send question to AI" : "Send chat message"))}
-        aria-describedby="chat-character-count"
-      >
-        {isSending ? (
-          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        ) : isAIMode ? (
-          <Bot className="w-4 h-4" aria-hidden="true" />
-        ) : (
-          <Send className="w-4 h-4" aria-hidden="true" />
-        )}
-      </Button>
+        <Input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder={
+            mode === 'agent'
+              ? (
+                insufficientForAgent
+                  ? "SEED balance insufficient (min 10). Visit Swap."
+                  : (sharedChatUnavailable ? "Agent chat unavailable" : "Ask the agent to mint plants...")
+              )
+              : (isAIMode
+                ? (sharedChatUnavailable ? "AI chat unavailable" : "Ask about Pixotchi...")
+                : (sharedChatUnavailable ? "Public chat unavailable" : "Type a message..."))
+          }
+          disabled={inputDisabled}
+          className="flex-1"
+          maxLength={mode === 'agent' ? 200 : (isAIMode ? 300 : 200)}
+          aria-label={mode === 'agent' ? "Ask onchain agent" : (isAIMode ? "Ask AI assistant a question" : "Type a chat message")}
+          aria-describedby="chat-character-count"
+          aria-invalid={message.length > (mode === 'agent' ? 200 : (isAIMode ? 300 : 200))}
+        />
+        <Button
+          onClick={handleSend}
+          disabled={inputDisabled || !message.trim()}
+          size="icon"
+          aria-label={isSending ? "Sending message..." : (mode === 'agent' ? "Send prompt to agent" : (isAIMode ? "Send question to AI" : "Send chat message"))}
+          aria-describedby="chat-character-count"
+        >
+          {isSending ? (
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          ) : isAIMode ? (
+            <Bot className="w-4 h-4" aria-hidden="true" />
+          ) : (
+            <Send className="w-4 h-4" aria-hidden="true" />
+          )}
+        </Button>
 
-      {/* Character count for screen readers */}
-      <div
-        id="chat-character-count"
-        className="sr-only"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {message.length}/{mode === 'agent' ? 200 : (isAIMode ? 300 : 200)} characters
-        {message.length > (mode === 'agent' ? 200 : (isAIMode ? 300 : 200)) && " - Message too long"}
-      </div>
+        {/* Character count for screen readers */}
+        <div
+          id="chat-character-count"
+          className="sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {message.length}/{mode === 'agent' ? 200 : (isAIMode ? 300 : 200)} characters
+          {message.length > (mode === 'agent' ? 200 : (isAIMode ? 300 : 200)) && " - Message too long"}
+        </div>
       </div>
     </div>
   );
