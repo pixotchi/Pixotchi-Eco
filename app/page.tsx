@@ -465,10 +465,19 @@ export default function App() {
       ...(params.uri ? { uri: params.uri } : {}),
     });
 
-    const signature = await params.provider.request({
-      method: "personal_sign",
-      params: [stringToHex(message), checksummedAddress],
-    });
+    let signature: unknown;
+
+    try {
+      signature = await params.provider.request({
+        method: "personal_sign",
+        params: [message, checksummedAddress],
+      });
+    } catch {
+      signature = await params.provider.request({
+        method: "personal_sign",
+        params: [stringToHex(message), checksummedAddress],
+      });
+    }
 
     if (typeof signature !== "string") {
       throw new Error("Coinbase Wallet did not return a valid signature.");
