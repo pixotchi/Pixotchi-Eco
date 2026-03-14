@@ -312,7 +312,7 @@ export default function App() {
 
   const isUnsupportedBaseMethodError = useCallback((error: unknown): boolean => {
     const code = getErrorCode(error);
-    if (code === 4100) {
+    if (code === 4100 || code === 4200 || code === -32004) {
       return true;
     }
 
@@ -320,7 +320,8 @@ export default function App() {
     return (
       message.includes("request method is not supported") ||
       message.includes("requested method is not supported") ||
-      message.includes("method is not supported")
+      message.includes("method is not supported") ||
+      (message.includes("wallet_connect") && message.includes("not supported"))
     );
   }, [getErrorCode, getErrorMessage]);
 
