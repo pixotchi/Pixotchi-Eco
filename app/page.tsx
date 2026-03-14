@@ -445,6 +445,42 @@ export default function App() {
     return lines.join("\n");
   }, []);
 
+  const createPersonalSignBasePayload = useCallback(async (params: {
+    baseAddress: string;
+    domain?: string;
+    issuedAt: string;
+    nonce: string;
+    provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+    uri?: string;
+  }) => {
+    const checksummedAddress = getAddress(params.baseAddress);
+
+    const message = buildFallbackSiweMessage({
+      address: checksummedAddress,
+      chainId: 8453,
+      ...(params.domain ? { domain: params.domain } : {}),
+      issuedAt: params.issuedAt,
+      nonce: params.nonce,
+      statement: "Sign in to Pixotchi",
+      ...(params.uri ? { uri: params.uri } : {}),
+    });
+
+    const signature = await params.provider.request({
+      method: "personal_sign",
+      params: [stringToHex(message), checksummedAddress],
+    });
+
+    if (typeof signature !== "string") {
+      throw new Error("Coinbase Wallet did not return a valid signature.");
+    }
+
+    return {
+      address: params.baseAddress.toLowerCase(),
+      message,
+      signature: signature as `0x${string}`,
+    };
+  }, [buildFallbackSiweMessage]);
+
   const completeBaseAuthentication = useCallback(async (baseConnector: any) => {
     const nonce = await requestBasePublicChatNonce();
     const domain = typeof window !== "undefined" ? window.location.host : undefined;
@@ -511,6 +547,7 @@ export default function App() {
       message: string;
       signature: `0x${string}`;
     } | null = null;
+    let withCapabilitiesError: unknown = null;
 
     try {
       const connectResult = await connectAsync({
@@ -540,57 +577,129 @@ export default function App() {
           message: getErrorMessage(error, "Base authentication failed."),
           normalizedAddress,
         });
-        throw error;
+        if (shouldUseLegacyBaseFallback(error)) {
+          withCapabilitiesError = error;
+        } else {
+          throw error;
+        }
       }
     }
 
     if (!payload) {
-      try {
-        let baseAddress = normalizedAddress;
-        const provider = typeof baseConnector?.getProvider === "function"
-          ? await baseConnector.getProvider()
-          : baseConnector?.provider;
+      let baseAddress = normalizedAddress;
+      const provider = typeof baseConnector?.getProvider === "function"
+        ? await baseConnector.getProvider()
+        : baseConnector?.provider;
 
-        if (!provider?.request) {
-          throw new Error("Base provider unavailable.");
-        }
+      if (!provider?.request) {
+        throw new Error("Base provider unavailable.");
+      }
 
-        if (!baseAddress) {
-          const connectedAccounts = await provider.request({
-            method: "eth_accounts",
-          });
-          baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
-        }
-
-        const authResult = await provider.request({
-          method: "wallet_connect",
-          params: [{
-            capabilities: {
-              signInWithEthereum,
-            },
-            version: "1",
-          }],
+      if (!baseAddress) {
+        const connectedAccounts = await provider.request({
+          method: "eth_accounts",
         });
+        baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
+      }
 
-        payload = extractBasePayload(authResult, baseAddress);
-        if (!payload) {
-          void logBaseClientDiagnostic("wallet_connect-empty", {
+      if (!baseAddress) {
+        throw new Error("Base account unavailable.");
+      }
+
+      if (withCapabilitiesError) {
+        try {
+          void logBaseClientDiagnostic("same-provider-fallback-selected", {
             connectorId: baseConnector?.id ?? null,
             connectorName: baseConnector?.name ?? null,
+            message: getErrorMessage(withCapabilitiesError, "Base capability auth failed."),
             normalizedAddress: baseAddress,
-            resultAccountSummary: summarizeBaseAccounts((authResult as any)?.accounts),
-            resultKeys: authResult && typeof authResult === "object" ? Object.keys(authResult as Record<string, unknown>) : [],
+          });
+          payload = await createPersonalSignBasePayload({
+            baseAddress,
+            ...(domain ? { domain } : {}),
+            issuedAt,
+            nonce,
+            provider,
+            ...(uri ? { uri } : {}),
+          });
+        } catch (fallbackError) {
+          void logBaseClientDiagnostic("same-provider-fallback-error", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            errorCode: getErrorCode(fallbackError),
+            message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
+            normalizedAddress: baseAddress,
+          });
+          throw withCapabilitiesError;
+        }
+      }
+
+      if (!payload) {
+        let walletConnectError: unknown = null;
+
+        try {
+          const authResult = await provider.request({
+            method: "wallet_connect",
+            params: [{
+              capabilities: {
+                signInWithEthereum,
+              },
+              version: "1",
+            }],
+          });
+
+          payload = extractBasePayload(authResult, baseAddress);
+          if (!payload) {
+            void logBaseClientDiagnostic("wallet_connect-empty", {
+              connectorId: baseConnector?.id ?? null,
+              connectorName: baseConnector?.name ?? null,
+              normalizedAddress: baseAddress,
+              resultAccountSummary: summarizeBaseAccounts((authResult as any)?.accounts),
+              resultKeys: authResult && typeof authResult === "object" ? Object.keys(authResult as Record<string, unknown>) : [],
+            });
+          }
+        } catch (error) {
+          walletConnectError = error;
+          void logBaseClientDiagnostic("wallet_connect-error", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            errorCode: getErrorCode(error),
+            message: getErrorMessage(error, "Base wallet_connect failed."),
+            normalizedAddress: baseAddress,
           });
         }
-      } catch (error) {
-        void logBaseClientDiagnostic("wallet_connect-error", {
-          connectorId: baseConnector?.id ?? null,
-          connectorName: baseConnector?.name ?? null,
-          errorCode: getErrorCode(error),
-          message: getErrorMessage(error, "Base wallet_connect failed."),
-          normalizedAddress,
-        });
-        throw error;
+
+        if (!payload) {
+          try {
+            void logBaseClientDiagnostic("same-provider-fallback-selected", {
+              connectorId: baseConnector?.id ?? null,
+              connectorName: baseConnector?.name ?? null,
+              message: walletConnectError
+                ? getErrorMessage(walletConnectError, "Base wallet_connect failed.")
+                : "Base capability auth returned no SIWE payload.",
+              normalizedAddress: baseAddress,
+            });
+            payload = await createPersonalSignBasePayload({
+              baseAddress,
+              ...(domain ? { domain } : {}),
+              issuedAt,
+              nonce,
+              provider,
+              ...(uri ? { uri } : {}),
+            });
+          } catch (fallbackError) {
+            void logBaseClientDiagnostic("same-provider-fallback-error", {
+              connectorId: baseConnector?.id ?? null,
+              connectorName: baseConnector?.name ?? null,
+              errorCode: getErrorCode(fallbackError),
+              message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
+              normalizedAddress: baseAddress,
+            });
+            if (walletConnectError) {
+              throw walletConnectError;
+            }
+          }
+        }
       }
     }
 
@@ -602,7 +711,7 @@ export default function App() {
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
     setBaseAuthenticatedAddress(payload.address);
-  }, [connectAsync, getErrorCode, getErrorMessage, getPrimaryAccountAddress, isAlreadyConnectedError, logBaseClientDiagnostic, normalizedAddress, summarizeBaseAccounts]);
+  }, [connectAsync, createPersonalSignBasePayload, getErrorCode, getErrorMessage, getPrimaryAccountAddress, isAlreadyConnectedError, logBaseClientDiagnostic, normalizedAddress, shouldUseLegacyBaseFallback, summarizeBaseAccounts]);
 
   const completeLegacyBaseAuthentication = useCallback(async (legacyConnector: any) => {
     const nonce = await requestBasePublicChatNonce();
@@ -644,38 +753,20 @@ export default function App() {
       throw new Error("Coinbase Wallet account unavailable.");
     }
 
-    const checksummedAddress = getAddress(baseAddress);
-
-    const message = buildFallbackSiweMessage({
-      address: checksummedAddress,
-      chainId: 8453,
+    const payload = await createPersonalSignBasePayload({
+      baseAddress,
       ...(domain ? { domain } : {}),
       issuedAt,
       nonce,
-      statement: "Sign in to Pixotchi",
+      provider,
       ...(uri ? { uri } : {}),
     });
-
-    const signature = await provider.request({
-      method: "personal_sign",
-      params: [stringToHex(message), checksummedAddress],
-    });
-
-    if (typeof signature !== "string") {
-      throw new Error("Coinbase Wallet did not return a valid signature.");
-    }
-
-    const payload = {
-      address: baseAddress.toLowerCase(),
-      message,
-      signature: signature as `0x${string}`,
-    };
 
     await sessionStorageManager.setPendingBaseChatAuth(payload);
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
     setBaseAuthenticatedAddress(payload.address);
-  }, [buildFallbackSiweMessage, connectAsync, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress]);
+  }, [connectAsync, createPersonalSignBasePayload, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress]);
 
   const { login } = useLogin({
     onComplete: ({ loginAccount }) => {
