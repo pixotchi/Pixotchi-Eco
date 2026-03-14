@@ -77,6 +77,7 @@ const SECONDS_PER_DAY = BigInt(86400);
 const PLANT_POINTS_DECIMALS = 12;
 const BARRACKS_PREVIEW_ENABLED = CLIENT_ENV.BARRACKS_PREVIEW_ENABLED;
 const HOME_DEFENSE_MAX_BPS = 1000;
+const HIDDEN_REPORT_VALUE = "?";
 
 const TROOP_OPTIONS = [
   {
@@ -309,11 +310,14 @@ function BattleReportTable({
 }: {
   label: string;
   landId?: bigint;
-  swordsmenSent: bigint;
-  phalanxSent: bigint;
-  swordsmenLost: bigint;
-  phalanxLost: bigint;
+  swordsmenSent: bigint | string;
+  phalanxSent: bigint | string;
+  swordsmenLost: bigint | string;
+  phalanxLost: bigint | string;
 }) {
+  const showSwordsmenLossHighlight = typeof swordsmenLost === "bigint" && swordsmenLost > ZERO_BIGINT;
+  const showPhalanxLossHighlight = typeof phalanxLost === "bigint" && phalanxLost > ZERO_BIGINT;
+
   return (
     <div className="rounded-md border border-border/70 overflow-hidden bg-background">
       <div className="bg-muted/60 px-3 py-1.5 border-b border-border/70 text-xs font-semibold text-foreground tracking-wide uppercase flex justify-between items-center">
@@ -333,14 +337,18 @@ function BattleReportTable({
         
         <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 text-sm items-center hover:bg-muted/5 transition-colors">
           <div className="text-muted-foreground text-xs">Troops</div>
-          <div className="text-center font-medium">{swordsmenSent.toString()}</div>
-          <div className="text-center font-medium">{phalanxSent.toString()}</div>
+          <div className="text-center font-medium">{typeof swordsmenSent === "bigint" ? swordsmenSent.toString() : swordsmenSent}</div>
+          <div className="text-center font-medium">{typeof phalanxSent === "bigint" ? phalanxSent.toString() : phalanxSent}</div>
         </div>
         
         <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 text-sm border-t border-border/40 items-center hover:bg-muted/5 transition-colors">
           <div className="text-muted-foreground text-xs">Casualties</div>
-          <div className={`text-center font-medium ${swordsmenLost > ZERO_BIGINT ? "text-destructive" : ""}`}>{swordsmenLost.toString()}</div>
-          <div className={`text-center font-medium ${phalanxLost > ZERO_BIGINT ? "text-destructive" : ""}`}>{phalanxLost.toString()}</div>
+          <div className={`text-center font-medium ${showSwordsmenLossHighlight ? "text-destructive" : ""}`}>
+            {typeof swordsmenLost === "bigint" ? swordsmenLost.toString() : swordsmenLost}
+          </div>
+          <div className={`text-center font-medium ${showPhalanxLossHighlight ? "text-destructive" : ""}`}>
+            {typeof phalanxLost === "bigint" ? phalanxLost.toString() : phalanxLost}
+          </div>
         </div>
       </div>
     </div>
@@ -372,6 +380,12 @@ function ReportCard({
     mode === "outgoing"
       ? `Target Land #${report.defenderLandId.toString()}`
       : `Attacker Land #${report.attackerLandId.toString()}`;
+  const attackersReturned =
+    report.survivingAttackerSwordsmen + report.survivingAttackerPhalanx > ZERO_BIGINT;
+  const shouldHideOutgoingIntel =
+    mode === "outgoing" && !BARRACKS_PREVIEW_ENABLED && !attackersReturned;
+  const defenderDisplayValue = (value: bigint): bigint | string =>
+    shouldHideOutgoingIntel ? HIDDEN_REPORT_VALUE : value;
 
   return (
     <StandardContainer className="space-y-3">
@@ -401,18 +415,24 @@ function ReportCard({
         <BattleReportTable
           label="Defender"
           landId={report.defenderLandId}
-          swordsmenSent={report.defenderSwordsmenBefore}
-          phalanxSent={report.defenderPhalanxBefore}
-          swordsmenLost={report.defenderSwordsmenLost}
-          phalanxLost={report.defenderPhalanxLost}
+          swordsmenSent={defenderDisplayValue(report.defenderSwordsmenBefore)}
+          phalanxSent={defenderDisplayValue(report.defenderPhalanxBefore)}
+          swordsmenLost={defenderDisplayValue(report.defenderSwordsmenLost)}
+          phalanxLost={defenderDisplayValue(report.defenderPhalanxLost)}
         />
       </div>
 
       <div className="rounded-md bg-primary/10 px-3 py-2 text-sm">
         <span className="font-semibold">Raided:</span>{" "}
-        <span className="text-primary">{formatBarracksPoints(report.pointsStolen)} PTS</span>
-        <span className="text-muted-foreground"> / </span>
-        <span className="text-primary">{formatBarracksLifetime(report.lifetimeStolen)} TOD</span>
+        {shouldHideOutgoingIntel ? (
+          <span>None of your troops came back.</span>
+        ) : (
+          <>
+            <span className="text-primary">{formatBarracksPoints(report.pointsStolen)} PTS</span>
+            <span className="text-muted-foreground"> / </span>
+            <span className="text-primary">{formatBarracksLifetime(report.lifetimeStolen)} TOD</span>
+          </>
+        )}
       </div>
 
       <div className="text-xs text-muted-foreground">
