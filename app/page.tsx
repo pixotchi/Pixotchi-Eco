@@ -34,6 +34,7 @@ import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import {
   clearPublicChatSession,
   createBasePublicChatSession,
+  getCurrentPublicChatSession,
   requestBasePublicChatNonce,
 } from "@/lib/chat-auth-client";
 import { clearMiniAppBypassCookies, setMiniAppBypassCookies } from "@/lib/miniapp-bypass";
@@ -202,9 +203,12 @@ export default function App() {
   const [surface, setSurface] = useState<'privy' | 'base' | 'privysolana' | null>(null);
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
   const [expectedPrivyAddress, setExpectedPrivyAddress] = useState<string | null>(null);
+  const [baseAuthenticatedAddress, setBaseAuthenticatedAddress] = useState<string | null>(null);
+  const [baseAuthStatus, setBaseAuthStatus] = useState<'idle' | 'checking' | 'authenticating'>('idle');
   const lastDismissedRef = useRef<string | null>(null);
   const privySessionResetRef = useRef(false);
   const baseAutologinAttemptRef = useRef(false);
+  const baseAuthInFlightRef = useRef(false);
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const normalizedAddress = address?.toLowerCase() ?? null;
 
@@ -320,6 +324,32 @@ export default function App() {
     );
   }, [getErrorCode, getErrorMessage]);
 
+  const isAlreadyConnectedError = useCallback((error: unknown): boolean => {
+    const message = getErrorMessage(error, "").toLowerCase();
+    return message.includes("connector already connected");
+  }, [getErrorMessage]);
+
+  const getPrimaryAccountAddress = useCallback((accounts: unknown): string | null => {
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      return null;
+    }
+
+    const primaryAccount = accounts[0];
+    if (typeof primaryAccount === "string" && primaryAccount) {
+      return primaryAccount;
+    }
+
+    if (
+      primaryAccount &&
+      typeof primaryAccount === "object" &&
+      typeof (primaryAccount as { address?: unknown }).address === "string"
+    ) {
+      return (primaryAccount as { address: string }).address;
+    }
+
+    return null;
+  }, []);
+
   const buildFallbackSiweMessage = useCallback((params: {
     address: string;
     chainId: number;
@@ -350,10 +380,20 @@ export default function App() {
     const domain = typeof window !== "undefined" ? window.location.host : undefined;
     const uri = typeof window !== "undefined" ? window.location.origin : undefined;
     const issuedAt = new Date().toISOString();
+    let baseAddress = normalizedAddress;
 
-    await connectAsync({
-      connector: baseConnector,
-    } as any);
+    if (!baseAddress) {
+      try {
+        const connectResult = await connectAsync({
+          connector: baseConnector,
+        } as any);
+        baseAddress = getPrimaryAccountAddress((connectResult as any)?.accounts)?.toLowerCase() ?? null;
+      } catch (error) {
+        if (!isAlreadyConnectedError(error)) {
+          throw error;
+        }
+      }
+    }
 
     const provider = typeof baseConnector?.getProvider === "function"
       ? await baseConnector.getProvider()
@@ -361,6 +401,13 @@ export default function App() {
 
     if (!provider?.request) {
       throw new Error("Base provider unavailable.");
+    }
+
+    if (!baseAddress) {
+      const connectedAccounts = await provider.request({
+        method: "eth_accounts",
+      });
+      baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
     }
 
     const authResult = await provider.request({
@@ -384,9 +431,10 @@ export default function App() {
     const primaryAccount = Array.isArray((authResult as any)?.accounts)
       ? (authResult as any).accounts[0]
       : null;
-    const baseAddress = typeof primaryAccount?.address === "string"
-      ? primaryAccount.address
-      : null;
+    const capabilityAddress =
+      typeof primaryAccount?.address === "string"
+        ? primaryAccount.address.toLowerCase()
+        : null;
     const siweCapability = primaryAccount?.capabilities?.signInWithEthereum;
 
     if (
@@ -399,7 +447,7 @@ export default function App() {
     }
 
     if (
-      !baseAddress ||
+      !(capabilityAddress ?? baseAddress) ||
       typeof siweCapability?.message !== "string" ||
       typeof siweCapability?.signature !== "string"
     ) {
@@ -407,7 +455,7 @@ export default function App() {
     }
 
     const payload = {
-      address: baseAddress.toLowerCase(),
+      address: (capabilityAddress ?? baseAddress)!,
       message: siweCapability.message,
       signature: siweCapability.signature as `0x${string}`,
     };
@@ -415,35 +463,47 @@ export default function App() {
     await sessionStorageManager.setPendingBaseChatAuth(payload);
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
-  }, [connectAsync]);
+    setBaseAuthenticatedAddress(payload.address);
+  }, [connectAsync, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress]);
 
   const completeLegacyBaseAuthentication = useCallback(async (legacyConnector: any) => {
     const nonce = await requestBasePublicChatNonce();
     const domain = typeof window !== "undefined" ? window.location.host : undefined;
     const uri = typeof window !== "undefined" ? window.location.origin : undefined;
     const issuedAt = new Date().toISOString();
+    let baseAddress = normalizedAddress;
 
-    const result = await connectAsync({
-      chainId: 8453,
-      connector: legacyConnector,
-    } as any);
-
-    const primaryAccount = Array.isArray((result as any)?.accounts)
-      ? (result as any).accounts[0]
-      : null;
-    const baseAddress =
-      typeof primaryAccount === "string"
-        ? primaryAccount
-        : typeof primaryAccount?.address === "string"
-          ? primaryAccount.address
-          : null;
+    if (!baseAddress) {
+      try {
+        const result = await connectAsync({
+          chainId: 8453,
+          connector: legacyConnector,
+        } as any);
+        baseAddress = getPrimaryAccountAddress((result as any)?.accounts)?.toLowerCase() ?? null;
+      } catch (error) {
+        if (!isAlreadyConnectedError(error)) {
+          throw error;
+        }
+      }
+    }
 
     const provider = typeof legacyConnector?.getProvider === "function"
       ? await legacyConnector.getProvider()
       : legacyConnector?.provider;
 
-    if (!provider?.request || !baseAddress) {
+    if (!provider?.request) {
       throw new Error("Coinbase Wallet provider unavailable.");
+    }
+
+    if (!baseAddress) {
+      const connectedAccounts = await provider.request({
+        method: "eth_accounts",
+      });
+      baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
+    }
+
+    if (!baseAddress) {
+      throw new Error("Coinbase Wallet account unavailable.");
     }
 
     const message = buildFallbackSiweMessage({
@@ -474,7 +534,8 @@ export default function App() {
     await sessionStorageManager.setPendingBaseChatAuth(payload);
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
-  }, [buildFallbackSiweMessage, connectAsync]);
+    setBaseAuthenticatedAddress(payload.address);
+  }, [buildFallbackSiweMessage, connectAsync, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress]);
 
   const { login } = useLogin({
     onComplete: ({ loginAccount }) => {
@@ -507,20 +568,23 @@ export default function App() {
       case 'privysolana':
         return privyReady && authenticated && hasSolanaWallet;
       case 'base':
-        return isEvmConnected;
+        return Boolean(isEvmConnected && normalizedAddress && baseAuthenticatedAddress === normalizedAddress);
       default:
         return false;
     }
   }, [
     authenticated,
+    baseAuthenticatedAddress,
     hasSolanaWallet,
     isEvmConnected,
     isMiniApp,
+    normalizedAddress,
     privyReady,
     surface,
     surfaceInitialized,
   ]);
   const isWebPrivySurface = !isMiniApp && surface === 'privy';
+  const isBaseAuthPending = !isMiniApp && surface === 'base' && baseAuthStatus !== 'idle';
 
   // Enable intelligent tab prefetching
   useTabPrefetching(activeTab, isConnected);
@@ -564,6 +628,74 @@ export default function App() {
     if (!surfaceInitialized) return;
     setExpectedPrivyAddress(sessionStorageManager.getPrivyAuthenticatedAddress());
   }, [authenticated, isEvmConnected, surface, surfaceInitialized]);
+
+  useEffect(() => {
+    if (!surfaceInitialized || isMiniApp || surface !== 'base') {
+      setBaseAuthenticatedAddress(null);
+      setBaseAuthStatus('idle');
+      baseAuthInFlightRef.current = false;
+      return;
+    }
+
+    if (!isEvmConnected || !normalizedAddress) {
+      setBaseAuthenticatedAddress(null);
+      if (!baseAuthInFlightRef.current) {
+        setBaseAuthStatus('idle');
+      }
+      return;
+    }
+
+    if (baseAuthenticatedAddress === normalizedAddress || baseAuthInFlightRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    setBaseAuthStatus('checking');
+
+    void (async () => {
+      try {
+        const session = await getCurrentPublicChatSession();
+        const sessionAddress = session?.address?.toLowerCase() ?? null;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (session?.provider === 'base' && sessionAddress === normalizedAddress) {
+          setBaseAuthenticatedAddress(normalizedAddress);
+          return;
+        }
+
+        if (session) {
+          await clearPublicChatSession().catch((error) => {
+            console.warn('Failed to clear stale chat session while checking Base auth:', error);
+          });
+        }
+
+        setBaseAuthenticatedAddress(null);
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to check Base authentication session:', error);
+          setBaseAuthenticatedAddress(null);
+        }
+      } finally {
+        if (!cancelled && !baseAuthInFlightRef.current) {
+          setBaseAuthStatus('idle');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    baseAuthenticatedAddress,
+    isEvmConnected,
+    isMiniApp,
+    normalizedAddress,
+    surface,
+    surfaceInitialized,
+  ]);
 
   useEffect(() => {
     if (isMiniApp && normalizedAddress) {
@@ -641,6 +773,7 @@ export default function App() {
 
   useEffect(() => {
     if (isConnected) return;
+    if (surface === 'base' && isBaseAuthPending) return;
 
     let mounted = true;
 
@@ -669,6 +802,10 @@ export default function App() {
           const legacyBase = (connectors || []).find((c: any) => c.id === 'coinbaseWalletSDK');
           if (base) {
             baseAutologinAttemptRef.current = true;
+            baseAuthInFlightRef.current = true;
+            if (mounted) {
+              setBaseAuthStatus('authenticating');
+            }
 
             try {
               if (!mounted) return;
@@ -682,6 +819,9 @@ export default function App() {
                 }
               }
               await sessionStorageManager.removeAutologin();
+              if (mounted) {
+                setBaseAuthStatus('idle');
+              }
             } catch (error) {
               try {
                 disconnect();
@@ -697,12 +837,18 @@ export default function App() {
               await clearPublicChatSession().catch((chatError) => {
                 console.warn('Failed to clear Base chat session after auth failure:', chatError);
               });
+              if (mounted) {
+                setBaseAuthenticatedAddress(null);
+                setBaseAuthStatus('idle');
+              }
               const fallbackMessage = isUnsupportedBaseMethodError(error)
                 ? 'This Coinbase app version does not support Sign in with Base yet. Update the app, open in your system browser, or use Privy.'
                 : 'Base authentication failed. Please try again.';
               toast.error(getErrorMessage(error, fallbackMessage));
               baseAutologinAttemptRef.current = false;
               throw error;
+            } finally {
+              baseAuthInFlightRef.current = false;
             }
           }
         }
@@ -716,7 +862,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorMessage, isConnected, isUnsupportedBaseMethodError, login, privyReady, surface]);
+  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorMessage, isBaseAuthPending, isConnected, isUnsupportedBaseMethodError, login, privyReady, surface]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets
@@ -976,6 +1122,17 @@ export default function App() {
         <div className="flex flex-col items-center justify-center gap-4">
           <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi Logo" width={64} height={64} className="opacity-50" />
           <BasePageLoader text="Checking wallet validation..." />
+        </div>
+      </div>
+    );
+  }
+
+  if (surface === 'base' && !isConnected && isBaseAuthPending) {
+    return (
+      <div className="flex flex-col h-dvh bg-background items-center justify-center p-4">
+        <div className="flex flex-col items-center justify-center gap-4">
+          <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi Logo" width={64} height={64} className="opacity-50" />
+          <BasePageLoader text={baseAuthStatus === 'checking' ? 'Checking Base session...' : 'Completing Base sign-in...'} />
         </div>
       </div>
     );
