@@ -174,11 +174,13 @@ function normalizeBaseSiweMessage(message: string): string {
 }
 
 function parseBaseSiweMessage(message: string): SiweMessage {
+  const normalizedMessage = normalizeBaseSiweMessage(message);
+
   try {
     return new SiweMessage(message);
   } catch {
     try {
-      return new SiweMessage(normalizeBaseSiweMessage(message));
+      return new SiweMessage(normalizedMessage);
     } catch {
       throw new ChatAuthError('Invalid SIWE message.', 400);
     }
@@ -587,15 +589,7 @@ export async function verifyBaseChatIdentity(
     throw new ChatAuthError('Invalid wallet address format.', 400);
   }
 
-  let siweMessage: SiweMessage;
-  try {
-    siweMessage = parseBaseSiweMessage(payload.message);
-  } catch (error) {
-    if (error instanceof ChatAuthError) {
-      throw error;
-    }
-    throw new ChatAuthError('Invalid SIWE message.', 400);
-  }
+  const siweMessage = parseBaseSiweMessage(payload.message);
 
   const expectedUrls = getExpectedBaseUrls(request);
   const expectedDomains = getExpectedBaseDomains(expectedUrls);
