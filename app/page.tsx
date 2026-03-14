@@ -269,42 +269,83 @@ export default function App() {
     }
   }, [authenticated, disconnect, logout, persistPrivyAuthenticatedAddress]);
 
+  const getErrorMessage = useCallback((error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message.trim()) {
+      return error.message;
+    }
+
+    if (typeof error === "string" && error.trim()) {
+      return error;
+    }
+
+    if (error && typeof error === "object") {
+      const candidate =
+        (error as { message?: unknown }).message ??
+        (error as { error?: { message?: unknown } }).error?.message;
+
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+    }
+
+    return fallback;
+  }, []);
+
   const completeBaseAuthentication = useCallback(async (baseConnector: any) => {
     const nonce = await requestBasePublicChatNonce();
     const domain = typeof window !== "undefined" ? window.location.host : undefined;
     const uri = typeof window !== "undefined" ? window.location.origin : undefined;
     const issuedAt = new Date().toISOString();
 
-    const result = await connectAsync({
-      capabilities: {
-        signInWithEthereum: {
-          chainId: "0x2105",
-          nonce,
-          ...(domain ? { domain } : {}),
-          issuedAt,
-          ...(uri ? { uri } : {}),
-          statement: "Sign in to Pixotchi",
-          version: "1",
-        },
-      },
+    await connectAsync({
       connector: baseConnector,
-      withCapabilities: true,
     } as any);
 
-    const primaryAccount = Array.isArray((result as any)?.accounts)
-      ? (result as any).accounts[0]
+    const provider = typeof baseConnector?.getProvider === "function"
+      ? await baseConnector.getProvider()
+      : baseConnector?.provider;
+
+    if (!provider?.request) {
+      throw new Error("Base provider unavailable.");
+    }
+
+    const authResult = await provider.request({
+      method: "wallet_connect",
+      params: [{
+        capabilities: {
+          signInWithEthereum: {
+            chainId: "0x2105",
+            nonce,
+            ...(domain ? { domain } : {}),
+            issuedAt,
+            ...(uri ? { uri } : {}),
+            statement: "Sign in to Pixotchi",
+            version: "1",
+          },
+        },
+        version: "1",
+      }],
+    });
+
+    const primaryAccount = Array.isArray((authResult as any)?.accounts)
+      ? (authResult as any).accounts[0]
       : null;
-    const baseAddress =
-      typeof primaryAccount === "string"
-        ? primaryAccount
-        : primaryAccount?.address;
-    const siweCapability =
-      typeof primaryAccount === "string"
-        ? null
-        : primaryAccount?.capabilities?.signInWithEthereum;
+    const baseAddress = typeof primaryAccount?.address === "string"
+      ? primaryAccount.address
+      : null;
+    const siweCapability = primaryAccount?.capabilities?.signInWithEthereum;
 
     if (
-      typeof baseAddress !== "string" ||
+      siweCapability &&
+      typeof siweCapability === "object" &&
+      typeof (siweCapability as { message?: unknown }).message === "string" &&
+      typeof (siweCapability as { signature?: unknown }).signature !== "string"
+    ) {
+      throw new Error((siweCapability as { message: string }).message);
+    }
+
+    if (
+      !baseAddress ||
       typeof siweCapability?.message !== "string" ||
       typeof siweCapability?.signature !== "string"
     ) {
@@ -534,7 +575,7 @@ export default function App() {
               await clearPublicChatSession().catch((chatError) => {
                 console.warn('Failed to clear Base chat session after auth failure:', chatError);
               });
-              toast.error(error instanceof Error ? error.message : 'Base authentication failed. Please try again.');
+              toast.error(getErrorMessage(error, 'Base authentication failed. Please try again.'));
               baseAutologinAttemptRef.current = false;
               throw error;
             }
@@ -550,7 +591,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [completeBaseAuthentication, connectors, disconnect, isConnected, login, privyReady, surface]);
+  }, [completeBaseAuthentication, connectors, disconnect, getErrorMessage, isConnected, login, privyReady, surface]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets
