@@ -359,6 +359,67 @@ export default function App() {
     return null;
   }, []);
 
+  const summarizeBaseAccounts = useCallback((accounts: unknown) => {
+    if (!Array.isArray(accounts)) {
+      return {
+        isArray: false,
+        type: typeof accounts,
+      };
+    }
+
+    return accounts.map((account) => {
+      if (typeof account === "string") {
+        return {
+          kind: "string",
+          value: account,
+        };
+      }
+
+      if (!account || typeof account !== "object") {
+        return {
+          kind: typeof account,
+        };
+      }
+
+      const capabilities = (account as { capabilities?: Record<string, unknown> }).capabilities;
+      const siweCapability = capabilities?.signInWithEthereum as
+        | { message?: unknown; signature?: unknown }
+        | undefined;
+
+      return {
+        address: typeof (account as { address?: unknown }).address === "string"
+          ? (account as { address: string }).address
+          : null,
+        capabilityKeys: capabilities ? Object.keys(capabilities) : [],
+        hasSiweCapability: Boolean(siweCapability),
+        messageType: typeof siweCapability?.message,
+        signatureType: typeof siweCapability?.signature,
+        kind: "object",
+      };
+    });
+  }, []);
+
+  const logBaseClientDiagnostic = useCallback(async (stage: string, details: Record<string, unknown>) => {
+    try {
+      await fetch("/api/chat/auth/base/debug", {
+        body: JSON.stringify({
+          ...details,
+          stage,
+          surface,
+        }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        keepalive: true,
+        method: "POST",
+      });
+    } catch {
+      // Ignore diagnostic delivery failures.
+    }
+  }, [surface]);
+
   const buildFallbackSiweMessage = useCallback((params: {
     address: string;
     chainId: number;
@@ -461,40 +522,76 @@ export default function App() {
       } as any);
 
       payload = extractBasePayload(connectResult, normalizedAddress);
+      if (!payload) {
+        void logBaseClientDiagnostic("withCapabilities-empty", {
+          connectorId: baseConnector?.id ?? null,
+          connectorName: baseConnector?.name ?? null,
+          normalizedAddress,
+          resultAccountSummary: summarizeBaseAccounts((connectResult as any)?.accounts),
+          resultKeys: connectResult && typeof connectResult === "object" ? Object.keys(connectResult as Record<string, unknown>) : [],
+        });
+      }
     } catch (error) {
       if (!isAlreadyConnectedError(error)) {
+        void logBaseClientDiagnostic("withCapabilities-error", {
+          connectorId: baseConnector?.id ?? null,
+          connectorName: baseConnector?.name ?? null,
+          errorCode: getErrorCode(error),
+          message: getErrorMessage(error, "Base authentication failed."),
+          normalizedAddress,
+        });
         throw error;
       }
     }
 
     if (!payload) {
-      let baseAddress = normalizedAddress;
-      const provider = typeof baseConnector?.getProvider === "function"
-        ? await baseConnector.getProvider()
-        : baseConnector?.provider;
+      try {
+        let baseAddress = normalizedAddress;
+        const provider = typeof baseConnector?.getProvider === "function"
+          ? await baseConnector.getProvider()
+          : baseConnector?.provider;
 
-      if (!provider?.request) {
-        throw new Error("Base provider unavailable.");
-      }
+        if (!provider?.request) {
+          throw new Error("Base provider unavailable.");
+        }
 
-      if (!baseAddress) {
-        const connectedAccounts = await provider.request({
-          method: "eth_accounts",
+        if (!baseAddress) {
+          const connectedAccounts = await provider.request({
+            method: "eth_accounts",
+          });
+          baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
+        }
+
+        const authResult = await provider.request({
+          method: "wallet_connect",
+          params: [{
+            capabilities: {
+              signInWithEthereum,
+            },
+            version: "1",
+          }],
         });
-        baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
+
+        payload = extractBasePayload(authResult, baseAddress);
+        if (!payload) {
+          void logBaseClientDiagnostic("wallet_connect-empty", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            normalizedAddress: baseAddress,
+            resultAccountSummary: summarizeBaseAccounts((authResult as any)?.accounts),
+            resultKeys: authResult && typeof authResult === "object" ? Object.keys(authResult as Record<string, unknown>) : [],
+          });
+        }
+      } catch (error) {
+        void logBaseClientDiagnostic("wallet_connect-error", {
+          connectorId: baseConnector?.id ?? null,
+          connectorName: baseConnector?.name ?? null,
+          errorCode: getErrorCode(error),
+          message: getErrorMessage(error, "Base wallet_connect failed."),
+          normalizedAddress,
+        });
+        throw error;
       }
-
-      const authResult = await provider.request({
-        method: "wallet_connect",
-        params: [{
-          capabilities: {
-            signInWithEthereum,
-          },
-          version: "1",
-        }],
-      });
-
-      payload = extractBasePayload(authResult, baseAddress);
     }
 
     if (!payload) {
@@ -505,7 +602,7 @@ export default function App() {
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
     setBaseAuthenticatedAddress(payload.address);
-  }, [connectAsync, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress]);
+  }, [connectAsync, getErrorCode, getErrorMessage, getPrimaryAccountAddress, isAlreadyConnectedError, logBaseClientDiagnostic, normalizedAddress, summarizeBaseAccounts]);
 
   const completeLegacyBaseAuthentication = useCallback(async (legacyConnector: any) => {
     const nonce = await requestBasePublicChatNonce();
@@ -856,6 +953,13 @@ export default function App() {
                 await completeBaseAuthentication(base as any);
               } catch (error) {
                 if (legacyBase && shouldUseLegacyBaseFallback(error)) {
+                  void logBaseClientDiagnostic("legacy-fallback-selected", {
+                    baseConnectorId: base?.id ?? null,
+                    legacyConnectorId: legacyBase?.id ?? null,
+                    errorCode: getErrorCode(error),
+                    message: getErrorMessage(error, "Base auth failed."),
+                    normalizedAddress,
+                  });
                   await completeLegacyBaseAuthentication(legacyBase as any);
                 } else {
                   throw error;
@@ -887,6 +991,13 @@ export default function App() {
               const fallbackMessage = shouldUseLegacyBaseFallback(error)
                 ? 'This Coinbase app version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy.'
                 : 'Base authentication failed. Please try again.';
+              void logBaseClientDiagnostic("autologin-failed", {
+                baseConnectorId: base?.id ?? null,
+                legacyConnectorId: legacyBase?.id ?? null,
+                errorCode: getErrorCode(error),
+                message: getErrorMessage(error, fallbackMessage),
+                normalizedAddress,
+              });
               toast.error(getErrorMessage(error, fallbackMessage));
               baseAutologinAttemptRef.current = false;
               throw error;
@@ -905,7 +1016,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorMessage, isBaseAuthPending, isConnected, login, privyReady, shouldUseLegacyBaseFallback, surface]);
+  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorCode, getErrorMessage, isBaseAuthPending, isConnected, logBaseClientDiagnostic, login, normalizedAddress, privyReady, shouldUseLegacyBaseFallback, surface]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets
