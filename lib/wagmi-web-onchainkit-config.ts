@@ -1,6 +1,7 @@
 "use client";
 
 import { createConfig } from "wagmi";
+import { coinbaseWallet } from "wagmi/connectors";
 import { base } from "viem/chains";
 import { createResilientTransport, getPrimaryRpcEndpoint } from "./rpc-transport";
 import { baseAccountConnector } from "./base-account-connector";
@@ -9,6 +10,10 @@ import { getDataSuffix } from "./builder-code";
 const connectors = [
   // Prefer Base Account SDK for dedicated Base sign-in flows
   baseAccountConnector({ displayName: "Sign in with Base" }),
+  // Fallback for legacy Coinbase Wallet / in-app browsers that do not support wallet_connect
+  coinbaseWallet({
+    appName: "Pixotchi Mini",
+  }),
 ];
 
 const primaryRpc = getPrimaryRpcEndpoint();

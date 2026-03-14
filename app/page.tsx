@@ -12,6 +12,7 @@ import { WalletProfile } from "@/components/wallet-profile";
 import { PlusCircle, Leaf, Sparkles, Info, Repeat, History, Trophy } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
+import { stringToHex } from "viem";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { INVITE_CONFIG, getLocalStorageKeys } from "@/lib/invite-utils";
@@ -291,6 +292,59 @@ export default function App() {
     return fallback;
   }, []);
 
+  const getErrorCode = useCallback((error: unknown): number | null => {
+    if (!error || typeof error !== "object") {
+      return null;
+    }
+
+    const direct = (error as { code?: unknown }).code;
+    if (typeof direct === "number") {
+      return direct;
+    }
+
+    const nested = (error as { error?: { code?: unknown } }).error?.code;
+    return typeof nested === "number" ? nested : null;
+  }, []);
+
+  const isUnsupportedBaseMethodError = useCallback((error: unknown): boolean => {
+    const code = getErrorCode(error);
+    if (code === 4100) {
+      return true;
+    }
+
+    const message = getErrorMessage(error, "").toLowerCase();
+    return (
+      message.includes("request method is not supported") ||
+      message.includes("requested method is not supported") ||
+      message.includes("method is not supported")
+    );
+  }, [getErrorCode, getErrorMessage]);
+
+  const buildFallbackSiweMessage = useCallback((params: {
+    address: string;
+    chainId: number;
+    domain?: string;
+    issuedAt: string;
+    nonce: string;
+    statement: string;
+    uri?: string;
+  }) => {
+    const lines = [
+      `${params.domain || "localhost"} wants you to sign in with your Ethereum account:`,
+      params.address,
+      "",
+      params.statement,
+      "",
+      `URI: ${params.uri || "http://localhost:3000"}`,
+      "Version: 1",
+      `Chain ID: ${params.chainId}`,
+      `Nonce: ${params.nonce}`,
+      `Issued At: ${params.issuedAt}`,
+    ];
+
+    return lines.join("\n");
+  }, []);
+
   const completeBaseAuthentication = useCallback(async (baseConnector: any) => {
     const nonce = await requestBasePublicChatNonce();
     const domain = typeof window !== "undefined" ? window.location.host : undefined;
@@ -362,6 +416,65 @@ export default function App() {
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
   }, [connectAsync]);
+
+  const completeLegacyBaseAuthentication = useCallback(async (legacyConnector: any) => {
+    const nonce = await requestBasePublicChatNonce();
+    const domain = typeof window !== "undefined" ? window.location.host : undefined;
+    const uri = typeof window !== "undefined" ? window.location.origin : undefined;
+    const issuedAt = new Date().toISOString();
+
+    const result = await connectAsync({
+      chainId: 8453,
+      connector: legacyConnector,
+    } as any);
+
+    const primaryAccount = Array.isArray((result as any)?.accounts)
+      ? (result as any).accounts[0]
+      : null;
+    const baseAddress =
+      typeof primaryAccount === "string"
+        ? primaryAccount
+        : typeof primaryAccount?.address === "string"
+          ? primaryAccount.address
+          : null;
+
+    const provider = typeof legacyConnector?.getProvider === "function"
+      ? await legacyConnector.getProvider()
+      : legacyConnector?.provider;
+
+    if (!provider?.request || !baseAddress) {
+      throw new Error("Coinbase Wallet provider unavailable.");
+    }
+
+    const message = buildFallbackSiweMessage({
+      address: baseAddress,
+      chainId: 8453,
+      ...(domain ? { domain } : {}),
+      issuedAt,
+      nonce,
+      statement: "Sign in to Pixotchi",
+      ...(uri ? { uri } : {}),
+    });
+
+    const signature = await provider.request({
+      method: "personal_sign",
+      params: [stringToHex(message), baseAddress],
+    });
+
+    if (typeof signature !== "string") {
+      throw new Error("Coinbase Wallet did not return a valid signature.");
+    }
+
+    const payload = {
+      address: baseAddress.toLowerCase(),
+      message,
+      signature: signature as `0x${string}`,
+    };
+
+    await sessionStorageManager.setPendingBaseChatAuth(payload);
+    await createBasePublicChatSession(payload);
+    await sessionStorageManager.clearPendingBaseChatAuth();
+  }, [buildFallbackSiweMessage, connectAsync]);
 
   const { login } = useLogin({
     onComplete: ({ loginAccount }) => {
@@ -553,12 +666,21 @@ export default function App() {
           }
 
           const base = (connectors || []).find((c: any) => c.id === 'baseAccount') || (connectors || [])[0];
+          const legacyBase = (connectors || []).find((c: any) => c.id === 'coinbaseWalletSDK');
           if (base) {
             baseAutologinAttemptRef.current = true;
 
             try {
               if (!mounted) return;
-              await completeBaseAuthentication(base as any);
+              try {
+                await completeBaseAuthentication(base as any);
+              } catch (error) {
+                if (legacyBase && isUnsupportedBaseMethodError(error)) {
+                  await completeLegacyBaseAuthentication(legacyBase as any);
+                } else {
+                  throw error;
+                }
+              }
               await sessionStorageManager.removeAutologin();
             } catch (error) {
               try {
@@ -575,7 +697,10 @@ export default function App() {
               await clearPublicChatSession().catch((chatError) => {
                 console.warn('Failed to clear Base chat session after auth failure:', chatError);
               });
-              toast.error(getErrorMessage(error, 'Base authentication failed. Please try again.'));
+              const fallbackMessage = isUnsupportedBaseMethodError(error)
+                ? 'This Coinbase app version does not support Sign in with Base yet. Update the app, open in your system browser, or use Privy.'
+                : 'Base authentication failed. Please try again.';
+              toast.error(getErrorMessage(error, fallbackMessage));
               baseAutologinAttemptRef.current = false;
               throw error;
             }
@@ -591,7 +716,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [completeBaseAuthentication, connectors, disconnect, getErrorMessage, isConnected, login, privyReady, surface]);
+  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorMessage, isConnected, isUnsupportedBaseMethodError, login, privyReady, surface]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets
