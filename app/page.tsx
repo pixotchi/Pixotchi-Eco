@@ -204,7 +204,12 @@ import { useKeyboardAware, useViewportHeight, useKeyboardNavigation } from "@/ho
 export default function App() {
   const { context } = useMiniKit();
   const fc = useFrameContext();
-  const { address, isConnected: isEvmConnected } = useAccount();
+  const {
+    address,
+    isConnected: isEvmConnected,
+    isConnecting: isWalletConnecting,
+    isReconnecting: isWalletReconnecting,
+  } = useAccount();
   const { disconnect } = useDisconnect();
   const { theme } = useTheme();
   const { startIfFirstVisit } = useSlideshow();
@@ -248,6 +253,17 @@ export default function App() {
     }
 
     await sessionStorageManager.setPrivyAuthenticatedAddress(nextAddress);
+  }, []);
+
+  const persistBaseAuthenticatedAddress = useCallback(async (nextAddress: string | null) => {
+    setBaseAuthenticatedAddress(nextAddress);
+
+    if (!nextAddress) {
+      await sessionStorageManager.removeBaseAuthenticatedAddress();
+      return;
+    }
+
+    await sessionStorageManager.setBaseAuthenticatedAddress(nextAddress);
   }, []);
 
   const resetPrivySession = useCallback(async (message?: string) => {
@@ -304,6 +320,9 @@ export default function App() {
     await persistPrivyAuthenticatedAddress(null).catch((error) => {
       console.warn('Failed to clear persisted Privy address before surface switch:', error);
     });
+    await persistBaseAuthenticatedAddress(null).catch((error) => {
+      console.warn('Failed to clear persisted Base address before surface switch:', error);
+    });
     await clearPublicChatSession().catch((error) => {
       console.warn('Failed to clear public chat session before surface switch:', error);
     });
@@ -334,7 +353,7 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('surface', nextSurface);
     window.location.replace(url.toString());
-  }, [authenticated, disconnect, logout, persistPrivyAuthenticatedAddress]);
+  }, [authenticated, disconnect, logout, persistBaseAuthenticatedAddress, persistPrivyAuthenticatedAddress]);
 
   const getErrorMessage = useCallback((error: unknown, fallback: string) => {
     if (error instanceof Error && error.message.trim()) {
@@ -782,8 +801,8 @@ export default function App() {
     await sessionStorageManager.setPendingBaseChatAuth(payload);
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
-    setBaseAuthenticatedAddress(payload.address);
-  }, [connectAsync, createPersonalSignBasePayload, getErrorCode, getErrorMessage, getPrimaryAccountAddress, isAlreadyConnectedError, logBaseClientDiagnostic, normalizedAddress, shouldUseLegacyBaseFallback, summarizeBaseAccounts]);
+    await persistBaseAuthenticatedAddress(payload.address);
+  }, [connectAsync, createPersonalSignBasePayload, getErrorCode, getErrorMessage, getPrimaryAccountAddress, isAlreadyConnectedError, logBaseClientDiagnostic, normalizedAddress, persistBaseAuthenticatedAddress, shouldUseLegacyBaseFallback, summarizeBaseAccounts]);
 
   const completeLegacyBaseAuthentication = useCallback(async (legacyConnector: any) => {
     const nonce = await requestBasePublicChatNonce();
@@ -837,8 +856,8 @@ export default function App() {
     await sessionStorageManager.setPendingBaseChatAuth(payload);
     await createBasePublicChatSession(payload);
     await sessionStorageManager.clearPendingBaseChatAuth();
-    setBaseAuthenticatedAddress(payload.address);
-  }, [connectAsync, createPersonalSignBasePayload, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress]);
+    await persistBaseAuthenticatedAddress(payload.address);
+  }, [connectAsync, createPersonalSignBasePayload, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress, persistBaseAuthenticatedAddress]);
 
   const { login } = useLogin({
     onComplete: ({ loginAccount }) => {
@@ -933,6 +952,17 @@ export default function App() {
   }, [authenticated, isEvmConnected, surface, surfaceInitialized]);
 
   useEffect(() => {
+    if (!surfaceInitialized) return;
+
+    if (surface === 'base') {
+      setBaseAuthenticatedAddress(sessionStorageManager.getBaseAuthenticatedAddress());
+      return;
+    }
+
+    setBaseAuthenticatedAddress(null);
+  }, [surface, surfaceInitialized]);
+
+  useEffect(() => {
     if (!surfaceInitialized || isMiniApp || surface !== 'base') {
       setBaseAuthenticatedAddress(null);
       setBaseAuthStatus('idle');
@@ -941,7 +971,6 @@ export default function App() {
     }
 
     if (!isEvmConnected || !normalizedAddress) {
-      setBaseAuthenticatedAddress(null);
       if (!baseAuthInFlightRef.current) {
         setBaseAuthStatus('idle');
       }
@@ -965,7 +994,7 @@ export default function App() {
         }
 
         if (session?.provider === 'base' && sessionAddress === normalizedAddress) {
-          setBaseAuthenticatedAddress(normalizedAddress);
+          await persistBaseAuthenticatedAddress(normalizedAddress);
           return;
         }
 
@@ -975,11 +1004,11 @@ export default function App() {
           });
         }
 
-        setBaseAuthenticatedAddress(null);
+        await persistBaseAuthenticatedAddress(null);
       } catch (error) {
         if (!cancelled) {
           console.warn('Failed to check Base authentication session:', error);
-          setBaseAuthenticatedAddress(null);
+          await persistBaseAuthenticatedAddress(null);
         }
       } finally {
         if (!cancelled && !baseAuthInFlightRef.current) {
@@ -996,6 +1025,7 @@ export default function App() {
     isEvmConnected,
     isMiniApp,
     normalizedAddress,
+    persistBaseAuthenticatedAddress,
     surface,
     surfaceInitialized,
   ]);
@@ -1159,8 +1189,10 @@ export default function App() {
               await clearPublicChatSession().catch((chatError) => {
                 console.warn('Failed to clear Base chat session after auth failure:', chatError);
               });
+              await persistBaseAuthenticatedAddress(null).catch((storageError) => {
+                console.warn('Failed to clear persisted Base auth after auth failure:', storageError);
+              });
               if (mounted) {
-                setBaseAuthenticatedAddress(null);
                 setBaseAuthStatus('idle');
               }
               const fallbackMessage = shouldUseLegacyBaseFallback(error)
@@ -1191,7 +1223,14 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorCode, getErrorMessage, isBaseAuthPending, isConnected, logBaseClientDiagnostic, login, normalizedAddress, privyReady, shouldUseLegacyBaseFallback, surface]);
+  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorCode, getErrorMessage, isBaseAuthPending, isConnected, logBaseClientDiagnostic, login, normalizedAddress, persistBaseAuthenticatedAddress, privyReady, shouldUseLegacyBaseFallback, surface]);
+
+  const isRestoringBaseSession =
+    !isMiniApp &&
+    surface === 'base' &&
+    !isConnected &&
+    Boolean(baseAuthenticatedAddress) &&
+    (isWalletConnecting || isWalletReconnecting || baseAuthStatus === 'checking');
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets
@@ -1559,6 +1598,11 @@ export default function App() {
                   Connect your wallet, mint a plant and begin your farming journey on Base.
                 </p>
               </div>
+              {isRestoringBaseSession ? (
+                <div className="w-full max-w-xs space-y-3">
+                  <BasePageLoader text="Restoring your Base session..." />
+                </div>
+              ) : (
               <div className="w-full max-w-xs space-y-3">
                 {!fc?.isInMiniApp && (
                   <Alert>
@@ -1616,6 +1660,7 @@ export default function App() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           ) : (
             <>
