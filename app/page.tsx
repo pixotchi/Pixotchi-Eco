@@ -324,6 +324,15 @@ export default function App() {
     );
   }, [getErrorCode, getErrorMessage]);
 
+  const isInvalidBaseSiweMessageError = useCallback((error: unknown): boolean => {
+    const message = getErrorMessage(error, "").toLowerCase();
+    return message.includes("invalid siwe message");
+  }, [getErrorMessage]);
+
+  const shouldUseLegacyBaseFallback = useCallback((error: unknown): boolean => {
+    return isUnsupportedBaseMethodError(error) || isInvalidBaseSiweMessageError(error);
+  }, [isInvalidBaseSiweMessageError, isUnsupportedBaseMethodError]);
+
   const isAlreadyConnectedError = useCallback((error: unknown): boolean => {
     const message = getErrorMessage(error, "").toLowerCase();
     return message.includes("connector already connected");
@@ -812,7 +821,7 @@ export default function App() {
               try {
                 await completeBaseAuthentication(base as any);
               } catch (error) {
-                if (legacyBase && isUnsupportedBaseMethodError(error)) {
+                if (legacyBase && shouldUseLegacyBaseFallback(error)) {
                   await completeLegacyBaseAuthentication(legacyBase as any);
                 } else {
                   throw error;
@@ -841,8 +850,8 @@ export default function App() {
                 setBaseAuthenticatedAddress(null);
                 setBaseAuthStatus('idle');
               }
-              const fallbackMessage = isUnsupportedBaseMethodError(error)
-                ? 'This Coinbase app version does not support Sign in with Base yet. Update the app, open in your system browser, or use Privy.'
+              const fallbackMessage = shouldUseLegacyBaseFallback(error)
+                ? 'This Coinbase app version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy.'
                 : 'Base authentication failed. Please try again.';
               toast.error(getErrorMessage(error, fallbackMessage));
               baseAutologinAttemptRef.current = false;
@@ -862,7 +871,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorMessage, isBaseAuthPending, isConnected, isUnsupportedBaseMethodError, login, privyReady, surface]);
+  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorMessage, isBaseAuthPending, isConnected, login, privyReady, shouldUseLegacyBaseFallback, surface]);
 
   // Respect user's wallet choice - don't automatically switch to embedded wallets
   // This prevents the issue where external wallets get switched to Privy embedded wallets
