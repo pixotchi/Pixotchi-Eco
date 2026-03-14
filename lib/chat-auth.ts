@@ -482,13 +482,26 @@ function getPrivyServerClient(): PrivyClient {
 }
 
 function getPrivyWalletAccounts(user: any, chainType: 'ethereum' | 'solana'): Array<{ address: string }> {
-  const accounts = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : [];
-  return accounts.filter(
-    (account: any) =>
+  const linkedAccounts = Array.isArray(user?.linkedAccounts)
+    ? user.linkedAccounts
+    : Array.isArray(user?.linked_accounts)
+      ? user.linked_accounts
+      : [];
+
+  return linkedAccounts.filter((account: any) => {
+    const accountChainType =
+      typeof account?.chainType === 'string'
+        ? account.chainType
+        : typeof account?.chain_type === 'string'
+          ? account.chain_type
+          : null;
+
+    return (
       account?.type === 'wallet' &&
-      account?.chainType === chainType &&
-      typeof account?.address === 'string',
-  );
+      accountChainType === chainType &&
+      typeof account?.address === 'string'
+    );
+  });
 }
 
 export async function verifyPrivyChatIdentity(
