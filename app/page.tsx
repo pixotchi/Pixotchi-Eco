@@ -31,6 +31,7 @@ import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
+import { clearAppCaches } from "@/lib/cache-utils";
 import {
   clearPublicChatSession,
   createBasePublicChatSession,
@@ -122,6 +123,17 @@ const tabComponents = {
     "leaderboard-tab"
   ),
 };
+
+const AUTH_CACHE_PREFIXES = [
+  "wagmi",
+  "_wagmi",
+  "walletconnect",
+  "wc@",
+  "privy",
+  "@privy",
+  "ock",
+  "coinbase",
+];
 
 // Tab prefetching logic with de-duplication
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
@@ -272,6 +284,56 @@ export default function App() {
         privySessionResetRef.current = false;
       }, 250);
     }
+  }, [authenticated, disconnect, logout, persistPrivyAuthenticatedAddress]);
+
+  const switchAuthSurface = useCallback(async (nextSurface: 'privy' | 'base' | 'privysolana') => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    await sessionStorageManager.markPrivyLogoutIntent().catch((error) => {
+      console.warn('Failed to mark Privy logout intent before surface switch:', error);
+    });
+
+    await sessionStorageManager.removeAutologin().catch((error) => {
+      console.warn('Failed to clear autologin before surface switch:', error);
+    });
+    await sessionStorageManager.clearPendingBaseChatAuth().catch((error) => {
+      console.warn('Failed to clear pending Base auth before surface switch:', error);
+    });
+    await persistPrivyAuthenticatedAddress(null).catch((error) => {
+      console.warn('Failed to clear persisted Privy address before surface switch:', error);
+    });
+    await clearPublicChatSession().catch((error) => {
+      console.warn('Failed to clear public chat session before surface switch:', error);
+    });
+    clearMiniAppBypassCookies();
+
+    if (authenticated && logout) {
+      await logout().catch((error) => {
+        console.warn('Privy logout failed before surface switch:', error);
+      });
+    }
+
+    try {
+      disconnect();
+    } catch (error) {
+      console.warn('Wallet disconnect failed before surface switch:', error);
+    }
+
+    await sessionStorageManager.clearAuthState().catch((error) => {
+      console.warn('Failed to clear auth state before surface switch:', error);
+    });
+
+    await clearAppCaches({
+      onlyPrefixes: AUTH_CACHE_PREFIXES,
+    });
+
+    await sessionStorageManager.setAuthSurfaceAndAutologin(nextSurface);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('surface', nextSurface);
+    window.location.replace(url.toString());
   }, [authenticated, disconnect, logout, persistPrivyAuthenticatedAddress]);
 
   const getErrorMessage = useCallback((error: unknown, fallback: string) => {
@@ -794,7 +856,7 @@ export default function App() {
       }
     },
     onError: () => {
-      if (surface === 'privy') {
+      if (surface === 'privy' && !sessionStorageManager.hasRecentPrivyLogoutIntent()) {
         void resetPrivySession('Privy login was cancelled. Please sign the message to continue.');
       }
     },
@@ -966,6 +1028,10 @@ export default function App() {
       return;
     }
 
+    if (sessionStorageManager.hasRecentPrivyLogoutIntent()) {
+      return;
+    }
+
     void resetPrivySession('Privy login was cancelled. Please sign the message to continue.');
   }, [
     authenticated,
@@ -975,6 +1041,14 @@ export default function App() {
     privyReady,
     resetPrivySession,
   ]);
+
+  useEffect(() => {
+    if (authenticated || isEvmConnected) {
+      return;
+    }
+
+    void sessionStorageManager.clearPrivyLogoutIntent();
+  }, [authenticated, isEvmConnected]);
 
   useEffect(() => {
     if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress || !expectedPrivyAddress) {
@@ -1218,12 +1292,10 @@ export default function App() {
       setIsProcessing(true);
       (async () => {
         try {
-          await sessionStorageManager.setAuthSurfaceAndAutologin("base");
-          const url = new URL(window.location.href);
-          url.searchParams.set("surface", "base");
-          window.location.replace(url.toString());
+          await switchAuthSurface("base");
         } catch (error) {
           console.error("Failed to switch to Base surface:", error);
+          toast.error("Failed to switch to Base sign-in. Please try again.");
           setIsProcessing(false);
         }
       })();
@@ -1251,12 +1323,10 @@ export default function App() {
       setIsProcessing(true);
       (async () => {
         try {
-          await sessionStorageManager.setAuthSurfaceAndAutologin("privysolana");
-          const url = new URL(window.location.href);
-          url.searchParams.set("surface", "privysolana");
-          window.location.replace(url.toString());
+          await switchAuthSurface("privysolana");
         } catch (error) {
           console.error("Failed to switch to Solana surface:", error);
+          toast.error("Failed to switch to Solana sign-in. Please try again.");
           setIsProcessing(false);
         }
       })();
@@ -1506,26 +1576,10 @@ export default function App() {
                     variant="default"
                     onClick={async () => {
                       try {
-                        // Set preferences first using centralized manager
-                        await sessionStorageManager.setAuthSurfaceAndAutologin('privy');
-
-                        // Wait a tick to ensure storage operations complete
-                        await new Promise(resolve => setTimeout(resolve, 0));
-
-                        // Update URL and reload
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('surface', 'privy');
-                        window.location.replace(url.toString());
+                        await switchAuthSurface('privy');
                       } catch (error) {
                         console.error('Failed to switch to Privy surface:', error);
-                        // Fallback: try direct login without reload if Privy is ready
-                        if (privyReady && login) {
-                          try {
-                            login();
-                          } catch (loginError) {
-                            console.error('Fallback Privy login failed:', loginError);
-                          }
-                        }
+                        toast.error('Failed to switch to Privy sign-in. Please try again.');
                       }
                     }}
                     disabled={!privyReady}

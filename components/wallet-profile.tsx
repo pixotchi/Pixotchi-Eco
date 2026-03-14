@@ -55,6 +55,18 @@ import { AirdropClaimCard } from "@/components/airdrop-claim-card";
 import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
+import { useAuthSurface } from "@/hooks/useAuthSurface";
+
+const AUTH_CACHE_PREFIXES = [
+  "wagmi",
+  "_wagmi",
+  "walletconnect",
+  "wc@",
+  "privy",
+  "@privy",
+  "ock",
+  "coinbase",
+];
 
 // Compact ETH Mode toggle row for Connection card
 const EthModeToggleRow = () => {
@@ -110,6 +122,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const chainId = useChainId();
   const { context } = useMiniKit(); // Get MiniKit context (Coinbase)
   const fc = useFrameContext();     // Farcaster context provider
+  const { resolved: authSurfaceResolved, surface: authSurface } = useAuthSurface();
   const {
     isSmartWallet,
     walletType,
@@ -144,8 +157,10 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
   // Farcaster / Mini App state (evaluate before export gating)
   const isMiniApp = Boolean(fc?.isInMiniApp);
+  const isFrameContextResolved = fc !== null;
   const fcContext = (fc?.context as any) ?? null;
   const isInFrame = isMiniApp; // alias for clarity
+  const isPrivySurface = authSurface === "privy" || authSurface === "privysolana";
 
   const embeddedWallets = useMemo(() => {
     if (!privyUser?.linkedAccounts) return [] as Array<{ address: string }>;
@@ -190,6 +205,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   }, [address, privyUser?.linkedAccounts]);
 
   const canExportEmbeddedWallet =
+    authSurfaceResolved &&
+    isPrivySurface &&
     privyReady &&
     privyAuthenticated &&
     embeddedWallets.length > 0 &&
@@ -364,6 +381,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     try {
       // First, close the dialog to provide immediate feedback
       onOpenChange(false);
+      await sessionStorageManager.markPrivyLogoutIntent();
 
       let privyLogoutSucceeded = true;
 
@@ -436,13 +454,29 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
   const handleCloseMiniApp = async () => {
     try {
+      await sessionStorageManager.clearAuthState();
+    } catch (storageError) {
+      console.warn('Failed to clear auth state before closing mini app:', storageError);
+    }
+
+    try {
+      await clearPublicChatSession();
+    } catch (chatSessionError) {
+      console.warn('Failed to clear public chat session before closing mini app:', chatSessionError);
+    }
+
+    clearMiniAppBypassCookies();
+
+    await clearAppCaches({
+      onlyPrefixes: AUTH_CACHE_PREFIXES,
+      preserveLocalStorageKeys: ["pixotchi:tutorial", "pixotchi:cache_version"],
+    });
+
+    try {
       await sdk.actions.close();
     } catch {
       toast.error("Close action not supported in this context");
     }
-    // Clear caches on exit as well, to avoid stale connector state lingering between sessions
-    // Preserve tutorial progress key so onboarding doesn't reshow
-    clearAppCaches({ preserveLocalStorageKeys: ["pixotchi:tutorial"] });
   };
 
   const handleRefreshBalances = () => {
@@ -833,7 +867,16 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     Transfer Assets
                   </Button>
                 </div>
-                {isMiniApp ? (
+                {!isFrameContextResolved ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled
+                    className="w-full"
+                  >
+                    Loading session controls...
+                  </Button>
+                ) : isMiniApp ? (
                   <Button
                     variant="secondary"
                     size="sm"

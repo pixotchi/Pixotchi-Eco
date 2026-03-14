@@ -8,15 +8,32 @@ type PendingBaseChatAuth = {
   signature: `0x${string}`;
 };
 
+export const AUTH_SURFACE_CHANGE_EVENT = 'pixotchi:auth-surface-change';
+
 class SessionStorageManager {
   private static instance: SessionStorageManager;
   private readonly KEY_AUTH_SURFACE = 'pixotchi:authSurface';
   private readonly KEY_AUTOLOGIN = 'pixotchi:autologin';
   private readonly KEY_PRIVY_AUTH_ADDRESS = 'pixotchi:privyAuthAddress';
+  private readonly KEY_PRIVY_LOGOUT_INTENT_AT = 'pixotchi:privyLogoutIntentAt';
   private readonly KEY_BASE_CHAT_AUTH = 'pixotchi:baseChatAuth';
   private lock: Promise<void> = Promise.resolve();
 
   private constructor() {}
+
+  private emitAuthSurfaceChange(surface: AuthSurface): void {
+    if (typeof window === 'undefined') return;
+
+    try {
+      window.dispatchEvent(new CustomEvent(AUTH_SURFACE_CHANGE_EVENT, {
+        detail: {
+          surface: surface === 'coinbase' ? 'base' : surface,
+        },
+      }));
+    } catch (error) {
+      console.warn('Failed to emit auth surface change event:', error);
+    }
+  }
 
   static getInstance(): SessionStorageManager {
     if (!SessionStorageManager.instance) {
@@ -41,6 +58,11 @@ class SessionStorageManager {
     }
   }
 
+  getEffectiveAuthSurface(): 'privy' | 'base' | 'privysolana' | null {
+    const stored = this.getAuthSurface();
+    return stored === 'coinbase' ? 'base' : stored;
+  }
+
   // Thread-safe setter for auth surface
   async setAuthSurface(surface: 'privy' | 'base' | 'coinbase' | 'privysolana'): Promise<void> {
     // Chain operations to prevent race conditions
@@ -49,6 +71,7 @@ class SessionStorageManager {
       
       try {
         sessionStorage.setItem(this.KEY_AUTH_SURFACE, surface);
+        this.emitAuthSurfaceChange(surface);
       } catch (error) {
         console.error('Failed to set auth surface in sessionStorage:', error);
         throw error;
@@ -148,6 +171,59 @@ class SessionStorageManager {
     return this.lock;
   }
 
+  hasRecentPrivyLogoutIntent(maxAgeMs: number = 10_000): boolean {
+    if (typeof window === 'undefined') return false;
+
+    try {
+      const stored = sessionStorage.getItem(this.KEY_PRIVY_LOGOUT_INTENT_AT);
+      if (!stored) return false;
+
+      const timestamp = Number(stored);
+      if (!Number.isFinite(timestamp)) {
+        sessionStorage.removeItem(this.KEY_PRIVY_LOGOUT_INTENT_AT);
+        return false;
+      }
+
+      const isRecent = Date.now() - timestamp <= maxAgeMs;
+      if (!isRecent) {
+        sessionStorage.removeItem(this.KEY_PRIVY_LOGOUT_INTENT_AT);
+      }
+
+      return isRecent;
+    } catch (error) {
+      console.warn('Failed to read Privy logout intent from sessionStorage:', error);
+      return false;
+    }
+  }
+
+  async markPrivyLogoutIntent(): Promise<void> {
+    this.lock = this.lock.then(async () => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        sessionStorage.setItem(this.KEY_PRIVY_LOGOUT_INTENT_AT, String(Date.now()));
+      } catch (error) {
+        console.warn('Failed to mark Privy logout intent in sessionStorage:', error);
+      }
+    });
+
+    return this.lock;
+  }
+
+  async clearPrivyLogoutIntent(): Promise<void> {
+    this.lock = this.lock.then(async () => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        sessionStorage.removeItem(this.KEY_PRIVY_LOGOUT_INTENT_AT);
+      } catch (error) {
+        console.warn('Failed to clear Privy logout intent from sessionStorage:', error);
+      }
+    });
+
+    return this.lock;
+  }
+
   getPendingBaseChatAuth(): PendingBaseChatAuth | null {
     if (typeof window === 'undefined') return null;
 
@@ -217,6 +293,7 @@ class SessionStorageManager {
       try {
         sessionStorage.setItem(this.KEY_AUTH_SURFACE, surface);
         sessionStorage.setItem(this.KEY_AUTOLOGIN, surface);
+        this.emitAuthSurfaceChange(surface);
       } catch (error) {
         console.error('Failed to set auth surface and autologin:', error);
         throw error;
@@ -235,6 +312,7 @@ class SessionStorageManager {
         sessionStorage.removeItem(this.KEY_AUTOLOGIN);
         sessionStorage.removeItem(this.KEY_PRIVY_AUTH_ADDRESS);
         sessionStorage.removeItem(this.KEY_BASE_CHAT_AUTH);
+        this.emitAuthSurfaceChange(null);
       } catch (error) {
         console.warn('Failed to clear auth state from sessionStorage:', error);
       }
