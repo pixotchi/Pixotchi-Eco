@@ -173,81 +173,16 @@ function normalizeBaseSiweMessage(message: string): string {
     .trim();
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === 'string' && error.trim()) {
-    return error;
-  }
-
-  return 'Unknown error';
-}
-
-function redactBaseSiweLine(line: string): string {
-  if (/^Nonce:/i.test(line)) {
-    return 'Nonce: [redacted]';
-  }
-
-  return line;
-}
-
-function getBaseSiweLines(message: string): string[] {
-  return message
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line) => redactBaseSiweLine(line));
-}
-
-function logBaseSiweFailure(
-  request: NextRequest,
-  payload: BaseChatAuthPayload,
-  details: Record<string, unknown>,
-): void {
-  const expectedUrls = getExpectedBaseUrls(request);
-
-  console.warn('[chat-auth] Base SIWE verification failed:', {
-    address: payload.address?.toLowerCase?.() ?? payload.address ?? null,
-    expectedDomains: Array.from(getExpectedBaseDomains(expectedUrls)),
-    expectedOrigins: expectedUrls.map((url) => url.origin),
-    forwardedHost: request.headers.get('x-forwarded-host'),
-    forwardedProto: request.headers.get('x-forwarded-proto'),
-    host: request.headers.get('host'),
-    origin: request.headers.get('origin'),
-    secFetchSite: request.headers.get('sec-fetch-site'),
-    signatureLength: typeof payload.signature === 'string' ? payload.signature.length : null,
-    userAgent: request.headers.get('user-agent'),
-    ...details,
-  });
-}
-
-function parseBaseSiweMessage(message: string): {
-  siweMessage: SiweMessage;
-  usedNormalizedMessage: boolean;
-} {
+function parseBaseSiweMessage(message: string): SiweMessage {
   const normalizedMessage = normalizeBaseSiweMessage(message);
 
   try {
-    return {
-      siweMessage: new SiweMessage(message),
-      usedNormalizedMessage: false,
-    };
-  } catch (rawError) {
+    return new SiweMessage(message);
+  } catch {
     try {
-      return {
-        siweMessage: new SiweMessage(normalizedMessage),
-        usedNormalizedMessage: true,
-      };
-    } catch (normalizedError) {
-      const chatAuthError = new ChatAuthError('Invalid SIWE message.', 400) as ChatAuthError & {
-        diagnostics?: Record<string, unknown>;
-      };
-      chatAuthError.diagnostics = {
-        normalizedReason: getErrorMessage(normalizedError),
-        rawReason: getErrorMessage(rawError),
-      };
-      throw chatAuthError;
+      return new SiweMessage(normalizedMessage);
+    } catch {
+      throw new ChatAuthError('Invalid SIWE message.', 400);
     }
   }
 }
@@ -654,36 +589,7 @@ export async function verifyBaseChatIdentity(
     throw new ChatAuthError('Invalid wallet address format.', 400);
   }
 
-  let siweMessage: SiweMessage;
-  let usedNormalizedMessage = false;
-  try {
-    const parsed = parseBaseSiweMessage(payload.message);
-    siweMessage = parsed.siweMessage;
-    usedNormalizedMessage = parsed.usedNormalizedMessage;
-  } catch (error) {
-    const normalizedMessage = normalizeBaseSiweMessage(payload.message);
-    const diagnostics =
-      error instanceof ChatAuthError &&
-      'diagnostics' in error &&
-      error.diagnostics &&
-      typeof error.diagnostics === 'object'
-        ? error.diagnostics
-        : {};
-    logBaseSiweFailure(request, payload, {
-      ...diagnostics,
-      normalizedLines: getBaseSiweLines(normalizedMessage),
-      normalizedPreview: normalizedMessage.slice(0, 400),
-      rawLines: getBaseSiweLines(payload.message),
-      rawPreview: payload.message.slice(0, 400),
-      reason: getErrorMessage(error),
-      stage: 'parse',
-    });
-
-    if (error instanceof ChatAuthError) {
-      throw error;
-    }
-    throw new ChatAuthError('Invalid SIWE message.', 400);
-  }
+  const siweMessage = parseBaseSiweMessage(payload.message);
 
   const expectedUrls = getExpectedBaseUrls(request);
   const expectedDomains = getExpectedBaseDomains(expectedUrls);
@@ -691,66 +597,31 @@ export async function verifyBaseChatIdentity(
   const normalizedAddress = normalizeAddress(payload.address);
 
   if (normalizeAddress(siweMessage.address) !== normalizedAddress) {
-    logBaseSiweFailure(request, payload, {
-      parsedAddress: normalizeAddress(siweMessage.address),
-      reason: 'SIWE address does not match the connected wallet.',
-      stage: 'address',
-      usedNormalizedMessage,
-    });
     throw new ChatAuthError('SIWE address does not match the connected wallet.', 400);
   }
 
   if (!expectedDomains.has(normalizeSiweDomain(siweMessage.domain))) {
-    logBaseSiweFailure(request, payload, {
-      parsedDomain: normalizeSiweDomain(siweMessage.domain),
-      reason: 'Unexpected SIWE domain.',
-      stage: 'domain',
-      usedNormalizedMessage,
-    });
     throw new ChatAuthError('Unexpected SIWE domain.', 400);
   }
 
   if (Number(siweMessage.chainId) !== base.id) {
-    logBaseSiweFailure(request, payload, {
-      parsedChainId: Number(siweMessage.chainId),
-      reason: 'SIWE signature must target Base mainnet.',
-      stage: 'chainId',
-      usedNormalizedMessage,
-    });
     throw new ChatAuthError('SIWE signature must target Base mainnet.', 400);
   }
 
   if (siweMessage.uri) {
     try {
       if (!expectedOrigins.has(normalizeOrigin(new URL(siweMessage.uri).origin))) {
-        logBaseSiweFailure(request, payload, {
-          parsedUri: siweMessage.uri,
-          reason: 'Unexpected SIWE origin.',
-          stage: 'origin',
-          usedNormalizedMessage,
-        });
         throw new ChatAuthError('Unexpected SIWE origin.', 400);
       }
     } catch (error) {
       if (error instanceof ChatAuthError) {
         throw error;
       }
-      logBaseSiweFailure(request, payload, {
-        parsedUri: siweMessage.uri,
-        reason: getErrorMessage(error),
-        stage: 'origin-parse',
-        usedNormalizedMessage,
-      });
       throw new ChatAuthError('Invalid SIWE origin.', 400);
     }
   }
 
   if (!siweMessage.nonce) {
-    logBaseSiweFailure(request, payload, {
-      reason: 'SIWE nonce is missing.',
-      stage: 'nonce-missing',
-      usedNormalizedMessage,
-    });
     throw new ChatAuthError('SIWE nonce is missing.', 400);
   }
 
@@ -761,21 +632,11 @@ export async function verifyBaseChatIdentity(
   });
 
   if (!isValid) {
-    logBaseSiweFailure(request, payload, {
-      reason: 'Invalid Base authentication signature.',
-      stage: 'signature',
-      usedNormalizedMessage,
-    });
     throw new ChatAuthError('Invalid Base authentication signature.', 401);
   }
 
   const nonceConsumed = await consumeBaseAuthNonce(siweMessage.nonce);
   if (!nonceConsumed) {
-    logBaseSiweFailure(request, payload, {
-      reason: 'Invalid or reused Base authentication nonce.',
-      stage: 'nonce-consume',
-      usedNormalizedMessage,
-    });
     throw new ChatAuthError('Invalid or reused Base authentication nonce.', 400);
   }
 

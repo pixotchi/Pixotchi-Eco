@@ -81,13 +81,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof ChatAuthError) {
-      if (error.status >= 500) {
-        console.error('[chat-auth] Session bootstrap unavailable:', {
-          message: error.message,
-          provider: provider ?? 'unknown',
-        });
-      }
-
       if (error.status === 503) {
         return createChatUnavailableResponse(error.message);
       }
