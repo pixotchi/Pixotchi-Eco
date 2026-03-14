@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.85",
+  "version": "1.6.86",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -20,7 +20,7 @@
     "@farcaster/miniapp-node": "0.1.13",
     "@farcaster/miniapp-wagmi-connector": "1.1.1",
     "@privy-io/react-auth": "3.17.0",
-    "@privy-io/server-auth": "1.18.4",
+    "@privy-io/server-auth": "1.32.5",
     "@privy-io/wagmi": "4.0.2",
     "@solana/kit": "6.3.1",
     "@solana/web3.js": "1.98.4",
@@ -30,8 +30,8 @@
     "@solana-program/token": "0.12.0",
     "bs58": "6.0.0",
     "wagmi": "2.19.5",
-    "viem": "2.47.2",
-    "ox": "0.14.2",
+    "viem": "2.47.4",
+    "ox": "0.14.5",
     "ethers": "6.16.0",
     "permissionless": "0.3.4",
     "next": "16.1.6",
@@ -85,6 +85,6 @@
   "overrides": {
     "pino": "10.3.1",
     "thread-stream": "3.1.0",
-    "viem": "2.47.2"
+    "viem": "2.47.4"
   }
 }
