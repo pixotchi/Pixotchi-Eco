@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
 import { useFrameContext } from '@/lib/frame-context';
+import { useAuthSurface } from '@/hooks/useAuthSurface';
 
 const POLL_INTERVAL = 30000; // 30 seconds
 const STORAGE_KEY = 'pixotchi:dismissed-broadcasts';
@@ -27,6 +28,7 @@ export function useBroadcastMessages() {
   const { address, isConnected } = useAccount();
   const { user, authenticated } = usePrivy();
   const frameContext = useFrameContext();
+  const { surface: authSurface } = useAuthSurface();
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(() => {
@@ -55,10 +57,12 @@ export function useBroadcastMessages() {
         : undefined;
 
     if (address) return `addr:${address.toLowerCase()}`;
-    if (authenticated && user?.id) return `privy:${user.id}`;
+    if ((authSurface === 'privy' || authSurface === 'privysolana') && authenticated && user?.id) {
+      return `privy:${user.id}`;
+    }
     if (typeof fid === 'number' && fid > 0) return `fid:${fid}`;
     return undefined;
-  }, [address, authenticated, user?.id, frameContext?.context]);
+  }, [address, authSurface, authenticated, user?.id, frameContext?.context]);
 
   // Local dismissed IDs are loaded synchronously in state initializer
 
@@ -155,7 +159,7 @@ export function useBroadcastMessages() {
     }
     
     // Send dismissal to server (only when connected)
-    if (identity && (isConnected || authenticated)) {
+    if (identity && (isConnected || ((authSurface === 'privy' || authSurface === 'privysolana') && authenticated))) {
       try {
         await fetch('/api/broadcast/dismiss', {
           method: 'POST',
@@ -166,7 +170,7 @@ export function useBroadcastMessages() {
         console.error('Failed to record dismissal:', error);
       }
     }
-  }, [identity, isConnected, authenticated, localDismissedIds]);
+  }, [authSurface, identity, isConnected, authenticated, localDismissedIds]);
 
   // Track impression (message was shown)
   const trackImpression = useCallback(async (messageId: string) => {
@@ -211,12 +215,12 @@ export function useBroadcastMessages() {
   useEffect(() => {
     if (!mountedRef.current) return;
     
-    if (address !== undefined || (authenticated && user?.id)) {
+    if (address !== undefined || (((authSurface === 'privy' || authSurface === 'privysolana') && authenticated) && user?.id)) {
       console.log('[Broadcast] Wallet address changed, fetching messages');
       fetchMessages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, authenticated, user?.id]); // Identity-related triggers
+  }, [address, authSurface, authenticated, user?.id]); // Identity-related triggers
 
   return {
     messages,
@@ -226,4 +230,3 @@ export function useBroadcastMessages() {
     refresh: fetchMessages,
   };
 }
-

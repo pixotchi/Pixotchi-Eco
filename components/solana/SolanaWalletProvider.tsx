@@ -10,6 +10,7 @@ import React, { useMemo } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { SolanaWalletProvider as SolanaWalletContextProvider } from '@/lib/solana-wallet-context';
 import { isSolanaEnabled } from '@/lib/solana-constants';
+import { useAuthSurface } from '@/hooks/useAuthSurface';
 
 // ============ Types ============
 
@@ -45,11 +46,13 @@ interface SolanaProviderProps {
  */
 export function SolanaWalletProvider({ children }: SolanaProviderProps) {
   const { user, authenticated } = usePrivy();
+  const { surface: authSurface } = useAuthSurface();
+  const isPrivySolanaSurface = authSurface === 'privysolana';
   
   // Find Solana wallet from user's linked accounts
   // Privy stores Solana wallets in linkedAccounts with chainType: 'solana'
   const solanaWallet = useMemo(() => {
-    if (!authenticated || !user) return null;
+    if (!isPrivySolanaSurface || !authenticated || !user) return null;
     
     // Check user's linked accounts for Solana wallet
     // This is the correct way to find Solana wallets in Privy
@@ -67,7 +70,7 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
     }
     
     return null;
-  }, [authenticated, user]);
+  }, [authenticated, isPrivySolanaSurface, user]);
   
   // Get Solana address from the wallet
   const solanaAddress = useMemo(() => {
@@ -78,8 +81,8 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
   
   // Check if connected - requires authentication, address, and Solana to be enabled
   const isConnected = useMemo(() => {
-    return authenticated && !!solanaAddress && isSolanaEnabled();
-  }, [authenticated, solanaAddress]);
+    return isPrivySolanaSurface && authenticated && !!solanaAddress && isSolanaEnabled();
+  }, [authenticated, isPrivySolanaSurface, solanaAddress]);
   
   return (
     <SolanaWalletContextProvider

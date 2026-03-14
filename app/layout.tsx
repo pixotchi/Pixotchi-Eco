@@ -168,6 +168,10 @@ export default function RootLayout({
       className={`${coinbaseSans.variable} ${pixelmix.variable}`}
     >
       <head>
+        <meta
+          name="talentapp:project_verification"
+          content="9ffd3d5d956960ca09dd1c00350b652e1dc820b5432f873814fc31be7de4c55518ed297d7a323487459309195296530a333768ca1df75d4bae10e72c8d7e65bc"
+        />
         <style
           id="pixotchi-font-prelude"
           dangerouslySetInnerHTML={{

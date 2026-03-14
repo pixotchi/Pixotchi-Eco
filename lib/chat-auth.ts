@@ -5,7 +5,7 @@ import { createPublicClient } from 'viem';
 import { base } from 'viem/chains';
 import { SiweMessage } from 'siwe';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
-import { PrivyClient } from '@privy-io/server-auth';
+import { PrivyClient } from '@privy-io/node';
 import { getTwinAddress } from '@/lib/solana-twin';
 import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
 import { MINIAPP_BYPASS_ADDRESS_COOKIE, MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
@@ -478,7 +478,7 @@ function getPrivyServerClient(): PrivyClient {
     throw new ChatAuthError('Privy server authentication is not configured.', 503);
   }
 
-  return new PrivyClient(appId, appSecret);
+  return new PrivyClient({ appId, appSecret });
 }
 
 function getPrivyWalletAccounts(user: any, chainType: 'ethereum' | 'solana'): Array<{ address: string }> {
@@ -500,8 +500,8 @@ export async function verifyPrivyChatIdentity(
 
   const expectedAddress = payload.expectedAddress ? normalizeAddress(payload.expectedAddress) : null;
   const privy = getPrivyServerClient();
-  const claims = await privy.verifyAuthToken(payload.accessToken);
-  const user = await privy.getUser(claims.userId);
+  const claims = await privy.utils().auth().verifyAccessToken(payload.accessToken);
+  const user = await privy.users()._get(claims.user_id);
 
   if (payload.solanaAddress) {
     const normalizedSolanaAddress = payload.solanaAddress.trim();
@@ -524,7 +524,7 @@ export async function verifyPrivyChatIdentity(
       method: 'privy-solana',
       provider: 'privy',
       sourceAddress: matchedWallet.address,
-      userId: claims.userId,
+      userId: claims.user_id,
     };
   }
 
@@ -543,7 +543,7 @@ export async function verifyPrivyChatIdentity(
     address,
     method: 'privy-ethereum',
     provider: 'privy',
-    userId: claims.userId,
+    userId: claims.user_id,
   };
 }
 
