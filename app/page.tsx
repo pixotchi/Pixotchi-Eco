@@ -818,13 +818,22 @@ export default function App() {
 
             try {
               if (!mounted) return;
-              try {
-                await completeBaseAuthentication(base as any);
-              } catch (error) {
-                if (legacyBase && shouldUseLegacyBaseFallback(error)) {
-                  await completeLegacyBaseAuthentication(legacyBase as any);
-                } else {
-                  throw error;
+              const baseProvider = typeof (base as any)?.getProvider === 'function'
+                ? await (base as any).getProvider().catch(() => null)
+                : (base as any)?.provider ?? null;
+              const shouldPreferLegacyCoinbaseBrowserFlow = Boolean(baseProvider?.isCoinbaseBrowser && legacyBase);
+
+              if (shouldPreferLegacyCoinbaseBrowserFlow) {
+                await completeLegacyBaseAuthentication(legacyBase as any);
+              } else {
+                try {
+                  await completeBaseAuthentication(base as any);
+                } catch (error) {
+                  if (legacyBase && shouldUseLegacyBaseFallback(error)) {
+                    await completeLegacyBaseAuthentication(legacyBase as any);
+                  } else {
+                    throw error;
+                  }
                 }
               }
               await sessionStorageManager.removeAutologin();
