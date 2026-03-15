@@ -7,7 +7,7 @@ import type { BroadcastMessage } from '@/lib/broadcast-service';
 import { useFrameContext } from '@/lib/frame-context';
 import { useAuthSurface } from '@/hooks/useAuthSurface';
 
-const POLL_INTERVAL = 30000; // 30 seconds
+const POLL_INTERVAL = 90000; // 90 seconds
 const STORAGE_KEY = 'pixotchi:dismissed-broadcasts';
 const TUTORIAL_STORAGE_KEY = 'pixotchi:tutorial';
 
