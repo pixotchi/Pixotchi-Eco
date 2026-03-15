@@ -11,11 +11,78 @@ import {
   verifyFarcasterChatIdentity,
   verifyPrivyChatIdentity,
 } from '@/lib/chat-auth';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
+const CHAT_AUTH_SESSION_GET_IP_LIMIT_PER_MINUTE = 60;
+const CHAT_AUTH_SESSION_GET_ADDRESS_LIMIT_PER_MINUTE = 90;
+const CHAT_AUTH_SESSION_POST_IP_LIMIT_PER_MINUTE = 20;
+const CHAT_AUTH_SESSION_POST_ADDRESS_LIMIT_PER_MINUTE = 10;
+const CHAT_AUTH_SESSION_DELETE_IP_LIMIT_PER_MINUTE = 20;
+
+function getStringField(body: Record<string, unknown>, key: string): string | undefined {
+  const value = body[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function getRequestedChatAuthAddress(body: unknown, provider: unknown): string | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+
+  const payload = body as Record<string, unknown>;
+
+  if (provider === 'base' && typeof payload.address === 'string') {
+    return payload.address;
+  }
+
+  if (
+    (provider === 'privy' || provider === 'farcaster') &&
+    typeof payload.expectedAddress === 'string'
+  ) {
+    return payload.expectedAddress;
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
+  const ipRateLimitResponse = await enforceRateLimit(request, {
+    scope: 'api:chat:auth:session:get',
+    rules: [
+      {
+        kind: 'ip',
+        identifier: getRequestIp(request),
+        limit: CHAT_AUTH_SESSION_GET_IP_LIMIT_PER_MINUTE,
+        windowSeconds: 60,
+      },
+    ],
+  });
+
+  if (ipRateLimitResponse) {
+    return ipRateLimitResponse;
+  }
+
   const { session, sessionId } = await getChatSessionFromRequest(request);
+
+  if (session) {
+    const addressRateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:chat:auth:session:get',
+      rules: [
+        {
+          kind: 'address',
+          identifier: session.address,
+          limit: CHAT_AUTH_SESSION_GET_ADDRESS_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+
+    if (addressRateLimitResponse) {
+      return addressRateLimitResponse;
+    }
+  }
 
   if (!session) {
     return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
@@ -41,31 +108,56 @@ export async function POST(request: NextRequest) {
   let provider: unknown;
 
   try {
-    const body = await request.json();
+    const parsedBody = await request.json();
+    const body = parsedBody && typeof parsedBody === 'object'
+      ? parsedBody as Record<string, unknown>
+      : {};
     provider = body?.provider;
+
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:chat:auth:session:post',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: CHAT_AUTH_SESSION_POST_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+        {
+          kind: 'address',
+          identifier: getRequestedChatAuthAddress(body, provider),
+          limit: CHAT_AUTH_SESSION_POST_ADDRESS_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
 
     if (provider === 'privy') {
       const identity = await verifyPrivyChatIdentity({
-        accessToken: body.accessToken,
-        expectedAddress: body.expectedAddress,
-        solanaAddress: body.solanaAddress,
+        accessToken: getStringField(body, 'accessToken') ?? '',
+        expectedAddress: getStringField(body, 'expectedAddress') ?? null,
+        solanaAddress: getStringField(body, 'solanaAddress') ?? null,
       });
       return createChatSessionResponse(request, identity);
     }
 
     if (provider === 'farcaster') {
       const identity = await verifyFarcasterChatIdentity(request, {
-        expectedAddress: body.expectedAddress,
-        token: body.token,
+        expectedAddress: getStringField(body, 'expectedAddress') ?? null,
+        token: getStringField(body, 'token') ?? '',
       });
       return createChatSessionResponse(request, identity);
     }
 
     if (provider === 'base') {
       const identity = await verifyBaseChatIdentity(request, {
-        address: body.address,
-        message: body.message,
-        signature: body.signature,
+        address: getStringField(body, 'address') ?? '',
+        message: getStringField(body, 'message') ?? '',
+        signature: (getStringField(body, 'signature') ?? '0x') as `0x${string}`,
       });
       return createChatSessionResponse(request, identity);
     }
@@ -103,6 +195,22 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:chat:auth:session:delete',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: CHAT_AUTH_SESSION_DELETE_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     await clearChatSessionForRequest(request);
 
     const response = NextResponse.json(

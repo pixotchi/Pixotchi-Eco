@@ -9,6 +9,12 @@ export type PublicChatSession = {
 };
 
 export const PUBLIC_CHAT_SESSION_EVENT = 'pixotchi:public-chat-session';
+const PUBLIC_CHAT_SESSION_CACHE_TTL_MS = 1000;
+
+type PublicChatSessionCacheEntry = {
+  expiresAt: number;
+  session: PublicChatSession | null;
+};
 
 type PrivyChatSessionRequest = {
   accessToken: string;
@@ -29,6 +35,16 @@ type BaseChatSessionRequest = {
   provider: 'base';
   signature: `0x${string}`;
 };
+
+let publicChatSessionCache: PublicChatSessionCacheEntry | null = null;
+let inFlightPublicChatSessionRequest: Promise<PublicChatSession | null> | null = null;
+
+function setPublicChatSessionCache(session: PublicChatSession | null) {
+  publicChatSessionCache = {
+    expiresAt: Date.now() + PUBLIC_CHAT_SESSION_CACHE_TTL_MS,
+    session,
+  };
+}
 
 async function parseError(response: Response): Promise<string> {
   try {
@@ -52,6 +68,8 @@ async function parseSessionResponse(response: Response): Promise<PublicChatSessi
 }
 
 function emitPublicChatSessionEvent(session: PublicChatSession | null) {
+  setPublicChatSessionCache(session);
+
   if (typeof window === 'undefined') {
     return;
   }
@@ -62,16 +80,36 @@ function emitPublicChatSessionEvent(session: PublicChatSession | null) {
 }
 
 export async function getCurrentPublicChatSession(): Promise<PublicChatSession | null> {
-  const response = await fetch('/api/chat/auth/session', {
-    cache: 'no-store',
-    credentials: 'same-origin',
-  });
-
-  if (response.status === 401) {
-    return null;
+  const now = Date.now();
+  if (publicChatSessionCache && publicChatSessionCache.expiresAt > now) {
+    return publicChatSessionCache.session;
   }
 
-  return parseSessionResponse(response);
+  if (inFlightPublicChatSessionRequest) {
+    return inFlightPublicChatSessionRequest;
+  }
+
+  inFlightPublicChatSessionRequest = (async () => {
+    const response = await fetch('/api/chat/auth/session', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+
+    if (response.status === 401) {
+      setPublicChatSessionCache(null);
+      return null;
+    }
+
+    const session = await parseSessionResponse(response);
+    setPublicChatSessionCache(session);
+    return session;
+  })();
+
+  try {
+    return await inFlightPublicChatSessionRequest;
+  } finally {
+    inFlightPublicChatSessionRequest = null;
+  }
 }
 
 export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessionRequest, 'provider'>): Promise<PublicChatSession> {

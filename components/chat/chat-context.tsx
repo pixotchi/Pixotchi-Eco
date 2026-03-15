@@ -88,6 +88,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const bootstrapKeyRef = useRef<string | null>(null);
   const previousChatAddressRef = useRef<string | null>(null);
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
+  const publicChatSessionRef = useRef<PublicChatSession | null>(null);
 
   const publicChatAddress = isMiniApp ? (chatAddress ?? null) : (publicChatSession?.address ?? null);
   const publicChatAuthenticated = isMiniApp
@@ -114,6 +115,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    publicChatSessionRef.current = publicChatSession;
+  }, [publicChatSession]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -121,18 +126,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const handlePublicChatSession = (event: Event) => {
       const detail = (event as CustomEvent<{ session: PublicChatSession | null }>).detail;
       const nextSession = detail?.session ?? null;
+      const currentSession = publicChatSessionRef.current;
+      const sessionChanged =
+        currentSession?.address?.toLowerCase() !== nextSession?.address?.toLowerCase() ||
+        currentSession?.provider !== nextSession?.provider ||
+        currentSession?.method !== nextSession?.method;
 
-      setPublicChatSession((current) => {
-        if (
-          current?.address?.toLowerCase() === nextSession?.address?.toLowerCase() &&
-          current?.provider === nextSession?.provider &&
-          current?.method === nextSession?.method
-        ) {
-          return current;
-        }
+      if (!sessionChanged) {
+        return;
+      }
 
-        return nextSession;
-      });
+      publicChatSessionRef.current = nextSession;
+      setPublicChatSession(nextSession);
       setPublicChatSessionVersion((version) => version + 1);
     };
 
@@ -483,6 +488,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       try {
         if (shouldBootstrapPrivy) {
+          const expectedPrivyMethod = currentSurface === 'privysolana' ? 'privy-solana' : 'privy-ethereum';
+          const hasMatchingPrivySession =
+            publicChatSession?.provider === 'privy' &&
+            publicChatSession?.method === expectedPrivyMethod &&
+            publicChatSession.address?.toLowerCase() === chatAddress.toLowerCase();
+
+          if (hasMatchingPrivySession) {
+            return;
+          }
+
           const accessToken = await getAccessToken();
           if (!accessToken) {
             throw new Error('Privy access token unavailable.');
@@ -501,6 +516,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
 
         if (shouldCheckBase) {
+          const hasMatchingBaseSession =
+            publicChatSession?.provider === 'base' &&
+            publicChatSession.address?.toLowerCase() === chatAddress.toLowerCase();
+
+          if (hasMatchingBaseSession) {
+            return;
+          }
+
           let nextSession: PublicChatSession | null = null;
 
           for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -577,6 +600,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     chatAddress,
     getAccessToken,
     isMiniApp,
+    publicChatSession,
     publicChatSessionVersion,
     privyReady,
     solanaAddress,
