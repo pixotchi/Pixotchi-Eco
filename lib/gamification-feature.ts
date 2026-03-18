@@ -1,3 +1,11 @@
+import {
+  buildGamificationPolicy,
+  GAMIFICATION_DISABLED_FALLBACK_MESSAGE,
+  isMiniAppGamificationContext,
+} from './gamification-policy';
+
+export { isMiniAppGamificationContext } from './gamification-policy';
+
 function isTruthyFlag(value: string | undefined | null): boolean {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
@@ -11,8 +19,24 @@ export function isGamificationDisabled(): boolean {
   );
 }
 
+export function isGamificationMiniAppOnly(): boolean {
+  return (
+    isTruthyFlag(process.env.GAMIFICATION_MINIAPP_ONLY) ||
+    isTruthyFlag(process.env.NEXT_PUBLIC_GAMIFICATION_MINIAPP_ONLY)
+  );
+}
+
 export function getGamificationDisabledMessage(): string {
   const message = process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED_MESSAGE?.trim();
   if (message) return message;
-  return 'Tasks and Rocks leaderboard are temporarily disabled while we reset progress for the next mission season.';
+  return GAMIFICATION_DISABLED_FALLBACK_MESSAGE;
+}
+
+export function getGamificationPolicy(input?: { isMiniApp?: boolean }) {
+  return buildGamificationPolicy({
+    disabled: isGamificationDisabled(),
+    miniAppOnly: isGamificationMiniAppOnly(),
+    isMiniApp: input?.isMiniApp,
+    disabledMessage: getGamificationDisabledMessage(),
+  });
 }

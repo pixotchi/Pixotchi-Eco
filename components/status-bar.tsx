@@ -9,6 +9,8 @@ import { useBalances } from "@/lib/balance-context";
 import { formatUnits } from "viem";
 import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/components/solana";
 import { cn } from "@/lib/utils";
+import { useFrameContext } from "@/lib/frame-context";
+import { getClientGamificationPolicy } from "@/lib/gamification-client";
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
   const num = parseFloat(formatUnits(amount, decimals));
@@ -22,9 +24,12 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading, refreshBalances } = useBalances();
   const isSolana = useIsSolanaWallet();
   const { twinInfo, solBalance } = useSolanaWallet();
+  const frame = useFrameContext();
 
   const [stakingOpen, setStakingOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
+  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const showTasksButton = gamificationPolicy.visible;
 
   // Balance refreshes are handled automatically by balance-context.tsx via events
   // No need for manual refresh on every render or tab change
@@ -92,16 +97,18 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
           <div className="shrink-0 flex items-center gap-2">
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}
-            <button
-              type="button"
-              onClick={() => setTasksOpen(true)}
-              className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
-              aria-label="Open tasks"
-              aria-expanded={tasksOpen}
-              aria-haspopup="dialog"
-            >
-              Tasks
-            </button>
+            {showTasksButton && (
+              <button
+                type="button"
+                onClick={() => setTasksOpen(true)}
+                className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                aria-label="Open tasks"
+                aria-expanded={tasksOpen}
+                aria-haspopup="dialog"
+              >
+                Tasks
+              </button>
+            )}
             {/* Hide staking for Solana wallet users (not supported via bridge) */}
             {!isSolana && (
               <button
@@ -125,4 +132,3 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
     </div>
   );
 }
-

@@ -31,6 +31,8 @@ import { base } from "viem/chains";
 import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { CLIENT_ENV } from "@/lib/env-config";
+import { useFrameContext } from "@/lib/frame-context";
+import { getClientGamificationPolicy } from "@/lib/gamification-client";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -60,6 +62,9 @@ const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 export default function LeaderboardTab() {
   const gamificationDisabled = CLIENT_ENV.GAMIFICATION_DISABLED;
   const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
+  const frame = useFrameContext();
+  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const showRocksBoard = gamificationPolicy.visible;
   const { address: evmAddress } = useAccount();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
@@ -305,6 +310,14 @@ export default function LeaderboardTab() {
   }, []);
 
   const fetchRocksLeaderboard = useCallback(async () => {
+    if (!showRocksBoard) {
+      setRocksDisabledNotice(null);
+      setRocksRows([]);
+      setRocksError(null);
+      setRocksLoading(false);
+      return;
+    }
+
     if (gamificationDisabled) {
       setRocksDisabledNotice(gamificationDisabledMessage);
       setRocksRows([]);
@@ -358,7 +371,7 @@ export default function LeaderboardTab() {
     } finally {
       setRocksLoading(false);
     }
-  }, []);
+  }, [gamificationDisabled, gamificationDisabledMessage, showRocksBoard, rocksRows.length]);
 
   // Fetch stake data when switching to stake tab
   useEffect(() => {
@@ -373,6 +386,11 @@ export default function LeaderboardTab() {
   useEffect(() => {
     setCurrentPage(1);
   }, [boardType]);
+
+  useEffect(() => {
+    if (showRocksBoard || boardType !== 'rocks') return;
+    setBoardType('plants');
+  }, [boardType, showRocksBoard]);
 
   // Fetch user's plants for attack selection
   const fetchMyPlants = useCallback(async () => {
@@ -825,7 +843,7 @@ export default function LeaderboardTab() {
                 { value: 'plants', label: 'Plants' },
                 { value: 'lands', label: 'Lands' },
                 { value: 'stake', label: 'Stake' },
-                { value: 'rocks', label: 'Rocks' },
+                ...(showRocksBoard ? [{ value: 'rocks', label: 'Rocks' }] : []),
               ]}
             />
           </div>

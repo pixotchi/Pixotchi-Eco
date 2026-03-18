@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const DEPLOYMENT_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 const BASE_URL = process.env.NEXT_PUBLIC_URL || DEPLOYMENT_URL || "https://mini.pixotchi.tech";
+const MINT_SHARE_REDIRECT_URL = "https://base.app/app/mini.pixotchi.tech?utm_source=pixotchi&utm_medium=referral&utm_campaign=miniapp_onboarding_mar2026";
 
 function getOgImageUrl(data: MintShareData, platform: 'twitter' | 'farcaster' = 'farcaster') {
   const og = new URL("/api/og/mint", BASE_URL);
@@ -103,7 +104,7 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
     notFound();
   }
 
-  const redirectUrl = `${BASE_URL}/?utm_source=share&utm_medium=mint&utm_content=${id}`;
+  const redirectUrl = MINT_SHARE_REDIRECT_URL;
 
   // Return a page with meta refresh for crawlers and immediate JS redirect for users
   return (
@@ -123,4 +124,3 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
     </html>
   );
 }
-

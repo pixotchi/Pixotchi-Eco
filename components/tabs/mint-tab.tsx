@@ -40,6 +40,7 @@ import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported, useSolanaBridge,
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { Transaction } from '@solana/web3.js';
+import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
@@ -127,6 +128,20 @@ export default function MintTab() {
   const incrementForcedFetch = () => {
     setForcedFetchCount(prev => prev + 1);
   };
+
+  const openMintShareModal = useCallback((strainId: number, strainName: string, txHash?: string) => {
+    if (!address) return;
+
+    setShareData({
+      address,
+      basename: primaryName || undefined,
+      strainName,
+      strainId,
+      mintedAt: new Date().toISOString(),
+      txHash,
+    });
+    setShowShareModal(true);
+  }, [address, primaryName]);
 
   // Helper function to get token logo path
   const getTokenLogo = (tokenAddress: `0x${string}` | undefined): string => {
@@ -1142,9 +1157,11 @@ export default function MintTab() {
         <div className="mb-6">
           <VerifyClaim
             strainId={4} // Force Zest strain (ID 4)
-            onClaimSuccess={() => {
+            onClaimSuccess={({ strainId, mintTxHash }) => {
               incrementForcedFetch();
               window.dispatchEvent(new Event('balances:refresh'));
+              const claimStrain = PLANT_STRAINS_BY_ID[strainId];
+              openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
             }}
           />
         </div>
@@ -1276,21 +1293,11 @@ export default function MintTab() {
                 strain={selectedStrain.id}
                 ethAmount={ethQuote.ethAmountWithBuffer}
                 minSeedOut={selectedStrain.paymentPrice ?? BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))}
-                onSuccess={() => {
+                onSuccess={(tx) => {
                   toast.success('Plant minted successfully with ETH!');
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
-                  if (address) {
-                    const mintedAt = new Date().toISOString();
-                    setShareData({
-                      address,
-                      basename: primaryName || undefined,
-                      strainName: selectedStrain.name,
-                      strainId: selectedStrain.id,
-                      mintedAt,
-                    });
-                    setShowShareModal(true);
-                  }
+                  openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint"}
@@ -1350,18 +1357,7 @@ export default function MintTab() {
                         window.dispatchEvent(new Event('balances:refresh'));
                       }}
                       onTransactionComplete={(tx) => {
-                        if (address) {
-                          const mintedAt = new Date().toISOString();
-                          setShareData({
-                            address,
-                            basename: primaryName || undefined,
-                            strainName: selectedStrain.name,
-                            strainId: selectedStrain.id,
-                            mintedAt,
-                            txHash: tx?.transactionHash,
-                          });
-                          setShowShareModal(true);
-                        }
+                        openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                       }}
                       onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                       buttonText={hasInsufficientBalance ? "Insufficient Balance" : "Approve + Mint"}
@@ -1409,18 +1405,7 @@ export default function MintTab() {
                       toast.success('Plant minted successfully!');
                       incrementForcedFetch();
                       window.dispatchEvent(new Event('balances:refresh'));
-                      if (address) {
-                        const mintedAt = new Date().toISOString();
-                        setShareData({
-                          address,
-                          basename: primaryName || undefined,
-                          strainName: selectedStrain.name,
-                          strainId: selectedStrain.id,
-                          mintedAt,
-                          txHash: tx?.transactionHash,
-                        });
-                        setShowShareModal(true);
-                      }
+                      openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                       try {
                         const fid = farcasterUser?.fid;
                         const notificationDetails = farcasterClient?.notificationDetails;

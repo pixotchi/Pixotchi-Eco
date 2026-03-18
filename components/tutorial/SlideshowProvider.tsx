@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { slides as defaultSlides, TUTORIAL_VERSION, type TutorialSlide } from "./slides";
+import { useFrameContext } from "@/lib/frame-context";
+import { getClientGamificationPolicy } from "@/lib/gamification-client";
 
 type SlideshowContextType = {
   open: boolean;
@@ -23,7 +25,15 @@ const STORAGE_KEY = "pixotchi:tutorial";
 export function SlideshowProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
-  const slides = defaultSlides;
+  const frame = useFrameContext();
+  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const slides = useMemo(
+    () =>
+      gamificationPolicy.visible
+        ? defaultSlides
+        : defaultSlides.filter((slide) => slide.id !== "tasks"),
+    [gamificationPolicy.visible],
+  );
 
   const envEnabled = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_TUTORIAL_SLIDESHOW || "on") === "on" : true;
 
@@ -115,5 +125,3 @@ export function useSlideshow() {
   if (!ctx) throw new Error("useSlideshow must be used within SlideshowProvider");
   return ctx;
 }
-
-

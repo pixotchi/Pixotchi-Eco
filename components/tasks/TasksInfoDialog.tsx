@@ -5,19 +5,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { CLIENT_ENV } from "@/lib/env-config";
+import { useFrameContext } from "@/lib/frame-context";
+import { getClientGamificationPolicy } from "@/lib/gamification-client";
 
 export default function TasksInfoDialog() {
   const { address } = useAccount();
-  const gamificationDisabled = CLIENT_ENV.GAMIFICATION_DISABLED;
+  const frame = useFrameContext();
   const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
+  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
   const [open, setOpen] = useState(false);
   const [missionDay, setMissionDay] = useState<any | null>(null);
   const [missionPts, setMissionPts] = useState<number>(0);
   const [missionTotal, setMissionTotal] = useState<number>(0);
   const [streak, setStreak] = useState<{ current: number; best: number } | null>(null);
   const [serverDisabledMessage, setServerDisabledMessage] = useState<string | null>(null);
-  const effectiveDisabled = gamificationDisabled || !!serverDisabledMessage;
-  const effectiveDisabledMessage = serverDisabledMessage || gamificationDisabledMessage;
+  const effectiveDisabled = !gamificationPolicy.enabled || !!serverDisabledMessage;
+  const effectiveDisabledMessage =
+    serverDisabledMessage ||
+    gamificationPolicy.message ||
+    gamificationDisabledMessage;
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -28,7 +34,7 @@ export default function TasksInfoDialog() {
   useEffect(() => {
     (async () => {
       try {
-        if (!address || !open || gamificationDisabled) return;
+        if (!address || !open || !gamificationPolicy.enabled) return;
 
         setServerDisabledMessage(null);
 
@@ -57,7 +63,16 @@ export default function TasksInfoDialog() {
         }
       } catch { }
     })();
-  }, [address, open, gamificationDisabled, gamificationDisabledMessage]);
+  }, [address, open, gamificationPolicy.enabled, gamificationDisabledMessage]);
+
+  useEffect(() => {
+    if (gamificationPolicy.visible) return;
+    setOpen(false);
+  }, [gamificationPolicy.visible]);
+
+  if (!gamificationPolicy.visible) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

@@ -25,7 +25,7 @@ const BASE_VERIFY_CONFIG = {
 };
 
 interface VerifyClaimProps {
-  onClaimSuccess: () => void;
+  onClaimSuccess: (claim: { strainId: number; mintTxHash?: string }) => void;
   strainId?: number; // Optional: Force specific strain or default to Zest(4)
 }
 
@@ -188,7 +188,10 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           toast.success(data.message || 'Plant minted! Check your wallet shortly.');
         }
         
-        onClaimSuccess();
+        onClaimSuccess({
+          strainId,
+          mintTxHash: data.mintTxHash ?? data.txHash,
+        });
       } else {
         throw new Error(data.error || 'Claim failed');
       }
