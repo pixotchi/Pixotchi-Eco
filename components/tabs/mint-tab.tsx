@@ -40,6 +40,7 @@ import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported, useSolanaBridge,
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { Transaction } from '@solana/web3.js';
+import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
@@ -127,6 +128,20 @@ export default function MintTab() {
   const incrementForcedFetch = () => {
     setForcedFetchCount(prev => prev + 1);
   };
+
+  const openMintShareModal = useCallback((strainId: number, strainName: string, txHash?: string) => {
+    if (!address) return;
+
+    setShareData({
+      address,
+      basename: primaryName || undefined,
+      strainName,
+      strainId,
+      mintedAt: new Date().toISOString(),
+      txHash,
+    });
+    setShowShareModal(true);
+  }, [address, primaryName]);
 
   // Helper function to get token logo path
   const getTokenLogo = (tokenAddress: `0x${string}` | undefined): string => {
@@ -402,7 +417,6 @@ export default function MintTab() {
   // Refresh when tab becomes visible
   useEffect(() => {
     if (isVisible) {
-      console.log('🔄 [MintTab] Tab visible, refreshing...');
       fetchData();
     }
   }, [isVisible, fetchData]);
@@ -1142,9 +1156,11 @@ export default function MintTab() {
         <div className="mb-6">
           <VerifyClaim
             strainId={4} // Force Zest strain (ID 4)
-            onClaimSuccess={() => {
+            onClaimSuccess={({ strainId, mintTxHash }) => {
               incrementForcedFetch();
               window.dispatchEvent(new Event('balances:refresh'));
+              const claimStrain = PLANT_STRAINS_BY_ID[strainId];
+              openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
             }}
           />
         </div>
@@ -1276,26 +1292,17 @@ export default function MintTab() {
                 strain={selectedStrain.id}
                 ethAmount={ethQuote.ethAmountWithBuffer}
                 minSeedOut={selectedStrain.paymentPrice ?? BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))}
-                onSuccess={() => {
+                onSuccess={(tx) => {
                   toast.success('Plant minted successfully with ETH!');
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
-                  if (address) {
-                    const mintedAt = new Date().toISOString();
-                    setShareData({
-                      address,
-                      basename: primaryName || undefined,
-                      strainName: selectedStrain.name,
-                      strainId: selectedStrain.id,
-                      mintedAt,
-                    });
-                    setShowShareModal(true);
-                  }
+                  openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint"}
                 buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                 disabled={ethBalance < ethQuote.ethAmountWithBuffer}
+                showToast={false}
               />
               {ethBalance < ethQuote.ethAmountWithBuffer && (
                 <p className="text-xs text-value text-center">
@@ -1350,23 +1357,13 @@ export default function MintTab() {
                         window.dispatchEvent(new Event('balances:refresh'));
                       }}
                       onTransactionComplete={(tx) => {
-                        if (address) {
-                          const mintedAt = new Date().toISOString();
-                          setShareData({
-                            address,
-                            basename: primaryName || undefined,
-                            strainName: selectedStrain.name,
-                            strainId: selectedStrain.id,
-                            mintedAt,
-                            txHash: tx?.transactionHash,
-                          });
-                          setShowShareModal(true);
-                        }
+                        openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                       }}
                       onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                       buttonText={hasInsufficientBalance ? "Insufficient Balance" : "Approve + Mint"}
                       buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                       disabled={hasInsufficientBalance}
+                      showToast={false}
                     />
                     {hasInsufficientBalance && (
                       <p className="text-xs text-value text-center mt-2">
@@ -1388,6 +1385,7 @@ export default function MintTab() {
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                     buttonText={`Approve ${paymentTokenSymbol}`}
                     buttonClassName="w-full"
+                    showToast={false}
                   />
                 );
               })()}
@@ -1409,18 +1407,7 @@ export default function MintTab() {
                       toast.success('Plant minted successfully!');
                       incrementForcedFetch();
                       window.dispatchEvent(new Event('balances:refresh'));
-                      if (address) {
-                        const mintedAt = new Date().toISOString();
-                        setShareData({
-                          address,
-                          basename: primaryName || undefined,
-                          strainName: selectedStrain.name,
-                          strainId: selectedStrain.id,
-                          mintedAt,
-                          txHash: tx?.transactionHash,
-                        });
-                        setShowShareModal(true);
-                      }
+                      openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                       try {
                         const fid = farcasterUser?.fid;
                         const notificationDetails = farcasterClient?.notificationDetails;
@@ -1444,6 +1431,7 @@ export default function MintTab() {
                     buttonText="Mint Plant"
                     buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                     disabled={(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
+                    showToast={false}
                   />
                   {!(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
                     <p className="text-xs text-value text-center mt-2">
@@ -1525,6 +1513,7 @@ export default function MintTab() {
               buttonText={ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
               buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
               disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
+              showToast={false}
             />
             {ethBalance < landEthQuote.ethAmountWithBuffer && (
               <p className="text-xs text-value text-center">
@@ -1567,6 +1556,7 @@ export default function MintTab() {
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Approve SEED for Land"
                   buttonClassName="w-full"
+                  showToast={false}
                 />
               </div>
             )}
@@ -1593,6 +1583,7 @@ export default function MintTab() {
                   buttonText={`Mint Land`}
                   buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                   disabled={!landMintStatus?.canMint || (landMintAllowance < landMintPrice) || seedBalanceRaw < landMintPrice}
+                  showToast={false}
                 />
                 {landMintStatus?.canMint && !(landMintAllowance < landMintPrice) && seedBalanceRaw < landMintPrice && (
                   <p className="text-xs text-value text-center mt-2">

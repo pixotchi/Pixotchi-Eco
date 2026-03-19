@@ -8,7 +8,8 @@ import { isValidEthereumAddressFormat } from '@/lib/utils';
 import type { GmProgressProof, GmTaskId } from '@/lib/gamification-types';
 import { getReadClient } from '@/lib/contracts';
 import type { Hex } from 'viem';
-import { getGamificationDisabledMessage, isGamificationDisabled } from '@/lib/gamification-feature';
+import { getGamificationPolicy, isMiniAppGamificationContext } from '@/lib/gamification-feature';
+import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
 
 const DEFAULT_ORIGINS = [
   process.env.NEXT_PUBLIC_URL,
@@ -157,11 +158,17 @@ export async function GET(request: NextRequest) {
     if (!address || !isValidEthereumAddressFormat(address)) {
       return NextResponse.json({ error: 'Valid wallet address is required' }, { status: 400 });
     }
-    if (isGamificationDisabled()) {
+    const gamificationPolicy = getGamificationPolicy({
+      isMiniApp: isMiniAppGamificationContext({
+        miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
+        miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
+      }),
+    });
+    if (!gamificationPolicy.enabled) {
       return NextResponse.json({
         success: true,
         disabled: true,
-        message: getGamificationDisabledMessage(),
+        message: gamificationPolicy.message,
         day: null,
         total: 0,
       });
@@ -183,20 +190,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
 
-    if (isGamificationDisabled()) {
-      return NextResponse.json({
-        success: true,
-        disabled: true,
-        message: getGamificationDisabledMessage(),
-      });
-    }
-
     const body = await request.json();
     const { taskId, proof, count } = body || {};
     const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
     const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
       fallbackAddress,
     });
+
+    const gamificationPolicy = getGamificationPolicy({
+      isMiniApp: isMiniAppGamificationContext({
+        sessionMethod: session?.method ?? null,
+        miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
+        miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
+      }),
+    });
+    if (!gamificationPolicy.enabled) {
+      return NextResponse.json({
+        success: true,
+        disabled: true,
+        message: gamificationPolicy.message,
+      });
+    }
 
     if (!session) {
       return createChatAuthRequiredResponse({

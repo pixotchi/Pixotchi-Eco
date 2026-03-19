@@ -107,7 +107,6 @@ export default function AboutTab() {
   // Refresh when tab becomes visible
   useEffect(() => {
     if (isVisible && address && INVITE_CONFIG.SYSTEM_ENABLED) {
-      console.log('🔄 [AboutTab] Tab visible, refreshing stats...');
       loadInviteStats();
       loadUserCodes();
     }

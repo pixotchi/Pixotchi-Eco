@@ -1,5 +1,7 @@
 "use client";
 
+import { sdk } from '@farcaster/miniapp-sdk';
+
 export type PublicChatSession = {
   address: string;
   authenticated: true;
@@ -79,6 +81,21 @@ function emitPublicChatSessionEvent(session: PublicChatSession | null) {
   }));
 }
 
+async function getMiniAppChatHeaders(): Promise<HeadersInit> {
+  try {
+    const isInMiniApp = await sdk.isInMiniApp();
+    if (!isInMiniApp) {
+      return {};
+    }
+  } catch {
+    return {};
+  }
+
+  return {
+    'x-pixotchi-miniapp': '1',
+  };
+}
+
 export async function getCurrentPublicChatSession(): Promise<PublicChatSession | null> {
   const now = Date.now();
   if (publicChatSessionCache && publicChatSessionCache.expiresAt > now) {
@@ -90,9 +107,11 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
   }
 
   inFlightPublicChatSessionRequest = (async () => {
+    const miniAppHeaders = await getMiniAppChatHeaders();
     const response = await fetch('/api/chat/auth/session', {
       cache: 'no-store',
       credentials: 'same-origin',
+      headers: miniAppHeaders,
     });
 
     if (response.status === 401) {
@@ -113,6 +132,7 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
 }
 
 export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
+  const miniAppHeaders = await getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,
@@ -122,6 +142,7 @@ export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessio
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
+      ...miniAppHeaders,
     },
     method: 'POST',
   });
@@ -132,6 +153,7 @@ export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessio
 }
 
 export async function createFarcasterPublicChatSession(payload: Omit<FarcasterChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
+  const miniAppHeaders = await getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,
@@ -141,6 +163,7 @@ export async function createFarcasterPublicChatSession(payload: Omit<FarcasterCh
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
+      ...miniAppHeaders,
     },
     method: 'POST',
   });
@@ -151,6 +174,7 @@ export async function createFarcasterPublicChatSession(payload: Omit<FarcasterCh
 }
 
 export async function createBasePublicChatSession(payload: Omit<BaseChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
+  const miniAppHeaders = await getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,
@@ -160,6 +184,7 @@ export async function createBasePublicChatSession(payload: Omit<BaseChatSessionR
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
+      ...miniAppHeaders,
     },
     method: 'POST',
   });
@@ -170,10 +195,12 @@ export async function createBasePublicChatSession(payload: Omit<BaseChatSessionR
 }
 
 export async function clearPublicChatSession(): Promise<void> {
+  const miniAppHeaders = await getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
-    cache: 'no-store',
-    credentials: 'same-origin',
-    method: 'DELETE',
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: miniAppHeaders,
+      method: 'DELETE',
   });
 
   if (!response.ok) {
@@ -184,9 +211,11 @@ export async function clearPublicChatSession(): Promise<void> {
 }
 
 export async function requestBasePublicChatNonce(): Promise<string> {
+  const miniAppHeaders = await getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/base/nonce', {
     cache: 'no-store',
     credentials: 'same-origin',
+    headers: miniAppHeaders,
   });
 
   if (!response.ok) {

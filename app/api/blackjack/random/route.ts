@@ -6,6 +6,10 @@ import { blackjackAbi } from '@/public/abi/blackjack-abi';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { redis, redisCompareAndSetJSON, redisDel, redisGetJSON } from '@/lib/redis';
 import { createResilientTransport, getRpcEndpoints } from '@/lib/rpc-transport';
+import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
+import { isMiniAppRequestContext } from '@/lib/miniapp-request-context';
+import { getCasinoPolicy } from '@/lib/casino-feature';
+import { BLACKJACK_DISABLED_MESSAGE } from '@/lib/casino-policy';
 
 /**
  * Server-Signed Randomness API for Blackjack
@@ -288,6 +292,27 @@ function cleanupRateLimits() {
 
 export async function POST(request: NextRequest) {
     try {
+        const casinoPolicy = getCasinoPolicy({
+            isMiniApp: isMiniAppRequestContext({
+                miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
+                miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
+            }),
+        });
+
+        if (!casinoPolicy.casinoEnabled || !casinoPolicy.blackjackEnabled) {
+            return NextResponse.json(
+                { error: BLACKJACK_DISABLED_MESSAGE },
+                { status: 503 }
+            );
+        }
+
+        if (!casinoPolicy.playable) {
+            return NextResponse.json(
+                { error: casinoPolicy.message || 'Blackjack is available only inside Pixotchi Mini on Base app.' },
+                { status: 403 }
+            );
+        }
+
         // Validate environment
         if (!SIGNER_PRIVATE_KEY) {
             console.error('BLACKJACK_RANDOMNESS_SIGNER_KEY not configured');

@@ -3,6 +3,7 @@ import { Metadata, ResolvingMetadata } from "next";
 import { redis } from "@/lib/redis";
 import { redisGetJSON } from "@/lib/redis";
 import type { MintShareData } from "@/lib/types";
+import { PIXOTCHI_BASE_APP_REFERRAL_URL } from "@/lib/pixotchi-links";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,7 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
     notFound();
   }
 
-  const redirectUrl = `${BASE_URL}/?utm_source=share&utm_medium=mint&utm_content=${id}`;
+  const redirectUrl = PIXOTCHI_BASE_APP_REFERRAL_URL;
 
   // Return a page with meta refresh for crawlers and immediate JS redirect for users
   return (
@@ -123,4 +124,3 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
     </html>
   );
 }
-

@@ -183,7 +183,6 @@ export default function ActivityTab() {
   useEffect(() => {
     if (!isVisible) return;
 
-    console.log('🔄 [Activity] Tab visible, refreshing...');
     fetchActivities();
   }, [isVisible, fetchActivities]);
 

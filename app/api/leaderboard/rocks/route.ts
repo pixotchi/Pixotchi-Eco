@@ -1,20 +1,27 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getLeaderboards } from '@/lib/gamification-service';
 import { resolvePrimaryNames } from '@/lib/ens-resolver';
-import { getGamificationDisabledMessage, isGamificationDisabled } from '@/lib/gamification-feature';
+import { getGamificationPolicy, isGamificationMiniAppOnly, isMiniAppGamificationContext } from '@/lib/gamification-feature';
+import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
 
 export const runtime = 'nodejs';
 export const revalidate = 300;
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    if (isGamificationDisabled()) {
+    const gamificationPolicy = getGamificationPolicy({
+      isMiniApp: isMiniAppGamificationContext({
+        miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
+        miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
+      }),
+    });
+    if (!gamificationPolicy.enabled) {
       return NextResponse.json(
         {
           success: true,
           disabled: true,
-          message: getGamificationDisabledMessage(),
+          message: gamificationPolicy.message,
           leaderboard: [],
           totalEntries: 0,
         },
@@ -35,7 +42,13 @@ export async function GET() {
 
     return NextResponse.json(
       { success: true, leaderboard, totalEntries: leaderboard.length },
-      { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=300' } },
+      {
+        headers: {
+          'Cache-Control': isGamificationMiniAppOnly()
+            ? 'no-store'
+            : 'public, max-age=60, s-maxage=300',
+        },
+      },
     );
   } catch (error) {
     console.error('[RocksLeaderboard] Failed to load rocks leaderboard', error);

@@ -21,6 +21,7 @@ interface MintTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  showToast?: boolean;
 }
 
 export default function MintTransaction({
@@ -29,7 +30,8 @@ export default function MintTransaction({
   onError,
   buttonText = "Mint Plant",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  showToast = true,
 }: MintTransactionProps) {
 
   const calls = [{
@@ -47,6 +49,7 @@ export default function MintTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      showToast={showToast}
     />
   );
-} 
+}

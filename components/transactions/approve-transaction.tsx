@@ -25,6 +25,7 @@ interface ApproveTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  showToast?: boolean;
 }
 
 export default function ApproveTransaction({
@@ -34,20 +35,21 @@ export default function ApproveTransaction({
   onError,
   buttonText = "Approve SEED",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  showToast = true,
 }: ApproveTransactionProps) {
-  
+
   // Max approval amount
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
-  
+
   // Use provided token address or default to SEED
   const token = tokenAddress || PIXOTCHI_TOKEN_ADDRESS;
-  
+
   const calls = [{
     address: token,
     abi: PIXOTCHI_TOKEN_ABI,
     functionName: 'approve',
-    args: [spenderAddress, maxApproval], 
+    args: [spenderAddress, maxApproval],
   }];
 
   return (
@@ -58,6 +60,7 @@ export default function ApproveTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      showToast={showToast}
     />
   );
-} 
+}

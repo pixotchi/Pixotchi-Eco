@@ -5,6 +5,8 @@ import { INVITE_CONFIG } from '@/lib/invite-utils';
 const CHAT_SESSION_COOKIE = 'pixotchi_chat_session';
 const MINIAPP_BYPASS_COOKIE = 'pixotchi_miniapp';
 const MINIAPP_BYPASS_ADDRESS_COOKIE = 'pixotchi_miniapp_address';
+const MINIAPP_BYPASS_HEADER = 'x-pixotchi-miniapp';
+const MINIAPP_BYPASS_ADDRESS_HEADER = 'x-pixotchi-address';
 const EDGE_SESSION_REQUIRED_API_PATHS = new Set([
   '/api/chat/messages',
   '/api/chat/send',
@@ -42,8 +44,20 @@ function hasChatAuthArtifacts(request: NextRequest): boolean {
     (
       request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value === '1' &&
       request.cookies.get(MINIAPP_BYPASS_ADDRESS_COOKIE)?.value
+    ) ||
+    (
+      request.headers.get(MINIAPP_BYPASS_HEADER) === '1' &&
+      request.headers.get(MINIAPP_BYPASS_ADDRESS_HEADER)
     ),
   );
+}
+
+function isMiniAppChatRequest(request: NextRequest, pathname: string): boolean {
+  if (!pathname.startsWith('/api/chat/')) {
+    return false;
+  }
+
+  return request.headers.get(MINIAPP_BYPASS_HEADER) === '1';
 }
 
 function isCrossSiteBrowserRequest(request: NextRequest): boolean {
@@ -79,7 +93,7 @@ export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   if (isEdgeSessionRequiredApiPath(pathname) || isEdgeSameOriginOnlyApiPath(pathname)) {
-    if (isCrossSiteBrowserRequest(request)) {
+    if (isCrossSiteBrowserRequest(request) && !isMiniAppChatRequest(request, pathname)) {
       return NextResponse.json(
         { error: 'Cross-site browser access is not allowed for this endpoint.' },
         {
@@ -147,7 +161,10 @@ export async function proxy(request: NextRequest) {
       if (origin && allowedPublicApiOrigins.has(origin)) {
         response.headers.set('Access-Control-Allow-Origin', origin);
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp');
+        response.headers.set(
+          'Access-Control-Allow-Headers',
+          'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp, x-pixotchi-miniapp, x-pixotchi-address',
+        );
         response.headers.set('Access-Control-Max-Age', '86400');
         response.headers.append('Vary', 'Origin');
       }
