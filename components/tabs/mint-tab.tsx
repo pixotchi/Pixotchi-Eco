@@ -1303,6 +1303,7 @@ export default function MintTab() {
                 buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint"}
                 buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                 disabled={ethBalance < ethQuote.ethAmountWithBuffer}
+                showToast={false}
               />
               {ethBalance < ethQuote.ethAmountWithBuffer && (
                 <p className="text-xs text-value text-center">
@@ -1363,6 +1364,7 @@ export default function MintTab() {
                       buttonText={hasInsufficientBalance ? "Insufficient Balance" : "Approve + Mint"}
                       buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                       disabled={hasInsufficientBalance}
+                      showToast={false}
                     />
                     {hasInsufficientBalance && (
                       <p className="text-xs text-value text-center mt-2">
@@ -1384,6 +1386,7 @@ export default function MintTab() {
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                     buttonText={`Approve ${paymentTokenSymbol}`}
                     buttonClassName="w-full"
+                    showToast={false}
                   />
                 );
               })()}
@@ -1429,6 +1432,7 @@ export default function MintTab() {
                     buttonText="Mint Plant"
                     buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                     disabled={(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
+                    showToast={false}
                   />
                   {!(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
                     <p className="text-xs text-value text-center mt-2">
@@ -1510,6 +1514,7 @@ export default function MintTab() {
               buttonText={ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
               buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
               disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
+              showToast={false}
             />
             {ethBalance < landEthQuote.ethAmountWithBuffer && (
               <p className="text-xs text-value text-center">
@@ -1552,6 +1557,7 @@ export default function MintTab() {
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Approve SEED for Land"
                   buttonClassName="w-full"
+                  showToast={false}
                 />
               </div>
             )}
@@ -1578,6 +1584,7 @@ export default function MintTab() {
                   buttonText={`Mint Land`}
                   buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
                   disabled={!landMintStatus?.canMint || (landMintAllowance < landMintPrice) || seedBalanceRaw < landMintPrice}
+                  showToast={false}
                 />
                 {landMintStatus?.canMint && !(landMintAllowance < landMintPrice) && seedBalanceRaw < landMintPrice && (
                   <p className="text-xs text-value text-center mt-2">

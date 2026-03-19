@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -38,14 +38,26 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
   const [isSharing, setIsSharing] = useState(false);
   const [shortUrl, setShortUrl] = useState<string>("");
   const [isGeneratingUrl, setIsGeneratingUrl] = useState(false);
+  const [generationAttemptKey, setGenerationAttemptKey] = useState<string | null>(null);
 
   const isMiniApp = Boolean(frame?.isInMiniApp);
+  const shareRequestKey = useMemo(() => {
+    if (!data) return null;
+    return [
+      data.address,
+      data.strainId,
+      data.mintedAt,
+      data.txHash || "",
+    ].join(":");
+  }, [data]);
 
   // Generate short URL when modal opens with data
   const generateShortUrl = useCallback(async () => {
     if (!data || shortUrl) return;
-    
+
     setIsGeneratingUrl(true);
+    let errorMessage: string | null = null;
+
     try {
       const response = await fetch("/api/share/create", {
         method: "POST",
@@ -62,30 +74,54 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
       if (response.ok) {
         const result = await response.json();
-        setShortUrl(result.shortUrl);
+        return typeof result.shortUrl === "string" ? result.shortUrl : "";
       } else {
         console.error("Failed to generate short URL - server returned error");
-        toast.error("Unable to generate share link");
+        errorMessage = "Unable to generate share link";
       }
     } catch (error) {
       console.error("Failed to generate short URL:", error);
-      toast.error("Unable to generate share link");
+      errorMessage = "Unable to generate share link";
     } finally {
       setIsGeneratingUrl(false);
     }
+    if (errorMessage) {
+      throw new Error(errorMessage);
+    }
+    return "";
   }, [data, shortUrl]);
 
-  // Generate short URL when modal opens
-  if (open && data && !shortUrl && !isGeneratingUrl) {
-    generateShortUrl();
-  }
+  useEffect(() => {
+    if (!open || !data || !shareRequestKey) return;
+    if (shortUrl || isGeneratingUrl || generationAttemptKey === shareRequestKey) return;
+
+    let cancelled = false;
+    setGenerationAttemptKey(shareRequestKey);
+
+    void (async () => {
+      try {
+        const nextShortUrl = await generateShortUrl();
+        if (!cancelled && nextShortUrl) {
+          setShortUrl(nextShortUrl);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.warn("Share link generation failed", error);
+        toast.error("Unable to generate share link");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data, generateShortUrl, generationAttemptKey, isGeneratingUrl, open, shareRequestKey, shortUrl]);
 
   const shareUrl = shortUrl;
 
   // Enhanced share text with engaging copy
   const shareText = useMemo(() => {
     if (!data) return "";
-    
+
     return isMiniApp
       ? `🪴 Just planted a ${data.strainName} in Pixotchi Mini!\n\nJoin me, grow your own plants and earn ETH rewards! 🟦`
       : `🪴 Just planted a ${data.strainName} on @baseapp!\n\nGrowing onchain with @pixotchi 🌿\n\nStart your farming journey and earn ETH rewards! 🟦`;
@@ -154,6 +190,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     if (!newOpen) {
       setShortUrl("");
       setIsGeneratingUrl(false);
+      setGenerationAttemptKey(null);
     }
     onOpenChange(newOpen);
   }, [onOpenChange]);
@@ -164,7 +201,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
         <DialogHeader>
           <DialogTitle className="text-center">Share your mint</DialogTitle>
           <DialogDescription className="text-center">
-            Celebrate your new plant with friends!
+            Celebrate your new plant with friends and become eligible for more rewards!!
           </DialogDescription>
         </DialogHeader>
 
@@ -175,29 +212,29 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
               <div className="relative w-32 h-32 flex items-center justify-center">
                 {/* Celebration sparkles animation */}
                 <div className="absolute inset-0 pointer-events-none">
-                  <Sparkles 
-                    className="absolute top-0 left-0 w-4 h-4 text-yellow-400 animate-pulse" 
+                  <Sparkles
+                    className="absolute top-0 left-0 w-4 h-4 text-yellow-400 animate-pulse"
                     style={{ animationDelay: '0s', animationDuration: '1.5s' }}
                   />
-                  <Sparkles 
-                    className="absolute top-2 right-2 w-5 h-5 text-yellow-300 animate-pulse" 
+                  <Sparkles
+                    className="absolute top-2 right-2 w-5 h-5 text-yellow-300 animate-pulse"
                     style={{ animationDelay: '0.3s', animationDuration: '2s' }}
                   />
-                  <Sparkles 
-                    className="absolute bottom-0 left-4 w-4 h-4 text-yellow-500 animate-pulse" 
+                  <Sparkles
+                    className="absolute bottom-0 left-4 w-4 h-4 text-yellow-500 animate-pulse"
                     style={{ animationDelay: '0.6s', animationDuration: '1.8s' }}
                   />
-                  <Sparkles 
-                    className="absolute bottom-4 right-0 w-3 h-3 text-yellow-400 animate-pulse" 
+                  <Sparkles
+                    className="absolute bottom-4 right-0 w-3 h-3 text-yellow-400 animate-pulse"
                     style={{ animationDelay: '0.9s', animationDuration: '2.2s' }}
                   />
                 </div>
-                
+
                 {/* Subtle glow effect */}
-                <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 via-transparent to-blue-400/10 rounded-full blur-xl animate-pulse" 
+                <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 via-transparent to-blue-400/10 rounded-full blur-xl animate-pulse"
                   style={{ animationDuration: '3s' }}
                 />
-                
+
                 <Image
                   src={PLANT_IMAGES[(data.strainId || 1) as keyof typeof PLANT_IMAGES] || PLANT_IMAGES[1]}
                   alt={`${data.strainName} plant`}
@@ -225,8 +262,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   {isGeneratingUrl ? "Generating link..." : "Share"}
                 </Button>
               ) : (
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full"
                   onClick={handleTwitterShare}
                   disabled={isGeneratingUrl || !shareUrl}
                   aria-busy={isGeneratingUrl}
@@ -273,4 +310,3 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     </Dialog>
   );
 }
-

@@ -36,6 +36,7 @@ export default function ApproveMintBundle({
   buttonText = 'Approve + Mint',
   buttonClassName = 'w-full',
   disabled = false,
+  showToast = true,
 }: {
   strain: number;
   tokenAddress?: `0x${string}`; // Optional: defaults to SEED token
@@ -45,6 +46,7 @@ export default function ApproveMintBundle({
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  showToast?: boolean;
 }) {
   // Unlimited approval followed by mint call
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
@@ -78,9 +80,8 @@ export default function ApproveMintBundle({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
-      showToast={true}
+      showToast={showToast}
     />
   );
 }
-
 

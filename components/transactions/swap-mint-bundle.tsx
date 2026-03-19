@@ -53,16 +53,17 @@ interface SwapMintBundleProps {
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
+    showToast?: boolean;
 }
 
 /**
  * SwapMintBundle - Atomic batch transaction for ETH mode minting
- * 
+ *
  * Executes 3 calls in a single transaction:
  * 1. swapExactETHForTokens - Swap ETH → SEED via BaseSwap
  * 2. approve - Approve SEED spending by NFT contract
  * 3. mint - Mint the plant
- * 
+ *
  * Requires smart wallet with EIP-5792 support for atomic batching.
  */
 export default function SwapMintBundle({
@@ -74,6 +75,7 @@ export default function SwapMintBundle({
     buttonText = 'Mint with ETH',
     buttonClassName = 'w-full',
     disabled = false,
+    showToast = true,
 }: SwapMintBundleProps) {
     const { address } = useAccount();
 
@@ -130,7 +132,7 @@ export default function SwapMintBundle({
             buttonText={buttonText}
             buttonClassName={buttonClassName}
             disabled={disabled || !isValid}
-            showToast={true}
+            showToast={showToast}
         />
     );
 }

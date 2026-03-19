@@ -11,6 +11,7 @@ interface LandMintTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  showToast?: boolean;
 }
 
 export default function LandMintTransaction({
@@ -18,14 +19,15 @@ export default function LandMintTransaction({
   onError,
   buttonText = "Mint Land",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  showToast = true,
 }: LandMintTransactionProps) {
-  
+
   const calls = [{
     address: LAND_CONTRACT_ADDRESS,
     abi: LAND_ABI,
     functionName: 'mint',
-    args: [], 
+    args: [],
   }];
 
   return (
@@ -36,6 +38,7 @@ export default function LandMintTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      showToast={showToast}
     />
   );
-} 
+}
