@@ -20,7 +20,7 @@ export interface StatusSnapshot {
 }
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.STATUS_CHECK_TIMEOUT_MS || 6000);
-const APP_HEALTH_URL = process.env.STATUS_APP_HEALTH_URL || CLIENT_ENV.APP_URL;
+const APP_HEALTH_PATH = '/api/health';
 const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
 const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
 const BASE_STATUS_URL = process.env.STATUS_BASE_STATUS_URL || 'https://status.base.org/api/v2/summary.json';
@@ -36,6 +36,26 @@ const normalizeUrl = (url?: string | null) => {
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   return `https://${url}`;
 };
+
+const withDefaultHealthPath = (url?: string | null, path: string = APP_HEALTH_PATH) => {
+  const normalized = normalizeUrl(url);
+  if (!normalized) return null;
+
+  try {
+    const parsed = new URL(normalized);
+    const isBareOriginPath = parsed.pathname === '/' || parsed.pathname === '';
+    if (isBareOriginPath && !parsed.search && !parsed.hash) {
+      parsed.pathname = path;
+    }
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+};
+
+const APP_HEALTH_URL = withDefaultHealthPath(
+  process.env.STATUS_APP_HEALTH_URL || CLIENT_ENV.APP_URL,
+);
 
 const withTimeout = async <T>(fn: (signal: AbortSignal) => Promise<T>, timeoutMs: number) => {
   const controller = new AbortController();
