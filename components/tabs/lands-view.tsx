@@ -384,7 +384,6 @@ export default function LandsView() {
   // Refresh when dashboard becomes visible
   useEffect(() => {
     if (isVisible) {
-      console.log('🔄 [LandsView] Dashboard visible, refreshing...');
       fetchData();
     }
   }, [isVisible, fetchData]);

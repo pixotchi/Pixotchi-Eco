@@ -200,7 +200,6 @@ export default function PlantsView() {
   // Refresh when dashboard becomes visible
   useEffect(() => {
     if (isVisible && address) {
-      console.log('🔄 [PlantsView] Dashboard visible, refreshing...');
       fetchData();
     }
   }, [isVisible, address, fetchData]);

@@ -185,7 +185,6 @@ export default function SwapTab() {
   // Refresh global balances when swap tab is visible (in case user swapped elsewhere/added funds)
   useEffect(() => {
     if (isVisible) {
-      console.log('🔄 [SwapTab] Tab visible, triggering balance refresh...');
       window.dispatchEvent(new Event('balances:refresh'));
     }
   }, [isVisible]);
@@ -357,4 +356,3 @@ export default function SwapTab() {
     </div>
   );
 }
-
