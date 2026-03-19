@@ -100,15 +100,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
   const getMiniAppBypassHeaders = useCallback((): HeadersInit => {
-    if (!isMiniApp || !chatAddress) {
+    if (!isMiniApp || !publicChatAddress) {
       return {};
     }
 
     return {
-      'x-pixotchi-address': chatAddress,
+      'x-pixotchi-address': publicChatAddress,
       'x-pixotchi-miniapp': '1',
     };
-  }, [chatAddress, isMiniApp]);
+  }, [isMiniApp, publicChatAddress]);
 
   useEffect(() => {
     return () => {
