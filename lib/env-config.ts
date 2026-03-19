@@ -24,6 +24,9 @@ export const CLIENT_ENV = {
   GAMIFICATION_DISABLED_MESSAGE:
     process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED_MESSAGE ||
     'Tasks and Rocks leaderboard are temporarily disabled while we reset progress for the next mission season.',
+  CASINO_ENABLED: process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true',
+  CASINO_MINIAPP_ONLY: process.env.NEXT_PUBLIC_CASINO_MINIAPP_ONLY === 'true',
+  BLACKJACK_ENABLED: process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== 'false',
   // Base Verify - Free plant claim for verified users
   // Single toggle controls both frontend UI and backend API
   VERIFY_CLAIM_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true',

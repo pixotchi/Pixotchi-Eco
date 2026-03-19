@@ -8,7 +8,7 @@ import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { casinoIsBuilt } from '@/lib/contracts';
 
 // Casino feature flag - hide casino building when disabled
-const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
+const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
 const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
 interface BuildingGridProps {
   buildings: BuildingData[];

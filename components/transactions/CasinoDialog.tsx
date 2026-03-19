@@ -25,6 +25,9 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
 import { loadBetPreference, storeBetPreference } from '@/lib/casino-bet-preferences';
+import { useFrameContext } from '@/lib/frame-context';
+import { getClientCasinoPolicy } from '@/lib/casino-client';
+import { showMiniAppRequiredToast } from '@/lib/miniapp-required-toast';
 
 interface CasinoDialogProps {
     open: boolean;
@@ -46,6 +49,8 @@ interface PlacedBet {
 export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete, selectedToken }: CasinoDialogProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
+    const frame = useFrameContext();
+    const casinoPolicy = getClientCasinoPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
 
     const [placedBets, setPlacedBets] = useState<PlacedBet[]>([]);
     const [currentBetAmount, setCurrentBetAmount] = useState('10');
@@ -160,7 +165,18 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const canAddMoreBets = placedBets.length < maxBets;
 
     useEffect(() => {
+        if (!open || casinoPolicy.playable) return;
+        onOpenChange(false);
+        showMiniAppRequiredToast({
+            id: 'casino-miniapp-required',
+            title: 'Casino Is In Pixotchi Mini',
+            description: 'Open Pixotchi Mini in Base app to play Roulette and Blackjack.',
+        });
+    }, [casinoPolicy.playable, onOpenChange, open]);
+
+    useEffect(() => {
         const loadConfig = async () => {
+            if (!casinoPolicy.playable) return;
             try {
                 const activeGame = landId ? await casinoGetActiveBetV2(landId) : null;
                 const effectiveToken = activeGame?.isActive ? activeGame.bettingToken : selectedToken;
@@ -202,7 +218,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             } catch (e) { console.error('Failed to load casino config:', e); }
         };
         if (open) loadConfig();
-    }, [open, address, landId, selectedToken]);
+    }, [open, address, landId, selectedToken, casinoPolicy.playable]);
 
     useEffect(() => {
         if (!open || pendingGame || !config) return;

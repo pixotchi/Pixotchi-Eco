@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
+import { CLIENT_ENV } from '@/lib/env-config';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
@@ -20,8 +21,8 @@ import CasinoPanel from './building-details/CasinoPanel';
 import BarracksPanelV2 from './building-details/BarracksPanelV2';
 
 // Casino feature flag - hide casino when disabled
-const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
-const BARRACKS_ENABLED = process.env.NEXT_PUBLIC_BARRACKS_ENABLED === 'true';
+const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
+const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
 
 interface BuildingDetailsPanelProps {
   selectedBuilding: BuildingData | null;

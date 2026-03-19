@@ -36,6 +36,9 @@ import { toast } from "react-hot-toast";
 import { useWalletClient, useAccount, useBalance } from "wagmi";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { useTokenSymbol } from "@/hooks/useTokenSymbol";
+import { useFrameContext } from "@/lib/frame-context";
+import { getClientCasinoPolicy } from "@/lib/casino-client";
+import { showMiniAppRequiredToast } from "@/lib/miniapp-required-toast";
 
 interface CasinoPanelProps {
   landId: bigint;
@@ -82,6 +85,8 @@ function CasinoTokenLabel({
 export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps) {
   const { data: walletClient } = useWalletClient();
   const { address } = useAccount();
+  const frame = useFrameContext();
+  const casinoPolicy = getClientCasinoPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
 
   const formatWholeNumber = useCallback((num: bigint): string => {
     const text = num.toString();
@@ -295,14 +300,36 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     if (onSpinComplete) onSpinComplete();
   }, [loadCasinoState, loadSelectedTokenStats, onSpinComplete]);
 
+  const handleOpenCasinoGame = useCallback((game: "roulette" | "blackjack") => {
+    if (!casinoPolicy.playable) {
+      showMiniAppRequiredToast({
+        id: "casino-miniapp-required",
+        title: "Casino Is In Pixotchi Mini",
+        description: "Open Pixotchi Mini in Base app to play Roulette and Blackjack.",
+      });
+      return;
+    }
+
+    if (game === "roulette") {
+      setCasinoOpen(true);
+      return;
+    }
+
+    setBlackjackOpen(true);
+  }, [casinoPolicy.playable]);
+
   const blackjackDisabledForToken =
-    process.env.NEXT_PUBLIC_BLACKJACK_ENABLED === "false" ||
+    !casinoPolicy.blackjackEnabled ||
     !selectedBlackjackConfig?.supported ||
     !selectedBlackjackConfig.enabled;
 
   const rouletteDisabledForToken = !selectedRouletteConfig?.supported || !selectedRouletteConfig.enabled;
-  const rouletteButtonDisabled = !hasActiveRouletteGame && (!selectedToken || rouletteDisabledForToken);
+  const rouletteButtonDisabled =
+    casinoPolicy.playable &&
+    !hasActiveRouletteGame &&
+    (!selectedToken || rouletteDisabledForToken);
   const blackjackButtonDisabled =
+    casinoPolicy.playable &&
     !hasActiveBlackjackGame &&
     (!selectedToken || blackjackDisabledForToken);
 
@@ -446,7 +473,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
               <span>Won: {formatTokenAmount(stats.won, selectedTokenDecimals)}</span>
             </div>
           )}
-          {process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== "false" && bjStats && (
+          {casinoPolicy.blackjackEnabled && bjStats && (
             <div className="flex flex-wrap justify-center gap-3">
               <span>Blackjack</span>
               <span>Games: {bjStats.games.toString()}</span>
@@ -460,15 +487,15 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
       <div className="pt-2 flex justify-center gap-2">
         <Button
           className="h-9 px-3 text-sm"
-          onClick={() => setCasinoOpen(true)}
+          onClick={() => handleOpenCasinoGame("roulette")}
           disabled={rouletteButtonDisabled}
         >
           {hasActiveRouletteGame ? "🎰 Resume Roulette" : "🎰 Play Roulette"}
         </Button>
-        {process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== "false" && (
+        {casinoPolicy.blackjackEnabled && (
           <Button
             className="h-9 px-3 text-sm bg-green-700 hover:bg-green-800"
-            onClick={() => setBlackjackOpen(true)}
+            onClick={() => handleOpenCasinoGame("blackjack")}
             disabled={blackjackButtonDisabled}
           >
             {hasActiveBlackjackGame ? "♦️ Resume Blackjack" : "♦️ Play Blackjack"}
@@ -494,7 +521,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         </p>
       )}
 
-      {!hasActiveBlackjackGame && selectedToken && blackjackDisabledForToken && process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== "false" && (
+      {!hasActiveBlackjackGame && selectedToken && blackjackDisabledForToken && casinoPolicy.blackjackEnabled && (
         <p className="text-xs text-muted-foreground">
           Blackjack is not enabled for the selected token.
         </p>

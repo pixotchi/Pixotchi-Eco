@@ -11,6 +11,7 @@ import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/compone
 import { cn } from "@/lib/utils";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
+import { showMiniAppRequiredToast } from "@/lib/miniapp-required-toast";
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
   const num = parseFloat(formatUnits(amount, decimals));
@@ -29,7 +30,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   const [stakingOpen, setStakingOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
-  const showTasksButton = gamificationPolicy.visible;
+  const showTasksButton = !gamificationPolicy.disabled;
 
   // Balance refreshes are handled automatically by balance-context.tsx via events
   // No need for manual refresh on every render or tab change
@@ -66,6 +67,19 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
+  const handleTasksClick = () => {
+    if (!gamificationPolicy.enabled && gamificationPolicy.reason === "miniapp_only") {
+      showMiniAppRequiredToast({
+        id: "tasks-miniapp-required",
+        title: "Tasks Are In Pixotchi Mini",
+        description: "Open Pixotchi Mini in Base app to view tasks, keep your streak, and earn Rocks.",
+      });
+      return;
+    }
+
+    setTasksOpen(true);
+  };
+
   return (
     <div className="w-full bg-background" role="region" aria-label="Account balance and staking">
       <div className="rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md">
@@ -100,7 +114,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
             {showTasksButton && (
               <button
                 type="button"
-                onClick={() => setTasksOpen(true)}
+                onClick={handleTasksClick}
                 className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
                 aria-label="Open tasks"
                 aria-expanded={tasksOpen}

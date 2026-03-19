@@ -1,3 +1,5 @@
+import { isMiniAppRequestContext } from "./miniapp-request-context";
+
 export const GAMIFICATION_DISABLED_FALLBACK_MESSAGE =
   'Tasks and Rocks leaderboard are temporarily disabled while we reset progress for the next mission season.';
 
@@ -9,11 +11,7 @@ export function isMiniAppGamificationContext(input?: {
   miniAppHeader?: string | null;
   sessionMethod?: string | null;
 }): boolean {
-  return (
-    input?.sessionMethod === 'farcaster-miniapp' ||
-    input?.miniAppCookie === '1' ||
-    input?.miniAppHeader === '1'
-  );
+  return isMiniAppRequestContext(input);
 }
 
 export function buildGamificationPolicy(input: {

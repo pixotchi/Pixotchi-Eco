@@ -43,7 +43,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 
 export default function LandsView() {
   const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
-  const CASINO_ENABLED = process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true';
+  const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
   // Gate: Solana wallets cannot use Land features
   const isSolana = useIsSolanaWallet();
 
