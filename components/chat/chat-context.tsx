@@ -12,10 +12,12 @@ import React, {
 import { usePrivy, useToken } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
 import { useAccount } from 'wagmi';
+import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import {
   clearPublicChatSession,
   createBasePublicChatSession,
+  createFarcasterPublicChatSession,
   createPrivyPublicChatSession,
   getCurrentPublicChatSession,
   PUBLIC_CHAT_SESSION_EVENT,
@@ -90,9 +92,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
   const publicChatSessionRef = useRef<PublicChatSession | null>(null);
 
-  const publicChatAddress = isMiniApp ? (chatAddress ?? null) : (publicChatSession?.address ?? null);
+  const publicChatAddress = isMiniApp
+    ? (chatAddress ?? publicChatSession?.address ?? null)
+    : (publicChatSession?.address ?? null);
   const publicChatAuthenticated = isMiniApp
-    ? Boolean(chatAddress)
+    ? Boolean(publicChatAddress && (chatAddress || publicChatSession?.authenticated))
     : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
   const getMiniAppBypassHeaders = useCallback((): HeadersInit => {
@@ -450,15 +454,59 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (!chatAddress) {
-      bootstrapKeyRef.current = null;
-      setPublicChatSession(null);
-      setPublicChatLoading(false);
-      return;
-    }
-
     if (isMiniApp) {
       bootstrapKeyRef.current = bootstrapKey;
+
+      if (chatAddress) {
+        setPublicChatSession(null);
+        setPublicChatLoading(false);
+        return;
+      }
+
+      let cancelled = false;
+
+      const bootstrapMiniAppChat = async () => {
+        setPublicChatLoading(true);
+
+        try {
+          let nextSession = await getCurrentPublicChatSession();
+
+          if (nextSession && nextSession.provider !== 'farcaster') {
+            await clearPublicChatSession().catch((error) => {
+              console.warn('[chat] Failed to clear stale non-Farcaster Mini App chat session:', error);
+            });
+            nextSession = null;
+          }
+
+          if (!nextSession) {
+            const { token } = await sdk.quickAuth.getToken();
+            nextSession = await createFarcasterPublicChatSession({ token });
+          }
+
+          if (!cancelled) {
+            setPublicChatSession(nextSession);
+          }
+        } catch (miniAppBootstrapError) {
+          console.error('[chat] Failed to bootstrap Mini App public chat session:', miniAppBootstrapError);
+          if (!cancelled) {
+            setPublicChatSession(null);
+          }
+        } finally {
+          if (!cancelled) {
+            setPublicChatLoading(false);
+          }
+        }
+      };
+
+      void bootstrapMiniAppChat();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!chatAddress) {
+      bootstrapKeyRef.current = null;
       setPublicChatSession(null);
       setPublicChatLoading(false);
       return;
@@ -685,7 +733,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (mode !== 'public' && !chatAddress) {
+    if (mode === 'agent' && !chatAddress) {
+      return;
+    }
+
+    if (mode === 'ai' && !publicIdentityAddress) {
       return;
     }
 
