@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminKey, logAdminAction } from '@/lib/auth-utils';
-import { redis, redisScanKeys } from '@/lib/redis';
+import { redis } from '@/lib/redis';
+
+/**
+ * Raw SCAN that does NOT auto-prefix keys.
+ * The claim routes use raw redis.set/get (no pixotchi: prefix),
+ * so we must scan without the prefix too.
+ */
+async function scanKeysRaw(pattern: string, maxKeys: number = 5000): Promise<string[]> {
+  if (!redis) return [];
+  const results: string[] = [];
+  let cursor = 0;
+  do {
+    const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
+    if (Array.isArray(resp)) {
+      cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
+      const batch: string[] = (resp[1] || []) as string[];
+      results.push(...batch);
+    } else if (resp && typeof resp === 'object' && 'cursor' in resp) {
+      cursor = Number(resp.cursor) || 0;
+      results.push(...((resp.keys || []) as string[]));
+    } else {
+      break;
+    }
+    if (results.length >= maxKeys) break;
+  } while (cursor !== 0);
+  return results;
+}
 
 /**
  * GET /api/admin/claims — List all Base Verify free plant claims
@@ -13,8 +39,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Scan for all wallet_claims keys (secondary index, one per wallet)
-    const keys = await redisScanKeys('wallet_claims:*');
+    // Scan for all wallet_claims keys (raw — no prefix, matching how claim route stores them)
+    const keys = await scanKeysRaw('wallet_claims:*');
 
     if (!keys.length) {
       return NextResponse.json({
@@ -105,12 +131,12 @@ export async function DELETE(req: NextRequest) {
       const walletKey = `wallet_claims:${address.toLowerCase()}`;
       let deletedCount = 0;
 
-      // Delete wallet_claims key
+      // Delete wallet_claims key (raw — no prefix)
       const walletResult = await redis?.del(walletKey);
       if (walletResult) deletedCount++;
 
       // Find and delete matching verified_claims key
-      const verifiedKeys = await redisScanKeys('verified_claims:*');
+      const verifiedKeys = await scanKeysRaw('verified_claims:*');
       for (const key of verifiedKeys) {
         const raw = await redis?.get(key);
         if (!raw) continue;
@@ -144,8 +170,8 @@ export async function DELETE(req: NextRequest) {
         );
       }
 
-      // Scan and delete all wallet_claims keys
-      const walletKeys = await redisScanKeys('wallet_claims:*');
+      // Scan and delete all wallet_claims keys (raw — no prefix)
+      const walletKeys = await scanKeysRaw('wallet_claims:*');
       let walletDeleted = 0;
       const batchSize = 100;
       for (let i = 0; i < walletKeys.length; i += batchSize) {
@@ -156,8 +182,8 @@ export async function DELETE(req: NextRequest) {
         }
       }
 
-      // Scan and delete all verified_claims keys
-      const verifiedKeys = await redisScanKeys('verified_claims:*');
+      // Scan and delete all verified_claims keys (raw — no prefix)
+      const verifiedKeys = await scanKeysRaw('verified_claims:*');
       let verifiedDeleted = 0;
       for (let i = 0; i < verifiedKeys.length; i += batchSize) {
         const batch = verifiedKeys.slice(i, i + batchSize);
