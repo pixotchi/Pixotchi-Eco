@@ -6,25 +6,28 @@ import { redis } from '@/lib/redis';
  * Raw SCAN that does NOT auto-prefix keys.
  * The claim routes use raw redis.set/get (no pixotchi: prefix),
  * so we must scan without the prefix too.
+ *
+ * IMPORTANT: Cursor is kept as a string to avoid JavaScript integer
+ * precision loss — Upstash cursors can exceed Number.MAX_SAFE_INTEGER.
  */
-async function scanKeysRaw(pattern: string, maxKeys: number = 5000): Promise<string[]> {
+async function scanKeysRaw(pattern: string, maxKeys: number = 10000): Promise<string[]> {
   if (!redis) return [];
   const results: string[] = [];
-  let cursor = 0;
+  let cursor = '0';
   do {
-    const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
+    const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 1000 });
     if (Array.isArray(resp)) {
-      cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
+      cursor = String(resp[0]);
       const batch: string[] = (resp[1] || []) as string[];
       results.push(...batch);
     } else if (resp && typeof resp === 'object' && 'cursor' in resp) {
-      cursor = Number(resp.cursor) || 0;
+      cursor = String(resp.cursor);
       results.push(...((resp.keys || []) as string[]));
     } else {
       break;
     }
     if (results.length >= maxKeys) break;
-  } while (cursor !== 0);
+  } while (cursor !== '0');
   return results;
 }
 
