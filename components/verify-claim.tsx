@@ -41,7 +41,10 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   // Claim status from Redis (source of truth)
   const [alreadyClaimed, setAlreadyClaimed] = useState<boolean | null>(null); // null = loading
   const [statusLoading, setStatusLoading] = useState(true);
-  
+
+  // Bonus availability from status endpoint
+  const [bonuses, setBonuses] = useState<{ leaf: boolean; seed: boolean }>({ leaf: false, seed: false });
+
   // Verification state
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
@@ -64,6 +67,9 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           setAlreadyClaimed(true); // Treat as claimed to hide the card
         } else {
           setAlreadyClaimed(data.claimed);
+          if (!data.claimed && data.bonuses) {
+            setBonuses(data.bonuses);
+          }
         }
       } catch (err) {
         console.error('[VERIFY] Failed to check claim status:', err);
@@ -182,7 +188,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         
         // Handle different success statuses
         if (data.status === 'complete') {
-          toast.success('Free plant claimed and transferred successfully!');
+          toast.success(data.message || 'Free plant claimed and transferred successfully!');
         } else if (data.status === 'partial') {
           // Partial success - mint worked but transfer may have failed
           toast.success(data.message || 'Plant minted! Check your wallet shortly.');
@@ -203,6 +209,14 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       setLoading(false);
     }
   };
+
+  // Build dynamic reward description based on active bonuses
+  const rewardDescription = (() => {
+    const parts: string[] = ['a free plant'];
+    if (bonuses.leaf) parts.push('500K LEAF');
+    if (bonuses.seed) parts.push('200 SEED');
+    return parts.join(' + ');
+  })();
 
   // Check if we're in Mini App mode
   const isInMiniApp = frameContext?.isInMiniApp ?? false;
@@ -235,7 +249,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
           <CheckCircle2 className="w-12 h-12 text-green-500 mb-2" />
           <h3 className="text-lg font-bold text-green-700 dark:text-green-400">Claimed!</h3>
-          <p className="text-sm text-muted-foreground">Your free plant is on its way.</p>
+          <p className="text-sm text-muted-foreground">Your {rewardDescription} {bonuses.leaf || bonuses.seed ? 'are' : 'is'} on the way.</p>
         </CardContent>
       </Card>
     );
@@ -308,7 +322,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
             </div>
           </CardTitle>
           <CardDescription className="text-white/90">
-            Verify your X account on Base Verify to mint a free plant!
+            Verify your X account to claim {rewardDescription}!
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
