@@ -9,9 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "3.0.58",
-    "@ai-sdk/google": "3.0.43",
-    "@ai-sdk/openai": "3.0.41",
+    "@ai-sdk/anthropic": "3.0.64",
+    "@ai-sdk/google": "3.0.53",
+    "@ai-sdk/openai": "3.0.48",
     "@base-org/account": "2.5.2",
     "@base-org/account-ui": "1.0.1",
     "@coinbase/agentkit": "0.10.4",
@@ -36,12 +36,12 @@
     "@solana/kit": "6.5.0",
     "@solana/spl-token": "0.4.14",
     "@solana/web3.js": "1.98.4",
-    "@tanstack/react-query": "5.91.2",
+    "@tanstack/react-query": "5.95.2",
     "@upstash/redis": "1.37.0",
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
     "@walletconnect/ethereum-provider": "2.23.8",
-    "ai": "6.0.116",
+    "ai": "6.0.137",
     "bs58": "6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -50,9 +50,9 @@
     "ethers": "6.16.0",
     "lucide-react": "0.577.0",
     "nanoid": "5.1.7",
-    "next": "16.2.0",
+    "next": "16.2.1",
     "next-themes": "0.4.6",
-    "ox": "0.14.5",
+    "ox": "0.14.9",
     "permissionless": "0.3.4",
     "pino": "10.3.1",
     "react": "19.2.4",
@@ -61,7 +61,7 @@
     "siwe": "3.0.0",
     "tailwind-merge": "3.5.0",
     "thread-stream": "3.1.0",
-    "viem": "2.47.5",
+    "viem": "2.47.6",
     "wagmi": "2.19.5",
     "zod": "4.3.6"
   },
@@ -70,8 +70,8 @@
     "@types/node": "25.5.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "eslint": "10.0.3",
-    "eslint-config-next": "16.2.0",
+    "eslint": "10.1.0",
+    "eslint-config-next": "16.2.1",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-prettier": "5.5.5",
     "eslint-plugin-react": "7.37.5",
@@ -80,7 +80,7 @@
     "prettier": "3.8.1",
     "tailwindcss": "4.2.2",
     "tailwindcss-animate": "1.0.7",
-    "typescript": "5.9.3"
+    "typescript": "6.0.2"
   },
   "overrides": {
     "@wagmi/connectors": {
@@ -88,6 +88,6 @@
     },
     "pino": "10.3.1",
     "thread-stream": "3.1.0",
-    "viem": "2.47.5"
+    "viem": "2.47.6"
   }
 }
