@@ -61,13 +61,9 @@ export async function GET(request: Request) {
     // Use basename if provided, otherwise format the address
     const displayAddress = basename || formatAddress(address);
 
-    // Load custom fonts
-    const pixelFontUrl = new URL('/fonts/pixelmix.ttf', baseUrl).toString();
-    const pixelFontData = await fetch(pixelFontUrl).then(res => res.arrayBuffer());
-    
-    // Use AdelleSans (available in .woff format) - Satori doesn't support .woff2
-    const mainFontUrl = new URL('/fonts/AdelleSans-Semibold.woff', baseUrl).toString();
-    const mainFontData = await fetch(mainFontUrl).then(res => res.arrayBuffer());
+    // Load custom fonts from local files (not HTTP self-fetch, which can return HTML 404 on Edge)
+    const pixelFontData = await fetch(new URL('../../../../public/fonts/pixelmix.ttf', import.meta.url)).then(res => res.arrayBuffer());
+    const mainFontData = await fetch(new URL('../../../../public/fonts/AdelleSans-Semibold.woff', import.meta.url)).then(res => res.arrayBuffer());
 
     return new ImageResponse(
       <div
