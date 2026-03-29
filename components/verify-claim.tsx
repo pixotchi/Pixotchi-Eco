@@ -344,7 +344,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
                 {step === 'verifying' ? 'Verifying...' : 'Claiming...'}
               </>
             ) : (
-              'Verify & Claim Free Plant'
+              'Verify & Claim'
             )}
           </Button>
           <p className="text-xs text-white/80 text-center font-sans">

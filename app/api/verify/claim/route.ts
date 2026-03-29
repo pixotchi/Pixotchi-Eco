@@ -42,7 +42,7 @@ const ELIGIBLE_STRAINS = [1, 2, 3, 4];
  * Ensure the agent smart account has sufficient LEAF balance.
  */
 const LEAF_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true';
-const LEAF_BONUS_AMOUNT = parseUnits('500000', 18); // 500,000 LEAF tokens
+const LEAF_BONUS_AMOUNT = parseUnits('1000000', 18); // 1,000,000 LEAF tokens
 
 /**
  * SEED token bonus — first-come-first-served.
@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
 
       if (LEAF_BONUS_ENABLED && transferSuccess) {
         try {
-          console.log(`[CLAIM] Sending LEAF bonus (500,000) to ${userAddress}...`);
+          console.log(`[CLAIM] Sending LEAF bonus (1,000,000) to ${userAddress}...`);
 
           const leafTransferData = encodeFunctionData({
             abi: [{
@@ -380,7 +380,7 @@ export async function POST(req: NextRequest) {
         transferError: transferSuccess ? null : (transferError?.message || 'Unknown error'),
         leafBonusSent: leafTransferSuccess,
         leafBonusTxHash: leafTransferTxHash,
-        leafBonusAmount: LEAF_BONUS_ENABLED ? '500000' : null,
+        leafBonusAmount: LEAF_BONUS_ENABLED ? '1000000' : null,
         seedBonusSent: seedTransferSuccess,
         seedBonusTxHash: seedTransferTxHash,
         seedBonusAmount: SEED_BONUS_ENABLED ? '200' : null,
@@ -393,7 +393,7 @@ export async function POST(req: NextRequest) {
       const walletClaimKey = `wallet_claims:${userAddress.toLowerCase()}`;
       await redis?.set(walletClaimKey, JSON.stringify(claimRecord));
 
-      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: '500000' } : null;
+      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: '1000000' } : null;
       const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: '200' } : null;
 
       if (transferSuccess) {
