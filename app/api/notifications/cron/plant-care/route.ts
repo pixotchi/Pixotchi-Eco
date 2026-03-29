@@ -7,9 +7,11 @@ import { differenceInSeconds } from 'date-fns';
 
 // Configuration
 const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
-const THROTTLE_SECONDS = 6 * 60 * 60; // 6 hours cooldown between notifications
+const THROTTLE_SECONDS = 12 * 60 * 60; // 12 hours cooldown between notifications
 const REDIS_KEY_PREFIX = 'notif:plant12h';
 const BATCH_SIZE = 30; // Process 30 FIDs in parallel
+const NEYNAR_FIDS_CACHE_KEY = 'notif:neynar:enabled_fids';
+const NEYNAR_FIDS_CACHE_TTL = 5 * 60; // 5 minutes
 
 // Validation Schemas (using Zod v4 stringbool for cleaner boolean parsing)
 const QuerySchema = z.object({
@@ -42,6 +44,18 @@ function verifyVercelCron(req: NextRequest): boolean {
 async function fetchAllEnabledFids(): Promise<number[]> {
   const apiKey = SERVER_ENV.NEYNAR_API_KEY;
   if (!apiKey) return [];
+
+  // Check cache first
+  if (redis) {
+    try {
+      const cached = await (redis as any)?.get?.(NEYNAR_FIDS_CACHE_KEY);
+      if (cached) {
+        const fids = JSON.parse(typeof cached === 'string' ? cached : JSON.stringify(cached));
+        console.log(`[plant-care cron] Using cached ${fids.length} FIDs`);
+        return fids;
+      }
+    } catch { }
+  }
 
   const allFids: number[] = [];
   let cursor: string | null = null;
@@ -79,6 +93,14 @@ async function fetchAllEnabledFids(): Promise<number[]> {
   } while (cursor && pageCount < maxPages);
 
   console.log(`[plant-care cron] Fetched ${allFids.length} unique FIDs from ${pageCount} Neynar pages`);
+
+  // Cache the result
+  if (redis && allFids.length > 0) {
+    try {
+      await (redis as any)?.set?.(NEYNAR_FIDS_CACHE_KEY, JSON.stringify(allFids), { ex: NEYNAR_FIDS_CACHE_TTL });
+    } catch { }
+  }
+
   return allFids;
 }
 

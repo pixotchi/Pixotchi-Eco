@@ -40,7 +40,8 @@ import {
   Bell,
   Megaphone,
   Edit2,
-  X as XIcon
+  X as XIcon,
+  BadgeCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStats } from '@/lib/types';
@@ -74,7 +75,7 @@ interface AdminStats {
   }>;
 }
 
-type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback' | 'airdrop';
+type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback' | 'airdrop' | 'claims';
 
 interface ConfirmDialogState {
   open: boolean;
@@ -207,6 +208,10 @@ export default function AdminInviteDashboard() {
   const [airdropData, setAirdropData] = useState<{ meta: any; recipients: any[] } | null>(null);
   const [airdropLoading, setAirdropLoading] = useState(false);
   const [airdropCsv, setAirdropCsv] = useState('');
+
+  // Claims state
+  const [claimsData, setClaimsData] = useState<{ stats: any; claims: any[] } | null>(null);
+  const [claimsLoading, setClaimsLoading] = useState(false);
 
   // Cleanup: abort pending requests on unmount
   useEffect(() => {
@@ -550,6 +555,25 @@ export default function AdminInviteDashboard() {
         }
       };
       fetchAirdropData();
+    }
+    if (isAuthenticated && activeTab === 'claims') {
+      const fetchClaims = async () => {
+        setClaimsLoading(true);
+        try {
+          const res = await fetch('/api/admin/claims', {
+            headers: { 'Authorization': `Bearer ${adminKey}` }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setClaimsData(data);
+          }
+        } catch (err) {
+          console.error('Failed to auto-fetch claims:', err);
+        } finally {
+          setClaimsLoading(false);
+        }
+      };
+      fetchClaims();
     }
   }, [isAuthenticated, activeTab, fetchBroadcastMessages, adminKey]);
 
@@ -1507,6 +1531,7 @@ export default function AdminInviteDashboard() {
             { id: 'og-images', label: 'OG Images', icon: FileText },
             { id: 'feedback', label: 'Feedback', icon: Plus },
             { id: 'airdrop', label: 'Airdrop', icon: Gift },
+            { id: 'claims', label: 'Claims', icon: BadgeCheck },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -3599,6 +3624,215 @@ export default function AdminInviteDashboard() {
                 </CardContent>
               </Card>
             )}
+          </div>
+        )}
+
+        {/* ==================== CLAIMS TAB ==================== */}
+        {activeTab === 'claims' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Base Verify Claims</h2>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setClaimsLoading(true);
+                    try {
+                      const res = await fetch('/api/admin/claims', {
+                        headers: { 'Authorization': `Bearer ${adminKey}` }
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setClaimsData(data);
+                        toast.success('Claims refreshed');
+                      } else {
+                        toast.error(data.error || 'Failed to fetch claims');
+                      }
+                    } catch {
+                      toast.error('Failed to fetch claims');
+                    } finally {
+                      setClaimsLoading(false);
+                    }
+                  }}
+                  disabled={claimsLoading}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${claimsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                {claimsData && claimsData.claims.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      showConfirmDialog({
+                        title: 'Reset All Claims',
+                        description: 'This will delete ALL claim records from Redis. Every wallet will be able to claim again. This cannot be undone.',
+                        confirmText: 'Reset All',
+                        isDangerous: true,
+                        requiresTextConfirmation: true,
+                        textToMatch: 'RESET',
+                        onConfirm: async () => {
+                          setClaimsLoading(true);
+                          try {
+                            const res = await fetch('/api/admin/claims?reset=all&confirm=true', {
+                              method: 'DELETE',
+                              headers: { 'Authorization': `Bearer ${adminKey}` }
+                            });
+                            const data = await res.json();
+                            if (res.ok) {
+                              toast.success(data.message || 'All claims reset');
+                              setClaimsData(null);
+                            } else {
+                              toast.error(data.error || 'Reset failed');
+                            }
+                          } catch {
+                            toast.error('Failed to reset claims');
+                          } finally {
+                            setClaimsLoading(false);
+                          }
+                        },
+                      });
+                    }}
+                    disabled={claimsLoading}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Reset All
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Stats Cards */}
+            {claimsData?.stats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">{claimsData.stats.total}</div>
+                    <p className="text-xs text-muted-foreground">Total Claims</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">{claimsData.stats.complete}</div>
+                    <p className="text-xs text-muted-foreground">Complete</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{claimsData.stats.partial + claimsData.stats.failed}</div>
+                    <p className="text-xs text-muted-foreground">Partial / Failed</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">
+                      {claimsData.stats.leafBonusSent}L / {claimsData.stats.seedBonusSent}S
+                    </div>
+                    <p className="text-xs text-muted-foreground">LEAF / SEED Bonuses Sent</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Claims List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Claimed Wallets</CardTitle>
+                <CardDescription>
+                  Wallets that have claimed a free plant via Base Verify. Delete a record to allow that wallet to claim again.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {claimsData && claimsData.claims.length > 0 ? (
+                  <div className="space-y-2">
+                    {/* Header */}
+                    <div className="grid grid-cols-[1fr_80px_70px_90px_100px_80px] gap-2 text-xs font-medium text-muted-foreground px-3 pb-2 border-b">
+                      <div>Address</div>
+                      <div>Token ID</div>
+                      <div>Strain</div>
+                      <div>Status</div>
+                      <div>Bonuses</div>
+                      <div>Actions</div>
+                    </div>
+                    {claimsData.claims.map((claim: any) => (
+                      <div key={claim.address} className="grid grid-cols-[1fr_80px_70px_90px_100px_80px] gap-2 items-center text-sm px-3 py-2 rounded hover:bg-muted/50">
+                        <div className="font-mono text-xs truncate" title={claim.address}>
+                          {claim.address?.slice(0, 8)}...{claim.address?.slice(-6)}
+                        </div>
+                        <div className="font-mono text-xs">{claim.tokenId || '—'}</div>
+                        <div>{claim.strainId || '—'}</div>
+                        <div>
+                          {claim.status === 'complete' ? (
+                            <span className="text-green-600 dark:text-green-400 text-xs flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> OK
+                            </span>
+                          ) : (
+                            <span className="text-yellow-600 dark:text-yellow-400 text-xs flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> {claim.status}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {claim.leafBonusSent ? 'LEAF ' : ''}{claim.seedBonusSent ? 'SEED' : ''}{!claim.leafBonusSent && !claim.seedBonusSent ? '—' : ''}
+                        </div>
+                        <div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              showConfirmDialog({
+                                title: 'Delete Claim',
+                                description: `Remove claim record for ${claim.address}? This wallet will be able to claim again.`,
+                                confirmText: 'Delete',
+                                isDangerous: true,
+                                onConfirm: async () => {
+                                  try {
+                                    const res = await fetch(`/api/admin/claims?address=${claim.address}`, {
+                                      method: 'DELETE',
+                                      headers: { 'Authorization': `Bearer ${adminKey}` }
+                                    });
+                                    const data = await res.json();
+                                    if (res.ok) {
+                                      toast.success(data.message || 'Claim deleted');
+                                      // Remove from local state
+                                      setClaimsData(prev => prev ? {
+                                        ...prev,
+                                        claims: prev.claims.filter((c: any) => c.address !== claim.address),
+                                        stats: {
+                                          ...prev.stats,
+                                          total: prev.stats.total - 1,
+                                          complete: claim.status === 'complete' ? prev.stats.complete - 1 : prev.stats.complete,
+                                          partial: claim.status !== 'complete' && claim.status !== 'transfer_failed' ? prev.stats.partial - 1 : prev.stats.partial,
+                                          failed: claim.status === 'transfer_failed' ? prev.stats.failed - 1 : prev.stats.failed,
+                                          leafBonusSent: claim.leafBonusSent ? prev.stats.leafBonusSent - 1 : prev.stats.leafBonusSent,
+                                          seedBonusSent: claim.seedBonusSent ? prev.stats.seedBonusSent - 1 : prev.stats.seedBonusSent,
+                                        },
+                                      } : null);
+                                    } else {
+                                      toast.error(data.error || 'Delete failed');
+                                    }
+                                  } catch {
+                                    toast.error('Failed to delete claim');
+                                  }
+                                },
+                              });
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <BadgeCheck className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>No claims found</p>
+                    <p className="text-sm">Claims will appear here when users claim free plants via Base Verify</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>

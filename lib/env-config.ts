@@ -30,6 +30,10 @@ export const CLIENT_ENV = {
   // Base Verify - Free plant claim for verified users
   // Single toggle controls both frontend UI and backend API
   VERIFY_CLAIM_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true',
+  // When enabled, each free plant claim also sends LEAF tokens as a bonus
+  VERIFY_CLAIM_LEAF_BONUS_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true',
+  // When enabled, each free plant claim also sends SEED tokens (first-come-first-served)
+  VERIFY_CLAIM_SEED_BONUS_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true',
   // Agent tab in chat - allows AI to mint plants on behalf of user
   // When false, the Agent tab is completely hidden and agent code is not loaded
   AGENT_ENABLED: process.env.NEXT_PUBLIC_AGENT_ENABLED !== 'false', // Defaults to true

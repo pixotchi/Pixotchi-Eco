@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
-import { encodeFunctionData, maxUint256, createPublicClient } from 'viem';
+import { PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
+import { encodeFunctionData, maxUint256, createPublicClient, parseUnits } from 'viem';
 import { base as baseChain } from 'viem/chains';
 import { createResilientTransport } from '@/lib/rpc-transport';
 
@@ -35,6 +35,22 @@ const CLAIM_LOCK_PREFIX = 'claim_lock:';
  * - TYJ (5) - NOT eligible (requires JESSE token)
  */
 const ELIGIBLE_STRAINS = [1, 2, 3, 4];
+
+/**
+ * LEAF token bonus - when enabled, each free claim also sends LEAF tokens.
+ * Set NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED=true to enable.
+ * Ensure the agent smart account has sufficient LEAF balance.
+ */
+const LEAF_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true';
+const LEAF_BONUS_AMOUNT = parseUnits('1000000', 18); // 1,000,000 LEAF tokens
+
+/**
+ * SEED token bonus — first-come-first-served.
+ * Sends 200 SEED per claim while the agent wallet has sufficient balance.
+ * When balance < 200 SEED, this bonus is silently skipped.
+ */
+const SEED_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true';
+const SEED_BONUS_AMOUNT = parseUnits('200', 18); // 200 SEED tokens
 
 export async function POST(req: NextRequest) {
   // Check if feature is enabled
@@ -257,7 +273,102 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 7. Mark as claimed in Redis
+      // 7. LEAF token bonus (non-blocking — plant claim succeeds even if this fails)
+      let leafTransferSuccess = false;
+      let leafTransferTxHash: string | null = null;
+
+      if (LEAF_BONUS_ENABLED && transferSuccess) {
+        try {
+          console.log(`[CLAIM] Sending LEAF bonus (1,000,000) to ${userAddress}...`);
+
+          const leafTransferData = encodeFunctionData({
+            abi: [{
+              type: 'function',
+              name: 'transfer',
+              stateMutability: 'nonpayable',
+              inputs: [
+                { name: 'to', type: 'address' },
+                { name: 'amount', type: 'uint256' },
+              ],
+              outputs: [{ name: '', type: 'bool' }],
+            }],
+            functionName: 'transfer',
+            args: [userAddress as `0x${string}`, LEAF_BONUS_AMOUNT],
+          });
+
+          const leafOp = await client.evm.sendUserOperation({
+            smartAccount: agentSmartAccount,
+            network: 'base',
+            calls: [{ to: LEAF_CONTRACT_ADDRESS, value: BigInt(0), data: leafTransferData }],
+          });
+
+          const leafReceipt = await agentSmartAccount.waitForUserOperation(leafOp);
+          if (leafReceipt.status === 'complete') {
+            leafTransferSuccess = true;
+            leafTransferTxHash = leafReceipt.transactionHash;
+            console.log(`[CLAIM] LEAF bonus sent, tx: ${leafTransferTxHash}`);
+          }
+        } catch (e: any) {
+          console.error('[CLAIM] LEAF bonus transfer failed:', e?.message || e);
+          // Non-blocking: plant claim is still successful
+        }
+      }
+
+      // 7b. SEED token bonus — first-come-first-served (non-blocking)
+      let seedTransferSuccess = false;
+      let seedTransferTxHash: string | null = null;
+
+      if (SEED_BONUS_ENABLED && transferSuccess) {
+        try {
+          // Check agent wallet SEED balance before attempting transfer
+          const balanceClient = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
+          const seedBalance = await balanceClient.readContract({
+            address: PIXOTCHI_TOKEN_ADDRESS,
+            abi: ERC20_BALANCE_ABI,
+            functionName: 'balanceOf',
+            args: [agentSmartAccount.address as `0x${string}`],
+          });
+
+          if ((seedBalance as bigint) >= SEED_BONUS_AMOUNT) {
+            console.log(`[CLAIM] Sending SEED bonus (200) to ${userAddress}...`);
+
+            const seedTransferData = encodeFunctionData({
+              abi: [{
+                type: 'function',
+                name: 'transfer',
+                stateMutability: 'nonpayable',
+                inputs: [
+                  { name: 'to', type: 'address' },
+                  { name: 'amount', type: 'uint256' },
+                ],
+                outputs: [{ name: '', type: 'bool' }],
+              }],
+              functionName: 'transfer',
+              args: [userAddress as `0x${string}`, SEED_BONUS_AMOUNT],
+            });
+
+            const seedOp = await client.evm.sendUserOperation({
+              smartAccount: agentSmartAccount,
+              network: 'base',
+              calls: [{ to: PIXOTCHI_TOKEN_ADDRESS, value: BigInt(0), data: seedTransferData }],
+            });
+
+            const seedReceipt = await agentSmartAccount.waitForUserOperation(seedOp);
+            if (seedReceipt.status === 'complete') {
+              seedTransferSuccess = true;
+              seedTransferTxHash = seedReceipt.transactionHash;
+              console.log(`[CLAIM] SEED bonus sent, tx: ${seedTransferTxHash}`);
+            }
+          } else {
+            console.log(`[CLAIM] SEED bonus skipped — insufficient balance (${seedBalance})`);
+          }
+        } catch (e: any) {
+          console.error('[CLAIM] SEED bonus transfer failed:', e?.message || e);
+          // Non-blocking: plant claim is still successful
+        }
+      }
+
+      // 8. Mark as claimed in Redis
       const claimRecord = {
         userAddress,
         mintTxHash: mintReceipt.transactionHash,
@@ -267,6 +378,12 @@ export async function POST(req: NextRequest) {
         strainId: targetStrainId,
         status: transferSuccess ? 'complete' : 'transfer_failed',
         transferError: transferSuccess ? null : (transferError?.message || 'Unknown error'),
+        leafBonusSent: leafTransferSuccess,
+        leafBonusTxHash: leafTransferTxHash,
+        leafBonusAmount: LEAF_BONUS_ENABLED ? '1000000' : null,
+        seedBonusSent: seedTransferSuccess,
+        seedBonusTxHash: seedTransferTxHash,
+        seedBonusAmount: SEED_BONUS_ENABLED ? '200' : null,
       };
 
       // Store by verification token (primary - prevents same X account claiming twice)
@@ -276,24 +393,35 @@ export async function POST(req: NextRequest) {
       const walletClaimKey = `wallet_claims:${userAddress.toLowerCase()}`;
       await redis?.set(walletClaimKey, JSON.stringify(claimRecord));
 
+      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: '1000000' } : null;
+      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: '200' } : null;
+
       if (transferSuccess) {
-        return NextResponse.json({ 
+        const messageParts = ['Plant claimed and transferred successfully!'];
+        if (leafTransferSuccess) messageParts.push('LEAF bonus sent.');
+        if (seedTransferSuccess) messageParts.push('SEED bonus sent.');
+
+        return NextResponse.json({
           success: true,
           status: 'complete',
           mintTxHash: mintReceipt.transactionHash,
           transferTxHash: transferTxHash,
           tokenId: mintedTokenId.toString(),
-          message: 'Plant claimed and transferred successfully!' 
+          leafBonus,
+          seedBonus,
+          message: messageParts.join(' '),
         });
       } else {
         // Mint succeeded but transfer failed after retries
         console.error('[CLAIM] Failed to transfer token after retries:', transferError);
-        
-        return NextResponse.json({ 
+
+        return NextResponse.json({
           success: true,
           status: 'partial',
           mintTxHash: mintReceipt.transactionHash,
           tokenId: mintedTokenId.toString(),
+          leafBonus,
+          seedBonus,
           message: `Plant minted (ID: ${mintedTokenId}) but transfer failed. Contact support to retrieve your plant.`,
           error: transferError?.message || 'Transfer failed after retries'
         });

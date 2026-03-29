@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30; // Should be fast - just calling Neynar API
 
 const REDIS_KEY_PREFIX = 'notif:plant12h';
-const THROTTLE_SECONDS = 6 * 60 * 60; // 6 hours
+const THROTTLE_SECONDS = 12 * 60 * 60; // 12 hours
 
 /**
  * POST /api/admin/notifications/trigger
