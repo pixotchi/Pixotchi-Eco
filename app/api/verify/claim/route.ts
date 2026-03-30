@@ -46,11 +46,11 @@ const LEAF_BONUS_AMOUNT = parseUnits('7000000', 18); // 7,000,000 LEAF tokens
 
 /**
  * SEED token bonus — first-come-first-served.
- * Sends 69 SEED per claim while the agent wallet has sufficient balance.
- * When balance < 69 SEED, this bonus is silently skipped.
+ * Sends 100 SEED per claim while the agent wallet has sufficient balance.
+ * When balance < 100 SEED, this bonus is silently skipped.
  */
 const SEED_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true';
-const SEED_BONUS_AMOUNT = parseUnits('69', 18); // 69 SEED tokens
+const SEED_BONUS_AMOUNT = parseUnits('100', 18); // 100 SEED tokens
 
 export async function POST(req: NextRequest) {
   // Check if feature is enabled
@@ -383,7 +383,7 @@ export async function POST(req: NextRequest) {
         leafBonusAmount: LEAF_BONUS_ENABLED ? '7000000' : null,
         seedBonusSent: seedTransferSuccess,
         seedBonusTxHash: seedTransferTxHash,
-        seedBonusAmount: SEED_BONUS_ENABLED ? '69' : null,
+        seedBonusAmount: SEED_BONUS_ENABLED ? '100' : null,
       };
 
       // Store by verification token (primary - prevents same X account claiming twice)
@@ -394,7 +394,7 @@ export async function POST(req: NextRequest) {
       await redis?.set(walletClaimKey, JSON.stringify(claimRecord));
 
       const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: '7000000' } : null;
-      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: '69' } : null;
+      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: '100' } : null;
 
       if (transferSuccess) {
         const messageParts = ['Plant claimed and transferred successfully!'];

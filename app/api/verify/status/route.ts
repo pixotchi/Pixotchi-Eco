@@ -15,7 +15,7 @@ const SEED_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABL
 
 // Agent smart account address for balance checks (avoids initializing full CDP SDK)
 const AGENT_ADDRESS = process.env.VERIFY_CLAIM_AGENT_ADDRESS || '';
-const SEED_BONUS_AMOUNT = parseUnits('69', 18);
+const SEED_BONUS_AMOUNT = parseUnits('100', 18);
 
 /**
  * GET /api/verify/status?address=0x...
