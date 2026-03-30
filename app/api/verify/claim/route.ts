@@ -42,15 +42,15 @@ const ELIGIBLE_STRAINS = [1, 2, 3, 4];
  * Ensure the agent smart account has sufficient LEAF balance.
  */
 const LEAF_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true';
-const LEAF_BONUS_AMOUNT = parseUnits('1000000', 18); // 1,000,000 LEAF tokens
+const LEAF_BONUS_AMOUNT = parseUnits('4000000', 18); // 4,000,000 LEAF tokens
 
 /**
  * SEED token bonus — first-come-first-served.
- * Sends 120 SEED per claim while the agent wallet has sufficient balance.
- * When balance < 120 SEED, this bonus is silently skipped.
+ * Sends 50 SEED per claim while the agent wallet has sufficient balance.
+ * When balance < 50 SEED, this bonus is silently skipped.
  */
 const SEED_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true';
-const SEED_BONUS_AMOUNT = parseUnits('120', 18); // 120 SEED tokens
+const SEED_BONUS_AMOUNT = parseUnits('50', 18); // 50 SEED tokens
 
 export async function POST(req: NextRequest) {
   // Check if feature is enabled
@@ -380,10 +380,10 @@ export async function POST(req: NextRequest) {
         transferError: transferSuccess ? null : (transferError?.message || 'Unknown error'),
         leafBonusSent: leafTransferSuccess,
         leafBonusTxHash: leafTransferTxHash,
-        leafBonusAmount: LEAF_BONUS_ENABLED ? '1000000' : null,
+        leafBonusAmount: LEAF_BONUS_ENABLED ? '4000000' : null,
         seedBonusSent: seedTransferSuccess,
         seedBonusTxHash: seedTransferTxHash,
-        seedBonusAmount: SEED_BONUS_ENABLED ? '120' : null,
+        seedBonusAmount: SEED_BONUS_ENABLED ? '50' : null,
       };
 
       // Store by verification token (primary - prevents same X account claiming twice)
@@ -393,8 +393,8 @@ export async function POST(req: NextRequest) {
       const walletClaimKey = `wallet_claims:${userAddress.toLowerCase()}`;
       await redis?.set(walletClaimKey, JSON.stringify(claimRecord));
 
-      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: '1000000' } : null;
-      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: '120' } : null;
+      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: '4000000' } : null;
+      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: '50' } : null;
 
       if (transferSuccess) {
         const messageParts = ['Plant claimed and transferred successfully!'];
