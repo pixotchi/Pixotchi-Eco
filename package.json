@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.91",
+  "version": "1.6.92",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.64",
-    "@ai-sdk/google": "3.0.53",
+    "@ai-sdk/google": "3.0.54",
     "@ai-sdk/openai": "3.0.48",
     "@base-org/account": "2.5.3",
     "@base-org/account-ui": "1.0.1",
@@ -22,7 +22,7 @@
     "@farcaster/miniapp-sdk": "0.2.3",
     "@farcaster/miniapp-wagmi-connector": "1.1.1",
     "@farcaster/quick-auth": "0.0.8",
-    "@privy-io/node": "0.11.0",
+    "@privy-io/node": "0.12.0",
     "@privy-io/react-auth": "3.18.0",
     "@privy-io/wagmi": "4.0.3",
     "@radix-ui/react-dialog": "1.1.15",
@@ -41,7 +41,7 @@
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
     "@walletconnect/ethereum-provider": "2.23.9",
-    "ai": "6.0.137",
+    "ai": "6.0.141",
     "bs58": "6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
