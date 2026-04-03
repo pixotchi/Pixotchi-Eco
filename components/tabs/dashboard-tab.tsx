@@ -1,14 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { Leaf, LandPlot } from "lucide-react";
+import { useFrameContext } from "@/lib/frame-context";
+import { useWebQueryState } from "@/hooks/useWebQueryState";
 import PlantsView from "./plants-view";
 import LandsView from "./lands-view";
 
 export default function DashboardTab() {
-  const [dashboardView, setDashboardView] = useState<'plants' | 'lands'>('plants');
+  const frame = useFrameContext();
+  const isMiniApp = Boolean(frame?.isInMiniApp);
+  const [dashboardView, setDashboardView] = useWebQueryState<'plants' | 'lands'>({
+    key: 'dashboardView',
+    defaultValue: 'plants',
+    enabled: !isMiniApp,
+    parse: (rawValue) => (rawValue === 'plants' || rawValue === 'lands' ? rawValue : null),
+    serialize: (value) => (value === 'plants' ? null : value),
+  });
 
   return (
     <div className="space-y-4">

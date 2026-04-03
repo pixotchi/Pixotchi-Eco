@@ -7,6 +7,7 @@ import Image from "next/image";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
+import { onTasksDialogOpen } from "@/lib/app-events";
 
 export default function TasksInfoDialog() {
   const { address } = useAccount();
@@ -26,9 +27,7 @@ export default function TasksInfoDialog() {
     gamificationDisabledMessage;
 
   useEffect(() => {
-    const handler = () => setOpen(true);
-    window.addEventListener('pixotchi:openTasks' as any, handler as EventListener);
-    return () => window.removeEventListener('pixotchi:openTasks' as any, handler as EventListener);
+    return onTasksDialogOpen(() => setOpen(true));
   }, []);
 
   useEffect(() => {

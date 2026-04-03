@@ -98,23 +98,34 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
 
               <div className="flex items-center space-x-2">
                 {context && !context.client.added && !frameAdded && (
-                  <Button variant="outline" size="sm" onClick={handleAddFrame}>
-                    <PlusCircle className="w-4 h-4" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddFrame}
+                    aria-label="Add Pixotchi Mini to your app"
+                    title="Add Pixotchi Mini to your app"
+                  >
+                    <PlusCircle className="w-4 h-4" aria-hidden="true" />
                   </Button>
                 )}
 
                 {isConnected && address ? (
                   <Button
+                    type="button"
                     variant="outline"
                     size="icon"
                     onClick={() => setShowWalletProfile(true)}
+                    aria-label="Open wallet profile"
+                    title="Open wallet profile"
                   >
                     <Image
                       src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"}
-                      alt="Profile"
+                      alt=""
                       width={24}
                       height={24}
                       className="w-6 h-6"
+                      aria-hidden="true"
                     />
                   </Button>
                 ) : null}

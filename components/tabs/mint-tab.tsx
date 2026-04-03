@@ -41,6 +41,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { Transaction } from '@solana/web3.js';
 import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
+import { useWebQueryState } from '@/hooks/useWebQueryState';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
@@ -107,7 +108,13 @@ export default function MintTab() {
   const [loading, setLoading] = useState(true);
   const [paymentTokenSymbol, setPaymentTokenSymbol] = useState<string>('SEED');
   const [paymentTokenBalance, setPaymentTokenBalance] = useState<bigint>(BigInt(0));
-  const [mintType, setMintType] = useState<'plant' | 'land'>('plant');
+  const [mintType, setMintType] = useWebQueryState<'plant' | 'land'>({
+    key: 'mintType',
+    defaultValue: 'plant',
+    enabled: !frameContext?.isInMiniApp,
+    parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
+    serialize: (value) => (value === 'plant' ? null : value),
+  });
   const [landBalance, setLandBalance] = useState(0);
   const [landSupply, setLandSupply] = useState<{ totalSupply: number; maxSupply: number; } | null>(null);
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);

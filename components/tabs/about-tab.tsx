@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Book, Gamepad2, Tractor, Gift, Copy, Check, Users, Calendar, Plus, Info, Flame, Shield, MessageCircle, Swords, Box, MessageSquare } from "lucide-react";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { openExternalUrl } from "@/lib/open-external";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { toast } from 'react-hot-toast';
@@ -76,6 +76,8 @@ const InfoCard = ({
 
 
 export default function AboutTab() {
+  const feedbackTextId = useId();
+  const feedbackHelpId = useId();
   const { address } = useAccount();
   const { start, enabled } = useSlideshow();
   const { walletType, isSmartWallet } = useSmartWallet();
@@ -334,7 +336,7 @@ export default function AboutTab() {
                   {generating ? (
                     <>
                       <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-                      Generating...
+                      Generating…
                     </>
                   ) : (
                     <>
@@ -482,26 +484,44 @@ export default function AboutTab() {
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
-        <DialogContent>
-          <DialogHeader className="mb-6">
+          <DialogContent>
+            <DialogHeader className="mb-6">
             <DialogTitle>Share Your Feedback</DialogTitle>
             <DialogDescription>
               We'd love to hear your thoughts on Pixotchi Mini!
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-1">
+              <label htmlFor={feedbackTextId} className="text-sm font-medium">
+                Feedback
+              </label>
+              <p id={feedbackHelpId} className="text-xs text-muted-foreground">
+                Share bugs, feature requests, or suggestions.
+              </p>
+            </div>
             <Textarea
+              id={feedbackTextId}
+              name="feedback"
               placeholder="What's on your mind? (e.g., bugs, feature requests, suggestions)"
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
               rows={5}
               className="w-full"
+              spellCheck={true}
+              autoComplete="off"
+              aria-describedby={feedbackHelpId}
             />
-            <Button onClick={submitFeedback} disabled={feedbackLoading || !address}>
+            <Button
+              type="button"
+              onClick={submitFeedback}
+              disabled={feedbackLoading || !address}
+              aria-busy={feedbackLoading}
+            >
               {feedbackLoading ? (
                 <>
                   <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-                  Sending...
+                  Sending…
                 </>
               ) : (
                 <>
@@ -526,6 +546,7 @@ export default function AboutTab() {
           <h3 className="text-sm font-semibold mb-2">Join our Community</h3>
           <div className="flex justify-center space-x-4">
             <button
+              type="button"
               onClick={() => openExternalUrl('https://x.com/pixotchi')}
               className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
             >
@@ -533,6 +554,7 @@ export default function AboutTab() {
               <span className="sr-only">X (Twitter)</span>
             </button>
             <button
+              type="button"
               onClick={() => openExternalUrl('https://t.me/pixotchi')}
               className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
             >

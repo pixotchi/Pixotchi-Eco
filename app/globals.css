@@ -350,12 +350,25 @@
     scroll-behavior: auto !important;
   }
 
-  /* Global scroll lock for native-app feel */
+  /* Root sizing shared by web and mini-app surfaces */
   html,
   body {
     height: 100%;
+  }
+
+  /* Mini-app shell keeps the native-app scroll lock */
+  html[data-surface="miniapp"],
+  html[data-surface="miniapp"] body {
     overflow: hidden;
     overscroll-behavior: none;
+  }
+
+  /* Web surface behaves like a normal web app */
+  html:not([data-surface="miniapp"]),
+  html:not([data-surface="miniapp"]) body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
   }
 
   /* Dynamic viewport height for mobile browsers */

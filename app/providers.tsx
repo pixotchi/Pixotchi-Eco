@@ -39,9 +39,11 @@ import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { usePathname } from "next/navigation";
 import packageJson from '@/package.json';
-
-// Surface types for auth provider selection
-type AuthSurface = 'privy' | 'base' | 'privysolana';
+import {
+  AuthSurface,
+  DEFAULT_AUTH_SURFACE,
+  resolvePreferredAuthSurface,
+} from "@/lib/auth-surface";
 const BASE_APP_CLIENT_FID = 309857;
 
 // Solana RPC config for Privy - mainnet only
@@ -125,20 +127,13 @@ export function Providers(props: { children: ReactNode }) {
       return;
     }
 
-    // Check URL param first
-    const params = new URLSearchParams(window.location.search);
-    const urlSurface = params.get('surface');
-
-    if (urlSurface === 'privy' || urlSurface === 'base' || urlSurface === 'privysolana') {
-      sessionStorageManager.setAuthSurface(urlSurface);
-      setAuthSurface(urlSurface);
-    } else {
-      // Get from storage
-      const stored = sessionStorageManager.getAuthSurface();
-      // Map 'coinbase' to 'base' for backward compatibility
-      const effective = stored === 'coinbase' ? 'base' : (stored || 'privy');
-      setAuthSurface(effective as AuthSurface);
-    }
+    const resolvedSurface = resolvePreferredAuthSurface({
+      fallback: DEFAULT_AUTH_SURFACE,
+      search: window.location.search,
+      storedSurface: sessionStorageManager.getAuthSurface(),
+    });
+    sessionStorageManager.setAuthSurface(resolvedSurface);
+    setAuthSurface(resolvedSurface);
 
     setSurfaceInitialized(true);
   }, []);
@@ -301,6 +296,14 @@ export function Providers(props: { children: ReactNode }) {
 
     useEffect(() => {
       if (typeof document === 'undefined') return;
+      document.documentElement.dataset.surface = isMiniApp ? 'miniapp' : 'web';
+      return () => {
+        delete document.documentElement.dataset.surface;
+      };
+    }, [isMiniApp]);
+
+    useEffect(() => {
+      if (typeof document === 'undefined') return;
       const miniTitle = "Pixotchi Mini - Grow your farm, Earn rewards!";
       const webTitle = "Pixotchi - Grow your farm, Earn rewards!";
       document.title = isMiniApp ? miniTitle : webTitle;
@@ -308,7 +311,7 @@ export function Providers(props: { children: ReactNode }) {
 
     // Show loading state until initialization is complete
     if (!isInitialized) {
-      return <div>Loading...</div>;
+      return <div>Preparing wallet login…</div>;
     }
 
     // Mini App: use Farcaster connector.
@@ -363,7 +366,7 @@ export function Providers(props: { children: ReactNode }) {
   if (!surfaceInitialized) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse">Loading...</div>
+        <div className="animate-pulse">Preparing wallet login…</div>
       </div>
     );
   }

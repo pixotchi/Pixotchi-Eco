@@ -2,9 +2,7 @@
 
 import { useMiniKit, useAddFrame } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
-import { useFrameContext } from "@/lib/frame-context";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { useEffect, useState, useCallback, useRef, Activity } from "react";
+import { Activity, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
 import { Tab } from "@/lib/types";
@@ -12,34 +10,28 @@ import { WalletProfile } from "@/components/wallet-profile";
 import { PlusCircle, Leaf, Sparkles, Info, Repeat, History, Trophy } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
-import { getAddress, stringToHex } from "viem";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { INVITE_CONFIG, getLocalStorageKeys } from "@/lib/invite-utils";
 import InviteGate from "@/components/invite-gate";
 import { ChatButton } from "@/components/chat";
 import StatusBar from "@/components/status-bar";
-import { usePrivy, useLogin, useLogout, useModalStatus } from "@privy-io/react-auth";
-import { SignInWithBaseButton } from "@base-org/account-ui/react";
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import toast from "react-hot-toast";
 
 // Import custom hooks
+import { useAppAuthController } from "@/hooks/useAppAuthController";
 import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
+import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
-import { clearAppCaches } from "@/lib/cache-utils";
 import {
-  clearPublicChatSession,
-  createBasePublicChatSession,
-  getCurrentPublicChatSession,
-  requestBasePublicChatNonce,
-} from "@/lib/chat-auth-client";
-import { clearMiniAppBypassCookies, setMiniAppBypassCookies } from "@/lib/miniapp-bypass";
-import { sessionStorageManager } from "@/lib/session-storage-manager";
+  BaseAccountSurfaceButton,
+  SolanaSurfaceButton,
+} from "@/components/auth/surface-switch-buttons";
+import { requestBalanceRefresh } from "@/lib/app-events";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -124,16 +116,7 @@ const tabComponents = {
   ),
 };
 
-const AUTH_CACHE_PREFIXES = [
-  "wagmi",
-  "_wagmi",
-  "walletconnect",
-  "wc@",
-  "privy",
-  "@privy",
-  "ock",
-  "coinbase",
-];
+const TAB_VALUES: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
 
 // Tab prefetching logic with de-duplication
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
@@ -145,13 +128,12 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
     if (!isConnected) return;
 
     // Define tab navigation patterns for prefetching
-    const tabOrder: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
-    const currentIndex = tabOrder.indexOf(activeTab);
+    const currentIndex = TAB_VALUES.indexOf(activeTab);
 
     // Prefetch adjacent tabs (next and previous)
     const prefetchTabs = [currentIndex - 1, currentIndex + 1]
-      .filter(index => index >= 0 && index < tabOrder.length)
-      .map(index => tabOrder[index]);
+      .filter(index => index >= 0 && index < TAB_VALUES.length)
+      .map(index => TAB_VALUES[index]);
 
     // Prefetch frequently accessed tabs
     const frequentlyAccessedTabs: Tab[] = ["dashboard", "mint", "swap"];
@@ -203,720 +185,42 @@ import { useKeyboardAware, useViewportHeight, useKeyboardNavigation } from "@/ho
 
 export default function App() {
   const { context } = useMiniKit();
-  const fc = useFrameContext();
-  const {
-    address,
-    isConnected: isEvmConnected,
-    isConnecting: isWalletConnecting,
-    isReconnecting: isWalletReconnecting,
-  } = useAccount();
-  const { disconnect } = useDisconnect();
   const { theme } = useTheme();
   const { startIfFirstVisit } = useSlideshow();
-  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
-  const [frameAdded, setFrameAdded] = useState(false);
-  const [showWalletProfile, setShowWalletProfile] = useState(false);
-  const [isMiniConnectRetrying, setIsMiniConnectRetrying] = useState(false);
-  const [surface, setSurface] = useState<'privy' | 'base' | 'privysolana' | null>(null);
-  const [surfaceInitialized, setSurfaceInitialized] = useState(false);
-  const [expectedPrivyAddress, setExpectedPrivyAddress] = useState<string | null>(null);
-  const [baseAuthenticatedAddress, setBaseAuthenticatedAddress] = useState<string | null>(null);
-  const [baseAuthStatus, setBaseAuthStatus] = useState<'idle' | 'checking' | 'authenticating'>('idle');
-  const lastDismissedRef = useRef<string | null>(null);
-  const privySessionResetRef = useRef(false);
-  const baseAutologinAttemptRef = useRef(false);
-  const baseAuthInFlightRef = useRef(false);
-  const isMiniApp = Boolean(fc?.isInMiniApp);
-  const normalizedAddress = address?.toLowerCase() ?? null;
-
-  // Privy state for debug + button readiness + Solana wallet check
-  const { ready: privyReady, authenticated, user } = usePrivy();
-  const { isOpen: isPrivyModalOpen } = useModalStatus();
-  const { logout } = useLogout();
-  const { connect, connectAsync, connectors } = useConnect();
-
-  // Check if user has a Solana wallet connected via Privy
-  const hasSolanaWallet = useMemo(() => {
-    if (!authenticated || !user) return false;
-    // Check linked accounts for Solana wallets
-    return user.linkedAccounts?.some(
-      (account: any) => account.type === 'wallet' && account.chainType === 'solana'
-    ) ?? false;
-  }, [authenticated, user]);
-
-  const persistPrivyAuthenticatedAddress = useCallback(async (nextAddress: string | null) => {
-    setExpectedPrivyAddress(nextAddress);
-
-    if (!nextAddress) {
-      await sessionStorageManager.removePrivyAuthenticatedAddress();
-      return;
-    }
-
-    await sessionStorageManager.setPrivyAuthenticatedAddress(nextAddress);
-  }, []);
-
-  const persistBaseAuthenticatedAddress = useCallback(async (nextAddress: string | null) => {
-    setBaseAuthenticatedAddress(nextAddress);
-
-    if (!nextAddress) {
-      await sessionStorageManager.removeBaseAuthenticatedAddress();
-      return;
-    }
-
-    await sessionStorageManager.setBaseAuthenticatedAddress(nextAddress);
-  }, []);
-
-  const resetPrivySession = useCallback(async (message?: string) => {
-    if (privySessionResetRef.current) return;
-
-    privySessionResetRef.current = true;
-
-    try {
-      await sessionStorageManager.removeAutologin();
-      await persistPrivyAuthenticatedAddress(null);
-      await clearPublicChatSession().catch((error) => {
-        console.warn('Failed to clear public chat session during Privy reset:', error);
-      });
-
-      if (authenticated && logout) {
-        try {
-          await logout();
-        } catch (error) {
-          console.warn('Privy logout during session reset failed:', error);
-        }
-      }
-
-      try {
-        disconnect();
-      } catch (error) {
-        console.warn('Wallet disconnect during Privy session reset failed:', error);
-      }
-
-      if (message) {
-        toast.error(message);
-      }
-    } finally {
-      setTimeout(() => {
-        privySessionResetRef.current = false;
-      }, 250);
-    }
-  }, [authenticated, disconnect, logout, persistPrivyAuthenticatedAddress]);
-
-  const switchAuthSurface = useCallback(async (nextSurface: 'privy' | 'base' | 'privysolana') => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    await sessionStorageManager.markPrivyLogoutIntent().catch((error) => {
-      console.warn('Failed to mark Privy logout intent before surface switch:', error);
-    });
-
-    await sessionStorageManager.removeAutologin().catch((error) => {
-      console.warn('Failed to clear autologin before surface switch:', error);
-    });
-    await sessionStorageManager.clearPendingBaseChatAuth().catch((error) => {
-      console.warn('Failed to clear pending Base auth before surface switch:', error);
-    });
-    await persistPrivyAuthenticatedAddress(null).catch((error) => {
-      console.warn('Failed to clear persisted Privy address before surface switch:', error);
-    });
-    await persistBaseAuthenticatedAddress(null).catch((error) => {
-      console.warn('Failed to clear persisted Base address before surface switch:', error);
-    });
-    await clearPublicChatSession().catch((error) => {
-      console.warn('Failed to clear public chat session before surface switch:', error);
-    });
-    clearMiniAppBypassCookies();
-
-    if (authenticated && logout) {
-      await logout().catch((error) => {
-        console.warn('Privy logout failed before surface switch:', error);
-      });
-    }
-
-    try {
-      disconnect();
-    } catch (error) {
-      console.warn('Wallet disconnect failed before surface switch:', error);
-    }
-
-    await sessionStorageManager.clearAuthState().catch((error) => {
-      console.warn('Failed to clear auth state before surface switch:', error);
-    });
-
-    await clearAppCaches({
-      onlyPrefixes: AUTH_CACHE_PREFIXES,
-    });
-
-    await sessionStorageManager.setAuthSurfaceAndAutologin(nextSurface);
-
-    const url = new URL(window.location.href);
-    url.searchParams.set('surface', nextSurface);
-    window.location.replace(url.toString());
-  }, [authenticated, disconnect, logout, persistBaseAuthenticatedAddress, persistPrivyAuthenticatedAddress]);
-
-  const getErrorMessage = useCallback((error: unknown, fallback: string) => {
-    if (error instanceof Error && error.message.trim()) {
-      return error.message;
-    }
-
-    if (typeof error === "string" && error.trim()) {
-      return error;
-    }
-
-    if (error && typeof error === "object") {
-      const candidate =
-        (error as { message?: unknown }).message ??
-        (error as { error?: { message?: unknown } }).error?.message;
-
-      if (typeof candidate === "string" && candidate.trim()) {
-        return candidate;
-      }
-    }
-
-    return fallback;
-  }, []);
-
-  const getErrorCode = useCallback((error: unknown): number | null => {
-    if (!error || typeof error !== "object") {
-      return null;
-    }
-
-    const direct = (error as { code?: unknown }).code;
-    if (typeof direct === "number") {
-      return direct;
-    }
-
-    const nested = (error as { error?: { code?: unknown } }).error?.code;
-    return typeof nested === "number" ? nested : null;
-  }, []);
-
-  const isUnsupportedBaseMethodError = useCallback((error: unknown): boolean => {
-    const code = getErrorCode(error);
-    if (code === 4100 || code === 4200 || code === -32004) {
-      return true;
-    }
-
-    const message = getErrorMessage(error, "").toLowerCase();
-    return (
-      message.includes("request method is not supported") ||
-      message.includes("requested method is not supported") ||
-      message.includes("method is not supported") ||
-      (message.includes("wallet_connect") && message.includes("not supported"))
-    );
-  }, [getErrorCode, getErrorMessage]);
-
-  const isInvalidBaseSiweMessageError = useCallback((error: unknown): boolean => {
-    const message = getErrorMessage(error, "").toLowerCase();
-    return message.includes("invalid siwe message");
-  }, [getErrorMessage]);
-
-  const shouldUseLegacyBaseFallback = useCallback((error: unknown): boolean => {
-    return isUnsupportedBaseMethodError(error) || isInvalidBaseSiweMessageError(error);
-  }, [isInvalidBaseSiweMessageError, isUnsupportedBaseMethodError]);
-
-  const isAlreadyConnectedError = useCallback((error: unknown): boolean => {
-    const message = getErrorMessage(error, "").toLowerCase();
-    return message.includes("connector already connected");
-  }, [getErrorMessage]);
-
-  const getPrimaryAccountAddress = useCallback((accounts: unknown): string | null => {
-    if (!Array.isArray(accounts) || accounts.length === 0) {
-      return null;
-    }
-
-    const primaryAccount = accounts[0];
-    if (typeof primaryAccount === "string" && primaryAccount) {
-      return primaryAccount;
-    }
-
-    if (
-      primaryAccount &&
-      typeof primaryAccount === "object" &&
-      typeof (primaryAccount as { address?: unknown }).address === "string"
-    ) {
-      return (primaryAccount as { address: string }).address;
-    }
-
-    return null;
-  }, []);
-
-  const summarizeBaseAccounts = useCallback((accounts: unknown) => {
-    if (!Array.isArray(accounts)) {
-      return {
-        isArray: false,
-        type: typeof accounts,
-      };
-    }
-
-    return accounts.map((account) => {
-      if (typeof account === "string") {
-        return {
-          kind: "string",
-          value: account,
-        };
-      }
-
-      if (!account || typeof account !== "object") {
-        return {
-          kind: typeof account,
-        };
-      }
-
-      const capabilities = (account as { capabilities?: Record<string, unknown> }).capabilities;
-      const siweCapability = capabilities?.signInWithEthereum as
-        | { message?: unknown; signature?: unknown }
-        | undefined;
-
-      return {
-        address: typeof (account as { address?: unknown }).address === "string"
-          ? (account as { address: string }).address
-          : null,
-        capabilityKeys: capabilities ? Object.keys(capabilities) : [],
-        hasSiweCapability: Boolean(siweCapability),
-        messageType: typeof siweCapability?.message,
-        signatureType: typeof siweCapability?.signature,
-        kind: "object",
-      };
-    });
-  }, []);
-
-  const logBaseClientDiagnostic = useCallback(async (stage: string, details: Record<string, unknown>) => {
-    try {
-      await fetch("/api/chat/auth/base/debug", {
-        body: JSON.stringify({
-          ...details,
-          stage,
-          surface,
-        }),
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        keepalive: true,
-        method: "POST",
-      });
-    } catch {
-      // Ignore diagnostic delivery failures.
-    }
-  }, [surface]);
-
-  const buildFallbackSiweMessage = useCallback((params: {
-    address: string;
-    chainId: number;
-    domain?: string;
-    issuedAt: string;
-    nonce: string;
-    statement: string;
-    uri?: string;
-  }) => {
-    const lines = [
-      `${params.domain || "localhost"} wants you to sign in with your Ethereum account:`,
-      params.address,
-      "",
-      params.statement,
-      "",
-      `URI: ${params.uri || "http://localhost:3000"}`,
-      "Version: 1",
-      `Chain ID: ${params.chainId}`,
-      `Nonce: ${params.nonce}`,
-      `Issued At: ${params.issuedAt}`,
-    ];
-
-    return lines.join("\n");
-  }, []);
-
-  const createPersonalSignBasePayload = useCallback(async (params: {
-    baseAddress: string;
-    domain?: string;
-    issuedAt: string;
-    nonce: string;
-    provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
-    uri?: string;
-  }) => {
-    const checksummedAddress = getAddress(params.baseAddress);
-
-    const message = buildFallbackSiweMessage({
-      address: checksummedAddress,
-      chainId: 8453,
-      ...(params.domain ? { domain: params.domain } : {}),
-      issuedAt: params.issuedAt,
-      nonce: params.nonce,
-      statement: "Sign in to Pixotchi",
-      ...(params.uri ? { uri: params.uri } : {}),
-    });
-
-    let signature: unknown;
-
-    try {
-      signature = await params.provider.request({
-        method: "personal_sign",
-        params: [message, checksummedAddress],
-      });
-    } catch {
-      signature = await params.provider.request({
-        method: "personal_sign",
-        params: [stringToHex(message), checksummedAddress],
-      });
-    }
-
-    if (typeof signature !== "string") {
-      throw new Error("Coinbase Wallet did not return a valid signature.");
-    }
-
-    return {
-      address: params.baseAddress.toLowerCase(),
-      message,
-      signature: signature as `0x${string}`,
-    };
-  }, [buildFallbackSiweMessage]);
-
-  const completeBaseAuthentication = useCallback(async (baseConnector: any) => {
-    const nonce = await requestBasePublicChatNonce();
-    const domain = typeof window !== "undefined" ? window.location.host : undefined;
-    const uri = typeof window !== "undefined" ? window.location.origin : undefined;
-    const issuedAt = new Date().toISOString();
-    const signInWithEthereum = {
-      chainId: "0x2105",
-      nonce,
-      ...(domain ? { domain } : {}),
-      issuedAt,
-      ...(uri ? { uri } : {}),
-      statement: "Sign in to Pixotchi",
-      version: "1",
-    };
-
-    const extractBasePayload = (
-      authResult: unknown,
-      fallbackAddress?: string | null,
-    ): {
-      address: string;
-      message: string;
-      signature: `0x${string}`;
-    } | null => {
-      const primaryAccount = Array.isArray((authResult as any)?.accounts)
-        ? (authResult as any).accounts[0]
-        : null;
-      const capabilityAddress =
-        typeof primaryAccount === "string"
-          ? primaryAccount.toLowerCase()
-          : typeof primaryAccount?.address === "string"
-            ? primaryAccount.address.toLowerCase()
-            : fallbackAddress?.toLowerCase() ?? null;
-      const siweCapability =
-        typeof primaryAccount === "string"
-          ? null
-          : primaryAccount?.capabilities?.signInWithEthereum;
-
-      if (
-        siweCapability &&
-        typeof siweCapability === "object" &&
-        typeof (siweCapability as { message?: unknown }).message === "string" &&
-        typeof (siweCapability as { signature?: unknown }).signature !== "string"
-      ) {
-        throw new Error((siweCapability as { message: string }).message);
-      }
-
-      if (
-        !capabilityAddress ||
-        typeof siweCapability?.message !== "string" ||
-        typeof siweCapability?.signature !== "string"
-      ) {
+  const {
+    address,
+    fc,
+    handleMiniAppReconnect,
+    isConnected,
+    isMiniApp,
+    isRestoringBaseSession,
+    privyReady,
+    state,
+    switchAuthSurface,
+  } = useAppAuthController();
+  const [activeTab, setActiveTab] = useWebQueryState<Tab>({
+    key: "tab",
+    defaultValue: "dashboard",
+    enabled: !isMiniApp,
+    parse: (rawValue) => {
+      if (!rawValue) {
         return null;
       }
 
-      return {
-        address: capabilityAddress,
-        message: siweCapability.message,
-        signature: siweCapability.signature as `0x${string}`,
-      };
-    };
-
-    let payload: {
-      address: string;
-      message: string;
-      signature: `0x${string}`;
-    } | null = null;
-    let withCapabilitiesError: unknown = null;
-
-    try {
-      const connectResult = await connectAsync({
-        capabilities: {
-          signInWithEthereum,
-        },
-        connector: baseConnector,
-        withCapabilities: true,
-      } as any);
-
-      payload = extractBasePayload(connectResult, normalizedAddress);
-      if (!payload) {
-        void logBaseClientDiagnostic("withCapabilities-empty", {
-          connectorId: baseConnector?.id ?? null,
-          connectorName: baseConnector?.name ?? null,
-          normalizedAddress,
-          resultAccountSummary: summarizeBaseAccounts((connectResult as any)?.accounts),
-          resultKeys: connectResult && typeof connectResult === "object" ? Object.keys(connectResult as Record<string, unknown>) : [],
-        });
-      }
-    } catch (error) {
-      if (!isAlreadyConnectedError(error)) {
-        void logBaseClientDiagnostic("withCapabilities-error", {
-          connectorId: baseConnector?.id ?? null,
-          connectorName: baseConnector?.name ?? null,
-          errorCode: getErrorCode(error),
-          message: getErrorMessage(error, "Base authentication failed."),
-          normalizedAddress,
-        });
-        if (shouldUseLegacyBaseFallback(error)) {
-          withCapabilitiesError = error;
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    if (!payload) {
-      let baseAddress = normalizedAddress;
-      const provider = typeof baseConnector?.getProvider === "function"
-        ? await baseConnector.getProvider()
-        : baseConnector?.provider;
-
-      if (!provider?.request) {
-        throw new Error("Base provider unavailable.");
-      }
-
-      if (!baseAddress) {
-        const connectedAccounts = await provider.request({
-          method: "eth_accounts",
-        });
-        baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
-      }
-
-      if (!baseAddress) {
-        throw new Error("Base account unavailable.");
-      }
-
-      if (withCapabilitiesError) {
-        try {
-          void logBaseClientDiagnostic("same-provider-fallback-selected", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            message: getErrorMessage(withCapabilitiesError, "Base capability auth failed."),
-            normalizedAddress: baseAddress,
-          });
-          payload = await createPersonalSignBasePayload({
-            baseAddress,
-            ...(domain ? { domain } : {}),
-            issuedAt,
-            nonce,
-            provider,
-            ...(uri ? { uri } : {}),
-          });
-        } catch (fallbackError) {
-          void logBaseClientDiagnostic("same-provider-fallback-error", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            errorCode: getErrorCode(fallbackError),
-            message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
-            normalizedAddress: baseAddress,
-          });
-          throw withCapabilitiesError;
-        }
-      }
-
-      if (!payload) {
-        let walletConnectError: unknown = null;
-
-        try {
-          const authResult = await provider.request({
-            method: "wallet_connect",
-            params: [{
-              capabilities: {
-                signInWithEthereum,
-              },
-              version: "1",
-            }],
-          });
-
-          payload = extractBasePayload(authResult, baseAddress);
-          if (!payload) {
-            void logBaseClientDiagnostic("wallet_connect-empty", {
-              connectorId: baseConnector?.id ?? null,
-              connectorName: baseConnector?.name ?? null,
-              normalizedAddress: baseAddress,
-              resultAccountSummary: summarizeBaseAccounts((authResult as any)?.accounts),
-              resultKeys: authResult && typeof authResult === "object" ? Object.keys(authResult as Record<string, unknown>) : [],
-            });
-          }
-        } catch (error) {
-          walletConnectError = error;
-          void logBaseClientDiagnostic("wallet_connect-error", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            errorCode: getErrorCode(error),
-            message: getErrorMessage(error, "Base wallet_connect failed."),
-            normalizedAddress: baseAddress,
-          });
-        }
-
-        if (!payload) {
-          try {
-            void logBaseClientDiagnostic("same-provider-fallback-selected", {
-              connectorId: baseConnector?.id ?? null,
-              connectorName: baseConnector?.name ?? null,
-              message: walletConnectError
-                ? getErrorMessage(walletConnectError, "Base wallet_connect failed.")
-                : "Base capability auth returned no SIWE payload.",
-              normalizedAddress: baseAddress,
-            });
-            payload = await createPersonalSignBasePayload({
-              baseAddress,
-              ...(domain ? { domain } : {}),
-              issuedAt,
-              nonce,
-              provider,
-              ...(uri ? { uri } : {}),
-            });
-          } catch (fallbackError) {
-            void logBaseClientDiagnostic("same-provider-fallback-error", {
-              connectorId: baseConnector?.id ?? null,
-              connectorName: baseConnector?.name ?? null,
-              errorCode: getErrorCode(fallbackError),
-              message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
-              normalizedAddress: baseAddress,
-            });
-            if (walletConnectError) {
-              throw walletConnectError;
-            }
-          }
-        }
-      }
-    }
-
-    if (!payload) {
-      throw new Error("Base authentication was not completed.");
-    }
-
-    await sessionStorageManager.setPendingBaseChatAuth(payload);
-    await createBasePublicChatSession(payload);
-    await sessionStorageManager.clearPendingBaseChatAuth();
-    await persistBaseAuthenticatedAddress(payload.address);
-  }, [connectAsync, createPersonalSignBasePayload, getErrorCode, getErrorMessage, getPrimaryAccountAddress, isAlreadyConnectedError, logBaseClientDiagnostic, normalizedAddress, persistBaseAuthenticatedAddress, shouldUseLegacyBaseFallback, summarizeBaseAccounts]);
-
-  const completeLegacyBaseAuthentication = useCallback(async (legacyConnector: any) => {
-    const nonce = await requestBasePublicChatNonce();
-    const domain = typeof window !== "undefined" ? window.location.host : undefined;
-    const uri = typeof window !== "undefined" ? window.location.origin : undefined;
-    const issuedAt = new Date().toISOString();
-    let baseAddress = normalizedAddress;
-
-    if (!baseAddress) {
-      try {
-        const result = await connectAsync({
-          chainId: 8453,
-          connector: legacyConnector,
-        } as any);
-        baseAddress = getPrimaryAccountAddress((result as any)?.accounts)?.toLowerCase() ?? null;
-      } catch (error) {
-        if (!isAlreadyConnectedError(error)) {
-          throw error;
-        }
-      }
-    }
-
-    const provider = typeof legacyConnector?.getProvider === "function"
-      ? await legacyConnector.getProvider()
-      : legacyConnector?.provider;
-
-    if (!provider?.request) {
-      throw new Error("Coinbase Wallet provider unavailable.");
-    }
-
-    if (!baseAddress) {
-      const connectedAccounts = await provider.request({
-        method: "eth_accounts",
-      });
-      baseAddress = getPrimaryAccountAddress(connectedAccounts)?.toLowerCase() ?? null;
-    }
-
-    if (!baseAddress) {
-      throw new Error("Coinbase Wallet account unavailable.");
-    }
-
-    const payload = await createPersonalSignBasePayload({
-      baseAddress,
-      ...(domain ? { domain } : {}),
-      issuedAt,
-      nonce,
-      provider,
-      ...(uri ? { uri } : {}),
-    });
-
-    await sessionStorageManager.setPendingBaseChatAuth(payload);
-    await createBasePublicChatSession(payload);
-    await sessionStorageManager.clearPendingBaseChatAuth();
-    await persistBaseAuthenticatedAddress(payload.address);
-  }, [connectAsync, createPersonalSignBasePayload, getPrimaryAccountAddress, isAlreadyConnectedError, normalizedAddress, persistBaseAuthenticatedAddress]);
-
-  const { login } = useLogin({
-    onComplete: ({ loginAccount }) => {
-      const loginAddress =
-        loginAccount?.type === 'wallet' &&
-        loginAccount.chainType === 'ethereum' &&
-        typeof loginAccount.address === 'string'
-          ? loginAccount.address.toLowerCase()
-          : normalizedAddress;
-
-      if (loginAddress) {
-        void persistPrivyAuthenticatedAddress(loginAddress);
-      } else {
-        void persistPrivyAuthenticatedAddress(null);
-      }
+      return TAB_VALUES.includes(rawValue as Tab) ? (rawValue as Tab) : null;
     },
-    onError: () => {
-      if (surface === 'privy' && !sessionStorageManager.hasRecentPrivyLogoutIntent()) {
-        void resetPrivySession('Privy login was cancelled. Please sign the message to continue.');
-      }
-    },
+    serialize: (value) => (value === "dashboard" ? null : value),
   });
-  const isConnected = useMemo(() => {
-    if (isMiniApp) return isEvmConnected;
-    if (!surfaceInitialized) return false;
-
-    switch (surface) {
-      case 'privy':
-        return privyReady && authenticated && isEvmConnected;
-      case 'privysolana':
-        return privyReady && authenticated && hasSolanaWallet;
-      case 'base':
-        return Boolean(isEvmConnected && normalizedAddress && baseAuthenticatedAddress === normalizedAddress);
-      default:
-        return false;
-    }
-  }, [
-    authenticated,
-    baseAuthenticatedAddress,
-    hasSolanaWallet,
-    isEvmConnected,
-    isMiniApp,
-    normalizedAddress,
-    privyReady,
-    surface,
-    surfaceInitialized,
-  ]);
-  const isWebPrivySurface = !isMiniApp && surface === 'privy';
-  const isBaseAuthPending = !isMiniApp && surface === 'base' && baseAuthStatus !== 'idle';
-
-  // Enable intelligent tab prefetching
-  useTabPrefetching(activeTab, isConnected);
-
-  // Custom hooks for logic separation
+  const [frameAdded, setFrameAdded] = useState(false);
+  const [showWalletProfile, setShowWalletProfile] = useState(false);
+  const lastDismissedRef = useRef<string | null>(null);
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
   const readyBlocker =
     isConnected &&
     INVITE_CONFIG.SYSTEM_ENABLED &&
     (checkingValidation || !userValidated);
+
+  useTabPrefetching(activeTab, isConnected);
 
   useFarcaster({ readyBlocker });
   useAutoConnect();
@@ -929,314 +233,6 @@ export default function App() {
   const keyboardState = useKeyboardAware();
   const viewportHeight = useViewportHeight();
   const isKeyboardNavigation = useKeyboardNavigation();
-
-  // Populate surface from sessionStorage on client mount only
-  useEffect(() => {
-    if (surfaceInitialized) return;
-
-    try {
-      const stored = sessionStorageManager.getAuthSurface();
-      // Map 'coinbase' to 'base' for backward compatibility
-      const effectiveSurface = stored === 'coinbase' ? 'base' : (stored as 'privy' | 'base' | 'privysolana' | null);
-      setSurface(effectiveSurface);
-    } catch (error) {
-      console.warn('Failed to read surface on mount:', error);
-    }
-
-    setSurfaceInitialized(true);
-  }, [surfaceInitialized]);
-
-  useEffect(() => {
-    if (!surfaceInitialized) return;
-    setExpectedPrivyAddress(sessionStorageManager.getPrivyAuthenticatedAddress());
-  }, [authenticated, isEvmConnected, surface, surfaceInitialized]);
-
-  useEffect(() => {
-    if (!surfaceInitialized) return;
-
-    if (surface === 'base') {
-      setBaseAuthenticatedAddress(sessionStorageManager.getBaseAuthenticatedAddress());
-      return;
-    }
-
-    setBaseAuthenticatedAddress(null);
-  }, [surface, surfaceInitialized]);
-
-  useEffect(() => {
-    if (!surfaceInitialized || isMiniApp || surface !== 'base') {
-      setBaseAuthenticatedAddress(null);
-      setBaseAuthStatus('idle');
-      baseAuthInFlightRef.current = false;
-      return;
-    }
-
-    if (!isEvmConnected || !normalizedAddress) {
-      if (!baseAuthInFlightRef.current) {
-        setBaseAuthStatus('idle');
-      }
-      return;
-    }
-
-    if (baseAuthenticatedAddress === normalizedAddress || baseAuthInFlightRef.current) {
-      return;
-    }
-
-    let cancelled = false;
-    setBaseAuthStatus('checking');
-
-    void (async () => {
-      try {
-        const session = await getCurrentPublicChatSession();
-        const sessionAddress = session?.address?.toLowerCase() ?? null;
-
-        if (cancelled) {
-          return;
-        }
-
-        if (session?.provider === 'base' && sessionAddress === normalizedAddress) {
-          await persistBaseAuthenticatedAddress(normalizedAddress);
-          return;
-        }
-
-        if (session) {
-          await clearPublicChatSession().catch((error) => {
-            console.warn('Failed to clear stale chat session while checking Base auth:', error);
-          });
-        }
-
-        await persistBaseAuthenticatedAddress(null);
-      } catch (error) {
-        if (!cancelled) {
-          console.warn('Failed to check Base authentication session:', error);
-          await persistBaseAuthenticatedAddress(null);
-        }
-      } finally {
-        if (!cancelled && !baseAuthInFlightRef.current) {
-          setBaseAuthStatus('idle');
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    baseAuthenticatedAddress,
-    isEvmConnected,
-    isMiniApp,
-    normalizedAddress,
-    persistBaseAuthenticatedAddress,
-    surface,
-    surfaceInitialized,
-  ]);
-
-  useEffect(() => {
-    if (isMiniApp && normalizedAddress) {
-      setMiniAppBypassCookies(normalizedAddress);
-      return;
-    }
-
-    clearMiniAppBypassCookies();
-  }, [isMiniApp, normalizedAddress]);
-
-  useEffect(() => {
-    if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress) return;
-    if (expectedPrivyAddress) return;
-
-    void persistPrivyAuthenticatedAddress(normalizedAddress);
-  }, [
-    authenticated,
-    expectedPrivyAddress,
-    isWebPrivySurface,
-    normalizedAddress,
-    persistPrivyAuthenticatedAddress,
-    privyReady,
-  ]);
-
-  useEffect(() => {
-    if (!isWebPrivySurface || !privyReady || authenticated || !isEvmConnected || isPrivyModalOpen) {
-      return;
-    }
-
-    if (sessionStorageManager.hasRecentPrivyLogoutIntent()) {
-      return;
-    }
-
-    void resetPrivySession('Privy login was cancelled. Please sign the message to continue.');
-  }, [
-    authenticated,
-    isEvmConnected,
-    isPrivyModalOpen,
-    isWebPrivySurface,
-    privyReady,
-    resetPrivySession,
-  ]);
-
-  useEffect(() => {
-    if (authenticated || isEvmConnected) {
-      return;
-    }
-
-    void sessionStorageManager.clearPrivyLogoutIntent();
-  }, [authenticated, isEvmConnected]);
-
-  useEffect(() => {
-    if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress || !expectedPrivyAddress) {
-      return;
-    }
-
-    if (expectedPrivyAddress !== normalizedAddress) {
-      void resetPrivySession('Wallet changed. Please sign in again.');
-    }
-  }, [
-    authenticated,
-    expectedPrivyAddress,
-    isWebPrivySurface,
-    normalizedAddress,
-    privyReady,
-    resetPrivySession,
-  ]);
-
-  // Back navigation control: enable web navigation integration inside Mini App
-  useEffect(() => {
-    (async () => {
-      try {
-        const inMini = await sdk.isInMiniApp();
-        if (inMini) {
-          await sdk.back.enableWebNavigation();
-        }
-      } catch { }
-    })();
-  }, []);
-
-  // One-shot autologin after surface switch
-  useEffect(() => {
-    if (surface !== 'base' || isConnected) {
-      baseAutologinAttemptRef.current = false;
-    }
-  }, [isConnected, surface]);
-
-  useEffect(() => {
-    if (isConnected) return;
-    if (surface === 'base' && isBaseAuthPending) return;
-
-    let mounted = true;
-
-    const handleAutologin = async () => {
-      try {
-        const storedAuto = sessionStorageManager.getAutologin();
-        if (!storedAuto) return;
-
-        // Map 'coinbase' to 'base'
-        const auto = storedAuto === 'coinbase' ? 'base' : storedAuto;
-
-        // Handle Privy surfaces (both EVM and Solana)
-        if (auto === 'privy' && surface === 'privy' && privyReady) {
-          await sessionStorageManager.removeAutologin();
-          if (mounted) login();
-        } else if (auto === 'privysolana' && surface === 'privysolana' && privyReady) {
-          // Solana surface - trigger Privy login (will show Solana wallets only)
-          await sessionStorageManager.removeAutologin();
-          if (mounted) login();
-        } else if (auto === 'base' && surface === 'base') {
-          if (baseAutologinAttemptRef.current) {
-            return;
-          }
-
-          const base = (connectors || []).find((c: any) => c.id === 'baseAccount') || (connectors || [])[0];
-          const legacyBase = (connectors || []).find((c: any) => c.id === 'coinbaseWalletSDK');
-          if (base) {
-            baseAutologinAttemptRef.current = true;
-            baseAuthInFlightRef.current = true;
-            if (mounted) {
-              setBaseAuthStatus('authenticating');
-            }
-
-            try {
-              if (!mounted) return;
-              try {
-                await completeBaseAuthentication(base as any);
-              } catch (error) {
-                if (legacyBase && shouldUseLegacyBaseFallback(error)) {
-                  void logBaseClientDiagnostic("legacy-fallback-selected", {
-                    baseConnectorId: base?.id ?? null,
-                    legacyConnectorId: legacyBase?.id ?? null,
-                    errorCode: getErrorCode(error),
-                    message: getErrorMessage(error, "Base auth failed."),
-                    normalizedAddress,
-                  });
-                  await completeLegacyBaseAuthentication(legacyBase as any);
-                } else {
-                  throw error;
-                }
-              }
-              await sessionStorageManager.removeAutologin();
-              if (mounted) {
-                setBaseAuthStatus('idle');
-              }
-            } catch (error) {
-              try {
-                disconnect();
-              } catch (disconnectError) {
-                console.warn('Failed to disconnect Base wallet after auth failure:', disconnectError);
-              }
-              await sessionStorageManager.removeAutologin().catch((storageError) => {
-                console.warn('Failed to clear Base autologin after auth failure:', storageError);
-              });
-              await sessionStorageManager.clearPendingBaseChatAuth().catch((storageError) => {
-                console.warn('Failed to clear pending Base auth after auth failure:', storageError);
-              });
-              await clearPublicChatSession().catch((chatError) => {
-                console.warn('Failed to clear Base chat session after auth failure:', chatError);
-              });
-              await persistBaseAuthenticatedAddress(null).catch((storageError) => {
-                console.warn('Failed to clear persisted Base auth after auth failure:', storageError);
-              });
-              if (mounted) {
-                setBaseAuthStatus('idle');
-              }
-              const fallbackMessage = shouldUseLegacyBaseFallback(error)
-                ? 'This Coinbase app version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy.'
-                : 'Base authentication failed. Please try again.';
-              void logBaseClientDiagnostic("autologin-failed", {
-                baseConnectorId: base?.id ?? null,
-                legacyConnectorId: legacyBase?.id ?? null,
-                errorCode: getErrorCode(error),
-                message: getErrorMessage(error, fallbackMessage),
-                normalizedAddress,
-              });
-              toast.error(getErrorMessage(error, fallbackMessage));
-              baseAutologinAttemptRef.current = false;
-              throw error;
-            } finally {
-              baseAuthInFlightRef.current = false;
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Failed to handle autologin:', error);
-      }
-    };
-
-    handleAutologin();
-
-    return () => {
-      mounted = false;
-    };
-  }, [completeBaseAuthentication, completeLegacyBaseAuthentication, connectors, disconnect, getErrorCode, getErrorMessage, isBaseAuthPending, isConnected, logBaseClientDiagnostic, login, normalizedAddress, persistBaseAuthenticatedAddress, privyReady, shouldUseLegacyBaseFallback, surface]);
-
-  const isRestoringBaseSession =
-    !isMiniApp &&
-    surface === 'base' &&
-    !isConnected &&
-    Boolean(baseAuthenticatedAddress) &&
-    (isWalletConnecting || isWalletReconnecting || baseAuthStatus === 'checking');
-
-  // Respect user's wallet choice - don't automatically switch to embedded wallets
-  // This prevents the issue where external wallets get switched to Privy embedded wallets
-  // after signing auth messages
-
-
   const addFrame = useAddFrame();
 
   // Start tutorial only after wallet connect (and invite gate passed)
@@ -1303,9 +299,7 @@ export default function App() {
   // Nudge UI forward immediately after a successful connection
   useEffect(() => {
     if (isConnected) {
-      try {
-        (window as any).__pixotchi_refresh_balances__?.();
-      } catch { }
+      void requestBalanceRefresh();
     }
   }, [isConnected]);
 
@@ -1322,80 +316,6 @@ export default function App() {
     }
   };
 
-  // Render a web-only Base Account connect using the official Base UI component
-  function BaseAccountButton() {
-    const [isProcessing, setIsProcessing] = useState(false);
-
-    const handleClick = () => {
-      if (isProcessing) return;
-      setIsProcessing(true);
-      (async () => {
-        try {
-          await switchAuthSurface("base");
-        } catch (error) {
-          console.error("Failed to switch to Base surface:", error);
-          toast.error("Failed to switch to Base sign-in. Please try again.");
-          setIsProcessing(false);
-        }
-      })();
-    };
-
-    return (
-      <SignInWithBaseButton
-        align="center"
-        variant="solid"
-        colorScheme="light"
-        onClick={handleClick}
-      />
-    );
-  }
-
-  // Render Solana wallet login button (switches to solana-only Privy mode)
-  function SolanaLoginButton() {
-    const [isProcessing, setIsProcessing] = useState(false);
-    const isSolanaEnabled = process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true';
-
-    if (!isSolanaEnabled) return null;
-
-    const handleClick = () => {
-      if (isProcessing) return;
-      setIsProcessing(true);
-      (async () => {
-        try {
-          await switchAuthSurface("privysolana");
-        } catch (error) {
-          console.error("Failed to switch to Solana surface:", error);
-          toast.error("Failed to switch to Solana sign-in. Please try again.");
-          setIsProcessing(false);
-        }
-      })();
-    };
-
-    return (
-      <Button
-        className="w-full rounded-md text-base font-semibold text-white h-11 bg-gradient-to-r from-[#9945FF] to-[#14F195] hover:from-[#8833EE] hover:to-[#0DE084] active:from-[#9945FF] active:to-[#14F195] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
-        variant="default"
-        onClick={handleClick}
-        disabled={isProcessing}
-      >
-        {isProcessing ? (
-          'Loading...'
-        ) : (
-          <span className="flex items-center gap-2">
-            <Image
-              src="/icons/solana.svg"
-              alt="Solana"
-              width={20}
-              height={20}
-              className="w-5 h-5"
-            />
-            Continue with Solana
-          </span>
-        )}
-      </Button>
-    );
-  }
-
   const handleAddFrame = useCallback(async () => {
     // Prefer Farcaster Mini App add flow when available, fallback to MiniKit's add frame
     try {
@@ -1409,30 +329,6 @@ export default function App() {
     }
   }, [addFrame]);
 
-  const handleMiniAppReconnect = useCallback(() => {
-    if (isMiniConnectRetrying) return;
-
-    setIsMiniConnectRetrying(true);
-    try {
-      const farcasterConnector = (connectors || []).find((c: any) => {
-        const id = (c?.id ?? "").toString().toLowerCase();
-        const name = (c?.name ?? "").toString().toLowerCase();
-        return id.includes("farcaster") || name.includes("farcaster");
-      }) || (connectors || [])[0];
-
-      if (farcasterConnector) {
-        connect({ connector: farcasterConnector as any });
-      } else {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.warn("Mini app reconnect failed, reloading:", error);
-      window.location.reload();
-    } finally {
-      setTimeout(() => setIsMiniConnectRetrying(false), 1200);
-    }
-  }, [connect, connectors, isMiniConnectRetrying]);
-
   const tabs = [
     { id: "dashboard" as Tab, label: "Farm", icon: Leaf },
     { id: "mint" as Tab, label: "Mint", icon: Sparkles },
@@ -1441,18 +337,6 @@ export default function App() {
     { id: "swap" as Tab, label: "Swap", icon: Repeat },
     { id: "about" as Tab, label: "About", icon: Info },
   ];
-
-  // Handle tutorial CTA tab navigation via a custom event fired externally if needed
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { tab?: Tab } | undefined;
-      if (detail?.tab) {
-        setActiveTab(detail.tab);
-      }
-    };
-    window.addEventListener('pixotchi:navigate', handler as EventListener);
-    return () => window.removeEventListener('pixotchi:navigate', handler as EventListener);
-  }, []);
 
   // Show broadcast messages (one at a time, highest priority first)
   useEffect(() => {
@@ -1485,7 +369,7 @@ export default function App() {
       <div className="flex flex-col h-dvh bg-background items-center justify-center p-4">
         <div className="flex flex-col items-center justify-center gap-4">
           <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi Logo" width={64} height={64} className="opacity-50" />
-          <BasePageLoader text="Checking wallet validation..." />
+          <BasePageLoader text="Checking wallet validation…" />
         </div>
       </div>
     );
@@ -1532,8 +416,15 @@ export default function App() {
 
               <div className="flex items-center space-x-2">
                 {context && !context.client.added && !frameAdded && (
-                  <Button variant="outline" size="sm" onClick={handleAddFrame}>
-                    <PlusCircle className="w-4 h-4" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddFrame}
+                    aria-label="Add Pixotchi Mini to your app"
+                    title="Add Pixotchi Mini to your app"
+                  >
+                    <PlusCircle className="w-4 h-4" aria-hidden="true" />
                   </Button>
                 )}
 
@@ -1541,16 +432,20 @@ export default function App() {
 
                 {isConnected ? (
                   <Button
+                    type="button"
                     variant="outline"
                     size="icon"
                     onClick={() => setShowWalletProfile(true)}
+                    aria-label="Open wallet profile"
+                    title="Open wallet profile"
                   >
                     <Image
                       src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"}
-                      alt="Profile"
+                      alt=""
                       width={24}
                       height={24}
                       className="w-6 h-6"
+                      aria-hidden="true"
                     />
                   </Button>
                 ) : null}
@@ -1600,7 +495,7 @@ export default function App() {
               </div>
               {isRestoringBaseSession ? (
                 <div className="w-full max-w-xs space-y-3">
-                  <BasePageLoader text="Restoring your Base session..." />
+                  <BasePageLoader text="Restoring your Base session…" />
                 </div>
               ) : (
               <div className="w-full max-w-xs space-y-3">
@@ -1633,7 +528,7 @@ export default function App() {
                 ) : null}
                 {!fc?.isInMiniApp ? (
                   <>
-                    <BaseAccountButton />
+                    <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
                     {/* Solana Bridge option - connects via Base-Solana bridge */}
                     {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
                       <>
@@ -1642,7 +537,7 @@ export default function App() {
                           <span className="text-xs text-muted-foreground">or bridge from Solana</span>
                           <div className="flex-1 h-px bg-border" />
                         </div>
-                        <SolanaLoginButton />
+                        <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
                       </>
                     )}
                   </>
@@ -1653,9 +548,9 @@ export default function App() {
                       variant="outline"
                       className="w-full"
                       onClick={handleMiniAppReconnect}
-                      disabled={isMiniConnectRetrying}
+                      disabled={state.isMiniConnectRetrying}
                     >
-                      {isMiniConnectRetrying ? "Retrying..." : "Retry Connection"}
+                      {state.isMiniConnectRetrying ? "Retrying…" : "Retry Connection"}
                     </Button>
                   </div>
                 )}

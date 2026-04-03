@@ -33,6 +33,7 @@ import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
+import { useWebQueryState } from "@/hooks/useWebQueryState";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -90,7 +91,17 @@ export default function LeaderboardTab() {
   const [rocksDisabledNotice, setRocksDisabledNotice] = useState<string | null>(
     gamificationDisabled ? gamificationDisabledMessage : null,
   );
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useWebQueryState<number>({
+    key: "leaderboardPage",
+    defaultValue: 1,
+    enabled: !frame?.isInMiniApp,
+    parse: (rawValue) => {
+      if (!rawValue) return null;
+      const parsed = Number.parseInt(rawValue, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    },
+    serialize: (value) => (value <= 1 ? null : value.toString()),
+  });
   const [myPlants, setMyPlants] = useState<Plant[]>([]);
   const [attackDialogOpen, setAttackDialogOpen] = useState(false);
   const [targetPlant, setTargetPlant] = useState<LeaderboardPlant | null>(null);
@@ -101,10 +112,39 @@ export default function LeaderboardTab() {
   const [reviveDialogOpen, setReviveDialogOpen] = useState(false);
   const [selectedKillerId, setSelectedKillerId] = useState<number | null>(null);
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
-  const [filterMode, setFilterMode] = useState<'all' | 'attackable' | 'dead'>('all');
-  const [showOnlyMyPlants, setShowOnlyMyPlants] = useState(false);
+  const [filterMode, setFilterMode] = useWebQueryState<'all' | 'attackable' | 'dead'>({
+    key: 'leaderboardFilter',
+    defaultValue: 'all',
+    enabled: !frame?.isInMiniApp,
+    parse: (rawValue) =>
+      rawValue === 'all' || rawValue === 'attackable' || rawValue === 'dead' ? rawValue : null,
+    serialize: (value) => (value === 'all' ? null : value),
+  });
+  const [showOnlyMyPlants, setShowOnlyMyPlants] = useWebQueryState<boolean>({
+    key: 'leaderboardMine',
+    defaultValue: false,
+    enabled: !frame?.isInMiniApp,
+    parse: (rawValue) => {
+      if (rawValue === '1') return true;
+      if (rawValue === '0' || rawValue === null) return false;
+      return null;
+    },
+    serialize: (value) => (value ? '1' : null),
+  });
   const publicClient = usePublicClient();
-  const [boardType, setBoardType] = useState<'plants' | 'lands' | 'stake' | 'rocks'>('plants');
+  const [boardType, setBoardType] = useWebQueryState<'plants' | 'lands' | 'stake' | 'rocks'>({
+    key: 'leaderboardBoard',
+    defaultValue: 'plants',
+    enabled: !frame?.isInMiniApp,
+    parse: (rawValue) =>
+      rawValue === 'plants' ||
+      rawValue === 'lands' ||
+      rawValue === 'stake' ||
+      rawValue === 'rocks'
+        ? rawValue
+        : null,
+    serialize: (value) => (value === 'plants' ? null : value),
+  });
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
 
@@ -247,7 +287,6 @@ export default function LeaderboardTab() {
         }
       } catch { }
 
-      setCurrentPage(1); // Reset to first page when data changes
     } catch (err) {
       console.error('Error fetching leaderboard data:', err);
       setError('Failed to load leaderboard data. Please try again.');
@@ -382,15 +421,11 @@ export default function LeaderboardTab() {
     }
   }, [boardType, fetchStakeLeaderboard, fetchRocksLeaderboard]);
 
-  // Reset pagination when switching board type
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [boardType]);
-
   useEffect(() => {
     if (showRocksBoard || boardType !== 'rocks') return;
+    setCurrentPage(1);
     setBoardType('plants');
-  }, [boardType, showRocksBoard]);
+  }, [boardType, setBoardType, setCurrentPage, showRocksBoard]);
 
   // Fetch user's plants for attack selection
   const fetchMyPlants = useCallback(async () => {
@@ -837,7 +872,10 @@ export default function LeaderboardTab() {
             </CardTitle>
             <ToggleGroup
               value={boardType}
-              onValueChange={(v) => setBoardType((v as any) || 'plants')}
+              onValueChange={(nextValue) => {
+                setCurrentPage(1);
+                setBoardType((nextValue as typeof boardType) || 'plants');
+              }}
               options={[
                 { value: 'plants', label: 'Plants' },
                 { value: 'lands', label: 'Lands' },

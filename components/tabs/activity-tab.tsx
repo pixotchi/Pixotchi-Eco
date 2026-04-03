@@ -36,6 +36,8 @@ import {
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { useIsSolanaWallet, useTwinAddress } from "@/components/solana";
+import { useFrameContext } from "@/lib/frame-context";
+import { useWebQueryState } from "@/hooks/useWebQueryState";
 
 type ActivityView = "all" | "my";
 type ItemMap = { [key: string]: string };
@@ -44,6 +46,8 @@ type ProcessedActivityEvent = Exclude<ActivityEvent, ItemConsumedEvent> | Bundle
 const ITEMS_PER_PAGE = 12;
 
 export default function ActivityTab() {
+  const frame = useFrameContext();
+  const isMiniApp = Boolean(frame?.isInMiniApp);
   const { address, isConnected } = useAccount();
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
@@ -54,10 +58,26 @@ export default function ActivityTab() {
   const [allActivities, setAllActivities] = useState<ProcessedActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<ActivityView>("all");
+  const [view, setView] = useWebQueryState<ActivityView>({
+    key: "activityView",
+    defaultValue: "all",
+    enabled: !isMiniApp,
+    parse: (rawValue) => (rawValue === "all" || rawValue === "my" ? rawValue : null),
+    serialize: (value) => (value === "all" ? null : value),
+  });
   const [shopItemMap, setShopItemMap] = useState<ItemMap>({});
   const [gardenItemMap, setGardenItemMap] = useState<ItemMap>({});
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useWebQueryState<number>({
+    key: "activityPage",
+    defaultValue: 1,
+    enabled: !isMiniApp,
+    parse: (rawValue) => {
+      if (!rawValue) return null;
+      const parsed = Number.parseInt(rawValue, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    },
+    serialize: (value) => (value <= 1 ? null : value.toString()),
+  });
   const { shopItems, gardenItems } = useItemCatalogs();
 
   // Request deduplication ref to prevent multiple simultaneous calls
@@ -141,7 +161,6 @@ export default function ActivityTab() {
       if (fetchActivitiesPendingRef.current === fetchKey) {
         const processedActivities = bundleItemConsumedEvents(recentActivities);
         setAllActivities(processedActivities);
-        setCurrentPage(1);
       }
     } catch (err) {
       console.error(err);
@@ -178,6 +197,10 @@ export default function ActivityTab() {
 
   // Note: Removed auto-reset effect that caused race condition when switching to 'my' view
   // The UI now handles missing wallet/address gracefully in renderContent()
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [setCurrentPage, view]);
 
   // Refresh when tab becomes visible
   useEffect(() => {
@@ -324,7 +347,10 @@ export default function ActivityTab() {
             <CardTitle>Activity (Last 24h)</CardTitle>
             <ToggleGroup
               value={view}
-              onValueChange={(v) => setView(v as 'all' | 'my')}
+              onValueChange={(nextValue) => {
+                setCurrentPage(1);
+                setView(nextValue as ActivityView);
+              }}
               options={[
                 { value: 'all', label: 'All' },
                 { value: 'my', label: 'My Activity' },

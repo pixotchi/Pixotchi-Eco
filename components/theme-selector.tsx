@@ -79,7 +79,7 @@ export function ThemeSelector() {
 
   if (!mounted) {
     // Render a placeholder to prevent layout shift
-    return <Button variant="outline" size="icon" disabled className="h-9 w-9" />;
+    return <Button variant="outline" size="icon" disabled className="h-9 w-9" aria-label="Loading theme selector" />;
   }
 
   const currentTheme = themes.find((t) => t.name === theme) ?? themes[0];
