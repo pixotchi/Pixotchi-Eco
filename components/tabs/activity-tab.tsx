@@ -198,10 +198,6 @@ export default function ActivityTab() {
   // Note: Removed auto-reset effect that caused race condition when switching to 'my' view
   // The UI now handles missing wallet/address gracefully in renderContent()
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [setCurrentPage, view]);
-
   // Refresh when tab becomes visible
   useEffect(() => {
     if (!isVisible) return;
@@ -266,6 +262,19 @@ export default function ActivityTab() {
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const currentActivities = allActivities.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    if (totalPages === 0) {
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      }
+      return;
+    }
+
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, setCurrentPage, totalPages]);
 
   const renderContent = () => {
     // Only block render if we have NO data at all
@@ -348,8 +357,16 @@ export default function ActivityTab() {
             <ToggleGroup
               value={view}
               onValueChange={(nextValue) => {
+                if (nextValue !== "all" && nextValue !== "my") {
+                  return;
+                }
+
+                if (nextValue === view) {
+                  return;
+                }
+
                 setCurrentPage(1);
-                setView(nextValue as ActivityView);
+                setView(nextValue);
               }}
               options={[
                 { value: 'all', label: 'All' },
