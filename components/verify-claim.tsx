@@ -6,11 +6,15 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CheckCircle2, AlertCircle, BadgeCheck } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useSignMessage } from 'wagmi';
 import { SiweMessage, generateNonce } from 'siwe';
 import { useFrameContext } from '@/lib/frame-context';
 import { openExternalUrl } from '@/lib/open-external';
+import {
+  VERIFY_CLAIM_LEAF_BONUS_LABEL,
+  VERIFY_CLAIM_SEED_BONUS_LABEL,
+} from '@/lib/verify-claim-config';
 
 // Base Verify requires specific configuration
 const BASE_VERIFY_CONFIG = {
@@ -44,9 +48,6 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
   // Bonus availability from status endpoint
   const [bonuses, setBonuses] = useState<{ leaf: boolean; seed: boolean }>({ leaf: false, seed: false });
-
-  // Verification state
-  const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
   // Check claim status from Redis on mount and when address changes
   useEffect(() => {
@@ -143,7 +144,6 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           setError('This account has already claimed a free plant.');
           setStep('idle');
         } else {
-          setVerificationToken(data.token);
           setStep('claiming'); // Auto-proceed to claim? Or let user click?
           // Let's auto-proceed for smoother UX
           await handleClaim(data.token);
@@ -213,8 +213,8 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   // Build dynamic reward description based on active bonuses
   const rewardDescription = (() => {
     const parts: string[] = ['a free plant'];
-    if (bonuses.leaf) parts.push('500K LEAF');
-    if (bonuses.seed) parts.push('200 SEED');
+    if (bonuses.leaf) parts.push(VERIFY_CLAIM_LEAF_BONUS_LABEL);
+    if (bonuses.seed) parts.push(VERIFY_CLAIM_SEED_BONUS_LABEL);
     return parts.join(' + ');
   })();
 
@@ -295,7 +295,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
                 handleVerify();
               }}
             >
-              I've Verified, Check Again
+              I&apos;ve Verified, Check Again
             </Button>
           </CardContent>
         </div>

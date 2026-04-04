@@ -4,6 +4,7 @@ import { createPublicClient, parseUnits } from 'viem';
 import { base as baseChain } from 'viem/chains';
 import { PIXOTCHI_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { createResilientTransport } from '@/lib/rpc-transport';
+import { VERIFY_CLAIM_SEED_BONUS_AMOUNT } from '@/lib/verify-claim-config';
 
 /**
  * Feature toggle for Base Verify claims.
@@ -15,7 +16,7 @@ const SEED_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABL
 
 // Agent smart account address for balance checks (avoids initializing full CDP SDK)
 const AGENT_ADDRESS = process.env.VERIFY_CLAIM_AGENT_ADDRESS || '';
-const SEED_BONUS_AMOUNT = parseUnits('100', 18);
+const SEED_BONUS_AMOUNT = parseUnits(VERIFY_CLAIM_SEED_BONUS_AMOUNT, 18);
 
 /**
  * GET /api/verify/status?address=0x...

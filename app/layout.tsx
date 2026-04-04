@@ -1,8 +1,5 @@
-import "@coinbase/onchainkit/styles.css";
-import "ethereum-identity-kit/css";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { coinbaseSans, pixelmix } from "./fonts";
@@ -235,7 +232,7 @@ export default function RootLayout({
         <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
       </head>
       <body className="bg-background">
-        <Providers>{children}</Providers>
+        {children}
         <Analytics />
         <SpeedInsights />
       </body>
