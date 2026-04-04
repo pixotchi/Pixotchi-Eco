@@ -315,7 +315,7 @@ export default function ActivityTab() {
 
     return (
       <div className="space-y-4">
-        <div className="space-y-2 divide-y -mx-4 px-4">
+        <div className="space-y-2 divide-y divide-border -mx-4 px-4">
           {currentActivities.map(renderActivity)}
         </div>
 

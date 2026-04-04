@@ -1,5 +1,3 @@
-import "@coinbase/onchainkit/styles.css";
-import "ethereum-identity-kit/css";
 import type { ReactNode } from "react";
 import { Providers } from "../providers";
 

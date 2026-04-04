@@ -1,3 +1,5 @@
+import "@coinbase/onchainkit/styles.css";
+import "ethereum-identity-kit/css";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";

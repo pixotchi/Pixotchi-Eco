@@ -2997,7 +2997,7 @@ export default function AdminInviteDashboard() {
                           <span className="text-xs text-muted-foreground">{notifKeysExpanded[prefix] ? '▼' : '▶'}</span>
                         </button>
                         {notifKeysExpanded[prefix] && (
-                          <div className="divide-y max-h-[300px] overflow-y-auto">
+                          <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
                             {keys.map((keyInfo: any) => (
                               <div key={keyInfo.key} className="p-2 text-xs hover:bg-muted/30 flex items-start gap-2">
                                 <div className="flex-1 min-w-0">
