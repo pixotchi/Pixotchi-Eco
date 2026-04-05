@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getBaseReadClient } from '@/lib/base-rpc';
 import { redis } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { encodeFunctionData, parseUnits } from 'viem';
-import { createPublicClient, http } from 'viem';
-import { base } from 'viem/chains';
 
 // Create public client for signature verification (supports ERC-1271)
-const publicClient = createPublicClient({
-    chain: base,
-    transport: http(process.env.NEXT_PUBLIC_RPC_NODE)
-});
+const publicClient = getBaseReadClient();
 
 // Token addresses
 const AIRDROP_TOKENS = {
@@ -101,7 +97,7 @@ export async function POST(req: NextRequest) {
             });
         } catch (verifyError) {
             console.error('[AIRDROP_CLAIM] Signature verification error:', verifyError);
-            return NextResponse.json({ error: 'Invalid signature format' }, { status: 400 });
+            return NextResponse.json({ error: 'Signature verification temporarily unavailable. Please try again.' }, { status: 503 });
         }
 
         if (!isValid) {

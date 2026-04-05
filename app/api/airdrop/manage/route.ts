@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getBaseReadClient } from '@/lib/base-rpc';
 import { redis, redisScanKeysRaw } from '@/lib/redis';
 import { logAdminAction, validateAdminKey } from '@/lib/auth-utils';
-import { createPublicClient, http, formatUnits } from 'viem';
-import { base } from 'viem/chains';
+import { formatUnits } from 'viem';
 
 // Token addresses for reference
 const AIRDROP_TOKENS = {
@@ -285,10 +285,7 @@ export async function GET(req: NextRequest) {
         // Fetch server wallet balances
         let balances = { seed: '0', leaf: '0', pixotchi: '0' };
         try {
-            const client = createPublicClient({
-                chain: base,
-                transport: http(process.env.NEXT_PUBLIC_RPC_NODE || 'https://mainnet.base.org'),
-            });
+            const client = getBaseReadClient();
 
             const [seedBal, leafBal, pixotchiBal] = await Promise.all([
                 client.readContract({

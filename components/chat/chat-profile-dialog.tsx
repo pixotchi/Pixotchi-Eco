@@ -75,10 +75,6 @@ export default function ChatProfileDialog({
       .catch((err) => {
         if (cancelled) return;
         console.error("[ChatProfileDialog] Failed to fetch plants", err);
-        // Only set error if address hasn't changed
-        if (fetchPendingRef.current === cacheKey) {
-          setPlant(null);
-        }
       })
       .finally(() => {
         if (cancelled) return;
@@ -110,4 +106,3 @@ export default function ChatProfileDialog({
     />
   );
 }
-

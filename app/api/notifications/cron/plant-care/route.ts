@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { CLIENT_ENV, SERVER_ENV } from '@/lib/env-config';
-import { getPlantsByOwnerWithRpc } from '@/lib/contracts';
+import { getPlantsByOwner } from '@/lib/contracts';
 import { z } from 'zod';
 import { differenceInSeconds } from 'date-fns';
 
@@ -9,9 +9,12 @@ import { differenceInSeconds } from 'date-fns';
 const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
 const THROTTLE_SECONDS = 12 * 60 * 60; // 12 hours cooldown between notifications
 const REDIS_KEY_PREFIX = 'notif:plant12h';
-const BATCH_SIZE = 30; // Process 30 FIDs in parallel
+const BATCH_SIZE = 10;
+const BATCH_DELAY_MS = 100;
 const NEYNAR_FIDS_CACHE_KEY = 'notif:neynar:enabled_fids';
 const NEYNAR_FIDS_CACHE_TTL = 5 * 60; // 5 minutes
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Validation Schemas (using Zod v4 stringbool for cleaner boolean parsing)
 const QuerySchema = z.object({
@@ -160,7 +163,6 @@ type FidProcessResult = {
  */
 async function processFid(
   fid: number,
-  rpcUrl: string,
   now: Date,
   debug: boolean,
   dryRun: boolean
@@ -188,7 +190,7 @@ async function processFid(
     return { fid, address: null, userThrottled: false, hasEligible: false, dueCount: 0, plants: [] };
   }
 
-  const plants = await getPlantsByOwnerWithRpc(address, rpcUrl);
+  const plants = await getPlantsByOwner(address);
   const plantDebug: Array<{ id: number; timestamp: number; left: number; due: boolean; plantThrottled: boolean }> = [];
 
   // Clear safe episodes (when plant has more than threshold time left)
@@ -289,7 +291,6 @@ export async function GET(req: NextRequest) {
     }
 
     const startedAt = Date.now();
-    const rpcUrl = 'https://base-rpc.publicnode.com';
     const now = new Date();
 
     let resolved = 0;
@@ -305,7 +306,7 @@ export async function GET(req: NextRequest) {
       const batch = fids.slice(i, i + BATCH_SIZE);
 
       const results = await Promise.allSettled(
-        batch.map(fid => processFid(fid, rpcUrl, now, debug, dryRun))
+        batch.map(fid => processFid(fid, now, debug, dryRun))
       );
 
       for (const result of results) {
@@ -332,6 +333,10 @@ export async function GET(req: NextRequest) {
       // Log progress every 10 batches
       if ((i / BATCH_SIZE) % 10 === 0) {
         console.log(`[plant-care cron] Processed ${Math.min(i + BATCH_SIZE, fids.length)}/${fids.length} FIDs`);
+      }
+
+      if (i + BATCH_SIZE < fids.length) {
+        await sleep(BATCH_DELAY_MS);
       }
     }
 

@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
-import { encodeFunctionData, maxUint256, createPublicClient, parseUnits } from 'viem';
-import { base as baseChain } from 'viem/chains';
-import { createResilientTransport } from '@/lib/rpc-transport';
+import { encodeFunctionData, maxUint256, parseUnits } from 'viem';
+import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
 import {
   VERIFY_CLAIM_LEAF_BONUS_AMOUNT,
   VERIFY_CLAIM_SEED_BONUS_AMOUNT,
@@ -167,10 +166,7 @@ export async function POST(req: NextRequest) {
       let mintedTokenId: bigint | null = null;
       
       try {
-        const publicClient = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
-        const txReceipt = await publicClient.waitForTransactionReceipt({ 
-          hash: mintReceipt.transactionHash as `0x${string}` 
-        });
+        const txReceipt = await waitForBaseReceipt(mintReceipt.transactionHash as `0x${string}`);
         
         const TRANSFER_SIG = EVM_EVENT_SIGNATURES.ERC20_TRANSFER;
         const zeroAddressTopic = EVM_TOPICS.ZERO_ADDRESS_TOPIC;
@@ -325,7 +321,7 @@ export async function POST(req: NextRequest) {
       if (SEED_BONUS_ENABLED && transferSuccess) {
         try {
           // Check agent wallet SEED balance before attempting transfer
-          const balanceClient = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
+          const balanceClient = getBaseReadClient();
           const seedBalance = await balanceClient.readContract({
             address: PIXOTCHI_TOKEN_ADDRESS,
             abi: ERC20_BALANCE_ABI,

@@ -1,15 +1,14 @@
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { createPublicClient } from 'viem';
 import { base } from 'viem/chains';
 import { SiweMessage } from 'siwe';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
 import { PrivyClient } from '@privy-io/node';
+import { getBaseReadClient } from '@/lib/base-rpc';
 import { getTwinAddress } from '@/lib/solana-twin';
 import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
 import { MINIAPP_BYPASS_ADDRESS_COOKIE, MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
-import { createResilientTransport } from '@/lib/rpc-transport';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 export type ChatSessionProvider = 'privy' | 'farcaster' | 'base';
@@ -71,10 +70,7 @@ end
 return 0
 `;
 
-const basePublicClient = createPublicClient({
-  chain: base,
-  transport: createResilientTransport(),
-});
+const basePublicClient = getBaseReadClient();
 
 export class ChatAuthError extends Error {
   status: number;

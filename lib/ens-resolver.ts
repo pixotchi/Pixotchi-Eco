@@ -1,8 +1,7 @@
-import { createPublicClient, isAddress, type PublicClient, type Transport } from 'viem';
-import { base } from 'viem/chains';
+import { isAddress } from 'viem';
+import { getBaseReadClient } from './base-rpc';
 import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
-import { createResilientTransport } from './rpc-transport';
 
 // Base ENS Registrar contract - resolves addresses to .base.eth names
 const BASE_ENS_REGISTRAR = '0x0000000000D8e504002cC26E3Ec46D81971C1664' as const;
@@ -18,18 +17,7 @@ const BASE_ENS_REGISTRAR_ABI = [
   },
 ] as const;
 
-// Create client with our resilient RPC transport (uses app's RPC system)
-let baseClient: PublicClient<Transport, typeof base> | null = null;
-
-function getBaseClient(): PublicClient<Transport, typeof base> {
-  if (!baseClient) {
-    baseClient = createPublicClient({
-      chain: base,
-      transport: createResilientTransport(),
-    });
-  }
-  return baseClient;
-}
+const getBaseClient = () => getBaseReadClient();
 
 async function readCache(key: string): Promise<string | null> {
   if (!redis) return null;

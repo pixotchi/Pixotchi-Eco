@@ -1,4 +1,5 @@
-import { CLIENT_ENV, listRpcHttpEndpoints } from './env-config';
+import { CLIENT_ENV } from './env-config';
+import { getBaseRpcMetrics, listBaseRpcEndpoints } from './base-rpc';
 import { redis, redisGetJSON, redisSetJSON } from './redis';
 import { fetchIndexerGraphQL } from './indexer-client';
 
@@ -20,6 +21,7 @@ export interface StatusSnapshot {
 }
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.STATUS_CHECK_TIMEOUT_MS || 6000);
+const RPC_TIMEOUT_MS = 3000;
 const APP_HEALTH_PATH = '/api/health';
 const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
 const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
@@ -86,8 +88,9 @@ const deriveStatus = (healthy: number, total: number): StatusLevel => {
 };
 
 async function checkRpcCluster(): Promise<StatusService> {
-  const endpoints = listRpcHttpEndpoints();
-  const timeout = DEFAULT_TIMEOUT_MS;
+  const endpoints = listBaseRpcEndpoints();
+  const liveMetrics = getBaseRpcMetrics();
+  const timeout = RPC_TIMEOUT_MS;
   const results = await Promise.all(endpoints.map(async (url) => {
     const { result, error, ms } = await measure(async () => {
       const response = await withTimeout((signal) => fetch(url, {
@@ -128,6 +131,7 @@ async function checkRpcCluster(): Promise<StatusService> {
     metrics: {
       healthyCount: healthy,
       totalCount: results.length,
+      liveMetrics,
     },
   };
 }

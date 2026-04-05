@@ -59,19 +59,34 @@ export default function BalanceCard({ className = "", variant = "default", onRef
       setStakeLoading(true);
       setNftLoading(true);
       try {
-        const [info, plants, lands] = await Promise.all([
+        const [infoResult, plantsResult, landsResult] = await Promise.allSettled([
           getStakeInfo(address),
           getPlantsByOwner(address),
           getLandsByOwner(address)
         ]);
-        setStakeInfo(info);
-        setPlantCount(plants?.length ?? 0);
-        setLandCount(lands?.length ?? 0);
+
+        if (infoResult.status === "fulfilled") {
+          setStakeInfo(infoResult.value);
+        }
+
+        if (plantsResult.status === "fulfilled") {
+          setPlantCount(plantsResult.value.length);
+        }
+
+        if (landsResult.status === "fulfilled") {
+          setLandCount(landsResult.value.length);
+        }
+
+        if (
+          infoResult.status === "rejected" &&
+          plantsResult.status === "rejected" &&
+          landsResult.status === "rejected"
+        ) {
+          throw infoResult.reason;
+        }
       } catch (err) {
         console.error('Failed to fetch wallet profile data:', err);
         setStakeInfo(null);
-        setPlantCount(0);
-        setLandCount(0);
       } finally {
         setStakeLoading(false);
         setNftLoading(false);

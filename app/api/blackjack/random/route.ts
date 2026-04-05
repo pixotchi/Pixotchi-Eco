@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, keccak256, encodePacked, type Hex } from 'viem';
+import { keccak256, encodePacked, type Hex } from 'viem';
 import { privateKeyToAccount, signMessage } from 'viem/accounts';
-import { base } from 'viem/chains';
 import { blackjackAbi } from '@/public/abi/blackjack-abi';
+import { getBaseReadClient } from '@/lib/base-rpc';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { redis, redisCompareAndSetJSON, redisDel, redisGetJSON } from '@/lib/redis';
-import { createResilientTransport, getRpcEndpoints } from '@/lib/rpc-transport';
 import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
 import { isMiniAppRequestContext } from '@/lib/miniapp-request-context';
 import { getCasinoPolicy } from '@/lib/casino-feature';
@@ -47,20 +46,6 @@ const PHASE_PLAYER_TURN = 2;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 type BlackjackActionName = 'deal' | 'hit' | 'stand' | 'double' | 'split' | 'surrender';
-
-function getBlackjackRpcEndpoints(): string[] {
-    const configuredEndpoints = getRpcEndpoints();
-    const explicitBaseRpc = process.env.BASE_RPC_URL?.trim();
-
-    // Keep BASE_RPC_URL as an optional server-side override, but still include
-    // the shared resilient endpoint list as fallbacks.
-    if (!explicitBaseRpc) return configuredEndpoints;
-
-    return [
-        explicitBaseRpc,
-        ...configuredEndpoints.filter((url) => url !== explicitBaseRpc),
-    ];
-}
 
 function getActionLockKey(landId: string, nonce: bigint): string {
     return `${ACTION_LOCK_KEY_PREFIX}${landId}:${nonce.toString()}`;
@@ -369,11 +354,7 @@ export async function POST(request: NextRequest) {
 
         // Use the shared resilient RPC transport (same endpoint set/fallback strategy
         // as the rest of the app) instead of a single hardcoded public RPC.
-        const blackjackRpcEndpoints = getBlackjackRpcEndpoints();
-        const publicClient = createPublicClient({
-            chain: base,
-            transport: createResilientTransport(blackjackRpcEndpoints),
-        });
+        const publicClient = getBaseReadClient();
 
         // Get current nonce from contract
         let currentNonce: bigint;

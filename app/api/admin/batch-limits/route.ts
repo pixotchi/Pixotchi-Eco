@@ -10,9 +10,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, encodeFunctionData } from 'viem';
-import { base } from 'viem/chains';
+import { encodeFunctionData } from 'viem';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { getBaseReadClient } from '@/lib/base-rpc';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { LAND_CONTRACT_ADDRESS, getLandsByOwner, getLandBuildingsBatch } from '@/lib/contracts';
 
@@ -62,10 +62,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const client = createPublicClient({
-      chain: base,
-      transport: http(),
-    });
+    const client = getBaseReadClient();
 
     // Get user's lands and their claimable buildings
     const lands = await getLandsByOwner(address);

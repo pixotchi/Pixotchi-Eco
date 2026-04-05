@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
-import { createPublicClient, parseUnits } from 'viem';
-import { base as baseChain } from 'viem/chains';
+import { parseUnits } from 'viem';
+import { getBaseReadClient } from '@/lib/base-rpc';
 import { PIXOTCHI_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
-import { createResilientTransport } from '@/lib/rpc-transport';
 import { VERIFY_CLAIM_SEED_BONUS_AMOUNT } from '@/lib/verify-claim-config';
 
 /**
@@ -81,7 +80,7 @@ export async function GET(req: NextRequest) {
     let seedAvailable = false;
     if (SEED_BONUS_ENABLED && AGENT_ADDRESS) {
       try {
-        const publicClient = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
+        const publicClient = getBaseReadClient();
         const balance = await publicClient.readContract({
           address: PIXOTCHI_TOKEN_ADDRESS,
           abi: ERC20_BALANCE_ABI,

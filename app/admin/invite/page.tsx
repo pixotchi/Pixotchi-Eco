@@ -1066,7 +1066,21 @@ export default function AdminInviteDashboard() {
   };
 
   // RPC status state
-  const [rpcStatus, setRpcStatus] = useState<{ endpoints: Array<{ url: string; ok: boolean; ms: number; error?: string }>; summary: any } | null>(null);
+  const [rpcStatus, setRpcStatus] = useState<{
+    endpoints: Array<{
+      url: string;
+      ok: boolean;
+      ms: number;
+      error?: string;
+      successCount: number;
+      failureCount: number;
+      lastSuccessAt: number | null;
+      lastFailureAt: number | null;
+      lastFailureMessage: string | null;
+      ewmaLatencyMs: number | null;
+    }>;
+    summary: any;
+  } | null>(null);
   const [rpcLoading, setRpcLoading] = useState(false);
   const fetchRpcStatus = async () => {
     if (!adminKey.trim()) return;
@@ -2651,7 +2665,7 @@ export default function AdminInviteDashboard() {
                   <div className="text-sm text-muted-foreground">
                     {rpcStatus ? (
                       <span>
-                        Total: {rpcStatus.summary?.total} • Healthy: {rpcStatus.summary?.healthy} • Degraded: {rpcStatus.summary?.degraded} • Avg: {rpcStatus.summary?.avgLatencyMs}ms
+                        Total: {rpcStatus.summary?.total} • Healthy: {rpcStatus.summary?.healthy} • Degraded: {rpcStatus.summary?.degraded} • Avg: {rpcStatus.summary?.avgLatencyMs}ms • Live Success: {rpcStatus.summary?.liveSuccessCount} • Live Failure: {rpcStatus.summary?.liveFailureCount}
                       </span>
                     ) : (
                       <span>Press refresh to check RPCs</span>
@@ -2672,6 +2686,8 @@ export default function AdminInviteDashboard() {
                         <div className="flex items-center gap-3 text-xs">
                           <span className={e.ok ? 'text-green-600' : 'text-red-600'}>{e.ok ? 'OK' : 'DOWN'}</span>
                           <span className="text-muted-foreground">{e.ms}ms</span>
+                          <span className="text-muted-foreground">live {e.successCount}/{e.failureCount}</span>
+                          {e.ewmaLatencyMs !== null && <span className="text-muted-foreground">ewma {e.ewmaLatencyMs}ms</span>}
                           {!e.ok && e.error && <span className="text-muted-foreground truncate max-w-[12rem]" title={e.error}>{e.error}</span>}
                         </div>
                       </div>

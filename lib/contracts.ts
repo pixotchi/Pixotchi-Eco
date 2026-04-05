@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
+import { createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import {
   Plant,
@@ -23,8 +23,7 @@ import { leafAbi } from '../public/abi/leaf-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { CLIENT_ENV } from './env-config';
-import { createResilientTransport, getPublicHealthRpc } from './rpc-transport';
-export { getRpcDiagnostics } from './rpc-transport';
+import { BaseRpcError, getBaseReadClient, waitForBaseReceipt } from './base-rpc';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
 export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);
@@ -750,42 +749,13 @@ export const KILL_COOLDOWN_ABI = [
   },
 ] as const;
 
-// Provider caching to avoid recreating clients
-let cachedReadClient: any = null;
-let cachedWriteClient: any = null;
+export const getReadClient = () => getBaseReadClient();
 
-// Create optimized read client for data fetching
-const healthRpc = getPublicHealthRpc();
-const baseWithHealth = {
-  ...base,
-  rpcUrls: {
-    default: { http: [healthRpc] },
-    public: { http: [healthRpc] },
-  },
-};
-
-export const getReadClient = () => {
-  if (!cachedReadClient) {
-    cachedReadClient = createPublicClient({
-      chain: baseWithHealth,
-      transport: createResilientTransport(), // Use all endpoints from config
-      // Slow polling to minimize background health checks; explicit calls still work immediately
-      pollingInterval: 300_000,
-    });
-  }
-  return cachedReadClient;
-};
-
-// Create optimized write client for transactions
-const getWriteClient = () => {
-  if (!cachedWriteClient) {
-    cachedWriteClient = createPublicClient({
-      chain: baseWithHealth,
-      transport: createResilientTransport([healthRpc]),
-      pollingInterval: 300_000,
-    });
-  }
-  return cachedWriteClient;
+const waitForBaseTransactionSuccess = async (
+  hash: `0x${string}`,
+): Promise<boolean> => {
+  const receipt = await waitForBaseReceipt(hash);
+  return receipt.status === 'success';
 };
 
 // Retry logic for rate limiting and network issues
@@ -800,6 +770,9 @@ export const retryWithBackoff = async <T>(
       // We can't tell which endpoint served this call from here; individual read helpers can annotate.
       return res;
     } catch (error: any) {
+      if (error instanceof BaseRpcError) {
+        throw error;
+      }
       const isRateLimit = error?.details?.includes('rate limit') ||
         error?.message?.includes('429') ||
         error?.status === 429;
@@ -1344,54 +1317,10 @@ export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
   });
 };
 
-// Explicit public-RPC variant (used by notification cron to avoid internal RPC pool)
-export const getPlantsByOwnerWithRpc = async (address: string, rpcUrl: string): Promise<Plant[]> => {
-  const readClient = createPublicClient({ chain: base, transport: createResilientTransport([rpcUrl]) });
-  const plants = await readClient.readContract({
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'getPlantsByOwnerExtended',
-    args: [address as `0x${string}`],
-  }) as any[];
-  // Fence V2 writes to the same extensions storage, so derive it from extensions
-  // No need for separate RPC call to fenceV2GetPurchaseStats
-
-  return plants.map((plant: any) => {
-    const plantId = Number(plant.id);
-    const extensions = plant.extensions || [];
-    // Derive Fence V2 state directly from extensions (same storage)
-    const fenceV2 = deriveFenceV2StateFromExtensions(extensions);
-
-    return {
-      id: plantId,
-      name: plant.name || '',
-      score: Number(plant.score),
-      status: Number(plant.status),
-      rewards: Number(plant.rewards),
-      level: Number(plant.level),
-      timeUntilStarving: Number(plant.timeUntilStarving),
-      stars: Number(plant.stars),
-      strain: Number(plant.strain),
-      timePlantBorn: plant.timePlantBorn ? plant.timePlantBorn.toString() : '0',
-      lastAttackUsed: plant.lastAttackUsed ? plant.lastAttackUsed.toString() : '0',
-      lastAttacked: plant.lastAttacked ? plant.lastAttacked.toString() : '0',
-      statusStr: plant.statusStr || '',
-      owner: typeof plant.owner === 'string' ? plant.owner.toLowerCase() : String(plant.owner || '').toLowerCase(),
-      extensions,
-      fenceV2,
-    };
-  });
-};
-
 // Get land balance
 export const getLandBalance = async (address: string): Promise<number> => {
-  try {
-    const lands = await getLandsByOwner(address);
-    return lands.length;
-  } catch (error) {
-    console.error('Error fetching land balance:', error);
-    return 0;
-  }
+  const lands = await getLandsByOwner(address);
+  return lands.length;
 };
 
 export const getLandSupply = async (): Promise<{ totalSupply: number; maxSupply: number; }> => {
@@ -1479,12 +1408,11 @@ export const getLandsByOwner = async (address: string): Promise<Land[]> => {
 
     return lands as Land[];
   } catch (error) {
-    console.error('Error fetching user lands:', error);
-    return [];
+    throw new BaseRpcError('getLandsByOwner', error);
   }
 };
 
-export const getLandById = async (landId: bigint): Promise<Land | null> => {
+export const getLandById = async (landId: bigint): Promise<Land> => {
   try {
     const client = getReadClient();
     const land = await client.readContract({
@@ -1495,8 +1423,7 @@ export const getLandById = async (landId: bigint): Promise<Land | null> => {
     });
     return land as Land;
   } catch (error) {
-    console.error('Error fetching land by id:', error);
-    return null;
+    throw new BaseRpcError('getLandById', error);
   }
 };
 
@@ -1548,7 +1475,6 @@ export const transferPlants = async (
   const from = walletClient.account.address;
   const to = getAddress(toAddress);
 
-  const writeClient = getWriteClient();
   const successIds: number[] = [];
   const failedIds: number[] = [];
 
@@ -1568,8 +1494,8 @@ export const transferPlants = async (
         account: walletClient.account,
         chain: base,
       });
-      const receipt = await writeClient.waitForTransactionReceipt({ hash });
-      if (receipt.status === 'success') successIds.push(id);
+      const success = await waitForBaseTransactionSuccess(hash);
+      if (success) successIds.push(id);
       else failedIds.push(id);
     } catch (e) {
       failedIds.push(id);
@@ -1591,7 +1517,6 @@ export const transferLands = async (
   const from = walletClient.account.address;
   const to = getAddress(toAddress);
 
-  const writeClient = getWriteClient();
   const successIds: bigint[] = [];
   const failedIds: bigint[] = [];
 
@@ -1611,8 +1536,8 @@ export const transferLands = async (
         account: walletClient.account,
         chain: base,
       });
-      const receipt = await writeClient.waitForTransactionReceipt({ hash });
-      if (receipt.status === 'success') successIds.push(id);
+      const success = await waitForBaseTransactionSuccess(hash);
+      if (success) successIds.push(id);
       else failedIds.push(id);
     } catch (e) {
       failedIds.push(id);
@@ -1677,17 +1602,18 @@ export const getFormattedTokenBalance = async (address: string): Promise<number>
 // Get formatted token balance for any ERC20 token
 export const getFormattedTokenBalanceForToken = async (address: string, tokenAddress: `0x${string}`): Promise<number> => {
   const balance = await getTokenBalanceForToken(address, tokenAddress);
-  // Try to get decimals, default to 18
+  const readClient = getReadClient();
   let decimals = 18;
   try {
-    const readClient = getReadClient();
-    decimals = await readClient.readContract({
-      address: tokenAddress,
-      abi: PIXOTCHI_TOKEN_ABI,
-      functionName: 'decimals',
-    }) as number;
-  } catch {
-    // Default to 18 if decimals call fails
+    decimals = await retryWithBackoff(async () => {
+      return await readClient.readContract({
+        address: tokenAddress,
+        abi: PIXOTCHI_TOKEN_ABI,
+        functionName: 'decimals',
+      }) as number;
+    });
+  } catch (error) {
+    console.warn(`Failed to fetch token decimals for ${tokenAddress}, using 18`, error);
   }
   return Number(balance) / (10 ** decimals);
 };
@@ -1911,60 +1837,48 @@ export const getShopItems = async (): Promise<ShopItem[]> => {
 export const approveTokenSpending = async (walletClient: WalletClient): Promise<boolean> => {
   if (!walletClient.account) throw new Error('No account connected');
 
-  return retryWithBackoff(async () => {
-    const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
+  const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
 
-    const hash = await walletClient.writeContract({
-      address: PIXOTCHI_TOKEN_ADDRESS,
-      abi: PIXOTCHI_TOKEN_ABI,
-      functionName: 'approve',
-      args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
-      account: walletClient.account!,
-      chain: base,
-    });
-
-    const writeClient = getWriteClient();
-    const receipt = await writeClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: PIXOTCHI_TOKEN_ADDRESS,
+    abi: PIXOTCHI_TOKEN_ABI,
+    functionName: 'approve',
+    args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
+    account: walletClient.account!,
+    chain: base,
   });
+
+  return waitForBaseTransactionSuccess(hash);
 };
 
 // Mint plant
 export const mintPlant = async (walletClient: WalletClient, strain: number): Promise<boolean> => {
   if (!walletClient.account) throw new Error('No account connected');
 
-  return retryWithBackoff(async () => {
-    const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'mint',
-      args: [BigInt(strain)],
-      account: walletClient.account!,
-      chain: base,
-    });
-
-    const writeClient = getWriteClient();
-    const receipt = await writeClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'mint',
+    args: [BigInt(strain)],
+    account: walletClient.account!,
+    chain: base,
   });
+
+  return waitForBaseTransactionSuccess(hash);
 };
 
 // Claim plant rewards (burns score and resets level)
 export const claimPlantRewards = async (walletClient: WalletClient, plantId: number): Promise<boolean> => {
   if (!walletClient.account) throw new Error('No account connected');
-  return retryWithBackoff(async () => {
-    const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'redeem',
-      args: [BigInt(plantId)],
-      account: walletClient.account!,
-      chain: base,
-    });
-    const writeClient = getWriteClient();
-    const receipt = await writeClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'redeem',
+    args: [BigInt(plantId)],
+    account: walletClient.account!,
+    chain: base,
   });
+  return waitForBaseTransactionSuccess(hash);
 };
 
 // Buy shop item
@@ -1975,20 +1889,16 @@ export const buyShopItem = async (
 ): Promise<boolean> => {
   if (!walletClient.account) throw new Error('No account connected');
 
-  return retryWithBackoff(async () => {
-    const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'shopBuyItem',
-      args: [BigInt(plantId), BigInt(itemId)],
-      account: walletClient.account!,
-      chain: base,
-    });
-
-    const writeClient = getWriteClient();
-    const receipt = await writeClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'shopBuyItem',
+    args: [BigInt(plantId), BigInt(itemId)],
+    account: walletClient.account!,
+    chain: base,
   });
+
+  return waitForBaseTransactionSuccess(hash);
 };
 
 // Get all shop items
@@ -2050,20 +1960,16 @@ export const buyGardenItem = async (
 ): Promise<boolean> => {
   if (!walletClient.account) throw new Error('No account connected');
 
-  return retryWithBackoff(async () => {
-    const hash = await walletClient.writeContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'buyAccessory',
-      args: [BigInt(plantId), BigInt(itemId)],
-      account: walletClient.account!,
-      chain: base,
-    });
-
-    const writeClient = getWriteClient();
-    const receipt = await writeClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PIXOTCHI_NFT_ABI,
+    functionName: 'buyAccessory',
+    args: [BigInt(plantId), BigInt(itemId)],
+    account: walletClient.account!,
+    chain: base,
   });
+
+  return waitForBaseTransactionSuccess(hash);
 };
 
 // Get swap quote with improved error handling
@@ -2167,40 +2073,37 @@ export const getEthQuoteForSeedAmount = async (seedAmount: bigint): Promise<{
 
 // Execute swap
 export const executeSwap = async (walletClient: WalletClient, ethAmount: string): Promise<boolean> => {
-  return retryWithBackoff(async () => {
-    if (!walletClient.account) throw new Error('No account connected');
+  if (!walletClient.account) throw new Error('No account connected');
 
-    const readClient = getReadClient();
-    const amountIn = parseUnits(ethAmount, 18);
+  const readClient = getReadClient();
+  const amountIn = parseUnits(ethAmount, 18);
 
-    const amountsOut = await readClient.readContract({
-      address: UNISWAP_ROUTER_ADDRESS,
-      abi: UniswapAbi,
-      functionName: 'getAmountsOut',
-      args: [amountIn, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
-    }) as bigint[];
+  const amountsOut = await readClient.readContract({
+    address: UNISWAP_ROUTER_ADDRESS,
+    abi: UniswapAbi,
+    functionName: 'getAmountsOut',
+    args: [amountIn, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
+  }) as bigint[];
 
-    const amountOutMin = amountsOut[1] * BigInt(95) / BigInt(100); // 5% slippage
-    const deadline = Math.floor(Date.now() / 1000) + 60 * 5; // 5 minutes from now
+  const amountOutMin = amountsOut[1] * BigInt(95) / BigInt(100); // 5% slippage
+  const deadline = Math.floor(Date.now() / 1000) + 60 * 5; // 5 minutes from now
 
-    const hash = await walletClient.writeContract({
-      address: UNISWAP_ROUTER_ADDRESS,
-      abi: UniswapAbi,
-      functionName: 'swapExactETHForTokens',
-      args: [
-        amountOutMin,
-        [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS],
-        walletClient.account.address,
-        BigInt(deadline)
-      ],
-      value: amountIn,
-      account: walletClient.account,
-      chain: base,
-    });
-
-    const receipt = await readClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: UNISWAP_ROUTER_ADDRESS,
+    abi: UniswapAbi,
+    functionName: 'swapExactETHForTokens',
+    args: [
+      amountOutMin,
+      [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS],
+      walletClient.account.address,
+      BigInt(deadline)
+    ],
+    value: amountIn,
+    account: walletClient.account,
+    chain: base,
   });
+
+  return waitForBaseTransactionSuccess(hash);
 };
 
 // -------------------- Fence HELPERS --------------------
@@ -2324,36 +2227,28 @@ export const buildFenceV2PurchaseCall = (plantId: number, days: number): { addre
 
 export const buyFenceV2 = async (walletClient: WalletClient, plantId: number, days: number): Promise<boolean> => {
   if (!walletClient.account) throw new Error('No account connected');
-  return retryWithBackoff(async () => {
-    const hash = await walletClient.writeContract({
-      address: FENCE_V2_EXTENSION_ADDRESS,
-      abi: fenceV2Abi,
-      functionName: 'fenceV2Purchase',
-      args: [BigInt(plantId), BigInt(days)],
-      account: walletClient.account!,
-      chain: base,
-    });
-    const writeClient = getWriteClient();
-    const receipt = await writeClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: FENCE_V2_EXTENSION_ADDRESS,
+    abi: fenceV2Abi,
+    functionName: 'fenceV2Purchase',
+    args: [BigInt(plantId), BigInt(days)],
+    account: walletClient.account!,
+    chain: base,
   });
+  return waitForBaseTransactionSuccess(hash);
 };
 
 export const setFenceV2PricePerDay = async (walletClient: WalletClient, pricePerDay: bigint): Promise<boolean> => {
   if (!walletClient.account) throw new Error('No account connected');
-  return retryWithBackoff(async () => {
-    const hash = await walletClient.writeContract({
-      address: FENCE_V2_EXTENSION_ADDRESS,
-      abi: fenceV2Abi,
-      functionName: 'fenceV2SetPricePerDay',
-      args: [pricePerDay],
-      account: walletClient.account!,
-      chain: base,
-    });
-    const writeClient = getWriteClient();
-    const receipt = await writeClient.waitForTransactionReceipt({ hash });
-    return receipt.status === 'success';
+  const hash = await walletClient.writeContract({
+    address: FENCE_V2_EXTENSION_ADDRESS,
+    abi: fenceV2Abi,
+    functionName: 'fenceV2SetPricePerDay',
+    args: [pricePerDay],
+    account: walletClient.account!,
+    chain: base,
   });
+  return waitForBaseTransactionSuccess(hash);
 };
 
 const attachFenceV2State = async (
@@ -3126,7 +3021,7 @@ export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]
 };
 
 // Get specific land owner
-export const getLandOwner = async (landId: number): Promise<string | null> => {
+export const getLandOwner = async (landId: number): Promise<string> => {
   const readClient = getReadClient();
   try {
     const owner = await retryWithBackoff(async () => {
@@ -3139,8 +3034,7 @@ export const getLandOwner = async (landId: number): Promise<string | null> => {
     });
     return owner as string;
   } catch (error) {
-    console.warn(`Failed to fetch owner for land ${landId}`, error);
-    return null;
+    throw new BaseRpcError(`getLandOwner:${landId}`, error);
   }
 };
 
@@ -3230,9 +3124,8 @@ export const routerBatchTransfer = async (
     chain: base,
   });
 
-  const writeClient = getWriteClient();
-  const receipt = await writeClient.waitForTransactionReceipt({ hash });
-  return { hash, success: receipt.status === 'success' };
+  const success = await waitForBaseTransactionSuccess(hash);
+  return { hash, success };
 };
 
 // -------------------- KILL COOLDOWN HELPERS --------------------
@@ -3628,7 +3521,7 @@ export const getCasinoLevel = async (landId: bigint): Promise<number> => {
         functionName: 'townGetBuildingsByLandId',
         args: [landId],
       });
-    }) as Array<{ id: number; level: number }>;
+    }) as unknown as Array<{ id: number; level: number }>;
 
     // Casino is building ID 6
     const casino = result.find(b => b.id === 6);
@@ -3840,9 +3733,7 @@ export const approveCasinoTokenSpending = async (
     chain: base,
   });
 
-  const writeClient = getWriteClient();
-  const receipt = await writeClient.waitForTransactionReceipt({ hash });
-  return receipt.status === 'success';
+  return waitForBaseTransactionSuccess(hash);
 };
 
 // ============================================================================
