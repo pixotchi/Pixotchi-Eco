@@ -92,8 +92,8 @@ export const getRpcConfig = () => {
 
   const allowDuplicateVendors = process.env.ALLOW_RPC_VENDOR_DUPLICATES === 'true';
   validateBaseRpcEndpointDiversity(endpoints, {
-    allowDuplicateVendors,
-    minUniqueVendors: 4,
+    maxEndpointsPerVendor: allowDuplicateVendors ? Number.POSITIVE_INFINITY : 2,
+    minUniqueVendors: 3,
   });
 
   return { endpoints };

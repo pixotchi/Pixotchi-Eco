@@ -78,10 +78,10 @@ export const buildBaseRpcEndpointDescriptors = (
 export const validateBaseRpcEndpointDiversity = (
   urls: string[],
   {
-    allowDuplicateVendors = false,
-    minUniqueVendors = 4,
+    maxEndpointsPerVendor = 2,
+    minUniqueVendors = 3,
   }: {
-    allowDuplicateVendors?: boolean;
+    maxEndpointsPerVendor?: number;
     minUniqueVendors?: number;
   } = {},
 ): BaseRpcVendorDiversityReport => {
@@ -97,22 +97,24 @@ export const validateBaseRpcEndpointDiversity = (
     );
   }
 
-  const duplicateHosts = [...hostCounts.entries()]
-    .filter(([, count]) => count > 1)
-    .map(([host]) => host);
-  const duplicateVendors = [...vendorCounts.entries()]
-    .filter(([, count]) => count > 1)
-    .map(([vendor]) => vendor);
+  const duplicateHostEntries = [...hostCounts.entries()].filter(
+    ([, count]) => count > 1,
+  );
+  const duplicateVendorEntries = [...vendorCounts.entries()].filter(
+    ([, count]) => count > 1,
+  );
+  const duplicateHosts = duplicateHostEntries.map(([host]) => host);
+  const duplicateVendors = duplicateVendorEntries.map(([vendor]) => vendor);
 
-  if (duplicateHosts.length > 0) {
-    throw new Error(
-      `Base RPC endpoints must be unique by host. Duplicate hosts: ${duplicateHosts.join(', ')}`,
-    );
-  }
+  const vendorOverLimitEntries = duplicateVendorEntries.filter(
+    ([, count]) => count > maxEndpointsPerVendor,
+  );
 
-  if (!allowDuplicateVendors && duplicateVendors.length > 0) {
+  if (vendorOverLimitEntries.length > 0) {
     throw new Error(
-      `Base RPC endpoints must use unique vendors unless ALLOW_RPC_VENDOR_DUPLICATES=true. Duplicate vendors: ${duplicateVendors.join(', ')}`,
+      `Base RPC endpoints may use at most ${maxEndpointsPerVendor} endpoints per vendor. Over-limit vendors detected: ${vendorOverLimitEntries
+        .map(([vendor, count]) => `${vendor} (${count}x)`)
+        .join(', ')}`,
     );
   }
 
