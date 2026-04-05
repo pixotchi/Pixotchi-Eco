@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { SERVER_ENV } from '@/lib/env-config';
-import { getPlantsByOwnerWithRpc } from '@/lib/contracts';
+import { getPlantsByOwner } from '@/lib/contracts';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { differenceInSeconds } from 'date-fns';
 
@@ -9,6 +9,10 @@ const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
 const REDIS_KEY_PREFIX = 'notif:plant12h';
 const NEYNAR_FIDS_CACHE_KEY = 'notif:neynar:enabled_fids';
 const NEYNAR_FIDS_CACHE_TTL = 5 * 60; // 5 minutes
+const BATCH_CONCURRENCY = 10;
+const BATCH_DELAY_MS = 100;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Fetch ALL enabled FIDs from Neynar with proper pagination.
@@ -84,7 +88,6 @@ async function fetchEnabledFids(): Promise<number[]> {
  */
 async function processFidsBatch(
     fids: number[],
-    rpcUrl: string,
     now: Date
 ): Promise<{
     eligible: Array<{
@@ -108,7 +111,6 @@ async function processFidsBatch(
         wouldNotify: number;
     };
 }> {
-    const CONCURRENCY = 30; // Process 30 FIDs in parallel for speed
     const eligible: Array<{
         fid: number;
         address: string;
@@ -130,8 +132,8 @@ async function processFidsBatch(
     let wouldNotify = 0;
 
     // Process in batches with concurrency limit
-    for (let i = 0; i < fids.length; i += CONCURRENCY) {
-        const batch = fids.slice(i, i + CONCURRENCY);
+    for (let i = 0; i < fids.length; i += BATCH_CONCURRENCY) {
+        const batch = fids.slice(i, i + BATCH_CONCURRENCY);
 
         const results = await Promise.allSettled(batch.map(async (fid) => {
             // Resolve address
@@ -157,7 +159,7 @@ async function processFidsBatch(
             if (!address) return null;
 
             // Get plants
-            const plants = await getPlantsByOwnerWithRpc(address, rpcUrl);
+            const plants = await getPlantsByOwner(address);
             if (!plants?.length) return { fid, address, plants: [], hasEligible: false };
 
             const plantDetails = await Promise.all(plants.map(async p => {
@@ -234,6 +236,10 @@ async function processFidsBatch(
                 }
             }
         }
+
+        if (i + BATCH_CONCURRENCY < fids.length) {
+            await sleep(BATCH_DELAY_MS);
+        }
     }
 
     return {
@@ -288,12 +294,11 @@ export async function GET(request: NextRequest) {
         const totalFids = allFids.length;
         const paginatedFids = targetFid ? allFids : (limit ? allFids.slice(offset, offset + limit) : allFids);
 
-        const rpcUrl = 'https://base-rpc.publicnode.com';
         const now = new Date();
         const startTime = Date.now();
 
         // Process with parallel batching
-        const { eligible, stats } = await processFidsBatch(paginatedFids, rpcUrl, now);
+        const { eligible, stats } = await processFidsBatch(paginatedFids, now);
 
         const processingTime = Date.now() - startTime;
 

@@ -7,15 +7,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, formatUnits, type Address } from 'viem';
-import { base } from 'viem/chains';
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { formatUnits, type Address } from 'viem';
 
 // Segment config: Always fetch fresh onchain data
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
-
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;
@@ -54,7 +52,7 @@ export async function GET(request: NextRequest) {
   if (accessDenied) return accessDenied;
 
   try {
-    const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+    const publicClient = getBaseReadClient();
 
     const results: any = {
       pools: {},
@@ -196,4 +194,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

@@ -5,11 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccount, useWalletClient } from "wagmi";
+import { getBaseReadClient, waitForBaseReceipt } from "@/lib/base-rpc";
 import { getPlantsByOwner, getLandsByOwner, transferPlants, transferLands, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
 import { isAddress, getAddress, encodeFunctionData } from "viem";
 import { toast } from "react-hot-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePublicClient } from "wagmi";
 import { useDebounce } from "@/hooks/useDebounce";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
@@ -24,7 +24,7 @@ interface TransferAssetsDialogProps {
 export default function TransferAssetsDialog({ open, onOpenChange }: TransferAssetsDialogProps) {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  const basePublicClient = useMemo(() => getBaseReadClient(), []);
   const [destination, setDestination] = useState("");
   const [loading, setLoading] = useState(false);
   const [counts, setCounts] = useState<{ plants: number; lands: number }>({ plants: 0, lands: 0 });
@@ -84,16 +84,16 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           setSelectedPlantIds(plants.map((p) => p.id));
           setSelectedLandIds(lands.map((l) => l.tokenId.toString()));
           // Check router approvals when available
-          if (routerAvailable && publicClient) {
+          if (routerAvailable) {
             try {
               const [ap1, ap2] = await Promise.all([
-                publicClient.readContract({
+                basePublicClient.readContract({
                   address: PIXOTCHI_NFT_ADDRESS,
                   abi: [{ inputs: [{name:'owner',type:'address'},{name:'operator',type:'address'}], name:'isApprovedForAll', outputs:[{name:'',type:'bool'}], stateMutability:'view', type:'function' }],
                   functionName: 'isApprovedForAll',
                   args: [address as `0x${string}`, BATCH_ROUTER_ADDRESS],
                 }) as Promise<boolean>,
-                publicClient.readContract({
+                basePublicClient.readContract({
                   address: LAND_CONTRACT_ADDRESS,
                   abi: [{ inputs: [{name:'owner',type:'address'},{name:'operator',type:'address'}], name:'isApprovedForAll', outputs:[{name:'',type:'bool'}], stateMutability:'view', type:'function' }],
                   functionName: 'isApprovedForAll',
@@ -108,14 +108,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
         }
       } catch (e) {
         if (!active) return;
-        // Only set error if address hasn't changed
-        if (loadCountsPendingRef.current === address) {
-          setCounts({ plants: 0, lands: 0 });
-          setPlantsList([]);
-          setLandsList([]);
-          setSelectedPlantIds([]);
-          setSelectedLandIds([]);
-        }
+        console.error("Failed to refresh transferable assets:", e);
       } finally {
         if (active) {
           // Clear pending flag only if address hasn't changed
@@ -134,7 +127,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
         loadCountsPendingRef.current = null;
       }
     };
-  }, [open, address, routerAvailable, publicClient]);
+  }, [open, address, routerAvailable, basePublicClient]);
 
   const isValidAddress = useMemo(() => {
     try {
@@ -458,7 +451,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                         account: walletClient.account!,
                         chain: undefined,
                       });
-                      await publicClient!.waitForTransactionReceipt({ hash });
+                      await waitForBaseReceipt(hash);
                       setApprovals(s => ({ ...s, plants: true }));
                       toast.success('Plants approved');
                     } catch (e: any) {
@@ -494,7 +487,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                         account: walletClient.account!,
                         chain: undefined,
                       });
-                      await publicClient!.waitForTransactionReceipt({ hash });
+                      await waitForBaseReceipt(hash);
                       setApprovals(s => ({ ...s, lands: true }));
                       toast.success('Lands approved');
                     } catch (e: any) {

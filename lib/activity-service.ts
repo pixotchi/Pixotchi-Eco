@@ -677,10 +677,19 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
 }
 
 export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
-  const userPlants = await getPlantsByOwner(address);
+  const [plantsResult, landsResult] = await Promise.allSettled([
+    getPlantsByOwner(address),
+    getLandsByOwner(address),
+  ]);
+
+  if (plantsResult.status === 'rejected' && landsResult.status === 'rejected') {
+    throw plantsResult.reason;
+  }
+
+  const userPlants = plantsResult.status === 'fulfilled' ? plantsResult.value : [];
   const plantIds = userPlants.map(p => p.id);
 
-  const userLands = await getLandsByOwner(address);
+  const userLands = landsResult.status === 'fulfilled' ? landsResult.value : [];
   const landIds = userLands.map(l => l.tokenId.toString());
 
   if (plantIds.length === 0 && landIds.length === 0) {

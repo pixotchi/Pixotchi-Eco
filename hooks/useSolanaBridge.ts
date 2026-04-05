@@ -140,7 +140,7 @@ async function getMintPriceInSeed(strain: number): Promise<bigint> {
     address: PIXOTCHI_NFT,
     abi: GET_ALL_STRAIN_INFO_ABI,
     functionName: 'getAllStrainInfo',
-  }) as Array<{ id: bigint; mintPrice: bigint; name: string }>;
+  }) as unknown as Array<{ id: bigint; mintPrice: bigint; name: string }>;
 
   const strainData = strains.find(s => Number(s.id) === strain);
   if (!strainData) {

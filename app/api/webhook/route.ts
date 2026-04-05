@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { event, notificationDetails, fid } = body;
+    const { fid, event: eventData } = body;
+    const { event, notificationDetails } = eventData;
 
     switch (event) {
       case 'miniapp_added':

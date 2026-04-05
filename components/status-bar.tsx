@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { showMiniAppRequiredToast } from "@/lib/miniapp-required-toast";
+import { onStakingDialogOpen, openTasksDialog } from "@/lib/app-events";
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
   const num = parseFloat(formatUnits(amount, decimals));
@@ -28,7 +29,6 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   const frame = useFrameContext();
 
   const [stakingOpen, setStakingOpen] = useState(false);
-  const [tasksOpen, setTasksOpen] = useState(false);
   const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
   const showTasksButton = !gamificationPolicy.disabled;
 
@@ -39,21 +39,8 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
 
   // Allow other components to open the staking dialog (e.g., Stake House building)
   useEffect(() => {
-    const openStaking = () => setStakingOpen(true);
-    window.addEventListener('staking:open', openStaking as EventListener);
-    return () => window.removeEventListener('staking:open', openStaking as EventListener);
+    return onStakingDialogOpen(() => setStakingOpen(true));
   }, []);
-
-  // Open About tab's tasks modal via a global event so we reuse that UI
-  useEffect(() => {
-    if (!tasksOpen) return;
-    try {
-      window.dispatchEvent(new CustomEvent('pixotchi:openTasks' as any));
-    } catch { }
-    // Close flag after dispatch to avoid side-effects during render
-    const t = setTimeout(() => setTasksOpen(false), 0);
-    return () => clearTimeout(t);
-  }, [tasksOpen]);
 
   const seedValue = formatTokenShort(seed);
   const leafValue = formatTokenShort(leaf);
@@ -77,7 +64,7 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
       return;
     }
 
-    setTasksOpen(true);
+    openTasksDialog();
   };
 
   return (
@@ -117,7 +104,6 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
                 onClick={handleTasksClick}
                 className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
                 aria-label="Open tasks"
-                aria-expanded={tasksOpen}
                 aria-haspopup="dialog"
               >
                 Tasks
@@ -140,9 +126,6 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
         </div>
       </div>
       <StakingDialog open={stakingOpen} onOpenChange={setStakingOpen} />
-      {tasksOpen && (
-        <div className="sr-only" aria-hidden />
-      )}
     </div>
   );
 }

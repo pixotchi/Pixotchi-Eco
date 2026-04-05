@@ -10,6 +10,7 @@ import { getReadClient } from '@/lib/contracts';
 import type { Hex } from 'viem';
 import { getGamificationPolicy, isMiniAppGamificationContext } from '@/lib/gamification-feature';
 import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
+import { getBaseTransactionReceipt } from '@/lib/base-rpc';
 
 const DEFAULT_ORIGINS = [
   process.env.NEXT_PUBLIC_URL,
@@ -77,14 +78,13 @@ function sleep(ms: number): Promise<void> {
  * Base blocks are fast but RPC indexing can lag behind.
  */
 async function getTransactionReceiptWithRetry(
-  client: ReturnType<typeof getReadClient>,
   txHash: Hex,
   maxAttempts = 3,
   delayMs = 1000
-): Promise<Awaited<ReturnType<typeof client.getTransactionReceipt>> | null> {
+): Promise<Awaited<ReturnType<typeof getBaseTransactionReceipt>> | null> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const receipt = await client.getTransactionReceipt({ hash: txHash });
+      const receipt = await getBaseTransactionReceipt(txHash);
       if (receipt) return receipt;
     } catch (error: any) {
       // Check if it's a "not found" or "indexing in progress" error
@@ -120,8 +120,7 @@ async function validateOnchainProof(address: string, proof: GmProgressProof | un
   }
 
   try {
-    const client = getReadClient();
-    const receipt = await getTransactionReceiptWithRetry(client, txHash);
+    const receipt = await getTransactionReceiptWithRetry(txHash);
     if (!receipt) {
       return false; // Transaction not found after retries
     }

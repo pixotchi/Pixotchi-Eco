@@ -9,12 +9,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, keccak256, encodeAbiParameters, toHex, padHex, encodeFunctionData, type Hex, type Address } from 'viem';
-import { base } from 'viem/chains';
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { keccak256, encodeAbiParameters, toHex, padHex, encodeFunctionData, type Hex, type Address } from 'viem';
 import { Connection, PublicKey } from '@solana/web3.js';
 
 const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 
 const BRIDGE_CONTRACT = '0x3eff766C76a1be2Ce1aCF2B69c78bCae257D5188' as Address;
 const BRIDGE_VALIDATOR = '0xAF24c1c24Ff3BF1e6D882518120fC25442d6794B' as Address;
@@ -78,7 +77,7 @@ export async function GET(request: NextRequest) {
     const { outerHash, evmMessage } = buildEvmMessage(pubkey, outgoingMessage, BigInt(gasLimit));
 
     // Check current status on Base
-    const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+    const publicClient = getBaseReadClient();
 
     const [isValidated, isSuccess, isFailed] = await Promise.all([
       publicClient.readContract({

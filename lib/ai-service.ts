@@ -1,4 +1,4 @@
-import { redis } from './redis';
+import { redis, redisScanKeysRaw } from './redis';
 import { nanoid } from 'nanoid';
 import { AIChatMessage, AIConversation, AIUsageStats, AICostMetrics } from './types';
 import { getCurrentAIProvider, getCurrentModelConfig, validateAIConfig } from './ai-config';
@@ -134,7 +134,7 @@ export async function getOrCreateConversation(address: string, firstMessage?: st
 
     // Fallback: check legacy keys pattern if no index found
     // This provides backward compatibility during migration
-    const conversationKeys = await redis.keys(`ai:conversations:${lowerAddress}:*`);
+    const conversationKeys = await redisScanKeysRaw(`ai:conversations:${lowerAddress}:*`);
     if (conversationKeys.length > 0) {
       const legacyId = conversationKeys[0].split(':')[3];
       // Index it for next time
@@ -261,7 +261,7 @@ export async function getAIConversationMessages(conversationId: string, limit: n
 
     // 2. Fallback to KEYS if List is empty (migration path)
     if (messageKeys.length === 0) {
-      const legacyKeys = await redis.keys(`ai:messages:${conversationId}:*`);
+      const legacyKeys = await redisScanKeysRaw(`ai:messages:${conversationId}:*`);
       if (legacyKeys.length > 0) {
         // Sort keys by timestamp (ascending)
         legacyKeys.sort((a, b) => {
@@ -499,7 +499,7 @@ export async function getAllAIConversations(): Promise<AIConversation[]> {
 
     // Fallback to KEYS for migration if index empty
     if (conversationKeys.length === 0) {
-      conversationKeys = await redis.keys('ai:conversations:*');
+      conversationKeys = await redisScanKeysRaw('ai:conversations:*');
       // Filter out non-conversation keys (like indices)
       conversationKeys = conversationKeys.filter(k => k.split(':').length === 4);
     }
@@ -564,7 +564,7 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
 
     // Fallback if index empty
     if (usageKeys.length === 0) {
-      usageKeys = await redis.keys(`ai:usage:*:${today}`);
+      usageKeys = await redisScanKeysRaw(`ai:usage:*:${today}`);
     }
 
     if (usageKeys.length > 0) {
@@ -616,13 +616,13 @@ export async function deleteAIConversation(conversationId: string): Promise<bool
     }
 
     // Also clean up legacy keys if any remain
-    const legacyKeys = await redis.keys(`ai:messages:${conversationId}:*`);
+    const legacyKeys = await redisScanKeysRaw(`ai:messages:${conversationId}:*`);
     if (legacyKeys.length > 0) {
       pipeline.del(...legacyKeys);
     }
 
     // 2. Delete conversation metadata
-    const conversationKeys = await redis.keys(`ai:conversations:*:${conversationId}`);
+    const conversationKeys = await redisScanKeysRaw(`ai:conversations:*:${conversationId}`);
     if (conversationKeys.length > 0) {
       pipeline.del(...conversationKeys);
       // Also remove from index

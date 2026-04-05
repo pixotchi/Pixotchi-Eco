@@ -7,10 +7,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, type Address } from 'viem';
-import { base } from 'viem/chains';
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { type Address } from 'viem';
 
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 const PIXOTCHI = '0xeb4e16c804AE9275a655AbBc20cD0658A91F9235' as Address;
 
 const PIXOTCHI_ABI = [
@@ -30,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+    const publicClient = getBaseReadClient();
 
     // Check what adapter is registered in Pixotchi
     let registeredAdapter: string | null = null;
@@ -80,4 +79,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

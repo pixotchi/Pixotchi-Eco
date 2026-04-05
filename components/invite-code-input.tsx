@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,14 +20,39 @@ export default function InviteCodeInput({
   initialCode = '', 
   autoSubmit = false 
 }: InviteCodeInputProps) {
+  const inputId = useId();
+  const helperId = useId();
+  const errorId = useId();
+  const sessionId = useId();
   const { address } = useAccount();
-  const { publicChatAuthenticated, publicChatLoading } = useChat();
+  const { publicChatState, retryPublicChatSession } = useChat();
   const [code, setCode] = useState(initialCode);
   const [isValidating, setIsValidating] = useState(false);
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const requiresSecureSession = Boolean(address);
-  const sessionUnavailable = requiresSecureSession && !publicChatAuthenticated;
+  const sessionUnavailable = requiresSecureSession && publicChatState !== 'ready';
+  const sessionStatusText = !requiresSecureSession
+    ? 'Secure session will start after wallet connection.'
+    : publicChatState === 'booting'
+      ? 'Finishing secure session setup…'
+      : publicChatState === 'error'
+        ? 'Secure session unavailable. Retry secure session setup or reconnect your wallet.'
+        : publicChatState === 'ready'
+          ? 'Secure session ready.'
+          : 'Secure session is not required yet.';
+  const statusText = isValidating
+    ? 'Validating invite code…'
+    : isValid === true
+      ? 'Invite code accepted.'
+      : isValid === false
+        ? 'Invite code rejected.'
+        : 'Invite code input ready.';
+  const describedBy = [
+    helperId,
+    errorMessage ? errorId : null,
+    requiresSecureSession ? sessionId : null,
+  ].filter(Boolean).join(' ');
 
   // Auto-submit if initial code is provided and autoSubmit is true
   useEffect(() => {
@@ -53,9 +78,11 @@ export default function InviteCodeInput({
     }
 
     if (sessionUnavailable) {
-      const message = publicChatLoading
-        ? 'Finishing secure session setup. Please try again in a moment.'
-        : 'Your secure session is not ready. Please reconnect and try again.';
+      const message = publicChatState === 'booting'
+        ? 'Finishing secure session setup… Please try again in a moment.'
+        : publicChatState === 'error'
+          ? 'Your secure session is not ready. Retry secure session setup or reconnect and try again.'
+          : 'Your secure session is not ready yet.';
       setErrorMessage(message);
       setIsValid(false);
       toast.error(message);
@@ -152,7 +179,16 @@ export default function InviteCodeInput({
       <CardContent className="p-4">
         <div className="space-y-4">
           <div className="relative">
+            <label htmlFor={inputId} className="sr-only">
+              Invite code
+            </label>
             <Input
+              id={inputId}
+              name="inviteCode"
+              autoComplete="one-time-code"
+              autoCapitalize="characters"
+              spellCheck={false}
+              inputMode="text"
               placeholder="Enter code"
               value={code}
               onChange={(e) => handleCodeChange(e.target.value)}
@@ -161,25 +197,40 @@ export default function InviteCodeInput({
               style={{ fontFamily: "var(--font-pixel, sans-serif)" }}
               maxLength={8}
               disabled={isValidating}
+              aria-describedby={describedBy}
+              aria-invalid={Boolean(errorMessage)}
+              aria-busy={isValidating}
             />
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+            <div
+              className="absolute right-3 top-1/2 transform -translate-y-1/2"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
               {getStatusIcon()}
+              <span className="sr-only">{statusText}</span>
             </div>
           </div>
 
           {errorMessage && (
-            <p className="text-sm text-red-600 text-center">{errorMessage}</p>
-          )}
-
-          {sessionUnavailable && (
-            <p className="text-xs text-muted-foreground text-center">
-              {publicChatLoading
-                ? 'Finishing secure session setup...'
-                : 'Secure session unavailable. Reconnect your wallet and try again.'}
+            <p id={errorId} className="text-sm text-red-600 text-center" role="alert">
+              {errorMessage}
             </p>
           )}
 
-          <p className="text-xs text-muted-foreground text-center">
+          {requiresSecureSession && (
+            <p id={sessionId} className="text-xs text-muted-foreground text-center" aria-live="polite">
+              {sessionStatusText}
+            </p>
+          )}
+
+          {requiresSecureSession && publicChatState === 'error' && (
+            <Button type="button" variant="outline" onClick={retryPublicChatSession} className="w-full">
+              Retry Secure Session
+            </Button>
+          )}
+
+          <p id={helperId} className="text-xs text-muted-foreground text-center">
             You can get code by asking our current farmers!
           </p>
 
@@ -188,7 +239,7 @@ export default function InviteCodeInput({
             disabled={!code || code.length !== 8 || isValidating || sessionUnavailable}
             className="w-full"
           >
-            {isValidating ? 'Validating...' : 'Validate Code'}
+            {isValidating ? 'Validating…' : 'Validate Code'}
           </Button>
 
           {!address && (

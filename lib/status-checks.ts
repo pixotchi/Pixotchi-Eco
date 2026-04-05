@@ -1,4 +1,5 @@
-import { CLIENT_ENV, listRpcHttpEndpoints } from './env-config';
+import { CLIENT_ENV } from './env-config';
+import { getBaseRpcStatusSnapshot } from './base-rpc';
 import { redis, redisGetJSON, redisSetJSON } from './redis';
 import { fetchIndexerGraphQL } from './indexer-client';
 
@@ -86,48 +87,46 @@ const deriveStatus = (healthy: number, total: number): StatusLevel => {
 };
 
 async function checkRpcCluster(): Promise<StatusService> {
-  const endpoints = listRpcHttpEndpoints();
-  const timeout = DEFAULT_TIMEOUT_MS;
-  const results = await Promise.all(endpoints.map(async (url) => {
-    const { result, error, ms } = await measure(async () => {
-      const response = await withTimeout((signal) => fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] }),
-        cache: 'no-store',
-        signal,
-      }), timeout);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const json = await response.json();
-      if (!json?.result) {
-        throw new Error('Invalid response');
-      }
-      return json.result;
-    });
-    return {
-      ok: !error,
-      ms,
-      error: error ? (error?.name === 'AbortError' ? 'timeout' : error?.message || 'error') : undefined,
-    };
-  }));
-
-  const healthy = results.filter(r => r.ok).length;
-  const status = deriveStatus(healthy, results.length);
-  const avgHealthyLatency = healthy > 0
-    ? Math.round(results.filter(r => r.ok).reduce((sum, r) => sum + (r.ms || 0), 0) / healthy)
-    : undefined;
+  const snapshot = await getBaseRpcStatusSnapshot({ refreshProbe: true });
+  const healthy = snapshot.summary.healthy;
+  const total = snapshot.summary.total;
+  const status = deriveStatus(healthy, total);
+  const avgHealthyLatency = snapshot.summary.avgLatencyMs ?? undefined;
+  const coolingDown = snapshot.summary.coolingDown;
 
   return {
     id: 'rpc',
     label: 'RPC Cluster',
     status,
     latencyMs: avgHealthyLatency,
-    details: `${healthy}/${results.length || 1} endpoints responsive`,
+    details: `${healthy}/${total || 1} endpoints passing probe + read checks${coolingDown > 0 ? ` • ${coolingDown} cooling down` : ''}`,
     metrics: {
+      coolingDown,
       healthyCount: healthy,
-      totalCount: results.length,
+      totalCount: total,
+      uniqueVendorCount: snapshot.summary.uniqueVendorCount,
+      rankedUrls: snapshot.rankedUrls,
+      endpoints: snapshot.endpoints.map((endpoint) => ({
+        error:
+          endpoint.probe.lastFailureMessage ??
+          endpoint.read.lastFailureMessage ??
+          null,
+        ewmaLatencyMs:
+          endpoint.probe.ewmaLatencyMs ??
+          endpoint.read.ewmaLatencyMs ??
+          null,
+        logHealthy: endpoint.log.healthy,
+        logCoolingDown: endpoint.log.coolingDown,
+        probeHealthy: endpoint.probe.healthy,
+        probeCoolingDown: endpoint.probe.coolingDown,
+        rank: endpoint.rank,
+        readHealthy: endpoint.read.healthy,
+        readCoolingDown: endpoint.read.coolingDown,
+        receiptHealthy: endpoint.receipt.healthy,
+        receiptCoolingDown: endpoint.receipt.coolingDown,
+        url: endpoint.url,
+        vendor: endpoint.vendor,
+      })),
     },
   };
 }

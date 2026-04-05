@@ -1,10 +1,11 @@
 "use client";
 
-import { createContext, useContext, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, ReactNode } from 'react';
 import { useAccount, useReadContracts } from 'wagmi';
 import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { leafAbi } from '@/public/abi/leaf-abi';
 import { useSolanaWalletContext } from '@/lib/solana-wallet-context';
+import { onBalanceRefresh } from '@/lib/app-events';
 
 export interface BalanceContextType {
   seedBalance: bigint;
@@ -15,24 +16,6 @@ export interface BalanceContextType {
 }
 
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined);
-
-// Debounce utility function for user-initiated rapid refreshes
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeoutId: NodeJS.Timeout | null = null;
-
-  return function debounced(...args: Parameters<T>) {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    timeoutId = setTimeout(() => {
-      func(...args);
-      timeoutId = null;
-    }, wait);
-  };
-}
 
 export function BalanceProvider({ children }: { children: ReactNode }) {
   const { address: evmAddress, isConnected: isEvmConnected } = useAccount();
@@ -45,7 +28,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const isConnected = isEvmConnected || isSolanaConnected;
 
   // Use wagmi's useReadContracts for automatic fetching, caching, and deduplication
-  const { data, refetch, isLoading: isWagmiLoading, isRefetching } = useReadContracts({
+  const { data, refetch, isLoading: isWagmiLoading } = useReadContracts({
     contracts: [
       {
         address: PIXOTCHI_TOKEN_ADDRESS,
@@ -77,30 +60,17 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const leafBalance = data?.[1]?.result as bigint ?? BigInt(0);
   const pixotchiBalance = data?.[2]?.result as bigint ?? BigInt(0);
 
-  // Expose a safe global refresher for non-React callers
-  const handleRefresher = useCallback(async () => {
-    await refetch();
-  }, [refetch]);
-
   useEffect(() => {
-    try {
-      (window as any).__pixotchi_refresh_balances__ = handleRefresher;
-    } catch { }
-
-    // Listen for transaction-triggered refresh events
-    const handleRefreshEvent = () => {
+    const unsubscribe = onBalanceRefresh((detail) => {
       // Small delay to allow blockchain state to propagate
       // Base has fast 1-2 second block times, so 500ms is sufficient
       setTimeout(() => {
         refetch();
-      }, 500);
-    };
+      }, detail?.delayMs ?? 500);
+    });
 
-    window.addEventListener('balances:refresh', handleRefreshEvent);
-    return () => {
-      window.removeEventListener('balances:refresh', handleRefreshEvent);
-    };
-  }, [handleRefresher, refetch]);
+    return unsubscribe;
+  }, [refetch]);
 
 
   const value = {

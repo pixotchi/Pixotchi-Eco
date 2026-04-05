@@ -17,6 +17,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { keccak256, encodePacked, toHex, hexToBytes, parseAbiItem, RpcRequestError } from "viem";
 import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
+import { getBaseLogClient } from "@/lib/base-rpc";
 
 type ArcadeDialogProps = {
   open: boolean;
@@ -142,6 +143,7 @@ const GameSelector = ({
 export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const baseLogClient = useMemo(() => getBaseLogClient(), []);
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
@@ -331,10 +333,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   }, [open, cooldown.normal, cooldown.star]);
 
   const enrichPendingFromLogs = useCallback(async () => {
-    if (!publicClient || !plant || !address) return null;
+    if (!plant || !address) return null;
 
     try {
-      const currentBlock = await publicClient.getBlockNumber();
+      const currentBlock = await baseLogClient.getBlockNumber();
       const lookback = BigInt(LOG_LOOKBACK_BLOCKS);
       const fallbackFrom = currentBlock > lookback ? currentBlock - lookback : BigInt("0");
       const lastSeen = lastSeenCommitBlockRef.current != null
@@ -368,18 +370,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         const baseTo = filterBase.toBlock ?? currentBlock;
 
         const execute = async (from: bigint, to: bigint) =>
-          publicClient.getLogs({
+          baseLogClient.getLogs({
             ...filterBase,
             fromBlock: from,
             toBlock: to,
             events: [event],
             ...argsFilter,
-          } as Parameters<typeof publicClient.getLogs>[0]);
+          } as Parameters<typeof baseLogClient.getLogs>[0]);
 
         const fetchChunk = async (
           from: bigint,
           to: bigint,
-        ): Promise<Awaited<ReturnType<typeof publicClient.getLogs>>> => {
+        ): Promise<Awaited<ReturnType<typeof baseLogClient.getLogs>>> => {
           try {
             return await execute(from, to);
           } catch (error) {
@@ -405,7 +407,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           cursor = to + BigInt(1);
         }
 
-        const chunkResults: Awaited<ReturnType<typeof publicClient.getLogs>>[] = [];
+        const chunkResults: Awaited<ReturnType<typeof baseLogClient.getLogs>>[] = [];
         for (const [start, end] of ranges) {
           chunkResults.push(await fetchChunk(start, end));
         }
@@ -447,7 +449,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       console.warn("Failed to reconcile spin logs", error);
       return null;
     }
-  }, [address, plant, publicClient]);
+  }, [address, baseLogClient, plant]);
 
   const hydratePendingState = useCallback(async () => {
     if (!plant) return;
@@ -1118,5 +1120,3 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     </Dialog>
   );
 }
-
-

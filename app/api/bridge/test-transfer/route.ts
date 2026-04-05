@@ -7,10 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, formatUnits, encodeFunctionData, type Address } from 'viem';
-import { base } from 'viem/chains';
-
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { formatUnits, encodeFunctionData, type Address } from 'viem';
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 const ADAPTER = '0x8d3056a3e5144187fde837ea1b206f4bcaea85bc' as Address;
@@ -31,7 +29,7 @@ export async function GET(request: NextRequest) {
   const amount = searchParams.get('amount') || '639108';
 
   try {
-    const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+    const publicClient = getBaseReadClient();
     const amountBn = BigInt(amount);
 
     // Check balances and allowances
@@ -132,4 +130,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

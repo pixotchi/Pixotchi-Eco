@@ -23,6 +23,7 @@ import {
   PUBLIC_CHAT_SESSION_EVENT,
   type PublicChatSession,
 } from '@/lib/chat-auth-client';
+import { SecureSessionState } from '@/lib/auth-surface';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { PLANT_STRAINS } from '@/lib/constants';
 import { sessionStorageManager } from '@/lib/session-storage-manager';
@@ -43,6 +44,8 @@ interface ChatContextState {
   publicChatAddress: string | null;
   publicChatAuthenticated: boolean;
   publicChatLoading: boolean;
+  publicChatState: SecureSessionState;
+  retryPublicChatSession: () => void;
   sendMessage: (message: string) => Promise<void>;
   setChatOpen: (open: boolean) => void;
   setConversationId: (id: string | null) => void;
@@ -78,7 +81,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [publicMessageVersion, setPublicMessageVersion] = useState(0);
   const [publicChatSession, setPublicChatSession] = useState<PublicChatSession | null>(null);
   const [publicChatLoading, setPublicChatLoading] = useState(false);
+  const [publicChatState, setPublicChatState] = useState<SecureSessionState>('unneeded');
   const [publicChatSessionVersion, setPublicChatSessionVersion] = useState(0);
+  const [publicChatRetryVersion, setPublicChatRetryVersion] = useState(0);
 
   const messageCacheRef = useRef<{ public: AnyChatMessage[]; ai: AnyChatMessage[]; agent: AnyChatMessage[] }>({
     agent: [],
@@ -123,6 +128,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [publicChatSession]);
 
   useEffect(() => {
+    if (publicChatAuthenticated) {
+      setPublicChatState('ready');
+      return;
+    }
+
+    if (publicChatLoading) {
+      setPublicChatState('booting');
+      return;
+    }
+
+    if (!chatAddress && !isMiniApp) {
+      setPublicChatState('unneeded');
+    }
+  }, [chatAddress, isMiniApp, publicChatAuthenticated, publicChatLoading]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -153,6 +174,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const handleChatAuthFailure = useCallback(async () => {
     setPublicChatSession(null);
+    setPublicChatState(chatAddress ? 'error' : 'unneeded');
     setConversationId(null);
     messageCacheRef.current.public = [];
     messageCacheRef.current.ai = [];
@@ -167,6 +189,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore cleanup failures after an auth rejection.
     }
+  }, [chatAddress]);
+
+  const retryPublicChatSession = useCallback(() => {
+    setError(null);
+    setPublicChatState('booting');
+    setPublicChatRetryVersion((version) => version + 1);
   }, []);
 
   useEffect(() => {
@@ -448,6 +476,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       authenticated ? '1' : '0',
       privyReady ? '1' : '0',
       publicChatSessionVersion.toString(),
+      publicChatRetryVersion.toString(),
     ].join(':');
 
     if (bootstrapKeyRef.current === bootstrapKey) {
@@ -459,6 +488,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       if (chatAddress) {
         setPublicChatSession(null);
+        setPublicChatState('ready');
         setPublicChatLoading(false);
         return;
       }
@@ -466,6 +496,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       let cancelled = false;
 
       const bootstrapMiniAppChat = async () => {
+        setPublicChatState('booting');
         setPublicChatLoading(true);
 
         try {
@@ -490,6 +521,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           console.error('[chat] Failed to bootstrap Mini App public chat session:', miniAppBootstrapError);
           if (!cancelled) {
             setPublicChatSession(null);
+            setPublicChatState('error');
           }
         } finally {
           if (!cancelled) {
@@ -508,6 +540,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!chatAddress) {
       bootstrapKeyRef.current = null;
       setPublicChatSession(null);
+      setPublicChatState('unneeded');
       setPublicChatLoading(false);
       return;
     }
@@ -524,6 +557,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!shouldBootstrapPrivy && !shouldCheckBase) {
       bootstrapKeyRef.current = null;
       setPublicChatSession(null);
+      setPublicChatState('unneeded');
       setPublicChatLoading(false);
       return;
     }
@@ -532,6 +566,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const bootstrapPublicChat = async () => {
+      setPublicChatState('booting');
       setPublicChatLoading(true);
 
       try {
@@ -543,6 +578,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             publicChatSession.address?.toLowerCase() === chatAddress.toLowerCase();
 
           if (hasMatchingPrivySession) {
+            setPublicChatState('ready');
             return;
           }
 
@@ -559,6 +595,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
           if (!cancelled) {
             setPublicChatSession(nextSession);
+            setPublicChatState('ready');
           }
           return;
         }
@@ -569,6 +606,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             publicChatSession.address?.toLowerCase() === chatAddress.toLowerCase();
 
           if (hasMatchingBaseSession) {
+            setPublicChatState('ready');
             return;
           }
 
@@ -618,6 +656,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
           if (!cancelled) {
             setPublicChatSession(nextSession);
+            setPublicChatState(nextSession ? 'ready' : 'error');
           }
 
           if (nextSession?.address?.toLowerCase() === chatAddress.toLowerCase()) {
@@ -630,6 +669,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         console.error('[chat] Failed to bootstrap public chat session:', bootstrapError);
         if (!cancelled) {
           setPublicChatSession(null);
+          setPublicChatState('error');
         }
       } finally {
         if (!cancelled) {
@@ -650,6 +690,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isMiniApp,
     publicChatSession,
     publicChatSessionVersion,
+    publicChatRetryVersion,
     privyReady,
     solanaAddress,
   ]);
@@ -1029,6 +1070,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     publicChatAddress,
     publicChatAuthenticated,
     publicChatLoading,
+    publicChatState,
+    retryPublicChatSession,
     sendMessage,
     setChatOpen: setIsChatOpen,
     setConversationId,

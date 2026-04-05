@@ -5,14 +5,12 @@
  * MAINNET ONLY - No devnet support
  */
 
-import { createPublicClient, http, fallback } from 'viem';
-import { base } from 'viem/chains';
+import { getBaseReadClient } from './base-rpc';
 import {
   BRIDGE_ABI,
   getBridgeConfig,
   getPixotchiSolanaConfig,
 } from './solana-constants';
-import { getRpcEndpoints } from './rpc-transport';
 
 // ============ Types ============
 
@@ -24,77 +22,7 @@ export interface TwinAddressInfo {
   seedBalance: bigint;
 }
 
-// ============ RPC Configuration ============
-
-// Get RPC URLs from environment with fallbacks (avoid mainnet.base.org to prevent CORS 403)
-const BASE_RPC_URLS = (() => {
-  const fromEnv = getRpcEndpoints();
-  if (fromEnv.length > 0) return fromEnv;
-  // Last-resort public RPC that allows browser POSTs better than mainnet.base.org
-  return ['https://base-rpc.publicnode.com'];
-})();
-
-// Log which RPC is being used (only in development)
-if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-  console.log('[SolanaTwin] Using Base RPC:', BASE_RPC_URLS[0]?.substring(0, 50) + '...');
-}
-
-// Create transports with retry config
-const transports = BASE_RPC_URLS.map(url => 
-  http(url, {
-    retryCount: 3,
-    retryDelay: 1000, // Fixed delay
-    timeout: 10000,
-  })
-);
-
-// ============ Viem Client ============
-
-// Create a viem client for Base mainnet with fallback transports
-const baseClient = createPublicClient({
-  chain: base,
-  transport: fallback(transports, {
-    rank: {
-        interval: 60_000,
-        sampleCount: 5,
-        timeout: 2000
-    },
-    retryCount: 3,
-    retryDelay: 1000, // Fixed delay
-  }),
-});
-
-// ============ Retry Helper ============
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> {
-  let lastError: Error | unknown;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      
-      // Check if it's a rate limit error
-      if (message.includes('429') || message.includes('rate limit') || message.includes('over rate limit')) {
-        const delay = baseDelay * Math.pow(2, attempt);
-        console.warn(`[SolanaTwin] Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-      
-      // For other errors, throw immediately
-      throw error;
-    }
-  }
-  
-  throw lastError;
-}
+const getBaseClient = () => getBaseReadClient();
 
 // ============ Core Functions ============
 
@@ -179,16 +107,14 @@ export async function getTwinAddress(solanaPublicKey: string): Promise<string> {
   // Convert Solana public key to bytes32
   const sender = solanaPublicKeyToBytes32(solanaPublicKey);
   
-  // Call the bridge contract to get the predicted twin address with retry
-  const twinAddress = await withRetry(async () => {
-    return await baseClient.readContract({
-      address: config.base.bridge as `0x${string}`,
-      abi: BRIDGE_ABI,
-      functionName: 'getPredictedTwinAddress',
-      args: [sender],
-    });
+  // Resolve the predicted Twin address through the shared Base RPC client
+  const twinAddress = await getBaseClient().readContract({
+    address: config.base.bridge as `0x${string}`,
+    abi: BRIDGE_ABI,
+    functionName: 'getPredictedTwinAddress',
+    args: [sender],
   });
-  
+
   return twinAddress as string;
 }
 
@@ -201,23 +127,42 @@ export async function getTwinAddressInfo(solanaPublicKey: string): Promise<TwinA
   const config = getBridgeConfig();
   const pixotchiConfig = getPixotchiSolanaConfig();
   
-  // Get twin address (already has retry)
+  // Resolve the Twin address first
   const twinAddress = await getTwinAddress(solanaPublicKey);
   
   // Check if twin is deployed (has code)
-  const code = await withRetry(async () => {
-    return await baseClient.getBytecode({
-      address: twinAddress as `0x${string}`,
-    });
+  const code = await getBaseClient().getBytecode({
+    address: twinAddress as `0x${string}`,
   });
   const isDeployed = !!code && code !== '0x';
   
   // Get wSOL balance
   let wsolBalance = BigInt(0);
   try {
-    wsolBalance = await withRetry(async () => {
-      return await baseClient.readContract({
-        address: config.base.wrappedSOL as `0x${string}`,
+    wsolBalance = await getBaseClient().readContract({
+      address: config.base.wrappedSOL as `0x${string}`,
+      abi: [
+        {
+          name: 'balanceOf',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: 'account', type: 'address' }],
+          outputs: [{ name: '', type: 'uint256' }],
+        },
+      ],
+      functionName: 'balanceOf',
+      args: [twinAddress as `0x${string}`],
+    });
+  } catch {
+    // Twin might not exist yet
+  }
+  
+  // Get SEED balance
+  let seedBalance = BigInt(0);
+  if (pixotchiConfig.seedToken) {
+    try {
+      seedBalance = await getBaseClient().readContract({
+        address: pixotchiConfig.seedToken as `0x${string}`,
         abi: [
           {
             name: 'balanceOf',
@@ -229,31 +174,6 @@ export async function getTwinAddressInfo(solanaPublicKey: string): Promise<TwinA
         ],
         functionName: 'balanceOf',
         args: [twinAddress as `0x${string}`],
-      });
-    });
-  } catch {
-    // Twin might not exist yet
-  }
-  
-  // Get SEED balance
-  let seedBalance = BigInt(0);
-  if (pixotchiConfig.seedToken) {
-    try {
-      seedBalance = await withRetry(async () => {
-        return await baseClient.readContract({
-          address: pixotchiConfig.seedToken as `0x${string}`,
-          abi: [
-            {
-              name: 'balanceOf',
-              type: 'function',
-              stateMutability: 'view',
-              inputs: [{ name: 'account', type: 'address' }],
-              outputs: [{ name: '', type: 'uint256' }],
-            },
-          ],
-          functionName: 'balanceOf',
-          args: [twinAddress as `0x${string}`],
-        });
       });
     } catch {
       // Ignore errors
@@ -297,24 +217,22 @@ export async function isTwinSetup(
       wsolContract: config.base.wrappedSOL,
     });
     
-    const allowance = await withRetry(async () => {
-      return await baseClient.readContract({
-        address: config.base.wrappedSOL as `0x${string}`,
-        abi: [
-          {
-            name: 'allowance',
-            type: 'function',
-            stateMutability: 'view',
-            inputs: [
-              { name: 'owner', type: 'address' },
-              { name: 'spender', type: 'address' },
-            ],
-            outputs: [{ name: '', type: 'uint256' }],
-          },
-        ],
-        functionName: 'allowance',
-        args: [twinAddress as `0x${string}`, adapter as `0x${string}`],
-      });
+    const allowance = await getBaseClient().readContract({
+      address: config.base.wrappedSOL as `0x${string}`,
+      abi: [
+        {
+          name: 'allowance',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' },
+          ],
+          outputs: [{ name: '', type: 'uint256' }],
+        },
+      ],
+      functionName: 'allowance',
+      args: [twinAddress as `0x${string}`, adapter as `0x${string}`],
     });
     
     const threshold = BigInt(10 ** 18); // 1 wSOL

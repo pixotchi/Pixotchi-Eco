@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { CoreProviders } from '../core-providers';
 
 export const metadata: Metadata = {
   title: 'Pixotchi Admin Dashboard',
@@ -12,8 +13,10 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="admin-page-scrollable min-h-screen">
-      {children}
-    </div>
+    <CoreProviders>
+      <div className="admin-page-scrollable min-h-screen">
+        {children}
+      </div>
+    </CoreProviders>
   );
 }

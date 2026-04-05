@@ -79,12 +79,14 @@ const EthModeToggleRow = () => {
     <div className="flex items-center justify-between">
       <span className="text-xs font-medium">ETH Mode (Beta)</span>
       <button
+        type="button"
         onClick={toggleEthMode}
         style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
         className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isEthMode ? 'bg-value' : 'bg-muted'
           }`}
         aria-pressed={isEthMode}
         role="switch"
+        aria-label={`Toggle ETH mode ${isEthMode ? 'off' : 'on'}`}
       >
         <span
           style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
@@ -776,6 +778,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => copyToClipboard(solanaAddress, "Solana address")}
+                              aria-label="Copy Solana address"
+                              title="Copy Solana address"
                             >
                               <Copy className="w-3 h-3" />
                             </Button>
@@ -800,6 +804,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => copyToClipboard(twinAddress, "Twin address")}
+                              aria-label="Copy twin address"
+                              title="Copy twin address"
                             >
                               <Copy className="w-3 h-3" />
                             </Button>
@@ -874,7 +880,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     disabled
                     className="w-full"
                   >
-                    Loading session controls...
+                    Loading session controls…
                   </Button>
                 ) : isMiniApp ? (
                   <Button
@@ -962,7 +968,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             >
               Cancel
             </Button>
-            <Button
+              <Button
               onClick={handleConfirmExport}
               disabled={isExporting || (embeddedWallets.length > 1 && !selectedEmbeddedAddress)}
               className="min-w-[140px]"
@@ -970,7 +976,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               {isExporting ? (
                 <>
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Opening...
+                  Opening…
                 </>
               ) : (
                 "Open Export"

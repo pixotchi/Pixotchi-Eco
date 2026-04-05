@@ -5,7 +5,6 @@ export const fenceV2Abi = [
     inputs: [],
     outputs: [
       { name: "pricePerDay", type: "uint256" },
-      { name: "minDurationDays", type: "uint256" },
       { name: "maxDurationDays", type: "uint256" }
     ],
     stateMutability: "view"
@@ -68,4 +67,3 @@ export const fenceV2Abi = [
     stateMutability: "nonpayable"
   }
 ] as const;
-

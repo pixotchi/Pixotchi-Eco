@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
-import { encodeFunctionData, maxUint256, createPublicClient, parseUnits } from 'viem';
-import { base as baseChain } from 'viem/chains';
-import { createResilientTransport } from '@/lib/rpc-transport';
+import { encodeFunctionData, maxUint256, parseUnits } from 'viem';
+import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
+import {
+  VERIFY_CLAIM_LEAF_BONUS_AMOUNT,
+  VERIFY_CLAIM_SEED_BONUS_AMOUNT,
+} from '@/lib/verify-claim-config';
 
 /**
  * Feature toggle for Base Verify claims.
@@ -42,7 +45,7 @@ const ELIGIBLE_STRAINS = [1, 2, 3, 4];
  * Ensure the agent smart account has sufficient LEAF balance.
  */
 const LEAF_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true';
-const LEAF_BONUS_AMOUNT = parseUnits('7000000', 18); // 7,000,000 LEAF tokens
+const LEAF_BONUS_AMOUNT = parseUnits(VERIFY_CLAIM_LEAF_BONUS_AMOUNT, 18); // 7,000,000 LEAF tokens
 
 /**
  * SEED token bonus — first-come-first-served.
@@ -50,7 +53,7 @@ const LEAF_BONUS_AMOUNT = parseUnits('7000000', 18); // 7,000,000 LEAF tokens
  * When balance < 100 SEED, this bonus is silently skipped.
  */
 const SEED_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true';
-const SEED_BONUS_AMOUNT = parseUnits('100', 18); // 100 SEED tokens
+const SEED_BONUS_AMOUNT = parseUnits(VERIFY_CLAIM_SEED_BONUS_AMOUNT, 18); // 100 SEED tokens
 
 export async function POST(req: NextRequest) {
   // Check if feature is enabled
@@ -163,10 +166,7 @@ export async function POST(req: NextRequest) {
       let mintedTokenId: bigint | null = null;
       
       try {
-        const publicClient = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
-        const txReceipt = await publicClient.waitForTransactionReceipt({ 
-          hash: mintReceipt.transactionHash as `0x${string}` 
-        });
+        const txReceipt = await waitForBaseReceipt(mintReceipt.transactionHash as `0x${string}`);
         
         const TRANSFER_SIG = EVM_EVENT_SIGNATURES.ERC20_TRANSFER;
         const zeroAddressTopic = EVM_TOPICS.ZERO_ADDRESS_TOPIC;
@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
 
       if (LEAF_BONUS_ENABLED && transferSuccess) {
         try {
-          console.log(`[CLAIM] Sending LEAF bonus (1,000,000) to ${userAddress}...`);
+          console.log(`[CLAIM] Sending LEAF bonus (${VERIFY_CLAIM_LEAF_BONUS_AMOUNT}) to ${userAddress}...`);
 
           const leafTransferData = encodeFunctionData({
             abi: [{
@@ -321,7 +321,7 @@ export async function POST(req: NextRequest) {
       if (SEED_BONUS_ENABLED && transferSuccess) {
         try {
           // Check agent wallet SEED balance before attempting transfer
-          const balanceClient = createPublicClient({ chain: baseChain, transport: createResilientTransport() });
+          const balanceClient = getBaseReadClient();
           const seedBalance = await balanceClient.readContract({
             address: PIXOTCHI_TOKEN_ADDRESS,
             abi: ERC20_BALANCE_ABI,
@@ -330,7 +330,7 @@ export async function POST(req: NextRequest) {
           });
 
           if ((seedBalance as bigint) >= SEED_BONUS_AMOUNT) {
-            console.log(`[CLAIM] Sending SEED bonus (200) to ${userAddress}...`);
+            console.log(`[CLAIM] Sending SEED bonus (${VERIFY_CLAIM_SEED_BONUS_AMOUNT}) to ${userAddress}...`);
 
             const seedTransferData = encodeFunctionData({
               abi: [{
@@ -380,10 +380,10 @@ export async function POST(req: NextRequest) {
         transferError: transferSuccess ? null : (transferError?.message || 'Unknown error'),
         leafBonusSent: leafTransferSuccess,
         leafBonusTxHash: leafTransferTxHash,
-        leafBonusAmount: LEAF_BONUS_ENABLED ? '7000000' : null,
+        leafBonusAmount: LEAF_BONUS_ENABLED ? VERIFY_CLAIM_LEAF_BONUS_AMOUNT : null,
         seedBonusSent: seedTransferSuccess,
         seedBonusTxHash: seedTransferTxHash,
-        seedBonusAmount: SEED_BONUS_ENABLED ? '100' : null,
+        seedBonusAmount: SEED_BONUS_ENABLED ? VERIFY_CLAIM_SEED_BONUS_AMOUNT : null,
       };
 
       // Store by verification token (primary - prevents same X account claiming twice)
@@ -393,8 +393,8 @@ export async function POST(req: NextRequest) {
       const walletClaimKey = `wallet_claims:${userAddress.toLowerCase()}`;
       await redis?.set(walletClaimKey, JSON.stringify(claimRecord));
 
-      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: '7000000' } : null;
-      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: '100' } : null;
+      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: VERIFY_CLAIM_LEAF_BONUS_AMOUNT } : null;
+      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: VERIFY_CLAIM_SEED_BONUS_AMOUNT } : null;
 
       if (transferSuccess) {
         const messageParts = ['Plant claimed and transferred successfully!'];

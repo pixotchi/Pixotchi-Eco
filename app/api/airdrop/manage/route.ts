@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
-import { createPublicClient, http, formatUnits } from 'viem';
-import { base } from 'viem/chains';
-
-const ADMIN_KEY = process.env.ADMIN_INVITE_KEY;
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { redis, redisScanKeysRaw } from '@/lib/redis';
+import { logAdminAction, validateAdminKey } from '@/lib/auth-utils';
+import { formatUnits } from 'viem';
 
 // Token addresses for reference
 const AIRDROP_TOKENS = {
@@ -24,6 +23,35 @@ const ERC20_BALANCE_ABI = [
     },
 ] as const;
 
+const REDIS_BATCH_SIZE = 100;
+const AIRDROP_ELIGIBLE_PATTERN = 'airdrop:eligible:*';
+const AIRDROP_LOCK_PATTERN = 'airdrop:lock:*';
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+
+    for (let index = 0; index < items.length; index += size) {
+        chunks.push(items.slice(index, index + size));
+    }
+
+    return chunks;
+}
+
+async function deleteRedisKeys(keys: string[]): Promise<number> {
+    if (!redis || keys.length === 0) {
+        return 0;
+    }
+
+    let deletedCount = 0;
+    for (const batch of chunkArray(keys, REDIS_BATCH_SIZE)) {
+        if (batch.length === 0) continue;
+        await redis.del(...batch);
+        deletedCount += batch.length;
+    }
+
+    return deletedCount;
+}
+
 /**
  * POST /api/airdrop/manage
  * Upload CSV eligibility list. Clears previous data.
@@ -31,9 +59,13 @@ const ERC20_BALANCE_ABI = [
  */
 export async function POST(req: NextRequest) {
     try {
-        const authHeader = req.headers.get('Authorization');
-        if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== ADMIN_KEY) {
+        if (!validateAdminKey(req)) {
+            await logAdminAction('airdrop_manage_upload_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (!redis) {
+            return NextResponse.json({ error: 'Redis unavailable' }, { status: 500 });
         }
 
         const body = await req.json();
@@ -108,32 +140,39 @@ export async function POST(req: NextRequest) {
         }
 
         // Clear existing airdrop data
-        const existingKeys = await redis?.keys('airdrop:eligible:*');
-        if (existingKeys && existingKeys.length > 0) {
-            for (const key of existingKeys) {
-                await redis?.del(key);
-            }
-        }
+        const existingKeys = await redisScanKeysRaw(AIRDROP_ELIGIBLE_PATTERN);
+        await deleteRedisKeys(existingKeys);
 
         // Store new entries
-        for (const entry of entries) {
-            const key = `airdrop:eligible:${entry.address}`;
-            await redis?.set(key, JSON.stringify({
-                seed: entry.seed,
-                leaf: entry.leaf,
-                pixotchi: entry.pixotchi,
-                claimed: false,
-                createdAt: Date.now(),
-            }));
+        for (const batch of chunkArray(entries, REDIS_BATCH_SIZE)) {
+            const pipeline = redis.pipeline();
+
+            for (const entry of batch) {
+                const key = `airdrop:eligible:${entry.address}`;
+                pipeline.set(key, JSON.stringify({
+                    seed: entry.seed,
+                    leaf: entry.leaf,
+                    pixotchi: entry.pixotchi,
+                    claimed: false,
+                    createdAt: Date.now(),
+                }));
+            }
+
+            await pipeline.exec();
         }
 
         // Store metadata
-        await redis?.set('airdrop:meta', JSON.stringify({
+        await redis.set('airdrop:meta', JSON.stringify({
             uploadedAt: Date.now(),
             totalRecipients: entries.length,
             claimedCount: 0,
             tokens: AIRDROP_TOKENS,
         }));
+
+        await logAdminAction('airdrop_manage_upload_success', 'system', {
+            totalRecipients: entries.length,
+            validationErrorCount: errors.length,
+        });
 
         return NextResponse.json({
             success: true,
@@ -153,13 +192,17 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
     try {
-        const authHeader = req.headers.get('Authorization');
-        if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== ADMIN_KEY) {
+        if (!validateAdminKey(req)) {
+            await logAdminAction('airdrop_manage_read_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        if (!redis) {
+            return NextResponse.json({ error: 'Redis unavailable' }, { status: 500 });
+        }
+
         // Get metadata
-        const metaRaw = await redis?.get('airdrop:meta');
+        const metaRaw = await redis.get('airdrop:meta');
         let meta: any = null;
         if (metaRaw) {
             try {
@@ -170,7 +213,7 @@ export async function GET(req: NextRequest) {
         }
 
         // Get all eligible entries
-        const keys = await redis?.keys('airdrop:eligible:*') || [];
+        const keys = await redisScanKeysRaw(AIRDROP_ELIGIBLE_PATTERN);
         const recipients: Array<{
             address: string;
             seed: string;
@@ -183,18 +226,24 @@ export async function GET(req: NextRequest) {
 
         let claimedCount = 0;
 
-        for (const key of keys) {
-            const address = key.replace('airdrop:eligible:', '');
-            const dataRaw = await redis?.get(key);
-            if (dataRaw) {
+        for (const batch of chunkArray(keys, REDIS_BATCH_SIZE)) {
+            if (batch.length === 0) continue;
+
+            const values = await redis.mget(...batch);
+            for (let index = 0; index < batch.length; index++) {
+                const key = batch[index];
+                const dataRaw = values[index];
+                if (!dataRaw) continue;
+
                 let data: any;
                 try {
                     data = typeof dataRaw === 'string' ? JSON.parse(dataRaw) : dataRaw;
                 } catch {
                     continue;
                 }
+
                 recipients.push({
-                    address,
+                    address: key.replace('airdrop:eligible:', ''),
                     seed: data.seed || '0',
                     leaf: data.leaf || '0',
                     pixotchi: data.pixotchi || '0',
@@ -202,6 +251,7 @@ export async function GET(req: NextRequest) {
                     claimedAt: data.claimedAt,
                     txHash: data.txHash,
                 });
+
                 if (data.claimed) claimedCount++;
             }
         }
@@ -235,10 +285,7 @@ export async function GET(req: NextRequest) {
         // Fetch server wallet balances
         let balances = { seed: '0', leaf: '0', pixotchi: '0' };
         try {
-            const client = createPublicClient({
-                chain: base,
-                transport: http(process.env.NEXT_PUBLIC_RPC_NODE || 'https://mainnet.base.org'),
-            });
+            const client = getBaseReadClient();
 
             const [seedBal, leafBal, pixotchiBal] = await Promise.all([
                 client.readContract({
@@ -296,21 +343,27 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
     try {
-        const authHeader = req.headers.get('Authorization');
-        if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== ADMIN_KEY) {
+        if (!validateAdminKey(req)) {
+            await logAdminAction('airdrop_manage_clear_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Clear all airdrop keys
-        const eligibleKeys = await redis?.keys('airdrop:eligible:*') || [];
-        const lockKeys = await redis?.keys('airdrop:lock:*') || [];
-        const allKeys = [...eligibleKeys, ...lockKeys, 'airdrop:meta'];
-
-        let deletedCount = 0;
-        for (const key of allKeys) {
-            await redis?.del(key);
-            deletedCount++;
+        if (!redis) {
+            return NextResponse.json({ error: 'Redis unavailable' }, { status: 500 });
         }
+
+        // Clear all airdrop keys
+        const [eligibleKeys, lockKeys, metaRaw] = await Promise.all([
+            redisScanKeysRaw(AIRDROP_ELIGIBLE_PATTERN),
+            redisScanKeysRaw(AIRDROP_LOCK_PATTERN),
+            redis.get('airdrop:meta'),
+        ]);
+        const allKeys = metaRaw ? [...eligibleKeys, ...lockKeys, 'airdrop:meta'] : [...eligibleKeys, ...lockKeys];
+        const deletedCount = await deleteRedisKeys(allKeys);
+
+        await logAdminAction('airdrop_manage_clear_success', 'system', {
+            deletedCount,
+        });
 
         return NextResponse.json({
             success: true,
