@@ -2116,8 +2116,16 @@ export type FenceV2Config = {
 
 const normalizeFenceV2Config = (result: any): FenceV2Config => {
   const priceRaw = result?.pricePerDay ?? result?.[0] ?? 0;
-  const minRaw = result?.minDurationDays ?? result?.minDays ?? result?.[1] ?? 0;
-  const maxRaw = result?.maxDurationDays ?? result?.maxDays ?? result?.[2] ?? 0;
+  const hasExplicitMin =
+    typeof result?.minDurationDays !== 'undefined' ||
+    typeof result?.minDays !== 'undefined' ||
+    typeof result?.[2] !== 'undefined';
+  const minRaw = hasExplicitMin
+    ? (result?.minDurationDays ?? result?.minDays ?? result?.[1] ?? 1)
+    : 1;
+  const maxRaw = hasExplicitMin
+    ? (result?.maxDurationDays ?? result?.maxDays ?? result?.[2] ?? result?.[1] ?? 30)
+    : (result?.maxDurationDays ?? result?.maxDays ?? result?.[1] ?? 30);
   return {
     pricePerDay: BigInt(priceRaw ?? 0),
     minDurationDays: Number(minRaw ?? 0),
