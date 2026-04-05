@@ -20,10 +20,8 @@ export function isCasinoEnabled(): boolean {
 }
 
 export function isCasinoMiniAppOnly(): boolean {
-  return (
-    isTruthyFlag(process.env.CASINO_MINIAPP_ONLY) ||
-    isTruthyFlag(process.env.NEXT_PUBLIC_CASINO_MINIAPP_ONLY)
-  );
+  // Deprecated: mini-app-only gating is no longer supported for casino features.
+  return false;
 }
 
 export function isBlackjackEnabled(): boolean {
@@ -36,11 +34,9 @@ export function isBlackjackEnabled(): boolean {
   return true;
 }
 
-export function getCasinoPolicy(input?: { isMiniApp?: boolean }) {
+export function getCasinoPolicy() {
   return buildCasinoPolicy({
     casinoEnabled: isCasinoEnabled(),
     blackjackEnabled: isBlackjackEnabled(),
-    miniAppOnly: isCasinoMiniAppOnly(),
-    isMiniApp: input?.isMiniApp,
   });
 }

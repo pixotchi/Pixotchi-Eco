@@ -36,9 +36,7 @@ import { toast } from "react-hot-toast";
 import { useWalletClient, useAccount, useBalance } from "wagmi";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { useTokenSymbol } from "@/hooks/useTokenSymbol";
-import { useFrameContext } from "@/lib/frame-context";
 import { getClientCasinoPolicy } from "@/lib/casino-client";
-import { showMiniAppRequiredToast } from "@/lib/miniapp-required-toast";
 
 interface CasinoPanelProps {
   landId: bigint;
@@ -85,8 +83,7 @@ function CasinoTokenLabel({
 export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps) {
   const { data: walletClient } = useWalletClient();
   const { address } = useAccount();
-  const frame = useFrameContext();
-  const casinoPolicy = getClientCasinoPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const casinoPolicy = getClientCasinoPolicy();
 
   const formatWholeNumber = useCallback((num: bigint): string => {
     const text = num.toString();
@@ -302,11 +299,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
   const handleOpenCasinoGame = useCallback((game: "roulette" | "blackjack") => {
     if (!casinoPolicy.playable) {
-      showMiniAppRequiredToast({
-        id: "casino-miniapp-required",
-        title: "Casino Is In Pixotchi Mini",
-        description: "Open Pixotchi Mini in Base app to play Roulette and Blackjack.",
-      });
+      toast.error(casinoPolicy.message || "Casino is currently unavailable.");
       return;
     }
 
@@ -316,7 +309,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     }
 
     setBlackjackOpen(true);
-  }, [casinoPolicy.playable]);
+  }, [casinoPolicy.message, casinoPolicy.playable]);
 
   const blackjackDisabledForToken =
     !casinoPolicy.blackjackEnabled ||

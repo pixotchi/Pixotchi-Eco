@@ -1,10 +1,7 @@
 import {
   buildGamificationPolicy,
   GAMIFICATION_DISABLED_FALLBACK_MESSAGE,
-  isMiniAppGamificationContext,
 } from './gamification-policy';
-
-export { isMiniAppGamificationContext } from './gamification-policy';
 
 function isTruthyFlag(value: string | undefined | null): boolean {
   if (!value) return false;
@@ -20,10 +17,8 @@ export function isGamificationDisabled(): boolean {
 }
 
 export function isGamificationMiniAppOnly(): boolean {
-  return (
-    isTruthyFlag(process.env.GAMIFICATION_MINIAPP_ONLY) ||
-    isTruthyFlag(process.env.NEXT_PUBLIC_GAMIFICATION_MINIAPP_ONLY)
-  );
+  // Deprecated: mini-app-only gating is no longer supported for gamification.
+  return false;
 }
 
 export function getGamificationDisabledMessage(): string {
@@ -32,11 +27,9 @@ export function getGamificationDisabledMessage(): string {
   return GAMIFICATION_DISABLED_FALLBACK_MESSAGE;
 }
 
-export function getGamificationPolicy(input?: { isMiniApp?: boolean }) {
+export function getGamificationPolicy() {
   return buildGamificationPolicy({
     disabled: isGamificationDisabled(),
-    miniAppOnly: isGamificationMiniAppOnly(),
-    isMiniApp: input?.isMiniApp,
     disabledMessage: getGamificationDisabledMessage(),
   });
 }

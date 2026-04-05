@@ -5,15 +5,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { CLIENT_ENV } from "@/lib/env-config";
-import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onTasksDialogOpen } from "@/lib/app-events";
 
 export default function TasksInfoDialog() {
   const { address } = useAccount();
-  const frame = useFrameContext();
   const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
-  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const gamificationPolicy = getClientGamificationPolicy();
   const [open, setOpen] = useState(false);
   const [missionDay, setMissionDay] = useState<any | null>(null);
   const [missionPts, setMissionPts] = useState<number>(0);

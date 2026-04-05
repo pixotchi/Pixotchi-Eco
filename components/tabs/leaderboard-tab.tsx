@@ -65,7 +65,7 @@ export default function LeaderboardTab() {
   const gamificationDisabled = CLIENT_ENV.GAMIFICATION_DISABLED;
   const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
   const frame = useFrameContext();
-  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const gamificationPolicy = getClientGamificationPolicy();
   const showRocksBoard = gamificationPolicy.visible;
   const { address: evmAddress } = useAccount();
   const { isSponsored } = usePaymaster();

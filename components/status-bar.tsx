@@ -2,16 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 // Use native <img> for small icons to reduce overhead
-import { useAccount } from "wagmi";
 import StakingDialog from "@/components/staking/staking-dialog";
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import { formatUnits } from "viem";
 import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/components/solana";
-import { cn } from "@/lib/utils";
-import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
-import { showMiniAppRequiredToast } from "@/lib/miniapp-required-toast";
 import { onStakingDialogOpen, openTasksDialog } from "@/lib/app-events";
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
@@ -21,15 +17,13 @@ function formatTokenShort(amount: bigint, decimals: number = 18): string {
   return num.toFixed(4).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
-export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
-  const { address } = useAccount();
-  const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading, refreshBalances } = useBalances();
+export default function StatusBar() {
+  const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading } = useBalances();
   const isSolana = useIsSolanaWallet();
-  const { twinInfo, solBalance } = useSolanaWallet();
-  const frame = useFrameContext();
+  const { solBalance } = useSolanaWallet();
 
   const [stakingOpen, setStakingOpen] = useState(false);
-  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const gamificationPolicy = getClientGamificationPolicy();
   const showTasksButton = !gamificationPolicy.disabled;
 
   // Balance refreshes are handled automatically by balance-context.tsx via events
@@ -55,15 +49,6 @@ export default function StatusBar({ refreshKey }: { refreshKey?: any }) {
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
   const handleTasksClick = () => {
-    if (!gamificationPolicy.enabled && gamificationPolicy.reason === "miniapp_only") {
-      showMiniAppRequiredToast({
-        id: "tasks-miniapp-required",
-        title: "Tasks Are In Pixotchi Mini",
-        description: "Open Pixotchi Mini in Base app to view tasks, keep your streak, and earn Rocks.",
-      });
-      return;
-    }
-
     openTasksDialog();
   };
 

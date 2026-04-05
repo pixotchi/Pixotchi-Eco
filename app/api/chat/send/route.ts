@@ -13,8 +13,7 @@ import {
 } from '@/lib/chat-auth';
 import { markMissionTask, trackDailyActivity } from '@/lib/gamification-service';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
-import { getGamificationPolicy, isMiniAppGamificationContext } from '@/lib/gamification-feature';
-import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
+import { getGamificationPolicy } from '@/lib/gamification-feature';
 
 const CHAT_SEND_IP_LIMIT_PER_MINUTE = 20;
 const CHAT_SEND_ADDRESS_LIMIT_PER_MINUTE = 20;
@@ -127,13 +126,7 @@ export async function POST(request: NextRequest) {
       console.error('Public chat rate limit update failed:', error);
     }
 
-    const gamificationPolicy = getGamificationPolicy({
-      isMiniApp: isMiniAppGamificationContext({
-        sessionMethod: session.method,
-        miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
-        miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
-      }),
-    });
+    const gamificationPolicy = getGamificationPolicy();
 
     if (gamificationPolicy.enabled) {
       Promise.allSettled([

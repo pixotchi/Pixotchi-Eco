@@ -22,12 +22,14 @@ export const CLIENT_ENV = {
   INVITE_SYSTEM_ENABLED: process.env.NEXT_PUBLIC_INVITE_SYSTEM_ENABLED === 'true',
   PAYMASTER_ENABLED: process.env.NEXT_PUBLIC_PAYMASTER_ENABLED === 'true',
   GAMIFICATION_DISABLED: process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED === 'true',
-  GAMIFICATION_MINIAPP_ONLY: process.env.NEXT_PUBLIC_GAMIFICATION_MINIAPP_ONLY === 'true',
+  // Deprecated: mini-app-only feature gating is ignored after the Base App web cutover.
+  GAMIFICATION_MINIAPP_ONLY: false,
   GAMIFICATION_DISABLED_MESSAGE:
     process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED_MESSAGE ||
     'Tasks and Rocks leaderboard are temporarily disabled while we reset progress for the next mission season.',
   CASINO_ENABLED: process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true',
-  CASINO_MINIAPP_ONLY: process.env.NEXT_PUBLIC_CASINO_MINIAPP_ONLY === 'true',
+  // Deprecated: mini-app-only feature gating is ignored after the Base App web cutover.
+  CASINO_MINIAPP_ONLY: false,
   BLACKJACK_ENABLED: process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== 'false',
   // Base Verify - Free plant claim for verified users
   // Single toggle controls both frontend UI and backend API
