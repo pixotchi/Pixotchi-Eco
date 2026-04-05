@@ -11,8 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, keccak256, encodeAbiParameters, toHex, padHex, type Hex, type Address } from 'viem';
-import { base } from 'viem/chains';
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { keccak256, encodeAbiParameters, toHex, padHex, type Hex, type Address } from 'viem';
 import { Connection, PublicKey } from '@solana/web3.js';
 
 // Segment config: Always fetch fresh onchain data
@@ -22,13 +22,10 @@ export const revalidate = 0;
 
 // Use existing environment variable conventions from lib/solana-constants.ts
 const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined; // Uses viem default if not set
 
 // Mainnet-only configuration (matching lib/solana-constants.ts)
 const CONFIG = {
   solanaRpc: SOLANA_RPC,
-  baseChain: base,
-  baseRpc: BASE_RPC,
   // Bridge contract addresses from SOLANA_BRIDGE_CONFIG
   bridgeContract: '0x3eff766C76a1be2Ce1aCF2B69c78bCae257D5188' as Address,
   bridgeValidator: '0xAF24c1c24Ff3BF1e6D882518120fC25442d6794B' as Address,
@@ -80,10 +77,7 @@ export async function GET(request: NextRequest) {
     const { innerHash, outerHash, evmMessage } = buildEvmMessage(pubkey, outgoingMessage);
 
     // Step 3: Check Base contracts
-    const publicClient = createPublicClient({
-      chain: config.baseChain,
-      transport: http(config.baseRpc) // Uses env RPC or default
-    });
+    const publicClient = getBaseReadClient();
 
     const [isValidated, validatorNextNonce, isSuccess, isFailed, isPaused] = await Promise.all([
       publicClient.readContract({

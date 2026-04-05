@@ -5,6 +5,8 @@
 // (Next.js will still inline NEXT_PUBLIC_* at build time)
 declare const process: any;
 
+import { validateBaseRpcEndpointDiversity } from './base-rpc-policy';
+
 // Client-safe environment variables (these are intentionally exposed)
 export const CLIENT_ENV = {
   // URLs and public configuration
@@ -80,11 +82,6 @@ export const getRpcConfig = () => {
     process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_3,
   ].filter((endpoint): endpoint is string => Boolean(endpoint));
 
-  const wssEndpoints = [
-    process.env.NEXT_PUBLIC_RPC_NODE_WSS,
-    process.env.NEXT_PUBLIC_RPC_NODE_FALLBACK_WSS,
-  ].filter((endpoint): endpoint is string => Boolean(endpoint));
-
   if (endpoints.length === 0) {
     throw new Error('Base RPC configuration missing: set NEXT_PUBLIC_RPC_NODE and backup endpoints.');
   }
@@ -93,7 +90,13 @@ export const getRpcConfig = () => {
     throw new Error('Base RPC endpoints must be unique.');
   }
 
-  return { endpoints, wssEndpoints };
+  const allowDuplicateVendors = process.env.ALLOW_RPC_VENDOR_DUPLICATES === 'true';
+  validateBaseRpcEndpointDiversity(endpoints, {
+    allowDuplicateVendors,
+    minUniqueVendors: 4,
+  });
+
+  return { endpoints };
 };
 
 // Helper to expose RPC list to admin diagnostics (server-only safe values)

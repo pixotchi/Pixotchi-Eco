@@ -34,6 +34,7 @@ import { CLIENT_ENV } from "@/lib/env-config";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
+import { getBaseTransactionReceipt } from "@/lib/base-rpc";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -190,9 +191,9 @@ export default function LeaderboardTab() {
   const fetchMyPlantsPendingRef = useRef<string | null>(null);
 
   const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
-    if (!hash || !publicClient) return;
+    if (!hash) return;
     try {
-      const receipt = await publicClient.getTransactionReceipt({ hash: hash as `0x${string}` });
+      const receipt = await getBaseTransactionReceipt(hash as `0x${string}`);
       const abi = (PixotchiNFT as any).abi || PixotchiNFT;
       for (const log of receipt.logs) {
         try {
@@ -212,7 +213,7 @@ export default function LeaderboardTab() {
     } catch (e) {
       // Swallow decoding errors; keep UX smooth
     }
-  }, [publicClient]);
+  }, []);
 
   const showAttackOutcomeFromLogs = (logs: any[]) => {
     try {

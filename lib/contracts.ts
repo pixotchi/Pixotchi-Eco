@@ -764,33 +764,9 @@ export const retryWithBackoff = async <T>(
   maxRetries: number = 3,
   baseDelay: number = 1000
 ): Promise<T> => {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fn();
-      // We can't tell which endpoint served this call from here; individual read helpers can annotate.
-      return res;
-    } catch (error: any) {
-      if (error instanceof BaseRpcError) {
-        throw error;
-      }
-      const isRateLimit = error?.details?.includes('rate limit') ||
-        error?.message?.includes('429') ||
-        error?.status === 429;
-
-      const isNetworkError = error?.message?.includes('fetch') ||
-        error?.message?.includes('network') ||
-        error?.message?.includes('timeout');
-
-      if ((isRateLimit || isNetworkError) && attempt < maxRetries) {
-        const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
-        console.log(`${isRateLimit ? 'Rate limited' : 'Network error'}, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries + 1})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-      throw error;
-    }
-  }
-  throw new Error('Max retries exceeded');
+  void maxRetries;
+  void baseDelay;
+  return fn();
 };
 
 // Simplified contract ABIs (only the functions we need)

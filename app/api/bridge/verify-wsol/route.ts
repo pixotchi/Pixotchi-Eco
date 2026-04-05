@@ -7,15 +7,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, type Address } from 'viem';
-import { base } from 'viem/chains';
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { type Address } from 'viem';
 
 // Segment config: Always fetch fresh onchain data
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
-
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 
 // The wSOL we're trying to use (from Base-Solana bridge)
 const BRIDGE_WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
@@ -39,7 +37,7 @@ export async function GET(request: NextRequest) {
   if (accessDenied) return accessDenied;
 
   try {
-    const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+    const publicClient = getBaseReadClient();
 
     // Get tokens in the pool
     const [token0, token1] = await Promise.all([
@@ -121,4 +119,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 import { usePublicClient } from 'wagmi';
 import { parseUnits } from 'viem';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { useTabVisibility } from '@/lib/tab-visibility-context';
 
 interface FarmerHousePanelProps {
   landId: bigint;
@@ -24,6 +25,8 @@ const MIN_SEED_BALANCE = parseUnits('300', 18);
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const { isTabVisible } = useTabVisibility();
+  const isDashboardVisible = isTabVisible('dashboard');
   const [slots, setSlots] = React.useState<import('@/lib/contracts').QuestSlot[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -72,7 +75,12 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   }, [fetchSlots, fetchRewardsBalance]);
 
   // Initialize and watch the current block number immediately to avoid transient wrong UI
-  const { data: liveBlock } = useBlockNumber({ watch: true, query: { refetchInterval: 1000 } });
+  const { data: liveBlock } = useBlockNumber({
+    watch: isDashboardVisible,
+    query: {
+      refetchInterval: isDashboardVisible ? 3000 : false,
+    },
+  });
   React.useEffect(() => {
     if (typeof liveBlock === 'bigint' && liveBlock > BigInt(0)) setCurrentBlock(liveBlock);
   }, [liveBlock]);

@@ -7,10 +7,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, parseAbiItem, type Address } from 'viem';
-import { base } from 'viem/chains';
-
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
+import {
+  getBaseLogClient,
+  getBaseReadClient,
+  getBaseTransactionReceipt,
+} from '@/lib/base-rpc';
+import { parseAbiItem, type Address } from 'viem';
 const BRIDGE_CONTRACT = '0x3eff766C76a1be2Ce1aCF2B69c78bCae257D5188' as Address;
 
 export async function GET(request: NextRequest) {
@@ -25,13 +27,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const publicClient = createPublicClient({ 
-      chain: base, 
-      transport: http(BASE_RPC) 
-    });
+    const readClient = getBaseReadClient();
+    const logClient = getBaseLogClient();
 
     // Get the current block number
-    const currentBlock = await publicClient.getBlockNumber();
+    const currentBlock = await readClient.getBlockNumber();
     
     // Search in chunks of 5000 blocks (within RPC limits)
     // Look back ~2 days worth of blocks (Base ~2s blocks = ~86400 blocks/day)
@@ -50,14 +50,14 @@ export async function GET(request: NextRequest) {
       
       try {
         const [failed, success] = await Promise.all([
-          publicClient.getLogs({
+          logClient.getLogs({
             address: BRIDGE_CONTRACT,
             event: parseAbiItem('event FailedToRelayMessage(address indexed submitter, bytes32 indexed messageHash)'),
             args: { messageHash: messageHash as `0x${string}` },
             fromBlock: start,
             toBlock: end,
           }),
-          publicClient.getLogs({
+          logClient.getLogs({
             address: BRIDGE_CONTRACT,
             event: parseAbiItem('event MessageSuccessfullyRelayed(address indexed submitter, bytes32 indexed messageHash)'),
             args: { messageHash: messageHash as `0x${string}` },
@@ -89,8 +89,8 @@ export async function GET(request: NextRequest) {
     // Get transaction details for failed events
     const failedTxs = await Promise.all(
       failedEvents.map(async (event) => {
-        const tx = await publicClient.getTransaction({ hash: event.transactionHash });
-        const receipt = await publicClient.getTransactionReceipt({ hash: event.transactionHash });
+        const tx = await readClient.getTransaction({ hash: event.transactionHash });
+        const receipt = await getBaseTransactionReceipt(event.transactionHash);
         
         return {
           transactionHash: event.transactionHash,
@@ -150,4 +150,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

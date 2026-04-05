@@ -1069,6 +1069,8 @@ export default function AdminInviteDashboard() {
   const [rpcStatus, setRpcStatus] = useState<{
     endpoints: Array<{
       url: string;
+      vendor?: string;
+      rank?: number;
       ok: boolean;
       ms: number;
       error?: string;
@@ -1078,6 +1080,23 @@ export default function AdminInviteDashboard() {
       lastFailureAt: number | null;
       lastFailureMessage: string | null;
       ewmaLatencyMs: number | null;
+      coolingDown?: boolean;
+      readCoolingDown?: boolean;
+      receiptCoolingDown?: boolean;
+      logCoolingDown?: boolean;
+      probeCoolingDown?: boolean;
+      readConsecutiveFailures?: number;
+      receiptConsecutiveFailures?: number;
+      logConsecutiveFailures?: number;
+      probeConsecutiveFailures?: number;
+      readOpenUntilAt?: number | null;
+      receiptOpenUntilAt?: number | null;
+      logOpenUntilAt?: number | null;
+      probeOpenUntilAt?: number | null;
+      readHealthy?: boolean;
+      receiptHealthy?: boolean;
+      logHealthy?: boolean;
+      probeHealthy?: boolean;
     }>;
     summary: any;
   } | null>(null);
@@ -2665,7 +2684,7 @@ export default function AdminInviteDashboard() {
                   <div className="text-sm text-muted-foreground">
                     {rpcStatus ? (
                       <span>
-                        Total: {rpcStatus.summary?.total} • Healthy: {rpcStatus.summary?.healthy} • Degraded: {rpcStatus.summary?.degraded} • Avg: {rpcStatus.summary?.avgLatencyMs}ms • Live Success: {rpcStatus.summary?.liveSuccessCount} • Live Failure: {rpcStatus.summary?.liveFailureCount}
+                        Total: {rpcStatus.summary?.total} • Healthy: {rpcStatus.summary?.healthy} • Degraded: {rpcStatus.summary?.degraded} • Cooling Down: {rpcStatus.summary?.coolingDown ?? 0} • Avg: {rpcStatus.summary?.avgLatencyMs}ms • Live Success: {rpcStatus.summary?.liveSuccessCount} • Live Failure: {rpcStatus.summary?.liveFailureCount}
                       </span>
                     ) : (
                       <span>Press refresh to check RPCs</span>
@@ -2682,12 +2701,34 @@ export default function AdminInviteDashboard() {
                   <div className="space-y-2">
                     {(rpcStatus?.endpoints || []).map((e) => (
                       <div key={e.url} className={`flex items-center justify-between p-2 rounded border ${e.ok ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
-                        <div className="font-mono text-xs truncate mr-2" title={e.url}>{e.url}</div>
+                        <div className="mr-2 min-w-0">
+                          <div className="font-mono text-xs truncate" title={e.url}>{e.url}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {e.vendor || 'unknown'}{typeof e.rank === 'number' ? ` • rank ${e.rank}` : ''}
+                          </div>
+                        </div>
                         <div className="flex items-center gap-3 text-xs">
                           <span className={e.ok ? 'text-green-600' : 'text-red-600'}>{e.ok ? 'OK' : 'DOWN'}</span>
+                          {e.coolingDown && <span className="text-amber-600">COOLDOWN</span>}
                           <span className="text-muted-foreground">{e.ms}ms</span>
                           <span className="text-muted-foreground">live {e.successCount}/{e.failureCount}</span>
                           {e.ewmaLatencyMs !== null && <span className="text-muted-foreground">ewma {e.ewmaLatencyMs}ms</span>}
+                          <span className="text-muted-foreground">
+                            r {e.readHealthy ? '1' : '0'} • rcpt {e.receiptHealthy ? '1' : '0'} • log {e.logHealthy ? '1' : '0'} • probe {e.probeHealthy ? '1' : '0'}
+                          </span>
+                          {(e.readCoolingDown || e.receiptCoolingDown || e.logCoolingDown || e.probeCoolingDown) && (
+                            <span className="text-muted-foreground">
+                              cd r {e.readCoolingDown ? '1' : '0'} • rcpt {e.receiptCoolingDown ? '1' : '0'} • log {e.logCoolingDown ? '1' : '0'} • probe {e.probeCoolingDown ? '1' : '0'}
+                            </span>
+                          )}
+                          {typeof e.readConsecutiveFailures === 'number' && e.readConsecutiveFailures > 0 && (
+                            <span className="text-muted-foreground">read fails {e.readConsecutiveFailures}</span>
+                          )}
+                          {e.readOpenUntilAt && e.readOpenUntilAt > Date.now() && (
+                            <span className="text-muted-foreground">
+                              read until {formatDistanceToNow(e.readOpenUntilAt, { addSuffix: true })}
+                            </span>
+                          )}
                           {!e.ok && e.error && <span className="text-muted-foreground truncate max-w-[12rem]" title={e.error}>{e.error}</span>}
                         </div>
                       </div>

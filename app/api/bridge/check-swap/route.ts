@@ -7,15 +7,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
-import { createPublicClient, http, formatUnits, type Address } from 'viem';
-import { base } from 'viem/chains';
+import { getBaseReadClient } from '@/lib/base-rpc';
+import { formatUnits, type Address } from 'viem';
 
 // Segment config: Always fetch fresh onchain data
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
-
-const BASE_RPC = process.env.NEXT_PUBLIC_RPC_NODE || undefined;
 
 // Contract addresses from SolanaTwinAdapterV2
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
@@ -82,7 +80,7 @@ export async function GET(request: NextRequest) {
   const strain = BigInt(strainStr);
 
   try {
-    const publicClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+    const publicClient = getBaseReadClient();
 
     // Step 1: Get mint price
     let mintPrice: bigint;
@@ -198,4 +196,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-
