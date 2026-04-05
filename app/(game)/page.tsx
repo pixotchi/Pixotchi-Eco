@@ -117,6 +117,31 @@ const tabComponents = {
 };
 
 const TAB_VALUES: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
+const MANAGED_GAME_QUERY_KEYS = new Set([
+  "tab",
+  "dashboardView",
+  "mintType",
+  "activityView",
+  "activityPage",
+  "leaderboardPage",
+  "leaderboardFilter",
+  "leaderboardMine",
+  "leaderboardBoard",
+]);
+const TAB_QUERY_KEY_ALLOWLIST: Record<Tab, ReadonlySet<string>> = {
+  dashboard: new Set(["tab", "dashboardView"]),
+  mint: new Set(["tab", "mintType"]),
+  activity: new Set(["tab", "activityView", "activityPage"]),
+  leaderboard: new Set([
+    "tab",
+    "leaderboardPage",
+    "leaderboardFilter",
+    "leaderboardMine",
+    "leaderboardBoard",
+  ]),
+  swap: new Set(["tab"]),
+  about: new Set(["tab"]),
+};
 
 // Tab prefetching logic with de-duplication
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
@@ -224,6 +249,38 @@ export default function App() {
 
   useFarcaster({ readyBlocker });
   useAutoConnect();
+
+  useEffect(() => {
+    if (isMiniApp || typeof window === "undefined") {
+      return;
+    }
+
+    const allowedKeys = TAB_QUERY_KEY_ALLOWLIST[activeTab];
+    const currentUrl = new URL(window.location.href);
+    let didChange = false;
+
+    for (const key of MANAGED_GAME_QUERY_KEYS) {
+      if (!currentUrl.searchParams.has(key) || allowedKeys.has(key)) {
+        continue;
+      }
+
+      currentUrl.searchParams.delete(key);
+      didChange = true;
+    }
+
+    if (!didChange) {
+      return;
+    }
+
+    const nextSearch = currentUrl.searchParams.toString();
+    const nextUrl = `${currentUrl.pathname}${nextSearch ? `?${nextSearch}` : ""}${currentUrl.hash}`;
+    const currentPathWithSearch =
+      `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+    if (nextUrl !== currentPathWithSearch) {
+      window.history.replaceState(window.history.state, "", nextUrl);
+    }
+  }, [activeTab, isMiniApp]);
 
   // Broadcast messages system
   const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
