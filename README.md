@@ -41,7 +41,6 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 - **Coinbase OnchainKit & CDP** – Wallets, AI Agents and smart account capabilities.
 - **Privy** – Embedded wallet authentication and social login.
 - **EFP** – Onchain Social Graph by Ethereum Follow Protocol.
-- **Memory Protocol** – Onchain Social Identities Graph.
 - **Neynar** – Notifications infra.
 - **Solana Bridge** – Cross‑chain minting from Solana *(experimental)*.
 
