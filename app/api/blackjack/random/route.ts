@@ -5,8 +5,6 @@ import { blackjackAbi } from '@/public/abi/blackjack-abi';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { redis, redisCompareAndSetJSON, redisDel, redisGetJSON } from '@/lib/redis';
-import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
-import { isMiniAppRequestContext } from '@/lib/miniapp-request-context';
 import { getCasinoPolicy } from '@/lib/casino-feature';
 import { BLACKJACK_DISABLED_MESSAGE } from '@/lib/casino-policy';
 
@@ -277,12 +275,7 @@ function cleanupRateLimits() {
 
 export async function POST(request: NextRequest) {
     try {
-        const casinoPolicy = getCasinoPolicy({
-            isMiniApp: isMiniAppRequestContext({
-                miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
-                miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
-            }),
-        });
+        const casinoPolicy = getCasinoPolicy();
 
         if (!casinoPolicy.casinoEnabled || !casinoPolicy.blackjackEnabled) {
             return NextResponse.json(
@@ -293,8 +286,8 @@ export async function POST(request: NextRequest) {
 
         if (!casinoPolicy.playable) {
             return NextResponse.json(
-                { error: casinoPolicy.message || 'Blackjack is available only inside Pixotchi Mini on Base app.' },
-                { status: 403 }
+                { error: casinoPolicy.message || BLACKJACK_DISABLED_MESSAGE },
+                { status: 503 }
             );
         }
 

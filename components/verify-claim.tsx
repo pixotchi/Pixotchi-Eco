@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useSignMessage } from 'wagmi';
 import { SiweMessage, generateNonce } from 'siwe';
-import { useFrameContext } from '@/lib/frame-context';
 import { openExternalUrl } from '@/lib/open-external';
 import {
   VERIFY_CLAIM_LEAF_BONUS_LABEL,
@@ -36,8 +35,7 @@ interface VerifyClaimProps {
 export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
-  const frameContext = useFrameContext();
-  
+
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'idle' | 'verifying' | 'claiming' | 'success' | 'unverified'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -217,20 +215,11 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
     if (bonuses.seed) parts.push(VERIFY_CLAIM_SEED_BONUS_LABEL);
     return parts.join(' + ');
   })();
-
-  // Check if we're in Mini App mode
-  const isInMiniApp = frameContext?.isInMiniApp ?? false;
-
   // Don't render if:
   // 1. Feature is disabled via env
-  // 2. Not in Mini App mode (only show in Mini App)
-  // 3. Still loading claim status
-  // 4. User has already claimed (Redis is source of truth)
+  // 2. Still loading claim status
+  // 3. User has already claimed (Redis is source of truth)
   if (!BASE_VERIFY_CONFIG.enabled) {
-    return null;
-  }
-
-  if (!isInMiniApp) {
     return null;
   }
 

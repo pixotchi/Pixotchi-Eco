@@ -28,9 +28,7 @@ import {
 } from '@/lib/contracts';
 import { getResultText } from '@/public/abi/blackjack-abi';
 import { loadBetPreference, storeBetPreference } from '@/lib/casino-bet-preferences';
-import { useFrameContext } from '@/lib/frame-context';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
-import { showMiniAppRequiredToast } from '@/lib/miniapp-required-toast';
 
 interface BlackjackDialogProps {
     open: boolean;
@@ -220,8 +218,8 @@ export default function BlackjackDialog({
 }: BlackjackDialogProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
-    const frame = useFrameContext();
-    const casinoPolicy = getClientCasinoPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+    const casinoPolicy = getClientCasinoPolicy();
+    const blackjackPlayable = casinoPolicy.playable && casinoPolicy.blackjackEnabled;
 
     // Core game state - derived from contract
     const [gameState, setGameState] = useState<GameState>(initialGameState);
@@ -246,14 +244,14 @@ export default function BlackjackDialog({
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!open || casinoPolicy.playable) return;
+        if (!open || blackjackPlayable) return;
         onOpenChange(false);
-        showMiniAppRequiredToast({
-            id: 'casino-miniapp-required',
-            title: 'Casino Is In Pixotchi Mini',
-            description: 'Open Pixotchi Mini in Base app to play Roulette and Blackjack.',
-        });
-    }, [casinoPolicy.playable, onOpenChange, open]);
+        toast.error(
+            casinoPolicy.blackjackEnabled
+                ? (casinoPolicy.message || 'Casino is currently unavailable.')
+                : 'Blackjack is currently unavailable.'
+        );
+    }, [blackjackPlayable, casinoPolicy.blackjackEnabled, casinoPolicy.message, onOpenChange, open]);
 
     const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
 
@@ -320,7 +318,7 @@ export default function BlackjackDialog({
 
     // Fetch complete game state from contract
     const refreshGameState = useCallback(async (): Promise<boolean> => {
-        if (!open || !address || !casinoPolicy.playable) {
+        if (!open || !address || !blackjackPlayable) {
             setActionButtonsReady(false);
             return false;
         }
@@ -523,7 +521,7 @@ export default function BlackjackDialog({
             setActionButtonsReady(false);
             return false;
         }
-    }, [open, landId, address, casinoPolicy.playable]);
+    }, [open, landId, address, blackjackPlayable]);
 
     const syncActionButtonsWithRetries = useCallback(async (): Promise<boolean> => {
         setActionButtonsReady(false);
@@ -552,7 +550,7 @@ export default function BlackjackDialog({
     // Load config on open
     useEffect(() => {
         const loadConfig = async () => {
-            if (!open || !casinoPolicy.playable) return;
+            if (!open || !blackjackPlayable) return;
 
             try {
                 const snapshot = await blackjackGetGameSnapshot(landId);
@@ -591,7 +589,7 @@ export default function BlackjackDialog({
         };
 
         loadConfig();
-    }, [open, address, landId, selectedToken, casinoPolicy.playable]);
+    }, [open, address, landId, selectedToken, blackjackPlayable]);
 
     useEffect(() => {
         if (!open || !config || gameState.contractPhase !== BlackjackPhase.NONE) return;
@@ -615,10 +613,10 @@ export default function BlackjackDialog({
 
     // Refresh game state on open
     useEffect(() => {
-        if (open && casinoPolicy.playable) {
+        if (open && blackjackPlayable) {
             refreshGameState();
         }
-    }, [open, refreshGameState, casinoPolicy.playable]);
+    }, [open, refreshGameState, blackjackPlayable]);
 
     // Keep action state synced while playing. If it becomes stale, hide buttons and
     // retry up to 3 times over ~3-4s before giving up.

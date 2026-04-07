@@ -1,21 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getLeaderboards } from '@/lib/gamification-service';
 import { resolvePrimaryNames } from '@/lib/ens-resolver';
-import { getGamificationPolicy, isGamificationMiniAppOnly, isMiniAppGamificationContext } from '@/lib/gamification-feature';
-import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
+import { getGamificationPolicy } from '@/lib/gamification-feature';
 
 export const runtime = 'nodejs';
 export const revalidate = 300;
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const gamificationPolicy = getGamificationPolicy({
-      isMiniApp: isMiniAppGamificationContext({
-        miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
-        miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
-      }),
-    });
+    const gamificationPolicy = getGamificationPolicy();
     if (!gamificationPolicy.enabled) {
       return NextResponse.json(
         {
@@ -44,9 +38,7 @@ export async function GET(request: NextRequest) {
       { success: true, leaderboard, totalEntries: leaderboard.length },
       {
         headers: {
-          'Cache-Control': isGamificationMiniAppOnly()
-            ? 'no-store'
-            : 'public, max-age=60, s-maxage=300',
+          'Cache-Control': 'public, max-age=60, s-maxage=300',
         },
       },
     );

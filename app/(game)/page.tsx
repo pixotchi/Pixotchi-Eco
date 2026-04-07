@@ -559,9 +559,9 @@ export default function App() {
                 {!fc?.isInMiniApp && (
                   <Alert>
                     <Info className="h-4 w-4" />
-                    <AlertTitle>Not in Mini App</AlertTitle>
+                    <AlertTitle>Web App</AlertTitle>
                     <AlertDescription>
-                      Open in Farcaster/Base App for the native experience — search "Pixotchi Mini". You can also continue here.
+                      You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
                     </AlertDescription>
                   </Alert>
                 )}

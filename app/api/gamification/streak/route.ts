@@ -5,8 +5,7 @@ import {
 } from '@/lib/chat-auth';
 import { getStreak, trackDailyActivity } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
-import { getGamificationPolicy, isMiniAppGamificationContext } from '@/lib/gamification-feature';
-import { MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
+import { getGamificationPolicy } from '@/lib/gamification-feature';
 
 // Segment config: Always fetch fresh user data
 export const dynamic = 'force-dynamic';
@@ -20,12 +19,7 @@ export async function GET(request: NextRequest) {
     if (!address || !isValidEthereumAddressFormat(address)) {
       return NextResponse.json({ error: 'Valid wallet address is required' }, { status: 400 });
     }
-    const gamificationPolicy = getGamificationPolicy({
-      isMiniApp: isMiniAppGamificationContext({
-        miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
-        miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
-      }),
-    });
+    const gamificationPolicy = getGamificationPolicy();
     if (!gamificationPolicy.enabled) {
       return NextResponse.json({
         success: true,
@@ -50,13 +44,7 @@ export async function POST(request: NextRequest) {
       fallbackAddress,
     });
 
-    const gamificationPolicy = getGamificationPolicy({
-      isMiniApp: isMiniAppGamificationContext({
-        sessionMethod: session?.method ?? null,
-        miniAppCookie: request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value ?? null,
-        miniAppHeader: request.headers.get('x-pixotchi-miniapp'),
-      }),
-    });
+    const gamificationPolicy = getGamificationPolicy();
     if (!gamificationPolicy.enabled) {
       return NextResponse.json({
         success: true,

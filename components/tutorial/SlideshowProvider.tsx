@@ -1,8 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { slides as defaultSlides, TUTORIAL_VERSION, type TutorialSlide } from "./slides";
-import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 
 type SlideshowContextType = {
@@ -25,8 +24,7 @@ const STORAGE_KEY = "pixotchi:tutorial";
 export function SlideshowProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
-  const frame = useFrameContext();
-  const gamificationPolicy = getClientGamificationPolicy({ isMiniApp: Boolean(frame?.isInMiniApp) });
+  const gamificationPolicy = getClientGamificationPolicy();
   const slides = useMemo(
     () =>
       gamificationPolicy.visible
