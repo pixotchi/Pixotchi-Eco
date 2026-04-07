@@ -561,7 +561,7 @@ export default function App() {
                     <Info className="h-4 w-4" />
                     <AlertTitle>Web App</AlertTitle>
                     <AlertDescription>
-                      You can play fully here on the web. Launching from Farcaster or Base App still enables their in-app integrations.
+                      You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
                     </AlertDescription>
                   </Alert>
                 )}
