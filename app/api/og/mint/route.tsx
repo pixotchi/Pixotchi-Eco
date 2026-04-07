@@ -1,7 +1,17 @@
+/* eslint-disable @next/next/no-img-element */
 import { ImageResponse } from 'next/og';
 import { PLANT_STRAINS, PLANT_ART_MAP } from '@/lib/constants';
 
 export const runtime = 'edge';
+
+type Platform = 'twitter' | 'farcaster';
+
+type BundledAsset = {
+  relativePath: string;
+  mimeType: string;
+  width: number;
+  height: number;
+};
 
 // Platform-specific dimensions
 const DIMENSIONS = {
@@ -17,22 +27,89 @@ const strainNames: Record<number, string> = Object.fromEntries(
 // Use plant art map from centralized constants
 const artMap = PLANT_ART_MAP;
 
-function formatDate(value: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const BACKGROUND_ASSETS: Record<Platform, BundledAsset> = {
+  twitter: {
+    relativePath: '../../../../public/twitter-og.png',
+    mimeType: 'image/png',
+    width: 1200,
+    height: 630,
+  },
+  farcaster: {
+    relativePath: '../../../../public/farcaster-og.png',
+    mimeType: 'image/png',
+    width: 1200,
+    height: 800,
+  },
+};
+
+const PLANT_ASSETS: Record<number, BundledAsset> = Object.fromEntries(
+  Object.entries(artMap).map(([key, publicPath]) => [
+    Number(key),
+    {
+      relativePath: `../../../../public${publicPath}`,
+      mimeType: publicPath.endsWith('.png') ? 'image/png' : 'image/svg+xml',
+      width: publicPath.endsWith('.png') ? 1500 : 600,
+      height: publicPath.endsWith('.png') ? 1500 : 600,
+    },
+  ])
+) as Record<number, BundledAsset>;
+
+const binaryAssetCache = new Map<string, Promise<ArrayBuffer>>();
+const dataUrlCache = new Map<string, Promise<string>>();
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+
+  return btoa(binary);
 }
 
-function resolveBaseUrl(request: Request) {
-  const host = request.headers.get('host') ?? 'mini.pixotchi.tech';
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  return `${protocol}://${host}`;
+async function loadBundledBinary(relativePath: string): Promise<ArrayBuffer> {
+  let pending = binaryAssetCache.get(relativePath);
+
+  if (!pending) {
+    pending = (async () => {
+      const response = await fetch(new URL(relativePath, import.meta.url));
+
+      if (!response.ok) {
+        throw new Error(`Failed to load bundled asset ${relativePath}: ${response.status}`);
+      }
+
+      return response.arrayBuffer();
+    })();
+
+    binaryAssetCache.set(relativePath, pending);
+  }
+
+  try {
+    return await pending;
+  } catch (error) {
+    binaryAssetCache.delete(relativePath);
+    throw error;
+  }
+}
+
+async function loadBundledDataUrl(asset: BundledAsset): Promise<string> {
+  const cacheKey = `${asset.relativePath}:${asset.mimeType}`;
+  let pending = dataUrlCache.get(cacheKey);
+
+  if (!pending) {
+    pending = loadBundledBinary(asset.relativePath).then(
+      (buffer) => `data:${asset.mimeType};base64,${arrayBufferToBase64(buffer)}`
+    );
+    dataUrlCache.set(cacheKey, pending);
+  }
+
+  try {
+    return await pending;
+  } catch (error) {
+    dataUrlCache.delete(cacheKey);
+    throw error;
+  }
 }
 
 function formatAddress(address: string): string {
@@ -45,25 +122,27 @@ function formatAddress(address: string): string {
 }
 
 export async function GET(request: Request) {
-  const baseUrl = resolveBaseUrl(request);
-
   try {
     const { searchParams } = new URL(request.url);
-    const platform = (searchParams.get('platform') || 'farcaster') as 'twitter' | 'farcaster';
+    const platform = searchParams.get('platform') === 'twitter' ? 'twitter' : 'farcaster';
     const address = searchParams.get('address') || '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
     const basename = searchParams.get('basename');
     const strain = Number(searchParams.get('strain') || '1');
     const strainName = strainNames[strain] || 'Flora';
-    
+
     const dimensions = DIMENSIONS[platform];
-    const bgUrl = new URL(dimensions.bg, baseUrl).toString();
-    const plantUrl = new URL(artMap[strain as keyof typeof PLANT_ART_MAP] || artMap[1], baseUrl).toString();
+    const backgroundAsset = BACKGROUND_ASSETS[platform];
+    const plantAsset = PLANT_ASSETS[strain] || PLANT_ASSETS[1];
     // Use basename if provided, otherwise format the address
     const displayAddress = basename || formatAddress(address);
 
-    // Load custom fonts from local files (not HTTP self-fetch, which can return HTML 404 on Edge)
-    const pixelFontData = await fetch(new URL('../../../../public/fonts/pixelmix.ttf', import.meta.url)).then(res => res.arrayBuffer());
-    const mainFontData = await fetch(new URL('../../../../public/fonts/AdelleSans-Semibold.woff', import.meta.url)).then(res => res.arrayBuffer());
+    // Load OG assets from the bundle instead of self-fetching over HTTP.
+    const [bgUrl, plantUrl, pixelFontData, mainFontData] = await Promise.all([
+      loadBundledDataUrl(backgroundAsset),
+      loadBundledDataUrl(plantAsset),
+      loadBundledBinary('../../../../public/fonts/pixelmix.ttf'),
+      loadBundledBinary('../../../../public/fonts/AdelleSans-Semibold.woff'),
+    ]);
 
     return new ImageResponse(
       <div
@@ -92,6 +171,9 @@ export async function GET(request: Request) {
         >
           <img
             src={plantUrl}
+            alt=""
+            width={plantAsset.width}
+            height={plantAsset.height}
             style={{
               width: '100%',
               height: '100%',
