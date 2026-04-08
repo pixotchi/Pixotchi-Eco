@@ -1,13 +1,15 @@
 /* eslint-disable @next/next/no-img-element */
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
 import { PLANT_STRAINS, PLANT_ART_MAP } from '@/lib/constants';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 type Platform = 'twitter' | 'farcaster';
 
 type BundledAsset = {
-  relativePath: string;
+  publicPath: string;
   mimeType: string;
   width: number;
   height: number;
@@ -29,13 +31,13 @@ const artMap = PLANT_ART_MAP;
 
 const BACKGROUND_ASSETS: Record<Platform, BundledAsset> = {
   twitter: {
-    relativePath: '../../../../public/twitter-og.png',
+    publicPath: 'twitter-og.png',
     mimeType: 'image/png',
     width: 1200,
     height: 630,
   },
   farcaster: {
-    relativePath: '../../../../public/farcaster-og.png',
+    publicPath: 'farcaster-og.png',
     mimeType: 'image/png',
     width: 1200,
     height: 800,
@@ -46,7 +48,7 @@ const PLANT_ASSETS: Record<number, BundledAsset> = Object.fromEntries(
   Object.entries(artMap).map(([key, publicPath]) => [
     Number(key),
     {
-      relativePath: `../../../../public${publicPath}`,
+      publicPath: publicPath.replace(/^\//, ''),
       mimeType: publicPath.endsWith('.png') ? 'image/png' : 'image/svg+xml',
       width: publicPath.endsWith('.png') ? 1500 : 600,
       height: publicPath.endsWith('.png') ? 1500 : 600,
@@ -54,52 +56,33 @@ const PLANT_ASSETS: Record<number, BundledAsset> = Object.fromEntries(
   ])
 ) as Record<number, BundledAsset>;
 
-const binaryAssetCache = new Map<string, Promise<ArrayBuffer>>();
+const binaryAssetCache = new Map<string, Promise<Buffer>>();
 const dataUrlCache = new Map<string, Promise<string>>();
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-
-  return btoa(binary);
-}
-
-async function loadBundledBinary(relativePath: string): Promise<ArrayBuffer> {
-  let pending = binaryAssetCache.get(relativePath);
+async function loadPublicAssetBinary(publicPath: string): Promise<Buffer> {
+  let pending = binaryAssetCache.get(publicPath);
 
   if (!pending) {
-    pending = (async () => {
-      const response = await fetch(new URL(relativePath, import.meta.url));
+    pending = readFile(join(process.cwd(), 'public', publicPath));
 
-      if (!response.ok) {
-        throw new Error(`Failed to load bundled asset ${relativePath}: ${response.status}`);
-      }
-
-      return response.arrayBuffer();
-    })();
-
-    binaryAssetCache.set(relativePath, pending);
+    binaryAssetCache.set(publicPath, pending);
   }
 
   try {
     return await pending;
   } catch (error) {
-    binaryAssetCache.delete(relativePath);
+    binaryAssetCache.delete(publicPath);
     throw error;
   }
 }
 
 async function loadBundledDataUrl(asset: BundledAsset): Promise<string> {
-  const cacheKey = `${asset.relativePath}:${asset.mimeType}`;
+  const cacheKey = `${asset.publicPath}:${asset.mimeType}`;
   let pending = dataUrlCache.get(cacheKey);
 
   if (!pending) {
-    pending = loadBundledBinary(asset.relativePath).then(
-      (buffer) => `data:${asset.mimeType};base64,${arrayBufferToBase64(buffer)}`
+    pending = loadPublicAssetBinary(asset.publicPath).then(
+      (buffer) => `data:${asset.mimeType};base64,${buffer.toString('base64')}`
     );
     dataUrlCache.set(cacheKey, pending);
   }
@@ -140,8 +123,8 @@ export async function GET(request: Request) {
     const [bgUrl, plantUrl, pixelFontData, mainFontData] = await Promise.all([
       loadBundledDataUrl(backgroundAsset),
       loadBundledDataUrl(plantAsset),
-      loadBundledBinary('../../../../public/fonts/pixelmix.ttf'),
-      loadBundledBinary('../../../../public/fonts/AdelleSans-Semibold.woff'),
+      loadPublicAssetBinary('fonts/pixelmix.ttf'),
+      loadPublicAssetBinary('fonts/AdelleSans-Semibold.woff'),
     ]);
 
     return new ImageResponse(
