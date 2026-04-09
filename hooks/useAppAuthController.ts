@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import toast from "react-hot-toast";
 import { getAddress, stringToHex } from "viem";
+import { createSiweMessage } from "viem/siwe";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { useFrameContext } from "@/lib/frame-context";
 import { clearAppCaches } from "@/lib/cache-utils";
@@ -444,22 +445,17 @@ export function useAppAuthController() {
       nonce: string;
       statement: string;
       uri?: string;
-    }) => {
-      const lines = [
-        `${params.domain || "localhost"} wants you to sign in with your Ethereum account:`,
-        params.address,
-        "",
-        params.statement,
-        "",
-        `URI: ${params.uri || "http://localhost:3000"}`,
-        "Version: 1",
-        `Chain ID: ${params.chainId}`,
-        `Nonce: ${params.nonce}`,
-        `Issued At: ${params.issuedAt}`,
-      ];
-
-      return lines.join("\n");
-    },
+    }) =>
+      createSiweMessage({
+        address: getAddress(params.address),
+        chainId: params.chainId,
+        domain: params.domain || "localhost",
+        issuedAt: new Date(params.issuedAt),
+        nonce: params.nonce,
+        statement: params.statement,
+        uri: params.uri || "http://localhost:3000",
+        version: "1",
+      }),
     [],
   );
 

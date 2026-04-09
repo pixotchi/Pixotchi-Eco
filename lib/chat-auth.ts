@@ -2,7 +2,6 @@ import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { base } from 'viem/chains';
-import { SiweMessage } from 'siwe';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
 import { PrivyClient } from '@privy-io/node';
 import { getBaseReadClient } from '@/lib/base-rpc';
@@ -46,6 +45,22 @@ interface BaseChatAuthPayload {
   address: string;
   message: string;
   signature: `0x${string}`;
+}
+
+interface ParsedBaseSiweMessage {
+  address: string;
+  chainId: number;
+  domain: string;
+  expirationTime?: Date;
+  issuedAt: Date;
+  nonce: string;
+  notBefore?: Date;
+  requestId?: string;
+  resources?: string[];
+  scheme?: string;
+  statement?: string;
+  uri: string;
+  version: string;
 }
 
 interface PrivyChatAuthPayload {
@@ -153,34 +168,152 @@ function getExpectedBaseDomains(urls: URL[]): Set<string> {
   return domains;
 }
 
+const BASE_SIWE_PREFIX_REGEX =
+  /^(?:([a-zA-Z][a-zA-Z0-9+-.]*):\/\/)?([a-zA-Z0-9+-.]*(?::[0-9]{1,5})?) (?:wants you to sign in with your Ethereum account:\n)(0x[a-fA-F0-9]{40})\n\n(?:(.*)\n\n)?/;
+const BASE_SIWE_SUFFIX_REGEX =
+  /(?:URI: (.+))\n(?:Version: (.+))\n(?:Chain ID: ([^\n]+))\n(?:Nonce: ([a-zA-Z0-9]+))\n(?:Issued At: (.+))(?:\nExpiration Time: (.+))?(?:\nNot Before: (.+))?(?:\nRequest ID: (.+))?/;
+
+function normalizeBaseSiweChainIdValue(chainId: string): string {
+  const trimmed = chainId.trim();
+  const caipMatch = trimmed.match(/^eip155:(\d+)$/i);
+
+  if (caipMatch) {
+    return caipMatch[1];
+  }
+
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
+    const parsed = Number.parseInt(trimmed, 16);
+    if (Number.isFinite(parsed)) {
+      return String(parsed);
+    }
+  }
+
+  return trimmed;
+}
+
+function normalizeBaseSiweLine(line: string): string {
+  const trimmed = line.trimStart();
+  const fieldMatch = trimmed.match(/^([^:]+):\s*(.*)$/);
+
+  if (!fieldMatch) {
+    return trimmed;
+  }
+
+  const [, rawLabel, rawValue] = fieldMatch;
+  const label = rawLabel.trim().toLowerCase().replace(/\s+/g, ' ');
+  const value = rawValue.trim();
+
+  switch (label) {
+    case 'uri':
+      return `URI: ${value}`;
+    case 'version':
+      return `Version: ${value}`;
+    case 'chain id':
+    case 'chainid':
+      return `Chain ID: ${normalizeBaseSiweChainIdValue(value)}`;
+    case 'nonce':
+      return `Nonce: ${value}`;
+    case 'issued at':
+      return `Issued At: ${value}`;
+    case 'expiration time':
+      return `Expiration Time: ${value}`;
+    case 'not before':
+      return `Not Before: ${value}`;
+    case 'request id':
+      return `Request ID: ${value}`;
+    case 'resources':
+      return 'Resources:';
+    default:
+      return trimmed;
+  }
+}
+
 function normalizeBaseSiweMessage(message: string): string {
   return message
     .replace(/\r\n/g, '\n')
     .split('\n')
-    .map((line) => line.trimStart())
+    .map(normalizeBaseSiweLine)
     .join('\n')
-    .replace(/^(Chain ID:\s*)(0x[0-9a-fA-F]+)\s*$/m, (_match, prefix, hexValue) => {
-      try {
-        return `${prefix}${Number.parseInt(hexValue, 16)}`;
-      } catch {
-        return `${prefix}${hexValue}`;
-      }
-    })
     .trim();
 }
 
-function parseBaseSiweMessage(message: string): SiweMessage {
-  const normalizedMessage = normalizeBaseSiweMessage(message);
+function parseRequiredBaseSiweDate(label: string, value: string): Date {
+  const date = new Date(value);
 
-  try {
-    return new SiweMessage(message);
-  } catch {
-    try {
-      return new SiweMessage(normalizedMessage);
-    } catch {
-      throw new ChatAuthError('Invalid SIWE message.', 400);
-    }
+  if (Number.isNaN(date.getTime())) {
+    throw new ChatAuthError(`Invalid SIWE ${label}.`, 400);
   }
+
+  return date;
+}
+
+function parseBaseSiweChainId(value: string): number {
+  const normalized = normalizeBaseSiweChainIdValue(value);
+
+  if (!/^\d+$/.test(normalized)) {
+    throw new ChatAuthError('Invalid SIWE chain ID.', 400);
+  }
+
+  const chainId = Number.parseInt(normalized, 10);
+  if (!Number.isFinite(chainId)) {
+    throw new ChatAuthError('Invalid SIWE chain ID.', 400);
+  }
+
+  return chainId;
+}
+
+function parseBaseSiweMessage(message: string): ParsedBaseSiweMessage {
+  const normalizedMessage = normalizeBaseSiweMessage(message);
+  const prefixMatch = normalizedMessage.match(BASE_SIWE_PREFIX_REGEX);
+  const suffixMatch = normalizedMessage.match(BASE_SIWE_SUFFIX_REGEX);
+
+  if (!prefixMatch || !suffixMatch) {
+    throw new ChatAuthError('Invalid SIWE message.', 400);
+  }
+
+  const [, scheme, domain, address, statement] = prefixMatch;
+  const [
+    ,
+    uri,
+    version,
+    chainId,
+    nonce,
+    issuedAt,
+    expirationTime,
+    notBefore,
+    requestId,
+  ] = suffixMatch;
+
+  if (!address || !domain || !uri || !version || !issuedAt || !nonce || !chainId) {
+    throw new ChatAuthError('Invalid SIWE message.', 400);
+  }
+
+  if (version.trim() !== '1') {
+    throw new ChatAuthError('Invalid SIWE version.', 400);
+  }
+
+  const resources = normalizedMessage
+    .split('Resources:')[1]
+    ?.split('\n- ')
+    .slice(1)
+    .map((resource) => resource.trim())
+    .filter(Boolean);
+
+  return {
+    address,
+    chainId: parseBaseSiweChainId(chainId),
+    domain,
+    ...(expirationTime ? { expirationTime: parseRequiredBaseSiweDate('expiration time', expirationTime) } : {}),
+    issuedAt: parseRequiredBaseSiweDate('issued at', issuedAt),
+    nonce,
+    ...(notBefore ? { notBefore: parseRequiredBaseSiweDate('not before', notBefore) } : {}),
+    ...(requestId ? { requestId } : {}),
+    ...(resources?.length ? { resources } : {}),
+    ...(scheme ? { scheme } : {}),
+    ...(statement ? { statement } : {}),
+    uri,
+    version,
+  };
 }
 
 function getExpectedBaseUrls(request: NextRequest): URL[] {
