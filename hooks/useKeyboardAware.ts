@@ -74,27 +74,52 @@ export function useViewportHeight() {
   const [viewportHeight, setViewportHeight] = useState<number>(0);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    const root = document.documentElement;
+    const KEYBOARD_HEIGHT_THRESHOLD = 150;
 
     const updateHeight = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-      setViewportHeight(window.innerHeight);
+      const viewport = window.visualViewport;
+      const layoutHeight = window.innerHeight;
+      const layoutWidth = window.innerWidth;
+      const visibleHeight = Math.round(viewport?.height ?? layoutHeight);
+      const visibleWidth = Math.round(viewport?.width ?? layoutWidth);
+      const offsetTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      const offsetLeft = Math.max(0, Math.round(viewport?.offsetLeft ?? 0));
+      const rawOffsetBottom = Math.max(0, Math.round(layoutHeight - visibleHeight - offsetTop));
+      const offsetRight = Math.max(0, Math.round(layoutWidth - visibleWidth - offsetLeft));
+      const browserBottomInset =
+        rawOffsetBottom > KEYBOARD_HEIGHT_THRESHOLD ? 0 : rawOffsetBottom;
+
+      root.style.setProperty('--vh', `${visibleHeight * 0.01}px`);
+      root.style.setProperty('--browser-safe-area-top', `${offsetTop}px`);
+      root.style.setProperty('--browser-safe-area-right', `${offsetRight}px`);
+      root.style.setProperty('--browser-safe-area-bottom', `${browserBottomInset}px`);
+      root.style.setProperty('--browser-safe-area-left', `${offsetLeft}px`);
+
+      setViewportHeight(visibleHeight);
     };
+
     const handleOrientationChange = () => {
       // Small delay to account for mobile browser UI adjustments
       setTimeout(updateHeight, 100);
     };
 
+    const viewport = window.visualViewport;
     updateHeight();
 
-    // Update on resize and orientation change
+    // Update on viewport resize, browser chrome movement, and orientation changes.
     window.addEventListener('resize', updateHeight);
     window.addEventListener('orientationchange', handleOrientationChange);
+    viewport?.addEventListener('resize', updateHeight);
+    viewport?.addEventListener('scroll', updateHeight);
 
     return () => {
       window.removeEventListener('resize', updateHeight);
       window.removeEventListener('orientationchange', handleOrientationChange);
+      viewport?.removeEventListener('resize', updateHeight);
+      viewport?.removeEventListener('scroll', updateHeight);
     };
   }, []);
 

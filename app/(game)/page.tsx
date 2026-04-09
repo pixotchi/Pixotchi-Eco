@@ -291,6 +291,7 @@ export default function App() {
   const viewportHeight = useViewportHeight();
   const isKeyboardNavigation = useKeyboardNavigation();
   const addFrame = useAddFrame();
+  const shellHeight = viewportHeight > 0 ? `${viewportHeight}px` : undefined;
 
   // Start tutorial only after wallet connect (and invite gate passed)
   useEffect(() => {
@@ -451,10 +452,13 @@ export default function App() {
       aria-label="Pixotchi Mini Game"
       style={{
         // Dynamic viewport height for mobile
-        minHeight: viewportHeight > 0 ? `${viewportHeight}px` : undefined
+        minHeight: shellHeight
       }}
     >
-      <div className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none">
+      <div
+        className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
+        style={{ height: shellHeight }}
+      >
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">
           <header className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
