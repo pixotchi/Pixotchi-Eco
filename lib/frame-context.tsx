@@ -28,6 +28,35 @@ type FrameContextValue = {
 
 const FrameContext = createContext<FrameContextValue>(null);
 
+const FRAME_CONTEXT_TIMEOUT_MS = 250;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]);
+}
+
+function applySafeAreaInsets(context: MiniAppContext | null | undefined) {
+  try {
+    if (typeof document === "undefined") {
+      throw new Error("No document available");
+    }
+    const insets: SafeAreaInsets | undefined = context?.client?.safeAreaInsets;
+    if (insets) {
+      const root = document.documentElement;
+      root.style.setProperty('--safe-area-inset-top', `${insets.top}px`);
+      root.style.setProperty('--safe-area-inset-bottom', `${insets.bottom}px`);
+      root.style.setProperty('--safe-area-inset-left', `${insets.left}px`);
+      root.style.setProperty('--safe-area-inset-right', `${insets.right}px`);
+    }
+  } catch {
+    // no-op: rely on CSS env() fallbacks
+  }
+}
+
 export function useFrameContext() {
   return useContext(FrameContext);
 }
@@ -42,49 +71,56 @@ export function FrameProvider({ children }: { children: React.ReactNode }) {
         // Small delay to ensure stable UI before reading context
         await new Promise((r) => setTimeout(r, 60));
 
-        // Resolve context (resolves to undefined outside miniapp)
-        let context: any | undefined;
+        // Resolve context without blocking forever in non-miniapp webviews.
+        let contextPromise: Promise<MiniAppContext | undefined>;
         try {
           // Some clients expose a promise; others a getter. Try both.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const maybeCtx: any = (sdk as any).context;
-          context = typeof maybeCtx?.then === 'function' ? await maybeCtx : maybeCtx;
+          contextPromise = typeof maybeCtx?.then === 'function'
+            ? maybeCtx
+            : Promise.resolve(maybeCtx as MiniAppContext | undefined);
         } catch {
-          context = undefined;
+          contextPromise = Promise.resolve(undefined);
         }
 
-        // Derive isInMiniApp; fallback to explicit check if needed
-        let isInMiniApp = Boolean(context);
+        const miniAppFlagPromise = sdk.isInMiniApp().catch(() => false);
+        const initialContext = await withTimeout(contextPromise, FRAME_CONTEXT_TIMEOUT_MS, undefined);
+
+        // Derive isInMiniApp; fallback to the SDK timeout-based check if needed
+        let isInMiniApp = Boolean(initialContext);
         if (!isInMiniApp) {
           try {
-            const flag = await sdk.isInMiniApp();
+            const flag = await miniAppFlagPromise;
             isInMiniApp = Boolean(flag);
           } catch {
             isInMiniApp = false;
           }
         }
 
-        // Apply safe-area insets globally if available
-        try {
-          if (typeof document === "undefined") {
-            throw new Error("No document available");
-          }
-          const insets: SafeAreaInsets | undefined = (context as any)?.client?.safeAreaInsets;
-          if (insets) {
-            const root = document.documentElement;
-            root.style.setProperty('--safe-area-inset-top', `${insets.top}px`);
-            root.style.setProperty('--safe-area-inset-bottom', `${insets.bottom}px`);
-            root.style.setProperty('--safe-area-inset-left', `${insets.left}px`);
-            root.style.setProperty('--safe-area-inset-right', `${insets.right}px`);
-          }
-        } catch {
-          // no-op: rely on CSS env() fallbacks
-        }
+        const resolvedContext = isInMiniApp
+          ? (initialContext ?? await withTimeout(contextPromise, FRAME_CONTEXT_TIMEOUT_MS, undefined))
+          : initialContext;
+
+        applySafeAreaInsets(resolvedContext ?? null);
 
         if (isMounted) {
-          const ctx = (context as MiniAppContext) ?? null;
+          const ctx = resolvedContext ?? null;
           setValue({ context: ctx, isInMiniApp });
         }
+
+        contextPromise
+          .then((lateContext) => {
+            if (!isMounted || !lateContext) {
+              return;
+            }
+
+            applySafeAreaInsets(lateContext);
+            setValue({ context: lateContext, isInMiniApp: true });
+          })
+          .catch(() => {
+            // Ignore late context failures; initial resolution already handled.
+          });
       } catch {
         if (isMounted) setValue({ context: { error: 'Failed to initialize' } as any, isInMiniApp: false });
       }
@@ -96,5 +132,4 @@ export function FrameProvider({ children }: { children: React.ReactNode }) {
 
   return <FrameContext.Provider value={value}>{children}</FrameContext.Provider>;
 }
-
 
