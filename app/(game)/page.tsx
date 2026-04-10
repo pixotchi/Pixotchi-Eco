@@ -35,6 +35,7 @@ import { requestBalanceRefresh } from "@/lib/app-events";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
+import { ViewportDebugOverlay } from "@/components/viewport-debug-overlay";
 
 // Tab load error fallback component
 function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => void }) {
@@ -707,6 +708,7 @@ export default function App() {
           onDismiss={handleDismissBroadcast}
           onImpression={trackImpression}
         />
+        <ViewportDebugOverlay />
       </div>
     </div>
   );
