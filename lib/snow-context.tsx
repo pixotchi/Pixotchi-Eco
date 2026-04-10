@@ -35,10 +35,10 @@ export function SnowProvider({ children }: { children: ReactNode }) {
 
         try {
             const stored = localStorage.getItem(STORAGE_KEY);
-            // Default to true (on) if no preference exists and feature is enabled
-            setIsEnabled(stored === null ? true : stored === "true");
+            // Default to off; users can opt in when the seasonal feature is enabled.
+            setIsEnabled(stored === null ? false : stored === "true");
         } catch {
-            setIsEnabled(true);
+            setIsEnabled(false);
         }
         setMounted(true);
     }, [isFeatureEnabled]);
