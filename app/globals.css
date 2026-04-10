@@ -503,20 +503,20 @@
 
   /* Safe area support for device cutouts and in-app browser overlays */
   .safe-area-inset {
-    padding-top: max(1rem, env(safe-area-inset-top), var(--browser-safe-area-top));
-    padding-bottom: max(1rem, env(safe-area-inset-bottom), var(--browser-safe-area-bottom));
-    padding-left: max(1rem, env(safe-area-inset-left), var(--browser-safe-area-left));
-    padding-right: max(1rem, env(safe-area-inset-right), var(--browser-safe-area-right));
+    padding-top: max(1rem, var(--safe-area-inset-top), var(--browser-safe-area-top));
+    padding-bottom: max(1rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
+    padding-left: max(1rem, var(--safe-area-inset-left), var(--browser-safe-area-left));
+    padding-right: max(1rem, var(--safe-area-inset-right), var(--browser-safe-area-right));
   }
 
   /* Header safe area helper */
   .safe-area-top {
-    padding-top: max(0.5rem, env(safe-area-inset-top), var(--browser-safe-area-top));
+    padding-top: max(0.5rem, var(--safe-area-inset-top), var(--browser-safe-area-top));
   }
 
   /* Bottom nav safe area helper */
   .safe-area-bottom {
-    padding-bottom: max(0.25rem, env(safe-area-inset-bottom), var(--browser-safe-area-bottom));
+    padding-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
   }
 
   /* Touch optimizations for buttons and interactive elements */
