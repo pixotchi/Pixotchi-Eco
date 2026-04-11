@@ -4,7 +4,6 @@ import { type ReactNode, useEffect, useState, useMemo } from "react";
 import { base } from "wagmi/chains";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import { Toaster } from "react-hot-toast";
-import { ThemeProvider } from "next-themes";
 import { PaymasterProvider } from "@/lib/paymaster-context";
 import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
@@ -23,7 +22,6 @@ import { setHostHandlesBuilderAttribution } from "@/lib/builder-code";
 import dynamic from "next/dynamic";
 import { BalanceProvider } from "@/lib/balance-context";
 import { LoadingProvider } from "@/lib/loading-context";
-import { applyTheme } from "@/lib/theme-utils";
 import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
@@ -32,9 +30,8 @@ import { SnowEffect } from "@/components/ui/snow-effect";
 import { SnowProvider } from "@/lib/snow-context";
 import { AmbientAudioProvider } from "@/lib/ambient-audio-context";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
-import { TransactionProvider, TransactionModal, useTransactions } from 'ethereum-identity-kit';
+import { TransactionProvider } from 'ethereum-identity-kit';
 import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
-import { SafeArea } from "@coinbase/onchainkit/minikit";
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { usePathname } from "next/navigation";
@@ -47,6 +44,61 @@ import {
 } from "@/lib/auth-surface";
 import { CLIENT_ENV } from "@/lib/env-config";
 const BASE_APP_CLIENT_FID = 309857;
+const MINIAPP_CONTEXT_TIMEOUT_MS = 250;
+
+type HostEnvironmentState = {
+  initialized: boolean;
+  isMiniApp: boolean;
+  isBaseAppMiniClient: boolean;
+};
+
+type TimedMiniAppCheck = (timeoutMs?: number) => Promise<boolean>;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]);
+}
+
+async function resolveHostEnvironment(): Promise<HostEnvironmentState> {
+  let contextPromise: Promise<any>;
+  try {
+    const maybeContext: any = (sdk as any).context;
+    contextPromise =
+      typeof maybeContext?.then === "function"
+        ? maybeContext
+        : Promise.resolve(maybeContext);
+  } catch {
+    contextPromise = Promise.resolve(undefined);
+  }
+
+  const initialContext = await withTimeout(contextPromise, MINIAPP_CONTEXT_TIMEOUT_MS, undefined);
+  let isMiniApp = Boolean(initialContext);
+
+  if (!isMiniApp) {
+    try {
+      isMiniApp = Boolean(
+        await (sdk.isInMiniApp as TimedMiniAppCheck)(MINIAPP_CONTEXT_TIMEOUT_MS),
+      );
+    } catch {
+      isMiniApp = false;
+    }
+  }
+
+  const resolvedContext = isMiniApp
+    ? (initialContext ?? await withTimeout(contextPromise, MINIAPP_CONTEXT_TIMEOUT_MS, undefined))
+    : initialContext;
+
+  const clientFid = Number(resolvedContext?.client?.clientFid);
+  return {
+    initialized: true,
+    isMiniApp,
+    isBaseAppMiniClient: isMiniApp && clientFid === BASE_APP_CLIENT_FID,
+  };
+}
 
 // Solana RPC config for Privy - mainnet only
 const getSolanaRpcConfig = () => {
@@ -124,6 +176,11 @@ export function Providers(props: { children: ReactNode }) {
   // Determine surface BEFORE rendering PrivyProvider so we can configure it correctly
   const [authSurface, setAuthSurface] = useState<AuthSurface>('privy');
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
+  const [hostEnvironment, setHostEnvironment] = useState<HostEnvironmentState>({
+    initialized: typeof window === 'undefined',
+    isMiniApp: false,
+    isBaseAppMiniClient: false,
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -140,6 +197,41 @@ export function Providers(props: { children: ReactNode }) {
     setAuthSurface(resolvedSurface);
 
     setSurfaceInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setHostEnvironment({
+        initialized: true,
+        isMiniApp: false,
+        isBaseAppMiniClient: false,
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const nextState = await resolveHostEnvironment();
+        if (cancelled) return;
+        setHostHandlesBuilderAttribution(nextState.isBaseAppMiniClient);
+        setHostEnvironment(nextState);
+      } catch (error) {
+        console.error('Failed to resolve host environment:', error);
+        if (cancelled) return;
+        setHostHandlesBuilderAttribution(false);
+        setHostEnvironment({
+          initialized: true,
+          isMiniApp: false,
+          isBaseAppMiniClient: false,
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
@@ -230,73 +322,16 @@ export function Providers(props: { children: ReactNode }) {
     };
   }, [authSurface]);
 
-  function WagmiRouter({ children }: { children: ReactNode }) {
-    const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
-    const [isBaseAppMiniClient, setIsBaseAppMiniClient] = useState<boolean>(false);
-    const [surface, setSurface] = useState<AuthSurface>('privy');
-    const [isInitialized, setIsInitialized] = useState(false);
-
-    useEffect(() => {
-      let mounted = true;
-      let cancelToken = false;
-
-      const initializeRouter = async () => {
-        try {
-          // Step 1: Check if we're in a MiniApp
-          const flag = await sdk.isInMiniApp();
-
-          if (cancelToken || !mounted) return;
-
-          setIsMiniApp(Boolean(flag));
-
-          if (Boolean(flag)) {
-            // Base App auto-appends Builder attribution. Avoid duplicate suffix there.
-            try {
-              const maybeContext: any = (sdk as any).context;
-              const context = typeof maybeContext?.then === 'function'
-                ? await maybeContext
-                : maybeContext;
-              const clientFid = Number(context?.client?.clientFid);
-              if (cancelToken || !mounted) return;
-              const isBaseClient = clientFid === BASE_APP_CLIENT_FID;
-              setIsBaseAppMiniClient(isBaseClient);
-              setHostHandlesBuilderAttribution(isBaseClient);
-            } catch {
-              if (cancelToken || !mounted) return;
-              setIsBaseAppMiniClient(false);
-              setHostHandlesBuilderAttribution(false);
-            }
-            if (cancelToken || !mounted) return;
-            setIsInitialized(true);
-            return;
-          }
-
-          // Web surfaces should append attribution client-side.
-          setHostHandlesBuilderAttribution(false);
-
-          // Step 2: Use the already-determined auth surface
-          if (cancelToken || !mounted) return;
-          setSurface(authSurface);
-
-          // Final initialization
-          if (cancelToken || !mounted) return;
-          setIsInitialized(true);
-
-        } catch (error) {
-          console.error('Failed to initialize router:', error);
-          if (cancelToken || !mounted) return;
-          setSurface('privy');
-          setIsInitialized(true);
-        }
-      };
-
-      initializeRouter();
-
-      return () => {
-        cancelToken = true;
-        mounted = false;
-      };
-    }, [authSurface]);
+  function WagmiRouter({
+    children,
+    hostEnvironmentState,
+  }: {
+    children: ReactNode;
+    hostEnvironmentState: HostEnvironmentState;
+  }) {
+    const isMiniApp = hostEnvironmentState.isMiniApp;
+    const isBaseAppMiniClient = hostEnvironmentState.isBaseAppMiniClient;
+    const surface = authSurface;
 
     useEffect(() => {
       if (typeof document === 'undefined') return;
@@ -312,11 +347,6 @@ export function Providers(props: { children: ReactNode }) {
       const webTitle = "Pixotchi - Grow your farm, Earn rewards!";
       document.title = isMiniApp ? miniTitle : webTitle;
     }, [isMiniApp]);
-
-    // Show loading state until initialization is complete
-    if (!isInitialized) {
-      return <div>Preparing wallet login…</div>;
-    }
 
     // Mini App: use Farcaster connector.
     if (isMiniApp) {
@@ -366,8 +396,8 @@ export function Providers(props: { children: ReactNode }) {
     );
   }
 
-  // Don't render until surface is determined (to configure PrivyProvider correctly)
-  if (!surfaceInitialized) {
+  // Don't render until surface and host environment are determined
+  if (!surfaceInitialized || !hostEnvironment.initialized) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-pulse">Preparing wallet login…</div>
@@ -424,7 +454,7 @@ export function Providers(props: { children: ReactNode }) {
                 }}
               >
                 <QueryClientProvider client={queryClient}>
-                  <WagmiRouter>
+                  <WagmiRouter hostEnvironmentState={hostEnvironment}>
                     <OnchainKitProvider
                       apiKey={apiKey}
                       chain={base}
@@ -438,67 +468,64 @@ export function Providers(props: { children: ReactNode }) {
                         analytics: true,
                       }}
                       miniKit={{
-                        enabled: true,
-                        autoConnect: true,
-                        ...(CLIENT_ENV.NOTIFICATION_PROVIDER === "neynar"
+                        enabled: hostEnvironment.isMiniApp,
+                        autoConnect: hostEnvironment.isMiniApp,
+                        ...(hostEnvironment.isMiniApp && CLIENT_ENV.NOTIFICATION_PROVIDER === "neynar"
                           ? { notificationProxyUrl: "/api/notify" }
                           : {}),
                       }}
                     >
-                      <SafeArea>
-                        <FrameProvider>
-                          <SmartWalletProvider>
-                            <EthModeProvider>
-                              <SolanaWalletProvider>
-                                <BalanceProvider>
-                                  <LoadingProvider>
-                                    <RouteAwareChatProvider>
-                                      <TutorialBundle>
-                                        {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                                        {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                                        {/** added provider wrapper **/}
-                                        {/* eslint-disable-next-line react/no-children-prop */}
-                                        <Toaster
-                                          position="top-center"
-                                          toastOptions={{
-                                            duration: 4000,
-                                            style: {
-                                              backgroundColor: "hsl(var(--background))",
-                                              color: "hsl(var(--foreground))",
-                                              border: "1px solid hsl(var(--border))",
-                                              zIndex: 9999,
-                                            },
-                                            success: {
-                                              iconTheme: {
-                                                primary: "hsl(var(--primary))",
-                                                secondary: "hsl(var(--primary-foreground))",
-                                              },
-                                            },
-                                            error: {
-                                              iconTheme: {
-                                                primary: "hsl(var(--destructive))",
-                                                secondary: "hsl(var(--destructive-foreground))",
-                                              },
-                                            },
-                                          }}
-                                          containerStyle={{
+                      <FrameProvider>
+                        <SmartWalletProvider>
+                          <EthModeProvider>
+                            <SolanaWalletProvider>
+                              <BalanceProvider>
+                                <LoadingProvider>
+                                  <RouteAwareChatProvider>
+                                    <TutorialBundle>
+                                      {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
+                                      {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
+                                      {/** added provider wrapper **/}
+                                      <Toaster
+                                        position="top-center"
+                                        toastOptions={{
+                                          duration: 4000,
+                                          style: {
+                                            backgroundColor: "hsl(var(--background))",
+                                            color: "hsl(var(--foreground))",
+                                            border: "1px solid hsl(var(--border))",
                                             zIndex: 9999,
-                                          }}
-                                        />
-                                        {props.children}
-                                        <SlideshowModal />
-                                      </TutorialBundle>
-                                      <TasksInfoDialog />
-                                      <SecretGardenListener />
-                                      <SnowEffect />
-                                    </RouteAwareChatProvider>
-                                  </LoadingProvider>
-                                </BalanceProvider>
-                              </SolanaWalletProvider>
-                            </EthModeProvider>
-                          </SmartWalletProvider>
-                        </FrameProvider>
-                      </SafeArea>
+                                          },
+                                          success: {
+                                            iconTheme: {
+                                              primary: "hsl(var(--primary))",
+                                              secondary: "hsl(var(--primary-foreground))",
+                                            },
+                                          },
+                                          error: {
+                                            iconTheme: {
+                                              primary: "hsl(var(--destructive))",
+                                              secondary: "hsl(var(--destructive-foreground))",
+                                            },
+                                          },
+                                        }}
+                                        containerStyle={{
+                                          zIndex: 9999,
+                                        }}
+                                      />
+                                      {props.children}
+                                      <SlideshowModal />
+                                    </TutorialBundle>
+                                    <TasksInfoDialog />
+                                    <SecretGardenListener />
+                                    <SnowEffect />
+                                  </RouteAwareChatProvider>
+                                </LoadingProvider>
+                              </BalanceProvider>
+                            </SolanaWalletProvider>
+                          </EthModeProvider>
+                        </SmartWalletProvider>
+                      </FrameProvider>
                     </OnchainKitProvider>
                   </WagmiRouter>
                 </QueryClientProvider>

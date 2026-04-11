@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useAccount, useBalance, useDisconnect, useChainId } from "wagmi";
-import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useFrameContext } from "@/lib/frame-context";
 import Image from "next/image";
@@ -122,7 +121,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     },
   });
   const chainId = useChainId();
-  const { context } = useMiniKit(); // Get MiniKit context (Coinbase)
   const fc = useFrameContext();     // Farcaster context provider
   const { resolved: authSurfaceResolved, surface: authSurface } = useAuthSurface();
   const {
