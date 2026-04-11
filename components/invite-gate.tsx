@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { useMiniKit, useAddFrame } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Info, Gift, ExternalLink, User, PlusCircle } from 'lucide-react';
+import { Info, PlusCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useTheme } from "next-themes";
 import InviteCodeInput from './invite-code-input';
@@ -15,6 +14,7 @@ import { toast } from 'react-hot-toast';
 import { WalletProfile } from './wallet-profile';
 import { ThemeSelector } from './theme-selector';
 import { CLIENT_ENV } from '@/lib/env-config';
+import { useFrameContext } from '@/lib/frame-context';
 
 interface InviteGateProps {
   onValidated: (code: string) => void;
@@ -24,14 +24,14 @@ interface InviteGateProps {
 
 export default function InviteGate({ onValidated, onSkip, showSkip = false }: InviteGateProps) {
   const { address, isConnected } = useAccount();
-  const { context } = useMiniKit();
+  const fc = useFrameContext();
   const { theme } = useTheme();
   const [urlCode, setUrlCode] = useState<string>('');
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [frameAdded, setFrameAdded] = useState(false);
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
-
-  const addFrame = useAddFrame();
+  const miniAppContext = (fc?.context as any) ?? null;
+  const miniAppAdded = Boolean(miniAppContext?.client?.added);
 
   useEffect(() => {
     // Check for invite code in URL parameters
@@ -46,17 +46,17 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
   }, []);
 
   const handleAddFrame = useCallback(async () => {
-    // Prefer Farcaster Mini App add flow when available, fallback to MiniKit's add frame
+    if (!fc?.isInMiniApp) {
+      return;
+    }
+
     try {
       await sdk.actions.addMiniApp();
       setFrameAdded(true);
-      return;
     } catch (e) {
-      // Fallback to Base MiniKit if Farcaster add flow is not available
-      const result = await addFrame();
-      setFrameAdded(Boolean(result));
+      console.warn('Add mini app prompt failed:', e);
     }
-  }, [addFrame]);
+  }, [fc?.isInMiniApp]);
 
   const handleValidated = async (code: string) => {
     try {
@@ -99,7 +99,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
               </div>
 
               <div className="flex items-center space-x-2">
-                {isNeynarNotifications && context && !context.client.added && !frameAdded && (
+                {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
                   <Button
                     type="button"
                     variant="outline"

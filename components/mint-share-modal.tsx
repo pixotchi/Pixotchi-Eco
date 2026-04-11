@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Copy, Share2, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { useFrameContext } from "@/lib/frame-context";
-import { useComposeCast } from "@coinbase/onchainkit/minikit";
+import { sdk } from "@farcaster/miniapp-sdk";
 import { toast } from "react-hot-toast";
 import { openExternalUrl } from "@/lib/open-external";
 import type { MintShareData } from "@/lib/types";
@@ -34,7 +34,6 @@ const PLANT_IMAGES: Record<number, string> = {
 
 export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps) {
   const frame = useFrameContext();
-  const { composeCast } = useComposeCast();
   const [isSharing, setIsSharing] = useState(false);
   const [shortUrl, setShortUrl] = useState<string>("");
   const [isGeneratingUrl, setIsGeneratingUrl] = useState(false);
@@ -158,10 +157,10 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
   }, [shareUrl]);
 
   const handleMiniAppShare = useCallback(async () => {
-    if (!data || !shareUrl) return;
+    if (!data || !shareUrl || !frame?.isInMiniApp) return;
     setIsSharing(true);
     try {
-      await composeCast({
+      await sdk.actions.composeCast({
         text: shareText,
         embeds: [shareUrl],
       });
@@ -173,7 +172,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     } finally {
       setIsSharing(false);
     }
-  }, [composeCast, data, onOpenChange, shareUrl, shareText]);
+  }, [data, frame?.isInMiniApp, onOpenChange, shareUrl, shareText]);
 
   const handleTwitterShare = useCallback(async () => {
     if (!tweetUrl) return;

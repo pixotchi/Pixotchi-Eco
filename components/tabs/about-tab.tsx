@@ -6,7 +6,6 @@ import { ArrowUpRight, Book, Gamepad2, Tractor, Gift, Copy, Check, Users, Calend
 import Image from "next/image";
 import { useState, useEffect, useId } from "react";
 import { openExternalUrl } from "@/lib/open-external";
-import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { toast } from 'react-hot-toast';
 import { formatInviteUrl, INVITE_CONFIG } from '@/lib/invite-utils';
 import { InviteStats } from '@/lib/types';

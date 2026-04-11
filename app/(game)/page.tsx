@@ -1,6 +1,5 @@
 "use client";
 
-import { useMiniKit, useAddFrame } from "@coinbase/onchainkit/minikit";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { Activity, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -211,7 +210,6 @@ import { useKeyboardAware, useViewportHeight, useKeyboardNavigation } from "@/ho
 
 
 export default function App() {
-  const { context } = useMiniKit();
   const { theme } = useTheme();
   const { startIfFirstVisit } = useSlideshow();
   const {
@@ -292,9 +290,10 @@ export default function App() {
   const keyboardState = useKeyboardAware();
   const viewportHeight = useViewportHeight();
   const isKeyboardNavigation = useKeyboardNavigation();
-  const addFrame = useAddFrame();
   const shellHeight = viewportHeight > 0 ? `${viewportHeight}px` : undefined;
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
+  const miniAppContext = (fc?.context as any) ?? null;
+  const miniAppAdded = Boolean(miniAppContext?.client?.added);
 
   // Start tutorial only after wallet connect (and invite gate passed)
   useEffect(() => {
@@ -308,7 +307,7 @@ export default function App() {
     if (!isNeynarNotifications) return;
 
     // Only run once context is available, user is in miniapp, and hasn't added yet
-    if (!context || context.client.added || frameAdded) return;
+    if (!miniAppContext || miniAppAdded || frameAdded) return;
     if (!fc?.isInMiniApp) return;
 
     // Small delay to let the app settle before showing the prompt
@@ -323,7 +322,7 @@ export default function App() {
     }, 1500);
 
     return () => clearTimeout(timeoutId);
-  }, [context, fc?.isInMiniApp, frameAdded, isNeynarNotifications]);
+  }, [miniAppAdded, miniAppContext, fc?.isInMiniApp, frameAdded, isNeynarNotifications]);
 
   // Map fid -> address for backend notifications (optional, best-effort)
   useEffect(() => {
@@ -382,17 +381,17 @@ export default function App() {
   };
 
   const handleAddFrame = useCallback(async () => {
-    // Prefer Farcaster Mini App add flow when available, fallback to MiniKit's add frame
+    if (!fc?.isInMiniApp) {
+      return;
+    }
+
     try {
       await sdk.actions.addMiniApp();
       setFrameAdded(true);
-      return;
     } catch (e) {
-      // Fallback to Base MiniKit if Farcaster add flow is not available
-      const result = await addFrame();
-      setFrameAdded(Boolean(result));
+      console.warn('Add mini app prompt failed:', e);
     }
-  }, [addFrame]);
+  }, [fc?.isInMiniApp]);
 
   const tabs = [
     { id: "dashboard" as Tab, label: "Farm", icon: Leaf },
@@ -483,7 +482,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center space-x-2">
-                {isNeynarNotifications && context && !context.client.added && !frameAdded && (
+                {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
                   <Button
                     type="button"
                     variant="outline"
