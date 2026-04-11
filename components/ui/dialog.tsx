@@ -20,6 +20,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
+    data-viewport-debug-dialog-overlay=""
     className={cn(
        "fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm",
       "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
@@ -43,6 +44,7 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      data-viewport-debug-dialog-frame=""
       className={cn(
         // Full-viewport centering container (avoids translate issues)
         "fixed inset-0 z-[1201] flex items-center justify-center p-4",
@@ -55,6 +57,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       <div
+        data-viewport-debug-dialog-surface=""
         className={cn(
        "relative w-full max-w-md rounded-2xl border border-border bg-background p-6 shadow-[0_32px_64px_-24px_rgba(15,23,42,0.45)]",
           "max-h-[90dvh] flex flex-col overflow-hidden",
