@@ -7,6 +7,10 @@
     {
       "path": "/api/notifications/cron/plant-care",
       "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/notifications/cron/base-audience-sync",
+      "schedule": "15 * * * *"
     }
   ]
 }

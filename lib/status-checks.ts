@@ -1,7 +1,9 @@
-import { CLIENT_ENV } from './env-config';
+import { CLIENT_ENV, SERVER_ENV } from './env-config';
 import { getBaseRpcStatusSnapshot } from './base-rpc';
 import { redis, redisGetJSON, redisSetJSON } from './redis';
 import { fetchIndexerGraphQL } from './indexer-client';
+import { fetchBaseNotificationUsers } from './notifications/base-api';
+import { getNotificationProviderLabel } from './notifications/provider';
 
 type StatusLevel = 'operational' | 'degraded' | 'outage' | 'unknown';
 
@@ -233,11 +235,38 @@ async function checkRedis(): Promise<StatusService> {
 }
 
 async function checkNotifications(): Promise<StatusService> {
+  if (SERVER_ENV.NOTIFICATION_PROVIDER === 'base') {
+    if (!SERVER_ENV.BASE_NOTIFICATIONS_API_KEY) {
+      return {
+        id: 'notifications',
+        label: `Notifications (${getNotificationProviderLabel('base')})`,
+        status: 'unknown',
+        details: 'API key missing',
+      };
+    }
+
+    const { error, ms } = await measure(async () => {
+      await fetchBaseNotificationUsers({ limit: 1, notificationEnabled: true });
+    });
+
+    const status: StatusLevel = error
+      ? (error?.name === 'AbortError' ? 'outage' : 'degraded')
+      : 'operational';
+
+    return {
+      id: 'notifications',
+      label: `Notifications (${getNotificationProviderLabel('base')})`,
+      status,
+      latencyMs: ms,
+      details: error ? (error?.message || 'Unreachable') : 'API responding',
+    };
+  }
+
   const apiKey = process.env.NEYNAR_API_KEY;
   if (!apiKey) {
     return {
       id: 'notifications',
-      label: 'Notifications (Neynar)',
+      label: `Notifications (${getNotificationProviderLabel('neynar')})`,
       status: 'unknown',
       details: 'API key missing',
     };
@@ -265,7 +294,7 @@ async function checkNotifications(): Promise<StatusService> {
 
   return {
     id: 'notifications',
-    label: 'Notifications (Neynar)',
+    label: `Notifications (${getNotificationProviderLabel('neynar')})`,
     status,
     latencyMs: ms,
     details: error ? (error?.message || 'Unreachable') : 'API responding',

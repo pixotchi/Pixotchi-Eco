@@ -2,13 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { SERVER_ENV, CLIENT_ENV } from '@/lib/env-config';
 import { redis } from '@/lib/redis';
+import { PLANT_CARE_THROTTLE_SECONDS, getPlantCareUserThrottleKey } from '@/lib/notifications/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30; // Should be fast - just calling Neynar API
-
-const REDIS_KEY_PREFIX = 'notif:plant12h';
-const THROTTLE_SECONDS = 12 * 60 * 60; // 12 hours
 
 /**
  * POST /api/admin/notifications/trigger
@@ -30,6 +28,13 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+        if (SERVER_ENV.NOTIFICATION_PROVIDER !== 'neynar') {
+            return NextResponse.json({
+                success: false,
+                error: 'Manual trigger route is only available for the Neynar provider.',
+            }, { status: 400 });
+        }
+
         const url = new URL(request.url);
         const targetFid = url.searchParams.get('fid');
         const dryRun = url.searchParams.get('dry') === '1' || url.searchParams.get('dry') === 'true';
@@ -52,7 +57,7 @@ export async function POST(request: NextRequest) {
 
         // Check throttle (unless force flag is set)
         if (!skipThrottle && redis) {
-            const throttleKey = `${REDIS_KEY_PREFIX}:fid:${fid}`;
+            const throttleKey = getPlantCareUserThrottleKey('neynar', fid);
             const isThrottled = await redis.get(throttleKey);
             if (isThrottled) {
                 return NextResponse.json({
@@ -123,20 +128,20 @@ export async function POST(request: NextRequest) {
 
         // Set throttle for this user
         if (redis && !skipThrottle) {
-            const throttleKey = `${REDIS_KEY_PREFIX}:fid:${fid}`;
-            await redis.setex(throttleKey, THROTTLE_SECONDS, '1');
+            const throttleKey = getPlantCareUserThrottleKey('neynar', fid);
+            await redis.setex(throttleKey, PLANT_CARE_THROTTLE_SECONDS, '1');
         }
 
         // Log the send
         if (redis) {
             try {
-                await redis.lpush(`${REDIS_KEY_PREFIX}:log`, JSON.stringify({
+                await redis.lpush(`notif:neynar:plant12h:log`, JSON.stringify({
                     ts: Date.now(),
                     fid,
                     manual: true,
                 }));
-                await redis.ltrim(`${REDIS_KEY_PREFIX}:log`, 0, 99);
-                await redis.incr(`${REDIS_KEY_PREFIX}:sent:count`);
+                await redis.ltrim(`notif:neynar:plant12h:log`, 0, 99);
+                await redis.incr(`notif:neynar:plant12h:sent:count`);
             } catch { }
         }
 

@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { SERVER_ENV } from '@/lib/env-config';
+import {
+  getBaseAudienceSyncState,
+  getCurrentBaseAudienceSnapshotMeta,
+  getPlantCareStats,
+  listBaseAudienceHistory,
+  listCampaigns,
+} from '@/lib/notifications/storage';
 
 function parseList(raw: string[] | null) {
-  return (raw || []).map((s: string) => {
+  return (raw || []).map((entry: string) => {
     try {
-      return JSON.parse(s);
+      return JSON.parse(entry);
     } catch {
-      return s;
+      return entry;
     }
   });
-}
-
-function parseJSON(value: string | null) {
-  if (!value) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -27,50 +26,69 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Plant TOD notification stats (12h threshold) - wrap each call to handle type mismatches
-    let plantSentCount = 0;
-    let plantLast = 0;
-    let plantRecent: any[] = [];
-    let plantRuns = 0;
-    let legacySentCount = 0;
-    let eligibleSet: string[] = [];
+    const provider = SERVER_ENV.NOTIFICATION_PROVIDER;
+    const plantCare = await getPlantCareStats(provider);
 
-    try {
-      plantSentCount = Number((await (redis as any)?.get?.('notif:plant12h:sent:count')) || '0');
-    } catch { /* key might be wrong type */ }
+    if (provider === 'base') {
+      const [syncState, currentSnapshot, history, campaigns] = await Promise.all([
+        getBaseAudienceSyncState(),
+        getCurrentBaseAudienceSnapshotMeta(),
+        listBaseAudienceHistory(10),
+        listCampaigns(10),
+      ]);
 
-    try {
-      plantLast = Number((await (redis as any)?.get?.('notif:plant12h:last')) || '0');
-    } catch { /* key might be wrong type */ }
+      return NextResponse.json({
+        success: true,
+        provider,
+        stats: {
+          plantTOD: {
+            thresholdHours: 12,
+            sentCount: plantCare.sentCount,
+            lastRun: plantCare.lastRun,
+            recent: plantCare.recent,
+            totalRuns: plantCare.totalRuns,
+          },
+          audience: {
+            currentSnapshot,
+            syncState,
+            history,
+            enabledCount: currentSnapshot?.uniqueAddresses || 0,
+          },
+          campaigns: {
+            recent: campaigns,
+          },
+        },
+        endpoints: {
+          audienceSync: '/api/notifications/cron/base-audience-sync - Refresh enabled Base wallet snapshot',
+          campaigns: '/api/admin/notifications/campaigns - List recent Base campaigns',
+          campaignPreview: '/api/admin/notifications/campaigns/preview - Preview Base campaign recipients',
+          campaignSend: '/api/admin/notifications/campaigns/send - Send Base campaign',
+          keys: '/api/admin/notifications/keys - View and delete notification Redis keys',
+          reset: '/api/admin/notifications/reset - Reset notification stats/throttles',
+        },
+      });
+    }
 
-    try {
-      plantRecent = parseList(await (redis as any)?.lrange?.('notif:plant12h:log', 0, 20));
-    } catch { /* key might be wrong type */ }
-
-    try {
-      plantRuns = Number((await (redis as any)?.get?.('notif:plant12h:runs')) || '0');
-    } catch { /* key might be wrong type */ }
-
-    try {
-      legacySentCount = Number((await (redis as any)?.get?.('notif:plant1h:sentCount')) || '0');
-    } catch { /* key might be wrong type */ }
-
-    try {
-      eligibleSet = (await redis?.smembers?.('notif:eligible:fids')) || [];
-    } catch { /* key might be wrong type */ }
+    const [eligibleSet, globalRecentRaw, globalSentCountRaw] = await Promise.all([
+      redis?.smembers?.('notif:eligible:fids'),
+      (redis as any)?.lrange?.('notif:global:log', 0, 20),
+      redis?.get?.('notif:global:sentCount'),
+    ]);
 
     return NextResponse.json({
       success: true,
+      provider,
       stats: {
         plantTOD: {
           thresholdHours: 12,
-          sentCount: plantSentCount,
-          lastRun: plantLast ? new Date(plantLast).toISOString() : null,
-          recent: plantRecent,
-          totalRuns: plantRuns,
+          sentCount: plantCare.sentCount,
+          lastRun: plantCare.lastRun,
+          recent: plantCare.recent,
+          totalRuns: plantCare.totalRuns,
         },
-        legacy: {
-          plant1hSentCount: legacySentCount,
+        global: {
+          sentCount: Number(globalSentCountRaw || 0),
+          recent: parseList(globalRecentRaw || []),
         },
         eligibleFids: eligibleSet || [],
         eligibleFidsCount: eligibleSet?.length || 0,
@@ -79,10 +97,13 @@ export async function GET(request: NextRequest) {
         eligible: '/api/admin/notifications/eligible - List plants eligible for notification',
         trigger: '/api/admin/notifications/trigger - Manually trigger notifications',
         keys: '/api/admin/notifications/keys - View and delete notification Redis keys',
-        reset: '/api/admin/notifications/reset - Reset throttle keys (scope=all|fid|plant)',
+        reset: '/api/admin/notifications/reset - Reset notification throttle keys',
       },
     });
-  } catch (e: any) {
-    return NextResponse.json(createErrorResponse(e?.message || 'Failed', 500).body, { status: 500 });
+  } catch (error) {
+    return NextResponse.json(
+      createErrorResponse(error instanceof Error ? error.message : 'Failed', 500).body,
+      { status: 500 },
+    );
   }
 }

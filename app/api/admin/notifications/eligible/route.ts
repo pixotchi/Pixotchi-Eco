@@ -1,330 +1,304 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { differenceInSeconds } from 'date-fns';
+import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
 import { SERVER_ENV } from '@/lib/env-config';
 import { getPlantsByOwner } from '@/lib/contracts';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
-import { differenceInSeconds } from 'date-fns';
-
-const THRESHOLD_SECONDS = 12 * 60 * 60; // 12 hours
-const REDIS_KEY_PREFIX = 'notif:plant12h';
-const NEYNAR_FIDS_CACHE_KEY = 'notif:neynar:enabled_fids';
-const NEYNAR_FIDS_CACHE_TTL = 5 * 60; // 5 minutes
-const BATCH_CONCURRENCY = 10;
-const BATCH_DELAY_MS = 100;
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Fetch ALL enabled FIDs from Neynar with proper pagination.
- * Results are cached for 5 minutes to avoid repeated API calls.
- */
-async function fetchEnabledFids(): Promise<number[]> {
-    const apiKey = SERVER_ENV.NEYNAR_API_KEY;
-    if (!apiKey) return [];
-
-    // Check cache first
-    if (redis) {
-        try {
-            const cached = await redis.get(NEYNAR_FIDS_CACHE_KEY);
-            if (cached) {
-                const fids = JSON.parse(typeof cached === 'string' ? cached : JSON.stringify(cached));
-                console.log(`[fetchEnabledFids] Using cached ${fids.length} FIDs`);
-                return fids;
-            }
-        } catch { }
-    }
-
-    const allFids: number[] = [];
-    let cursor: string | null = null;
-    let pageCount = 0;
-    const maxPages = 100;
-
-    do {
-        const url = new URL('https://api.neynar.com/v2/farcaster/frame/notification_tokens/');
-        url.searchParams.set('limit', '100');
-        if (cursor) {
-            url.searchParams.set('cursor', cursor);
-        }
-
-        const res = await fetch(url.toString(), {
-            headers: { 'x-api-key': apiKey },
-        });
-
-        if (!res.ok) {
-            console.error(`[fetchEnabledFids] Neynar API error: ${res.status}`);
-            break;
-        }
-
-        const json = await res.json();
-        const tokens: Array<{ fid: number }> | undefined = json?.notification_tokens;
-
-        if (tokens?.length) {
-            for (const t of tokens) {
-                if (!allFids.includes(t.fid)) {
-                    allFids.push(t.fid);
-                }
-            }
-        }
-
-        cursor = json?.next?.cursor || null;
-        pageCount++;
-
-    } while (cursor && pageCount < maxPages);
-
-    console.log(`[fetchEnabledFids] Fetched ${allFids.length} unique FIDs from ${pageCount} pages`);
-
-    // Cache the result
-    if (redis && allFids.length > 0) {
-        try {
-            await redis.setex(NEYNAR_FIDS_CACHE_KEY, NEYNAR_FIDS_CACHE_TTL, JSON.stringify(allFids));
-        } catch { }
-    }
-
-    return allFids;
-}
-
-/**
- * Process a batch of FIDs in parallel with concurrency limit
- */
-async function processFidsBatch(
-    fids: number[],
-    now: Date
-): Promise<{
-    eligible: Array<{
-        fid: number;
-        address: string;
-        plants: Array<{
-            id: number;
-            hoursLeft: number;
-            eligible: boolean;
-            throttled: boolean;
-        }>;
-    }>;
-    stats: {
-        processed: number;
-        withAddress: number;
-        withPlants: number;
-        withEligiblePlants: number;
-        totalEligiblePlants: number;
-        throttledUsers: number;
-        throttledPlants: number;
-        wouldNotify: number;
-    };
-}> {
-    const eligible: Array<{
-        fid: number;
-        address: string;
-        userThrottled: boolean;
-        plants: Array<{
-            id: number;
-            hoursLeft: number;
-            eligible: boolean;
-            throttled: boolean;
-        }>;
-    }> = [];
-
-    let withAddress = 0;
-    let withPlants = 0;
-    let withEligiblePlants = 0;
-    let totalEligiblePlants = 0;
-    let throttledUsers = 0;
-    let throttledPlants = 0;
-    let wouldNotify = 0;
-
-    // Process in batches with concurrency limit
-    for (let i = 0; i < fids.length; i += BATCH_CONCURRENCY) {
-        const batch = fids.slice(i, i + BATCH_CONCURRENCY);
-
-        const results = await Promise.allSettled(batch.map(async (fid) => {
-            // Resolve address
-            let address: string | null = null;
-            try {
-                // Check cache first
-                const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
-                if (cached) {
-                    address = String(cached).toLowerCase();
-                } else {
-                    const res = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        const addr = data?.result?.address?.address as string | undefined;
-                        if (addr) {
-                            address = addr.toLowerCase();
-                            await (redis as any)?.set?.(`fidmap:${fid}`, address);
-                        }
-                    }
-                }
-            } catch { }
-
-            if (!address) return null;
-
-            // Get plants
-            const plants = await getPlantsByOwner(address);
-            if (!plants?.length) return { fid, address, plants: [], hasEligible: false };
-
-            const plantDetails = await Promise.all(plants.map(async p => {
-                const t = Number(p.timeUntilStarving ?? 0);
-                const plantDate = new Date(t * 1000);
-                const secondsLeft = differenceInSeconds(plantDate, now);
-                const isEligible = secondsLeft > 0 && secondsLeft <= THRESHOLD_SECONDS;
-
-                // Check plant throttle status
-                let isThrottled = false;
-                if (isEligible && redis) {
-                    try {
-                        const throttleKey = `${REDIS_KEY_PREFIX}:fid:${fid}:plant:${Number(p.id)}`;
-                        const exists = await (redis as any)?.get?.(throttleKey);
-                        isThrottled = !!exists;
-                    } catch { }
-                }
-
-                return {
-                    id: Number(p.id),
-                    hoursLeft: Math.round((secondsLeft / 3600) * 100) / 100,
-                    eligible: isEligible,
-                    throttled: isThrottled,
-                };
-            }));
-
-            const eligibleCount = plantDetails.filter(p => p.eligible).length;
-            const throttledCount = plantDetails.filter(p => p.eligible && p.throttled).length;
-            const notThrottledCount = eligibleCount - throttledCount;
-
-            // Check user-level throttle
-            let userThrottled = false;
-            if (redis) {
-                try {
-                    const userThrottleKey = `${REDIS_KEY_PREFIX}:fid:${fid}`;
-                    const exists = await (redis as any)?.get?.(userThrottleKey);
-                    userThrottled = !!exists;
-                } catch { }
-            }
-
-            return {
-                fid,
-                address,
-                plants: plantDetails,
-                hasEligible: eligibleCount > 0,
-                eligibleCount,
-                throttledCount,
-                notThrottledCount,
-                userThrottled
-            };
-        }));
-
-        // Collect results
-        for (const result of results) {
-            if (result.status === 'fulfilled' && result.value) {
-                if (result.value.address) withAddress++;
-                if (result.value.plants?.length > 0) withPlants++;
-                if (result.value.hasEligible) {
-                    withEligiblePlants++;
-                    totalEligiblePlants += result.value.eligibleCount || 0;
-                    throttledPlants += result.value.throttledCount || 0;
-                    if (result.value.userThrottled) {
-                        throttledUsers++;
-                    } else {
-                        // User has eligible plants and is NOT user-throttled = would notify
-                        wouldNotify++;
-                    }
-                    eligible.push({
-                        fid: result.value.fid,
-                        address: result.value.address,
-                        userThrottled: result.value.userThrottled || false,
-                        plants: result.value.plants,
-                    });
-                }
-            }
-        }
-
-        if (i + BATCH_CONCURRENCY < fids.length) {
-            await sleep(BATCH_DELAY_MS);
-        }
-    }
-
-    return {
-        eligible,
-        stats: {
-            processed: fids.length,
-            withAddress,
-            withPlants,
-            withEligiblePlants,
-            totalEligiblePlants,
-            throttledUsers,
-            throttledPlants,
-            wouldNotify,
-        }
-    };
-}
+import {
+  NEYNAR_ENABLED_FIDS_CACHE_KEY,
+  NEYNAR_ENABLED_FIDS_CACHE_TTL_SECONDS,
+  PLANT_CARE_THRESHOLD_SECONDS,
+  getPlantCarePlantThrottleKey,
+  getPlantCareUserThrottleKey,
+} from '@/lib/notifications/constants';
+import { collectDuePlantsByOwner } from '@/lib/notifications/plant-care';
+import { getCurrentBaseAudienceAddresses, getCurrentBaseAudienceSnapshotMeta } from '@/lib/notifications/storage';
+import { normalizeWalletAddress } from '@/lib/notifications/utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes (Pro plan limit)
+export const maxDuration = 300;
 
-/**
- * GET /api/admin/notifications/eligible
- * 
- * List all plants eligible for TOD notification (under 3h lifetime).
- * 
- * Query params:
- * - fid: Filter to specific user
- * - limit: Max FIDs to check (default: 100, max: 500)
- * - offset: Skip first N FIDs (for pagination)
- */
-export async function GET(request: NextRequest) {
-    if (!validateAdminKey(request)) {
-        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-    }
+async function getThrottleState(key: string): Promise<boolean> {
+  if (!redis) {
+    return false;
+  }
 
+  return Boolean(await (redis as any)?.get?.(key));
+}
+
+async function fetchEnabledFids(): Promise<number[]> {
+  const apiKey = SERVER_ENV.NEYNAR_API_KEY;
+  if (!apiKey) return [];
+
+  if (redis) {
     try {
-        const url = new URL(request.url);
-        const targetFid = url.searchParams.get('fid') ? parseInt(url.searchParams.get('fid')!, 10) : undefined;
-        const limit = url.searchParams.get('limit') ? Math.min(parseInt(url.searchParams.get('limit')!, 10), 5000) : undefined;
-        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
-
-        // Fetch eligible fids
-        let allFids: number[];
-        if (targetFid) {
-            allFids = [targetFid];
-        } else {
-            allFids = await fetchEnabledFids();
+      const cached = await redis.get(NEYNAR_ENABLED_FIDS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(typeof cached === 'string' ? cached : JSON.stringify(cached));
+        if (Array.isArray(parsed)) {
+          return parsed.map((value) => Number(value)).filter((value) => Number.isFinite(value));
         }
-
-        // Apply pagination only if limit is specified
-        const totalFids = allFids.length;
-        const paginatedFids = targetFid ? allFids : (limit ? allFids.slice(offset, offset + limit) : allFids);
-
-        const now = new Date();
-        const startTime = Date.now();
-
-        // Process with parallel batching
-        const { eligible, stats } = await processFidsBatch(paginatedFids, now);
-
-        const processingTime = Date.now() - startTime;
-
-        return NextResponse.json({
-            success: true,
-            timestamp: Math.floor(now.getTime() / 1000),
-            thresholdHours: 12,
-            pagination: {
-                total: totalFids,
-                offset,
-                limit: limit || totalFids,
-                returned: paginatedFids.length,
-                hasMore: limit ? (offset + limit < totalFids) : false,
-            },
-            summary: {
-                fidsChecked: stats.processed,
-                fidsWithAddress: stats.withAddress,
-                fidsWithPlants: stats.withPlants,
-                fidsWithEligiblePlants: stats.withEligiblePlants,
-                totalEligiblePlants: stats.totalEligiblePlants,
-                processingTimeMs: processingTime,
-            },
-            eligible,
-        });
-    } catch (e: any) {
-        console.error('[eligible] Error:', e);
-        return NextResponse.json(createErrorResponse(e?.message || 'Failed', 500).body, { status: 500 });
+      }
+    } catch {
+      // Ignore cache failures
     }
+  }
+
+  const allFids: number[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const url = new URL('https://api.neynar.com/v2/farcaster/frame/notification_tokens/');
+    url.searchParams.set('limit', '100');
+    if (cursor) {
+      url.searchParams.set('cursor', cursor);
+    }
+
+    const response = await fetch(url.toString(), {
+      headers: { 'x-api-key': apiKey },
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      throw new Error(`Neynar API error (${response.status})`);
+    }
+
+    const payload = await response.json();
+    const tokens: Array<{ fid: number }> | undefined = payload?.notification_tokens;
+    if (tokens?.length) {
+      for (const token of tokens) {
+        if (!allFids.includes(token.fid)) {
+          allFids.push(token.fid);
+        }
+      }
+    }
+
+    cursor = payload?.next?.cursor || null;
+  } while (cursor);
+
+  if (redis && allFids.length > 0) {
+    await redis.set(NEYNAR_ENABLED_FIDS_CACHE_KEY, JSON.stringify(allFids), {
+      ex: NEYNAR_ENABLED_FIDS_CACHE_TTL_SECONDS,
+    });
+  }
+
+  return allFids;
+}
+
+async function resolveFidAddress(fid: number): Promise<string | null> {
+  try {
+    const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
+    if (cached) {
+      return String(cached).toLowerCase();
+    }
+
+    const response = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    const address = normalizeWalletAddress(payload?.result?.address?.address);
+    if (address) {
+      await (redis as any)?.set?.(`fidmap:${fid}`, address);
+    }
+    return address;
+  } catch {
+    return null;
+  }
+}
+
+async function handleBaseEligible(request: NextRequest) {
+  const url = new URL(request.url);
+  const addressFilter = normalizeWalletAddress(url.searchParams.get('address'));
+  const offset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+  const limit = Math.min(Number.parseInt(url.searchParams.get('limit') || '200', 10), 1000);
+
+  const snapshotMeta = await getCurrentBaseAudienceSnapshotMeta();
+  if (!snapshotMeta) {
+    return NextResponse.json(createErrorResponse('Base audience snapshot missing', 503).body, { status: 503 });
+  }
+
+  const enabledSet = new Set(await getCurrentBaseAudienceAddresses());
+  const dueOwners = await collectDuePlantsByOwner();
+  const eligibleOwners = dueOwners.filter((owner) => enabledSet.has(owner.address));
+  const filteredOwners = addressFilter
+    ? eligibleOwners.filter((owner) => owner.address === addressFilter)
+    : eligibleOwners;
+
+  let throttledUsers = 0;
+  let throttledPlants = 0;
+  let wouldNotify = 0;
+
+  const rows = await Promise.all(
+    filteredOwners.map(async (owner) => {
+      const userThrottled = await getThrottleState(getPlantCareUserThrottleKey('base', owner.address));
+      const plants = await Promise.all(
+        owner.duePlants.map(async (plant) => {
+          const throttled = await getThrottleState(getPlantCarePlantThrottleKey('base', owner.address, plant.id));
+          return {
+            id: plant.id,
+            hoursLeft: plant.hoursLeft,
+            eligible: true,
+            throttled,
+          };
+        }),
+      );
+
+      const throttledPlantCount = plants.filter((plant) => plant.throttled).length;
+      throttledPlants += throttledPlantCount;
+      if (userThrottled) {
+        throttledUsers += 1;
+      } else if (plants.some((plant) => !plant.throttled)) {
+        wouldNotify += 1;
+      }
+
+      return {
+        address: owner.address,
+        userThrottled,
+        plants,
+      };
+    }),
+  );
+
+  const paginated = rows.slice(offset, offset + limit);
+
+  return NextResponse.json({
+    success: true,
+    provider: 'base',
+    thresholdHours: 12,
+    snapshot: snapshotMeta,
+    pagination: {
+      total: rows.length,
+      offset,
+      limit,
+      returned: paginated.length,
+      hasMore: offset + limit < rows.length,
+    },
+    summary: {
+      addressesChecked: filteredOwners.length,
+      addressesWithEligiblePlants: rows.length,
+      totalEligiblePlants: rows.reduce((total, row) => total + row.plants.length, 0),
+      throttledUsers,
+      throttledPlants,
+      wouldNotify,
+    },
+    eligible: paginated,
+  });
+}
+
+async function handleNeynarEligible(request: NextRequest) {
+  const url = new URL(request.url);
+  const targetFid = url.searchParams.get('fid') ? Number.parseInt(url.searchParams.get('fid') || '0', 10) : undefined;
+  const offset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+  const limit = Math.min(Number.parseInt(url.searchParams.get('limit') || '200', 10), 1000);
+  const now = new Date();
+
+  const allFids = targetFid ? [targetFid] : await fetchEnabledFids();
+  const rows = [];
+  let fidsWithAddress = 0;
+  let fidsWithPlants = 0;
+  let throttledUsers = 0;
+  let throttledPlants = 0;
+  let wouldNotify = 0;
+
+  for (const fid of allFids) {
+    const address = await resolveFidAddress(fid);
+    if (!address) {
+      continue;
+    }
+
+    fidsWithAddress += 1;
+    const plants = await getPlantsByOwner(address);
+    if (!plants?.length) {
+      continue;
+    }
+
+    fidsWithPlants += 1;
+    const eligiblePlants = [];
+
+    for (const plant of plants) {
+      const secondsLeft = differenceInSeconds(new Date(Number(plant.timeUntilStarving || 0) * 1000), now);
+      if (secondsLeft <= 0 || secondsLeft > PLANT_CARE_THRESHOLD_SECONDS) {
+        continue;
+      }
+
+      const throttled = await getThrottleState(getPlantCarePlantThrottleKey('neynar', fid, Number(plant.id)));
+      if (throttled) {
+        throttledPlants += 1;
+      }
+
+      eligiblePlants.push({
+        id: Number(plant.id),
+        hoursLeft: Math.round((secondsLeft / 3600) * 100) / 100,
+        eligible: true,
+        throttled,
+      });
+    }
+
+    if (eligiblePlants.length === 0) {
+      continue;
+    }
+
+    const userThrottled = await getThrottleState(getPlantCareUserThrottleKey('neynar', fid));
+    if (userThrottled) {
+      throttledUsers += 1;
+    } else if (eligiblePlants.some((plant) => !plant.throttled)) {
+      wouldNotify += 1;
+    }
+
+    rows.push({
+      fid,
+      address,
+      userThrottled,
+      plants: eligiblePlants,
+    });
+  }
+
+  const paginated = rows.slice(offset, offset + limit);
+
+  return NextResponse.json({
+    success: true,
+    provider: 'neynar',
+    thresholdHours: 12,
+    pagination: {
+      total: rows.length,
+      offset,
+      limit,
+      returned: paginated.length,
+      hasMore: offset + limit < rows.length,
+    },
+    summary: {
+      fidsChecked: allFids.length,
+      fidsWithAddress,
+      fidsWithPlants,
+      fidsWithEligiblePlants: rows.length,
+      totalEligiblePlants: rows.reduce((total, row) => total + row.plants.length, 0),
+      throttledUsers,
+      throttledPlants,
+      wouldNotify,
+    },
+    eligible: paginated,
+  });
+}
+
+export async function GET(request: NextRequest) {
+  if (!validateAdminKey(request)) {
+    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
+  }
+
+  try {
+    if (SERVER_ENV.NOTIFICATION_PROVIDER === 'base') {
+      return handleBaseEligible(request);
+    }
+
+    return handleNeynarEligible(request);
+  } catch (error) {
+    return NextResponse.json(
+      createErrorResponse(error instanceof Error ? error.message : 'Failed', 500).body,
+      { status: 500 },
+    );
+  }
 }

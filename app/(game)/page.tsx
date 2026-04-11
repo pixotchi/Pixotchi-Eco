@@ -32,6 +32,7 @@ import {
   SolanaSurfaceButton,
 } from "@/components/auth/surface-switch-buttons";
 import { requestBalanceRefresh } from "@/lib/app-events";
+import { CLIENT_ENV } from "@/lib/env-config";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -293,6 +294,7 @@ export default function App() {
   const isKeyboardNavigation = useKeyboardNavigation();
   const addFrame = useAddFrame();
   const shellHeight = viewportHeight > 0 ? `${viewportHeight}px` : undefined;
+  const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
 
   // Start tutorial only after wallet connect (and invite gate passed)
   useEffect(() => {
@@ -303,6 +305,8 @@ export default function App() {
 
   // Auto-prompt to add mini app when user opens in miniapp mode and hasn't added yet
   useEffect(() => {
+    if (!isNeynarNotifications) return;
+
     // Only run once context is available, user is in miniapp, and hasn't added yet
     if (!context || context.client.added || frameAdded) return;
     if (!fc?.isInMiniApp) return;
@@ -319,10 +323,12 @@ export default function App() {
     }, 1500);
 
     return () => clearTimeout(timeoutId);
-  }, [context, fc?.isInMiniApp, frameAdded]);
+  }, [context, fc?.isInMiniApp, frameAdded, isNeynarNotifications]);
 
   // Map fid -> address for backend notifications (optional, best-effort)
   useEffect(() => {
+    if (!isNeynarNotifications) return;
+
     let mounted = true;
     let timeoutId: NodeJS.Timeout | null = null;
 
@@ -353,7 +359,7 @@ export default function App() {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [address, fc?.context]);
+  }, [address, fc?.context, isNeynarNotifications]);
 
   // Nudge UI forward immediately after a successful connection
   useEffect(() => {
@@ -477,7 +483,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center space-x-2">
-                {context && !context.client.added && !frameAdded && (
+                {isNeynarNotifications && context && !context.client.added && !frameAdded && (
                   <Button
                     type="button"
                     variant="outline"

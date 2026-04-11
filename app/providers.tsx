@@ -44,6 +44,7 @@ import {
   DEFAULT_AUTH_SURFACE,
   resolvePreferredAuthSurface,
 } from "@/lib/auth-surface";
+import { CLIENT_ENV } from "@/lib/env-config";
 const BASE_APP_CLIENT_FID = 309857;
 
 // Solana RPC config for Privy - mainnet only
@@ -436,7 +437,9 @@ export function Providers(props: { children: ReactNode }) {
                       miniKit={{
                         enabled: true,
                         autoConnect: true,
-                        notificationProxyUrl: "/api/notify",
+                        ...(CLIENT_ENV.NOTIFICATION_PROVIDER === "neynar"
+                          ? { notificationProxyUrl: "/api/notify" }
+                          : {}),
                       }}
                     >
                       <SafeArea>

@@ -48,6 +48,7 @@ import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStat
 import { formatDistanceToNow } from 'date-fns';
 import { ThemeSelector } from '@/components/theme-selector';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
+import { CLIENT_ENV } from '@/lib/env-config';
 
 interface AdminStats {
   codes: {
@@ -93,6 +94,7 @@ interface PlantNotificationStats {
   lastPerFid: Record<string, string>;
   recent: any[];
   lastRun?: any;
+  totalRuns?: number;
 }
 
 interface GlobalNotificationStats {
@@ -118,12 +120,15 @@ interface FenceStats {
 
 interface AdminStatsResponse {
   success: boolean;
+  provider?: 'neynar' | 'base';
   stats: {
     plantTOD: PlantNotificationStats & { thresholdHours: number; runs?: any[] };
     legacy?: { plant1hSentCount?: number };
     global?: GlobalNotificationStats;
     eligibleFids: string[];
     eligibleFidsCount?: number;
+    audience?: any;
+    campaigns?: { recent: any[] };
   };
   endpoints?: Record<string, string>;
 }
@@ -137,6 +142,8 @@ const LoadingSpinner = ({ text }: { text?: string }) => (
 );
 
 export default function AdminInviteDashboard() {
+  const notificationProvider = CLIENT_ENV.NOTIFICATION_PROVIDER;
+  const isBaseNotifications = notificationProvider === 'base';
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminKey, setAdminKey] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -1125,6 +1132,10 @@ export default function AdminInviteDashboard() {
   const [notifDebugLoadingExpire, setNotifDebugLoadingExpire] = useState(false);
   const [notifResetFenceLoading, setNotifResetFenceLoading] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [baseAudience, setBaseAudience] = useState<any>(null);
+  const [baseCampaigns, setBaseCampaigns] = useState<any[]>([]);
+  const [baseSyncLoading, setBaseSyncLoading] = useState(false);
+  const [baseSyncResult, setBaseSyncResult] = useState<any>(null);
 
   // Eligible plants management
   const [eligiblePlants, setEligiblePlants] = useState<any>(null);
@@ -1132,6 +1143,15 @@ export default function AdminInviteDashboard() {
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [notifFidFilter, setNotifFidFilter] = useState('');
   const [triggerResult, setTriggerResult] = useState<any>(null);
+  const [baseAddressFilter, setBaseAddressFilter] = useState('');
+  const [baseCampaignTitle, setBaseCampaignTitle] = useState('');
+  const [baseCampaignMessage, setBaseCampaignMessage] = useState('');
+  const [baseCampaignTargetPath, setBaseCampaignTargetPath] = useState('/');
+  const [baseCampaignAudienceMode, setBaseCampaignAudienceMode] = useState<'all' | 'selected'>('all');
+  const [baseCampaignAddressInput, setBaseCampaignAddressInput] = useState('');
+  const [baseCampaignPreview, setBaseCampaignPreview] = useState<any>(null);
+  const [baseCampaignResult, setBaseCampaignResult] = useState<any>(null);
+  const [baseCampaignLoading, setBaseCampaignLoading] = useState(false);
 
   // Send notifications confirmation dialog
   const [sendNotifDialogOpen, setSendNotifDialogOpen] = useState(false);
@@ -1212,6 +1232,11 @@ export default function AdminInviteDashboard() {
         setNotifFenceV2Stats(null); // Fence notifications removed
         setNotifGlobalStats(payload?.stats?.global || null);
         setEligibleFids(payload?.stats?.eligibleFids || []);
+        setBaseAudience(payload?.stats?.audience || null);
+        setBaseCampaigns(payload?.stats?.campaigns?.recent || []);
+        if (payload?.provider !== 'base') {
+          setBaseSyncResult(null);
+        }
       } else {
         const errorMessage = (data as { error?: string })?.error || 'Failed to load notifications stats';
         toast.error(errorMessage);
@@ -1225,7 +1250,10 @@ export default function AdminInviteDashboard() {
   const runNotifDebug = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/notifications/cron/plant-care?debug=1', { method: 'POST' });
+      const res = await fetch('/api/notifications/cron/plant-care?debug=1', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminKey}` }
+      });
       const data = await res.json();
       setNotifDebugResult(data);
       if (!res.ok || data?.success === false) {
@@ -1278,14 +1306,15 @@ export default function AdminInviteDashboard() {
     if (!adminKey.trim()) return toast.error('Enter admin key');
     setEligibleLoading(true);
     try {
-      const url = fid
-        ? `/api/admin/notifications/eligible?fid=${fid}`
-        : '/api/admin/notifications/eligible';
+      const url = isBaseNotifications
+        ? (fid ? `/api/admin/notifications/eligible?address=${encodeURIComponent(fid)}` : '/api/admin/notifications/eligible')
+        : (fid ? `/api/admin/notifications/eligible?fid=${fid}` : '/api/admin/notifications/eligible');
       const res = await fetch(url, { headers: { Authorization: `Bearer ${adminKey}` } });
       const data = await res.json();
       if (res.ok && data?.success) {
         setEligiblePlants(data);
-        toast.success(`Found ${data.summary?.totalEligiblePlants || 0} eligible plants`);
+        const recipientLabel = isBaseNotifications ? 'wallets' : 'users';
+        toast.success(`Found ${data.summary?.totalEligiblePlants || 0} eligible plants across ${data.summary?.wouldNotify || data.summary?.fidsWithEligiblePlants || 0} ${recipientLabel}`);
       } else {
         toast.error(data?.error || 'Failed to fetch eligible plants');
       }
@@ -1297,6 +1326,7 @@ export default function AdminInviteDashboard() {
 
   // Trigger notifications (with optional dry-run) - for single FID
   const triggerNotifications = async (fid?: string, dryRun: boolean = false) => {
+    if (isBaseNotifications) return;
     if (!adminKey.trim()) return toast.error('Enter admin key');
     setTriggerLoading(true);
     try {
@@ -1336,6 +1366,7 @@ export default function AdminInviteDashboard() {
 
   // Send notifications to all eligible FIDs one by one
   const sendToEligibleFids = async () => {
+    if (isBaseNotifications) return;
     const fidsToNotify = getEligibleFidsToNotify();
     if (fidsToNotify.length === 0) {
       toast.error('No eligible FIDs to notify');
@@ -1377,6 +1408,99 @@ export default function AdminInviteDashboard() {
 
     fetchNotifStats();
     fetchEligiblePlants(notifFidFilter || undefined); // Refresh to show updated throttle status
+  };
+
+  const runBaseAudienceSync = async (force: boolean = false) => {
+    if (!adminKey.trim()) return toast.error('Enter admin key');
+    setBaseSyncLoading(true);
+    try {
+      const res = await fetch(`/api/notifications/cron/base-audience-sync${force ? '?force=1' : ''}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      const data = await res.json();
+      setBaseSyncResult(data);
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error || 'Audience sync failed');
+      } else {
+        toast.success(data?.completed ? 'Audience sync completed' : 'Audience sync checkpoint saved');
+        fetchNotifStats();
+      }
+    } catch (error) {
+      console.error('Base audience sync failed:', error);
+      toast.error('Audience sync failed');
+    } finally {
+      setBaseSyncLoading(false);
+    }
+  };
+
+  const previewBaseCampaign = async () => {
+    if (!adminKey.trim()) return toast.error('Enter admin key');
+    setBaseCampaignLoading(true);
+    try {
+      const res = await fetch('/api/admin/notifications/campaigns/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({
+          title: baseCampaignTitle,
+          message: baseCampaignMessage,
+          targetPath: baseCampaignTargetPath,
+          audienceMode: baseCampaignAudienceMode,
+          walletAddressInput: baseCampaignAddressInput,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error || 'Preview failed');
+      } else {
+        setBaseCampaignPreview(data.preview);
+        toast.success(`Preview ready for ${data.preview?.resolvedCount || 0} wallets`);
+      }
+    } catch (error) {
+      console.error('Preview failed:', error);
+      toast.error('Preview failed');
+    } finally {
+      setBaseCampaignLoading(false);
+    }
+  };
+
+  const sendBaseCampaign = async (dryRun: boolean = false) => {
+    if (!adminKey.trim()) return toast.error('Enter admin key');
+    setBaseCampaignLoading(true);
+    try {
+      const res = await fetch('/api/admin/notifications/campaigns/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminKey}`,
+        },
+        body: JSON.stringify({
+          title: baseCampaignTitle,
+          message: baseCampaignMessage,
+          targetPath: baseCampaignTargetPath,
+          audienceMode: baseCampaignAudienceMode,
+          walletAddressInput: baseCampaignAddressInput,
+          dryRun,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error || 'Campaign failed');
+      } else {
+        setBaseCampaignResult(data);
+        setBaseCampaignPreview(data.preview || null);
+        toast.success(dryRun ? 'Dry run saved' : `Campaign processed: ${data.result?.sentCount || 0} sent`);
+        fetchNotifStats();
+      }
+    } catch (error) {
+      console.error('Campaign failed:', error);
+      toast.error('Campaign failed');
+    } finally {
+      setBaseCampaignLoading(false);
+    }
   };
 
   const runFenceDebug = async (type: 'warn' | 'expire') => {
@@ -2748,14 +2872,14 @@ export default function AdminInviteDashboard() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications (Plant Care 12h)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications ({isBaseNotifications ? 'Base App' : 'Neynar'})</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm text-muted-foreground">
                     {notifStats ? (
                       <span>
-                        Total sent: {notifStats.sentCount || 0}
+                        Total sent: {notifStats.sentCount || 0} • Runs: {notifStats.totalRuns || 0}
                       </span>
                     ) : (
                       <span>Press refresh to load stats</span>
@@ -2768,231 +2892,409 @@ export default function AdminInviteDashboard() {
                     </Button>
                     <Button variant="outline" size="sm" onClick={runNotifDebug} disabled={loading}>
                       <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                      Debug Run (Force)
+                      Debug Run
                     </Button>
                     <Button variant="destructive" size="sm" onClick={confirmResetNotifHistory} disabled={loading}>
                       {loading ? 'Resetting…' : 'Reset History'}
                     </Button>
                   </div>
                 </div>
-                {!notifStats ? (
-                  <div className="text-center py-8 text-muted-foreground">No data yet.</div>
-                ) : (
-                  <div className="space-y-4">
+                <div className="space-y-3">
+                  {!isBaseNotifications && (
                     <div className="text-sm">
-                      <div className="font-semibold mb-1">Global (all types)</div>
+                      <div className="font-semibold mb-1">Global direct-send stats</div>
                       <div className="flex items-center justify-between p-2 rounded border">
                         <div>Sent total: {notifGlobalStats?.sentCount || 0}</div>
                         <div className="text-xs text-muted-foreground">Recent entries: {(notifGlobalStats?.recent || []).length}</div>
                       </div>
                     </div>
-                    <div className="text-sm">
-                      <div className="font-semibold mb-1">Recent batches</div>
-                      <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                        {(notifStats?.recent || []).map((e: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between p-2 rounded border">
-                            <div className="text-xs text-muted-foreground">{new Date(e.ts || 0).toLocaleString()} (Local)</div>
-                            <div className="text-xs">fids: {(e.fids || []).length}</div>
-                          </div>
-                        ))}
-                      </div>
+                  )}
+                  <div className="text-sm">
+                    <div className="font-semibold mb-1">Last cron/debug run</div>
+                    <div className="p-2 rounded border text-xs text-muted-foreground max-h-64 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap">
+                        {JSON.stringify(notifDebugResult || notifStats?.lastRun || { message: 'No run summary yet.' }, null, 2)}
+                      </pre>
                     </div>
-                    <div className="text-sm">
-                      <div className="font-semibold mb-1">Last cron run</div>
-                      <div className="p-2 rounded border text-xs text-muted-foreground">
-                        {notifDebugResult ? (
-                          <pre className="whitespace-pre-wrap">{JSON.stringify(notifDebugResult, null, 2)}</pre>
-                        ) : notifStats?.lastRun ? (
-                          <pre className="whitespace-pre-wrap">{JSON.stringify(notifStats.lastRun, null, 2)}</pre>
-                        ) : (
-                          <span>No run summary yet.</span>
-                        )}
-                      </div>
-                    </div>
-                    {eligibleFids && eligibleFids.length > 0 ? (
-                      <div className="text-sm">
-                        <div className="font-semibold mb-1">Eligible fids (seen)</div>
-                        <div className="flex flex-wrap gap-1 max-h-[200px] overflow-y-auto">
-                          {eligibleFids.slice(0, 200).map((f: any) => (
-                            <span key={f} className="text-xs bg-muted px-2 py-0.5 rounded">{f}</span>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-
-                    {/* Run History */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Last Cron Run</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <pre className="whitespace-pre-wrap text-xs text-muted-foreground max-h-64 overflow-y-auto">
-                            {notifDebugResult ? JSON.stringify(notifDebugResult, null, 2) : notifStats?.lastRun ? JSON.stringify(notifStats.lastRun, null, 2) : 'No runs yet.'}
-                          </pre>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Run History (last 20)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">
-                            {((notifStats as any)?.runs || []).length === 0 ? 'No history yet.' : ((notifStats as any)?.runs || []).map((run: any, idx: number) => (
-                              <pre key={idx} className="border p-2 rounded">{JSON.stringify(run, null, 2)}</pre>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Eligible Plants & Manual Trigger */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5" /> Plants Under 12h (Eligible for Notification)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* FID Filter & Actions */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    placeholder="Filter by FID (optional)"
-                    value={notifFidFilter}
-                    onChange={(e) => setNotifFidFilter(e.target.value.replace(/\D/g, ''))}
-                    className="w-40"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fetchEligiblePlants(notifFidFilter || undefined)}
-                    disabled={eligibleLoading}
-                  >
-                    <Search className={`w-4 h-4 mr-2 ${eligibleLoading ? 'animate-spin' : ''}`} />
-                    {eligibleLoading ? 'Loading...' : 'Check Eligible'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => triggerNotifications(notifFidFilter || undefined, true)}
-                    disabled={triggerLoading}
-                  >
-                    <Eye className={`w-4 h-4 mr-2`} />
-                    Dry Run
-                  </Button>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => {
-                      const fids = getEligibleFidsToNotify();
-                      if (fids.length === 0) {
-                        toast.error('No eligible FIDs found. Click "Check Eligible" first.');
-                        return;
-                      }
-                      setSendNotifProgress(null);
-                      setSendNotifDialogOpen(true);
-                    }}
-                    disabled={triggerLoading || !eligiblePlants}
-                  >
-                    <Bell className={`w-4 h-4 mr-2 ${triggerLoading ? 'animate-spin' : ''}`} />
-                    {triggerLoading ? 'Sending...' : 'Send Notifications'}
-                  </Button>
-                </div>
-
-                {/* Eligible Plants Results */}
-                {eligiblePlants && (
-                  <div className="space-y-3">
-                    <div className="flex flex-col gap-2 p-3 bg-muted/50 rounded">
-                      <div className="text-sm">
-                        <span className="font-semibold">Summary:</span>{' '}
-                        {eligiblePlants.summary?.fidsChecked || 0} users checked,{' '}
-                        {eligiblePlants.summary?.fidsWithEligiblePlants || 0} with eligible plants,{' '}
-                        <span className="text-orange-600 font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
-                      </div>
-                      {/* Throttle Stats */}
-                      <div className="text-sm border-t pt-2 mt-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Already notified (throttled):</span>
-                          <span className="font-semibold text-yellow-600">
-                            {eligiblePlants.summary?.throttledUsers || 0} users, {eligiblePlants.summary?.throttledPlants || 0} plants
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Would notify now:</span>
-                          <span className="font-semibold text-green-600">
-                            {eligiblePlants.summary?.wouldNotify || 0} users
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {(eligiblePlants.eligible || []).map((user: any) => (
-                        <div key={user.fid} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
-                          <div className="flex items-center justify-between">
-                            <div className="font-mono text-sm flex items-center gap-2">
-                              FID: <span className="font-semibold">{user.fid}</span>
-                              {user.userThrottled && (
-                                <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded">
-                                  THROTTLED
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                              {user.address}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                            {(user.plants || []).map((plant: any) => (
-                              <div
-                                key={plant.id}
-                                className={`p-2 rounded text-xs ${plant.eligible
-                                  ? plant.throttled
-                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300'
-                                    : 'bg-green-100 dark:bg-green-900/30 border border-green-300'
-                                  : 'bg-muted'
-                                  }`}
-                              >
-                                <div className="font-semibold">Plant #{plant.id}</div>
-                                <div className={plant.eligible ? (plant.throttled ? 'text-yellow-600' : 'text-green-600') + ' font-semibold' : 'text-muted-foreground'}>
-                                  {plant.hoursLeft > 0 ? `${plant.hoursLeft}h left` : 'Dead/Fed'}
-                                </div>
-                                {plant.eligible && (
-                                  <div className={plant.throttled ? 'text-yellow-600' : 'text-green-600'}>
-                                    {plant.throttled ? '⏸ Notified' : '✓ Would notify'}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      {(eligiblePlants.eligible || []).length === 0 && (
-                        <div className="text-center py-4 text-muted-foreground">
-                          No users with eligible plants found.
-                        </div>
+                  <div className="text-sm">
+                    <div className="font-semibold mb-1">Recent runs</div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto text-xs text-muted-foreground">
+                      {(notifStats?.recent || []).length === 0 ? (
+                        <div className="border rounded p-2">No history yet.</div>
+                      ) : (
+                        (notifStats?.recent || []).map((run: any, idx: number) => (
+                          <pre key={idx} className="border p-2 rounded whitespace-pre-wrap">{JSON.stringify(run, null, 2)}</pre>
+                        ))
                       )}
                     </div>
                   </div>
-                )}
-
-                {/* Trigger Result */}
-                {triggerResult && (
-                  <div className="text-sm">
-                    <div className="font-semibold mb-1">Last Trigger Result</div>
-                    <pre className="p-2 rounded border text-xs text-muted-foreground whitespace-pre-wrap max-h-64 overflow-y-auto">
-                      {JSON.stringify(triggerResult, null, 2)}
-                    </pre>
-                  </div>
-                )}
+                </div>
               </CardContent>
             </Card>
+
+            {isBaseNotifications ? (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5" /> Base Audience Snapshot</CardTitle>
+                    <CardDescription>Wallet snapshot used for plant-care sends and mass campaigns.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      <div className="border rounded p-3">
+                        <div className="text-muted-foreground">Enabled wallets</div>
+                        <div className="text-xl font-semibold">{baseAudience?.enabledCount || 0}</div>
+                      </div>
+                      <div className="border rounded p-3">
+                        <div className="text-muted-foreground">Current snapshot</div>
+                        <div className="font-mono text-xs break-all">{baseAudience?.currentSnapshot?.id || 'None yet'}</div>
+                      </div>
+                      <div className="border rounded p-3">
+                        <div className="text-muted-foreground">Last completed</div>
+                        <div>{baseAudience?.currentSnapshot?.completedAt ? new Date(baseAudience.currentSnapshot.completedAt).toLocaleString() : 'Not synced yet'}</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => runBaseAudienceSync(false)} disabled={baseSyncLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${baseSyncLoading ? 'animate-spin' : ''}`} />
+                        Sync / Resume
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => runBaseAudienceSync(true)} disabled={baseSyncLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${baseSyncLoading ? 'animate-spin' : ''}`} />
+                        Force Full Sync
+                      </Button>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-2">
+                      <div className="font-semibold text-foreground">Sync state</div>
+                      <pre className="p-2 rounded border whitespace-pre-wrap max-h-56 overflow-y-auto">
+                        {JSON.stringify(baseSyncResult || baseAudience?.syncState || { message: 'No sync run recorded yet.' }, null, 2)}
+                      </pre>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-semibold text-sm">Recent snapshot history</div>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {(baseAudience?.history || []).length === 0 ? (
+                          <div className="border rounded p-2 text-sm text-muted-foreground">No snapshot history yet.</div>
+                        ) : (
+                          (baseAudience?.history || []).map((entry: any) => (
+                            <div key={entry.id} className="border rounded p-2 text-xs">
+                              <div className="font-mono break-all">{entry.id}</div>
+                              <div className="text-muted-foreground">
+                                {entry.uniqueAddresses} wallets • {entry.pagesFetched} pages • {entry.completedAt ? new Date(entry.completedAt).toLocaleString() : 'in progress'}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Base Plant-Care Eligibility</CardTitle>
+                    <CardDescription>Checks due plant owners against the cached enabled-wallet snapshot.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        placeholder="Filter by wallet address (optional)"
+                        value={baseAddressFilter}
+                        onChange={(e) => setBaseAddressFilter(e.target.value)}
+                        className="w-full md:w-72"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fetchEligiblePlants(baseAddressFilter || undefined)}
+                        disabled={eligibleLoading}
+                      >
+                        <Search className={`w-4 h-4 mr-2 ${eligibleLoading ? 'animate-spin' : ''}`} />
+                        {eligibleLoading ? 'Loading...' : 'Check Eligible'}
+                      </Button>
+                    </div>
+
+                    {eligiblePlants && (
+                      <div className="space-y-3">
+                        <div className="p-3 rounded border text-sm space-y-1">
+                          <div>
+                            <span className="font-semibold">Summary:</span>{' '}
+                            {eligiblePlants.summary?.addressesWithEligiblePlants || 0} wallets with due plants,{' '}
+                            <span className="text-orange-600 font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
+                          </div>
+                          <div className="text-muted-foreground">
+                            Would notify now: <span className="font-semibold text-green-600">{eligiblePlants.summary?.wouldNotify || 0}</span> •
+                            Throttled wallets: <span className="font-semibold text-yellow-600"> {eligiblePlants.summary?.throttledUsers || 0}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                          {(eligiblePlants.eligible || []).length === 0 ? (
+                            <div className="text-center py-4 text-muted-foreground">No Base wallets with eligible plants found.</div>
+                          ) : (
+                            (eligiblePlants.eligible || []).map((user: any) => (
+                              <div key={user.address} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="font-mono text-xs break-all">{user.address}</div>
+                                  {user.userThrottled && (
+                                    <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded">
+                                      THROTTLED
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                  {(user.plants || []).map((plant: any) => (
+                                    <div
+                                      key={plant.id}
+                                      className={`p-2 rounded text-xs ${plant.throttled ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300' : 'bg-green-100 dark:bg-green-900/30 border border-green-300'}`}
+                                    >
+                                      <div className="font-semibold">Plant #{plant.id}</div>
+                                      <div className={`${plant.throttled ? 'text-yellow-600' : 'text-green-600'} font-semibold`}>
+                                        {plant.hoursLeft}h left
+                                      </div>
+                                      <div className={plant.throttled ? 'text-yellow-600' : 'text-green-600'}>
+                                        {plant.throttled ? '⏸ Notified' : '✓ Would notify'}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Megaphone className="w-5 h-5" /> Base Campaigns</CardTitle>
+                    <CardDescription>Custom mass notifications to all enabled wallets or a selected wallet list.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Input
+                        value={baseCampaignTitle}
+                        onChange={(e) => setBaseCampaignTitle(e.target.value)}
+                        placeholder="Title (max 30 characters)"
+                        maxLength={30}
+                      />
+                      <Input
+                        value={baseCampaignTargetPath}
+                        onChange={(e) => setBaseCampaignTargetPath(e.target.value)}
+                        placeholder="/rewards"
+                        maxLength={500}
+                      />
+                    </div>
+                    <Textarea
+                      value={baseCampaignMessage}
+                      onChange={(e) => setBaseCampaignMessage(e.target.value)}
+                      placeholder="Message (max 200 characters)"
+                      maxLength={200}
+                      rows={4}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant={baseCampaignAudienceMode === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setBaseCampaignAudienceMode('all')}
+                      >
+                        All Enabled Wallets
+                      </Button>
+                      <Button
+                        variant={baseCampaignAudienceMode === 'selected' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setBaseCampaignAudienceMode('selected')}
+                      >
+                        Selected Wallets
+                      </Button>
+                    </div>
+                    {baseCampaignAudienceMode === 'selected' && (
+                      <Textarea
+                        value={baseCampaignAddressInput}
+                        onChange={(e) => setBaseCampaignAddressInput(e.target.value)}
+                        placeholder="Paste wallet addresses separated by commas, spaces, or new lines"
+                        rows={5}
+                      />
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={previewBaseCampaign} disabled={baseCampaignLoading}>
+                        <Eye className="w-4 h-4 mr-2" />
+                        Preview
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => sendBaseCampaign(true)} disabled={baseCampaignLoading}>
+                        <Bell className="w-4 h-4 mr-2" />
+                        Save Dry Run
+                      </Button>
+                      <Button size="sm" onClick={() => sendBaseCampaign(false)} disabled={baseCampaignLoading}>
+                        <Megaphone className="w-4 h-4 mr-2" />
+                        Send Campaign
+                      </Button>
+                    </div>
+                    {baseCampaignPreview && (
+                      <div className="text-xs text-muted-foreground p-3 rounded border space-y-1">
+                        <div className="font-semibold text-foreground">Preview</div>
+                        <div>Requested: {baseCampaignPreview.requestedCount} • Resolved: {baseCampaignPreview.resolvedCount}</div>
+                        <div>Snapshot size: {baseCampaignPreview.snapshotCount ?? 'n/a'} • Snapshot matched: {baseCampaignPreview.snapshotMatchedCount ?? 'n/a'}</div>
+                        {(baseCampaignPreview.notes || []).length > 0 && (
+                          <div>{(baseCampaignPreview.notes || []).join(' ')}</div>
+                        )}
+                      </div>
+                    )}
+                    {baseCampaignResult && (
+                      <div className="text-xs text-muted-foreground p-3 rounded border max-h-64 overflow-y-auto">
+                        <pre className="whitespace-pre-wrap">{JSON.stringify(baseCampaignResult, null, 2)}</pre>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <div className="font-semibold text-sm">Recent campaigns</div>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {baseCampaigns.length === 0 ? (
+                          <div className="border rounded p-2 text-sm text-muted-foreground">No campaigns yet.</div>
+                        ) : (
+                          baseCampaigns.map((campaign: any) => (
+                            <div key={campaign.id} className="border rounded p-3 text-xs space-y-1">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="font-semibold">{campaign.title}</div>
+                                <div className="text-muted-foreground">{campaign.status}</div>
+                              </div>
+                              <div>{campaign.message}</div>
+                              <div className="text-muted-foreground">
+                                {campaign.audienceMode} • requested {campaign.requestedCount} • resolved {campaign.resolvedCount} • sent {campaign.sentCount} • failed {campaign.failedCount}
+                              </div>
+                              <div className="text-muted-foreground">{campaign.updatedAt ? new Date(campaign.updatedAt).toLocaleString() : ''}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Neynar Plant-Care Admin</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {eligibleFids && eligibleFids.length > 0 && (
+                    <div className="text-sm">
+                      <div className="font-semibold mb-1">Known eligible FIDs</div>
+                      <div className="flex flex-wrap gap-1 max-h-[140px] overflow-y-auto">
+                        {eligibleFids.slice(0, 200).map((fid: any) => (
+                          <span key={fid} className="text-xs bg-muted px-2 py-0.5 rounded">{fid}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      placeholder="Filter by FID (optional)"
+                      value={notifFidFilter}
+                      onChange={(e) => setNotifFidFilter(e.target.value.replace(/\D/g, ''))}
+                      className="w-40"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchEligiblePlants(notifFidFilter || undefined)}
+                      disabled={eligibleLoading}
+                    >
+                      <Search className={`w-4 h-4 mr-2 ${eligibleLoading ? 'animate-spin' : ''}`} />
+                      {eligibleLoading ? 'Loading...' : 'Check Eligible'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => triggerNotifications(notifFidFilter || undefined, true)}
+                      disabled={triggerLoading}
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      Dry Run
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const fids = getEligibleFidsToNotify();
+                        if (fids.length === 0) {
+                          toast.error('No eligible FIDs found. Click "Check Eligible" first.');
+                          return;
+                        }
+                        setSendNotifProgress(null);
+                        setSendNotifDialogOpen(true);
+                      }}
+                      disabled={triggerLoading || !eligiblePlants}
+                    >
+                      <Bell className={`w-4 h-4 mr-2 ${triggerLoading ? 'animate-spin' : ''}`} />
+                      Send Notifications
+                    </Button>
+                  </div>
+
+                  {eligiblePlants && (
+                    <div className="space-y-3">
+                      <div className="p-3 rounded border text-sm space-y-1">
+                        <div>
+                          <span className="font-semibold">Summary:</span>{' '}
+                          {eligiblePlants.summary?.fidsWithEligiblePlants || 0} FIDs with due plants,{' '}
+                          <span className="text-orange-600 font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
+                        </div>
+                        <div className="text-muted-foreground">
+                          Would notify now: <span className="font-semibold text-green-600">{eligiblePlants.summary?.wouldNotify || 0}</span> •
+                          Throttled users: <span className="font-semibold text-yellow-600"> {eligiblePlants.summary?.throttledUsers || 0}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {(eligiblePlants.eligible || []).length === 0 ? (
+                          <div className="text-center py-4 text-muted-foreground">No users with eligible plants found.</div>
+                        ) : (
+                          (eligiblePlants.eligible || []).map((user: any) => (
+                            <div key={user.fid} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
+                              <div className="flex items-center justify-between">
+                                <div className="font-mono text-sm flex items-center gap-2">
+                                  FID: <span className="font-semibold">{user.fid}</span>
+                                  {user.userThrottled && (
+                                    <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded">
+                                      THROTTLED
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate max-w-[200px]">{user.address}</div>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {(user.plants || []).map((plant: any) => (
+                                  <div
+                                    key={plant.id}
+                                    className={`p-2 rounded text-xs ${plant.throttled ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300' : 'bg-green-100 dark:bg-green-900/30 border border-green-300'}`}
+                                  >
+                                    <div className="font-semibold">Plant #{plant.id}</div>
+                                    <div className={`${plant.throttled ? 'text-yellow-600' : 'text-green-600'} font-semibold`}>
+                                      {plant.hoursLeft}h left
+                                    </div>
+                                    <div className={plant.throttled ? 'text-yellow-600' : 'text-green-600'}>
+                                      {plant.throttled ? '⏸ Notified' : '✓ Would notify'}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {triggerResult && (
+                    <div className="text-sm">
+                      <div className="font-semibold mb-1">Last Trigger Result</div>
+                      <pre className="p-2 rounded border text-xs text-muted-foreground whitespace-pre-wrap max-h-64 overflow-y-auto">
+                        {JSON.stringify(triggerResult, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Redis Keys Management Card */}
             <Card>

@@ -1,54 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { SERVER_ENV } from '@/lib/env-config';
+import {
+  BASE_AUDIENCE_HISTORY_KEY,
+  BASE_AUDIENCE_SYNC_STATE_KEY,
+  NOTIFICATION_CAMPAIGN_INDEX_KEY,
+  getPlantCareLastKey,
+  getPlantCareLogKey,
+  getPlantCareRunsKey,
+  getPlantCareSentCountKey,
+  getPlantCareUserThrottleKey,
+} from '@/lib/notifications/constants';
+import type { NotificationProvider } from '@/lib/notifications/provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Scan and delete notification keys - uses raw scan WITHOUT pixotchi: prefix
-// because notification keys are stored without the prefix
 async function scanAndDelete(pattern: string): Promise<number> {
   if (!redis) return 0;
-  let deletedCount = 0;
-  try {
-    let cursor = 0;
-    do {
-      // Use raw scan with pattern (notification keys don't have pixotchi: prefix)
-      const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
-      if (Array.isArray(resp)) {
-        cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
-        const keys: string[] = (resp[1] || []) as string[];
-        for (const key of keys) {
-          try {
-            await (redis as any).del(key);
-            deletedCount++;
-          } catch { }
-        }
-      } else {
-        break;
-      }
-    } while (cursor !== 0);
-  } catch (e) {
-    console.error('[scanAndDelete] Error:', e);
-  }
-  return deletedCount;
+
+  let deleted = 0;
+  let cursor = 0;
+
+  do {
+    const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
+    if (!Array.isArray(resp)) {
+      break;
+    }
+
+    cursor = typeof resp[0] === 'string' ? Number.parseInt(resp[0], 10) : resp[0];
+    const keys: string[] = (resp[1] || []) as string[];
+
+    for (const key of keys) {
+      await redis.del(key);
+      deleted += 1;
+    }
+  } while (cursor !== 0);
+
+  return deleted;
 }
 
-/**
- * DELETE /api/admin/notifications/reset
- * 
- * Reset notification throttle keys to allow re-sending notifications.
- * 
- * Query params:
- * - scope: 'all' | 'fid' | 'plant' (default: 'all')
- * - fid: Required for 'fid' and 'plant' scopes
- * - plantId: Required for 'plant' scope
- * 
- * Examples:
- * - DELETE /api/admin/notifications/reset?scope=all - Clear all notification keys
- * - DELETE /api/admin/notifications/reset?scope=fid&fid=123 - Clear keys for specific user
- * - DELETE /api/admin/notifications/reset?scope=plant&fid=123&plantId=456 - Clear keys for specific plant
- */
+async function clearProviderPlantCare(provider: NotificationProvider): Promise<number> {
+  if (!redis) return 0;
+
+  let deleted = 0;
+  const keys = [
+    getPlantCareLogKey(provider),
+    getPlantCareLastKey(provider),
+    getPlantCareSentCountKey(provider),
+    getPlantCareRunsKey(provider),
+  ];
+
+  for (const key of keys) {
+    await redis.del(key);
+    deleted += 1;
+  }
+
+  deleted += await scanAndDelete(provider === 'base' ? 'notif:base:plant12h:wallet:*' : 'notif:neynar:plant12h:fid:*');
+  return deleted;
+}
+
+async function clearBaseCampaigns(): Promise<number> {
+  if (!redis) return 0;
+
+  let deleted = 0;
+  deleted += await scanAndDelete('notif:campaign:*');
+  await redis.del(NOTIFICATION_CAMPAIGN_INDEX_KEY);
+  deleted += 1;
+  return deleted;
+}
+
 export async function DELETE(req: NextRequest) {
   if (!validateAdminKey(req)) {
     return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
@@ -57,57 +79,59 @@ export async function DELETE(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const scope = url.searchParams.get('scope') || 'all';
+    const provider = (url.searchParams.get('provider') || SERVER_ENV.NOTIFICATION_PROVIDER) as NotificationProvider | 'all';
     const fid = url.searchParams.get('fid');
+    const address = url.searchParams.get('address');
     const plantId = url.searchParams.get('plantId');
 
-    const ops: Array<Promise<any>> = [];
+    let deletedCount = 0;
 
     if (scope === 'all') {
-      // Clear all plant12h notification keys
-      ops.push((redis as any)?.del?.('notif:plant12h:log'));
-      ops.push((redis as any)?.del?.('notif:plant12h:last'));
-      ops.push((redis as any)?.del?.('notif:plant12h:sent:count'));
-      ops.push((redis as any)?.del?.('notif:plant12h:runs'));
-      await scanAndDelete('notif:plant12h:fid:*');
+      const providers: NotificationProvider[] =
+        provider === 'all' ? ['neynar', 'base'] : [provider];
 
-      // Also clean up legacy plant1h keys
-      ops.push((redis as any)?.del?.('notif:plant1h:log'));
-      ops.push((redis as any)?.del?.('notif:plant1h:last'));
-      ops.push((redis as any)?.del?.('notif:plant1h:sentCount'));
-      ops.push((redis as any)?.del?.('notif:plant1h:runs'));
-      ops.push((redis as any)?.del?.('notif:plant1h:lastRun'));
-      await scanAndDelete('notif:plant1h:fid:*');
+      for (const currentProvider of providers) {
+        deletedCount += await clearProviderPlantCare(currentProvider);
+      }
 
-      // Clean up legacy fence keys
-      await scanAndDelete('notif:fence:*');
-      await scanAndDelete('notif:fencev2:*');
-
-    } else if (scope === 'fid' && fid) {
-      // Clear keys for specific fid
-      ops.push((redis as any)?.del?.(`notif:plant12h:fid:${fid}`));
-      await scanAndDelete(`notif:plant12h:fid:${fid}:plant:*`);
-
-    } else if (scope === 'plant' && fid && plantId) {
-      // Clear key for specific plant
-      ops.push((redis as any)?.del?.(`notif:plant12h:fid:${fid}:plant:${plantId}`));
-
+      if (providers.includes('base')) {
+        deletedCount += await clearBaseCampaigns();
+        await redis?.del(BASE_AUDIENCE_SYNC_STATE_KEY);
+        await redis?.del(BASE_AUDIENCE_HISTORY_KEY);
+      }
+    } else if ((scope === 'fid' || scope === 'recipient') && fid) {
+      await redis?.del(getPlantCareUserThrottleKey('neynar', fid));
+      deletedCount += 1;
+      deletedCount += await scanAndDelete(`notif:neynar:plant12h:fid:${fid}:plant:*`);
+    } else if ((scope === 'address' || scope === 'recipient') && address) {
+      await redis?.del(getPlantCareUserThrottleKey('base', address));
+      deletedCount += 1;
+      deletedCount += await scanAndDelete(`notif:base:plant12h:wallet:${String(address).toLowerCase()}:plant:*`);
+    } else if (scope === 'plant' && plantId && (fid || address)) {
+      if (fid) {
+        await redis?.del(`notif:neynar:plant12h:fid:${fid}:plant:${plantId}`);
+      }
+      if (address) {
+        await redis?.del(`notif:base:plant12h:wallet:${String(address).toLowerCase()}:plant:${plantId}`);
+      }
+      deletedCount += 1;
     } else {
       return NextResponse.json({
         success: false,
-        error: 'Invalid scope or missing params. Use scope=all, scope=fid&fid=123, or scope=plant&fid=123&plantId=456'
+        error: 'Invalid scope or missing params',
       }, { status: 400 });
     }
 
-    await Promise.all(ops);
-
     return NextResponse.json({
       success: true,
+      deletedCount,
       scope,
-      fid: fid || null,
-      plantId: plantId || null,
-      message: `Cleared notification throttle keys for scope: ${scope}`,
+      provider,
     });
-  } catch (e: any) {
-    return NextResponse.json({ success: false, error: e?.message || 'reset_failed' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json(
+      createErrorResponse(error instanceof Error ? error.message : 'reset_failed', 500).body,
+      { status: 500 },
+    );
   }
 }
