@@ -70,10 +70,10 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         try {
             const stored = localStorage.getItem(STORAGE_KEY);
-            // Default to true (on) if no preference exists
-            setIsEnabled(stored === null ? true : stored === "true");
+            // Default to false (off) if no preference exists
+            setIsEnabled(stored === null ? false : stored === "true");
         } catch {
-            setIsEnabled(true);
+            setIsEnabled(false);
         }
         setMounted(true);
     }, []);
