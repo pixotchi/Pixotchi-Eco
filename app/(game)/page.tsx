@@ -538,7 +538,7 @@ export default function App() {
         {/* Main Content */}
         <main data-viewport-shell="main" className="flex-1 bg-muted/40 flex flex-col overflow-hidden" role="main" aria-label="Main content area">
           {(!isConnected) ? (
-            <div className="flex flex-col items-center justify-center h-full p-4">
+            <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom">
               <div className="flex-grow flex flex-col items-center justify-center text-center">
                 <div className="flex flex-col items-center space-y-3 mb-8">
                   <Image

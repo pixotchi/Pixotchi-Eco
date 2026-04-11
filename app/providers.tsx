@@ -522,6 +522,7 @@ function ProvidersContent({
                             },
                           }}
                           containerStyle={{
+                            top: "max(1rem, var(--safe-area-inset-top), var(--browser-safe-area-top))",
                             zIndex: 9999,
                           }}
                         />
