@@ -36,6 +36,36 @@ export function ThemeSelector() {
     setMounted(true);
   }, []);
 
+  const runStableThemeSwitch = React.useCallback((applyThemeChange: () => void) => {
+    if (typeof document === "undefined") {
+      applyThemeChange();
+      return;
+    }
+
+    const root = document.documentElement;
+    const shouldStabilize = root.dataset.hostChrome === "visible";
+    if (!shouldStabilize) {
+      applyThemeChange();
+      return;
+    }
+
+    let released = false;
+    const release = () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      root.classList.remove("theme-switch-stable");
+    };
+
+    root.classList.add("theme-switch-stable");
+    applyThemeChange();
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(release);
+    });
+    window.setTimeout(release, 220);
+  }, []);
+
   const handleSecretProgress = React.useCallback(async (selectedTheme: string) => {
     try {
       const response = await fetch("/api/secret-garden/progress", {
@@ -70,10 +100,10 @@ export function ThemeSelector() {
 
   const handleThemeChange = React.useCallback((newTheme: string) => {
     if (THEMES[newTheme as Theme]) {
-      setTheme(newTheme);
+      runStableThemeSwitch(() => setTheme(newTheme));
       void handleSecretProgress(newTheme);
     }
-  }, [handleSecretProgress, setTheme]);
+  }, [handleSecretProgress, runStableThemeSwitch, setTheme]);
 
   if (!mounted) {
     // Render a placeholder to prevent layout shift

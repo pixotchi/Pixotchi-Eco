@@ -542,17 +542,17 @@ export default function LandsView() {
         <>
           <Card className="rounded-2xl">
             <CardContent className="space-y-3">
-              <div className="relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
+              <div className="host-chrome-solid-muted relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-2 gap-2 text-sm font-bold text-foreground/80 z-20">
                   <div className="flex justify-start">
-                    <div className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    <div className="host-chrome-stable-surface host-chrome-solid-background flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
                       <Image src="/icons/pts.svg" alt="XP" width={16} height={16} className="w-4 h-4" />
                       <span>{formatXP(selectedLand.experiencePoints)} XP</span>
                     </div>
                   </div>
                   <div className="flex justify-end">
                     <div
-                      className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full"
+                      className="host-chrome-stable-surface host-chrome-solid-background flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full"
                     >
                       <Image src="/icons/location.svg" alt="Coordinates" width={16} height={16} className="w-4 h-4" />
                       <span>({selectedLand.coordinateX.toString()}, {selectedLand.coordinateY.toString()})</span>
@@ -594,7 +594,7 @@ export default function LandsView() {
                           setSelectedLand(lands[prevIndex]);
                         }
                       }}
-                      className="host-chrome-stable-surface absolute left-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      className="host-chrome-stable-surface host-chrome-solid-background absolute left-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                       aria-label="Previous land"
                       title="Previous"
                     >
@@ -609,7 +609,7 @@ export default function LandsView() {
                           setSelectedLand(lands[nextIndex]);
                         }
                       }}
-                      className="host-chrome-stable-surface absolute right-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      className="host-chrome-stable-surface host-chrome-solid-background absolute right-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                       aria-label="Next land"
                       title="Next"
                     >

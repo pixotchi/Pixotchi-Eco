@@ -58,14 +58,12 @@ export function useKeyboardAware(): KeyboardState {
 
     // Listen to visual viewport changes
     viewport.addEventListener('resize', updateKeyboardState);
-    viewport.addEventListener('scroll', updateKeyboardState);
 
     // Initial check
     updateKeyboardState();
 
     return () => {
       viewport.removeEventListener('resize', updateKeyboardState);
-      viewport.removeEventListener('scroll', updateKeyboardState);
     };
   }, [updateKeyboardState]);
 
@@ -80,6 +78,14 @@ export function useViewportHeight() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     const root = document.documentElement;
+    let previousViewportHeight: number | null = null;
+    let previousBrowserTop: string | null = null;
+    let previousBrowserRight: string | null = null;
+    let previousBrowserBottom: string | null = null;
+    let previousBrowserLeft: string | null = null;
+    let previousHostChromeBottomInset: string | null = null;
+    let previousHostChromeState: 'visible' | 'hidden' | null = null;
+    let pendingAnimationFrame: number | null = null;
 
     const parsePixelValue = (value: string) => {
       const normalized = value.trim();
@@ -128,9 +134,18 @@ export function useViewportHeight() {
         'paddingBottom',
       ) ?? 0;
       const bottomInset = Math.max(safeBottom, browserBottom);
+      const nextInset = `${bottomInset}px`;
+      const nextState = bottomInset >= HOST_CHROME_VISIBLE_THRESHOLD ? 'visible' : 'hidden';
 
-      root.style.setProperty('--host-chrome-bottom-inset', `${bottomInset}px`);
-      root.dataset.hostChrome = bottomInset >= HOST_CHROME_VISIBLE_THRESHOLD ? 'visible' : 'hidden';
+      if (previousHostChromeBottomInset !== nextInset) {
+        root.style.setProperty('--host-chrome-bottom-inset', nextInset);
+        previousHostChromeBottomInset = nextInset;
+      }
+
+      if (previousHostChromeState !== nextState) {
+        root.dataset.hostChrome = nextState;
+        previousHostChromeState = nextState;
+      }
     };
 
     const updateHeight = () => {
@@ -145,39 +160,76 @@ export function useViewportHeight() {
       const offsetRight = Math.max(0, Math.round(layoutWidth - visibleWidth - offsetLeft));
       const browserBottomInset =
         rawOffsetBottom > KEYBOARD_HEIGHT_THRESHOLD ? 0 : rawOffsetBottom;
+      const nextBrowserTop = `${offsetTop}px`;
+      const nextBrowserRight = `${offsetRight}px`;
+      const nextBrowserBottom = `${browserBottomInset}px`;
+      const nextBrowserLeft = `${offsetLeft}px`;
 
-      root.style.setProperty('--vh', `${visibleHeight * 0.01}px`);
-      root.style.setProperty('--browser-safe-area-top', `${offsetTop}px`);
-      root.style.setProperty('--browser-safe-area-right', `${offsetRight}px`);
-      root.style.setProperty('--browser-safe-area-bottom', `${browserBottomInset}px`);
-      root.style.setProperty('--browser-safe-area-left', `${offsetLeft}px`);
+      if (previousViewportHeight !== visibleHeight) {
+        root.style.setProperty('--vh', `${visibleHeight * 0.01}px`);
+        previousViewportHeight = visibleHeight;
+        setViewportHeight(visibleHeight);
+      }
+
+      if (previousBrowserTop !== nextBrowserTop) {
+        root.style.setProperty('--browser-safe-area-top', nextBrowserTop);
+        previousBrowserTop = nextBrowserTop;
+      }
+      if (previousBrowserRight !== nextBrowserRight) {
+        root.style.setProperty('--browser-safe-area-right', nextBrowserRight);
+        previousBrowserRight = nextBrowserRight;
+      }
+      if (previousBrowserBottom !== nextBrowserBottom) {
+        root.style.setProperty('--browser-safe-area-bottom', nextBrowserBottom);
+        previousBrowserBottom = nextBrowserBottom;
+      }
+      if (previousBrowserLeft !== nextBrowserLeft) {
+        root.style.setProperty('--browser-safe-area-left', nextBrowserLeft);
+        previousBrowserLeft = nextBrowserLeft;
+      }
+
       updateHostChromeState();
+    };
 
-      setViewportHeight(visibleHeight);
+    const scheduleUpdate = () => {
+      if (pendingAnimationFrame !== null) {
+        return;
+      }
+
+      pendingAnimationFrame = window.requestAnimationFrame(() => {
+        pendingAnimationFrame = null;
+        updateHeight();
+      });
     };
 
     const handleOrientationChange = () => {
       // Small delay to account for mobile browser UI adjustments
-      setTimeout(updateHeight, 100);
+      window.setTimeout(scheduleUpdate, 100);
     };
 
     const viewport = window.visualViewport;
     updateHeight();
 
     // Update on viewport resize, browser chrome movement, and orientation changes.
-    window.addEventListener('resize', updateHeight);
+    window.addEventListener('resize', scheduleUpdate);
     window.addEventListener('orientationchange', handleOrientationChange);
-    viewport?.addEventListener('resize', updateHeight);
-    viewport?.addEventListener('scroll', updateHeight);
+    viewport?.addEventListener('resize', scheduleUpdate);
     const hostChromePoll = window.setInterval(updateHostChromeState, 250);
 
     return () => {
-      window.removeEventListener('resize', updateHeight);
+      if (pendingAnimationFrame !== null) {
+        window.cancelAnimationFrame(pendingAnimationFrame);
+      }
+
+      window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('orientationchange', handleOrientationChange);
-      viewport?.removeEventListener('resize', updateHeight);
-      viewport?.removeEventListener('scroll', updateHeight);
+      viewport?.removeEventListener('resize', scheduleUpdate);
       window.clearInterval(hostChromePoll);
       root.style.removeProperty('--host-chrome-bottom-inset');
+      root.style.removeProperty('--browser-safe-area-top');
+      root.style.removeProperty('--browser-safe-area-right');
+      root.style.removeProperty('--browser-safe-area-bottom');
+      root.style.removeProperty('--browser-safe-area-left');
       delete root.dataset.hostChrome;
     };
   }, []);
