@@ -8,9 +8,12 @@ export const BASE_AUDIENCE_PAGE_SIZE = 100;
 export const BASE_SEND_BATCH_SIZE = 1000;
 export const BASE_REQUEST_INTERVAL_MS = 6500;
 export const BASE_REQUEST_LOCK_TTL_SECONDS = 15 * 60;
+export const BASE_AUDIENCE_SYNC_SAFE_MAX_DURATION_SECONDS = 300;
+export const BASE_AUDIENCE_SYNC_EXECUTION_HEADROOM_MS = 45 * 1000;
 export const BASE_SYNC_HISTORY_LIMIT = 24;
 export const BASE_CAMPAIGN_HISTORY_LIMIT = 50;
 export const PLANT_CARE_HISTORY_LIMIT = 50;
+export const BASE_PLANT_CARE_TARGET_PATH = '/?tab=dashboard&dashboardView=plants';
 
 export const BASE_API_LOCK_KEY = 'notif:base:api:lock';
 export const BASE_AUDIENCE_CURRENT_SNAPSHOT_KEY = 'notif:base:audience:current';

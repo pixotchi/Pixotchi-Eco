@@ -4,6 +4,7 @@ import {
   BASE_REQUEST_INTERVAL_MS,
   BASE_SEND_BATCH_SIZE,
 } from '@/lib/notifications/constants';
+import { pruneBaseAudienceAddressesFromCurrentSnapshot } from '@/lib/notifications/storage';
 import { chunkArray, normalizeTargetPath, sleep, uniqueWalletAddresses } from '@/lib/notifications/utils';
 
 export type BaseNotificationUser = {
@@ -34,6 +35,7 @@ export type BaseNotificationSendResponse = {
 export type BaseNotificationBatchResult = {
   batchIndex: number;
   requestedCount: number;
+  requestedAddresses: string[];
   response: BaseNotificationSendResponse;
 };
 
@@ -44,6 +46,10 @@ export type BaseNotificationChunkedSendResponse = {
   failedCount: number;
   batches: BaseNotificationBatchResult[];
   failures: BaseNotificationSendResult[];
+  prunedSnapshotAddresses: string[];
+  prunedSnapshotCount: number;
+  prunedSnapshotRemainingCount: number;
+  prunedSnapshotId: string | null;
 };
 
 type BaseFetchUsersOptions = {
@@ -62,6 +68,11 @@ type BaseSendOptions = {
 type BaseChunkedSendOptions = BaseSendOptions & {
   pacingMs?: number;
   onBatchComplete?: (result: BaseNotificationBatchResult) => Promise<void> | void;
+};
+
+export type BaseNotificationChunkedSendError = Error & {
+  partialResponse?: BaseNotificationChunkedSendResponse;
+  status?: number;
 };
 
 function getBaseNotificationsApiKey(): string | null {
@@ -100,6 +111,30 @@ function buildBaseApiError(status: number, payload: unknown, fallback: string): 
   (error as Error & { status?: number; payload?: unknown }).status = status;
   (error as Error & { status?: number; payload?: unknown }).payload = payload;
   return error;
+}
+
+function getRetryDelayMs(attempt: number, pacingMs: number): number {
+  return pacingMs * Math.max(2, attempt + 2);
+}
+
+function isRetryableBaseSendStatus(status?: number): boolean {
+  return status === 429 || status === 503;
+}
+
+function shouldPruneBaseFailureReason(failureReason?: string | null): boolean {
+  const normalized = String(failureReason || '').trim().toLowerCase();
+  return normalized === 'user has not saved this app' || normalized === 'user has notifications disabled';
+}
+
+async function finalizePrunedSnapshot(prunableAddresses: Set<string>) {
+  const prunedSnapshotAddresses = Array.from(prunableAddresses);
+  const pruneResult = await pruneBaseAudienceAddressesFromCurrentSnapshot(prunedSnapshotAddresses);
+  return {
+    prunedSnapshotAddresses,
+    prunedSnapshotCount: pruneResult.removedCount,
+    prunedSnapshotRemainingCount: pruneResult.remainingCount,
+    prunedSnapshotId: pruneResult.snapshotId,
+  };
 }
 
 export function isBaseNotificationsConfigured(): boolean {
@@ -165,6 +200,7 @@ export async function sendBaseNotificationBatch(
   options: BaseSendOptions,
 ): Promise<BaseNotificationSendResponse> {
   const addresses = uniqueWalletAddresses(options.addresses);
+  const targetPath = normalizeTargetPath(options.targetPath);
   if (addresses.length === 0) {
     return {
       success: true,
@@ -184,7 +220,7 @@ export async function sendBaseNotificationBatch(
       wallet_addresses: addresses,
       title: options.title,
       message: options.message,
-      ...(normalizeTargetPath(options.targetPath) ? { target_path: normalizeTargetPath(options.targetPath) } : {}),
+      ...(targetPath ? { target_path: targetPath } : {}),
     }),
   });
   const payload = await parseJsonSafe(response);
@@ -248,6 +284,7 @@ export async function sendBaseNotificationsInChunks(
 
   const results: BaseNotificationBatchResult[] = [];
   const failures: BaseNotificationSendResult[] = [];
+  const prunableAddresses = new Set<string>();
   let sentCount = 0;
   let failedCount = 0;
 
@@ -256,32 +293,53 @@ export async function sendBaseNotificationsInChunks(
       await sleep(pacingMs);
     }
 
-    let response: BaseNotificationSendResponse;
-    try {
-      response = await sendBaseNotificationBatch({
-        addresses: batches[index] || [],
-        title: options.title,
-        message: options.message,
-        targetPath: options.targetPath,
-      });
-    } catch (error) {
-      const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined;
-      if (status !== 429) {
-        throw error;
-      }
+    let response: BaseNotificationSendResponse | null = null;
+    let lastError: unknown = null;
 
-      await sleep(pacingMs * 2);
-      response = await sendBaseNotificationBatch({
-        addresses: batches[index] || [],
-        title: options.title,
-        message: options.message,
-        targetPath: options.targetPath,
-      });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        response = await sendBaseNotificationBatch({
+          addresses: batches[index] || [],
+          title: options.title,
+          message: options.message,
+          targetPath: options.targetPath,
+        });
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        const status =
+          typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined;
+
+        if (!isRetryableBaseSendStatus(status) || attempt === 2) {
+          const pruneSummary = await finalizePrunedSnapshot(prunableAddresses);
+          const partialResponse: BaseNotificationChunkedSendResponse = {
+            success: false,
+            totalRequested: addresses.length,
+            sentCount,
+            failedCount,
+            batches: results,
+            failures,
+            ...pruneSummary,
+          };
+          const enrichedError = (error instanceof Error ? error : new Error('Base notification send failed')) as BaseNotificationChunkedSendError;
+          enrichedError.partialResponse = partialResponse;
+          enrichedError.status = status;
+          throw enrichedError;
+        }
+
+        await sleep(getRetryDelayMs(attempt, pacingMs));
+      }
+    }
+
+    if (!response) {
+      throw lastError instanceof Error ? lastError : new Error('Base notification send failed');
     }
 
     results.push({
       batchIndex: index,
       requestedCount: (batches[index] || []).length,
+      requestedAddresses: batches[index] || [],
       response,
     });
     if (options.onBatchComplete) {
@@ -291,7 +349,14 @@ export async function sendBaseNotificationsInChunks(
     sentCount += response.sentCount;
     failedCount += response.failedCount;
     failures.push(...response.results.filter((entry) => !entry.sent));
+    for (const failure of response.results) {
+      if (!failure.sent && shouldPruneBaseFailureReason(failure.failureReason)) {
+        prunableAddresses.add(failure.walletAddress.toLowerCase());
+      }
+    }
   }
+
+  const pruneSummary = await finalizePrunedSnapshot(prunableAddresses);
 
   return {
     success: failedCount === 0,
@@ -300,5 +365,6 @@ export async function sendBaseNotificationsInChunks(
     failedCount,
     batches: results,
     failures,
+    ...pruneSummary,
   };
 }

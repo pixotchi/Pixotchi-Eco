@@ -39,6 +39,7 @@ import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { usePathname } from "next/navigation";
 import packageJson from '@/package.json';
+import { patchOnchainKitClientMetaTimeout } from "@/lib/onchainkit-client-meta-patch";
 import {
   AuthSurface,
   DEFAULT_AUTH_SURFACE,
@@ -98,6 +99,8 @@ const queryClient = new QueryClient({
 });
 
 export function Providers(props: { children: ReactNode }) {
+  patchOnchainKitClientMetaTimeout();
+
   // Use CDP Client API key for Coinbase SDK
   const apiKey = process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY;
 

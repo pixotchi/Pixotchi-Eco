@@ -12,6 +12,7 @@ import {
   releaseBaseApiLock,
 } from '@/lib/notifications/storage';
 import {
+  BASE_PLANT_CARE_TARGET_PATH,
   BASE_REQUEST_LOCK_TTL_SECONDS,
   NEYNAR_ENABLED_FIDS_CACHE_KEY,
   NEYNAR_ENABLED_FIDS_CACHE_TTL_SECONDS,
@@ -21,9 +22,14 @@ import {
   getPlantCareUserThrottleKey,
 } from '@/lib/notifications/constants';
 import { collectDuePlantsByOwner, type DuePlantOwnerSummary } from '@/lib/notifications/plant-care';
-import { sendBaseNotificationsInChunks } from '@/lib/notifications/base-api';
+import {
+  sendBaseNotificationsInChunks,
+  type BaseNotificationChunkedSendError,
+  type BaseNotificationChunkedSendResponse,
+} from '@/lib/notifications/base-api';
 import { sleep, normalizeWalletAddress } from '@/lib/notifications/utils';
 import { validateAdminKey } from '@/lib/auth-utils';
+import { verifyVercelCron } from '@/lib/notifications/cron-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,14 +67,6 @@ type BaseAddressProcessResult = {
   hasEligible: boolean;
   duePlants: Array<{ id: number; hoursLeft: number; plantThrottled: boolean }>;
 };
-
-function verifyVercelCron(req: NextRequest): boolean {
-  const authHeader = req.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret) return true;
-  return authHeader === `Bearer ${cronSecret}`;
-}
 
 async function getThrottleState(key: string): Promise<boolean> {
   if (!redis) {
@@ -416,6 +414,41 @@ async function processBaseDueOwner(
   };
 }
 
+async function applyBasePlantCareDeliveryOutcome(
+  response: BaseNotificationChunkedSendResponse,
+  eligiblePlantIdsByAddress: Map<string, number[]>,
+) {
+  const deliveredAddresses = new Set<string>();
+
+  for (const batch of response.batches) {
+    if (batch.response.results.length > 0) {
+      for (const entry of batch.response.results) {
+        if (entry.sent) {
+          deliveredAddresses.add(entry.walletAddress.toLowerCase());
+        }
+      }
+      continue;
+    }
+
+    if (batch.response.failedCount === 0) {
+      for (const address of batch.requestedAddresses) {
+        deliveredAddresses.add(address.toLowerCase());
+      }
+    }
+  }
+
+  for (const address of deliveredAddresses) {
+    if (!eligiblePlantIdsByAddress.has(address)) {
+      continue;
+    }
+
+    await markThrottle(getPlantCareUserThrottleKey('base', address));
+    for (const plantId of eligiblePlantIdsByAddress.get(address) || []) {
+      await markThrottle(getPlantCarePlantThrottleKey('base', address, plantId));
+    }
+  }
+}
+
 async function handleBasePlantCare(req: NextRequest, debug: boolean, dryRun: boolean, targetAddress?: string) {
   const snapshotMeta = await getCurrentBaseAudienceSnapshotMeta();
   if (!snapshotMeta) {
@@ -446,6 +479,8 @@ async function handleBasePlantCare(req: NextRequest, debug: boolean, dryRun: boo
   const addressesToNotify: string[] = [];
   const results: BaseAddressProcessResult[] = [];
   const eligiblePlantIdsByAddress = new Map<string, number[]>();
+  let sendErrorMessage: string | null = null;
+  let sendErrorStatus = 503;
 
   for (const owner of filteredOwners) {
     const entry = await processBaseDueOwner(owner, enabledRecipients, debug, dryRun);
@@ -482,26 +517,33 @@ async function handleBasePlantCare(req: NextRequest, debug: boolean, dryRun: boo
     }
 
     try {
-      const response = await sendBaseNotificationsInChunks({
-        addresses: addressesToNotify,
-        title: '🪴 Plant Health Alert',
-        message: 'Your plant has under 12h left before it dies. Tap to feed it now!',
-      });
-      publishResult = response;
+      try {
+        const response = await sendBaseNotificationsInChunks({
+          addresses: addressesToNotify,
+          title: '🪴 Plant Health Alert',
+          message: 'Your plant has under 12h left before it dies. Tap to feed it now!',
+          targetPath: BASE_PLANT_CARE_TARGET_PATH,
+        });
+        publishResult = response;
+        await applyBasePlantCareDeliveryOutcome(response, eligiblePlantIdsByAddress);
+      } catch (error) {
+        const partialResponse =
+          typeof error === 'object' && error && 'partialResponse' in error
+            ? (error as BaseNotificationChunkedSendError).partialResponse
+            : undefined;
 
-      for (const batchFailure of response.failures) {
-        eligiblePlantIdsByAddress.delete(batchFailure.walletAddress.toLowerCase());
-      }
-
-      for (const address of addressesToNotify) {
-        if (!eligiblePlantIdsByAddress.has(address)) {
-          continue;
+        if (partialResponse) {
+          publishResult = {
+            ...partialResponse,
+            fatalError: error instanceof Error ? error.message : 'send_failed',
+          };
+          await applyBasePlantCareDeliveryOutcome(partialResponse, eligiblePlantIdsByAddress);
         }
-
-        await markThrottle(getPlantCareUserThrottleKey('base', address));
-        for (const plantId of eligiblePlantIdsByAddress.get(address) || []) {
-          await markThrottle(getPlantCarePlantThrottleKey('base', address, plantId));
-        }
+        sendErrorMessage = error instanceof Error ? error.message : 'send_failed';
+        sendErrorStatus =
+          typeof error === 'object' && error && 'status' in error && typeof (error as { status?: number }).status === 'number'
+            ? (error as { status?: number }).status || 503
+            : 503;
       }
     } finally {
       await releaseBaseApiLock(lockOwner);
@@ -528,6 +570,24 @@ async function handleBasePlantCare(req: NextRequest, debug: boolean, dryRun: boo
   };
 
   await recordPlantCareRun(summary);
+
+  if (sendErrorMessage) {
+    return NextResponse.json({
+      success: false,
+      provider: 'base',
+      error: sendErrorMessage,
+      snapshot: snapshotMeta,
+      stats: {
+        checkedOwners: filteredOwners.length,
+        skippedNotEnabled,
+        skippedThrottled,
+        eligiblePlants,
+        notified: summary.notified,
+        elapsedMs: summary.elapsedMs,
+      },
+      ...(debug ? { details: results, publishResult } : { publishResult }),
+    }, { status: sendErrorStatus });
+  }
 
   return NextResponse.json({
     success: true,

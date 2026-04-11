@@ -20,10 +20,17 @@ import {
   NOTIFICATION_CAMPAIGN_INDEX_KEY,
 } from '@/lib/notifications/constants';
 import type { NotificationProvider } from '@/lib/notifications/provider';
+import { uniqueWalletAddresses } from '@/lib/notifications/utils';
 
 export type BaseAudienceSyncTrigger = 'cron' | 'admin';
 export type SyncStatus = 'running' | 'completed' | 'failed';
-export type CampaignStatus = 'draft' | 'dry_run' | 'running' | 'completed' | 'failed';
+export type CampaignStatus =
+  | 'draft'
+  | 'dry_run'
+  | 'running'
+  | 'completed'
+  | 'completed_with_failures'
+  | 'failed';
 
 export type BaseAudienceSyncState = {
   id: string;
@@ -182,10 +189,19 @@ export async function releaseBaseApiLock(owner: string): Promise<void> {
     return;
   }
 
-  const current = await redis.get(BASE_API_LOCK_KEY);
-  if (String(current || '') === owner) {
-    await redis.del(BASE_API_LOCK_KEY);
+  await (redis as any)?.eval?.(
+    'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0',
+    [BASE_API_LOCK_KEY],
+    [owner],
+  );
+}
+
+export async function clearBaseApiLock(): Promise<void> {
+  if (!redis) {
+    return;
   }
+
+  await redis.del(BASE_API_LOCK_KEY);
 }
 
 export async function getBaseAudienceSyncState(): Promise<BaseAudienceSyncState | null> {
@@ -248,11 +264,12 @@ export async function deleteBaseAudienceSnapshot(snapshotId: string): Promise<vo
 }
 
 export async function addBaseAudienceAddresses(snapshotId: string, addresses: string[]): Promise<number> {
-  if (!redis || addresses.length === 0) {
+  const normalizedAddresses = uniqueWalletAddresses(addresses);
+  if (!redis || normalizedAddresses.length === 0) {
     return getSetCardRaw(getBaseAudienceSnapshotAddressesKey(snapshotId));
   }
 
-  await (redis as any)?.sadd?.(getBaseAudienceSnapshotAddressesKey(snapshotId), ...addresses);
+  await (redis as any)?.sadd?.(getBaseAudienceSnapshotAddressesKey(snapshotId), ...normalizedAddresses);
   return getSetCardRaw(getBaseAudienceSnapshotAddressesKey(snapshotId));
 }
 
@@ -332,6 +349,50 @@ export async function listBaseAudienceHistory(limit: number = 10): Promise<BaseA
       }
     })
     .filter((row): row is BaseAudienceSnapshotMeta => row !== null);
+}
+
+export async function pruneBaseAudienceAddressesFromCurrentSnapshot(addresses: string[]): Promise<{
+  snapshotId: string | null;
+  removedCount: number;
+  remainingCount: number;
+}> {
+  const normalizedAddresses = uniqueWalletAddresses(addresses);
+  const snapshotId = await getBaseAudienceCurrentSnapshotId();
+
+  if (!redis || normalizedAddresses.length === 0) {
+    return {
+      snapshotId,
+      removedCount: 0,
+      remainingCount: (await getCurrentBaseAudienceSnapshotMeta())?.uniqueAddresses || 0,
+    };
+  }
+
+  if (!snapshotId) {
+    return {
+      snapshotId: null,
+      removedCount: 0,
+      remainingCount: 0,
+    };
+  }
+
+  const addressesKey = getBaseAudienceSnapshotAddressesKey(snapshotId);
+  const removedRaw = await (redis as any)?.srem?.(addressesKey, ...normalizedAddresses);
+  const removedCount = typeof removedRaw === 'number' ? removedRaw : Number.parseInt(String(removedRaw || '0'), 10) || 0;
+  const remainingCount = await getSetCardRaw(addressesKey);
+
+  const snapshot = await getBaseAudienceSnapshotMeta(snapshotId);
+  if (snapshot) {
+    await writeJsonRaw(getBaseAudienceSnapshotMetaKey(snapshotId), {
+      ...snapshot,
+      uniqueAddresses: remainingCount,
+    });
+  }
+
+  return {
+    snapshotId,
+    removedCount,
+    remainingCount,
+  };
 }
 
 export async function recordPlantCareRun(summary: PlantCareRunSummary): Promise<void> {

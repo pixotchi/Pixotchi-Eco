@@ -3,6 +3,12 @@ import { redis } from '@/lib/redis';
 import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
 import { SERVER_ENV } from '@/lib/env-config';
 import {
+  clearBaseApiLock,
+  deleteBaseAudienceSnapshot,
+  getBaseAudienceCurrentSnapshotId,
+  getBaseAudienceSyncState,
+} from '@/lib/notifications/storage';
+import {
   BASE_AUDIENCE_HISTORY_KEY,
   BASE_AUDIENCE_SYNC_STATE_KEY,
   NOTIFICATION_CAMPAIGN_INDEX_KEY,
@@ -96,8 +102,16 @@ export async function DELETE(req: NextRequest) {
 
       if (providers.includes('base')) {
         deletedCount += await clearBaseCampaigns();
+        const syncState = await getBaseAudienceSyncState();
+        const currentSnapshotId = await getBaseAudienceCurrentSnapshotId();
+        if (syncState?.id && syncState.id !== currentSnapshotId) {
+          await deleteBaseAudienceSnapshot(syncState.id);
+          deletedCount += 2;
+        }
         await redis?.del(BASE_AUDIENCE_SYNC_STATE_KEY);
         await redis?.del(BASE_AUDIENCE_HISTORY_KEY);
+        await clearBaseApiLock();
+        deletedCount += 3;
       }
     } else if ((scope === 'fid' || scope === 'recipient') && fid) {
       await redis?.del(getPlantCareUserThrottleKey('neynar', fid));

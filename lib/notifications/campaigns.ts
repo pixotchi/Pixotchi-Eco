@@ -12,7 +12,10 @@ import {
   type NotificationCampaignMeta,
 } from '@/lib/notifications/storage';
 import { BASE_REQUEST_LOCK_TTL_SECONDS } from '@/lib/notifications/constants';
-import { sendBaseNotificationsInChunks } from '@/lib/notifications/base-api';
+import {
+  sendBaseNotificationsInChunks,
+  type BaseNotificationChunkedSendError,
+} from '@/lib/notifications/base-api';
 import {
   normalizeWalletAddress,
   uniqueWalletAddresses,
@@ -216,10 +219,17 @@ export async function sendBaseCampaign(input: BaseCampaignInput): Promise<{
 
     await setCampaignResults(campaign.id, result);
     const finalized = await updateCampaignMeta(campaign.id, {
-      status: response.failedCount > 0 ? 'completed' : 'completed',
+      status: response.failedCount > 0 ? 'completed_with_failures' : 'completed',
       sentCount: response.sentCount,
       failedCount: response.failedCount,
       finishedAt: new Date().toISOString(),
+      notes:
+        response.prunedSnapshotCount > 0
+          ? [
+              ...(campaign.notes || []),
+              `Pruned ${response.prunedSnapshotCount} stale wallet(s) from the current Base audience snapshot after delivery failures.`,
+            ]
+          : campaign.notes,
     });
 
     return {
@@ -228,12 +238,30 @@ export async function sendBaseCampaign(input: BaseCampaignInput): Promise<{
       result,
     };
   } catch (error) {
+    const partialResponse =
+      typeof error === 'object' && error && 'partialResponse' in error
+        ? (error as BaseNotificationChunkedSendError).partialResponse
+        : undefined;
+
+    if (partialResponse) {
+      await setCampaignResults(campaign.id, {
+        preview,
+        ...partialResponse,
+        fatalError: error instanceof Error ? error.message : 'send_failed',
+      });
+    }
+
     await updateCampaignMeta(campaign.id, {
       status: 'failed',
+      sentCount: partialResponse?.sentCount ?? 0,
+      failedCount: partialResponse?.failedCount ?? 0,
       finishedAt: new Date().toISOString(),
       notes: [
         ...(campaign.notes || []),
         error instanceof Error ? error.message : 'send_failed',
+        ...(partialResponse?.prunedSnapshotCount
+          ? [`Pruned ${partialResponse.prunedSnapshotCount} stale wallet(s) from the current Base audience snapshot after delivery failures.`]
+          : []),
       ],
     });
     throw error;
