@@ -2,6 +2,7 @@ import { sendFrameNotification } from "@/lib/notification-client";
 import { NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
 import type { FrameNotificationDetails } from "@/lib/types";
+import { SERVER_ENV } from "@/lib/env-config";
 
 const SECRET_HEADER = "x-notification-secret";
 const GLOBAL_RATE_LIMIT = { limit: 50, windowSeconds: 300 }; // 50 requests per 5 minutes
@@ -97,6 +98,13 @@ function validatePayload(body: unknown): ValidatedPayload {
 
 export async function POST(request: Request) {
   try {
+    if (SERVER_ENV.NOTIFICATION_PROVIDER !== "neynar") {
+      return NextResponse.json(
+        { error: "Notification proxy disabled for current provider" },
+        { status: 503 },
+      );
+    }
+
     const secret = process.env.NOTIFICATION_PROXY_SECRET;
 
     if (secret) {
@@ -141,6 +149,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: result.error },
         { status: 500 },
+      );
+    }
+
+    if (result.state === "no_token") {
+      return NextResponse.json(
+        { error: "No notification token available" },
+        { status: 404 },
+      );
+    }
+
+    if (result.state === "rate_limit") {
+      return NextResponse.json(
+        { error: "Notification provider rate limit exceeded" },
+        { status: 429 },
       );
     }
 

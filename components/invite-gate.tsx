@@ -14,6 +14,7 @@ import { getLocalStorageKeys } from '@/lib/invite-utils';
 import { toast } from 'react-hot-toast';
 import { WalletProfile } from './wallet-profile';
 import { ThemeSelector } from './theme-selector';
+import { CLIENT_ENV } from '@/lib/env-config';
 
 interface InviteGateProps {
   onValidated: (code: string) => void;
@@ -28,6 +29,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
   const [urlCode, setUrlCode] = useState<string>('');
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [frameAdded, setFrameAdded] = useState(false);
+  const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
 
   const addFrame = useAddFrame();
 
@@ -97,7 +99,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
               </div>
 
               <div className="flex items-center space-x-2">
-                {context && !context.client.added && !frameAdded && (
+                {isNeynarNotifications && context && !context.client.added && !frameAdded && (
                   <Button
                     type="button"
                     variant="outline"

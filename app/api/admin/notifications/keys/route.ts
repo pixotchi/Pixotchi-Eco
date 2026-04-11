@@ -32,7 +32,8 @@ async function rawScanKeys(pattern: string, maxKeys: number = 1000): Promise<str
 }
 
 const NOTIFICATION_KEY_PATTERNS = [
-    'notif:plant12h:*',   // Current notification system
+    'notif:neynar:plant12h:*',
+    'notif:base:plant12h:*',
     'notif:plant3h:*',    // Legacy 3h keys
     'notif:plant1h:*',    // Legacy 1h keys
     'notif:fence:*',      // Legacy fence keys
@@ -42,7 +43,10 @@ const NOTIFICATION_KEY_PATTERNS = [
     'notif:global:*',     // Global notification stats
     'notif:type:*',       // Per-type notification stats
     'notif:neynar:*',     // Neynar cache
+    'notif:base:audience:*',
+    'notif:campaign:*',
     'fidmap:*',           // FID to address mappings
+    `${process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME ?? 'minikit'}:user:*`,
 ];
 
 type KeyInfo = {

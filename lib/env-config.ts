@@ -6,6 +6,17 @@
 declare const process: any;
 
 import { validateBaseRpcEndpointDiversity } from './base-rpc-policy';
+import {
+  normalizeNotificationProvider,
+  type NotificationProvider,
+} from './notifications/provider';
+
+const rawClientNotificationProvider = process.env.NEXT_PUBLIC_NOTIFICATION_PROVIDER;
+const rawServerNotificationProvider = process.env.NOTIFICATION_PROVIDER;
+const normalizedClientNotificationProvider = normalizeNotificationProvider(rawClientNotificationProvider);
+const normalizedServerNotificationProvider = normalizeNotificationProvider(
+  rawServerNotificationProvider || rawClientNotificationProvider,
+);
 
 // Client-safe environment variables (these are intentionally exposed)
 export const CLIENT_ENV = {
@@ -57,6 +68,7 @@ export const CLIENT_ENV = {
   BARRACKS_ENABLED: process.env.NEXT_PUBLIC_BARRACKS_ENABLED !== 'false',
   BARRACKS_PREVIEW_ENABLED: process.env.NEXT_PUBLIC_BARRACKS_PREVIEW_ENABLED === 'true',
   BARRACKS_V2_ENABLED: process.env.NEXT_PUBLIC_BARRACKS_V2_ENABLED === 'true',
+  NOTIFICATION_PROVIDER: normalizedClientNotificationProvider as NotificationProvider,
 
   // Optional: Batch router for bulk ERC-721 transfers
   BATCH_ROUTER_ADDRESS: process.env.NEXT_PUBLIC_BATCH_ROUTER_ADDRESS,
@@ -129,9 +141,13 @@ export const SERVER_ENV = {
   // CORS configuration for admin endpoints only
   ALLOWED_ADMIN_ORIGINS: process.env.ALLOWED_ADMIN_ORIGINS,
   ALLOWED_PUBLIC_API_ORIGINS: process.env.ALLOWED_PUBLIC_API_ORIGINS,
+  NOTIFICATION_PROVIDER: normalizedServerNotificationProvider as NotificationProvider,
   // Neynar integration
   NEYNAR_API_KEY: process.env.NEYNAR_API_KEY,
   NEYNAR_APP_ID: process.env.NEYNAR_APP_ID,
+  BASE_NOTIFICATIONS_API_KEY: process.env.BASE_NOTIFICATIONS_API_KEY,
+  BASE_AUDIENCE_SYNC_MAX_DURATION_SECONDS: process.env.BASE_AUDIENCE_SYNC_MAX_DURATION_SECONDS,
+  BASE_AUDIENCE_SYNC_EXECUTION_BUDGET_MS: process.env.BASE_AUDIENCE_SYNC_EXECUTION_BUDGET_MS,
   INDEXER_UPSTREAM_URL: process.env.INDEXER_UPSTREAM_URL,
   INDEXER_SHARED_SECRET: process.env.INDEXER_SHARED_SECRET,
   STATUS_SNAPSHOT_TTL_SECONDS: process.env.STATUS_SNAPSHOT_TTL_SECONDS,
@@ -160,6 +176,14 @@ if (process.env.NODE_ENV === 'development') {
 
 // Fail fast on missing critical envs in production (server-side only)
 if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+  if (
+    rawClientNotificationProvider &&
+    rawServerNotificationProvider &&
+    normalizeNotificationProvider(rawClientNotificationProvider) !== normalizeNotificationProvider(rawServerNotificationProvider)
+  ) {
+    throw new Error('Notification provider env mismatch: NEXT_PUBLIC_NOTIFICATION_PROVIDER and NOTIFICATION_PROVIDER must match.');
+  }
+
   const required: Array<{ key: string; present: boolean }> = [
     { key: 'NEXT_PUBLIC_URL', present: Boolean(process.env.NEXT_PUBLIC_URL) },
     { key: 'NEXT_PUBLIC_RPC_NODE', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE) },

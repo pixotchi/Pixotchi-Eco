@@ -39,11 +39,13 @@ import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { usePathname } from "next/navigation";
 import packageJson from '@/package.json';
+import { patchOnchainKitClientMetaTimeout } from "@/lib/onchainkit-client-meta-patch";
 import {
   AuthSurface,
   DEFAULT_AUTH_SURFACE,
   resolvePreferredAuthSurface,
 } from "@/lib/auth-surface";
+import { CLIENT_ENV } from "@/lib/env-config";
 const BASE_APP_CLIENT_FID = 309857;
 
 // Solana RPC config for Privy - mainnet only
@@ -97,6 +99,8 @@ const queryClient = new QueryClient({
 });
 
 export function Providers(props: { children: ReactNode }) {
+  patchOnchainKitClientMetaTimeout();
+
   // Use CDP Client API key for Coinbase SDK
   const apiKey = process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY;
 
@@ -436,7 +440,9 @@ export function Providers(props: { children: ReactNode }) {
                       miniKit={{
                         enabled: true,
                         autoConnect: true,
-                        notificationProxyUrl: "/api/notify",
+                        ...(CLIENT_ENV.NOTIFICATION_PROVIDER === "neynar"
+                          ? { notificationProxyUrl: "/api/notify" }
+                          : {}),
                       }}
                     >
                       <SafeArea>

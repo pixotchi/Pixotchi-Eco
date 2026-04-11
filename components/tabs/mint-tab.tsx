@@ -42,6 +42,7 @@ import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@priv
 import { Transaction } from '@solana/web3.js';
 import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
 import { useWebQueryState } from '@/hooks/useWebQueryState';
+import { CLIENT_ENV } from '@/lib/env-config';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
@@ -1415,24 +1416,26 @@ export default function MintTab() {
                       incrementForcedFetch();
                       window.dispatchEvent(new Event('balances:refresh'));
                       openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
-                      try {
-                        const fid = farcasterUser?.fid;
-                        const notificationDetails = farcasterClient?.notificationDetails;
-                        if (fid) {
-                          fetch('/api/notify', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              fid,
-                              notification: {
-                                title: 'Mint Completed! 🌱',
-                                body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
-                                notificationDetails,
-                              },
-                            }),
-                          }).catch(() => { });
-                        }
-                      } catch { }
+                      if (CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar') {
+                        try {
+                          const fid = farcasterUser?.fid;
+                          const notificationDetails = farcasterClient?.notificationDetails;
+                          if (fid) {
+                            fetch('/api/notify', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                fid,
+                                notification: {
+                                  title: 'Mint Completed! 🌱',
+                                  body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
+                                  notificationDetails,
+                                },
+                              }),
+                            }).catch(() => { });
+                          }
+                        } catch { }
+                      }
                     }}
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                     buttonText="Mint Plant"

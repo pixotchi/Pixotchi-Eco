@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setUserNotificationDetails, deleteUserNotificationDetails } from '@/lib/notification';
 import crypto from 'crypto';
+import { SERVER_ENV } from '@/lib/env-config';
 // Prefer official JSON Farcaster Signature verification; fall back to HMAC if needed
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: runtime-only import, types may vary across versions
 import { parseWebhookEvent, verifyAppKeyWithNeynar } from '@farcaster/miniapp-node';
 
-async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolean; body: any }>{
+async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolean; body: any }> {
+  const bodyText = await request.text();
+
   // Attempt official JSON Farcaster Signature verification first
   try {
-    const bodyText = await request.text();
     // parseWebhookEvent validates header/payload/signature using the provided verifier
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const parsed: any = await (parseWebhookEvent as any)(bodyText, verifyAppKeyWithNeynar);
     return { valid: true, body: parsed };
-  } catch (e) {
+  } catch {
     // Fall back to legacy HMAC verification for backward compatibility
     try {
       const webhookSecret = process.env.WEBHOOK_SECRET;
@@ -28,7 +30,6 @@ async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolea
       const now = Date.now();
       if (Math.abs(now - timestampMs) > 5 * 60 * 1000) return { valid: false, body: null };
 
-      const bodyText = await request.text();
       const body = JSON.parse(bodyText);
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
@@ -47,6 +48,10 @@ async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolea
 
 export async function POST(req: NextRequest) {
   try {
+    if (SERVER_ENV.NOTIFICATION_PROVIDER !== 'neynar') {
+      return NextResponse.json({ message: 'Webhook ignored for current provider' }, { status: 202 });
+    }
+
     const { valid, body } = await verifyWebhookEvent(req);
 
     if (!valid) {
