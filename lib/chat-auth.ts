@@ -707,12 +707,18 @@ export async function verifyFarcasterChatIdentity(
     throw new ChatAuthError('Farcaster Quick Auth token is missing an address.', 401);
   }
 
+  const normalizedAddress = normalizeAddress(verified.address);
+  const expectedAddress = payload.expectedAddress ? normalizeAddress(payload.expectedAddress) : null;
+  if (expectedAddress && normalizedAddress !== expectedAddress) {
+    throw new ChatAuthError('Farcaster session does not match the connected wallet.', 401);
+  }
+
   const fid = typeof verified.sub === 'number'
     ? verified.sub
     : Number.parseInt(String(verified.sub ?? ''), 10);
 
   return {
-    address: normalizeAddress(verified.address),
+    address: normalizedAddress,
     ...(Number.isFinite(fid) ? { fid } : {}),
     method: 'farcaster-miniapp',
     provider: 'farcaster',

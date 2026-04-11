@@ -1,11 +1,21 @@
 "use client";
 
 import { sdk } from "@farcaster/miniapp-sdk";
+import {
+	ensureHostEnvironmentResolved,
+	getHostEnvironmentSnapshot,
+} from "@/lib/host-environment";
 import type React from "react";
 
 export async function isMiniApp(): Promise<boolean> {
+	const snapshot = getHostEnvironmentSnapshot();
+	if (snapshot.initialized) {
+		return snapshot.isMiniApp;
+	}
+
 	try {
-		return await sdk.isInMiniApp();
+		const resolved = await ensureHostEnvironmentResolved();
+		return resolved.isMiniApp;
 	} catch {
 		return false;
 	}
@@ -35,5 +45,4 @@ export async function handleExternalAnchorClick(
 		await sdk.actions.openUrl(url);
 	}
 }
-
 
