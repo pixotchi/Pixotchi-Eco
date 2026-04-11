@@ -468,8 +468,8 @@ export default function App() {
         style={{ height: shellHeight }}
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="bg-card/90 backdrop-blur-sm overscroll-none">
-          <header data-viewport-shell="header" className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
+        <div className="host-chrome-stable-surface bg-card/90 backdrop-blur-sm overscroll-none">
+          <header data-viewport-shell="header" className="host-chrome-stable-surface bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
                 <Image

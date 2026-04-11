@@ -289,21 +289,21 @@ export default function PlantsView() {
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-3 gap-2 text-sm font-bold text-foreground/80 z-20">
                   {/* Left: Level */}
                   <div className="flex justify-start">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    <div className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
                       <Image src="/icons/level.svg" alt="Level" width={16} height={16} className="w-4 h-4" />
                       <span>LVL {selectedPlant.level}</span>
                     </div>
                   </div>
                   {/* Center: Points */}
                   <div className="flex justify-center">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    <div className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
                       <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4 text-yellow-500" />
                       <span>{formatScore(selectedPlant.score)} PTS</span>
                     </div>
                   </div>
                   {/* Right: Stars */}
                   <div className="flex justify-end">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    <div className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
                       <Image src="/icons/Star.svg" alt="Star" width={16} height={16} className="w-4 h-4 text-amber-400" />
                       <span>{selectedPlant.stars}</span>
                     </div>
@@ -334,7 +334,7 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      className="host-chrome-stable-surface absolute left-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                       aria-label="Previous plant"
                       title="Previous"
                     >
@@ -349,7 +349,7 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      className="host-chrome-stable-surface absolute right-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                       aria-label="Next plant"
                       title="Next"
                     >
@@ -367,20 +367,20 @@ export default function PlantsView() {
                       {hasActiveFence && (
                         <div className="flex flex-col gap-1">
                           {fenceStatuses.map((fence) => (
-                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                            <div key={`${fence.type}-${fence.effectUntil}`} className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
                               <FenceTimer effectUntil={fence.effectUntil} noBackground={true} className="text-sm" label={fence.type} />
                             </div>
                           ))}
                         </div>
                       )}
                       {/* TOD Timer */}
-                      <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <div className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
                         <CountdownTimer timeUntilStarving={selectedPlant.timeUntilStarving} noBackground={true} className="text-sm" />
                       </div>
                     </div>
                     {/* Bottom-right: Health Status */}
                     <div className="flex justify-end">
-                      <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <div className="host-chrome-stable-surface flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
                         <Image src="/icons/HEART.svg" alt="Heart" width={16} height={16} className="w-4 h-4 text-red-500" />
                         <span>{getPlantStatusText(selectedPlant.status)}</span>
                       </div>

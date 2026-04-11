@@ -32,12 +32,7 @@ export function setClientTheme(theme: Theme): void {
 
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-
-    // Also set as cookie for server-side consistency
-    document.cookie = `${THEME_COOKIE_NAME}=${theme}; path=/; max-age=31536000; SameSite=Lax`;
-
-    // Apply theme immediately
-    applyTheme(theme);
+    syncThemeMetadata(theme);
   } catch (error) {
     console.warn('Error setting client theme:', error);
   }
@@ -58,11 +53,17 @@ export function applyTheme(theme: Theme): void {
     // Add the new theme class
     root.classList.add(theme);
 
-    // Update meta theme-color
-    updateMetaThemeColor(theme);
+    syncThemeMetadata(theme);
   } catch (error) {
     console.warn('Error applying theme:', error);
   }
+}
+
+export function syncThemeMetadata(theme: Theme): void {
+  if (typeof document === 'undefined') return;
+
+  document.cookie = `${THEME_COOKIE_NAME}=${theme}; path=/; max-age=31536000; SameSite=Lax`;
+  updateMetaThemeColor(theme);
 }
 
 // Update meta theme-color based on theme

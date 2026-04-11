@@ -90,6 +90,7 @@
     --browser-safe-area-right: 0px;
     --browser-safe-area-bottom: 0px;
     --browser-safe-area-left: 0px;
+    --host-chrome-bottom-inset: 0px;
 
     /* 
      * Z-index scale for consistent layering
@@ -338,6 +339,10 @@
     transition-duration: 180ms;
   }
 
+  html[data-host-chrome="visible"] body {
+    transition: none !important;
+  }
+
   /* Respect user preference to reduce motion */
   @media (prefers-reduced-motion: reduce) {
     body {
@@ -373,6 +378,17 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-y: auto;
+  }
+
+  html[data-host-chrome="visible"] .host-chrome-stable-menu {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
+  html[data-host-chrome="visible"] .host-chrome-stable-surface {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   /* Dynamic viewport height for mobile browsers */
