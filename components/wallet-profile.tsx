@@ -162,6 +162,29 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const isInFrame = isMiniApp; // alias for clarity
   const isPrivySurface = authSurface === "privy" || authSurface === "privysolana";
 
+  useEffect(() => {
+    if (isMiniApp) {
+      return;
+    }
+
+    setDebugTapCount(0);
+    setDebugMode(false);
+    setShowFcDetails(false);
+
+    if (debugTapTimeoutRef.current) {
+      clearTimeout(debugTapTimeoutRef.current);
+      debugTapTimeoutRef.current = null;
+    }
+  }, [isMiniApp]);
+
+  useEffect(() => {
+    return () => {
+      if (debugTapTimeoutRef.current) {
+        clearTimeout(debugTapTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const embeddedWallets = useMemo(() => {
     if (!privyUser?.linkedAccounts) return [] as Array<{ address: string }>;
 
@@ -503,8 +526,12 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             <div className="flex items-center space-x-2">
               {/* Profile Avatar or Wallet icon - with 5-tap debug mode trigger */}
               <div
-                className="cursor-pointer select-none"
+                className={isMiniApp ? "cursor-pointer select-none" : "select-none"}
                 onClick={() => {
+                  if (!isMiniApp) {
+                    return;
+                  }
+
                   // Clear previous timeout
                   if (debugTapTimeoutRef.current) {
                     clearTimeout(debugTapTimeoutRef.current);
