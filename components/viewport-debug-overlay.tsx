@@ -299,8 +299,10 @@ function formatUnixMs(unixMs: number) {
 }
 
 export function ViewportDebugOverlay() {
+  const [expanded, setExpanded] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [exportText, setExportText] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<ViewportDebugSnapshot | null>(null);
   const [events, setEvents] = useState<ViewportDebugEvent[]>([]);
   const eventIdRef = useRef(0);
@@ -545,6 +547,14 @@ export function ViewportDebugOverlay() {
     return null;
   }
 
+  const compactRows: Array<[string, string | number | boolean | null]> = [
+    ["chrome", snapshot.chromeState],
+    ["vv", snapshot.vvWidth && snapshot.vvHeight ? `${snapshot.vvWidth}x${snapshot.vvHeight}` : "null"],
+    ["browser bottom", snapshot.browserBottom],
+    ["shell", snapshot.shellInnerHeight],
+    ["keyboard", snapshot.keyboardVisible ? `${snapshot.keyboardHeight ?? 0}px` : "false"],
+  ];
+
   const rows: Array<[string, string | number | boolean | null]> = [
     ["chrome", snapshot.chromeState],
     ["keyboard", snapshot.keyboardVisible],
@@ -571,105 +581,178 @@ export function ViewportDebugOverlay() {
     ["active", snapshot.activeElement],
   ];
 
-  return (
-    <div className="fixed left-2 top-2 z-[4000] flex max-h-[calc(100dvh-1rem)] w-[min(26rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-lg border border-black/20 bg-black/85 p-2 text-[11px] leading-tight text-white shadow-lg">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-semibold">Viewport debug</span>
-        <div className="flex items-center gap-1">
+  if (!panelOpen) {
+    return (
+      <div className="pointer-events-none fixed bottom-2 right-2 z-[4000]">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-black/20 bg-black/85 px-2 py-1 text-[10px] leading-tight text-white shadow-lg">
+          <span className="max-w-24 truncate text-white/70">{snapshot.chromeState}</span>
           <button
             type="button"
             onClick={markGlitch}
-            className="min-h-0 min-w-0 rounded border border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-200"
+            className="min-h-0 min-w-0 rounded-full border border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-200"
           >
             Mark glitch
           </button>
           <button
             type="button"
-            onClick={copySnapshot}
-            className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
+            onClick={() => setPanelOpen(true)}
+            className="min-h-0 min-w-0 rounded-full border border-white/30 px-2 py-0.5 text-[10px]"
           >
-            Copy snapshot
-          </button>
-          <button
-            type="button"
-            onClick={copyLog}
-            className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
-          >
-            Copy log
-          </button>
-          <button
-            type="button"
-            onClick={toggleExportText}
-            className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
-          >
-            {exportText ? "Hide JSON" : "Show JSON"}
-          </button>
-          <button
-            type="button"
-            onClick={clearLog}
-            className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
-          >
-            Clear
+            Open debug
           </button>
         </div>
       </div>
+    );
+  }
 
-      <div className="grid grid-cols-[7.5rem_1fr] gap-x-2 gap-y-0.5 font-mono">
-        {rows.map(([label, value]) => (
-          <div key={label} className="contents">
-            <span className="text-white/60">{label}</span>
-            <span className="break-all">{String(value)}</span>
+  return (
+    <div className="pointer-events-none fixed bottom-2 right-2 z-[4000]">
+      <div className={`pointer-events-auto flex flex-col overflow-hidden rounded-lg border border-black/20 bg-black/85 p-2 text-[11px] leading-tight text-white shadow-lg ${expanded ? "max-h-[calc(100dvh-1rem)] w-[min(26rem,calc(100vw-1rem))]" : "w-[min(18rem,calc(100vw-1rem))] max-h-[40dvh]"}`}>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="font-semibold">Viewport debug</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPanelOpen(false)}
+              className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
+            >
+              Hide
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
+            >
+              {expanded ? "Compact" : "Expand"}
+            </button>
+            {!expanded ? (
+              <button
+                type="button"
+                onClick={markGlitch}
+                className="min-h-0 min-w-0 rounded border border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-200"
+              >
+                Mark glitch
+              </button>
+            ) : null}
           </div>
-        ))}
-      </div>
-
-      <div className="mt-2 rounded border border-white/10 bg-white/5 p-2 text-[10px] text-white/75">
-        Reproduce the issue, swipe to show and hide the Base nav bar, and tap `Mark glitch` while the flicker is visible.
-      </div>
-
-      {exportText ? (
-        <div className="mt-2 rounded border border-white/10 bg-white/5 p-2">
-          <div className="mb-1 text-[10px] text-white/70">
-            JSON fallback. Use this if clipboard copy is blocked in the in-app browser.
-          </div>
-          <textarea
-            readOnly
-            value={exportText}
-            className="h-32 w-full resize-none rounded border border-white/10 bg-black/40 p-2 font-mono text-[10px] text-white"
-          />
         </div>
-      ) : null}
 
-      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-white/10 bg-white/5">
-        <div className="flex items-center justify-between border-b border-white/10 px-2 py-1">
-          <span className="font-semibold">Recent events</span>
-          <span className="text-[10px] text-white/60">{events.length} stored</span>
-        </div>
-        <div className="min-h-0 overflow-y-auto px-2 py-1 font-mono">
-          {events.length === 0 ? (
-            <div className="py-2 text-[10px] text-white/60">No events captured yet.</div>
-          ) : (
-            events.map((event) => (
-              <div key={event.id} className="border-b border-white/5 py-1 last:border-b-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[10px] text-cyan-200">{event.timestamp}</span>
-                  <span className="shrink-0 text-[10px] text-white/50">{event.kind}</span>
+        {!expanded ? (
+          <>
+            <div className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 font-mono">
+              {compactRows.map(([label, value]) => (
+                <div key={label} className="contents">
+                  <span className="text-white/60">{label}</span>
+                  <span className="break-all">{String(value)}</span>
                 </div>
-                <div className="mt-0.5 text-[10px] text-white">{event.summary}</div>
-                <div className="mt-0.5 break-all text-[10px] text-white/55">{event.source}</div>
-                {event.diff.length > 0 ? (
-                  <div className="mt-0.5 break-all text-[10px] text-white/45">
-                    {event.diff.slice(0, 4).join(" | ")}
-                  </div>
-                ) : null}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+              ))}
+            </div>
+            <div className="mt-2 text-[10px] text-white/70">
+              Expand only when you need the full event log.
+            </div>
+            <div className="mt-1 truncate text-[10px] text-white/60">
+              {snapshot.timestamp}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-2 flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={markGlitch}
+                className="min-h-0 min-w-0 rounded border border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-200"
+              >
+                Mark glitch
+              </button>
+              <button
+                type="button"
+                onClick={copySnapshot}
+                className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
+              >
+                Copy snapshot
+              </button>
+              <button
+                type="button"
+                onClick={copyLog}
+                className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
+              >
+                Copy log
+              </button>
+              <button
+                type="button"
+                onClick={toggleExportText}
+                className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
+              >
+                {exportText ? "Hide JSON" : "Show JSON"}
+              </button>
+              <button
+                type="button"
+                onClick={clearLog}
+                className="min-h-0 min-w-0 rounded border border-white/30 px-2 py-0.5 text-[10px]"
+              >
+                Clear
+              </button>
+            </div>
 
-      <div className="mt-1 truncate text-[10px] text-white/60">
-        {snapshot.timestamp} {snapshot.userAgent}
+            <div className="grid grid-cols-[7.5rem_1fr] gap-x-2 gap-y-0.5 font-mono">
+              {rows.map(([label, value]) => (
+                <div key={label} className="contents">
+                  <span className="text-white/60">{label}</span>
+                  <span className="break-all">{String(value)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-2 rounded border border-white/10 bg-white/5 p-2 text-[10px] text-white/75">
+              Reproduce the issue, swipe to show and hide the Base nav bar, and tap `Mark glitch` while the flicker is visible.
+            </div>
+
+            {exportText ? (
+              <div className="mt-2 rounded border border-white/10 bg-white/5 p-2">
+                <div className="mb-1 text-[10px] text-white/70">
+                  JSON fallback. Use this if clipboard copy is blocked in the in-app browser.
+                </div>
+                <textarea
+                  readOnly
+                  value={exportText}
+                  className="h-32 w-full resize-none rounded border border-white/10 bg-black/40 p-2 font-mono text-[10px] text-white"
+                />
+              </div>
+            ) : null}
+
+            <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-white/10 bg-white/5">
+              <div className="flex items-center justify-between border-b border-white/10 px-2 py-1">
+                <span className="font-semibold">Recent events</span>
+                <span className="text-[10px] text-white/60">{events.length} stored</span>
+              </div>
+              <div className="min-h-0 overflow-y-auto px-2 py-1 font-mono">
+                {events.length === 0 ? (
+                  <div className="py-2 text-[10px] text-white/60">No events captured yet.</div>
+                ) : (
+                  events.map((event) => (
+                    <div key={event.id} className="border-b border-white/5 py-1 last:border-b-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[10px] text-cyan-200">{event.timestamp}</span>
+                        <span className="shrink-0 text-[10px] text-white/50">{event.kind}</span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-white">{event.summary}</div>
+                      <div className="mt-0.5 break-all text-[10px] text-white/55">{event.source}</div>
+                      {event.diff.length > 0 ? (
+                        <div className="mt-0.5 break-all text-[10px] text-white/45">
+                          {event.diff.slice(0, 4).join(" | ")}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="mt-1 truncate text-[10px] text-white/60">
+              {snapshot.timestamp} {snapshot.userAgent}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
