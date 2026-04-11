@@ -230,6 +230,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#2d3c53" />
         <meta name="msapplication-TileColor" content="#2d3c53" />
         {/* Fonts are self-hosted via next/font/local */}
+        <link rel="preconnect" href="https://auth.farcaster.xyz" crossOrigin="" />
         {/* Preload above-the-fold art to reduce first paint */}
         <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
       </head>
