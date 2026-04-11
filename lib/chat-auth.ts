@@ -109,6 +109,40 @@ function normalizeAddress(address: string): string {
   return address.toLowerCase();
 }
 
+async function resolveFarcasterAddressFromFid(fid: number): Promise<string | null> {
+  try {
+    const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
+    if (typeof cached === 'string' && isValidEthereumAddressFormat(cached)) {
+      return normalizeAddress(cached);
+    }
+  } catch {
+    // Ignore cache lookup failures and fall back to the Farcaster API.
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`,
+      { cache: 'no-store' },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    const address = payload?.result?.address?.address;
+    if (typeof address !== 'string' || !isValidEthereumAddressFormat(address)) {
+      return null;
+    }
+
+    const normalizedAddress = normalizeAddress(address);
+    await (redis as any)?.set?.(`fidmap:${fid}`, normalizedAddress);
+    return normalizedAddress;
+  } catch {
+    return null;
+  }
+}
+
 function pushUrlCandidate(candidates: URL[], candidate: string | null | undefined): void {
   if (!candidate) {
     return;
@@ -701,21 +735,20 @@ export async function verifyFarcasterChatIdentity(
   const verified = await quickAuthClient.verifyJwt({
     domain: getExpectedDomain(request),
     token: payload.token,
-  }) as { address?: unknown; sub?: unknown };
-
-  if (typeof verified.address !== 'string' || !verified.address) {
-    throw new ChatAuthError('Farcaster Quick Auth token is missing an address.', 401);
-  }
-
-  const normalizedAddress = normalizeAddress(verified.address);
-  const expectedAddress = payload.expectedAddress ? normalizeAddress(payload.expectedAddress) : null;
-  if (expectedAddress && normalizedAddress !== expectedAddress) {
-    throw new ChatAuthError('Farcaster session does not match the connected wallet.', 401);
-  }
+  }) as { sub?: unknown };
 
   const fid = typeof verified.sub === 'number'
     ? verified.sub
     : Number.parseInt(String(verified.sub ?? ''), 10);
+
+  if (!Number.isFinite(fid)) {
+    throw new ChatAuthError('Farcaster Quick Auth token is missing a valid fid.', 401);
+  }
+
+  const normalizedAddress = await resolveFarcasterAddressFromFid(fid);
+  if (!normalizedAddress) {
+    throw new ChatAuthError('Farcaster Quick Auth address could not be resolved.', 401);
+  }
 
   return {
     address: normalizedAddress,

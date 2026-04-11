@@ -530,10 +530,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
           if (!nextSession) {
             const { token } = await sdk.quickAuth.getToken();
-            nextSession = await createFarcasterPublicChatSession({
-              token,
-              ...(chatAddress ? { expectedAddress: chatAddress } : {}),
-            });
+            nextSession = await createFarcasterPublicChatSession({ token });
           }
 
           if (!cancelled) {
