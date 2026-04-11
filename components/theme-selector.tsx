@@ -9,7 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { THEMES, Theme } from "@/lib/theme-utils";
+import { THEMES, setClientTheme, Theme } from "@/lib/theme-utils";
 import { useSnow } from "@/lib/snow-context";
 import { useAmbientAudio } from "@/lib/ambient-audio-context";
 
@@ -71,6 +71,8 @@ export function ThemeSelector() {
   const handleThemeChange = React.useCallback((newTheme: string) => {
     if (THEMES[newTheme as Theme]) {
       setTheme(newTheme);
+      // Also use our custom theme persistence for better SSR support
+      setClientTheme(newTheme as Theme);
       void handleSecretProgress(newTheme);
     }
   }, [handleSecretProgress, setTheme]);

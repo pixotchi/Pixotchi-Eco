@@ -2,9 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-const KEYBOARD_HEIGHT_THRESHOLD = 150;
-const HOST_CHROME_VISIBLE_THRESHOLD = 32;
-
 interface KeyboardState {
   isVisible: boolean;
   height: number;
@@ -80,58 +77,7 @@ export function useViewportHeight() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     const root = document.documentElement;
-
-    const parsePixelValue = (value: string) => {
-      const normalized = value.trim();
-      if (!normalized || normalized === '(empty)') {
-        return null;
-      }
-
-      const match = normalized.match(/-?\d+(\.\d+)?/);
-      if (!match) {
-        return null;
-      }
-
-      const parsed = Number(match[0]);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
-
-    const resolveCssLengthValue = (
-      value: string,
-      property: 'paddingBottom' | 'paddingTop',
-    ): number | null => {
-      if (!value || value === '(empty)') {
-        return null;
-      }
-
-      const probe = document.createElement('div');
-      probe.style.position = 'fixed';
-      probe.style.visibility = 'hidden';
-      probe.style.pointerEvents = 'none';
-      probe.style.inset = '0 auto auto 0';
-      probe.style[property] = value;
-      document.body.appendChild(probe);
-
-      const resolved = parsePixelValue(getComputedStyle(probe)[property]);
-      probe.remove();
-      return resolved;
-    };
-
-    const updateHostChromeState = () => {
-      const styles = getComputedStyle(root);
-      const safeBottom = resolveCssLengthValue(
-        styles.getPropertyValue('--safe-area-inset-bottom'),
-        'paddingBottom',
-      ) ?? 0;
-      const browserBottom = resolveCssLengthValue(
-        styles.getPropertyValue('--browser-safe-area-bottom'),
-        'paddingBottom',
-      ) ?? 0;
-      const bottomInset = Math.max(safeBottom, browserBottom);
-
-      root.style.setProperty('--host-chrome-bottom-inset', `${bottomInset}px`);
-      root.dataset.hostChrome = bottomInset >= HOST_CHROME_VISIBLE_THRESHOLD ? 'visible' : 'hidden';
-    };
+    const KEYBOARD_HEIGHT_THRESHOLD = 150;
 
     const updateHeight = () => {
       const viewport = window.visualViewport;
@@ -145,13 +91,12 @@ export function useViewportHeight() {
       const offsetRight = Math.max(0, Math.round(layoutWidth - visibleWidth - offsetLeft));
       const browserBottomInset =
         rawOffsetBottom > KEYBOARD_HEIGHT_THRESHOLD ? 0 : rawOffsetBottom;
+
       root.style.setProperty('--vh', `${visibleHeight * 0.01}px`);
       root.style.setProperty('--browser-safe-area-top', `${offsetTop}px`);
       root.style.setProperty('--browser-safe-area-right', `${offsetRight}px`);
       root.style.setProperty('--browser-safe-area-bottom', `${browserBottomInset}px`);
       root.style.setProperty('--browser-safe-area-left', `${offsetLeft}px`);
-
-      updateHostChromeState();
 
       setViewportHeight(visibleHeight);
     };
@@ -169,16 +114,12 @@ export function useViewportHeight() {
     window.addEventListener('orientationchange', handleOrientationChange);
     viewport?.addEventListener('resize', updateHeight);
     viewport?.addEventListener('scroll', updateHeight);
-    const hostChromePoll = window.setInterval(updateHostChromeState, 250);
 
     return () => {
       window.removeEventListener('resize', updateHeight);
       window.removeEventListener('orientationchange', handleOrientationChange);
       viewport?.removeEventListener('resize', updateHeight);
       viewport?.removeEventListener('scroll', updateHeight);
-      window.clearInterval(hostChromePoll);
-      root.style.removeProperty('--host-chrome-bottom-inset');
-      delete root.dataset.hostChrome;
     };
   }, []);
 

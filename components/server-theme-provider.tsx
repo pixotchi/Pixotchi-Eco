@@ -1,6 +1,8 @@
 "use client";
 
-import { ThemeProvider as NextThemesProvider } from 'next-themes';
+import { useEffect } from 'react';
+import { ThemeProvider as NextThemesProvider, useTheme } from 'next-themes';
+import { getClientTheme, applyTheme } from '@/lib/theme-utils';
 
 interface ServerThemeProviderProps {
   children: React.ReactNode;
@@ -17,6 +19,15 @@ export function ServerThemeProvider({
   storageKey = 'pixotchi-theme',
   themes = ["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"]
 }: ServerThemeProviderProps) {
+
+  useEffect(() => {
+    // Ensure theme is applied on mount to prevent flash of unstyled content
+    const clientTheme = getClientTheme();
+    if (clientTheme) {
+      applyTheme(clientTheme);
+    }
+  }, []);
+
   return (
     <NextThemesProvider
       attribute="class"
