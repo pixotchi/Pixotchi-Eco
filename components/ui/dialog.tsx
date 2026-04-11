@@ -22,10 +22,10 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     data-viewport-debug-dialog-overlay=""
     className={cn(
-       "fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm",
+       "fixed inset-0 z-[1200] bg-black/60",
       "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      "motion-off:bg-black/75 motion-off:backdrop-blur-none",
+      "motion-off:bg-black/75",
       className
     )}
     aria-hidden="true"
@@ -53,7 +53,6 @@ const DialogContent = React.forwardRef<
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
       )}
-      style={{ willChange: 'transform, opacity' }}
       {...props}
     >
       <div
@@ -63,7 +62,6 @@ const DialogContent = React.forwardRef<
           "max-h-full sm:max-h-[90dvh] flex flex-col overflow-hidden",
           className
         )}
-        style={{ contentVisibility: 'auto' as any }}
       >
         {children}
         {!hideCloseButton && (
