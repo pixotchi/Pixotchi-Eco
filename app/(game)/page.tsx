@@ -452,6 +452,7 @@ export default function App() {
 
   return (
     <div
+      data-viewport-shell="outer"
       className={`flex justify-center w-full min-h-dvh bg-background overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
         } ${isKeyboardNavigation ? 'keyboard-navigation' : ''
         }`}
@@ -462,12 +463,13 @@ export default function App() {
       }}
     >
       <div
+        data-viewport-shell="inner"
         className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
         style={{ height: shellHeight }}
       >
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">
-          <header className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
+          <header data-viewport-shell="header" className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
                 <Image
@@ -534,7 +536,7 @@ export default function App() {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 bg-muted/40 flex flex-col overflow-hidden" role="main" aria-label="Main content area">
+        <main data-viewport-shell="main" className="flex-1 bg-muted/40 flex flex-col overflow-hidden" role="main" aria-label="Main content area">
           {(!isConnected) ? (
             <div className="flex flex-col items-center justify-center h-full p-4">
               <div className="flex-grow flex flex-col items-center justify-center text-center">
@@ -628,6 +630,7 @@ export default function App() {
             <>
               {/* Tab Content */}
               <div
+                data-viewport-shell="content"
                 className="flex-1 overflow-y-auto overscroll-contain p-4 pb-16 safe-area-inset"
                 role="tabpanel"
                 id={`tabpanel-${activeTab}`}
@@ -662,7 +665,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
