@@ -53,7 +53,6 @@ import {
   clearMiniAppBypassCookies,
   setMiniAppBypassCookies,
 } from "@/lib/miniapp-bypass";
-import { isAndroidWebView } from "@/lib/client-runtime";
 
 // Solana RPC config for Privy - mainnet only
 const getSolanaRpcConfig = () => {
@@ -250,7 +249,9 @@ export function Providers(props: { children: ReactNode }) {
     useEffect(() => {
       if (typeof document === 'undefined') return;
       document.documentElement.dataset.surface = isMiniApp ? 'miniapp' : 'web';
-      document.documentElement.dataset.androidWebview = isAndroidWebView() ? 'true' : 'false';
+      return () => {
+        delete document.documentElement.dataset.surface;
+      };
     }, [isMiniApp]);
 
     useEffect(() => {

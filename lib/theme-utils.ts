@@ -42,16 +42,10 @@ export function getThemeMetaColor(theme: Theme): string {
 export function updateMetaThemeColor(theme: Theme): void {
   if (typeof document === 'undefined') return;
 
-  const nextColor = getThemeMetaColor(theme);
-  const metaThemeColor =
-    document.querySelector('meta[name="theme-color"][data-pixotchi-theme-color="true"]') ||
-    document.querySelector('meta[name="theme-color"]');
-  const tileColor = document.querySelector('meta[name="msapplication-TileColor"]');
-
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
   if (!metaThemeColor) return;
 
-  metaThemeColor.setAttribute('content', nextColor);
-  tileColor?.setAttribute('content', nextColor);
+  metaThemeColor.setAttribute('content', getThemeMetaColor(theme));
 }
 
 // Get theme color values for CSS custom properties

@@ -96,7 +96,7 @@ const MAX_EVENTS = 200;
 const CHURN_EVENT_THRESHOLD = 4;
 const CHURN_WINDOW_MS = 1200;
 const TRACKED_DIALOG_SELECTOR = "[data-viewport-debug-dialog-overlay], [data-viewport-debug-dialog-frame], [data-viewport-debug-dialog-surface]";
-const TRACKED_BLUR_SELECTOR = '[class*="backdrop-blur"], [class*="shell-blur"]';
+const TRACKED_BLUR_SELECTOR = '[class*="backdrop-blur"]';
 const DEFAULT_NAV_SESSION: NavVisibleSessionState = {
   active: false,
   durationMs: 0,

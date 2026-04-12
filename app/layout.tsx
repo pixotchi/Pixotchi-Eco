@@ -12,6 +12,11 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
+  // Enhanced mobile viewport settings
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#a7c7e7" },
+    { media: "(prefers-color-scheme: dark)", color: "#2d3c53" }
+  ]
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -200,7 +205,7 @@ export default function RootLayout({
           }}
         />
         {/* Theme color */}
-        <meta data-pixotchi-theme-color="true" name="theme-color" content="#2d3c53" />
+        <meta name="theme-color" content="#2d3c53" />
         <meta name="msapplication-TileColor" content="#2d3c53" />
         {/* Fonts are self-hosted via next/font/local */}
         <link rel="preconnect" href="https://auth.farcaster.xyz" crossOrigin="" />
