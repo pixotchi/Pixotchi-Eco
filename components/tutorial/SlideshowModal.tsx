@@ -3,7 +3,9 @@
 import { useEffect } from "react";
 import { useSlideshow } from "./SlideshowProvider";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import Image from "next/image";
+import type { SyntheticEvent } from "react";
 
 function Art({ type }: { type?: string }) {
   if (!type) return null;
@@ -33,7 +35,11 @@ function Art({ type }: { type?: string }) {
           height={450}
           priority
           className="w-full h-full object-cover transition-opacity duration-300"
-          onError={(e: any) => { try { (e.target as HTMLImageElement).style.display = 'none'; } catch {} }}
+          onError={(event: SyntheticEvent<HTMLImageElement>) => {
+            try {
+              event.currentTarget.style.display = "none";
+            } catch {}
+          }}
         />
       </div>
     </div>
@@ -65,9 +71,8 @@ export default function SlideshowModal() {
       const img = new window.Image();
       img.src = src;
     };
-    const current = slides[index] as any;
-    const prevSlide = slides[index - 1] as any;
-    const nextSlide = slides[index + 1] as any;
+    const prevSlide = slides[index - 1];
+    const nextSlide = slides[index + 1];
     preload(prevSlide?.art);
     preload(nextSlide?.art);
   }, [open, index, slides]);
@@ -88,10 +93,25 @@ export default function SlideshowModal() {
   const isLast = index === slides.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[11000] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="w-full max-w-md h-auto max-h-[90dvh] bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          close();
+        }
+      }}
+    >
+      <DialogContent
+        hideCloseButton
+        useSafeAreaInset={false}
+        overlayClassName="bg-black/50 backdrop-blur-sm"
+        frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
+        className="max-h-[90dvh] w-full max-w-md rounded-t-2xl rounded-b-none border border-border p-0 shadow-xl sm:rounded-2xl"
+        onInteractOutside={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+      >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between safe-area-top">
+        <div className="flex items-center justify-between border-b border-border bg-card/80 px-4 py-3 backdrop-blur-sm">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi" width={20} height={20} />
             <span className="font-pixel text-sm">TUTORIAL</span>
@@ -100,7 +120,7 @@ export default function SlideshowModal() {
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5 safe-area-inset max-h-[65vh] overflow-y-auto">
+        <div className="max-h-[65vh] overflow-y-auto p-6 space-y-5">
           <div className="flex items-start gap-3">
             {slide.icon}
             <h2 className="text-lg font-semibold leading-tight">{slide.title}</h2>
@@ -110,7 +130,7 @@ export default function SlideshowModal() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-border bg-card/80 backdrop-blur-sm safe-area-bottom sticky bottom-0">
+        <div className="border-t border-border bg-card/80 px-4 py-3 backdrop-blur-sm safe-area-bottom">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               {slides.map((_, i) => (
@@ -127,9 +147,7 @@ export default function SlideshowModal() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-

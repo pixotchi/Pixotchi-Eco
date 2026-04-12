@@ -375,10 +375,24 @@
     overscroll-behavior-y: auto;
   }
 
+  /* App-shell routes should own vertical scrolling through an inner pane. */
+  html[data-app-shell-scroll="locked"],
+  html[data-app-shell-scroll="locked"] body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   /* Dynamic viewport height for mobile browsers */
   .h-dvh {
     height: 100vh;
-    height: calc(var(--vh, 1vh) * 100);
+    height: 100svh;
+    height: 100dvh;
+  }
+
+  .min-h-dvh {
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
   }
 
   /* Keyboard-aware adjustments */
@@ -519,6 +533,16 @@
     padding-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
   }
 
+  /* Bottom offset helper for fixed and floating UI */
+  .safe-area-bottom-margin {
+    margin-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+  }
+
+  /* Top offset helper for fixed and floating UI */
+  .safe-area-top-margin {
+    margin-top: max(0.5rem, var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
+  }
+
   /* Touch optimizations for buttons and interactive elements */
   button,
   [role="button"],
@@ -639,6 +663,7 @@
 .ock-toast-container {
   z-index: var(--z-toast);
   position: relative;
+  margin-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
 }
 
 /* OnchainKit modal and popup overlays */

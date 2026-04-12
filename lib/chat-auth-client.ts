@@ -1,6 +1,12 @@
 "use client";
 
-import { sdk } from '@farcaster/miniapp-sdk';
+import {
+  type ConfirmedMiniAppSessionSource,
+  clearConfirmedMiniAppSession,
+  confirmMiniAppSession,
+  getConfirmedMiniAppSessionSnapshot,
+} from '@/lib/confirmed-miniapp-session';
+import { getHostEnvironmentSnapshot } from '@/lib/host-environment';
 
 export type PublicChatSession = {
   address: string;
@@ -81,18 +87,35 @@ function emitPublicChatSessionEvent(session: PublicChatSession | null) {
   }));
 }
 
-async function getMiniAppChatHeaders(): Promise<HeadersInit> {
-  try {
-    const isInMiniApp = await sdk.isInMiniApp();
-    if (!isInMiniApp) {
-      return {};
-    }
-  } catch {
+function syncConfirmedMiniAppSession(
+  session: PublicChatSession | null,
+  source: ConfirmedMiniAppSessionSource,
+) {
+  const hostEnvironment = getHostEnvironmentSnapshot();
+  if (
+    hostEnvironment.isMiniApp &&
+    session?.provider === 'farcaster' &&
+    session.method === 'farcaster-miniapp'
+  ) {
+    confirmMiniAppSession(session.address, source);
+    return;
+  }
+
+  clearConfirmedMiniAppSession(session ? 'non-farcaster-chat-session' : 'chat-session-cleared');
+}
+
+function getMiniAppChatHeaders(): HeadersInit {
+  const hostEnvironment = getHostEnvironmentSnapshot();
+  const confirmedMiniAppSession = getConfirmedMiniAppSessionSnapshot();
+  if (!hostEnvironment.isMiniApp || !confirmedMiniAppSession.confirmed) {
     return {};
   }
 
   return {
     'x-pixotchi-miniapp': '1',
+    ...(confirmedMiniAppSession.address
+      ? { 'x-pixotchi-address': confirmedMiniAppSession.address }
+      : {}),
   };
 }
 
@@ -107,7 +130,7 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
   }
 
   inFlightPublicChatSessionRequest = (async () => {
-    const miniAppHeaders = await getMiniAppChatHeaders();
+    const miniAppHeaders = getMiniAppChatHeaders();
     const response = await fetch('/api/chat/auth/session', {
       cache: 'no-store',
       credentials: 'same-origin',
@@ -116,11 +139,13 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
 
     if (response.status === 401) {
       setPublicChatSessionCache(null);
+      clearConfirmedMiniAppSession('chat-session-missing');
       return null;
     }
 
     const session = await parseSessionResponse(response);
     setPublicChatSessionCache(session);
+    syncConfirmedMiniAppSession(session, 'restored');
     return session;
   })();
 
@@ -132,7 +157,7 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
 }
 
 export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
-  const miniAppHeaders = await getMiniAppChatHeaders();
+  const miniAppHeaders = getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,
@@ -148,12 +173,13 @@ export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessio
   });
 
   const session = await parseSessionResponse(response);
+  syncConfirmedMiniAppSession(session, 'chat-session');
   emitPublicChatSessionEvent(session);
   return session;
 }
 
 export async function createFarcasterPublicChatSession(payload: Omit<FarcasterChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
-  const miniAppHeaders = await getMiniAppChatHeaders();
+  const miniAppHeaders = getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,
@@ -169,12 +195,13 @@ export async function createFarcasterPublicChatSession(payload: Omit<FarcasterCh
   });
 
   const session = await parseSessionResponse(response);
+  syncConfirmedMiniAppSession(session, 'quick-auth');
   emitPublicChatSessionEvent(session);
   return session;
 }
 
 export async function createBasePublicChatSession(payload: Omit<BaseChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
-  const miniAppHeaders = await getMiniAppChatHeaders();
+  const miniAppHeaders = getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,
@@ -190,12 +217,13 @@ export async function createBasePublicChatSession(payload: Omit<BaseChatSessionR
   });
 
   const session = await parseSessionResponse(response);
+  syncConfirmedMiniAppSession(session, 'chat-session');
   emitPublicChatSessionEvent(session);
   return session;
 }
 
 export async function clearPublicChatSession(): Promise<void> {
-  const miniAppHeaders = await getMiniAppChatHeaders();
+  const miniAppHeaders = getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/session', {
       cache: 'no-store',
       credentials: 'same-origin',
@@ -207,11 +235,12 @@ export async function clearPublicChatSession(): Promise<void> {
     throw new Error(await parseError(response));
   }
 
+  clearConfirmedMiniAppSession('chat-session-cleared');
   emitPublicChatSessionEvent(null);
 }
 
 export async function requestBasePublicChatNonce(): Promise<string> {
-  const miniAppHeaders = await getMiniAppChatHeaders();
+  const miniAppHeaders = getMiniAppChatHeaders();
   const response = await fetch('/api/chat/auth/base/nonce', {
     cache: 'no-store',
     credentials: 'same-origin',

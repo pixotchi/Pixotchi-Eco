@@ -39,6 +39,7 @@ export function CoreProviders({ children }: { children: ReactNode }) {
           },
         }}
         containerStyle={{
+          top: "max(1rem, var(--safe-area-inset-top), var(--browser-safe-area-top))",
           zIndex: 9999,
         }}
       />

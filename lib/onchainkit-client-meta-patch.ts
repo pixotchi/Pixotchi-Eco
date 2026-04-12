@@ -1,6 +1,10 @@
 "use client";
 
 import { clientMetaManager } from "../node_modules/@coinbase/onchainkit/dist/core/clientMeta/clientMetaManager.js";
+import {
+  ensureHostEnvironmentResolved,
+  getHostEnvironmentSnapshot,
+} from "@/lib/host-environment";
 
 type ClientMeta = {
   mode: "minikit" | "onchainkit";
@@ -8,34 +12,39 @@ type ClientMeta = {
 };
 
 type PatchedClientMetaManager = {
+  clientMeta: ClientMeta | null;
+  initPromise: Promise<ClientMeta> | null;
+  init: (args: { isMiniKit: boolean }) => Promise<void>;
   getClientMeta: () => Promise<ClientMeta>;
 };
 
-const CLIENT_META_TIMEOUT_MS = 250;
-
 let didPatch = false;
-let fallbackMeta: ClientMeta | null = null;
-let didWarn = false;
+let didLogBridge = false;
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => {
-      setTimeout(() => resolve(fallback), timeoutMs);
-    }),
-  ]);
+function logBridgeMetaOnce(meta: ClientMeta) {
+  if (didLogBridge) {
+    return;
+  }
+
+  didLogBridge = true;
+  console.info("[OnchainKit bridge] resolved host-backed client meta", meta);
 }
 
-function warnFallbackOnce(reason: string) {
-  if (didWarn) return;
-  didWarn = true;
-  console.warn(
-    `[OnchainKit patch] Falling back to safe client metadata after ${reason}. ` +
-    "This avoids swap quote hangs in webviews that expose Farcaster bridge APIs without returning context.",
-  );
+async function resolveClientMeta(): Promise<ClientMeta> {
+  const snapshot = getHostEnvironmentSnapshot();
+  const hostEnvironment = snapshot.initialized
+    ? snapshot
+    : await ensureHostEnvironmentResolved();
+
+  const meta: ClientMeta = {
+    mode: "onchainkit",
+    clientFid: hostEnvironment.clientFid,
+  };
+  logBridgeMetaOnce(meta);
+  return meta;
 }
 
-export function patchOnchainKitClientMetaTimeout() {
+export function patchOnchainKitClientMetaBridge() {
   if (didPatch || typeof window === "undefined") {
     return;
   }
@@ -43,37 +52,32 @@ export function patchOnchainKitClientMetaTimeout() {
   didPatch = true;
 
   const manager = clientMetaManager as unknown as PatchedClientMetaManager;
-  const originalGetClientMeta = manager.getClientMeta.bind(manager);
+  manager.init = async () => {
+    if (manager.initPromise) {
+      await manager.initPromise;
+      return;
+    }
+
+    manager.initPromise = resolveClientMeta().then((meta) => {
+      manager.clientMeta = meta;
+      return meta;
+    });
+
+    await manager.initPromise;
+  };
 
   manager.getClientMeta = async () => {
-    if (fallbackMeta) {
-      return fallbackMeta;
+    if (!manager.initPromise) {
+      manager.initPromise = resolveClientMeta().then((meta) => {
+        manager.clientMeta = meta;
+        return meta;
+      });
     }
 
-    try {
-      const resolved = await withTimeout<ClientMeta | null>(
-        Promise.resolve(originalGetClientMeta()).then((meta) => meta ?? null),
-        CLIENT_META_TIMEOUT_MS,
-        null,
-      );
-
-      if (resolved) {
-        return resolved;
-      }
-
-      fallbackMeta = {
-        mode: "onchainkit",
-        clientFid: null,
-      };
-      warnFallbackOnce("a timed-out sdk.context lookup");
-      return fallbackMeta;
-    } catch (error) {
-      fallbackMeta = {
-        mode: "onchainkit",
-        clientFid: null,
-      };
-      warnFallbackOnce(error instanceof Error ? error.message : "an unexpected client-meta error");
-      return fallbackMeta;
+    if (!manager.clientMeta) {
+      manager.clientMeta = await manager.initPromise;
     }
+
+    return manager.clientMeta;
   };
 }

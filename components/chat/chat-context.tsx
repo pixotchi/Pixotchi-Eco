@@ -23,6 +23,10 @@ import {
   PUBLIC_CHAT_SESSION_EVENT,
   type PublicChatSession,
 } from '@/lib/chat-auth-client';
+import {
+  clearConfirmedMiniAppSession,
+  useConfirmedMiniAppSession,
+} from '@/lib/confirmed-miniapp-session';
 import { SecureSessionState } from '@/lib/auth-surface';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { PLANT_STRAINS } from '@/lib/constants';
@@ -67,6 +71,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { getAccessToken } = useToken();
   const fc = useFrameContext();
   const isMiniApp = Boolean(fc?.isInMiniApp);
+  const confirmedMiniAppSession = useConfirmedMiniAppSession();
   const isSolana = useIsSolanaWallet();
   const { effectiveAddress, solanaAddress } = useSolanaWallet();
   const chatAddress = isSolana ? effectiveAddress : address;
@@ -96,24 +101,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const previousChatAddressRef = useRef<string | null>(null);
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
   const publicChatSessionRef = useRef<PublicChatSession | null>(null);
+  const confirmedMiniAppAddress = isMiniApp && confirmedMiniAppSession.confirmed
+    ? confirmedMiniAppSession.address
+    : null;
 
   const publicChatAddress = isMiniApp
-    ? (chatAddress ?? publicChatSession?.address ?? null)
+    ? (confirmedMiniAppAddress ?? publicChatSession?.address ?? null)
     : (publicChatSession?.address ?? null);
   const publicChatAuthenticated = isMiniApp
-    ? Boolean(publicChatAddress && (chatAddress || publicChatSession?.authenticated))
+    ? Boolean(confirmedMiniAppAddress)
     : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
   const getMiniAppBypassHeaders = useCallback((): HeadersInit => {
-    if (!isMiniApp || !publicChatAddress) {
+    if (!isMiniApp || !confirmedMiniAppAddress) {
       return {};
     }
 
     return {
-      'x-pixotchi-address': publicChatAddress,
+      'x-pixotchi-address': confirmedMiniAppAddress,
       'x-pixotchi-miniapp': '1',
     };
-  }, [isMiniApp, publicChatAddress]);
+  }, [confirmedMiniAppAddress, isMiniApp]);
 
   useEffect(() => {
     return () => {
@@ -174,7 +182,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const handleChatAuthFailure = useCallback(async () => {
     setPublicChatSession(null);
-    setPublicChatState(chatAddress ? 'error' : 'unneeded');
+    setPublicChatState(isMiniApp || chatAddress ? 'error' : 'unneeded');
     setConversationId(null);
     messageCacheRef.current.public = [];
     messageCacheRef.current.ai = [];
@@ -189,7 +197,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore cleanup failures after an auth rejection.
     }
-  }, [chatAddress]);
+  }, [chatAddress, isMiniApp]);
 
   const retryPublicChatSession = useCallback(() => {
     setError(null);
@@ -243,14 +251,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const previousAddress = previousChatAddressRef.current;
-    if (previousAddress && !chatAddress) {
+    if (!isMiniApp && previousAddress && !chatAddress) {
       void clearPublicChatSession().catch(() => {
         // Ignore cleanup failures during disconnect.
       });
     }
 
     previousChatAddressRef.current = chatAddress ?? null;
-  }, [chatAddress]);
+  }, [chatAddress, isMiniApp]);
+
+  useEffect(() => {
+    if (!isMiniApp) {
+      clearConfirmedMiniAppSession('chat-host-downgrade');
+    }
+  }, [isMiniApp]);
 
   const setMode = (next: ChatMode) => {
     if (mode) {
@@ -486,13 +500,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (isMiniApp) {
       bootstrapKeyRef.current = bootstrapKey;
 
-      if (chatAddress) {
-        setPublicChatSession(null);
-        setPublicChatState('ready');
-        setPublicChatLoading(false);
-        return;
-      }
-
       let cancelled = false;
 
       const bootstrapMiniAppChat = async () => {
@@ -501,10 +508,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         try {
           let nextSession = await getCurrentPublicChatSession();
+          const normalizedChatAddress = chatAddress?.toLowerCase() ?? null;
 
           if (nextSession && nextSession.provider !== 'farcaster') {
             await clearPublicChatSession().catch((error) => {
               console.warn('[chat] Failed to clear stale non-Farcaster Mini App chat session:', error);
+            });
+            nextSession = null;
+          }
+
+          if (
+            nextSession &&
+            normalizedChatAddress &&
+            nextSession.address.toLowerCase() !== normalizedChatAddress
+          ) {
+            await clearPublicChatSession().catch((error) => {
+              console.warn('[chat] Failed to clear mismatched Mini App chat session:', error);
             });
             nextSession = null;
           }
@@ -516,6 +535,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
           if (!cancelled) {
             setPublicChatSession(nextSession);
+            setPublicChatState('ready');
           }
         } catch (miniAppBootstrapError) {
           console.error('[chat] Failed to bootstrap Mini App public chat session:', miniAppBootstrapError);

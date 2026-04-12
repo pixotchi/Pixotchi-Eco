@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { base } from "wagmi/chains";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import { Toaster } from "react-hot-toast";
@@ -13,12 +13,15 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider as CoreWagmiProvider } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
-import { wagmiMiniAppConfig, wagmiMiniAppBaseAppConfig } from "@/lib/wagmi-miniapp-config";
+import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { FrameProvider } from "@/lib/frame-context";
-import { sdk } from "@farcaster/miniapp-sdk";
 import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
-import { setHostHandlesBuilderAttribution } from "@/lib/builder-code";
+import {
+  HostEnvironmentProvider,
+  type HostEnvironmentState,
+  useHostEnvironment,
+} from "@/lib/host-environment";
 import dynamic from "next/dynamic";
 import { BalanceProvider } from "@/lib/balance-context";
 import { LoadingProvider } from "@/lib/loading-context";
@@ -36,69 +39,20 @@ import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { usePathname } from "next/navigation";
 import packageJson from '@/package.json';
-import { patchOnchainKitClientMetaTimeout } from "@/lib/onchainkit-client-meta-patch";
+import { patchOnchainKitClientMetaBridge } from "@/lib/onchainkit-client-meta-patch";
 import {
   AuthSurface,
   DEFAULT_AUTH_SURFACE,
   resolvePreferredAuthSurface,
 } from "@/lib/auth-surface";
-import { CLIENT_ENV } from "@/lib/env-config";
-const BASE_APP_CLIENT_FID = 309857;
-const MINIAPP_CONTEXT_TIMEOUT_MS = 250;
-
-type HostEnvironmentState = {
-  initialized: boolean;
-  isMiniApp: boolean;
-  isBaseAppMiniClient: boolean;
-};
-
-type TimedMiniAppCheck = (timeoutMs?: number) => Promise<boolean>;
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => {
-      setTimeout(() => resolve(fallback), timeoutMs);
-    }),
-  ]);
-}
-
-async function resolveHostEnvironment(): Promise<HostEnvironmentState> {
-  let contextPromise: Promise<any>;
-  try {
-    const maybeContext: any = (sdk as any).context;
-    contextPromise =
-      typeof maybeContext?.then === "function"
-        ? maybeContext
-        : Promise.resolve(maybeContext);
-  } catch {
-    contextPromise = Promise.resolve(undefined);
-  }
-
-  const initialContext = await withTimeout(contextPromise, MINIAPP_CONTEXT_TIMEOUT_MS, undefined);
-  let isMiniApp = Boolean(initialContext);
-
-  if (!isMiniApp) {
-    try {
-      isMiniApp = Boolean(
-        await (sdk.isInMiniApp as TimedMiniAppCheck)(MINIAPP_CONTEXT_TIMEOUT_MS),
-      );
-    } catch {
-      isMiniApp = false;
-    }
-  }
-
-  const resolvedContext = isMiniApp
-    ? (initialContext ?? await withTimeout(contextPromise, MINIAPP_CONTEXT_TIMEOUT_MS, undefined))
-    : initialContext;
-
-  const clientFid = Number(resolvedContext?.client?.clientFid);
-  return {
-    initialized: true,
-    isMiniApp,
-    isBaseAppMiniClient: isMiniApp && clientFid === BASE_APP_CLIENT_FID,
-  };
-}
+import {
+  clearConfirmedMiniAppSession,
+  useConfirmedMiniAppSession,
+} from "@/lib/confirmed-miniapp-session";
+import {
+  clearMiniAppBypassCookies,
+  setMiniAppBypassCookies,
+} from "@/lib/miniapp-bypass";
 
 // Solana RPC config for Privy - mainnet only
 const getSolanaRpcConfig = () => {
@@ -151,7 +105,7 @@ const queryClient = new QueryClient({
 });
 
 export function Providers(props: { children: ReactNode }) {
-  patchOnchainKitClientMetaTimeout();
+  patchOnchainKitClientMetaBridge();
 
   // Use CDP Client API key for Coinbase SDK
   const apiKey = process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY;
@@ -176,11 +130,6 @@ export function Providers(props: { children: ReactNode }) {
   // Determine surface BEFORE rendering PrivyProvider so we can configure it correctly
   const [authSurface, setAuthSurface] = useState<AuthSurface>('privy');
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
-  const [hostEnvironment, setHostEnvironment] = useState<HostEnvironmentState>({
-    initialized: typeof window === 'undefined',
-    isMiniApp: false,
-    isBaseAppMiniClient: false,
-  });
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -197,41 +146,6 @@ export function Providers(props: { children: ReactNode }) {
     setAuthSurface(resolvedSurface);
 
     setSurfaceInitialized(true);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      setHostEnvironment({
-        initialized: true,
-        isMiniApp: false,
-        isBaseAppMiniClient: false,
-      });
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const nextState = await resolveHostEnvironment();
-        if (cancelled) return;
-        setHostHandlesBuilderAttribution(nextState.isBaseAppMiniClient);
-        setHostEnvironment(nextState);
-      } catch (error) {
-        console.error('Failed to resolve host environment:', error);
-        if (cancelled) return;
-        setHostHandlesBuilderAttribution(false);
-        setHostEnvironment({
-          initialized: true,
-          isMiniApp: false,
-          isBaseAppMiniClient: false,
-        });
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
@@ -330,7 +244,6 @@ export function Providers(props: { children: ReactNode }) {
     hostEnvironmentState: HostEnvironmentState;
   }) {
     const isMiniApp = hostEnvironmentState.isMiniApp;
-    const isBaseAppMiniClient = hostEnvironmentState.isBaseAppMiniClient;
     const surface = authSurface;
 
     useEffect(() => {
@@ -350,11 +263,8 @@ export function Providers(props: { children: ReactNode }) {
 
     // Mini App: use Farcaster connector.
     if (isMiniApp) {
-      const miniAppWagmiConfig = isBaseAppMiniClient
-        ? wagmiMiniAppBaseAppConfig
-        : wagmiMiniAppConfig;
       return (
-        <CoreWagmiProvider config={miniAppWagmiConfig}>
+        <CoreWagmiProvider config={wagmiMiniAppConfig}>
           <TransactionProvider
             defaultChainId={8453}
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
@@ -393,15 +303,6 @@ export function Providers(props: { children: ReactNode }) {
           <TransactionModalWrapper className="!z-[1300]" />
         </TransactionProvider>
       </PrivyWagmiProvider>
-    );
-  }
-
-  // Don't render until surface and host environment are determined
-  if (!surfaceInitialized || !hostEnvironment.initialized) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse">Preparing wallet login…</div>
-      </div>
     );
   }
 
@@ -454,80 +355,16 @@ export function Providers(props: { children: ReactNode }) {
                 }}
               >
                 <QueryClientProvider client={queryClient}>
-                  <WagmiRouter hostEnvironmentState={hostEnvironment}>
-                    <OnchainKitProvider
+                  <HostEnvironmentProvider>
+                    <ProvidersContent
                       apiKey={apiKey}
-                      chain={base}
-                      config={{
-                        appearance: {
-                          mode: "auto",
-                          name: "Pixotchi Mini",
-                          logo: process.env.NEXT_PUBLIC_ICON_URL,
-                        },
-                        paymaster: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
-                        analytics: true,
-                      }}
-                      miniKit={{
-                        enabled: hostEnvironment.isMiniApp,
-                        autoConnect: hostEnvironment.isMiniApp,
-                        ...(hostEnvironment.isMiniApp && CLIENT_ENV.NOTIFICATION_PROVIDER === "neynar"
-                          ? { notificationProxyUrl: "/api/notify" }
-                          : {}),
-                      }}
+                      authSurface={authSurface}
+                      surfaceInitialized={surfaceInitialized}
+                      wagmiRouter={WagmiRouter}
                     >
-                      <FrameProvider>
-                        <SmartWalletProvider>
-                          <EthModeProvider>
-                            <SolanaWalletProvider>
-                              <BalanceProvider>
-                                <LoadingProvider>
-                                  <RouteAwareChatProvider>
-                                    <TutorialBundle>
-                                      {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                                      {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                                      {/** added provider wrapper **/}
-                                      <Toaster
-                                        position="top-center"
-                                        toastOptions={{
-                                          duration: 4000,
-                                          style: {
-                                            backgroundColor: "hsl(var(--background))",
-                                            color: "hsl(var(--foreground))",
-                                            border: "1px solid hsl(var(--border))",
-                                            zIndex: 9999,
-                                          },
-                                          success: {
-                                            iconTheme: {
-                                              primary: "hsl(var(--primary))",
-                                              secondary: "hsl(var(--primary-foreground))",
-                                            },
-                                          },
-                                          error: {
-                                            iconTheme: {
-                                              primary: "hsl(var(--destructive))",
-                                              secondary: "hsl(var(--destructive-foreground))",
-                                            },
-                                          },
-                                        }}
-                                        containerStyle={{
-                                          zIndex: 9999,
-                                        }}
-                                      />
-                                      {props.children}
-                                      <SlideshowModal />
-                                    </TutorialBundle>
-                                    <TasksInfoDialog />
-                                    <SecretGardenListener />
-                                    <SnowEffect />
-                                  </RouteAwareChatProvider>
-                                </LoadingProvider>
-                              </BalanceProvider>
-                            </SolanaWalletProvider>
-                          </EthModeProvider>
-                        </SmartWalletProvider>
-                      </FrameProvider>
-                    </OnchainKitProvider>
-                  </WagmiRouter>
+                      {props.children}
+                    </ProvidersContent>
+                  </HostEnvironmentProvider>
                 </QueryClientProvider>
               </PrivyProvider>
             </PaymasterProvider>
@@ -547,4 +384,174 @@ function RouteAwareChatProvider({ children }: { children: ReactNode }) {
   }
 
   return <ChatProvider>{children}</ChatProvider>;
+}
+
+function ProvidersContent({
+  apiKey,
+  authSurface,
+  children,
+  surfaceInitialized,
+  wagmiRouter: WagmiRouter,
+}: {
+  apiKey?: string;
+  authSurface: AuthSurface;
+  children: ReactNode;
+  surfaceInitialized: boolean;
+  wagmiRouter: ({
+    children,
+    hostEnvironmentState,
+  }: {
+    children: ReactNode;
+    hostEnvironmentState: HostEnvironmentState;
+  }) => ReactNode;
+}) {
+  const hostEnvironment = useHostEnvironment();
+  const confirmedMiniAppSession = useConfirmedMiniAppSession();
+  const [hostEnvironmentReady, setHostEnvironmentReady] = useState(
+    typeof window === 'undefined',
+  );
+  const didBootstrapSanitizeRef = useRef(typeof window === 'undefined');
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const root = document.documentElement;
+    const previousScrollLock = root.dataset.appShellScroll;
+
+    root.dataset.appShellScroll = 'locked';
+
+    return () => {
+      if (previousScrollLock) {
+        root.dataset.appShellScroll = previousScrollLock;
+        return;
+      }
+
+      delete root.dataset.appShellScroll;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hostEnvironment.initialized) {
+      return;
+    }
+
+    if (!didBootstrapSanitizeRef.current) {
+      clearMiniAppBypassCookies();
+      clearConfirmedMiniAppSession('host-bootstrap');
+      didBootstrapSanitizeRef.current = true;
+      setHostEnvironmentReady(true);
+      return;
+    }
+
+    if (!hostEnvironment.isMiniApp) {
+      clearMiniAppBypassCookies();
+      clearConfirmedMiniAppSession('host-downgrade');
+    }
+  }, [
+    hostEnvironment.initialized,
+    hostEnvironment.isMiniApp,
+  ]);
+
+  useEffect(() => {
+    if (!hostEnvironmentReady) {
+      return;
+    }
+
+    if (
+      hostEnvironment.isMiniApp &&
+      confirmedMiniAppSession.confirmed &&
+      confirmedMiniAppSession.address
+    ) {
+      setMiniAppBypassCookies(confirmedMiniAppSession.address);
+      return;
+    }
+
+    clearMiniAppBypassCookies();
+  }, [
+    confirmedMiniAppSession.address,
+    confirmedMiniAppSession.confirmed,
+    hostEnvironment.isMiniApp,
+    hostEnvironmentReady,
+  ]);
+
+  if (!surfaceInitialized || !hostEnvironment.initialized || !hostEnvironmentReady) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-pulse">Preparing wallet login…</div>
+      </div>
+    );
+  }
+
+  return (
+    <WagmiRouter hostEnvironmentState={hostEnvironment}>
+      <OnchainKitProvider
+        apiKey={apiKey}
+        chain={base}
+        config={{
+          appearance: {
+            mode: "auto",
+            name: authSurface === 'base' ? "Pixotchi" : "Pixotchi Mini",
+            logo: process.env.NEXT_PUBLIC_ICON_URL,
+          },
+          paymaster: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
+          analytics: true,
+        }}
+      >
+        <FrameProvider>
+          <SmartWalletProvider>
+            <EthModeProvider>
+              <SolanaWalletProvider>
+                <BalanceProvider>
+                  <LoadingProvider>
+                    <RouteAwareChatProvider>
+                      <TutorialBundle>
+                        {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
+                        {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
+                        {/** added provider wrapper **/}
+                        <Toaster
+                          position="top-center"
+                          toastOptions={{
+                            duration: 4000,
+                            style: {
+                              backgroundColor: "hsl(var(--background))",
+                              color: "hsl(var(--foreground))",
+                              border: "1px solid hsl(var(--border))",
+                              zIndex: 9999,
+                            },
+                            success: {
+                              iconTheme: {
+                                primary: "hsl(var(--primary))",
+                                secondary: "hsl(var(--primary-foreground))",
+                              },
+                            },
+                            error: {
+                              iconTheme: {
+                                primary: "hsl(var(--destructive))",
+                                secondary: "hsl(var(--destructive-foreground))",
+                              },
+                            },
+                          }}
+                          containerStyle={{
+                            top: "max(1rem, var(--safe-area-inset-top), var(--browser-safe-area-top))",
+                            zIndex: 9999,
+                          }}
+                        />
+                        {children}
+                        <SlideshowModal />
+                      </TutorialBundle>
+                      <TasksInfoDialog />
+                      <SecretGardenListener />
+                      <SnowEffect />
+                    </RouteAwareChatProvider>
+                  </LoadingProvider>
+                </BalanceProvider>
+              </SolanaWalletProvider>
+            </EthModeProvider>
+          </SmartWalletProvider>
+        </FrameProvider>
+      </OnchainKitProvider>
+    </WagmiRouter>
+  );
 }

@@ -177,28 +177,6 @@ export default function RootLayout({
             __html: `:root { --font-coinbase: ${coinbaseSans.style.fontFamily}; --font-pixel: ${pixelmix.style.fontFamily}; }`,
           }}
         />
-        {/* Prevent theme flash (FOUC) by applying theme before first paint */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  const theme = localStorage.getItem('pixotchi-theme') || 'light';
-                  const validThemes = ['light', 'dark', 'green', 'yellow', 'red', 'pink', 'blue', 'violet'];
-                  if (validThemes.includes(theme)) {
-                    const root = document.documentElement;
-                    const existing = new Set((root.className || '').split(/\s+/).filter(Boolean));
-                    validThemes.forEach((t) => existing.delete(t));
-                    existing.add(theme);
-                    root.className = Array.from(existing).join(' ');
-                  }
-                } catch (e) {
-                  console.warn('Theme initialization failed:', e);
-                }
-              })();
-            `,
-          }}
-        />
         {/* Structured Data */}
         <script
           type="application/ld+json"
@@ -230,6 +208,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#2d3c53" />
         <meta name="msapplication-TileColor" content="#2d3c53" />
         {/* Fonts are self-hosted via next/font/local */}
+        <link rel="preconnect" href="https://auth.farcaster.xyz" crossOrigin="" />
         {/* Preload above-the-fold art to reduce first paint */}
         <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
       </head>

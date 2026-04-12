@@ -14,62 +14,17 @@ export const THEMES = {
 
 export type Theme = keyof typeof THEMES;
 
-// Client-side theme management
-export function getClientTheme(): Theme {
-  if (typeof window === 'undefined') return 'light';
-
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme;
-    return stored && THEMES[stored] ? stored : 'light';
-  } catch (error) {
-    console.warn('Error getting client theme:', error);
-    return 'light';
-  }
-}
-
-export function setClientTheme(theme: Theme): void {
+export function syncThemeCookie(theme: Theme): void {
   if (typeof window === 'undefined') return;
 
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-
-    // Also set as cookie for server-side consistency
     document.cookie = `${THEME_COOKIE_NAME}=${theme}; path=/; max-age=31536000; SameSite=Lax`;
-
-    // Apply theme immediately
-    applyTheme(theme);
   } catch (error) {
-    console.warn('Error setting client theme:', error);
+    console.warn('Error syncing theme cookie:', error);
   }
 }
 
-// Apply theme to document
-export function applyTheme(theme: Theme): void {
-  if (typeof window === 'undefined') return;
-
-  try {
-    const root = document.documentElement;
-
-    // Remove all theme classes
-    Object.values(THEMES).forEach(themeName => {
-      root.classList.remove(themeName);
-    });
-
-    // Add the new theme class
-    root.classList.add(theme);
-
-    // Update meta theme-color
-    updateMetaThemeColor(theme);
-  } catch (error) {
-    console.warn('Error applying theme:', error);
-  }
-}
-
-// Update meta theme-color based on theme
-function updateMetaThemeColor(theme: Theme): void {
-  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-  if (!metaThemeColor) return;
-
+export function getThemeMetaColor(theme: Theme): string {
   const themeColors = {
     light: '#a7c7e7',
     dark: '#2d3c53',
@@ -79,9 +34,18 @@ function updateMetaThemeColor(theme: Theme): void {
     pink: '#ec4899',
     blue: '#3b82f6',
     violet: '#8b5cf6'
-  };
+  } satisfies Record<Theme, string>;
 
-  metaThemeColor.setAttribute('content', themeColors[theme] || themeColors.light);
+  return themeColors[theme] || themeColors.light;
+}
+
+export function updateMetaThemeColor(theme: Theme): void {
+  if (typeof document === 'undefined') return;
+
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (!metaThemeColor) return;
+
+  metaThemeColor.setAttribute('content', getThemeMetaColor(theme));
 }
 
 // Get theme color values for CSS custom properties

@@ -1,6 +1,5 @@
 "use client";
 
-import { sdk } from "@farcaster/miniapp-sdk";
 import {
   usePrivy,
   useLogin,
@@ -20,9 +19,9 @@ import {
   getCurrentPublicChatSession,
   requestBasePublicChatNonce,
 } from "@/lib/chat-auth-client";
+import { clearConfirmedMiniAppSession } from "@/lib/confirmed-miniapp-session";
 import {
   clearMiniAppBypassCookies,
-  setMiniAppBypassCookies,
 } from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import {
@@ -245,6 +244,7 @@ export function useAppAuthController() {
       await clearPublicChatSession().catch((error) => {
         console.warn("Failed to clear public chat session before surface switch:", error);
       });
+      clearConfirmedMiniAppSession("surface-switch");
       clearMiniAppBypassCookies();
 
       if (authenticated && logout) {
@@ -1020,15 +1020,6 @@ export function useAppAuthController() {
   ]);
 
   useEffect(() => {
-    if (isMiniApp && normalizedAddress) {
-      setMiniAppBypassCookies(normalizedAddress);
-      return;
-    }
-
-    clearMiniAppBypassCookies();
-  }, [isMiniApp, normalizedAddress]);
-
-  useEffect(() => {
     if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress) {
       return;
     }
@@ -1096,19 +1087,6 @@ export function useAppAuthController() {
     resetPrivySession,
     state.expectedPrivyAddress,
   ]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const inMini = await sdk.isInMiniApp();
-        if (inMini) {
-          await sdk.back.enableWebNavigation();
-        }
-      } catch {
-        // no-op
-      }
-    })();
-  }, []);
 
   useEffect(() => {
     if (state.surface !== "base" || isConnected) {

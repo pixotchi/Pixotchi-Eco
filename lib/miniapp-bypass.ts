@@ -10,6 +10,7 @@ export function setMiniAppBypassCookies(address: string) {
   if (typeof document === 'undefined') return;
 
   const normalized = address.toLowerCase();
+  console.info('[MiniAppBypass] set', { address: normalized });
   document.cookie = `${MINIAPP_BYPASS_COOKIE}=1; ${getCookieAttributes(60 * 60 * 24 * 7)}`;
   document.cookie = `${MINIAPP_BYPASS_ADDRESS_COOKIE}=${encodeURIComponent(normalized)}; ${getCookieAttributes(60 * 60 * 24 * 7)}`;
 }
@@ -17,6 +18,7 @@ export function setMiniAppBypassCookies(address: string) {
 export function clearMiniAppBypassCookies() {
   if (typeof document === 'undefined') return;
 
+  console.info('[MiniAppBypass] cleared');
   document.cookie = `${MINIAPP_BYPASS_COOKIE}=; ${getCookieAttributes(0)}`;
   document.cookie = `${MINIAPP_BYPASS_ADDRESS_COOKIE}=; ${getCookieAttributes(0)}`;
 }

@@ -37,10 +37,7 @@ function getRequestedChatAuthAddress(body: unknown, provider: unknown): string |
     return payload.address;
   }
 
-  if (
-    (provider === 'privy' || provider === 'farcaster') &&
-    typeof payload.expectedAddress === 'string'
-  ) {
+  if (provider === 'privy' && typeof payload.expectedAddress === 'string') {
     return payload.expectedAddress;
   }
 

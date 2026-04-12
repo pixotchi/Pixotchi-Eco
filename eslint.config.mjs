@@ -39,4 +39,40 @@ export default [
       },
     },
   },
+  {
+    files: ["**/*.{js,mjs,ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@coinbase/onchainkit/minikit",
+              message:
+                "Use the Farcaster SDK and the shared host-environment resolver instead of OnchainKit MiniKit.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "sdk",
+          property: "context",
+          message: "Use the shared host-environment resolver instead of raw sdk.context.",
+        },
+        {
+          object: "sdk",
+          property: "isInMiniApp",
+          message: "Use the shared host-environment resolver instead of raw sdk.isInMiniApp().",
+        },
+      ],
+    },
+  },
+  {
+    files: ["lib/host-environment.tsx"],
+    rules: {
+      "no-restricted-properties": "off",
+    },
+  },
 ];
