@@ -452,18 +452,18 @@ export default function App() {
   return (
     <div
       data-viewport-shell="outer"
-      className={`flex justify-center w-full min-h-dvh shell-app-bg overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
+      className={`flex justify-center w-full min-h-dvh bg-background overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
         } ${isKeyboardNavigation ? 'keyboard-navigation' : ''
         }`}
       aria-label="Pixotchi Mini Game"
     >
       <div
         data-viewport-shell="inner"
-        className="w-full max-w-md flex flex-col h-dvh shell-app-bg overflow-hidden overscroll-none"
+        className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="shell-surface overscroll-none">
-          <header data-viewport-shell="header" className="shell-surface shell-blur border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
+        <div className="bg-card/90 backdrop-blur-sm overscroll-none">
+          <header data-viewport-shell="header" className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
                 <Image
@@ -659,7 +659,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="shell-nav-surface border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
