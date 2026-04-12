@@ -12,8 +12,6 @@ const DialogTrigger = DialogPrimitive.Trigger;
 
 const DialogPortal = DialogPrimitive.Portal;
 
-const DialogClose = DialogPrimitive.Close;
-
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -37,21 +35,26 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    frameClassName?: string;
     hideCloseButton?: boolean;
+    overlayClassName?: string;
+    useSafeAreaInset?: boolean;
   }
->(({ className, children, hideCloseButton, ...props }, ref) => (
+>(({ className, children, frameClassName, hideCloseButton, overlayClassName, useSafeAreaInset = true, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       data-viewport-debug-dialog-frame=""
       className={cn(
         // Full-viewport centering container (avoids translate issues)
-        "fixed inset-0 z-[1201] flex items-center justify-center safe-area-inset",
+        "fixed inset-0 z-[1201] flex items-center justify-center",
+        useSafeAreaInset && "safe-area-inset",
         // Animations disabled on mobile via global .motion-off override; keep classes for desktop
         "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        frameClassName
       )}
       {...props}
     >
