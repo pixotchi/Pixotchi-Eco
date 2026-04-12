@@ -90,7 +90,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-card/90 px-4 py-3 backdrop-blur-sm">
+      <header className="shell-surface shell-blur sticky top-0 z-30 border-b border-border px-4 py-3">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi logo" width={28} height={28} priority />
@@ -136,4 +136,3 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
     </div>
   );
 }
-

@@ -536,6 +536,64 @@
     margin-top: max(0.5rem, var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
   }
 
+  /* Shell surfaces are app UI, not browser chrome. Keep them explicit and stable. */
+  .shell-app-bg {
+    background-color: hsl(var(--background));
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+
+  .shell-surface {
+    background-color: hsl(var(--card) / 0.92);
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .shell-surface-strong {
+    background-color: hsl(var(--card) / 0.96);
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .shell-nav-surface {
+    background-color: hsl(var(--card));
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .shell-blur {
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .shell-blur-strong {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  html[data-android-webview="true"] .shell-blur,
+  html[data-android-webview="true"] .shell-blur-strong {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html[data-android-webview="true"] .shell-surface {
+    background-color: hsl(var(--card) / 0.98);
+  }
+
+  html[data-android-webview="true"] .shell-surface-strong,
+  html[data-android-webview="true"] .shell-nav-surface {
+    background-color: hsl(var(--card));
+  }
+
   /* Touch optimizations for buttons and interactive elements */
   button,
   [role="button"],
