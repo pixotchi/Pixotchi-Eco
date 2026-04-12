@@ -13,11 +13,10 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider as CoreWagmiProvider } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
-import { wagmiMiniAppConfig, wagmiMiniAppBaseAppConfig } from "@/lib/wagmi-miniapp-config";
+import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { FrameProvider } from "@/lib/frame-context";
 import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
-import { setHostHandlesBuilderAttribution } from "@/lib/builder-code";
 import {
   HostEnvironmentProvider,
   type HostEnvironmentState,
@@ -245,7 +244,6 @@ export function Providers(props: { children: ReactNode }) {
     hostEnvironmentState: HostEnvironmentState;
   }) {
     const isMiniApp = hostEnvironmentState.isMiniApp;
-    const isBaseAppMiniClient = hostEnvironmentState.isBaseAppMiniClient;
     const surface = authSurface;
 
     useEffect(() => {
@@ -265,11 +263,8 @@ export function Providers(props: { children: ReactNode }) {
 
     // Mini App: use Farcaster connector.
     if (isMiniApp) {
-      const miniAppWagmiConfig = isBaseAppMiniClient
-        ? wagmiMiniAppBaseAppConfig
-        : wagmiMiniAppConfig;
       return (
-        <CoreWagmiProvider config={miniAppWagmiConfig}>
+        <CoreWagmiProvider config={wagmiMiniAppConfig}>
           <TransactionProvider
             defaultChainId={8453}
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
@@ -422,8 +417,6 @@ function ProvidersContent({
       return;
     }
 
-    setHostHandlesBuilderAttribution(hostEnvironment.isBaseAppMiniClient);
-
     if (!didBootstrapSanitizeRef.current) {
       clearMiniAppBypassCookies();
       clearConfirmedMiniAppSession('host-bootstrap');
@@ -438,7 +431,6 @@ function ProvidersContent({
     }
   }, [
     hostEnvironment.initialized,
-    hostEnvironment.isBaseAppMiniClient,
     hostEnvironment.isMiniApp,
   ]);
 

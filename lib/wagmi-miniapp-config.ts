@@ -32,13 +32,7 @@ const miniAppBaseConfig = {
   ssr: true,
 } as const;
 
-// Used for non-Base App Mini App clients
 export const wagmiMiniAppConfig = createConfig({
   ...miniAppBaseConfig,
   ...(dataSuffix ? { dataSuffix } : {}),
-});
-
-// Used for Base App Mini App client (Base App auto-appends Builder attribution)
-export const wagmiMiniAppBaseAppConfig = createConfig({
-  ...miniAppBaseConfig,
 });

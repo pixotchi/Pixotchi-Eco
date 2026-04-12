@@ -44,7 +44,6 @@ export type HostEnvironmentResolutionStatus =
 export type HostEnvironmentState = {
   initialized: boolean;
   isMiniApp: boolean;
-  isBaseAppMiniClient: boolean;
   clientFid: number | null;
   context: MiniAppContext | Record<string, unknown> | null;
   resolutionSource: HostEnvironmentResolutionSource;
@@ -54,13 +53,11 @@ export type HostEnvironmentState = {
 type HostEnvironmentListener = (state: HostEnvironmentState) => void;
 type TimedMiniAppCheck = (timeoutMs?: number) => Promise<boolean>;
 
-const BASE_APP_CLIENT_FID = 309857;
 const HOST_ENVIRONMENT_TIMEOUT_MS = 250;
 
 const DEFAULT_HOST_ENVIRONMENT: HostEnvironmentState = {
   initialized: typeof window === "undefined",
   isMiniApp: false,
-  isBaseAppMiniClient: false,
   clientFid: null,
   context: null,
   resolutionSource: typeof window === "undefined" ? "ssr" : "pending",
@@ -118,7 +115,6 @@ function updateHostEnvironmentSnapshot(nextState: HostEnvironmentState) {
   console.info("[HostEnv] resolved", {
     clientFid: nextState.clientFid,
     initialized: nextState.initialized,
-    isBaseAppMiniClient: nextState.isBaseAppMiniClient,
     isMiniApp: nextState.isMiniApp,
     resolutionSource: nextState.resolutionSource,
     resolutionStatus: nextState.resolutionStatus,
@@ -163,7 +159,6 @@ function toHostEnvironmentState(
   return {
     initialized: true,
     isMiniApp: input.isMiniApp,
-    isBaseAppMiniClient: input.isMiniApp && normalizedClientFid === BASE_APP_CLIENT_FID,
     clientFid: normalizedClientFid,
     context: input.context,
     resolutionSource: input.resolutionSource,

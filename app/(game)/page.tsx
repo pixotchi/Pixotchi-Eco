@@ -206,7 +206,7 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 
 import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
-import { useKeyboardAware, useViewportHeight, useKeyboardNavigation } from "@/hooks/useKeyboardAware";
+import { useKeyboardAware, useViewportInsets, useKeyboardNavigation } from "@/hooks/useKeyboardAware";
 
 
 export default function App() {
@@ -288,9 +288,8 @@ export default function App() {
 
   // Keyboard and viewport awareness
   const keyboardState = useKeyboardAware();
-  const viewportHeight = useViewportHeight();
+  useViewportInsets();
   const isKeyboardNavigation = useKeyboardNavigation();
-  const shellHeight = viewportHeight > 0 ? `${viewportHeight}px` : undefined;
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
   const miniAppContext = (fc?.context as any) ?? null;
   const miniAppAdded = Boolean(miniAppContext?.client?.added);
@@ -457,15 +456,10 @@ export default function App() {
         } ${isKeyboardNavigation ? 'keyboard-navigation' : ''
         }`}
       aria-label="Pixotchi Mini Game"
-      style={{
-        // Dynamic viewport height for mobile
-        minHeight: shellHeight
-      }}
     >
       <div
         data-viewport-shell="inner"
         className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
-        style={{ height: shellHeight }}
       >
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">

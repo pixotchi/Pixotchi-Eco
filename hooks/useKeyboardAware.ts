@@ -69,17 +69,20 @@ export function useKeyboardAware(): KeyboardState {
   return keyboardState;
 }
 
-// Hook for managing viewport height (handles mobile browser UI changes)
-export function useViewportHeight() {
-  const [viewportHeight, setViewportHeight] = useState<number>(0);
-
+// Sync browser-driven viewport insets into CSS custom properties.
+// The shell height itself should be owned by CSS viewport units, not JS.
+export function useViewportInsets() {
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     const root = document.documentElement;
     const KEYBOARD_HEIGHT_THRESHOLD = 150;
+    let frameId: number | null = null;
+    let orientationTimeoutId: number | null = null;
 
-    const updateHeight = () => {
+    const updateInsets = () => {
+      frameId = null;
+
       const viewport = window.visualViewport;
       const layoutHeight = window.innerHeight;
       const layoutWidth = window.innerWidth;
@@ -92,38 +95,53 @@ export function useViewportHeight() {
       const browserBottomInset =
         rawOffsetBottom > KEYBOARD_HEIGHT_THRESHOLD ? 0 : rawOffsetBottom;
 
-      root.style.setProperty('--vh', `${visibleHeight * 0.01}px`);
       root.style.setProperty('--browser-safe-area-top', `${offsetTop}px`);
       root.style.setProperty('--browser-safe-area-right', `${offsetRight}px`);
       root.style.setProperty('--browser-safe-area-bottom', `${browserBottomInset}px`);
       root.style.setProperty('--browser-safe-area-left', `${offsetLeft}px`);
+    };
 
-      setViewportHeight(visibleHeight);
+    const scheduleUpdate = () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(updateInsets);
     };
 
     const handleOrientationChange = () => {
-      // Small delay to account for mobile browser UI adjustments
-      setTimeout(updateHeight, 100);
+      // Let the browser settle before recomputing inset values.
+      if (orientationTimeoutId !== null) {
+        window.clearTimeout(orientationTimeoutId);
+      }
+
+      orientationTimeoutId = window.setTimeout(scheduleUpdate, 100);
     };
 
     const viewport = window.visualViewport;
-    updateHeight();
+    scheduleUpdate();
 
     // Update on viewport resize, browser chrome movement, and orientation changes.
-    window.addEventListener('resize', updateHeight);
+    window.addEventListener('resize', scheduleUpdate);
     window.addEventListener('orientationchange', handleOrientationChange);
-    viewport?.addEventListener('resize', updateHeight);
-    viewport?.addEventListener('scroll', updateHeight);
+    viewport?.addEventListener('resize', scheduleUpdate);
+    viewport?.addEventListener('scroll', scheduleUpdate);
 
     return () => {
-      window.removeEventListener('resize', updateHeight);
+      window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('orientationchange', handleOrientationChange);
-      viewport?.removeEventListener('resize', updateHeight);
-      viewport?.removeEventListener('scroll', updateHeight);
+      viewport?.removeEventListener('resize', scheduleUpdate);
+      viewport?.removeEventListener('scroll', scheduleUpdate);
+
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      if (orientationTimeoutId !== null) {
+        window.clearTimeout(orientationTimeoutId);
+      }
     };
   }, []);
-
-  return viewportHeight;
 }
 
 // Hook for managing focus and keyboard navigation

@@ -34,7 +34,6 @@ type ViewportDebugSnapshot = {
   hostSafeAreaTopPx: number | null;
   innerHeight: number;
   innerWidth: number;
-  isBaseAppMiniClient: boolean;
   keyboardHeight: number | null;
   keyboardVisible: boolean;
   mainHeight: number | null;
@@ -355,7 +354,6 @@ function readSnapshot(hostEnvironment: HostEnvironmentState): ViewportDebugSnaps
     hostSafeAreaTopPx: hostClient.hostSafeAreaTopPx,
     innerHeight: window.innerHeight,
     innerWidth: window.innerWidth,
-    isBaseAppMiniClient: hostEnvironment.isBaseAppMiniClient,
     keyboardHeight,
     keyboardVisible,
     mainHeight: readElementHeight('[data-viewport-shell="main"]'),
@@ -989,7 +987,6 @@ export function ViewportDebugOverlay() {
     ["host client", snapshot.hostClientName ?? "(unknown)"],
     ["host fid", snapshot.hostClientFid],
     ["host source", snapshot.hostResolutionSource],
-    ["base client", snapshot.isBaseAppMiniClient],
     ["header pt", snapshot.headerPaddingTop],
     ["nav pb", snapshot.navPaddingBottom],
     ["nav pb px", snapshot.navPaddingBottomPx],

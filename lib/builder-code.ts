@@ -24,7 +24,6 @@ const BUILDER_CODE = CLIENT_ENV.BUILDER_CODE;
 // Cache the computed suffix to avoid recomputation
 let cachedDataSuffix: string | null = null;
 let cacheInitialized = false;
-let autoAppendHandledByHost = false;
 
 /**
  * Generate the ERC-8021 dataSuffix for transaction attribution
@@ -69,18 +68,6 @@ export function getDataSuffix(): string | undefined {
 }
 
 /**
- * Configure whether attribution suffix append/capability should be skipped
- * because host client is appending attribution automatically (e.g. Base App).
- */
-export function setHostHandlesBuilderAttribution(enabled: boolean): void {
-  autoAppendHandledByHost = enabled;
-}
-
-function shouldSkipClientSideAttributionAppend(): boolean {
-  return autoAppendHandledByHost;
-}
-
-/**
  * Get a wallet_sendCalls capability payload for data suffix attribution.
  * Note: Prefer client-level `dataSuffix` in Wagmi config for primary integration.
  * 
@@ -89,7 +76,6 @@ function shouldSkipClientSideAttributionAppend(): boolean {
 export function getBuilderCapabilities():
   | { dataSuffix: { value: string; optional: true } }
   | undefined {
-  if (shouldSkipClientSideAttributionAppend()) return undefined;
   const suffix = getDataSuffix();
   if (!suffix) return undefined;
   return { dataSuffix: { value: suffix, optional: true } };
@@ -117,7 +103,6 @@ export function getBuilderCode(): string | undefined {
  * @returns The data with builder suffix appended, or original data if no suffix configured
  */
 export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
-  if (shouldSkipClientSideAttributionAppend()) return encodedData;
   const suffix = getDataSuffix();
   if (!suffix) return encodedData;
 
