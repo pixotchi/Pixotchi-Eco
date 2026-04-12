@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.99",
+  "version": "1.6.992",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -22,9 +22,9 @@
     "@farcaster/miniapp-sdk": "0.3.0",
     "@farcaster/miniapp-wagmi-connector": "2.0.0",
     "@farcaster/quick-auth": "0.0.8",
-    "@privy-io/node": "0.12.0",
-    "@privy-io/react-auth": "3.21.0",
-    "@privy-io/wagmi": "4.0.4",
+    "@privy-io/node": "0.14.0",
+    "@privy-io/react-auth": "3.21.2",
+    "@privy-io/wagmi": "4.0.5",
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-dropdown-menu": "2.1.16",
     "@radix-ui/react-progress": "1.1.8",
