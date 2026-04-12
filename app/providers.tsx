@@ -413,6 +413,26 @@ function ProvidersContent({
   const didBootstrapSanitizeRef = useRef(typeof window === 'undefined');
 
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const root = document.documentElement;
+    const previousScrollLock = root.dataset.appShellScroll;
+
+    root.dataset.appShellScroll = 'locked';
+
+    return () => {
+      if (previousScrollLock) {
+        root.dataset.appShellScroll = previousScrollLock;
+        return;
+      }
+
+      delete root.dataset.appShellScroll;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!hostEnvironment.initialized) {
       return;
     }

@@ -375,6 +375,13 @@
     overscroll-behavior-y: auto;
   }
 
+  /* App-shell routes should own vertical scrolling through an inner pane. */
+  html[data-app-shell-scroll="locked"],
+  html[data-app-shell-scroll="locked"] body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   /* Dynamic viewport height for mobile browsers */
   .h-dvh {
     height: 100vh;

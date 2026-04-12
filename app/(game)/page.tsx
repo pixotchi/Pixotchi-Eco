@@ -625,7 +625,7 @@ export default function App() {
               {/* Tab Content */}
               <div
                 data-viewport-shell="content"
-                className="flex-1 overflow-y-auto overscroll-contain p-4 pb-16 safe-area-inset"
+                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-4 pb-16 safe-area-inset"
                 role="tabpanel"
                 id={`tabpanel-${activeTab}`}
                 aria-labelledby={`tab-${activeTab}`}
