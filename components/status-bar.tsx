@@ -53,8 +53,8 @@ export default function StatusBar() {
   };
 
   return (
-    <div className="w-full bg-background" role="region" aria-label="Account balance and staking">
-      <div className="rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md">
+    <div className="w-full shell-app-bg" role="region" aria-label="Account balance and staking">
+      <div className="shell-surface-strong shell-blur-strong rounded-b-2xl border border-border/70 px-4 py-1.5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0" role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
