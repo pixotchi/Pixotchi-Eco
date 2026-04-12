@@ -517,30 +517,30 @@
 
   /* Safe area support for device cutouts and in-app browser overlays */
   .safe-area-inset {
-    padding-top: max(0px, var(--safe-area-inset-top), var(--browser-safe-area-top));
-    padding-bottom: max(0px, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
-    padding-left: max(0px, var(--safe-area-inset-left), var(--browser-safe-area-left));
-    padding-right: max(0px, var(--safe-area-inset-right), var(--browser-safe-area-right));
+    padding-top: max(1rem, var(--safe-area-inset-top), var(--browser-safe-area-top));
+    padding-bottom: max(1rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
+    padding-left: max(1rem, var(--safe-area-inset-left), var(--browser-safe-area-left));
+    padding-right: max(1rem, var(--safe-area-inset-right), var(--browser-safe-area-right));
   }
 
   /* Header safe area helper */
   .safe-area-top {
-    padding-top: max(0px, var(--safe-area-inset-top), var(--browser-safe-area-top));
+    padding-top: max(0.5rem, var(--safe-area-inset-top), var(--browser-safe-area-top));
   }
 
   /* Bottom nav safe area helper */
   .safe-area-bottom {
-    padding-bottom: max(0px, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+    padding-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
   }
 
   /* Bottom offset helper for fixed and floating UI */
   .safe-area-bottom-margin {
-    margin-bottom: max(0px, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+    margin-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
   }
 
   /* Top offset helper for fixed and floating UI */
   .safe-area-top-margin {
-    margin-top: max(0px, var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
+    margin-top: max(0.5rem, var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
   }
 
   /* Touch optimizations for buttons and interactive elements */
@@ -663,7 +663,7 @@
 .ock-toast-container {
   z-index: var(--z-toast);
   position: relative;
-  margin-bottom: max(0px, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
+  margin-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
 }
 
 /* OnchainKit modal and popup overlays */
