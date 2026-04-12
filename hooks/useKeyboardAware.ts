@@ -121,17 +121,18 @@ export function useViewportInsets() {
     const viewport = window.visualViewport;
     scheduleUpdate();
 
-    // Update on viewport resize, browser chrome movement, and orientation changes.
+    // Per the VisualViewport spec, `resize` reflects chrome show/hide and keyboard state;
+    // `scroll` is for pinch-zoom panning and fires continuously during page scroll, which
+    // samples mid-animation values on WebViews that animate their address bar. Listening
+    // only to `resize` is the correct signal for committed chrome state.
     window.addEventListener('resize', scheduleUpdate);
     window.addEventListener('orientationchange', handleOrientationChange);
     viewport?.addEventListener('resize', scheduleUpdate);
-    viewport?.addEventListener('scroll', scheduleUpdate);
 
     return () => {
       window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('orientationchange', handleOrientationChange);
       viewport?.removeEventListener('resize', scheduleUpdate);
-      viewport?.removeEventListener('scroll', scheduleUpdate);
 
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
