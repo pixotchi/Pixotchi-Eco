@@ -15,6 +15,8 @@ import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Plant, ShopItem, GardenItem } from "@/lib/types";
 import {
   getPlantsByOwner,
+  getRevivePrice,
+  getTokenBalance,
 } from "@/lib/contracts";
 import { getStrainName, formatScore, formatEth, formatTokenAmount, getPlantStatusText, cn, getActiveFences } from '@/lib/utils';
 import PlantImage from "../PlantImage";
@@ -42,15 +44,19 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import QuantitySelector from "@/components/quantity-selector";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { StandardContainer } from "@/components/ui/pixel-container";
+import { SponsoredBadge } from "@/components/paymaster-toggle";
 import EditPlantName from "@/components/edit-plant-name";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
+import ReviveTransaction from "@/components/transactions/revive-transaction";
 import ArcadeDialog from "@/components/arcade/ArcadeDialog";
 import { Gamepad2 } from "lucide-react";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
+
+const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 export default function PlantsView() {
@@ -81,6 +87,9 @@ export default function PlantsView() {
   const [claimOpen, setClaimOpen] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
   const [claimConfirmationText, setClaimConfirmationText] = useState("");
+  const [revivePrice, setRevivePrice] = useState<bigint>(DEFAULT_REVIVE_PRICE);
+  const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
+  const [reviveDataLoading, setReviveDataLoading] = useState(false);
 
   // Use ref to track selected plant ID without causing re-renders or re-fetches
   const selectedPlantIdRef = useRef<number | null>(null);
@@ -195,6 +204,41 @@ export default function PlantsView() {
       }
     }
   }, [selectedItem, gardenItems, shopItems]);
+
+  useEffect(() => {
+    if (!selectedPlant || selectedPlant.status !== 4) {
+      setReviveDataLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchReviveData = async () => {
+      setReviveDataLoading(true);
+
+      try {
+        const [price, balance] = await Promise.all([
+          getRevivePrice().catch(() => DEFAULT_REVIVE_PRICE),
+          address ? getTokenBalance(address).catch(() => BigInt(0)) : Promise.resolve(BigInt(0)),
+        ]);
+
+        if (!cancelled) {
+          setRevivePrice(price || DEFAULT_REVIVE_PRICE);
+          setSeedBalance(balance || BigInt(0));
+        }
+      } finally {
+        if (!cancelled) {
+          setReviveDataLoading(false);
+        }
+      }
+    };
+
+    void fetchReviveData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, selectedPlant?.id, selectedPlant?.status]);
 
   // Fetch data when address changes - properly include fetchData in deps
   // Refresh when dashboard becomes visible
@@ -541,149 +585,216 @@ export default function PlantsView() {
             plant={selectedPlant}
           />
 
-          {/* Items Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle className="font-pixel">Marketplace</CardTitle>
-                <ToggleGroup
-                  value={itemType}
-                  onValueChange={(v) => handleItemTypeChange(v as 'garden' | 'shop')}
-                  options={[
-                    { value: 'garden', label: 'Garden' },
-                    { value: 'shop', label: 'Shop' },
-                  ]}
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-                {/* Regular Wallet Info Message */}
-                {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                  <StandardContainer className="p-3 rounded-md border bg-primary/10">
+          {/* Items / Revive Section */}
+          {selectedPlant.status === 4 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-pixel">Revive Plant</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-4">
+                  <StandardContainer className="p-3 rounded-md border bg-destructive/10">
                     <div className="flex items-start space-x-2">
-                      <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                      <Heart className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
                       <div className="text-sm text-foreground">
-                        <div className="font-medium">Regular Wallet Mode</div>
-                        <div className="text-xs mt-1">Purchasing 1 item at a time. For bulk purchases, consider using a smart wallet.</div>
+                        <div className="font-medium">This plant is dead</div>
+                        <div className="text-xs mt-1">
+                          Revive it to restore marketplace access and continue caring for it from the farm tab.
+                        </div>
                       </div>
                     </div>
                   </StandardContainer>
-                )}
 
-
-                {/* Item Selection with Quantity - Grouped by category for Garden items */}
-                <div className="space-y-2">
-                  {itemType === 'garden' ? (
-                    // Group garden items by category: TOD, PTS, Hybrid
-                    (() => {
-                      const todItems = gardenItems.filter((item: GardenItem) =>
-                        Number(item.timeExtension) > 0 && Number(item.points) === 0
-                      );
-                      const ptsItems = gardenItems.filter((item: GardenItem) =>
-                        Number(item.points) > 0 && Number(item.timeExtension) === 0
-                      );
-                      const hybridItems = gardenItems.filter((item: GardenItem) =>
-                        Number(item.points) > 0 && Number(item.timeExtension) > 0
-                      );
-
-                      const renderItemGroup = (items: GardenItem[], label: string) => {
-                        if (items.length === 0) return null;
-                        return (
-                          <div key={label} className="space-y-1.5">
-                            {/* Subtle group divider with label */}
-                            <div className="flex items-center gap-2">
-                              <div className="h-px flex-1 bg-border/50" />
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-                              <div className="h-px flex-1 bg-border/50" />
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                              {items.map((item: GardenItem) => {
-                                const quantity = getItemQuantity(item.id);
-                                return (
-                                  <div key={item.id} className="space-y-1">
-                                    <div className="flex justify-center">
-                                      <button
-                                        onClick={() => setSelectedItem(item)}
-                                        className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
-                                      >
-                                        <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
-                                          <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                        </div>
-                                      </button>
-                                    </div>
-                                    {isSmartWallet && (
-                                      <div className="flex justify-center">
-                                        <QuantitySelector
-                                          quantity={quantity}
-                                          onQuantityChange={(newQuantity) => {
-                                            handleQuantityChange(item.id, newQuantity);
-                                            setSelectedItem(item);
-                                          }}
-                                          max={80}
-                                          min={0}
-                                          size="sm"
-                                        />
-                                      </div>
-                                    )}
-                                    {!smartWalletLoading && !isSmartWallet && (
-                                      <div className="flex justify-center">
-                                        <div className="text-xs text-muted-foreground px-2 py-1">
-                                          Qty: 1
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      };
-
-                      return (
-                        <div className="space-y-2">
-                          {renderItemGroup(todItems, 'TOD')}
-                          {renderItemGroup(ptsItems, 'PTS')}
-                          {renderItemGroup(hybridItems, 'Hybrid')}
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    // Shop items - no grouping needed (all are protection items)
-                    <div className="grid grid-cols-3 gap-2">
-                      {shopItems.map((item: ShopItem) => {
-                        const quantity = getItemQuantity(item.id);
-                        return (
-                          <div key={item.id} className="space-y-1">
-                            <div className="flex justify-center">
-                              <button
-                                onClick={() => setSelectedItem(item)}
-                                className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
-                              >
-                                <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
-                                  <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                </div>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  <div className="rounded-lg border bg-card p-4 space-y-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Revive cost</span>
+                      <span className="font-semibold text-foreground">
+                        {reviveDataLoading ? "Loading..." : `${formatTokenAmount(revivePrice)} SEED`}
+                      </span>
                     </div>
-                  )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Your SEED balance</span>
+                      <span className="font-semibold text-foreground">
+                        {reviveDataLoading ? "Loading..." : `${formatTokenAmount(seedBalance)} SEED`}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Confirm Revive</span>
+                      <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
+                    </div>
+                    {isSolana ? (
+                      <SolanaNotSupported feature="Revive action" />
+                    ) : (
+                      <>
+                        <ReviveTransaction
+                          plantId={selectedPlant.id}
+                          buttonText="Revive Plant"
+                          buttonClassName="w-full"
+                          disabled={reviveDataLoading || seedBalance < revivePrice}
+                          onSuccess={() => {
+                            toast.success('You revived your plant.');
+                            fetchData();
+                            window.dispatchEvent(new Event('balances:refresh'));
+                          }}
+                          onError={() => {
+                            toast.error('Revive failed');
+                          }}
+                        />
+                        {seedBalance < revivePrice && !reviveDataLoading && (
+                          <p className="text-xs text-destructive text-center">
+                            Insufficient SEED balance. You need {formatTokenAmount(revivePrice)} SEED to revive this plant.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="font-pixel">Marketplace</CardTitle>
+                  <ToggleGroup
+                    value={itemType}
+                    onValueChange={(v) => handleItemTypeChange(v as 'garden' | 'shop')}
+                    options={[
+                      { value: 'garden', label: 'Garden' },
+                      { value: 'shop', label: 'Shop' },
+                    ]}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                  {/* Regular Wallet Info Message */}
+                  {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
+                    <StandardContainer className="p-3 rounded-md border bg-primary/10">
+                      <div className="flex items-start space-x-2">
+                        <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-foreground">
+                          <div className="font-medium">Regular Wallet Mode</div>
+                          <div className="text-xs mt-1">Purchasing 1 item at a time. For bulk purchases, consider using a smart wallet.</div>
+                        </div>
+                      </div>
+                    </StandardContainer>
+                  )}
 
-                {/* Item Details and Purchase */}
-                <ItemDetailsPanel
-                  selectedItem={selectedItem}
-                  selectedPlant={selectedPlant}
-                  itemType={itemType}
-                  onPurchaseSuccess={onPurchaseSuccess}
-                  quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
-                />
-              </div>
-            </CardContent>
-          </Card>
+
+                  {/* Item Selection with Quantity - Grouped by category for Garden items */}
+                  <div className="space-y-2">
+                    {itemType === 'garden' ? (
+                      // Group garden items by category: TOD, PTS, Hybrid
+                      (() => {
+                        const todItems = gardenItems.filter((item: GardenItem) =>
+                          Number(item.timeExtension) > 0 && Number(item.points) === 0
+                        );
+                        const ptsItems = gardenItems.filter((item: GardenItem) =>
+                          Number(item.points) > 0 && Number(item.timeExtension) === 0
+                        );
+                        const hybridItems = gardenItems.filter((item: GardenItem) =>
+                          Number(item.points) > 0 && Number(item.timeExtension) > 0
+                        );
+
+                        const renderItemGroup = (items: GardenItem[], label: string) => {
+                          if (items.length === 0) return null;
+                          return (
+                            <div key={label} className="space-y-1.5">
+                              {/* Subtle group divider with label */}
+                              <div className="flex items-center gap-2">
+                                <div className="h-px flex-1 bg-border/50" />
+                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+                                <div className="h-px flex-1 bg-border/50" />
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {items.map((item: GardenItem) => {
+                                  const quantity = getItemQuantity(item.id);
+                                  return (
+                                    <div key={item.id} className="space-y-1">
+                                      <div className="flex justify-center">
+                                        <button
+                                          onClick={() => setSelectedItem(item)}
+                                          className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                        >
+                                          <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
+                                            <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
+                                          </div>
+                                        </button>
+                                      </div>
+                                      {isSmartWallet && (
+                                        <div className="flex justify-center">
+                                          <QuantitySelector
+                                            quantity={quantity}
+                                            onQuantityChange={(newQuantity) => {
+                                              handleQuantityChange(item.id, newQuantity);
+                                              setSelectedItem(item);
+                                            }}
+                                            max={80}
+                                            min={0}
+                                            size="sm"
+                                          />
+                                        </div>
+                                      )}
+                                      {!smartWalletLoading && !isSmartWallet && (
+                                        <div className="flex justify-center">
+                                          <div className="text-xs text-muted-foreground px-2 py-1">
+                                            Qty: 1
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <div className="space-y-2">
+                            {renderItemGroup(todItems, 'TOD')}
+                            {renderItemGroup(ptsItems, 'PTS')}
+                            {renderItemGroup(hybridItems, 'Hybrid')}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      // Shop items - no grouping needed (all are protection items)
+                      <div className="grid grid-cols-3 gap-2">
+                        {shopItems.map((item: ShopItem) => {
+                          const quantity = getItemQuantity(item.id);
+                          return (
+                            <div key={item.id} className="space-y-1">
+                              <div className="flex justify-center">
+                                <button
+                                  onClick={() => setSelectedItem(item)}
+                                  className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                >
+                                  <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
+                                    <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
+                                  </div>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Item Details and Purchase */}
+                  <ItemDetailsPanel
+                    selectedItem={selectedItem}
+                    selectedPlant={selectedPlant}
+                    itemType={itemType}
+                    onPurchaseSuccess={onPurchaseSuccess}
+                    quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

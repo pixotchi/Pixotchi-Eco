@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Plant } from "@/lib/types";
-import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard, getKillCooldown } from "@/lib/contracts";
-import { formatScoreShort, formatEthShort, formatScore, formatAddress, cn, getFenceStatus } from "@/lib/utils";
+import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard, getKillCooldown, getRevivePrice } from "@/lib/contracts";
+import { formatScoreShort, formatEthShort, formatScore, formatAddress, cn, getFenceStatus, formatTokenAmount } from "@/lib/utils";
 import PlantImage from "@/components/PlantImage";
 import { Trophy, Skull, Sword, HeartPulse } from "lucide-react";
 import Image from "next/image";
@@ -60,6 +60,7 @@ const ITEMS_PER_PAGE = 12;
 // Client-side cache duration for stake data (24 hours since cron runs once at midnight)
 const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 
 export default function LeaderboardTab() {
   const gamificationDisabled = CLIENT_ENV.GAMIFICATION_DISABLED;
@@ -113,6 +114,7 @@ export default function LeaderboardTab() {
   const [reviveDialogOpen, setReviveDialogOpen] = useState(false);
   const [selectedKillerId, setSelectedKillerId] = useState<number | null>(null);
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
+  const [revivePrice, setRevivePrice] = useState<bigint>(DEFAULT_REVIVE_PRICE);
   const [filterMode, setFilterMode] = useWebQueryState<'all' | 'attackable' | 'dead'>({
     key: 'leaderboardFilter',
     defaultValue: 'all',
@@ -504,8 +506,12 @@ export default function LeaderboardTab() {
     (async () => {
       if (reviveDialogOpen && address) {
         try {
-          const bal = await getTokenBalance(address);
+          const [bal, price] = await Promise.all([
+            getTokenBalance(address),
+            getRevivePrice().catch(() => DEFAULT_REVIVE_PRICE),
+          ]);
           setSeedBalance(bal || BigInt(0));
+          setRevivePrice(price || DEFAULT_REVIVE_PRICE);
         } catch { }
       }
     })();
@@ -1427,7 +1433,7 @@ export default function LeaderboardTab() {
           <div className="space-y-3">
             {targetPlant && (
               <div className="text-sm text-muted-foreground">
-                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>. Cost: 100 SEED.
+                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>. Cost: {formatTokenAmount(revivePrice)} SEED.
               </div>
             )}
             <div className="pt-2 space-y-2">
@@ -1438,8 +1444,7 @@ export default function LeaderboardTab() {
               {isSolana ? (
                 <SolanaNotSupported feature="Revive action" />
               ) : (() => {
-                const REVIVE_COST_WEI = BigInt(100) * (BigInt(10) ** BigInt(18));
-                const hasEnough = seedBalance > REVIVE_COST_WEI;
+                const hasEnough = seedBalance >= revivePrice;
                 return (
                   <>
                     <ReviveTransaction
@@ -1466,7 +1471,7 @@ export default function LeaderboardTab() {
                       }}
                     />
                     {!hasEnough && (
-                      <div className="text-xs text-red-500">Insufficient SEED balance (requires &gt; 100 SEED)</div>
+                      <div className="text-xs text-red-500">Insufficient SEED balance (requires {formatTokenAmount(revivePrice)} SEED)</div>
                     )}
                   </>
                 );
