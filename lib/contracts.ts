@@ -867,6 +867,13 @@ const PIXOTCHI_NFT_ABI = [
     type: 'function',
   },
   {
+    inputs: [],
+    name: 'getRevivePrice',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [
       { name: 'plantId', type: 'uint256' },
       { name: 'itemId', type: 'uint256' }
@@ -1567,6 +1574,18 @@ export const getTokenBalanceForToken = async (address: string, tokenAddress: `0x
 
 export const getTokenBalance = async (address: string): Promise<bigint> => {
   return getTokenBalanceForToken(address, PIXOTCHI_TOKEN_ADDRESS);
+};
+
+export const getRevivePrice = async (): Promise<bigint> => {
+  const readClient = getReadClient();
+
+  return retryWithBackoff(async () => {
+    return await readClient.readContract({
+      address: PIXOTCHI_NFT_ADDRESS,
+      abi: PIXOTCHI_NFT_ABI,
+      functionName: 'getRevivePrice',
+    }) as bigint;
+  });
 };
 
 // Helper function for formatted token balance

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminKey, createErrorResponse, logAdminAction } from '@/lib/auth-utils';
-import { getAllAIConversations, getAIUsageStats } from '@/lib/ai-service';
+import { getAllAIConversations, getAIUsageStats, deleteAIConversation, deleteAllAIConversations } from '@/lib/ai-service';
 
 export async function GET(request: NextRequest) {
   // Validate admin access
@@ -63,8 +63,31 @@ export async function DELETE(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
+    const deleteAll = searchParams.get('all') === 'true';
     const conversationId = searchParams.get('conversationId');
-    
+    const adminKey = request.headers.get('x-admin-key') || '';
+
+    if (deleteAll) {
+      const deletedCount = await deleteAllAIConversations();
+
+      if (deletedCount < 0) {
+        return NextResponse.json(
+          createErrorResponse('Failed to delete all AI conversations', 500).body,
+          { status: 500 }
+        );
+      }
+
+      await logAdminAction('ai_conversations_deleted_all', adminKey, {
+        deletedCount
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'All AI conversations deleted successfully',
+        deletedCount
+      });
+    }
+
     if (!conversationId) {
       return NextResponse.json(
         createErrorResponse('Conversation ID is required', 400).body,
@@ -72,10 +95,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete the conversation
-    const { deleteAIConversation } = await import('@/lib/ai-service');
     const deleted = await deleteAIConversation(conversationId);
-    
+
     if (!deleted) {
       return NextResponse.json(
         createErrorResponse('Failed to delete conversation', 500).body,
@@ -83,8 +104,6 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Log admin action
-    const adminKey = request.headers.get('x-admin-key') || '';
     await logAdminAction('ai_conversation_deleted', adminKey, {
       conversationId
     });

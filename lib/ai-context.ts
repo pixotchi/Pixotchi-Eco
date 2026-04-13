@@ -1,5 +1,5 @@
 // Game documentation context for Neural Seed
-// Last Updated: December 31st, 2025
+// Last Updated: April 13th, 2026
 // System prompt for Neural Seed
 const SYSTEM_PROMPT = `You are Neural Seed, and you are a helpful AI assistant for Pixotchi Mini, an onchain pocket farm on Base. 
 
@@ -21,12 +21,13 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 - Give personalized advice based on their actual game state.
 - 🚨 ALERT: If a plant's \`timeUntilStarving\` is <3h, prioritize urgent care guidance.
 - DO NOT make up or invent data: leaderboard positions, item costs, contract addresses, token prices, or game states.
+- Treat revive price, item prices, staking ratios, reward rates, and campaign availability as live values. If they are not explicitly present in context, direct users to the relevant in-app panel instead of guessing.
 
 **Context & Data Handling:**
 - User's current game stats are provided in each message—use them naturally in your response.
 - Repeat player stat values exactly as they appear in your context (avoid conversions).
 - When referencing in-game features, mention specific app tabs (Farm, Mint, Ranking, Swap, About, Chat).
-- For onchain actions (transactions, transfers), direct users to the Agent tab in chat or in-game transfer features.
+- For onchain actions, direct users to the relevant in-app flow (Farm, Mint, Ranking, Swap, Status bar staking, or Wallet Profile → Transfer Assets).
 
 **Scope & Boundaries:**
 - Focus on practical game help and Base/Pixotchi ecosystem topics only.
@@ -49,10 +50,10 @@ CORE GOAL: Help users understand game mechanics and guide them to the right feat
 // Knowledge base content - organized for AI comprehension and accuracy
 const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
-**Last Context Update on:** 11th of March 2026
-**ongoing special event:** Users on Base app that have their X account linked, can claim a free plant on mint tab (only on base app and only 1 free plant) ---- 13th of Feb this year, marks Pixotchi's 2nd year anniversary, so as for the birthday event, there is an ongoing airdrop where users can claim in the wallet profile page, if eligible)
+**Last Context Update on:** 13th of April 2026
+**Free Plant Claim:** If the Verify claim card is visible on Mint, eligible users can verify an X account and claim 1 free plant there.
 **Real-time Data Handling:** User stats are provided with each request; use them directly.
-**Airdrop Claim:** Users who are eligible for Airdrops (Rocks/misisons, daily streaks, activity and/or more) can claim their allocations by tappng on the Avatar/Wallet profile in header and tapping on claim. 
+**Airdrop Claim:** If a user is eligible for an airdrop or seasonal claim, the claim entry/card appears in Wallet Profile.
 **Hallucination Risk Mitigation:** Do NOT invent prices, addresses, or game states not in this guide or user context.
 
 ---
@@ -64,9 +65,9 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - **TOD (Time of Death):** Hours remaining before a plant dies if not cared for.
 - **Unclaimed Productions:** PTS and TOD that Village buildings have generated but have not been claimed to Warehouse yet.
 - **Claim to Warehouse:** Move land production out of building output and into the land's stored Warehouse balances so it can be applied to plants.
-- **$SEED:** Main in-game token; used to buy items, speed upgrades, and trade for ETH/LEAF.
-- **$LEAF:** Currency used exclusively for building upgrades and given as staking rewards. IT IS NOT SWAPPABLE. YOU CAN ONLY EARN IT BY STAKING SEED OR DOING ARCADE GAMES, QUESTS ETC or using MARKETPLACE OF LAND to trade against other user's orders.)
-- **$PIXOTCHI:** Pixotchi's Creator Token on Zora. Deployed in Decemeber 2025 to add a new layer of gamification and community engagement. It's only feature right now is the ability to batch claim production from your buildings (Need to hold 1M $PIXOTCHI in your wallet to unlock).
+- **$SEED:** Main in-game token; used to mint most plants and lands, buy plant items, stake, and trade in supported parts of the app.
+- **$LEAF:** Building upgrade currency and staking reward token. It is also used in the Land Marketplace orderbook against SEED.
+- **$PIXOTCHI:** Pixotchi creator token used for building speed-ups and batch-claiming land production. Exact costs and requirements are shown in the relevant UI.
 - **$ETH:** The native token of the Base network, tradeable for SEED via the Swap tab and rewarded to players for their PTS after each swap (2% of volume).
 - **ERC-721:** NFT standard used for Plants and Lands (collectible digital assets).
 - **Smart Wallet:** Coinbase Smart Account offering gasless transactions; Base gas sponsored by Pixotchi.
@@ -95,7 +96,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - Wallets: Smart wallet enables gasless, bundled transactions.
 - SEED: Primary currency for plant care and item purchases.
 - Land: Generates passive PTS/TOD for plants via building upgrades.
-- Staking: Rewards you with LEAF for staking SEED, enabling building upgrades. (Staking generates around 3.3 LEAF per SEED token staked, per day)
+- Staking: Rewards you with LEAF for staking SEED, enabling building upgrades. Check the Staking dialog for the live reward rate.
 
 ---
 
@@ -103,14 +104,14 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 | Task | Steps | Notes |
 |------|-------|-------|
-| **Mint Plant** | Mint tab → Select strain → Approve SEED → Mint | Flora is minted out; Taki (20 SEED) most affordable |
+| **Mint Plant** | Mint tab → Select strain → Approve SEED → Mint | Flora is minted out; Zest (10 SEED) is the most affordable standard strain |
 | **Care for Plant** | Farm → Plants → Select → Buy Items | Use Water/Pollinator for TOD, Sunlight/Fertilizer for PTS |
 | **Get SEED** | Swap tab → Input ETH → Confirm | Instant, taxed at 5% (includes LP, burn, rewards) |
-| **Upgrade Building** | Farm → Lands → Select building → Approve LEAF → Upgrade | Use SEED to speed up the upgrade timer |
+| **Upgrade Building** | Farm → Lands → Select building → Approve LEAF → Upgrade | Use PIXOTCHI to speed up an active upgrade timer |
 | **Attack Plant** | Ranking tab → Select plant with ⚔️ icon → Choose attacker → Attack | 30% win chance; can only attack once per 30 min |
 | **Raid Land** | Farm → Lands → Barracks → Raid | Both lands need Barracks; target must have unclaimed productions and no defense cooldown |
 | **Stake SEED** | Status bar → Stake → Approve SEED → Stake | Converts SEED to LEAF at staking app ratio |
-| **Claim LEAF** | Status bar → Stake → Claim rewards | Earned from staking or Farmer House quests |
+| **Claim LEAF** | Status bar → Stake → Claim rewards | Staking dialog shows your current claimable rewards |
 | **Unstake SEED** | Status bar → Stake → Unstake tab → Unstake | Converts LEAF back to SEED; check current ratio in-game |
 | **Apply PTS/TOD** | Warehouse building (on Land) → Select resource → Apply to plant | Manually claim & distribute production |
 | **Transfer Assets** | Header → Profile → Transfer Assets | Use in-game transfer tool for Lands/Plants NFTs |
@@ -123,14 +124,14 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - **Farm:** Manage minted Plants and Land NFTs; buy items and upgrade buildings.
 - **Mint:** Mint new Plant and Land NFTs.(There is a toggle to switch between minting plants or lands)
 - **Activity:** View game events and transaction history.
-- **Ranking:** View Plant, Land, and Staking leaderboards. Attack plants (with ⚔️) here. (Reviving, Killing plants also happens here)
+- **Ranking:** View Plant, Land, and Staking leaderboards. Attack plants (with ⚔️) here. Dead plants can also be revived here, and dead plants can be killed here.
 - **Swap:** Trade ETH ↔ SEED ↔ USDC; view SEED chart and tokenomics.
 - **About:** About Pixotchi, Feedback, Status (of Ecosystem infra), Tutorial and Documentation buttons are here.
 
 ### Header Buttons/Elements
 - **Theme Selector:** Toggle light/dark mode.
 - **Profile (Avatar icon):** Wallet/smart wallet details; Transfer Assets button/Disconnect wallet button/Close mini app button and balances info.
-- **Chat:** Talk to players, Neural Seed (me), or Agent (requires smart wallet spend permission).
+- **Chat:** Talk to players or Neural Seed (me).
 - **Farcaster + Button:** Save mini app to Farcaster (miniapp mode only).
 - **Status Bar:** Shows SEED/LEAF/PIXOTCHI balances; Stake & Tasks buttons for quick access.
 
@@ -162,24 +163,24 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 | **Okay** | 24–48h | 🟡 Caution | Consider buying items |
 | **Dry** | 12–24h | 🟠 Warning | Buy Water/Pollinator soon |
 | **Dying** | 3–12h | 🔴 Critical | **Apply items immediately** |
-| **Dead** | 0h | ⚫ Gone | Can be revived if not killed (100 SEED cost) |
+| **Dead** | 0h | ⚫ Gone | Can be revived from Farm or Ranking if not killed; revive price is shown live in the UI |
 
 ### Plant Care Items (Shop)
 
-| Item | Effect | Cost (SEED) | Best For |
-|------|--------|------------|----------|
-| **Sunlight** | +48 PTS | 13.8 | Budget PTS boost |
-| **Water** | +12h TOD | 20.7 | Extend life affordably |
-| **Fertilizer** | +137.5 PTS | 28.75 | Mid-tier PTS |
-| **Pollinator** | +26h TOD | 34.5 | Best TOD value |
-| **Magic Soil** | +273 PTS | 48.3 | High PTS boost |
-| **Dream Dew** | +180 PTS, +48h TOD | 55.2 | Balanced care |
-| **Botano** | +450 PTS | 69 | Maximum PTS |
-| **Moonlight** | +75.6h TOD | 78.2 | Maximum TOD |
-| **Nitro** | +510 PTS, +72h TOD | 97.75 | Premium all-around |
-| **Fence** | Attack protection | 25/day | Prevent raids |
+| Item | Effect | Best For |
+|------|--------|----------|
+| **Sunlight** | +48 PTS | Budget PTS boost |
+| **Water** | +12h TOD | Extend life affordably |
+| **Fertilizer** | +137.5 PTS | Mid-tier PTS |
+| **Pollinator** | +26h TOD | Best TOD value |
+| **Magic Soil** | +273 PTS | High PTS boost |
+| **Dream Dew** | +180 PTS, +48h TOD | Balanced care |
+| **Botano** | +450 PTS | Maximum PTS |
+| **Moonlight** | +75.6h TOD | Maximum TOD |
+| **Nitro** | +510 PTS, +72h TOD | Premium all-around |
+| **Fence** | Attack protection | Prevent attacks while active |
 
-> **Note:** Fence renews every 24h; plants without Fence can be attacked by other players.
+> **Note:** Item and revive prices are live onchain. The Farm UI shows the exact current quote. Fence duration is purchased in days and is capped by the plant's remaining TOD.
 
 ### Attack Mechanics
 
@@ -197,7 +198,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 **Death & Rewards:**
 - Dead plants can be killed by attackers (killer gains a star).
 - Dead plants are burned; owner auto-redeems rewards.
-- Owners can revive dead plants for 100 SEED if not yet killed.
+- Owners can revive dead plants from the Farm tab or Ranking tab if the plant has not yet been killed. The revive price is shown live in the UI.
 
 ---
 
@@ -209,8 +210,8 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - Contain **Village** (production buildings) and **Town** (utility buildings).
 - Generate passive **PTS & TOD** for all your plants.
 - Built Barracks can train troops and launch land raids for a share of other players' unclaimed productions.
-- Upgraded using **LEAF**; speed up with **SEED**.
-- Batch Claim productions from your buildings (if own more than 1 land) with $PIXOTCHI (Need to hold 1M $PIXOTCHI in your wallet to unlock).
+- Upgraded using **LEAF**; active upgrades can be sped up with **$PIXOTCHI**.
+- Batch claim productions from multiple lands with **$PIXOTCHI**; exact cost is shown in the batch-claim UI.
 
 ### Building Types & Production
 
@@ -246,7 +247,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 **Warehouse (ID 3)** – Storage & claiming (single level, prebuilt)
 - Manually claim & apply PTS/TOD from production.
 
-**Stakehouse (ID 1)** – Staking hub (single level, prebuilt)
+**Stake House (ID 1)** – Staking hub (single level, prebuilt)
 - Front door to SEED staking for LEAF rewards.
 
 **Casino (ID 6)** – Gambling (single level)
@@ -302,7 +303,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 ### Upgrading Buildings
 - **Cost:** LEAF (checked at in-game rates).
 - **Max Level:** Production buildings generally cap at Level 3; Solar Panels now extend to Level 4 (hybrid PTS + TOD). Town utility buildings remain single-level or up to 3.
-- **Speed Up:** Use $PIXOTCHI to reduce upgrade timer and instantly finish the upgrade.
+- **Speed Up:** Use $PIXOTCHI to reduce an active upgrade timer and instantly finish the upgrade.
 - **Warehouse Claim:** Must manually claim production, then apply to plants. (Use $PIXOTCHI to claim production instantly in batches for multiple lands)
 
 ---
@@ -313,9 +314,9 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 | Token | Purpose | Earning Method |
 |-------|---------|-----------------|
-| **$SEED** | Main currency; buy items, speed upgrades, trade for ETH/LEAF | Trade ETH, complete quests, finish Rocks missions |
+| **$SEED** | Main currency; mint most assets, buy plant items, stake, and use supported marketplace flows | Trade supported tokens in the app and use in-game claim/reward flows when available |
 | **$LEAF** | Building upgrade currency; staking rewards | Stake SEED, complete Farmer House quests |
-| **$PIXOTCHI** | Pixotchi's Creator Coin, used for UI/UX features like batch claim production from your buildings in 1 tx or speeding up the upgrade timer | Stake SEED, complete Farmer House quests |
+| **$PIXOTCHI** | Pixotchi creator token used for batch-claiming production and speeding up building upgrades | Check the live app/community sources for current distribution and acquire paths; do not guess |
 | **ETH** | Real Ethereum; trade for SEED via Swap | Rank up in leaderboard (PTS) (2% of the volume is distributed to plants based on their PTS) |
 
 ### SEED Tokenomics (Static Reference)
@@ -330,7 +331,7 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 - Smart contract distributes instantly & automatically.
 
 ### Earning LEAF
-1. **Stake SEED** → Staking app (tap "Stake" in status bar or visit Stakehouse building).
+1. **Stake SEED** → Staking app (tap "Stake" in status bar or visit Stake House building).
 2. **Complete Quests** → Farmer House on Lands (pay out LEAF + other rewards).
 3. **Arcade Games** → Play arcade mini-games to earn LEAF rewards. (SpinLeaf)
 
@@ -340,27 +341,28 @@ const KNOWLEDGE_BASE = `# Pixotchi Mini Game Knowledge Base
 
 ### Accessing Missions
 - **Shortcut:** Status bar → Tasks button.
-- **Full View:** About tab → Missions/Rocks section.
+- **Primary View:** Tasks dialog from the status bar.
 - **Refresh:** Every UTC midnight (UTC day).
 
 ### Rock Sections (S1–S4)
 
 | Section | Tasks | Reward |
 |---------|-------|--------|
-| **S1 · Shop & Care** | Buy 5 garden items; purchase shield/fence; claim warehouse | 20 points |
-| **S2 · Plant Activity** | Apply resources to plant; attack another plant; post chat message | 20 points |
-| **S3 · Land & Quests** | Send Farmer House quest; place order; claim staking rewards | 10 points |
-| **S4 · Economy & Arcade** | Complete swap; collect star; play arcade mini-game | 30 points |
+| **S1 · General** | Make a SEED swap; stake SEED; claim stake rewards; place a SEED/LEAF order | 30 Rocks |
+| **S2 · Social** | Follow a player; send a public chat message; visit a profile | 20 Rocks |
+| **S3 · Land** | Apply resources to a plant; send a Farmer House quest; claim production; play a casino game | 25 Rocks |
+| **S4 · Plant** | Buy at least 10 elements; buy a shield/fence; collect a star; play an arcade game | 25 Rocks |
 
 **Points & Rewards:**
-- Completing a section awards its listed mission points; daily cap is 80 (20+20+10+30).
-- Earned points unlock SEED/LEAF rewards that appear inside the Tasks dialog—claim them manually.
+- Completing all 4 sections awards up to 100 Rocks per day.
+- The Tasks dialog tracks today's Rocks and lifetime total.
+- If a related claim or airdrop is available, it appears elsewhere in the app such as Wallet Profile; do not say rewards are claimed directly inside the Tasks dialog unless the UI shows that.
 - Tasks update once the corresponding onchain proof is indexed (swap tx hash, quest event, etc.).
 
 ### Daily Streaks
 - Streak increases when at least one tracked action is logged on a new UTC day (mission completion, chat activity, etc.).
 - Missing a full UTC day resets the current streak but keeps the all-time best value.
-- Current streak, best streak, daily mission score (out of 80), and lifetime Rocks points are shown in the About tab under “Farmer's Tasks”.
+- Current streak, best streak, daily mission score (out of 100), and lifetime Rocks points are shown in the Tasks dialog.
 
 ---
 

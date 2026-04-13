@@ -1,5 +1,13 @@
+const appBuildId =
+  process.env.NEXT_PUBLIC_APP_BUILD_ID ||
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.npm_package_version ||
+  "development";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  ...(process.env.NODE_ENV === "production" ? { deploymentId: appBuildId } : {}),
   turbopack: {},
   // NOTE: cacheComponents is NOT enabled because it's incompatible with 
   // dynamic/runtime/revalidate segment configs used for fresh onchain data
@@ -29,6 +37,9 @@ const nextConfig = {
   // Configure Next.js Image optimization qualities
   images: {
     qualities: [75, 80, 85, 90],
+  },
+  env: {
+    NEXT_PUBLIC_APP_BUILD_ID: appBuildId,
   },
   async redirects() {
     const redirects = [];
