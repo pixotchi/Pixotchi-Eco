@@ -647,3 +647,85 @@ export async function deleteAIConversation(conversationId: string): Promise<bool
     return false;
   }
 }
+
+export async function deleteAllAIConversations(): Promise<number> {
+  if (!redis) return -1;
+  const redisClient = redis;
+
+  try {
+    let conversationKeys = await redisClient.smembers('ai:conversations:index');
+
+    if (conversationKeys.length === 0) {
+      conversationKeys = await redisScanKeysRaw('ai:conversations:*');
+      conversationKeys = conversationKeys.filter((k) => k.split(':').length === 4);
+    }
+
+    if (conversationKeys.length === 0) {
+      return 0;
+    }
+
+    const conversationEntries = conversationKeys
+      .map((key) => {
+        const parts = key.split(':');
+        if (parts.length !== 4) return null;
+        return {
+          key,
+          address: parts[2],
+          conversationId: parts[3],
+        };
+      })
+      .filter((entry): entry is { key: string; address: string; conversationId: string } => Boolean(entry));
+
+    if (conversationEntries.length === 0) {
+      return 0;
+    }
+
+    const pipeline = redisClient.pipeline();
+    const activeConversationKeys = new Set<string>();
+    const messageListKeys: string[] = [];
+
+    const messageKeysPerConversation = await Promise.all(
+      conversationEntries.map((entry) => redisClient.lrange(`ai:conversation_messages:${entry.conversationId}`, 0, -1))
+    );
+
+    const legacyKeysPerConversation = await Promise.all(
+      conversationEntries.map((entry) => redisScanKeysRaw(`ai:messages:${entry.conversationId}:*`))
+    );
+
+    conversationEntries.forEach((entry, index) => {
+      const listKey = `ai:conversation_messages:${entry.conversationId}`;
+      messageListKeys.push(listKey);
+      activeConversationKeys.add(`ai:user_active_conversation:${entry.address}`);
+
+      const messageKeys = messageKeysPerConversation[index];
+      if (messageKeys.length > 0) {
+        pipeline.del(...messageKeys);
+      }
+
+      const legacyKeys = legacyKeysPerConversation[index];
+      if (legacyKeys.length > 0) {
+        pipeline.del(...legacyKeys);
+      }
+    });
+
+    if (conversationKeys.length > 0) {
+      pipeline.del(...conversationKeys);
+      pipeline.srem('ai:conversations:index', ...conversationKeys);
+    }
+
+    if (messageListKeys.length > 0) {
+      pipeline.del(...messageListKeys);
+    }
+
+    const activeKeys = Array.from(activeConversationKeys);
+    if (activeKeys.length > 0) {
+      pipeline.del(...activeKeys);
+    }
+
+    await pipeline.exec();
+    return conversationEntries.length;
+  } catch (error) {
+    console.error('Error deleting all AI conversations:', error);
+    return -1;
+  }
+}

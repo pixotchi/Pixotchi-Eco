@@ -177,6 +177,7 @@ export default function AdminInviteDashboard() {
   const [conversationMessages, setConversationMessages] = useState<AIChatMessage[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [aiChatLoading, setAIChatLoading] = useState(false);
+  const [deletingAllAIConversations, setDeletingAllAIConversations] = useState(false);
   // Gamification leaderboards
   const [gmLb, setGmLb] = useState<{ streakTop: Array<{ address: string; value: number }>; missionTop: Array<{ address: string; value: number }> } | null>(null);
 
@@ -851,6 +852,55 @@ export default function AdminInviteDashboard() {
       description: 'Are you sure you want to delete this conversation? This action cannot be undone.',
       confirmText: 'Delete',
       onConfirm: () => deleteConversation(conversationId),
+      isDangerous: true,
+    });
+  };
+
+  const deleteAllAIChatConversations = async () => {
+    if (!adminKey.trim()) return;
+
+    setDeletingAllAIConversations(true);
+    try {
+      const response = await fetch('/api/chat/ai/admin/conversations?all=true', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+        },
+        signal: abortControllerRef.current?.signal,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.error || data?.message || 'Failed to delete all AI conversations');
+      }
+
+      const deletedCount = typeof data?.deletedCount === 'number' ? data.deletedCount : 0;
+      toast.success(
+        deletedCount > 0
+          ? `Deleted ${deletedCount} AI conversation${deletedCount === 1 ? '' : 's'}`
+          : 'No AI conversations to delete'
+      );
+
+      setSelectedConversation(null);
+      setConversationMessages([]);
+      await fetchAIChatData();
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error deleting all AI conversations:', error);
+        toast.error(error.message || 'Failed to delete all AI conversations');
+      }
+    } finally {
+      setDeletingAllAIConversations(false);
+    }
+  };
+
+  const confirmDeleteAllAIConversations = () => {
+    showConfirmDialog({
+      title: 'Delete All AI Conversations',
+      description: 'Are you sure you want to delete ALL AI conversations? This action cannot be undone.',
+      confirmText: 'Delete All',
+      onConfirm: deleteAllAIChatConversations,
       isDangerous: true,
     });
   };
@@ -2566,14 +2616,24 @@ export default function AdminInviteDashboard() {
                       <Bot className="w-5 h-5" />
                       AI Conversations ({filteredConversations.length})
                     </CardTitle>
-                    <Button
-                      variant="outline"
-                      onClick={fetchAIChatData}
-                      disabled={aiChatLoading}
-                    >
-                      <RefreshCw className={`w-4 h-4 mr-2 ${aiChatLoading ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="destructive"
+                        onClick={confirmDeleteAllAIConversations}
+                        disabled={aiChatLoading || deletingAllAIConversations || aiConversations.length === 0}
+                      >
+                        <Trash2 className={`w-4 h-4 mr-2 ${deletingAllAIConversations ? 'animate-spin' : ''}`} />
+                        Delete All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={fetchAIChatData}
+                        disabled={aiChatLoading || deletingAllAIConversations}
+                      >
+                        <RefreshCw className={`w-4 h-4 mr-2 ${aiChatLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
