@@ -9,7 +9,7 @@ import { Plant } from "@/lib/types";
 import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard, getKillCooldown, getRevivePrice } from "@/lib/contracts";
 import { formatScoreShort, formatEthShort, formatScore, formatAddress, cn, getFenceStatus, formatTokenAmount } from "@/lib/utils";
 import PlantImage from "@/components/PlantImage";
-import { Trophy, Skull, Sword, HeartPulse } from "lucide-react";
+import { Trophy, Skull, Sword } from "lucide-react";
 import Image from "next/image";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
@@ -830,7 +830,13 @@ export default function LeaderboardTab() {
                         aria-label="Revive your plant"
                         title="Revive"
                       >
-                        <HeartPulse className="w-4 h-4" />
+                        <Image
+                          src="/icons/skull.png"
+                          alt="Revive plant"
+                          width={16}
+                          height={16}
+                          className="h-4 w-4 object-contain"
+                        />
                       </Button>
                     )}
                   </div>

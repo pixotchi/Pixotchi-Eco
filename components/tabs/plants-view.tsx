@@ -25,7 +25,6 @@ import FenceTimer from "../fence-timer";
 import ItemDetailsPanel from "../item-details-panel";
 import {
   Shield,
-  Heart,
   Star,
   ChevronDown,
   ChevronLeft,
@@ -425,7 +424,13 @@ export default function PlantsView() {
                     {/* Bottom-right: Health Status */}
                     <div className="flex justify-end">
                       <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                        <Image src="/icons/HEART.svg" alt="Heart" width={16} height={16} className="w-4 h-4 text-red-500" />
+                        <Image
+                          src={selectedPlant.status === 4 ? "/icons/skull.png" : "/icons/HEART.svg"}
+                          alt={selectedPlant.status === 4 ? "Dead" : "Health"}
+                          width={16}
+                          height={16}
+                          className="w-4 h-4 object-contain"
+                        />
                         <span>{getPlantStatusText(selectedPlant.status)}</span>
                       </div>
                     </div>
@@ -595,7 +600,13 @@ export default function PlantsView() {
                 <div className="grid grid-cols-1 gap-4">
                   <StandardContainer className="p-3 rounded-md border bg-destructive/10">
                     <div className="flex items-start space-x-2">
-                      <Heart className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
+                      <Image
+                        src="/icons/skull.png"
+                        alt="Dead plant"
+                        width={16}
+                        height={16}
+                        className="mt-0.5 h-4 w-4 flex-shrink-0 object-contain"
+                      />
                       <div className="text-sm text-foreground">
                         <div className="font-medium">This plant is dead</div>
                         <div className="text-xs mt-1">
