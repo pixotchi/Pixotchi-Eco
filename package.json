@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.6.992",
+  "version": "1.6.994",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "3.0.68",
-    "@ai-sdk/google": "3.0.61",
+    "@ai-sdk/anthropic": "3.0.69",
+    "@ai-sdk/google": "3.0.62",
     "@ai-sdk/openai": "3.0.52",
     "@base-org/account": "2.5.3",
     "@base-org/account-ui": "1.0.1",
@@ -35,11 +35,11 @@
     "@solana/kit": "6.8.0",
     "@solana/spl-token": "0.4.14",
     "@solana/web3.js": "1.98.4",
-    "@tanstack/react-query": "5.97.0",
+    "@tanstack/react-query": "5.99.0",
     "@upstash/redis": "1.37.0",
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
-    "ai": "6.0.157",
+    "ai": "6.0.158",
     "bs58": "6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -59,7 +59,7 @@
     "siwe": "3.0.0",
     "tailwind-merge": "3.5.0",
     "thread-stream": "3.1.0",
-    "viem": "2.47.12",
+    "viem": "2.47.16",
     "wagmi": "2.19.5",
     "zod": "4.3.6"
   },
@@ -87,6 +87,6 @@
     "axios": "1.15.0",
     "pino": "10.3.1",
     "thread-stream": "3.1.0",
-    "viem": "2.47.12"
+    "viem": "2.47.16"
   }
 }
