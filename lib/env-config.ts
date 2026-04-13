@@ -23,6 +23,8 @@ export const CLIENT_ENV = {
   // URLs and public configuration
   APP_URL: process.env.NEXT_PUBLIC_URL || 'https://mini.pixotchi.tech',
   PONDER_API_URL: process.env.NEXT_PUBLIC_PONDER_API_URL || 'https://api.mini.pixotchi.tech/graphql',
+  APP_BUILD_ID: process.env.NEXT_PUBLIC_APP_BUILD_ID || 'development',
+  APP_UPDATE_CHECK_INTERVAL_SECONDS: Number(process.env.NEXT_PUBLIC_APP_UPDATE_CHECK_INTERVAL_SECONDS || '300'),
 
   // Contract addresses (public by nature)
   LAND_CONTRACT_ADDRESS: process.env.NEXT_PUBLIC_LAND_CONTRACT_ADDRESS_MAINNET || '0x3f1F8F0C4BE4bCeB45E6597AFe0dE861B8c3278c',

@@ -16,7 +16,6 @@ import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { FrameProvider } from "@/lib/frame-context";
-import { clearAppCaches, markCacheVersion, needsCacheMigration } from "@/lib/cache-utils";
 import {
   HostEnvironmentProvider,
   type HostEnvironmentState,
@@ -37,8 +36,8 @@ import { TransactionProvider } from 'ethereum-identity-kit';
 import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
+import { AppUpdateBanner } from "@/components/app-update-banner";
 import { usePathname } from "next/navigation";
-import packageJson from '@/package.json';
 import { patchOnchainKitClientMetaBridge } from "@/lib/onchainkit-client-meta-patch";
 import {
   AuthSurface,
@@ -146,33 +145,6 @@ export function Providers(props: { children: ReactNode }) {
     setAuthSurface(resolvedSurface);
 
     setSurfaceInitialized(true);
-  }, []);
-
-  // Lightweight client-side cache migration: bump this when wallet/provider plumbing changes
-  useEffect(() => {
-    const CACHE_VERSION = packageJson.version;
-    try {
-      if (needsCacheMigration(CACHE_VERSION)) {
-        // Hard clear: unregister SW and reload to force update
-        // This runs automatically whenever package.json version changes
-        console.log(`[Cache] Migrating to version ${CACHE_VERSION}`);
-        clearAppCaches({
-          unregisterServiceWorkers: true,
-          reloadAfter: true,
-          preserveLocalStorageKeys: [
-            "pixotchi:tutorial",
-            "pixotchi:cache_version",
-            ...sessionStorageManager.getPersistentLocalStorageKeys(),
-          ],
-          // Only clear our own keys to avoid racing Privy/OnchainKit first-load state
-          onlyPrefixes: ["pixotchi", "pixotchi:"]
-        });
-        markCacheVersion(CACHE_VERSION);
-      }
-    } catch (error) {
-      console.error('Cache migration failed:', error);
-      // Non-critical - cache migration failure shouldn't break the app
-    }
   }, []);
 
   // Respect user preference for reduced motion (don't arbitrarily disable on touch devices)
@@ -507,6 +479,7 @@ function ProvidersContent({
                   <LoadingProvider>
                     <RouteAwareChatProvider>
                       <TutorialBundle>
+                        <AppUpdateBanner disabled={hostEnvironment.isMiniApp} />
                         {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
                         {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
                         {/** added provider wrapper **/}
