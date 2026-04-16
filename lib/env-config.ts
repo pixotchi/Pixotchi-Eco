@@ -54,6 +54,10 @@ export const CLIENT_ENV = {
   // Agent tab in chat - allows AI to mint plants on behalf of user
   // When false, the Agent tab is completely hidden and agent code is not loaded
   AGENT_ENABLED: process.env.NEXT_PUBLIC_AGENT_ENABLED !== 'false', // Defaults to true
+  SWAP_MODULE_DISABLED: process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED === 'true',
+  SWAP_MODULE_DISABLED_MESSAGE:
+    process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED_MESSAGE ||
+    "In-Game swaps are temporarily disabled but it'll be back soon! \nThanks for your patience, and apologies for the inconvenience.",
 
   // UI configuration
   ICON_URL: process.env.NEXT_PUBLIC_ICON_URL,

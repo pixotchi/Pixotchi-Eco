@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { CLIENT_ENV } from '@/lib/env-config';
 import { useFrameContext } from '@/lib/frame-context';
 import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import { useTabVisibility } from "@/lib/tab-visibility-context";
@@ -18,15 +19,34 @@ import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS, JESSE_TOKEN_ADDRESS, CREATOR_TOKE
 import TradingViewWidget from './TradingViewWidget';
 import type { TransactionReceipt } from 'viem';
 
+function SwapLockedState({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-center">
+      <div className="mx-auto max-w-md space-y-4">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-amber-500/30 bg-background/70 text-2xl">
+          !
+        </div>
+        <p className="text-lg font-semibold text-foreground">Swaps temporarily unavailable</p>
+        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+          {message}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function SwapTab() {
   const { address } = useAccount();
   const fc = useFrameContext();
   const isMiniApp = Boolean(fc?.isInMiniApp);
+  const isSwapModuleDisabled = CLIENT_ENV.SWAP_MODULE_DISABLED;
+  const swapDisabledMessage = CLIENT_ENV.SWAP_MODULE_DISABLED_MESSAGE;
   const [swapView, setSwapView] = useState<'swap' | 'chart'>('swap');
   const [fromTokenSymbol, setFromTokenSymbol] = useState<string>('ETH');
   const [toTokenSymbol, setToTokenSymbol] = useState<string>('SEED');
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('swap');
+  const isChartView = swapView === 'chart';
 
   // Rewards distributed today (2% of 24h volume)
   const [rewardsData, setRewardsData] = useState<{ volume24h: number; rewards: number } | null>(null);
@@ -205,7 +225,7 @@ export default function SwapTab() {
     fetchRewardsData();
   }, []);
 
-  if (!address) {
+  if (!address && !isSwapModuleDisabled) {
     return (
       <div className="text-center text-muted-foreground py-8">Connect your wallet to swap.</div>
     );
@@ -214,12 +234,12 @@ export default function SwapTab() {
   return (
     <div className="space-y-4">
       <Card
-        className={swapView === 'chart' ? 'flex flex-col aspect-square' : ''}
-        padding={swapView === 'chart' ? 'none' : 'md'}
+        className={isChartView ? 'flex flex-col aspect-square' : ''}
+        padding={isChartView ? 'none' : 'md'}
       >
-        <CardHeader className={swapView === 'chart' ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
+        <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
           <div className="flex items-center justify-between gap-4">
-            <CardTitle>{swapView === 'chart' ? 'Chart' : 'Swap'}</CardTitle>
+            <CardTitle>{isChartView ? 'Chart' : 'Swap'}</CardTitle>
             <ToggleGroup
               value={swapView}
               onValueChange={(v) => setSwapView(v as 'swap' | 'chart')}
@@ -227,51 +247,58 @@ export default function SwapTab() {
                 { value: 'swap', label: 'Swap' },
                 { value: 'chart', label: 'Chart' },
               ]}
+              getButtonClassName={(value) =>
+                isSwapModuleDisabled && value === 'swap' ? 'opacity-60' : ''
+              }
             />
           </div>
         </CardHeader>
-        <CardContent className={swapView === 'chart' ? 'flex-1 p-4 overflow-hidden' : 'space-y-4'}>
+        <CardContent className={isChartView ? 'flex-1 p-4 overflow-hidden' : 'space-y-4'}>
           {swapView === 'swap' ? (
-            <div data-ock-theme="pixotchi">
-              <Swap
-                isSponsored={false}
-                experimental={{ useAggregator: true }}
-                config={{ maxSlippage: 5.5 }}
-                onSuccess={handleSuccess}
-                onError={handleError}
-                onStatus={handleStatus}
-              >
-                {/* SEED or JESSE or PIXOTCHI must always be part of the swap - only show valid token pairs */}
-                <SwapAmountInput
-                  label="Sell"
-                  token={
-                    fromTokenSymbol === 'ETH' ? ETH
-                      : fromTokenSymbol === 'USDC' ? USDC
-                        : fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE' ? JESSE
-                          : fromTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
-                            : SEED
-                  }
-                  swappableTokens={fromSwappable}
-                  type="from"
-                />
-                <SwapToggleButton />
-                <SwapAmountInput
-                  label="Buy"
-                  token={
-                    toTokenSymbol === 'ETH' ? ETH
-                      : toTokenSymbol === 'USDC' ? USDC
-                        : toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE' ? JESSE
-                          : toTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
-                            : SEED
-                  }
-                  swappableTokens={toSwappable}
-                  type="to"
-                />
-                <SwapButton />
-                <SwapMessage />
-                <SwapToast />
-              </Swap>
-            </div>
+            isSwapModuleDisabled ? (
+              <SwapLockedState message={swapDisabledMessage} />
+            ) : (
+              <div data-ock-theme="pixotchi">
+                <Swap
+                  isSponsored={false}
+                  experimental={{ useAggregator: true }}
+                  config={{ maxSlippage: 5.5 }}
+                  onSuccess={handleSuccess}
+                  onError={handleError}
+                  onStatus={handleStatus}
+                >
+                  {/* SEED or JESSE or PIXOTCHI must always be part of the swap - only show valid token pairs */}
+                  <SwapAmountInput
+                    label="Sell"
+                    token={
+                      fromTokenSymbol === 'ETH' ? ETH
+                        : fromTokenSymbol === 'USDC' ? USDC
+                          : fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE' ? JESSE
+                            : fromTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
+                              : SEED
+                    }
+                    swappableTokens={fromSwappable}
+                    type="from"
+                  />
+                  <SwapToggleButton />
+                  <SwapAmountInput
+                    label="Buy"
+                    token={
+                      toTokenSymbol === 'ETH' ? ETH
+                        : toTokenSymbol === 'USDC' ? USDC
+                          : toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE' ? JESSE
+                            : toTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
+                              : SEED
+                    }
+                    swappableTokens={toSwappable}
+                    type="to"
+                  />
+                  <SwapButton />
+                  <SwapMessage />
+                  <SwapToast />
+                </Swap>
+              </div>
+            )
           ) : (
             <TradingViewWidget />
           )}
@@ -333,7 +360,7 @@ export default function SwapTab() {
                 onClick={async () => {
                   try {
                     await sdk.actions.viewToken({ token: `eip155:8453/erc20:${PIXOTCHI_TOKEN_ADDRESS}` });
-                  } catch (err) {
+                  } catch {
                     toast.error('View Token is only available in supported Farcaster clients.');
                   }
                 }}
