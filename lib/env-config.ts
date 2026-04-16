@@ -57,7 +57,7 @@ export const CLIENT_ENV = {
   SWAP_MODULE_DISABLED: process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED === 'true',
   SWAP_MODULE_DISABLED_MESSAGE:
     process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED_MESSAGE ||
-    "In-Game swaps are temporarily disabled. The Base Swap Module has been deprecated without a replacement, so we're building our own swap module and expect it to be live over the weekend.\nThanks for your patience, and apologies for the inconvenience.",
+    "In-Game swaps are temporarily disabled but it'll be back soon! \nThanks for your patience, and apologies for the inconvenience.",
 
   // UI configuration
   ICON_URL: process.env.NEXT_PUBLIC_ICON_URL,

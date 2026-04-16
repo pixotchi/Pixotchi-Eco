@@ -21,47 +21,13 @@ import type { TransactionReceipt } from 'viem';
 
 function SwapLockedState({ message }: { message: string }) {
   return (
-    <div className="space-y-4">
-      <div
-        className="pointer-events-none select-none rounded-xl border border-border/70 bg-muted/20 p-4"
-        aria-hidden="true"
-      >
-        <div className="space-y-4 opacity-50 grayscale">
-          <div className="space-y-2">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sell</div>
-            <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
-              <div className="space-y-2">
-                <div className="h-3 w-14 rounded bg-muted" />
-                <div className="h-4 w-24 rounded bg-muted" />
-              </div>
-              <div className="h-10 w-28 rounded-full bg-muted" />
-            </div>
-          </div>
-
-          <div className="flex justify-center">
-            <div className="h-10 w-10 rounded-full border border-border bg-background" />
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Buy</div>
-            <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
-              <div className="space-y-2">
-                <div className="h-3 w-14 rounded bg-muted" />
-                <div className="h-4 w-24 rounded bg-muted" />
-              </div>
-              <div className="h-10 w-28 rounded-full bg-muted" />
-            </div>
-          </div>
-
-          <Button className="w-full" disabled variant="secondary">
-            Swaps temporarily unavailable
-          </Button>
+    <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-center">
+      <div className="mx-auto max-w-md space-y-4">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-amber-500/30 bg-background/70 text-2xl">
+          !
         </div>
-      </div>
-
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-        <p className="text-sm font-semibold text-foreground">Swaps temporarily unavailable</p>
-        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+        <p className="text-lg font-semibold text-foreground">Swaps temporarily unavailable</p>
+        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
           {message}
         </p>
       </div>
