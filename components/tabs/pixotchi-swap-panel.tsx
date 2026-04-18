@@ -9,9 +9,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import Image from 'next/image';
 import { toast } from 'react-hot-toast';
-import { CheckCircle2, ChevronDown } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import {
   encodeFunctionData,
   formatUnits,
@@ -83,6 +82,40 @@ type SmartWalletBatchCall =
 const readClient = getBaseReadClient();
 const ETH_GAS_BUFFER_WEI = BigInt(50_000_000_000_000);
 
+function TokenCaret({ isOpen }: { isOpen: boolean }) {
+  return isOpen ? (
+    <svg
+      role="img"
+      aria-label="Collapse token list"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M3.05329 10.9866L7.99996 6.03997L12.9466 10.9866L14.1266 9.80663L7.99996 3.67997L1.87329 9.80663L3.05329 10.9866Z"
+        className="ock:fill-ock-foreground"
+      />
+    </svg>
+  ) : (
+    <svg
+      role="img"
+      aria-label="Expand token list"
+      width="16"
+      height="17"
+      viewBox="0 0 16 17"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12.95 4.85999L8.00001 9.80999L3.05001 4.85999L1.64001 6.27999L8.00001 12.64L14.36 6.27999L12.95 4.85999Z"
+        className="ock:fill-ock-foreground"
+      />
+    </svg>
+  );
+}
+
 function TokenSelector({
   value,
   options,
@@ -97,37 +130,46 @@ function TokenSelector({
   className?: string;
 }) {
   const token = SWAP_TOKEN_MAP[value];
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          data-testid="ockTokenSelectButton_Button"
           className={cn(
             'ock:cursor-pointer ock:bg-ock-background ock:hover:bg-ock-background-hover ock:active:bg-ock-background-active ock:focus:bg-ock-background-active',
             'ock:shadow-ock-default ock:rounded-ock-default ock:border-ock-line ock:border',
-            'ock:flex ock:w-fit ock:items-center ock:gap-2 ock:px-3 ock:py-1',
+            'ock:flex ock:w-fit ock:flex-nowrap ock:items-center ock:gap-2 ock:px-3 ock:py-1',
             'disabled:opacity-[0.38] disabled:pointer-events-none',
             className,
           )}
           disabled={disabled}
           aria-label={`Select ${token.displaySymbol}`}
         >
-          <span className="ock:w-4 ock:flex ock:items-center ock:justify-center">
-            <Image
-              src={token.image}
-              alt={token.displaySymbol}
-              width={16}
-              height={16}
-              className="ock:h-4 ock:w-4 ock:rounded-full"
-            />
+          <span className="ock:flex ock:items-center ock:gap-2 ock:shrink-0">
+            <span className="ock:flex ock:w-4 ock:items-center ock:justify-center ock:shrink-0">
+              <img
+                src={token.image}
+                alt=""
+                className="ock:overflow-hidden ock:rounded-[50%]"
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  minWidth: '16px',
+                  minHeight: '16px',
+                }}
+                aria-hidden="true"
+              />
+            </span>
+            <span className="ock:font-ock ock:whitespace-nowrap ock:font-semibold ock:text-ock-foreground">
+              {token.displaySymbol}
+            </span>
           </span>
-          <span className="ock:font-ock ock:font-semibold ock:text-ock-foreground">
-            {token.displaySymbol}
-          </span>
-          <span className="ock:relative ock:flex ock:items-center ock:justify-center">
+          <span className="ock:relative ock:flex ock:h-4 ock:w-4 ock:items-center ock:justify-center ock:shrink-0">
             <span className="ock:absolute ock:top-0 ock:left-0 ock:h-4 ock:w-4" />
-            <ChevronDown className="h-4 w-4 text-foreground/70" />
+            <TokenCaret isOpen={isOpen} />
           </span>
         </button>
       </DropdownMenuTrigger>
@@ -141,12 +183,11 @@ function TokenSelector({
               className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
             >
               <span className="flex items-center gap-3">
-                <Image
+                <img
                   src={optionToken.image}
-                  alt={optionToken.displaySymbol}
-                  width={22}
-                  height={22}
-                  className="h-[22px] w-[22px] rounded-full"
+                  alt=""
+                  className="h-[22px] w-[22px] rounded-full object-contain"
+                  aria-hidden="true"
                 />
                 <span>{optionToken.displaySymbol}</span>
               </span>
@@ -860,7 +901,7 @@ export default function PixotchiSwapPanel() {
         </button>
 
         <div
-          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[128px] ock:w-full ock:flex-col ock:items-start ock:p-4"
           data-testid="ockSwapAmountInput_Container"
         >
           <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
@@ -877,7 +918,7 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-end">
+          <div className="ock:mt-auto ock:flex ock:w-full ock:items-center ock:justify-end">
             <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:items-center ock:justify-end">
               {buyBalanceText ? <span>{buyBalanceText}</span> : null}
             </div>
