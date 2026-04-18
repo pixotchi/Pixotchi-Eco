@@ -82,40 +82,6 @@ type SmartWalletBatchCall =
 const readClient = getBaseReadClient();
 const ETH_GAS_BUFFER_WEI = BigInt(50_000_000_000_000);
 
-function TokenCaret({ isOpen }: { isOpen: boolean }) {
-  return isOpen ? (
-    <svg
-      role="img"
-      aria-label="Collapse token list"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M3.05329 10.9866L7.99996 6.03997L12.9466 10.9866L14.1266 9.80663L7.99996 3.67997L1.87329 9.80663L3.05329 10.9866Z"
-        className="ock:fill-ock-foreground"
-      />
-    </svg>
-  ) : (
-    <svg
-      role="img"
-      aria-label="Expand token list"
-      width="16"
-      height="17"
-      viewBox="0 0 16 17"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M12.95 4.85999L8.00001 9.80999L3.05001 4.85999L1.64001 6.27999L8.00001 12.64L14.36 6.27999L12.95 4.85999Z"
-        className="ock:fill-ock-foreground"
-      />
-    </svg>
-  );
-}
-
 function TokenSelector({
   value,
   options,
@@ -141,15 +107,15 @@ function TokenSelector({
           className={cn(
             'ock:cursor-pointer ock:bg-ock-background ock:hover:bg-ock-background-hover ock:active:bg-ock-background-active ock:focus:bg-ock-background-active',
             'ock:shadow-ock-default ock:rounded-ock-default ock:border-ock-line ock:border',
-            'ock:flex ock:w-fit ock:flex-nowrap ock:items-center ock:gap-2 ock:px-3 ock:py-1',
+            'ock:flex ock:w-fit ock:items-center ock:gap-2 ock:px-3 ock:py-1',
             'disabled:opacity-[0.38] disabled:pointer-events-none',
             className,
           )}
           disabled={disabled}
           aria-label={`Select ${token.displaySymbol}`}
         >
-          <span className="ock:flex ock:items-center ock:gap-2 ock:shrink-0">
-            <span className="ock:flex ock:w-4 ock:items-center ock:justify-center ock:shrink-0">
+          <>
+            <div className="ock:w-4">
               <img
                 src={token.image}
                 alt=""
@@ -162,15 +128,48 @@ function TokenSelector({
                 }}
                 aria-hidden="true"
               />
-            </span>
-            <span className="ock:font-ock ock:whitespace-nowrap ock:font-semibold ock:text-ock-foreground">
+            </div>
+            <span
+              className="ock:font-ock ock:whitespace-nowrap ock:font-semibold ock:text-ock-foreground"
+              data-testid="ockTokenSelectButton_Symbol"
+            >
               {token.displaySymbol}
             </span>
-          </span>
-          <span className="ock:relative ock:flex ock:h-4 ock:w-4 ock:items-center ock:justify-center ock:shrink-0">
-            <span className="ock:absolute ock:top-0 ock:left-0 ock:h-4 ock:w-4" />
-            <TokenCaret isOpen={isOpen} />
-          </span>
+          </>
+          <div className="ock:relative ock:flex ock:items-center ock:justify-center">
+            <div className="ock:absolute ock:top-0 ock:left-0 ock:h-4 ock:w-4" />
+            {isOpen ? (
+              <svg
+                role="img"
+                aria-label="Collapse token list"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3.05329 10.9866L7.99996 6.03997L12.9466 10.9866L14.1266 9.80663L7.99996 3.67997L1.87329 9.80663L3.05329 10.9866Z"
+                  className="ock:fill-ock-foreground"
+                />
+              </svg>
+            ) : (
+              <svg
+                role="img"
+                aria-label="Expand token list"
+                width="16"
+                height="17"
+                viewBox="0 0 16 17"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12.95 4.85999L8.00001 9.80999L3.05001 4.85999L1.64001 6.27999L8.00001 12.64L14.36 6.27999L12.95 4.85999Z"
+                  className="ock:fill-ock-foreground"
+                />
+              </svg>
+            )}
+          </div>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56 rounded-xl p-2">
@@ -901,7 +900,7 @@ export default function PixotchiSwapPanel() {
         </button>
 
         <div
-          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[128px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
           data-testid="ockSwapAmountInput_Container"
         >
           <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
@@ -918,8 +917,11 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="ock:mt-auto ock:flex ock:w-full ock:items-center ock:justify-end">
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:items-center ock:justify-end">
+          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
+              {'\u00A0'}
+            </div>
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
               {buyBalanceText ? <span>{buyBalanceText}</span> : null}
             </div>
           </div>
