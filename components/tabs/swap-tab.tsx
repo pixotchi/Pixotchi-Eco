@@ -86,19 +86,12 @@ export default function SwapTab() {
             <ToggleGroup
               value={swapView}
               onValueChange={(v) => setSwapView(v as 'swap' | 'chart')}
-              className="rounded-[12px] border-border/55 bg-background/35 p-1"
               options={[
                 { value: 'swap', label: 'Swap' },
                 { value: 'chart', label: 'Chart' },
               ]}
-              getButtonClassName={(value, selected) =>
-                [
-                  'rounded-[10px] px-4',
-                  selected
-                    ? 'border border-primary/25 bg-background shadow-sm hover:bg-background'
-                    : 'bg-transparent',
-                  isSwapModuleDisabled && value === 'swap' ? 'opacity-60' : '',
-                ].join(' ')
+              getButtonClassName={(value) =>
+                isSwapModuleDisabled && value === 'swap' ? 'opacity-60' : ''
               }
             />
           </div>

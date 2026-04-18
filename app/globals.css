@@ -1087,6 +1087,110 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   --tw-ring-offset-color: var(--color-background);
 }
 
+/* OnchainKit theme bridge: make OCK use Pixotchi theme tokens */
+[data-ock-theme='pixotchi'] {
+  --ock-background: hsl(var(--background));
+  --ock-text-foreground: hsl(var(--foreground));
+  --ock-border: hsl(var(--border));
+  --ock-primary: hsl(var(--primary));
+  --ock-primary-foreground: hsl(var(--primary-foreground));
+  --ock-secondary: hsl(var(--secondary));
+  --ock-secondary-foreground: hsl(var(--secondary-foreground));
+  --ock-accent: hsl(var(--accent));
+  --ock-accent-foreground: hsl(var(--accent-foreground));
+  --ock-muted: hsl(var(--muted));
+  --ock-muted-foreground: hsl(var(--muted-foreground));
+  --ock-ring: hsl(var(--ring));
+  --ock-background-inverse: hsl(var(--card));
+  --ock-background-hover: hsl(var(--accent));
+  --ock-background-active: hsl(var(--secondary));
+  --ock-foreground-muted: hsl(var(--muted-foreground));
+  --ock-background-alternate: hsl(var(--card));
+  --ock-background-alternate-hover: hsl(var(--accent));
+  --ock-background-alternate-active: hsl(var(--secondary));
+}
+
+[data-ock-theme='pixotchi'] .ock-swap-token-button {
+  color: hsl(var(--foreground));
+}
+
+[data-ock-theme='pixotchi'] .ock-swap-token-button * {
+  color: inherit;
+}
+
+[data-ock-theme='pixotchi'] .ock\:text-ock-foreground {
+  color: hsl(var(--foreground)) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:text-ock-foreground-muted {
+  color: var(--ock-foreground-muted) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock-swap-token-button svg,
+[data-ock-theme='pixotchi'] .ock-swap-token-button svg * {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+[data-ock-theme='pixotchi'] [role='menu'],
+[data-ock-theme='pixotchi'] [role='listbox'] {
+  background-color: var(--ock-background) !important;
+  color: var(--ock-text-foreground) !important;
+  border-color: var(--ock-border) !important;
+}
+
+[data-ock-theme='pixotchi'] [role='menu'] *,
+[data-ock-theme='pixotchi'] [role='listbox'] * {
+  color: inherit !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:font-ock {
+  color: hsl(var(--foreground));
+}
+
+[data-ock-theme='pixotchi'] .ock\:bg-ock-background-inverse {
+  background-color: var(--ock-background-inverse) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:hover\:bg-ock-background-hover:hover {
+  background-color: var(--ock-background-hover) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:active\:bg-ock-background-active:active,
+[data-ock-theme='pixotchi'] .ock\:focus\:bg-ock-background-active:focus {
+  background-color: var(--ock-background-active) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:bg-ock-background-alternate {
+  background-color: var(--ock-background-alternate) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:hover\:bg-ock-background-alternate-hover:hover {
+  background-color: var(--ock-background-alternate-hover) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:active\:bg-ock-background-alternate-active:active,
+[data-ock-theme='pixotchi'] .ock\:focus\:bg-ock-background-alternate-active:focus {
+  background-color: var(--ock-background-alternate-active) !important;
+}
+
+[data-ock-theme='pixotchi'] .ock\:fill-ock-foreground {
+  fill: hsl(var(--foreground)) !important;
+  stroke: hsl(var(--foreground)) !important;
+}
+
+[data-ock-theme='pixotchi'] [data-testid='SwapTokensButton'] {
+  height: 2.25rem !important;
+  width: 2.25rem !important;
+  margin-top: -0.5rem !important;
+  margin-bottom: -0.5rem !important;
+}
+
+[data-ock-theme='pixotchi'] [data-testid='SwapTokensButton'] svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
 /* Fallback hover utilities used by Button variants */
 @media (hover: hover) {
   .hover\:bg-primary\/90:hover {

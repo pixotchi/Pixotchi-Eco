@@ -11,7 +11,7 @@ import {
 } from 'react';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
-import { CheckCircle2, ChevronDown, CircleAlert, Loader2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown } from 'lucide-react';
 import {
   formatUnits,
   parseUnits,
@@ -21,7 +21,6 @@ import {
 } from 'viem';
 import { base } from 'viem/chains';
 import { useAccount, useBalance, useWalletClient } from 'wagmi';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,38 +166,6 @@ function formatExecutionMessage(message?: string): string | null {
   return message;
 }
 
-function getExecutionStatusLabel(status: ExecutionStatus): string {
-  switch (status) {
-    case 'approving':
-      return 'Approval';
-    case 'swapping':
-      return 'Wallet';
-    case 'confirming':
-      return 'Confirming';
-    case 'complete':
-      return 'Done';
-    case 'error':
-      return 'Error';
-    default:
-      return 'Pending';
-  }
-}
-
-function getExecutionStatusClass(status: ExecutionStatus): string {
-  switch (status) {
-    case 'complete':
-      return 'border-primary/25 bg-primary/10 text-primary';
-    case 'error':
-      return 'border-destructive/30 bg-destructive/10 text-destructive';
-    case 'approving':
-    case 'swapping':
-    case 'confirming':
-      return 'border-primary/20 bg-primary/10 text-primary';
-    default:
-      return 'border-border/50 bg-muted/40 text-muted-foreground';
-  }
-}
-
 function sanitizeDecimalInput(value: string): string {
   if (value === '') {
     return '';
@@ -323,7 +290,7 @@ export default function PixotchiSwapPanel() {
           SWAP_TOKEN_MAP[buyToken].decimals,
           6,
         )
-      : '--';
+      : '0.0';
   const isAmountValid = Boolean(parsedAmount && parsedAmount > BigInt(0));
   const hasInsufficientBalance = Boolean(
     address &&
@@ -339,6 +306,64 @@ export default function PixotchiSwapPanel() {
     chainId !== BASE_CHAIN_ID ||
     !walletClient?.account ||
     hasInsufficientBalance;
+  const swapMessage = useMemo(() => {
+    if (currentQuote?.strategy === 'blocked') {
+      return currentQuote.blockedReason || 'This swap pair is unavailable.';
+    }
+
+    if (quoteState.status === 'error') {
+      return quoteState.error;
+    }
+
+    if (chainId !== BASE_CHAIN_ID) {
+      return 'Switch your wallet to Base to swap.';
+    }
+
+    if (!walletClient?.account) {
+      return 'Wallet client not ready yet.';
+    }
+
+    if (!isAmountValid && sellAmount.trim()) {
+      return `Enter a valid ${SWAP_TOKEN_MAP[sellToken].displaySymbol} amount.`;
+    }
+
+    if (hasInsufficientBalance) {
+      return `Insufficient ${SWAP_TOKEN_MAP[sellToken].displaySymbol} balance.`;
+    }
+
+    if (!executionSteps?.[0]) {
+      return '\u00A0';
+    }
+
+    const step = executionSteps[0];
+    if (step.status === 'approving') {
+      return 'Approve token spending';
+    }
+    if (step.status === 'swapping') {
+      return `Swapping ${SWAP_TOKEN_MAP[sellToken].displaySymbol} for ${SWAP_TOKEN_MAP[buyToken].displaySymbol}`;
+    }
+    if (step.status === 'confirming') {
+      return 'Transaction pending...';
+    }
+    if (step.status === 'complete') {
+      return 'Swap successful';
+    }
+    if (step.status === 'error') {
+      return step.message || 'Swap execution failed';
+    }
+    return '\u00A0';
+  }, [
+    buyToken,
+    chainId,
+    currentQuote,
+    executionSteps,
+    hasInsufficientBalance,
+    isAmountValid,
+    quoteState,
+    sellAmount,
+    sellToken,
+    walletClient?.account,
+  ]);
 
   useEffect(() => {
     if (!allowedTargets.includes(buyToken)) {
@@ -645,16 +670,16 @@ export default function PixotchiSwapPanel() {
   }, [address, sellBalanceRaw, sellToken]);
 
   return (
-    <div className="space-y-4 rounded-[18px] bg-background/18 p-1.5">
-      <div className="space-y-3">
+    <div data-ock-theme="pixotchi">
+      <div className="space-y-0.5">
         <div
-          className="flex h-[140px] w-full flex-col justify-between rounded-[18px] border border-border/45 bg-background/82 px-5 py-4 shadow-sm"
+          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
           data-testid="ockSwapAmountInput_Container"
         >
-          <div className="flex w-full items-center justify-between text-sm text-muted-foreground">
+          <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
             Sell
           </div>
-          <div className="flex w-full items-center justify-between gap-4">
+          <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
             <input
               value={sellAmount}
               onChange={(event) => {
@@ -664,7 +689,7 @@ export default function PixotchiSwapPanel() {
               placeholder="0.0"
               disabled={isExecuting}
               aria-label={`Sell amount in ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
-              className="w-full truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground"
+              className="ock:mr-2 ock:w-full ock:border-[none] ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:outline-none ock:truncate text-foreground placeholder:text-muted-foreground"
             />
             <TokenSelector
               value={sellToken}
@@ -673,18 +698,18 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="mt-4 flex w-full items-center justify-between">
-            <div className="text-sm text-muted-foreground">
+          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
               {quoteState.status === 'loading'
                 ? 'Fetching quote...'
                 : '\u00A0'}
             </div>
-            <div className="flex grow items-center justify-end gap-3 text-sm text-muted-foreground">
-              {sellBalanceText ? <span className="truncate text-right">{sellBalanceText}</span> : null}
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+              {sellBalanceText ? <span>{sellBalanceText}</span> : null}
               {address ? (
                 <button
                   type="button"
-                  className="inline-flex h-8 items-center justify-center rounded-[10px] border border-border/60 bg-background px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground disabled:pointer-events-none disabled:opacity-[0.38]"
+                  className="ock:font-ock ock:font-semibold ock:text-sm ock:text-ock-primary ock:flex ock:cursor-pointer ock:items-center ock:justify-center ock:px-2 ock:py-1 disabled:opacity-[0.38] disabled:pointer-events-none"
                   onClick={handleSetMax}
                   disabled={isExecuting || sellBalanceRaw <= BigInt(0)}
                 >
@@ -698,8 +723,8 @@ export default function PixotchiSwapPanel() {
         <button
           type="button"
           className={cn(
-            'relative z-10 mx-auto -my-1 flex h-10 w-10 items-center justify-center rounded-[12px] border border-border/60 bg-background text-foreground shadow-sm transition-colors',
-            'hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'ock:cursor-pointer ock:bg-ock-background-alternate ock:hover:bg-ock-background-alternate-hover ock:active:bg-ock-background-alternate-active ock:focus:bg-ock-background-alternate-active',
+            'ock:border-ock-background -my-6 relative mx-auto flex h-12 w-12 items-center justify-center rounded-lg border-4 border-solid',
           )}
           data-testid="SwapTokensButton"
           onClick={handleFlipTokens}
@@ -714,32 +739,24 @@ export default function PixotchiSwapPanel() {
             viewBox="0 0 16 17"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
-            className="text-foreground"
           >
             <path
               d="M14.5659 4.93434L13.4345 6.06571L11.8002 4.43139L11.8002 10.75L10.2002 10.75L10.2002 4.43139L8.56592 6.06571L7.43455 4.93434L11.0002 1.36865L14.5659 4.93434ZM8.56592 12.0657L5.00023 15.6314L1.43455 12.0657L2.56592 10.9343L4.20023 12.5687L4.20023 6.25002L5.80023 6.25002L5.80023 12.5687L7.43455 10.9343L8.56592 12.0657Z"
-              className="fill-current"
+              className="ock:fill-ock-foreground"
             />
           </svg>
         </button>
 
         <div
-          className="flex h-[132px] w-full flex-col justify-between rounded-[18px] border border-border/45 bg-background/82 px-5 py-4 shadow-sm"
+          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
           data-testid="ockSwapAmountInput_Container"
         >
-          <div className="flex w-full items-center justify-between text-sm text-muted-foreground">
+          <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
             Buy
           </div>
-          <div className="flex w-full items-center justify-between gap-4">
-            <div className="w-full truncate bg-transparent text-[2.5rem] leading-none text-foreground">
-              {quoteState.status === 'loading' ? (
-                <span className="inline-flex items-center gap-2 text-base text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Quoting...
-                </span>
-              ) : (
-                buyAmountDisplay
-              )}
+          <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="ock:mr-2 ock:w-full ock:truncate ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:text-ock-foreground">
+              {buyAmountDisplay}
             </div>
             <TokenSelector
               value={buyToken}
@@ -748,8 +765,11 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="flex w-full items-center justify-end text-sm text-muted-foreground">
-            <div className="flex grow items-center justify-end text-sm text-muted-foreground">
+          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
+              {'\u00A0'}
+            </div>
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
               {buyBalanceText ? <span>{buyBalanceText}</span> : null}
             </div>
           </div>
@@ -757,78 +777,23 @@ export default function PixotchiSwapPanel() {
 
         <button
           type="button"
-          className="mt-2 w-full rounded-[12px] bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(
+            'ock:bg-ock-primary ock:rounded-ock-default mt-4 w-full rounded-xl px-4 py-3',
+            'ock:font-ock ock:font-semibold',
+            actionDisabled && 'opacity-[0.38] pointer-events-none',
+          )}
           disabled={actionDisabled}
           onClick={() => currentQuote && executeQuote(currentQuote)}
         >
           {isExecuting ? 'Working...' : 'Swap'}
         </button>
-      </div>
-
-      {quoteState.status === 'error' ? (
-        <Alert variant="destructive">
-          <CircleAlert className="h-4 w-4" />
-          <AlertTitle>Quote error</AlertTitle>
-          <AlertDescription>{quoteState.error}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {currentQuote?.strategy === 'blocked' ? (
-        <Alert variant="destructive">
-          <CircleAlert className="h-4 w-4" />
-          <AlertTitle>Swap unavailable</AlertTitle>
-          <AlertDescription>
-            {currentQuote.blockedReason || 'This swap pair is unavailable.'}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {chainId !== BASE_CHAIN_ID ? (
-        <Alert variant="destructive">
-          <CircleAlert className="h-4 w-4" />
-          <AlertTitle>Wrong network</AlertTitle>
-          <AlertDescription>Switch your wallet to Base to swap.</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {executionSteps?.[0] ? (
-        <div className="rounded-xl border border-border/55 bg-background/75 p-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold">{executionSteps[0].label}</p>
-              {executionSteps[0].message ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatExecutionMessage(executionSteps[0].message)}
-                </p>
-              ) : null}
-            </div>
-            <span
-              className={cn(
-                'rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-wide',
-                getExecutionStatusClass(executionSteps[0].status),
-              )}
-            >
-              {getExecutionStatusLabel(executionSteps[0].status)}
-            </span>
-          </div>
+        <div
+          className="ock:flex ock:h-7 ock:pt-2 ock:font-ock ock:text-sm ock:text-ock-foreground-muted"
+          data-testid="ockSwapMessage_Message"
+        >
+          {formatExecutionMessage(swapMessage) || '\u00A0'}
         </div>
-      ) : null}
-
-      {!walletClient?.account ? (
-        <p className="text-center text-xs text-muted-foreground">
-          Wallet client not ready yet.
-        </p>
-      ) : null}
-      {!isAmountValid && sellAmount.trim() ? (
-        <p className="text-center text-xs text-muted-foreground">
-          Enter a valid {SWAP_TOKEN_MAP[sellToken].displaySymbol} amount.
-        </p>
-      ) : null}
-      {hasInsufficientBalance ? (
-        <p className="text-center text-xs text-destructive">
-          Insufficient {SWAP_TOKEN_MAP[sellToken].displaySymbol} balance.
-        </p>
-      ) : null}
+      </div>
     </div>
   );
 }
