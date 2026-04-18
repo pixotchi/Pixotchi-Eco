@@ -165,14 +165,12 @@ function TokenSelector({
               {token.displaySymbol}
             </span>
           </>
-          <div className="ock:relative ock:flex ock:items-center ock:justify-center">
-            <div className="ock:absolute ock:top-0 ock:left-0 ock:h-4 ock:w-4" />
+          <div className="ock:flex ock:h-4 ock:w-4 ock:shrink-0 ock:items-center ock:justify-center">
             {isOpen ? (
               <svg
                 role="img"
                 aria-label="Collapse token list"
-                width="16"
-                height="16"
+                className="ock:h-4 ock:w-4"
                 viewBox="0 0 16 16"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -186,8 +184,7 @@ function TokenSelector({
               <svg
                 role="img"
                 aria-label="Expand token list"
-                width="16"
-                height="17"
+                className="ock:h-4 ock:w-4"
                 viewBox="0 0 16 17"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
