@@ -42,6 +42,7 @@ import type {
   UserSwapTokenId,
 } from '@/lib/swap/types';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
+import { useTabVisibility } from '@/lib/tab-visibility-context';
 import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
 import {
   getBuilderCapabilities,
@@ -89,6 +90,7 @@ const ETH_GAS_REQUIRED_WEI = BigInt(200_000_000_000_000);
 
 const QUOTE_DEBOUNCE_MS = 250;
 const QUOTE_MAX_RETRIES = 2;
+const QUOTE_IDLE_REFRESH_MS = 5_000;
 
 function isTransientStatus(status: number | undefined): boolean {
   if (status === undefined) return true;
@@ -341,6 +343,7 @@ export default function PixotchiSwapPanel() {
   const { address, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
   const { isSmartWallet } = useSmartWallet();
+  const { isTabVisible } = useTabVisibility();
   const readClient = useMemo(() => getBaseReadClient(), []);
   const [sellToken, setSellToken] = useState<UserSwapTokenId>('ETH');
   const [buyToken, setBuyToken] = useState<UserSwapTokenId>('SEED');
@@ -350,7 +353,10 @@ export default function PixotchiSwapPanel() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepState[] | null>(null);
   const quoteRequestRef = useRef(0);
+  const backgroundRefreshInFlightRef = useRef(false);
+  const quoteActivityAtRef = useRef(0);
   const messageId = 'pixotchi-swap-message';
+  const isVisible = isTabVisible('swap');
 
   const {
     data: sellBalanceData,
@@ -449,6 +455,10 @@ export default function PixotchiSwapPanel() {
     chainId !== BASE_CHAIN_ID ||
     !walletClient?.account ||
     hasInsufficientBalance;
+
+  const markQuoteActivity = useCallback(() => {
+    quoteActivityAtRef.current = Date.now();
+  }, []);
   const swapMessage = useMemo(() => {
     if (currentQuote?.strategy === 'blocked') {
       return currentQuote.blockedReason || S.errors.blockedPairFallback;
@@ -516,6 +526,10 @@ export default function PixotchiSwapPanel() {
       setBuyToken(allowedTargets[0]);
     }
   }, [allowedTargets, buyToken]);
+
+  useEffect(() => {
+    markQuoteActivity();
+  }, [buyToken, markQuoteActivity, sellToken]);
 
   useEffect(() => {
     // Clear both the cached quote AND any in-flight execution steps whenever
@@ -599,6 +613,73 @@ export default function PixotchiSwapPanel() {
       window.clearTimeout(timer);
     };
   }, [fetchQuoteOnce, parsedAmount]);
+
+  const refreshQuoteInBackground = useCallback(
+    async (amountIn: bigint): Promise<void> => {
+      if (backgroundRefreshInFlightRef.current) {
+        return;
+      }
+
+      backgroundRefreshInFlightRef.current = true;
+      const requestId = ++quoteRequestRef.current;
+
+      try {
+        const quote = await fetchQuoteOnce(amountIn);
+        if (quoteRequestRef.current !== requestId) return;
+        startTransition(() => setQuoteState({ status: 'ready', quote }));
+      } catch (error) {
+        if (quoteRequestRef.current !== requestId) return;
+
+        const message =
+          error instanceof Error ? error.message : 'Failed to fetch swap quote';
+        const status = (error as { status?: number })?.status;
+        startTransition(() =>
+          setQuoteState((current) =>
+            current.status === 'ready'
+              ? current
+              : { status: 'error', error: message, retriable: isTransientStatus(status) },
+          ),
+        );
+      } finally {
+        backgroundRefreshInFlightRef.current = false;
+      }
+    },
+    [fetchQuoteOnce],
+  );
+
+  useEffect(() => {
+    const amountIn = parsedAmount;
+    if (!isVisible || !amountIn || amountIn <= BigInt(0)) {
+      return;
+    }
+
+    if (isExecuting || isDeferredLagging || quoteState.status === 'loading') {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      if (Date.now() - quoteActivityAtRef.current < QUOTE_IDLE_REFRESH_MS) {
+        return;
+      }
+
+      void refreshQuoteInBackground(amountIn);
+    }, QUOTE_IDLE_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    isDeferredLagging,
+    isExecuting,
+    isVisible,
+    parsedAmount,
+    quoteState.status,
+    refreshQuoteInBackground,
+  ]);
 
   const trackSwapMission = useCallback(
     async (receipt: TransactionReceipt) => {
@@ -1012,9 +1093,10 @@ export default function PixotchiSwapPanel() {
   );
 
   const handleFlipTokens = useCallback(() => {
+    markQuoteActivity();
     setSellToken(buyToken);
     setBuyToken(sellToken);
-  }, [buyToken, sellToken]);
+  }, [buyToken, markQuoteActivity, sellToken]);
 
   const handleSetMax = useCallback(() => {
     if (!address) {
@@ -1041,8 +1123,25 @@ export default function PixotchiSwapPanel() {
       return;
     }
 
+    markQuoteActivity();
     setSellAmount(formatEditableAmount(amount, SWAP_TOKEN_MAP[sellToken].decimals));
-  }, [address, sellBalanceLoading, sellBalanceRaw, sellToken]);
+  }, [address, markQuoteActivity, sellBalanceLoading, sellBalanceRaw, sellToken]);
+
+  const handleSellTokenSelect = useCallback(
+    (next: UserSwapTokenId) => {
+      markQuoteActivity();
+      setSellToken(next);
+    },
+    [markQuoteActivity],
+  );
+
+  const handleBuyTokenSelect = useCallback(
+    (next: UserSwapTokenId) => {
+      markQuoteActivity();
+      setBuyToken(next);
+    },
+    [markQuoteActivity],
+  );
 
   const handleSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -1079,6 +1178,7 @@ export default function PixotchiSwapPanel() {
                 id="pixotchi-swap-sell-amount"
                 value={sellAmount}
                 onChange={(event) => {
+                  markQuoteActivity();
                   setSellAmount(sanitizeDecimalInput(event.target.value));
                 }}
                 inputMode="decimal"
@@ -1090,7 +1190,7 @@ export default function PixotchiSwapPanel() {
               <TokenSelector
                 value={sellToken}
                 options={allowedSources}
-                onSelect={setSellToken}
+                onSelect={handleSellTokenSelect}
                 disabled={isExecuting}
               />
             </div>
@@ -1177,7 +1277,7 @@ export default function PixotchiSwapPanel() {
               <TokenSelector
                 value={buyToken}
                 options={allowedTargets}
-                onSelect={setBuyToken}
+                onSelect={handleBuyTokenSelect}
                 disabled={isExecuting}
               />
             </div>
