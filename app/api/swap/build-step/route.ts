@@ -88,6 +88,20 @@ export async function POST(request: NextRequest) {
       return reject('Quote parameters do not match the build request.', 400);
     }
 
+    const matchesQuotedStep = verified.steps.some(
+      (step) =>
+        step.kind === payload.kind &&
+        step.sellToken === payload.sellToken &&
+        step.buyToken === payload.buyToken &&
+        step.amountIn === payload.amountIn,
+    );
+    if (!matchesQuotedStep) {
+      return reject(
+        'Requested execution step does not match the signed quote route.',
+        400,
+      );
+    }
+
     const response = await buildSwapStep({
       kind: payload.kind,
       sellToken: payload.sellToken,

@@ -856,7 +856,7 @@ export default function PixotchiSwapPanel() {
 
       updateExecutionStep(stepIndex, {
         status: 'swapping',
-        message: step.routeLabel,
+        message: builtStep.step.routeLabel,
       });
 
       const hash = await walletClient.sendTransaction({

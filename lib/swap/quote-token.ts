@@ -1,10 +1,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import type { UserSwapTokenId } from './types';
+import { isSwapTokenId } from './constants';
+import type { SwapStepKind, SwapTokenId, UserSwapTokenId } from './types';
 
 // Stateless quote binding: /api/swap/quote signs a payload describing the
-// quoted swap and hands the token back to the client. /api/swap/build-step
-// verifies the HMAC and treats the payload as the authoritative source of
-// truth — no Redis round-trip, no storage cost.
+// quoted swap plus the exact executable step(s) and hands the token back to
+// the client. /api/swap/build-step verifies the HMAC and treats the payload as
+// the authoritative source of truth — no Redis round-trip, no storage cost.
 //
 // This replaces the prior Redis-backed quote store. We lose "single-use"
 // enforcement (a token can be replayed to the build endpoint until it
@@ -12,7 +13,20 @@ import type { UserSwapTokenId } from './types';
 // still requires the user's wallet signature, and Kyber's own deadline
 // bounds on-chain replay. Rate limits handle quota abuse.
 
-const TOKEN_VERSION = 'v1';
+const TOKEN_VERSION = 'v2';
+
+const QUOTE_STEP_KINDS: ReadonlySet<SwapStepKind> = new Set([
+  'kyber',
+  'baseswap_seed',
+]);
+
+export interface QuoteTokenStep {
+  key: 'step1' | 'step2';
+  kind: SwapStepKind;
+  sellToken: SwapTokenId;
+  buyToken: SwapTokenId;
+  amountIn: string;
+}
 
 export interface QuoteTokenPayload {
   v: typeof TOKEN_VERSION;
@@ -20,8 +34,26 @@ export interface QuoteTokenPayload {
   sellToken: UserSwapTokenId;
   buyToken: UserSwapTokenId;
   amountIn: string;
+  steps: QuoteTokenStep[];
   expiresAt: number;
   jti: string;
+}
+
+function isQuoteTokenStep(value: unknown): value is QuoteTokenStep {
+  if (!value || typeof value !== 'object') return false;
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    (candidate.key === 'step1' || candidate.key === 'step2') &&
+    typeof candidate.kind === 'string' &&
+    QUOTE_STEP_KINDS.has(candidate.kind as SwapStepKind) &&
+    typeof candidate.sellToken === 'string' &&
+    isSwapTokenId(candidate.sellToken) &&
+    typeof candidate.buyToken === 'string' &&
+    isSwapTokenId(candidate.buyToken) &&
+    typeof candidate.amountIn === 'string' &&
+    /^\d+$/.test(candidate.amountIn)
+  );
 }
 
 function getSecret(): string {
@@ -90,6 +122,8 @@ export function verifyQuoteToken(token: string): QuoteTokenPayload | null {
     const decoded = JSON.parse(fromB64url(body).toString('utf8')) as QuoteTokenPayload;
     if (decoded.v !== TOKEN_VERSION) return null;
     if (typeof decoded.expiresAt !== 'number') return null;
+    if (!Array.isArray(decoded.steps) || decoded.steps.length === 0) return null;
+    if (!decoded.steps.every((step) => isQuoteTokenStep(step))) return null;
     if (Date.now() >= decoded.expiresAt) return null;
     return decoded;
   } catch {

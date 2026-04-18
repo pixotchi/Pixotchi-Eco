@@ -89,6 +89,13 @@ export async function POST(request: NextRequest) {
             sellToken: payload.sellToken,
             buyToken: payload.buyToken,
             amountIn: amountIn.toString(),
+            steps: quote.steps.map((step) => ({
+              key: step.key,
+              kind: step.kind,
+              sellToken: step.sellToken,
+              buyToken: step.buyToken,
+              amountIn: step.amountIn,
+            })),
             expiresAt,
           });
 
