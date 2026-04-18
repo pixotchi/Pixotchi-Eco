@@ -91,8 +91,8 @@ function TokenSelector({
         <button
           type="button"
           className={cn(
-            'flex w-fit items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-2 shadow-sm transition-colors',
-            'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'flex h-11 w-fit items-center gap-2 rounded-[12px] border border-border/60 bg-background px-3.5 py-2 shadow-sm transition-colors',
+            'hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             'disabled:opacity-[0.38] disabled:pointer-events-none',
             className,
           )}
@@ -103,9 +103,9 @@ function TokenSelector({
             <Image
               src={token.image}
               alt={token.displaySymbol}
-              width={20}
-              height={20}
-              className="h-5 w-5 rounded-full"
+              width={22}
+              height={22}
+              className="h-[22px] w-[22px] rounded-full"
             />
             <span className="font-semibold text-foreground">
               {token.displaySymbol}
@@ -645,16 +645,16 @@ export default function PixotchiSwapPanel() {
   }, [address, sellBalanceRaw, sellToken]);
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-0.5">
+    <div className="space-y-4 rounded-[18px] bg-background/18 p-1.5">
+      <div className="space-y-3">
         <div
-          className="my-0.5 flex h-[148px] w-full flex-col items-start rounded-[20px] border border-border/55 bg-card p-4 shadow-sm"
+          className="flex h-[140px] w-full flex-col justify-between rounded-[18px] border border-border/45 bg-background/82 px-5 py-4 shadow-sm"
           data-testid="ockSwapAmountInput_Container"
         >
           <div className="flex w-full items-center justify-between text-sm text-muted-foreground">
             Sell
           </div>
-          <div className="flex w-full items-center justify-between">
+          <div className="flex w-full items-center justify-between gap-4">
             <input
               value={sellAmount}
               onChange={(event) => {
@@ -664,7 +664,7 @@ export default function PixotchiSwapPanel() {
               placeholder="0.0"
               disabled={isExecuting}
               aria-label={`Sell amount in ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
-              className="mr-2 w-full truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground"
+              className="w-full truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground"
             />
             <TokenSelector
               value={sellToken}
@@ -679,12 +679,12 @@ export default function PixotchiSwapPanel() {
                 ? 'Fetching quote...'
                 : '\u00A0'}
             </div>
-            <div className="flex grow items-center justify-end gap-2 text-sm text-muted-foreground">
-              {sellBalanceText ? <span>{sellBalanceText}</span> : null}
+            <div className="flex grow items-center justify-end gap-3 text-sm text-muted-foreground">
+              {sellBalanceText ? <span className="truncate text-right">{sellBalanceText}</span> : null}
               {address ? (
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-full border border-border/60 bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-[0.38]"
+                  className="inline-flex h-8 items-center justify-center rounded-[10px] border border-border/60 bg-background px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground disabled:pointer-events-none disabled:opacity-[0.38]"
                   onClick={handleSetMax}
                   disabled={isExecuting || sellBalanceRaw <= BigInt(0)}
                 >
@@ -698,8 +698,8 @@ export default function PixotchiSwapPanel() {
         <button
           type="button"
           className={cn(
-            '-my-6 relative mx-auto flex h-12 w-12 items-center justify-center rounded-[16px] border-4 border-background bg-background text-foreground shadow-sm transition-colors',
-            'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'relative z-10 mx-auto -my-1 flex h-10 w-10 items-center justify-center rounded-[12px] border border-border/60 bg-background text-foreground shadow-sm transition-colors',
+            'hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           )}
           data-testid="SwapTokensButton"
           onClick={handleFlipTokens}
@@ -724,14 +724,14 @@ export default function PixotchiSwapPanel() {
         </button>
 
         <div
-          className="my-0.5 flex h-[148px] w-full flex-col items-start rounded-[20px] border border-border/55 bg-card p-4 shadow-sm"
+          className="flex h-[132px] w-full flex-col justify-between rounded-[18px] border border-border/45 bg-background/82 px-5 py-4 shadow-sm"
           data-testid="ockSwapAmountInput_Container"
         >
           <div className="flex w-full items-center justify-between text-sm text-muted-foreground">
             Buy
           </div>
-          <div className="flex w-full items-center justify-between">
-            <div className="mr-2 w-full truncate bg-transparent text-[2.5rem] leading-none text-foreground">
+          <div className="flex w-full items-center justify-between gap-4">
+            <div className="w-full truncate bg-transparent text-[2.5rem] leading-none text-foreground">
               {quoteState.status === 'loading' ? (
                 <span className="inline-flex items-center gap-2 text-base text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -748,8 +748,7 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="mt-4 flex w-full items-center justify-between">
-            <div className="text-sm text-muted-foreground">{'\u00A0'}</div>
+          <div className="flex w-full items-center justify-end text-sm text-muted-foreground">
             <div className="flex grow items-center justify-end text-sm text-muted-foreground">
               {buyBalanceText ? <span>{buyBalanceText}</span> : null}
             </div>
@@ -758,7 +757,7 @@ export default function PixotchiSwapPanel() {
 
         <button
           type="button"
-          className="mt-4 w-full rounded-[16px] bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-2 w-full rounded-[12px] bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={actionDisabled}
           onClick={() => currentQuote && executeQuote(currentQuote)}
         >
