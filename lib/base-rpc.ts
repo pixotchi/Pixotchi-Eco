@@ -94,6 +94,19 @@ const MULTICALL_BATCH_SIZE = 8_192;
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 
+// Hedge delays govern when we start a parallel request to a backup RPC.
+// Keeping them overridable lets ops dial them up during Base congestion
+// without a redeploy, in which case fixed 300 ms can be too aggressive.
+function resolveHedgeDelayMs(envName: string, fallback: number): number {
+  const raw = process.env[envName];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 5_000) return fallback;
+  return parsed;
+}
+const RECEIPT_HEDGE_DELAY_MS = resolveHedgeDelayMs('BASE_RPC_RECEIPT_HEDGE_MS', 300);
+const LOG_HEDGE_DELAY_MS = resolveHedgeDelayMs('BASE_RPC_LOG_HEDGE_MS', 300);
+
 const POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = {
   read: {
     timeoutMs: 4_500,
@@ -108,7 +121,7 @@ const POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = {
   receipt: {
     timeoutMs: 2_500,
     fallbackRetryCount: 0,
-    hedgeDelayMs: 300,
+    hedgeDelayMs: RECEIPT_HEDGE_DELAY_MS,
     pollingIntervalMs: 1_500,
     rankIntervalMs: 15_000,
     rankTimeoutMs: 800,
@@ -118,7 +131,7 @@ const POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = {
   log: {
     timeoutMs: 5_000,
     fallbackRetryCount: 0,
-    hedgeDelayMs: 300,
+    hedgeDelayMs: LOG_HEDGE_DELAY_MS,
     pollingIntervalMs: 5_000,
     rankIntervalMs: 15_000,
     rankTimeoutMs: 800,

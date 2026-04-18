@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isAddress } from 'viem';
+import { getSwapQuoteForUserPair } from '@/lib/swap/engine';
 import {
-  getSwapQuoteForUserPair,
-  SwapBlockedError,
-} from '@/lib/swap/engine';
-import { isUserSwapTokenId } from '@/lib/swap/constants';
+  isUserSwapTokenId,
+  SWAP_QUOTE_TTL_MS,
+} from '@/lib/swap/constants';
+import { signQuoteToken } from '@/lib/swap/quote-token';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
+import { swapErrorResponse } from '@/lib/swap/api-errors';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const QUOTE_IP_LIMIT = 120;
+const QUOTE_IP_WINDOW_SECONDS = 60;
+const QUOTE_ADDRESS_LIMIT = 90;
+const QUOTE_ADDRESS_WINDOW_SECONDS = 60;
+const MAX_AMOUNT_DIGITS = 80;
+
 const requestSchema = z.object({
   sellToken: z.string().refine(isUserSwapTokenId, 'Unsupported sell token'),
   buyToken: z.string().refine(isUserSwapTokenId, 'Unsupported buy token'),
-  amountIn: z.string().regex(/^\d+$/, 'amountIn must be a raw integer string'),
+  amountIn: z
+    .string()
+    .regex(/^\d+$/, 'amountIn must be a raw integer string')
+    .max(MAX_AMOUNT_DIGITS, 'amountIn is too large'),
   originAddress: z
     .string()
     .optional()
@@ -21,34 +33,72 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Cross-site / origin enforcement is handled centrally by proxy.ts
+  // (EDGE_SAME_ORIGIN_ONLY_API_PATHS + the /api/* CORS allowlist).
   try {
+    const rateLimitResponse = await enforceRateLimit(request, {
+      scope: 'api:swap:quote',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request),
+          limit: QUOTE_IP_LIMIT,
+          windowSeconds: QUOTE_IP_WINDOW_SECONDS,
+        },
+      ],
+    });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const json = await request.json();
     const payload = requestSchema.parse(json);
+
+    if (payload.originAddress) {
+      const addressRateLimit = await enforceRateLimit(request, {
+        scope: 'api:swap:quote',
+        rules: [
+          {
+            kind: 'address',
+            identifier: payload.originAddress,
+            limit: QUOTE_ADDRESS_LIMIT,
+            windowSeconds: QUOTE_ADDRESS_WINDOW_SECONDS,
+          },
+        ],
+      });
+      if (addressRateLimit) return addressRateLimit;
+    }
+
+    const amountIn = BigInt(payload.amountIn);
 
     const quote = await getSwapQuoteForUserPair({
       sellToken: payload.sellToken,
       buyToken: payload.buyToken,
-      amountIn: BigInt(payload.amountIn),
+      amountIn,
       originAddress: payload.originAddress as `0x${string}` | undefined,
     });
 
-    return NextResponse.json(quote);
+    const issuedAt = Date.now();
+    const expiresAt = issuedAt + SWAP_QUOTE_TTL_MS;
+
+    // Only issue an executable token for executable quotes. Preview-only
+    // (blocked) quotes get an advisory response without a token.
+    const quoteToken =
+      quote.strategy === 'blocked'
+        ? undefined
+        : signQuoteToken({
+            sender: payload.originAddress?.toLowerCase() ?? null,
+            sellToken: payload.sellToken,
+            buyToken: payload.buyToken,
+            amountIn: amountIn.toString(),
+            expiresAt,
+          });
+
+    return NextResponse.json({
+      ...quote,
+      quoteToken,
+      issuedAt,
+      expiresAt,
+    });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.issues[0]?.message || 'Invalid quote request' },
-        { status: 400 },
-      );
-    }
-
-    if (error instanceof SwapBlockedError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    console.error('[swap/quote] Failed to quote swap', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch swap quote' },
-      { status: 500 },
-    );
+    return swapErrorResponse(error, 'Failed to fetch swap quote', '[swap/quote]');
   }
 }

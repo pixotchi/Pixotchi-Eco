@@ -62,6 +62,9 @@ export interface SwapQuoteResponse {
   steps: SwapQuoteStep[];
   blockedReason?: string;
   intermediateToken?: SwapTokenId;
+  quoteToken?: string;
+  issuedAt?: number;
+  expiresAt?: number;
 }
 
 export interface SwapBuildTransaction {

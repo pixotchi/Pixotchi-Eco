@@ -1,13 +1,20 @@
-import type { Address } from 'viem';
+import { getAddress, type Address } from 'viem';
 import type { SwapTokenDefinition, SwapTokenId, UserSwapTokenId } from './types';
 
 export const BASE_CHAIN_ID = 8453;
 export const BASIS_POINTS = 10_000;
+// Fixed 5% SEED transfer tax (protocol-level, not tunable).
 export const SEED_TAX_BPS = 500;
-export const MARKET_SLIPPAGE_BPS = 50;
+// Fixed 0.75% market slippage — not user-adjustable. Picked at the upper
+// end of the comfort range so routine pool movement doesn't revert swaps.
+// SEED pairs get SEED_TAX_BPS added on top inside the engine.
+export const MARKET_SLIPPAGE_BPS = 75;
 export const MAX_APPROVAL_AMOUNT =
   (BigInt(2) ** BigInt(256)) - BigInt(1);
 export const TOKEN_APPROVAL_THRESHOLD = BigInt(0);
+export const SWAP_DEADLINE_WINDOW_SECONDS = 180;
+export const SWAP_QUOTE_TTL_MS = 60_000;
+export const SWAP_QUOTE_MAX_AGE_MS = 30_000;
 
 export const KYBER_NATIVE_TOKEN_ADDRESS =
   '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as Address;
@@ -133,4 +140,24 @@ export function getKyberTokenAddress(tokenId: SwapTokenId): Address {
   }
 
   return getTokenAddress(tokenId);
+}
+
+// Known KyberSwap MetaAggregationRouter deployments on Base.
+// Server rejects any build response whose routerAddress is not in this set,
+// preventing a compromised or spoofed aggregator response from directing
+// user approvals / value to an arbitrary contract.
+const KYBER_ROUTER_ALLOWLIST_RAW: readonly Address[] = [
+  '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',
+];
+
+export const KYBER_ROUTER_ALLOWLIST: ReadonlySet<string> = new Set(
+  KYBER_ROUTER_ALLOWLIST_RAW.map((address) => getAddress(address)),
+);
+
+export function isAllowedSwapRouter(address: string): boolean {
+  try {
+    return KYBER_ROUTER_ALLOWLIST.has(getAddress(address));
+  } catch {
+    return false;
+  }
 }

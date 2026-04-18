@@ -12,10 +12,12 @@ import {
   BASIS_POINTS,
   MARKET_SLIPPAGE_BPS,
   SEED_TAX_BPS,
+  SWAP_DEADLINE_WINDOW_SECONDS,
   SWAP_TOKEN_MAP,
   WETH_ADDRESS,
   getKyberTokenAddress,
   getTokenAddress,
+  isAllowedSwapRouter,
   isNativeSwapToken,
   isSeedSwapToken,
 } from './constants';
@@ -33,7 +35,6 @@ import type {
 const KYBER_BASE_URL = 'https://aggregator-api.kyberswap.com/base/api/v1';
 const KYBER_CLIENT_ID = process.env.KYBERSWAP_CLIENT_ID || 'pixotchi-app';
 const KYBER_TIMEOUT_MS = 10_000;
-const SWAP_DEADLINE_WINDOW_SECONDS = 60 * 10;
 
 type KyberRouteSegment = {
   exchange?: string;
@@ -66,6 +67,8 @@ type KyberBuildResponse = {
 };
 
 export class SwapBlockedError extends Error {}
+export class SwapTransientError extends Error {}
+export class SwapTimeoutError extends Error {}
 
 type UserQuoteParams = {
   sellToken: UserSwapTokenId;
@@ -103,7 +106,7 @@ export async function getSwapQuoteForUserPair({
   }
 
   try {
-    const strategy = resolveStrategy(sellToken, buyToken);
+    const strategy: SwapStrategy = 'single_kyber';
     const step = await quoteKyberStep({
       key: 'step1',
       sellToken,
@@ -166,15 +169,6 @@ export async function buildSwapStep({
   });
 }
 
-function resolveStrategy(
-  sellToken: UserSwapTokenId,
-  buyToken: UserSwapTokenId,
-): SwapStrategy {
-  void sellToken;
-  void buyToken;
-  return 'single_kyber';
-}
-
 function createBlockedQuote(
   sellToken: UserSwapTokenId,
   buyToken: UserSwapTokenId,
@@ -217,6 +211,13 @@ async function quoteKyberStep({
     amountIn,
     originAddress,
   });
+
+  if (!isAllowedSwapRouter(route.routerAddress)) {
+    throw new SwapBlockedError(
+      'Swap router is not on the approved list. Please refresh and try again.',
+    );
+  }
+
   return createKyberQuoteStep({
     key,
     sellToken,
@@ -248,6 +249,13 @@ async function buildKyberStep({
     amountIn,
     originAddress: sender,
   });
+
+  if (!isAllowedSwapRouter(route.routerAddress)) {
+    throw new SwapBlockedError(
+      'Swap router is not on the approved list. Please refresh and try again.',
+    );
+  }
+
   const build = await fetchKyberBuild({
     sellToken,
     buyToken,
@@ -260,6 +268,14 @@ async function buildKyberStep({
     throw new Error('Kyber build response did not include executable transaction data.');
   }
 
+  if (!isAllowedSwapRouter(build.data.routerAddress)) {
+    throw new SwapBlockedError(
+      'Swap router returned by the aggregator is not on the approved list.',
+    );
+  }
+
+  const builtRouter = getAddress(build.data.routerAddress);
+
   const quotedStep = await createKyberQuoteStep({
     key: 'step1',
     sellToken,
@@ -270,7 +286,7 @@ async function buildKyberStep({
         ...route.routeSummary,
         amountOut: build.data.amountOut || route.routeSummary.amountOut,
       },
-      routerAddress: build.data.routerAddress,
+      routerAddress: builtRouter,
     },
     originAddress: sender,
   });
@@ -278,19 +294,17 @@ async function buildKyberStep({
   return {
     step: {
       ...quotedStep,
-      approvalTarget: isNativeSwapToken(sellToken)
-        ? undefined
-        : build.data.routerAddress,
+      approvalTarget: isNativeSwapToken(sellToken) ? undefined : builtRouter,
     },
     approval: isNativeSwapToken(sellToken)
       ? null
       : {
           token: getTokenAddress(sellToken as Exclude<SwapTokenId, 'ETH'>),
-          spender: build.data.routerAddress,
+          spender: builtRouter,
           requiredAmount: amountIn.toString(),
         },
     transaction: {
-      to: build.data.routerAddress,
+      to: builtRouter,
       data: build.data.data,
       value: build.data.transactionValue || '0',
       chainId: BASE_CHAIN_ID,
@@ -687,18 +701,44 @@ async function fetchWithTimeout<T>(
   url: string,
   init: RequestInit,
 ): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(KYBER_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(KYBER_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new SwapTimeoutError('Swap provider timed out. Please try again.');
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new SwapTimeoutError('Swap provider request was aborted.');
+    }
+    throw new SwapTransientError(
+      error instanceof Error ? error.message : 'Swap provider is unreachable.',
+    );
+  }
 
-  const json = (await response.json()) as T & { message?: string };
+  let json: (T & { message?: string }) | null = null;
+  try {
+    json = (await response.json()) as T & { message?: string };
+  } catch {
+    // Leave json null; handled below.
+  }
+
   if (!response.ok) {
     const message = `${json?.message || 'Swap provider request failed'} (${response.status})`;
     if (response.status === 400 || response.status === 404 || response.status === 422) {
       throw new SwapBlockedError(message);
     }
+    if (response.status === 429 || response.status >= 500) {
+      throw new SwapTransientError(message);
+    }
     throw new Error(message);
+  }
+
+  if (!json) {
+    throw new SwapTransientError('Swap provider returned an invalid response.');
   }
 
   return json;
@@ -734,6 +774,8 @@ function getKyberBuildSlippageBps(
   sellToken: SwapTokenId,
   buyToken: SwapTokenId,
 ): number {
+  // Fixed 0.75% market slippage (MARKET_SLIPPAGE_BPS). SEED pairs also
+  // carry the 5% transfer tax, so the router tolerance is stacked.
   if (isSeedSwapToken(sellToken) || isSeedSwapToken(buyToken)) {
     return SEED_TAX_BPS + MARKET_SLIPPAGE_BPS;
   }

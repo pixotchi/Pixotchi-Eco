@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup } from '@/components/ui/toggle-group';
+import ErrorBoundary from '@/components/ui/error-boundary';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { useFrameContext } from '@/lib/frame-context';
@@ -101,7 +102,9 @@ export default function SwapTab() {
             isSwapModuleDisabled ? (
               <SwapLockedState message={swapDisabledMessage} />
             ) : (
-              <PixotchiSwapPanel />
+              <ErrorBoundary variant="inline" showErrorDetails>
+                <PixotchiSwapPanel />
+              </ErrorBoundary>
             )
           ) : (
             <TradingViewWidget />
