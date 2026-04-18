@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 import { CheckCircle2, ChevronDown } from 'lucide-react';
 import {
+  encodeFunctionData,
   formatUnits,
   parseUnits,
   type Address,
@@ -41,7 +42,13 @@ import type {
   SwapQuoteStep,
   UserSwapTokenId,
 } from '@/lib/swap/types';
+import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
+import {
+  getBuilderCapabilities,
+  transformCallsWithBuilderCode,
+} from '@/lib/builder-code';
+import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 import { cn, formatTokenAmountRounded } from '@/lib/utils';
 
 type QuoteState =
@@ -65,6 +72,13 @@ type ExecutionStepState = {
   txHash?: Hex;
   message?: string;
 };
+
+type SmartWalletBatchCall =
+  | {
+      to: Address;
+      data: Hex;
+      value: bigint;
+    };
 
 const readClient = getBaseReadClient();
 const ETH_GAS_BUFFER_WEI = BigInt(50_000_000_000_000);
@@ -90,27 +104,31 @@ function TokenSelector({
         <button
           type="button"
           className={cn(
-            'flex h-11 w-fit items-center gap-2 rounded-[12px] border border-border/60 bg-background px-3.5 py-2 shadow-sm transition-colors',
-            'hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'ock:cursor-pointer ock:bg-ock-background ock:hover:bg-ock-background-hover ock:active:bg-ock-background-active ock:focus:bg-ock-background-active',
+            'ock:shadow-ock-default ock:rounded-ock-default ock:border-ock-line ock:border',
+            'ock:flex ock:w-fit ock:items-center ock:gap-2 ock:px-3 ock:py-1',
             'disabled:opacity-[0.38] disabled:pointer-events-none',
             className,
           )}
           disabled={disabled}
           aria-label={`Select ${token.displaySymbol}`}
         >
-          <span className="flex items-center gap-2">
+          <span className="ock:w-4 ock:flex ock:items-center ock:justify-center">
             <Image
               src={token.image}
               alt={token.displaySymbol}
-              width={22}
-              height={22}
-              className="h-[22px] w-[22px] rounded-full"
+              width={16}
+              height={16}
+              className="ock:h-4 ock:w-4 ock:rounded-full"
             />
-            <span className="font-semibold text-foreground">
-              {token.displaySymbol}
-            </span>
           </span>
-          <ChevronDown className="h-4 w-4 text-foreground/70" />
+          <span className="ock:font-ock ock:font-semibold ock:text-ock-foreground">
+            {token.displaySymbol}
+          </span>
+          <span className="ock:relative ock:flex ock:items-center ock:justify-center">
+            <span className="ock:absolute ock:top-0 ock:left-0 ock:h-4 ock:w-4" />
+            <ChevronDown className="h-4 w-4 text-foreground/70" />
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56 rounded-xl p-2">
@@ -209,6 +227,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
 export default function PixotchiSwapPanel() {
   const { address, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { isSmartWallet } = useSmartWallet();
   const [sellToken, setSellToken] = useState<UserSwapTokenId>('ETH');
   const [buyToken, setBuyToken] = useState<UserSwapTokenId>('SEED');
   const [sellAmount, setSellAmount] = useState('');
@@ -337,13 +356,16 @@ export default function PixotchiSwapPanel() {
 
     const step = executionSteps[0];
     if (step.status === 'approving') {
-      return 'Approve token spending';
+      return step.message || 'Approve token spending';
     }
     if (step.status === 'swapping') {
-      return `Swapping ${SWAP_TOKEN_MAP[sellToken].displaySymbol} for ${SWAP_TOKEN_MAP[buyToken].displaySymbol}`;
+      return (
+        step.message ||
+        `Swapping ${SWAP_TOKEN_MAP[sellToken].displaySymbol} for ${SWAP_TOKEN_MAP[buyToken].displaySymbol}`
+      );
     }
     if (step.status === 'confirming') {
-      return 'Transaction pending...';
+      return step.message || 'Transaction pending...';
     }
     if (step.status === 'complete') {
       return 'Swap successful';
@@ -524,6 +546,81 @@ export default function PixotchiSwapPanel() {
     [address, updateExecutionStep, walletClient],
   );
 
+  const executeApprovalAndSwapBatch = useCallback(
+    async (
+      approval: NonNullable<SwapBuildStepResponse['approval']>,
+      builtStep: SwapBuildStepResponse,
+      stepIndex: number,
+    ): Promise<TransactionReceipt> => {
+      if (!address || !walletClient?.account) {
+        throw new Error('Wallet client unavailable');
+      }
+
+      const calls = transformCallsWithBuilderCode<SmartWalletBatchCall>([
+        {
+          to: approval.token,
+          data: encodeFunctionData({
+            abi: ERC20_TOKEN_ABI,
+            functionName: 'approve',
+            args: [approval.spender, MAX_APPROVAL_AMOUNT],
+          }),
+          value: BigInt(0),
+        },
+        {
+          to: builtStep.transaction.to,
+          data: builtStep.transaction.data,
+          value: BigInt(builtStep.transaction.value),
+        },
+      ]);
+
+      updateExecutionStep(stepIndex, {
+        status: 'swapping',
+        message: 'Approving and swapping in one transaction',
+      });
+
+      const batch = await walletClient.sendCalls({
+        account: walletClient.account,
+        chain: base,
+        calls,
+        capabilities: getBuilderCapabilities(),
+        forceAtomic: true,
+      });
+
+      updateExecutionStep(stepIndex, {
+        status: 'confirming',
+        message: 'Transaction pending...',
+      });
+
+      const result = await walletClient.waitForCallsStatus({
+        id: batch.id,
+        timeout: 120_000,
+        throwOnFailure: true,
+      });
+
+      if (result.status !== 'success') {
+        throw new Error('Swap transaction reverted');
+      }
+
+      const receipts = result.receipts ?? [];
+      const receipt = normalizeTransactionReceipt(
+        receipts[receipts.length - 1] ?? receipts[0],
+      );
+
+      if (!receipt) {
+        throw new Error('Swap completed without a receipt');
+      }
+
+      updateExecutionStep(stepIndex, {
+        status: 'complete',
+        txHash: receipt.transactionHash,
+        message: receipt.transactionHash,
+      });
+
+      return receipt as TransactionReceipt;
+    },
+    [address, updateExecutionStep, walletClient],
+  );
+
   const executeSingleStep = useCallback(
     async (
       step: SwapQuoteStep,
@@ -538,6 +635,14 @@ export default function PixotchiSwapPanel() {
       const builtStep = await buildStep(step, amountIn);
 
       if (builtStep.approval) {
+        if (isSmartWallet && typeof walletClient?.sendCalls === 'function') {
+          return executeApprovalAndSwapBatch(
+            builtStep.approval,
+            builtStep,
+            stepIndex,
+          );
+        }
+
         await ensureApproval(builtStep.approval, stepIndex);
       }
 
@@ -574,7 +679,14 @@ export default function PixotchiSwapPanel() {
 
       return receipt;
     },
-    [buildStep, ensureApproval, updateExecutionStep, walletClient],
+    [
+      buildStep,
+      ensureApproval,
+      executeApprovalAndSwapBatch,
+      isSmartWallet,
+      updateExecutionStep,
+      walletClient,
+    ],
   );
 
   const finalizeSwapSuccess = useCallback(
@@ -765,11 +877,8 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
-              {'\u00A0'}
-            </div>
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-end">
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:items-center ock:justify-end">
               {buyBalanceText ? <span>{buyBalanceText}</span> : null}
             </div>
           </div>
