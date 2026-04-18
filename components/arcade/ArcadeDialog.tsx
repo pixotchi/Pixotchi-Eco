@@ -15,9 +15,14 @@ import { cn, formatDuration, formatScore, formatTokenAmount } from "@/lib/utils"
 import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
-import { keccak256, encodePacked, toHex, hexToBytes, parseAbiItem, RpcRequestError } from "viem";
+import { keccak256, encodePacked, toHex, hexToBytes, RpcRequestError } from "viem";
 import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
 import { getBaseLogClient } from "@/lib/base-rpc";
+import {
+  SPIN_GAME_V2_COMMITTED_EVENT,
+  SPIN_GAME_V2_FORFEITED_EVENT,
+  SPIN_GAME_V2_PLAYED_EVENT,
+} from "@/lib/spin-game-events";
 
 type ArcadeDialogProps = {
   open: boolean;
@@ -54,16 +59,6 @@ const LOG_CHUNK_SIZE = BigInt(500);
 const BLOCK_TIME_SECONDS = 4;
 const BLOCK_POLL_INTERVAL_MS = 3000;
 const MIN_REVEAL_DELAY_SECONDS = 4;
-
-const SPIN_GAME_COMMITTED_EVENT = parseAbiItem(
-  "event SpinGameV2Committed(uint256 indexed nftId, address indexed player, bytes32 commitHash)"
-);
-const SPIN_GAME_PLAYED_EVENT = parseAbiItem(
-  "event SpinGameV2Played(uint256 indexed nftId, address indexed player, uint256 rewardIndex, int256 pointsDelta, uint256 timeAdded, uint256 leafAmount)"
-);
-const SPIN_GAME_FORFEITED_EVENT = parseAbiItem(
-  "event SpinGameV2Forfeited(uint256 indexed nftId, address indexed player)"
-);
 
 const WHEEL_SEGMENTS = 6;
 const SPIN_EXTRA_TURNS = 4;
@@ -356,11 +351,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         return msg.includes("block range") && msg.includes("large");
       };
 
-      const fetchLogs = async (
-        event:
-          | typeof SPIN_GAME_COMMITTED_EVENT
-          | typeof SPIN_GAME_PLAYED_EVENT
-          | typeof SPIN_GAME_FORFEITED_EVENT,
+        const fetchLogs = async (
+          event:
+          | typeof SPIN_GAME_V2_COMMITTED_EVENT
+          | typeof SPIN_GAME_V2_PLAYED_EVENT
+          | typeof SPIN_GAME_V2_FORFEITED_EVENT,
       ) => {
         const argsFilter = address
           ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } }
@@ -415,9 +410,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       };
 
       const [committedLogs, playedLogs, forfeitedLogs] = await Promise.all([
-        fetchLogs(SPIN_GAME_COMMITTED_EVENT),
-        fetchLogs(SPIN_GAME_PLAYED_EVENT),
-        fetchLogs(SPIN_GAME_FORFEITED_EVENT),
+        fetchLogs(SPIN_GAME_V2_COMMITTED_EVENT),
+        fetchLogs(SPIN_GAME_V2_PLAYED_EVENT),
+        fetchLogs(SPIN_GAME_V2_FORFEITED_EVENT),
       ]);
 
       const lastCommit = committedLogs.at(-1);
