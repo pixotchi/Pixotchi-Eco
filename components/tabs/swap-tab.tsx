@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
+import { erc20Abi } from 'viem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup } from '@/components/ui/toggle-group';
@@ -15,6 +16,9 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import TradingViewWidget from './TradingViewWidget';
 import PixotchiSwapPanel from './pixotchi-swap-panel';
 import { SEED_ADDRESS } from '@/lib/swap/constants';
+
+const INITIAL_SEED_SUPPLY = BigInt(20_000_000) * BigInt(10) ** BigInt(18);
+const PERCENTAGE_BASIS_POINTS = BigInt(10_000);
 
 function SwapLockedState({ message }: { message: string }) {
   return (
@@ -42,9 +46,23 @@ export default function SwapTab() {
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('swap');
   const isChartView = swapView === 'chart';
+  const { data: seedTotalSupply } = useReadContract({
+    address: SEED_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'totalSupply',
+    query: {
+      enabled: isVisible,
+      staleTime: 60_000,
+      refetchInterval: isVisible ? 60_000 : false,
+    },
+  });
 
   // Rewards distributed today (2% of 24h volume)
   const [rewardsData, setRewardsData] = useState<{ volume24h: number; rewards: number } | null>(null);
+  const currentBurnedSupplyLabel =
+    typeof seedTotalSupply === 'bigint' && seedTotalSupply <= INITIAL_SEED_SUPPLY
+      ? `${(Number(((INITIAL_SEED_SUPPLY - seedTotalSupply) * PERCENTAGE_BASIS_POINTS) / INITIAL_SEED_SUPPLY) / 100).toFixed(2)}%`
+      : '...';
 
   // Refresh global balances when swap tab is visible (in case user swapped elsewhere/added funds)
   useEffect(() => {
@@ -121,7 +139,12 @@ export default function SwapTab() {
           <div className="flex items-start space-x-3">
             <Image src="/icons/fire.svg" alt="Burn" width={20} height={20} className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold">70% In-Game Burn</h4>
+              <h4 className="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-semibold">
+                <span>70% In-Game Burn</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  (Current burnt supply: {currentBurnedSupplyLabel})
+                </span>
+              </h4>
               <p className="text-muted-foreground text-xs">
                 Currently, 70% of the SEED tokens spent within the game on items or upgrades are permanently burned. 30% are added to the rewards pool.
               </p>
