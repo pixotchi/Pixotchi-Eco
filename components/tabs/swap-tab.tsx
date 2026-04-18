@@ -14,6 +14,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import TradingViewWidget from './TradingViewWidget';
 import PixotchiSwapPanel from './pixotchi-swap-panel';
 import { SEED_ADDRESS } from '@/lib/swap/constants';
+import { cn } from '@/lib/utils';
 
 function SwapLockedState({ message }: { message: string }) {
   return (
@@ -77,12 +78,24 @@ export default function SwapTab() {
   return (
     <div className="space-y-4">
       <Card
-        className={isChartView ? 'flex flex-col aspect-square' : ''}
-        padding={isChartView ? 'none' : 'md'}
+        className={cn(
+          'overflow-hidden border-border/60 shadow-[0_28px_70px_-52px_hsl(var(--foreground)/0.6)]',
+          isChartView
+            ? 'flex flex-col aspect-square bg-card'
+            : 'bg-[linear-gradient(180deg,hsl(var(--card)/0.98),hsl(var(--background)/0.94))] backdrop-blur-sm',
+        )}
+        padding={isChartView ? 'none' : 'sm'}
       >
-        <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
+        <CardHeader
+          className={cn(
+            'pb-2',
+            isChartView ? 'px-4 pt-4 flex-shrink-0' : 'px-2 pt-2',
+          )}
+        >
           <div className="flex items-center justify-between gap-4">
-            <CardTitle>{isChartView ? 'Chart' : 'Swap'}</CardTitle>
+            <CardTitle className={cn(!isChartView && 'text-sm tracking-wide')}>
+              {isChartView ? 'Chart' : 'Swap'}
+            </CardTitle>
             <ToggleGroup
               value={swapView}
               onValueChange={(v) => setSwapView(v as 'swap' | 'chart')}
@@ -96,7 +109,11 @@ export default function SwapTab() {
             />
           </div>
         </CardHeader>
-        <CardContent className={isChartView ? 'flex-1 p-4 overflow-hidden' : 'space-y-4'}>
+        <CardContent
+          className={cn(
+            isChartView ? 'flex-1 p-4 overflow-hidden' : 'space-y-4 px-2 pb-2 pt-1',
+          )}
+        >
           {swapView === 'swap' ? (
             isSwapModuleDisabled ? (
               <SwapLockedState message={swapDisabledMessage} />

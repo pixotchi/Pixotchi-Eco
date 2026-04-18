@@ -15,12 +15,21 @@ import {
   ArrowDownUp,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   CircleAlert,
+  Info,
   Loader2,
 } from 'lucide-react';
-import { parseUnits, type Hex, type TransactionReceipt } from 'viem';
+import {
+  encodeFunctionData,
+  formatUnits,
+  parseUnits,
+  type Address,
+  type Hex,
+  type TransactionReceipt,
+} from 'viem';
 import { base } from 'viem/chains';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useBalance, useWalletClient } from 'wagmi';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -70,7 +79,25 @@ type ExecutionStepState = {
   message?: string;
 };
 
+type FeeEstimateState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | {
+      status: 'ready';
+      totalFeeWei: bigint;
+      swapFeeWei: bigint;
+      approvalFeeWei?: bigint;
+      approvalRequired: boolean;
+    }
+  | {
+      status: 'error';
+      error: string;
+      approvalRequired: boolean;
+    };
+
 const readClient = getBaseReadClient();
+const ETH_GAS_BUFFER_WEI = BigInt(50_000_000_000_000);
+const KYBER_SWAP_GAS_FALLBACK = BigInt(360_000);
 
 function TokenSelector({
   value,
@@ -91,39 +118,39 @@ function TokenSelector({
         <Button
           type="button"
           variant="outline"
-          className="h-11 justify-between gap-3 rounded-xl px-3"
+          className="h-12 justify-between gap-3 rounded-full border-border/70 bg-background/90 px-4 text-sm shadow-[0_14px_24px_-22px_hsl(var(--foreground)/0.9)] backdrop-blur-sm hover:border-primary/25 hover:bg-background"
           disabled={disabled}
           aria-label={`Select ${token.displaySymbol}`}
         >
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-3">
             <Image
               src={token.image}
               alt={token.displaySymbol}
-              width={20}
-              height={20}
-              className="h-5 w-5 rounded-full"
+              width={24}
+              height={24}
+              className="h-6 w-6 rounded-full"
             />
-            <span>{token.displaySymbol}</span>
+            <span className="font-medium">{token.displaySymbol}</span>
           </span>
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="start" className="w-56 rounded-2xl p-2">
         {options.map((option) => {
           const optionToken = SWAP_TOKEN_MAP[option];
           return (
             <DropdownMenuItem
               key={option}
               onSelect={() => onSelect(option)}
-              className="flex items-center justify-between gap-3"
+              className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-3">
                 <Image
                   src={optionToken.image}
                   alt={optionToken.displaySymbol}
-                  width={20}
-                  height={20}
-                  className="h-5 w-5 rounded-full"
+                  width={22}
+                  height={22}
+                  className="h-[22px] w-[22px] rounded-full"
                 />
                 <span>{optionToken.displaySymbol}</span>
               </span>
@@ -148,9 +175,14 @@ function QuoteRow({
   emphasis?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 text-xs">
+    <div className="flex items-center justify-between gap-4 text-[13px]">
       <span className="text-muted-foreground">{label}</span>
-      <span className={cn('text-right', emphasis && 'font-semibold text-foreground')}>
+      <span
+        className={cn(
+          'text-right text-foreground/90',
+          emphasis && 'font-semibold text-foreground',
+        )}
+      >
         {value}
       </span>
     </div>
@@ -166,8 +198,62 @@ function formatRawAmount(tokenId: SwapTokenId, amount: string): string {
   return `${formatTokenAmountRounded(BigInt(amount), token.decimals, 6)} ${token.displaySymbol}`;
 }
 
-function getStepTitle(step: SwapQuoteStep): string {
-  return `${SWAP_TOKEN_MAP[step.sellToken].displaySymbol} -> ${SWAP_TOKEN_MAP[step.buyToken].displaySymbol}`;
+function formatEditableAmount(amount: bigint, decimals: number): string {
+  const formatted = formatUnits(amount, decimals);
+  if (!formatted.includes('.')) {
+    return formatted;
+  }
+
+  const [whole, fraction] = formatted.split('.');
+  const trimmedFraction = fraction.slice(0, Math.min(decimals, 8)).replace(/0+$/, '');
+  return trimmedFraction ? `${whole}.${trimmedFraction}` : whole;
+}
+
+function formatGasFee(amountWei: bigint): string {
+  const eth = Number(formatUnits(amountWei, 18));
+  if (!Number.isFinite(eth) || eth <= 0) {
+    return '--';
+  }
+
+  if (eth < 0.0001) {
+    return `<${eth.toFixed(6)} ETH`;
+  }
+
+  return `~${eth.toFixed(6)} ETH`;
+}
+
+function formatRateDisplay(
+  sellToken: UserSwapTokenId,
+  buyToken: UserSwapTokenId,
+  amountIn: bigint,
+  amountOut: bigint,
+): string | null {
+  const sellValue = Number(formatUnits(amountIn, SWAP_TOKEN_MAP[sellToken].decimals));
+  const buyValue = Number(formatUnits(amountOut, SWAP_TOKEN_MAP[buyToken].decimals));
+  if (!Number.isFinite(sellValue) || !Number.isFinite(buyValue) || sellValue <= 0) {
+    return null;
+  }
+
+  const rate = buyValue / sellValue;
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return null;
+  }
+
+  return `1 ${SWAP_TOKEN_MAP[sellToken].displaySymbol} = ${new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 6,
+  }).format(rate)} ${SWAP_TOKEN_MAP[buyToken].displaySymbol}`;
+}
+
+function formatExecutionMessage(message?: string): string | null {
+  if (!message) {
+    return null;
+  }
+
+  if (/^0x[a-fA-F0-9]{64}$/.test(message)) {
+    return `${message.slice(0, 10)}...${message.slice(-8)}`;
+  }
+
+  return message;
 }
 
 function getExecutionStatusLabel(status: ExecutionStatus): string {
@@ -190,13 +276,13 @@ function getExecutionStatusLabel(status: ExecutionStatus): string {
 function getExecutionStatusClass(status: ExecutionStatus): string {
   switch (status) {
     case 'complete':
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+      return 'border-primary/25 bg-primary/10 text-primary';
     case 'error':
       return 'border-destructive/30 bg-destructive/10 text-destructive';
     case 'approving':
     case 'swapping':
     case 'confirming':
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+      return 'border-primary/20 bg-primary/10 text-primary';
     default:
       return 'border-border/50 bg-muted/40 text-muted-foreground';
   }
@@ -233,10 +319,7 @@ function parseInputAmount(
   }
 }
 
-async function fetchJson<T>(
-  url: string,
-  init: RequestInit,
-): Promise<T> {
+async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const json = (await response.json()) as T & { error?: string };
   if (!response.ok) {
@@ -255,7 +338,28 @@ export default function PixotchiSwapPanel() {
   const [quoteState, setQuoteState] = useState<QuoteState>({ status: 'idle' });
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepState[] | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [feeEstimateState, setFeeEstimateState] = useState<FeeEstimateState>({
+    status: 'idle',
+  });
   const quoteRequestRef = useRef(0);
+  const feeRequestRef = useRef(0);
+
+  const {
+    data: sellBalanceData,
+    isLoading: sellBalanceLoading,
+    refetch: refetchSellBalance,
+  } = useBalance({
+    address,
+    chainId: BASE_CHAIN_ID,
+    token:
+      sellToken === 'ETH'
+        ? undefined
+        : (SWAP_TOKEN_MAP[sellToken].address as Address | undefined),
+    query: {
+      enabled: Boolean(address),
+    },
+  });
 
   const allowedTargets = useMemo(
     () => getAllowedSwapTargets(sellToken),
@@ -270,12 +374,73 @@ export default function PixotchiSwapPanel() {
     () => parseInputAmount(deferredSellAmount, sellToken),
     [deferredSellAmount, sellToken],
   );
+  const sellBalanceRaw = sellBalanceData?.value ?? BigInt(0);
+  const sellBalanceText = useMemo(() => {
+    if (!address) {
+      return 'Connect wallet';
+    }
+
+    if (sellBalanceLoading) {
+      return 'Loading balance...';
+    }
+
+    return `Balance ${formatTokenAmountRounded(
+      sellBalanceRaw,
+      SWAP_TOKEN_MAP[sellToken].decimals,
+      sellToken === 'USDC' ? 2 : 6,
+    )}`;
+  }, [address, sellBalanceLoading, sellBalanceRaw, sellToken]);
+
+  const currentQuote = quoteState.status === 'ready' ? quoteState.quote : null;
+  const seedLegStep =
+    currentQuote?.steps.find(
+      (step) => step.taxBps > 0 || Boolean(step.grossOut) || Boolean(step.effectiveIn),
+    ) || null;
+  const rateDisplay = useMemo(() => {
+    if (!currentQuote || currentQuote.strategy === 'blocked' || !parsedAmount) {
+      return null;
+    }
+
+    return formatRateDisplay(
+      sellToken,
+      buyToken,
+      parsedAmount,
+      BigInt(currentQuote.expectedOut),
+    );
+  }, [buyToken, currentQuote, parsedAmount, sellToken]);
+  const buyAmountDisplay =
+    currentQuote && currentQuote.strategy !== 'blocked'
+      ? formatTokenAmountRounded(
+          BigInt(currentQuote.expectedOut),
+          SWAP_TOKEN_MAP[buyToken].decimals,
+          6,
+        )
+      : '--';
+  const isAmountValid = Boolean(parsedAmount && parsedAmount > BigInt(0));
+  const hasInsufficientBalance = Boolean(
+    address &&
+      parsedAmount &&
+      parsedAmount > BigInt(0) &&
+      parsedAmount > sellBalanceRaw,
+  );
+  const actionDisabled =
+    isExecuting ||
+    !currentQuote ||
+    currentQuote.strategy === 'blocked' ||
+    !isAmountValid ||
+    chainId !== BASE_CHAIN_ID ||
+    !walletClient?.account ||
+    hasInsufficientBalance;
 
   useEffect(() => {
     if (!allowedTargets.includes(buyToken)) {
       setBuyToken(allowedTargets[0]);
     }
   }, [allowedTargets, buyToken]);
+
+  useEffect(() => {
+    setExecutionSteps(null);
+  }, [sellToken, buyToken, deferredSellAmount]);
 
   useEffect(() => {
     const amountIn = parsedAmount;
@@ -364,8 +529,34 @@ export default function PixotchiSwapPanel() {
     [],
   );
 
+  const buildStep = useCallback(
+    async (step: SwapQuoteStep, amountIn: string, signal?: AbortSignal) => {
+      if (!address) {
+        throw new Error('Wallet not connected');
+      }
+
+      return fetchJson<SwapBuildStepResponse>('/api/swap/build-step', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: step.kind,
+          sellToken: step.sellToken,
+          buyToken: step.buyToken,
+          amountIn,
+          sender: address,
+          recipient: address,
+        }),
+        signal,
+      });
+    },
+    [address],
+  );
+
   const ensureApproval = useCallback(
-    async (approval: NonNullable<SwapBuildStepResponse['approval']>, stepIndex: number) => {
+    async (
+      approval: NonNullable<SwapBuildStepResponse['approval']>,
+      stepIndex: number,
+    ) => {
       if (!address || !walletClient?.account) {
         throw new Error('Wallet client unavailable');
       }
@@ -400,28 +591,6 @@ export default function PixotchiSwapPanel() {
     [address, updateExecutionStep, walletClient],
   );
 
-  const buildStep = useCallback(
-    async (step: SwapQuoteStep, amountIn: string) => {
-      if (!address) {
-        throw new Error('Wallet not connected');
-      }
-
-      return fetchJson<SwapBuildStepResponse>('/api/swap/build-step', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kind: step.kind,
-          sellToken: step.sellToken,
-          buyToken: step.buyToken,
-          amountIn,
-          sender: address,
-          recipient: address,
-        }),
-      });
-    },
-    [address],
-  );
-
   const executeSingleStep = useCallback(
     async (
       step: SwapQuoteStep,
@@ -441,7 +610,7 @@ export default function PixotchiSwapPanel() {
 
       updateExecutionStep(stepIndex, {
         status: 'swapping',
-        message: getStepTitle(builtStep.step),
+        message: step.routeLabel,
       });
 
       const hash = await walletClient.sendTransaction({
@@ -467,7 +636,7 @@ export default function PixotchiSwapPanel() {
       updateExecutionStep(stepIndex, {
         status: 'complete',
         txHash: hash,
-        message: getStepTitle(builtStep.step),
+        message: hash,
       });
 
       return receipt;
@@ -480,10 +649,15 @@ export default function PixotchiSwapPanel() {
       try {
         window.dispatchEvent(new Event('balances:refresh'));
       } catch {}
+      void refetchSellBalance();
       await trackSwapMission(receipt);
       toast.success('Swap successful');
+
+      window.setTimeout(() => {
+        setExecutionSteps(null);
+      }, 2200);
     },
-    [trackSwapMission],
+    [refetchSellBalance, trackSwapMission],
   );
 
   const executeQuote = useCallback(
@@ -507,7 +681,7 @@ export default function PixotchiSwapPanel() {
       setExecutionSteps(
         quote.steps.map((step) => ({
           key: step.key,
-          label: getStepTitle(step),
+          label: `${SWAP_TOKEN_MAP[step.sellToken].displaySymbol} -> ${SWAP_TOKEN_MAP[step.buyToken].displaySymbol}`,
           status: 'pending',
         })),
       );
@@ -530,13 +704,7 @@ export default function PixotchiSwapPanel() {
         setIsExecuting(false);
       }
     },
-    [
-      address,
-      chainId,
-      executeSingleStep,
-      finalizeSwapSuccess,
-      walletClient,
-    ],
+    [address, chainId, executeSingleStep, finalizeSwapSuccess, walletClient],
   );
 
   const handleFlipTokens = useCallback(() => {
@@ -544,94 +712,366 @@ export default function PixotchiSwapPanel() {
     setBuyToken(sellToken);
   }, [buyToken, sellToken]);
 
-  const currentQuote =
-    quoteState.status === 'ready' ? quoteState.quote : null;
-  const buyAmountDisplay =
-    currentQuote && currentQuote.strategy !== 'blocked'
-      ? formatRawAmount(buyToken, currentQuote.expectedOut)
-      : '--';
-  const isAmountValid = Boolean(parsedAmount && parsedAmount > BigInt(0));
-  const seedLegStep =
-    currentQuote?.steps.find(
-      (step) => step.taxBps > 0 || Boolean(step.grossOut) || Boolean(step.effectiveIn),
-    ) || null;
-  const actionLabel = 'Swap now';
-  const actionDisabled =
-    isExecuting ||
-    !currentQuote ||
-    currentQuote.strategy === 'blocked' ||
-    !isAmountValid ||
-    chainId !== BASE_CHAIN_ID ||
-    !walletClient?.account;
+  const handleSetMax = useCallback(() => {
+    if (!address) {
+      toast.error('Connect your wallet to use max');
+      return;
+    }
+
+    let amount = sellBalanceRaw;
+    if (sellToken === 'ETH') {
+      const reserve =
+        feeEstimateState.status === 'ready'
+          ? feeEstimateState.totalFeeWei * BigInt(2)
+          : ETH_GAS_BUFFER_WEI;
+
+      if (amount <= reserve) {
+        toast.error('Keep a bit of ETH for gas.');
+        return;
+      }
+
+      amount -= reserve;
+    }
+
+    if (amount <= BigInt(0)) {
+      toast.error('No balance available.');
+      return;
+    }
+
+    setSellAmount(formatEditableAmount(amount, SWAP_TOKEN_MAP[sellToken].decimals));
+  }, [address, feeEstimateState, sellBalanceRaw, sellToken]);
+
+  useEffect(() => {
+    if (
+      !address ||
+      !currentQuote ||
+      currentQuote.strategy === 'blocked' ||
+      currentQuote.steps.length === 0
+    ) {
+      setFeeEstimateState({ status: 'idle' });
+      return;
+    }
+
+    const step = currentQuote.steps[0];
+    const requestId = ++feeRequestRef.current;
+    const controller = new AbortController();
+
+    setFeeEstimateState({ status: 'loading' });
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const builtStep = await buildStep(step, step.amountIn, controller.signal);
+        const gasPrice = await readClient.getGasPrice();
+
+        let approvalRequired = false;
+        let approvalFeeWei: bigint | undefined;
+
+        if (builtStep.approval) {
+          const currentAllowance = (await readClient.readContract({
+            address: builtStep.approval.token,
+            abi: ERC20_TOKEN_ABI,
+            functionName: 'allowance',
+            args: [address, builtStep.approval.spender],
+          })) as bigint;
+
+          approvalRequired =
+            currentAllowance < BigInt(builtStep.approval.requiredAmount);
+
+          if (approvalRequired) {
+            const approvalGas = await readClient.estimateGas({
+              account: address,
+              to: builtStep.approval.token,
+              data: encodeFunctionData({
+                abi: ERC20_TOKEN_ABI,
+                functionName: 'approve',
+                args: [builtStep.approval.spender, MAX_APPROVAL_AMOUNT],
+              }),
+              value: BigInt(0),
+            });
+            approvalFeeWei = approvalGas * gasPrice;
+          }
+        }
+
+        let swapFeeWei: bigint;
+        try {
+          const swapGas = await readClient.estimateGas({
+            account: address,
+            to: builtStep.transaction.to,
+            data: builtStep.transaction.data,
+            value: BigInt(builtStep.transaction.value),
+          });
+          swapFeeWei = swapGas * gasPrice;
+        } catch {
+          swapFeeWei = KYBER_SWAP_GAS_FALLBACK * gasPrice;
+        }
+
+        if (feeRequestRef.current !== requestId) {
+          return;
+        }
+
+        setFeeEstimateState({
+          status: 'ready',
+          totalFeeWei: swapFeeWei + (approvalFeeWei ?? BigInt(0)),
+          swapFeeWei,
+          approvalFeeWei,
+          approvalRequired,
+        });
+      } catch (error) {
+        if (controller.signal.aborted || feeRequestRef.current !== requestId) {
+          return;
+        }
+
+        setFeeEstimateState({
+          status: 'error',
+          error:
+            error instanceof Error ? error.message : 'Failed to estimate network fee',
+          approvalRequired: false,
+        });
+      }
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [address, buildStep, currentQuote]);
+
+  const feeSummaryLabel =
+    feeEstimateState.status === 'ready'
+      ? formatGasFee(feeEstimateState.totalFeeWei)
+      : feeEstimateState.status === 'loading'
+        ? 'Calculating...'
+        : '--';
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-2xl border border-border/60 bg-background/80 p-3">
-        <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Sell
-            </span>
-            <TokenSelector
-              value={sellToken}
-              options={allowedSources}
-              onSelect={(next) => {
-                setSellToken(next);
-              }}
-              disabled={isExecuting}
-            />
-          </div>
-          <Input
-            value={sellAmount}
-            onChange={(event) => {
-              setSellAmount(sanitizeDecimalInput(event.target.value));
-            }}
-            inputMode="decimal"
-            placeholder="0.0"
-            className="h-14 border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
-            disabled={isExecuting}
-            aria-label={`Sell amount in ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
-          />
-        </div>
+      <div
+        className="relative overflow-hidden rounded-[30px] border border-border/60 bg-card/95 p-3 shadow-[0_28px_60px_-42px_hsl(var(--foreground)/0.55)] sm:p-4"
+        style={{
+          backgroundImage:
+            'linear-gradient(180deg, hsl(var(--card) / 0.98), hsl(var(--background) / 0.96))',
+        }}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-80"
+          style={{
+            background:
+              'radial-gradient(circle at top left, hsl(var(--primary) / 0.12), transparent 36%), radial-gradient(circle at bottom right, hsl(var(--accent) / 0.26), transparent 34%)',
+          }}
+        />
 
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            className="h-10 w-10 rounded-full"
-            onClick={handleFlipTokens}
-            disabled={isExecuting}
-            aria-label="Toggle swap direction"
-          >
-            <ArrowDownUp className="h-4 w-4" />
-          </Button>
-        </div>
+        <div className="relative space-y-3">
+          <div className="rounded-[24px] border border-border/55 bg-background/70 px-4 py-4 backdrop-blur-sm sm:px-5 sm:py-5">
+            <div className="flex items-start justify-between gap-4">
+              <TokenSelector
+                value={sellToken}
+                options={allowedSources}
+                onSelect={setSellToken}
+                disabled={isExecuting}
+              />
+              <div className="min-w-0 flex-1 text-right">
+                <Input
+                  value={sellAmount}
+                  onChange={(event) => {
+                    setSellAmount(sanitizeDecimalInput(event.target.value));
+                  }}
+                  inputMode="decimal"
+                  placeholder="0.0"
+                  className="h-auto border-0 bg-transparent px-0 py-0 text-right text-[40px] font-semibold leading-none tracking-[-0.04em] shadow-none focus-visible:ring-0 sm:text-[44px]"
+                  disabled={isExecuting}
+                  aria-label={`Sell amount in ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
+                />
+              </div>
+            </div>
 
-        <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Buy
-            </span>
-            <TokenSelector
-              value={buyToken}
-              options={allowedTargets}
-              onSelect={(next) => {
-                setBuyToken(next);
-              }}
-              disabled={isExecuting}
-            />
+            <div className="mt-5 flex items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={handleSetMax}
+                disabled={isExecuting || !address || sellBalanceRaw <= BigInt(0)}
+                className="inline-flex h-8 items-center rounded-full border border-border/55 bg-background/80 px-3 text-[11px] font-medium text-muted-foreground transition hover:border-primary/25 hover:bg-primary/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              >
+                Max
+              </button>
+              <span className="text-xs text-muted-foreground">{sellBalanceText}</span>
+            </div>
           </div>
-          <div className="flex h-14 items-center text-2xl font-semibold">
-            {quoteState.status === 'loading' ? (
-              <span className="flex items-center gap-2 text-base text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Fetching quote
+
+          <div className="-my-3 flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="relative z-10 h-12 w-12 rounded-full border-primary/20 bg-background/95 text-primary shadow-[0_18px_30px_-22px_hsl(var(--primary)/0.9)] backdrop-blur hover:border-primary/30 hover:bg-background"
+              onClick={handleFlipTokens}
+              disabled={isExecuting}
+              aria-label="Toggle swap direction"
+            >
+              <ArrowDownUp className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="rounded-[24px] border border-border/55 bg-background/70 px-4 py-4 backdrop-blur-sm sm:px-5 sm:py-5">
+            <div className="flex items-start justify-between gap-4">
+              <TokenSelector
+                value={buyToken}
+                options={allowedTargets}
+                onSelect={setBuyToken}
+                disabled={isExecuting}
+              />
+              <div className="min-w-0 flex-1 text-right">
+                <div className="text-[40px] font-semibold leading-none tracking-[-0.04em] sm:text-[44px]">
+                  {quoteState.status === 'loading' ? (
+                    <span className="inline-flex items-center gap-2 text-base font-medium text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Quoting
+                    </span>
+                  ) : (
+                    buyAmountDisplay
+                  )}
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  {currentQuote && currentQuote.strategy !== 'blocked'
+                    ? `Min ${formatRawAmount(buyToken, currentQuote.minOut)}`
+                    : 'Output updates as you type'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-4">
+              <span className="text-xs text-muted-foreground">
+                {rateDisplay || 'Best route selected automatically'}
               </span>
-            ) : (
-              buyAmountDisplay
-            )}
+              <span className="text-xs text-muted-foreground">
+                1 transaction
+              </span>
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((current) => !current)}
+            className="flex w-full items-center justify-between gap-4 rounded-2xl px-1 py-2 text-left"
+            aria-expanded={detailsOpen}
+          >
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Network fees</span>
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-background/75">
+                <Info className="h-3.5 w-3.5" />
+              </span>
+            </span>
+
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <span>{feeSummaryLabel}</span>
+              <span className="text-xs font-medium text-primary">
+                More details
+              </span>
+              {detailsOpen ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </span>
+          </button>
+
+          {detailsOpen && currentQuote && currentQuote.strategy !== 'blocked' ? (
+            <div className="rounded-[22px] border border-border/55 bg-background/72 p-4 backdrop-blur-sm">
+              <div className="space-y-3">
+                <QuoteRow label="Provider" value="Kyber Aggregator" />
+                <QuoteRow
+                  label="Route"
+                  value={currentQuote.steps[0]?.routeLabel || 'Best available route'}
+                />
+                <QuoteRow
+                  label="Expected receive"
+                  value={formatRawAmount(buyToken, currentQuote.expectedOut)}
+                  emphasis
+                />
+                <QuoteRow
+                  label="Minimum receive"
+                  value={formatRawAmount(buyToken, currentQuote.minOut)}
+                />
+                {seedLegStep?.grossOut ? (
+                  <QuoteRow
+                    label="Gross receive before tax"
+                    value={formatRawAmount(
+                      seedLegStep.buyToken,
+                      seedLegStep.grossOut,
+                    )}
+                  />
+                ) : null}
+                {seedLegStep?.effectiveIn ? (
+                  <QuoteRow
+                    label="SEED reaching pool"
+                    value={formatRawAmount(
+                      seedLegStep.sellToken,
+                      seedLegStep.effectiveIn,
+                    )}
+                  />
+                ) : null}
+                {currentQuote.taxBps > 0 ? (
+                  <QuoteRow
+                    label="SEED tax"
+                    value={formatBasisPoints(currentQuote.taxBps)}
+                  />
+                ) : null}
+                <QuoteRow
+                  label="Market slippage"
+                  value={formatBasisPoints(currentQuote.marketSlippageBps)}
+                />
+                {currentQuote.taxBps > 0 ? (
+                  <QuoteRow
+                    label="Router tolerance"
+                    value={formatBasisPoints(
+                      currentQuote.taxBps + currentQuote.marketSlippageBps,
+                    )}
+                  />
+                ) : null}
+                <QuoteRow
+                  label="Approval"
+                  value={
+                    feeEstimateState.status === 'ready'
+                      ? feeEstimateState.approvalRequired
+                        ? 'Required on first swap'
+                        : 'Already approved'
+                      : 'Estimated automatically'
+                  }
+                />
+                <QuoteRow
+                  label="Fee estimate"
+                  value={feeSummaryLabel}
+                />
+              </div>
+
+              {currentQuote.steps[0]?.routeSources.length ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {currentQuote.steps[0].routeSources.map((source) => (
+                    <span
+                      key={source}
+                      className="inline-flex items-center rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary"
+                    >
+                      {source}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              {currentQuote.steps[0]?.warnings.length ? (
+                <div className="mt-4 space-y-2 border-t border-border/50 pt-4 text-xs text-muted-foreground">
+                  {currentQuote.steps[0].warnings.map((warning) => (
+                    <p key={warning}>{warning}</p>
+                  ))}
+                </div>
+              ) : null}
+
+              {feeEstimateState.status === 'error' ? (
+                <p className="mt-4 border-t border-border/50 pt-4 text-xs text-muted-foreground">
+                  Fee estimate is best-effort and will finalize in your wallet.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -661,130 +1101,36 @@ export default function PixotchiSwapPanel() {
         </Alert>
       ) : null}
 
-      {currentQuote && currentQuote.strategy !== 'blocked' ? (
-        <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/15 p-4">
+      {executionSteps?.[0] ? (
+        <div className="rounded-[22px] border border-border/55 bg-background/75 p-4 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-semibold">Swap details</span>
-            <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-              1 transaction
-            </span>
-          </div>
-
-          {seedLegStep?.grossOut ? (
-            <div className="space-y-2">
-              <QuoteRow
-                label="Gross receive before SEED tax"
-                value={formatRawAmount(seedLegStep.buyToken, seedLegStep.grossOut)}
-              />
-              <QuoteRow
-                label="SEED tax"
-                value={formatBasisPoints(seedLegStep.taxBps)}
-              />
-            </div>
-          ) : null}
-
-          {seedLegStep?.effectiveIn ? (
-            <QuoteRow
-              label="SEED reaching pool"
-              value={formatRawAmount(seedLegStep.sellToken, seedLegStep.effectiveIn)}
-            />
-          ) : null}
-
-          <QuoteRow
-            label="Expected receive"
-            value={formatRawAmount(buyToken, currentQuote.expectedOut)}
-            emphasis
-          />
-          <QuoteRow
-            label="Minimum receive"
-            value={formatRawAmount(buyToken, currentQuote.minOut)}
-          />
-          {currentQuote.taxBps > 0 ? (
-            <QuoteRow
-              label="SEED tax"
-              value={formatBasisPoints(currentQuote.taxBps)}
-            />
-          ) : null}
-          <QuoteRow
-            label="Market slippage"
-            value={formatBasisPoints(currentQuote.marketSlippageBps)}
-          />
-          {currentQuote.taxBps > 0 ? (
-            <QuoteRow
-              label="Router tolerance"
-              value={formatBasisPoints(
-                currentQuote.taxBps + currentQuote.marketSlippageBps,
-              )}
-            />
-          ) : null}
-
-          <div className="space-y-2 border-t border-border/50 pt-3">
-            {currentQuote.steps.map((step) => (
-              <div
-                key={step.key}
-                className="rounded-xl border border-border/50 bg-background/70 p-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium">{getStepTitle(step)}</span>
-                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {step.kind === 'kyber' ? 'Kyber' : 'BaseSwap'}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">{step.routeLabel}</p>
-                {step.warnings.length > 0 ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {step.warnings.join(' ')}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-
-          {currentQuote.warnings.length > 0 ? (
-            <Alert>
-              <CircleAlert className="h-4 w-4" />
-              <AlertDescription>{currentQuote.warnings.join(' ')}</AlertDescription>
-            </Alert>
-          ) : null}
-        </div>
-      ) : null}
-
-      {executionSteps ? (
-        <div className="space-y-2 rounded-2xl border border-border/60 bg-background/70 p-4">
-          <div className="text-sm font-semibold">Execution status</div>
-          {executionSteps.map((step) => (
-            <div
-              key={`${step.key}-${step.label}`}
-              className="rounded-xl border border-border/50 bg-muted/10 p-3"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium">{step.label}</span>
-                <span
-                  className={cn(
-                    'rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide',
-                    getExecutionStatusClass(step.status),
-                  )}
-                >
-                  {getExecutionStatusLabel(step.status)}
-                </span>
-              </div>
-              {step.message ? (
-                <p className="mt-2 break-all text-xs text-muted-foreground">
-                  {step.message}
+            <div>
+              <p className="text-sm font-semibold">{executionSteps[0].label}</p>
+              {executionSteps[0].message ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatExecutionMessage(executionSteps[0].message)}
                 </p>
               ) : null}
             </div>
-          ))}
+            <span
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-wide',
+                getExecutionStatusClass(executionSteps[0].status),
+              )}
+            >
+              {getExecutionStatusLabel(executionSteps[0].status)}
+            </span>
+          </div>
         </div>
       ) : null}
 
       <Button
         type="button"
-        className="h-11 w-full"
+        className="h-12 w-full rounded-2xl text-sm font-semibold shadow-[0_16px_34px_-18px_hsl(var(--primary)/0.7)]"
         disabled={actionDisabled}
         onClick={() => currentQuote && executeQuote(currentQuote)}
       >
-        {isExecuting ? 'Working...' : actionLabel}
+        {isExecuting ? 'Working...' : 'Swap now'}
       </Button>
 
       {!walletClient?.account ? (
@@ -795,6 +1141,11 @@ export default function PixotchiSwapPanel() {
       {!isAmountValid && sellAmount.trim() ? (
         <p className="text-center text-xs text-muted-foreground">
           Enter a valid {SWAP_TOKEN_MAP[sellToken].displaySymbol} amount.
+        </p>
+      ) : null}
+      {hasInsufficientBalance ? (
+        <p className="text-center text-xs text-destructive">
+          Insufficient {SWAP_TOKEN_MAP[sellToken].displaySymbol} balance.
         </p>
       ) : null}
     </div>
