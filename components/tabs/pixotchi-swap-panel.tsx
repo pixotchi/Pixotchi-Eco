@@ -18,7 +18,7 @@ import {
   CircleAlert,
   Loader2,
 } from 'lucide-react';
-import { parseUnits, type Address, type Hex, type TransactionReceipt } from 'viem';
+import { parseUnits, type Hex, type TransactionReceipt } from 'viem';
 import { base } from 'viem/chains';
 import { useAccount, useWalletClient } from 'wagmi';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -36,8 +36,6 @@ import {
   MAX_APPROVAL_AMOUNT,
   SWAP_TOKEN_MAP,
   USER_SWAP_TOKEN_IDS,
-  getTokenAddress,
-  isNativeSwapToken,
 } from '@/lib/swap/constants';
 import { getAllowedSwapTargets } from '@/lib/swap/rules';
 import type {
@@ -58,7 +56,6 @@ type QuoteState =
 
 type ExecutionStatus =
   | 'pending'
-  | 'requoting'
   | 'approving'
   | 'swapping'
   | 'confirming'
@@ -71,13 +68,6 @@ type ExecutionStepState = {
   status: ExecutionStatus;
   txHash?: Hex;
   message?: string;
-};
-
-type ResumeStepState = {
-  step: SwapQuoteStep;
-  amountIn: string;
-  originalSellToken: UserSwapTokenId;
-  originalBuyToken: UserSwapTokenId;
 };
 
 const readClient = getBaseReadClient();
@@ -182,8 +172,6 @@ function getStepTitle(step: SwapQuoteStep): string {
 
 function getExecutionStatusLabel(status: ExecutionStatus): string {
   switch (status) {
-    case 'requoting':
-      return 'Requoting';
     case 'approving':
       return 'Approval';
     case 'swapping':
@@ -208,7 +196,6 @@ function getExecutionStatusClass(status: ExecutionStatus): string {
     case 'approving':
     case 'swapping':
     case 'confirming':
-    case 'requoting':
       return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
     default:
       return 'border-border/50 bg-muted/40 text-muted-foreground';
@@ -258,19 +245,6 @@ async function fetchJson<T>(
   return json;
 }
 
-async function getTokenBalance(tokenId: SwapTokenId, owner: Address): Promise<bigint> {
-  if (isNativeSwapToken(tokenId)) {
-    return readClient.getBalance({ address: owner });
-  }
-
-  return (await readClient.readContract({
-    address: getTokenAddress(tokenId as Exclude<SwapTokenId, 'ETH'>),
-    abi: ERC20_TOKEN_ABI,
-    functionName: 'balanceOf',
-    args: [owner],
-  })) as bigint;
-}
-
 export default function PixotchiSwapPanel() {
   const { address, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -281,7 +255,6 @@ export default function PixotchiSwapPanel() {
   const [quoteState, setQuoteState] = useState<QuoteState>({ status: 'idle' });
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepState[] | null>(null);
-  const [resumeStep, setResumeStep] = useState<ResumeStepState | null>(null);
   const quoteRequestRef = useRef(0);
 
   const allowedTargets = useMemo(
@@ -454,17 +427,13 @@ export default function PixotchiSwapPanel() {
       step: SwapQuoteStep,
       stepIndex: number,
       amountInOverride?: string,
-    ): Promise<{ actualOut: bigint; receipt: TransactionReceipt }> => {
+    ): Promise<TransactionReceipt> => {
       if (!walletClient?.account) {
         throw new Error('Wallet not connected');
       }
 
       const amountIn = amountInOverride || step.amountIn;
       const builtStep = await buildStep(step, amountIn);
-      const buyTokenBalanceBefore =
-        builtStep.step.buyToken === 'WETH'
-          ? await getTokenBalance('WETH', address as Address)
-          : null;
 
       if (builtStep.approval) {
         await ensureApproval(builtStep.approval, stepIndex);
@@ -490,10 +459,6 @@ export default function PixotchiSwapPanel() {
       });
 
       const receipt = await waitForBaseReceipt(hash);
-      const buyTokenBalanceAfter =
-        builtStep.step.buyToken === 'WETH'
-          ? await getTokenBalance('WETH', address as Address)
-          : null;
 
       if (receipt.status !== 'success') {
         throw new Error('Swap transaction reverted');
@@ -505,19 +470,13 @@ export default function PixotchiSwapPanel() {
         message: getStepTitle(builtStep.step),
       });
 
-      const actualOut =
-        buyTokenBalanceBefore !== null && buyTokenBalanceAfter !== null
-          ? buyTokenBalanceAfter - buyTokenBalanceBefore
-          : BigInt(builtStep.step.expectedOut);
-
-      return { actualOut, receipt };
+      return receipt;
     },
-    [address, buildStep, ensureApproval, updateExecutionStep, walletClient],
+    [buildStep, ensureApproval, updateExecutionStep, walletClient],
   );
 
   const finalizeSwapSuccess = useCallback(
     async (receipt: TransactionReceipt) => {
-      setResumeStep(null);
       try {
         window.dispatchEvent(new Event('balances:refresh'));
       } catch {}
@@ -545,7 +504,6 @@ export default function PixotchiSwapPanel() {
       }
 
       setIsExecuting(true);
-      setResumeStep(null);
       setExecutionSteps(
         quote.steps.map((step) => ({
           key: step.key,
@@ -555,46 +513,8 @@ export default function PixotchiSwapPanel() {
       );
 
       try {
-        const firstResult = await executeSingleStep(quote.steps[0], 0);
-
-        if (quote.strategy === 'two_step_via_weth' && quote.steps[1]) {
-          updateExecutionStep(1, {
-            status: 'requoting',
-            message: `Using actual WETH received: ${formatRawAmount(
-              'WETH',
-              firstResult.actualOut.toString(),
-            )}`,
-          });
-
-          try {
-            const secondResult = await executeSingleStep(
-              quote.steps[1],
-              1,
-              firstResult.actualOut.toString(),
-            );
-            await finalizeSwapSuccess(secondResult.receipt);
-          } catch (error) {
-            setResumeStep({
-              step: quote.steps[1],
-              amountIn: firstResult.actualOut.toString(),
-              originalSellToken: quote.sellToken,
-              originalBuyToken: quote.buyToken,
-            });
-            updateExecutionStep(1, {
-              status: 'error',
-              message:
-                error instanceof Error
-                  ? error.message
-                  : 'Step 2 failed after WETH was received.',
-            });
-            toast.error(
-              'Step 1 succeeded. You now hold WETH and can resume step 2.',
-            );
-            return;
-          }
-        } else {
-          await finalizeSwapSuccess(firstResult.receipt);
-        }
+        const receipt = await executeSingleStep(quote.steps[0], 0);
+        await finalizeSwapSuccess(receipt);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Swap execution failed';
@@ -615,65 +535,13 @@ export default function PixotchiSwapPanel() {
       chainId,
       executeSingleStep,
       finalizeSwapSuccess,
-      updateExecutionStep,
       walletClient,
     ],
   );
 
-  const handleResumeStep = useCallback(async () => {
-    if (!resumeStep || !address || !walletClient?.account) {
-      return;
-    }
-
-    if (chainId !== BASE_CHAIN_ID) {
-      toast.error('Switch to Base to resume step 2');
-      return;
-    }
-
-    setIsExecuting(true);
-    setExecutionSteps([
-      {
-        key: 'step1',
-        label: `Resume ${getStepTitle(resumeStep.step)}`,
-        status: 'pending',
-      },
-    ]);
-
-    try {
-      const result = await executeSingleStep(
-        resumeStep.step,
-        0,
-        resumeStep.amountIn,
-      );
-      await finalizeSwapSuccess(result.receipt);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to resume step 2';
-      setExecutionSteps([
-        {
-          key: 'step1',
-          label: `Resume ${getStepTitle(resumeStep.step)}`,
-          status: 'error',
-          message,
-        },
-      ]);
-      toast.error(message);
-    } finally {
-      setIsExecuting(false);
-    }
-  }, [
-    address,
-    chainId,
-    executeSingleStep,
-    finalizeSwapSuccess,
-    resumeStep,
-    walletClient,
-  ]);
-
   const handleFlipTokens = useCallback(() => {
     setSellToken(buyToken);
     setBuyToken(sellToken);
-    setResumeStep(null);
   }, [buyToken, sellToken]);
 
   const currentQuote =
@@ -684,12 +552,10 @@ export default function PixotchiSwapPanel() {
       : '--';
   const isAmountValid = Boolean(parsedAmount && parsedAmount > BigInt(0));
   const seedLegStep =
-    currentQuote?.steps.find((step) => step.kind === 'baseswap_seed') || null;
-  const actionLabel = resumeStep
-    ? `Resume ${getStepTitle(resumeStep.step)}`
-    : currentQuote?.strategy === 'two_step_via_weth'
-      ? 'Swap in 2 steps'
-      : 'Swap now';
+    currentQuote?.steps.find(
+      (step) => step.taxBps > 0 || Boolean(step.grossOut) || Boolean(step.effectiveIn),
+    ) || null;
+  const actionLabel = 'Swap now';
   const actionDisabled =
     isExecuting ||
     !currentQuote ||
@@ -711,7 +577,6 @@ export default function PixotchiSwapPanel() {
               options={allowedSources}
               onSelect={(next) => {
                 setSellToken(next);
-                setResumeStep(null);
               }}
               disabled={isExecuting}
             />
@@ -720,7 +585,6 @@ export default function PixotchiSwapPanel() {
             value={sellAmount}
             onChange={(event) => {
               setSellAmount(sanitizeDecimalInput(event.target.value));
-              setResumeStep(null);
             }}
             inputMode="decimal"
             placeholder="0.0"
@@ -754,7 +618,6 @@ export default function PixotchiSwapPanel() {
               options={allowedTargets}
               onSelect={(next) => {
                 setBuyToken(next);
-                setResumeStep(null);
               }}
               disabled={isExecuting}
             />
@@ -798,45 +661,19 @@ export default function PixotchiSwapPanel() {
         </Alert>
       ) : null}
 
-      {resumeStep ? (
-        <Alert>
-          <CircleAlert className="h-4 w-4" />
-          <AlertTitle>Resume step 2</AlertTitle>
-          <AlertDescription className="space-y-3">
-            <p>
-              Step 1 already completed. You can continue with{' '}
-              {formatRawAmount('WETH', resumeStep.amountIn)} into{' '}
-              {SWAP_TOKEN_MAP[resumeStep.originalBuyToken].displaySymbol}.
-            </p>
-            <Button
-              type="button"
-              className="w-full"
-              onClick={handleResumeStep}
-              disabled={isExecuting}
-            >
-              {isExecuting ? 'Working...' : `Resume ${getStepTitle(resumeStep.step)}`}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
       {currentQuote && currentQuote.strategy !== 'blocked' ? (
         <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/15 p-4">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-semibold">Swap details</span>
             <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-              {currentQuote.strategy === 'two_step_via_weth'
-                ? '2 transactions'
-                : currentQuote.strategy === 'single_baseswap_seed'
-                  ? 'BaseSwap direct'
-                  : 'Kyber direct'}
+              1 transaction
             </span>
           </div>
 
           {seedLegStep?.grossOut ? (
             <div className="space-y-2">
               <QuoteRow
-                label="BaseSwap gross receive"
+                label="Gross receive before SEED tax"
                 value={formatRawAmount(seedLegStep.buyToken, seedLegStep.grossOut)}
               />
               <QuoteRow
@@ -872,6 +709,14 @@ export default function PixotchiSwapPanel() {
             label="Market slippage"
             value={formatBasisPoints(currentQuote.marketSlippageBps)}
           />
+          {currentQuote.taxBps > 0 ? (
+            <QuoteRow
+              label="Router tolerance"
+              value={formatBasisPoints(
+                currentQuote.taxBps + currentQuote.marketSlippageBps,
+              )}
+            />
+          ) : null}
 
           <div className="space-y-2 border-t border-border/50 pt-3">
             {currentQuote.steps.map((step) => (
@@ -950,12 +795,6 @@ export default function PixotchiSwapPanel() {
       {!isAmountValid && sellAmount.trim() ? (
         <p className="text-center text-xs text-muted-foreground">
           Enter a valid {SWAP_TOKEN_MAP[sellToken].displaySymbol} amount.
-        </p>
-      ) : null}
-      {currentQuote?.strategy === 'two_step_via_weth' ? (
-        <p className="text-center text-xs text-muted-foreground">
-          Composite swaps use WETH internally so step 2 can re-quote from the
-          exact output of step 1.
         </p>
       ) : null}
     </div>

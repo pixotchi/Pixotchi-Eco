@@ -10,7 +10,6 @@ import {
   BASE_CHAIN_ID,
   BASESWAP_ROUTER_ADDRESS,
   BASIS_POINTS,
-  INTERNAL_INTERMEDIATE_TOKEN,
   MARKET_SLIPPAGE_BPS,
   SEED_TAX_BPS,
   SWAP_TOKEN_MAP,
@@ -105,82 +104,25 @@ export async function getSwapQuoteForUserPair({
 
   try {
     const strategy = resolveStrategy(sellToken, buyToken);
-    if (strategy === 'single_kyber') {
-      const step = await quoteKyberStep({
-        key: 'step1',
-        sellToken,
-        buyToken,
-        amountIn,
-        originAddress,
-      });
-
-      return {
-        strategy,
-        sellToken,
-        buyToken,
-        amountIn: amountIn.toString(),
-        expectedOut: step.expectedOut,
-        minOut: step.minOut,
-        taxBps: 0,
-        marketSlippageBps: MARKET_SLIPPAGE_BPS,
-        warnings: [],
-        steps: [step],
-      };
-    }
-
-    if (strategy === 'single_baseswap_seed') {
-      const step = await quoteBaseSwapSeedStep({
-        key: 'step1',
-        sellToken,
-        buyToken,
-        amountIn,
-      });
-
-      return {
-        strategy,
-        sellToken,
-        buyToken,
-        amountIn: amountIn.toString(),
-        expectedOut: step.expectedOut,
-        minOut: step.minOut,
-        taxBps: SEED_TAX_BPS,
-        marketSlippageBps: MARKET_SLIPPAGE_BPS,
-        warnings: ['SEED executes directly against the BaseSwap WETH/SEED pool.'],
-        steps: [step],
-      };
-    }
-
-    const steps =
-      buyToken === 'SEED'
-        ? await quoteBuySeedCompositeSteps({
-            sellToken,
-            buyToken,
-            amountIn,
-            originAddress,
-          })
-        : await quoteSellSeedCompositeSteps({
-            sellToken,
-            buyToken,
-            amountIn,
-            originAddress,
-          });
+    const step = await quoteKyberStep({
+      key: 'step1',
+      sellToken,
+      buyToken,
+      amountIn,
+      originAddress,
+    });
 
     return {
       strategy,
       sellToken,
       buyToken,
       amountIn: amountIn.toString(),
-      expectedOut: steps[1].expectedOut,
-      minOut: steps[1].minOut,
-      taxBps: SEED_TAX_BPS,
+      expectedOut: step.expectedOut,
+      minOut: step.minOut,
+      taxBps: step.taxBps,
       marketSlippageBps: MARKET_SLIPPAGE_BPS,
-      warnings: [
-        'This route executes in 2 swap transactions.',
-        'The SEED leg always runs on the BaseSwap WETH/SEED pool.',
-        'Step 2 requotes from the actual WETH received after step 1.',
-      ],
-      steps,
-      intermediateToken: INTERNAL_INTERMEDIATE_TOKEN,
+      warnings: [],
+      steps: [step],
     };
   } catch (error) {
     if (error instanceof SwapBlockedError) {
@@ -228,18 +170,8 @@ function resolveStrategy(
   sellToken: UserSwapTokenId,
   buyToken: UserSwapTokenId,
 ): SwapStrategy {
-  if (sellToken === 'SEED' && buyToken === 'ETH') {
-    return 'single_baseswap_seed';
-  }
-
-  if (sellToken === 'ETH' && buyToken === 'SEED') {
-    return 'single_baseswap_seed';
-  }
-
-  if (sellToken === 'SEED' || buyToken === 'SEED') {
-    return 'two_step_via_weth';
-  }
-
+  void sellToken;
+  void buyToken;
   return 'single_kyber';
 }
 
@@ -264,52 +196,6 @@ function createBlockedQuote(
   };
 }
 
-async function quoteBuySeedCompositeSteps({
-  sellToken,
-  buyToken,
-  amountIn,
-  originAddress,
-}: UserQuoteParams): Promise<[SwapQuoteStep, SwapQuoteStep]> {
-  const firstStep = await quoteKyberStep({
-    key: 'step1',
-    sellToken,
-    buyToken: 'WETH',
-    amountIn,
-    originAddress,
-  });
-  const secondStep = await quoteBaseSwapSeedStep({
-    key: 'step2',
-    sellToken: 'WETH',
-    buyToken,
-    amountIn: BigInt(firstStep.expectedOut),
-  });
-
-  return [firstStep, secondStep];
-}
-
-async function quoteSellSeedCompositeSteps({
-  sellToken,
-  buyToken,
-  amountIn,
-  originAddress,
-}: UserQuoteParams): Promise<[SwapQuoteStep, SwapQuoteStep]> {
-  const firstStep = await quoteBaseSwapSeedStep({
-    key: 'step1',
-    sellToken,
-    buyToken: 'WETH',
-    amountIn,
-  });
-  const secondStep = await quoteKyberStep({
-    key: 'step2',
-    sellToken: 'WETH',
-    buyToken,
-    amountIn: BigInt(firstStep.expectedOut),
-    originAddress,
-  });
-
-  return [firstStep, secondStep];
-}
-
 async function quoteKyberStep({
   key,
   sellToken,
@@ -331,30 +217,14 @@ async function quoteKyberStep({
     amountIn,
     originAddress,
   });
-  const expectedOut = BigInt(route.routeSummary.amountOut);
-  const minOut = applyDiscountBps(expectedOut, MARKET_SLIPPAGE_BPS);
-  const routeSources = getKyberRouteSources(route.routeSummary);
-
-  return {
+  return createKyberQuoteStep({
     key,
-    kind: 'kyber',
     sellToken,
     buyToken,
-    amountIn: amountIn.toString(),
-    expectedOut: expectedOut.toString(),
-    minOut: minOut.toString(),
-    taxBps: 0,
-    marketSlippageBps: MARKET_SLIPPAGE_BPS,
-    routeLabel:
-      routeSources.length > 0
-        ? `Kyber via ${routeSources.join(' -> ')}`
-        : 'Kyber Aggregator',
-    routeSources,
-    warnings: [],
-    approvalTarget: isNativeSwapToken(sellToken)
-      ? undefined
-      : route.routerAddress,
-  };
+    amountIn,
+    route,
+    originAddress,
+  });
 }
 
 async function buildKyberStep({
@@ -379,6 +249,8 @@ async function buildKyberStep({
     originAddress: sender,
   });
   const build = await fetchKyberBuild({
+    sellToken,
+    buyToken,
     routeSummary: route.routeSummary,
     sender,
     recipient,
@@ -388,27 +260,24 @@ async function buildKyberStep({
     throw new Error('Kyber build response did not include executable transaction data.');
   }
 
-  const routeSources = getKyberRouteSources(route.routeSummary);
-  const amountOut = BigInt(build.data.amountOut || route.routeSummary.amountOut);
-  const minOut = applyDiscountBps(amountOut, MARKET_SLIPPAGE_BPS);
+  const quotedStep = await createKyberQuoteStep({
+    key: 'step1',
+    sellToken,
+    buyToken,
+    amountIn,
+    route: {
+      routeSummary: {
+        ...route.routeSummary,
+        amountOut: build.data.amountOut || route.routeSummary.amountOut,
+      },
+      routerAddress: build.data.routerAddress,
+    },
+    originAddress: sender,
+  });
 
   return {
     step: {
-      key: 'step1',
-      kind: 'kyber',
-      sellToken,
-      buyToken,
-      amountIn: amountIn.toString(),
-      expectedOut: amountOut.toString(),
-      minOut: minOut.toString(),
-      taxBps: 0,
-      marketSlippageBps: MARKET_SLIPPAGE_BPS,
-      routeLabel:
-        routeSources.length > 0
-          ? `Kyber via ${routeSources.join(' -> ')}`
-          : 'Kyber Aggregator',
-      routeSources,
-      warnings: [],
+      ...quotedStep,
       approvalTarget: isNativeSwapToken(sellToken)
         ? undefined
         : build.data.routerAddress,
@@ -426,6 +295,134 @@ async function buildKyberStep({
       value: build.data.transactionValue || '0',
       chainId: BASE_CHAIN_ID,
     },
+  };
+}
+
+async function createKyberQuoteStep({
+  key,
+  sellToken,
+  buyToken,
+  amountIn,
+  route,
+  originAddress,
+}: {
+  key: 'step1' | 'step2';
+  sellToken: SwapTokenId;
+  buyToken: SwapTokenId;
+  amountIn: bigint;
+  route: { routeSummary: KyberRouteSummary; routerAddress: Address };
+  originAddress?: Address;
+}): Promise<SwapQuoteStep> {
+  const routeSources = getKyberRouteSources(route.routeSummary);
+  const displayQuote = await getKyberDisplayQuote({
+    sellToken,
+    buyToken,
+    amountIn,
+    routeSummary: route.routeSummary,
+    originAddress,
+  });
+
+  return {
+    key,
+    kind: 'kyber',
+    sellToken,
+    buyToken,
+    amountIn: amountIn.toString(),
+    expectedOut: displayQuote.expectedOut.toString(),
+    minOut: displayQuote.minOut.toString(),
+    taxBps: displayQuote.taxBps,
+    marketSlippageBps: MARKET_SLIPPAGE_BPS,
+    routeLabel:
+      routeSources.length > 0
+        ? `Kyber via ${routeSources.join(' -> ')}`
+        : 'Kyber Aggregator',
+    routeSources,
+    warnings: displayQuote.warnings,
+    approvalTarget: isNativeSwapToken(sellToken)
+      ? undefined
+      : route.routerAddress,
+    grossOut: displayQuote.grossOut?.toString(),
+    effectiveIn: displayQuote.effectiveIn?.toString(),
+  };
+}
+
+async function getKyberDisplayQuote({
+  sellToken,
+  buyToken,
+  amountIn,
+  routeSummary,
+  originAddress,
+}: {
+  sellToken: SwapTokenId;
+  buyToken: SwapTokenId;
+  amountIn: bigint;
+  routeSummary: KyberRouteSummary;
+  originAddress?: Address;
+}): Promise<{
+  expectedOut: bigint;
+  minOut: bigint;
+  taxBps: number;
+  warnings: string[];
+  grossOut?: bigint;
+  effectiveIn?: bigint;
+}> {
+  if (buyToken === 'SEED') {
+    const grossOut = BigInt(routeSummary.amountOut);
+    const expectedOut = applyDiscountBps(grossOut, SEED_TAX_BPS);
+    const minOut = applyDiscountBps(expectedOut, MARKET_SLIPPAGE_BPS);
+
+    return {
+      expectedOut,
+      minOut,
+      taxBps: SEED_TAX_BPS,
+      warnings: [
+        'SEED applies a 5% transfer tax on output.',
+        `Pixotchi builds the router transaction with ${formatBasisPoints(
+          getKyberBuildSlippageBps(sellToken, buyToken),
+        )} total tolerance so the swap stays 1 transaction.`,
+      ],
+      grossOut,
+    };
+  }
+
+  if (sellToken === 'SEED') {
+    const effectiveIn = applyDiscountBps(amountIn, SEED_TAX_BPS);
+    let expectedOut = applyDiscountBps(BigInt(routeSummary.amountOut), SEED_TAX_BPS);
+
+    if (effectiveIn > BigInt(0)) {
+      try {
+        const effectiveRoute = await fetchKyberRoute({
+          sellToken,
+          buyToken,
+          amountIn: effectiveIn,
+          originAddress,
+        });
+        expectedOut = BigInt(effectiveRoute.routeSummary.amountOut);
+      } catch {
+        // Fall back to scaling the raw quote when the display-only requote is unavailable.
+      }
+    }
+
+    return {
+      expectedOut,
+      minOut: applyDiscountBps(expectedOut, MARKET_SLIPPAGE_BPS),
+      taxBps: SEED_TAX_BPS,
+      warnings: [
+        'Only 95% of submitted SEED reaches the first pool after tax.',
+        `Pixotchi builds the router transaction with ${formatBasisPoints(
+          getKyberBuildSlippageBps(sellToken, buyToken),
+        )} total tolerance so the swap stays 1 transaction.`,
+      ],
+      effectiveIn,
+    };
+  }
+
+  const expectedOut = BigInt(routeSummary.amountOut);
+  return {
+    expectedOut,
+    minOut: applyDiscountBps(expectedOut, MARKET_SLIPPAGE_BPS),
+    taxBps: 0,
+    warnings: [],
   };
 }
 
@@ -654,10 +651,14 @@ async function fetchKyberRoute({
 }
 
 async function fetchKyberBuild({
+  sellToken,
+  buyToken,
   routeSummary,
   sender,
   recipient,
 }: {
+  sellToken: SwapTokenId;
+  buyToken: SwapTokenId;
   routeSummary: KyberRouteSummary;
   sender: Address;
   recipient: Address;
@@ -675,8 +676,8 @@ async function fetchKyberBuild({
       sender,
       recipient,
       origin: sender,
-      slippageTolerance: MARKET_SLIPPAGE_BPS,
-      enableGasEstimation: true,
+      slippageTolerance: getKyberBuildSlippageBps(sellToken, buyToken),
+      enableGasEstimation: false,
       source: 'pixotchi-app',
     }),
   });
@@ -707,10 +708,6 @@ function assertKyberStep(sellToken: SwapTokenId, buyToken: SwapTokenId) {
   if (sellToken === buyToken) {
     throw new SwapBlockedError('Swap legs must use distinct tokens.');
   }
-
-  if (isSeedSwapToken(sellToken) || isSeedSwapToken(buyToken)) {
-    throw new SwapBlockedError('Kyber cannot execute SEED legs in this swap flow.');
-  }
 }
 
 function assertBaseSwapSeedStep(sellToken: SwapTokenId, buyToken: SwapTokenId) {
@@ -731,6 +728,21 @@ function applyDiscountBps(amount: bigint, bps: number): bigint {
   }
 
   return (amount * BigInt(BASIS_POINTS - bps)) / BigInt(BASIS_POINTS);
+}
+
+function getKyberBuildSlippageBps(
+  sellToken: SwapTokenId,
+  buyToken: SwapTokenId,
+): number {
+  if (isSeedSwapToken(sellToken) || isSeedSwapToken(buyToken)) {
+    return SEED_TAX_BPS + MARKET_SLIPPAGE_BPS;
+  }
+
+  return MARKET_SLIPPAGE_BPS;
+}
+
+function formatBasisPoints(bps: number): string {
+  return `${(bps / 100).toFixed(2)}%`;
 }
 
 function getKyberRouteSources(routeSummary: KyberRouteSummary): string[] {
