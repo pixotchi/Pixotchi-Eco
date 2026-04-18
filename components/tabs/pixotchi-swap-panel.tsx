@@ -11,15 +11,8 @@ import {
 } from 'react';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
+import { CheckCircle2, ChevronDown, CircleAlert, Loader2 } from 'lucide-react';
 import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  CircleAlert,
-  Loader2,
-} from 'lucide-react';
-import {
-  encodeFunctionData,
   formatUnits,
   parseUnits,
   type Address,
@@ -47,7 +40,6 @@ import type {
   SwapBuildStepResponse,
   SwapQuoteResponse,
   SwapQuoteStep,
-  SwapTokenId,
   UserSwapTokenId,
 } from '@/lib/swap/types';
 import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
@@ -75,25 +67,8 @@ type ExecutionStepState = {
   message?: string;
 };
 
-type FeeEstimateState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | {
-      status: 'ready';
-      totalFeeWei: bigint;
-      swapFeeWei: bigint;
-      approvalFeeWei?: bigint;
-      approvalRequired: boolean;
-    }
-  | {
-      status: 'error';
-      error: string;
-      approvalRequired: boolean;
-    };
-
 const readClient = getBaseReadClient();
 const ETH_GAS_BUFFER_WEI = BigInt(50_000_000_000_000);
-const KYBER_SWAP_GAS_FALLBACK = BigInt(360_000);
 
 function TokenSelector({
   value,
@@ -116,24 +91,23 @@ function TokenSelector({
         <button
           type="button"
           className={cn(
-            'ock:cursor-pointer ock:bg-ock-background ock:hover:bg-ock-background-hover ock:active:bg-ock-background-active ock:focus:bg-ock-background-active',
-            'ock:shadow-ock-default ock:rounded-ock-default ock:border-ock-line ock:border',
-            'ock:flex ock:w-fit ock:items-center ock:gap-2 ock:px-3 ock:py-1',
+            'flex w-fit items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-2 shadow-sm transition-colors',
+            'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             'disabled:opacity-[0.38] disabled:pointer-events-none',
             className,
           )}
           disabled={disabled}
           aria-label={`Select ${token.displaySymbol}`}
         >
-          <span className="ock:flex ock:items-center ock:gap-2">
+          <span className="flex items-center gap-2">
             <Image
               src={token.image}
               alt={token.displaySymbol}
-              width={16}
-              height={16}
-              className="ock:h-4 ock:w-4 ock:rounded-full"
+              width={20}
+              height={20}
+              className="h-5 w-5 rounded-full"
             />
-            <span className="ock:font-ock ock:font-semibold ock:text-ock-foreground">
+            <span className="font-semibold text-foreground">
               {token.displaySymbol}
             </span>
           </span>
@@ -170,39 +144,6 @@ function TokenSelector({
   );
 }
 
-function QuoteRow({
-  label,
-  value,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 text-[13px]">
-      <span className="text-muted-foreground">{label}</span>
-      <span
-        className={cn(
-          'text-right text-foreground/90',
-          emphasis && 'font-semibold text-foreground',
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function formatBasisPoints(bps: number): string {
-  return `${(bps / 100).toFixed(2)}%`;
-}
-
-function formatRawAmount(tokenId: SwapTokenId, amount: string): string {
-  const token = SWAP_TOKEN_MAP[tokenId];
-  return `${formatTokenAmountRounded(BigInt(amount), token.decimals, 6)} ${token.displaySymbol}`;
-}
-
 function formatEditableAmount(amount: bigint, decimals: number): string {
   const formatted = formatUnits(amount, decimals);
   if (!formatted.includes('.')) {
@@ -212,41 +153,6 @@ function formatEditableAmount(amount: bigint, decimals: number): string {
   const [whole, fraction] = formatted.split('.');
   const trimmedFraction = fraction.slice(0, Math.min(decimals, 8)).replace(/0+$/, '');
   return trimmedFraction ? `${whole}.${trimmedFraction}` : whole;
-}
-
-function formatGasFee(amountWei: bigint): string {
-  const eth = Number(formatUnits(amountWei, 18));
-  if (!Number.isFinite(eth) || eth <= 0) {
-    return '--';
-  }
-
-  if (eth < 0.0001) {
-    return `<${eth.toFixed(6)} ETH`;
-  }
-
-  return `~${eth.toFixed(6)} ETH`;
-}
-
-function formatRateDisplay(
-  sellToken: UserSwapTokenId,
-  buyToken: UserSwapTokenId,
-  amountIn: bigint,
-  amountOut: bigint,
-): string | null {
-  const sellValue = Number(formatUnits(amountIn, SWAP_TOKEN_MAP[sellToken].decimals));
-  const buyValue = Number(formatUnits(amountOut, SWAP_TOKEN_MAP[buyToken].decimals));
-  if (!Number.isFinite(sellValue) || !Number.isFinite(buyValue) || sellValue <= 0) {
-    return null;
-  }
-
-  const rate = buyValue / sellValue;
-  if (!Number.isFinite(rate) || rate <= 0) {
-    return null;
-  }
-
-  return `1 ${SWAP_TOKEN_MAP[sellToken].displaySymbol} = ${new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 6,
-  }).format(rate)} ${SWAP_TOKEN_MAP[buyToken].displaySymbol}`;
 }
 
 function formatExecutionMessage(message?: string): string | null {
@@ -343,12 +249,7 @@ export default function PixotchiSwapPanel() {
   const [quoteState, setQuoteState] = useState<QuoteState>({ status: 'idle' });
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepState[] | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [feeEstimateState, setFeeEstimateState] = useState<FeeEstimateState>({
-    status: 'idle',
-  });
   const quoteRequestRef = useRef(0);
-  const feeRequestRef = useRef(0);
 
   const {
     data: sellBalanceData,
@@ -415,22 +316,6 @@ export default function PixotchiSwapPanel() {
   }, [address, buyBalanceData?.value, buyBalanceLoading, buyToken]);
 
   const currentQuote = quoteState.status === 'ready' ? quoteState.quote : null;
-  const seedLegStep =
-    currentQuote?.steps.find(
-      (step) => step.taxBps > 0 || Boolean(step.grossOut) || Boolean(step.effectiveIn),
-    ) || null;
-  const rateDisplay = useMemo(() => {
-    if (!currentQuote || currentQuote.strategy === 'blocked' || !parsedAmount) {
-      return null;
-    }
-
-    return formatRateDisplay(
-      sellToken,
-      buyToken,
-      parsedAmount,
-      BigInt(currentQuote.expectedOut),
-    );
-  }, [buyToken, currentQuote, parsedAmount, sellToken]);
   const buyAmountDisplay =
     currentQuote && currentQuote.strategy !== 'blocked'
       ? formatTokenAmountRounded(
@@ -743,17 +628,12 @@ export default function PixotchiSwapPanel() {
 
     let amount = sellBalanceRaw;
     if (sellToken === 'ETH') {
-      const reserve =
-        feeEstimateState.status === 'ready'
-          ? feeEstimateState.totalFeeWei * BigInt(2)
-          : ETH_GAS_BUFFER_WEI;
-
-      if (amount <= reserve) {
+      if (amount <= ETH_GAS_BUFFER_WEI) {
         toast.error('Keep a bit of ETH for gas.');
         return;
       }
 
-      amount -= reserve;
+      amount -= ETH_GAS_BUFFER_WEI;
     }
 
     if (amount <= BigInt(0)) {
@@ -762,121 +642,19 @@ export default function PixotchiSwapPanel() {
     }
 
     setSellAmount(formatEditableAmount(amount, SWAP_TOKEN_MAP[sellToken].decimals));
-  }, [address, feeEstimateState, sellBalanceRaw, sellToken]);
-
-  useEffect(() => {
-    if (
-      !address ||
-      !currentQuote ||
-      currentQuote.strategy === 'blocked' ||
-      currentQuote.steps.length === 0
-    ) {
-      setFeeEstimateState({ status: 'idle' });
-      return;
-    }
-
-    const step = currentQuote.steps[0];
-    const requestId = ++feeRequestRef.current;
-    const controller = new AbortController();
-
-    setFeeEstimateState({ status: 'loading' });
-
-    const timer = window.setTimeout(async () => {
-      try {
-        const builtStep = await buildStep(step, step.amountIn, controller.signal);
-        const gasPrice = await readClient.getGasPrice();
-
-        let approvalRequired = false;
-        let approvalFeeWei: bigint | undefined;
-
-        if (builtStep.approval) {
-          const currentAllowance = (await readClient.readContract({
-            address: builtStep.approval.token,
-            abi: ERC20_TOKEN_ABI,
-            functionName: 'allowance',
-            args: [address, builtStep.approval.spender],
-          })) as bigint;
-
-          approvalRequired =
-            currentAllowance < BigInt(builtStep.approval.requiredAmount);
-
-          if (approvalRequired) {
-            const approvalGas = await readClient.estimateGas({
-              account: address,
-              to: builtStep.approval.token,
-              data: encodeFunctionData({
-                abi: ERC20_TOKEN_ABI,
-                functionName: 'approve',
-                args: [builtStep.approval.spender, MAX_APPROVAL_AMOUNT],
-              }),
-              value: BigInt(0),
-            });
-            approvalFeeWei = approvalGas * gasPrice;
-          }
-        }
-
-        let swapFeeWei: bigint;
-        try {
-          const swapGas = await readClient.estimateGas({
-            account: address,
-            to: builtStep.transaction.to,
-            data: builtStep.transaction.data,
-            value: BigInt(builtStep.transaction.value),
-          });
-          swapFeeWei = swapGas * gasPrice;
-        } catch {
-          swapFeeWei = KYBER_SWAP_GAS_FALLBACK * gasPrice;
-        }
-
-        if (feeRequestRef.current !== requestId) {
-          return;
-        }
-
-        setFeeEstimateState({
-          status: 'ready',
-          totalFeeWei: swapFeeWei + (approvalFeeWei ?? BigInt(0)),
-          swapFeeWei,
-          approvalFeeWei,
-          approvalRequired,
-        });
-      } catch (error) {
-        if (controller.signal.aborted || feeRequestRef.current !== requestId) {
-          return;
-        }
-
-        setFeeEstimateState({
-          status: 'error',
-          error:
-            error instanceof Error ? error.message : 'Failed to estimate network fee',
-          approvalRequired: false,
-        });
-      }
-    }, 180);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [address, buildStep, currentQuote]);
-
-  const feeSummaryLabel =
-    feeEstimateState.status === 'ready'
-      ? formatGasFee(feeEstimateState.totalFeeWei)
-      : feeEstimateState.status === 'loading'
-        ? 'Calculating...'
-        : '--';
+  }, [address, sellBalanceRaw, sellToken]);
 
   return (
-    <div data-ock-theme="pixotchi" className="space-y-4">
+    <div className="space-y-4">
       <div className="space-y-0.5">
         <div
-          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+          className="my-0.5 flex h-[148px] w-full flex-col items-start rounded-[20px] border border-border/55 bg-card p-4 shadow-sm"
           data-testid="ockSwapAmountInput_Container"
         >
-          <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
+          <div className="flex w-full items-center justify-between text-sm text-muted-foreground">
             Sell
           </div>
-          <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
+          <div className="flex w-full items-center justify-between">
             <input
               value={sellAmount}
               onChange={(event) => {
@@ -886,7 +664,7 @@ export default function PixotchiSwapPanel() {
               placeholder="0.0"
               disabled={isExecuting}
               aria-label={`Sell amount in ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
-              className="ock:mr-2 ock:w-full ock:border-[none] ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:outline-none ock:truncate text-foreground placeholder:text-muted-foreground"
+              className="mr-2 w-full truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground"
             />
             <TokenSelector
               value={sellToken}
@@ -895,20 +673,18 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
+          <div className="mt-4 flex w-full items-center justify-between">
+            <div className="text-sm text-muted-foreground">
               {quoteState.status === 'loading'
                 ? 'Fetching quote...'
-                : feeEstimateState.status === 'loading'
-                  ? 'Estimating gas...'
-                  : '\u00A0'}
+                : '\u00A0'}
             </div>
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+            <div className="flex grow items-center justify-end gap-2 text-sm text-muted-foreground">
               {sellBalanceText ? <span>{sellBalanceText}</span> : null}
               {address ? (
                 <button
                   type="button"
-                  className="ock:font-ock ock:font-semibold ock:text-sm ock:text-ock-primary ock:flex ock:cursor-pointer ock:items-center ock:justify-center ock:px-2 ock:py-1 disabled:opacity-[0.38] disabled:pointer-events-none"
+                  className="inline-flex items-center justify-center rounded-full border border-border/60 bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-[0.38]"
                   onClick={handleSetMax}
                   disabled={isExecuting || sellBalanceRaw <= BigInt(0)}
                 >
@@ -922,8 +698,8 @@ export default function PixotchiSwapPanel() {
         <button
           type="button"
           className={cn(
-            'ock:cursor-pointer ock:bg-ock-background-alternate ock:hover:bg-ock-background-alternate-hover ock:active:bg-ock-background-alternate-active ock:focus:bg-ock-background-alternate-active',
-            'ock:border-ock-background -my-6 relative mx-auto flex h-12 w-12 items-center justify-center rounded-lg border-4 border-solid',
+            '-my-6 relative mx-auto flex h-12 w-12 items-center justify-center rounded-[16px] border-4 border-background bg-background text-foreground shadow-sm transition-colors',
+            'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           )}
           data-testid="SwapTokensButton"
           onClick={handleFlipTokens}
@@ -938,23 +714,24 @@ export default function PixotchiSwapPanel() {
             viewBox="0 0 16 17"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
+            className="text-foreground"
           >
             <path
               d="M14.5659 4.93434L13.4345 6.06571L11.8002 4.43139L11.8002 10.75L10.2002 10.75L10.2002 4.43139L8.56592 6.06571L7.43455 4.93434L11.0002 1.36865L14.5659 4.93434ZM8.56592 12.0657L5.00023 15.6314L1.43455 12.0657L2.56592 10.9343L4.20023 12.5687L4.20023 6.25002L5.80023 6.25002L5.80023 12.5687L7.43455 10.9343L8.56592 12.0657Z"
-              className="ock:fill-ock-foreground"
+              className="fill-current"
             />
           </svg>
         </button>
 
         <div
-          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+          className="my-0.5 flex h-[148px] w-full flex-col items-start rounded-[20px] border border-border/55 bg-card p-4 shadow-sm"
           data-testid="ockSwapAmountInput_Container"
         >
-          <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
+          <div className="flex w-full items-center justify-between text-sm text-muted-foreground">
             Buy
           </div>
-          <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
-            <div className="ock:mr-2 ock:w-full ock:truncate ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:text-ock-foreground">
+          <div className="flex w-full items-center justify-between">
+            <div className="mr-2 w-full truncate bg-transparent text-[2.5rem] leading-none text-foreground">
               {quoteState.status === 'loading' ? (
                 <span className="inline-flex items-center gap-2 text-base text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -971,11 +748,9 @@ export default function PixotchiSwapPanel() {
               disabled={isExecuting}
             />
           </div>
-          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
-              {rateDisplay || `Min ${currentQuote ? formatRawAmount(buyToken, currentQuote.minOut) : '--'}`}
-            </div>
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+          <div className="mt-4 flex w-full items-center justify-between">
+            <div className="text-sm text-muted-foreground">{'\u00A0'}</div>
+            <div className="flex grow items-center justify-end text-sm text-muted-foreground">
               {buyBalanceText ? <span>{buyBalanceText}</span> : null}
             </div>
           </div>
@@ -983,82 +758,12 @@ export default function PixotchiSwapPanel() {
 
         <button
           type="button"
-          className="ock:bg-ock-primary ock:rounded-ock-default mt-4 w-full rounded-xl px-4 py-3 text-primary-foreground"
+          className="mt-4 w-full rounded-[16px] bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={actionDisabled}
           onClick={() => currentQuote && executeQuote(currentQuote)}
         >
           {isExecuting ? 'Working...' : 'Swap'}
         </button>
-
-        {currentQuote && currentQuote.strategy !== 'blocked' ? (
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={() => setDetailsOpen((current) => !current)}
-              className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted flex w-full items-center justify-between text-left"
-              aria-expanded={detailsOpen}
-            >
-              <span>{feeSummaryLabel === '--' ? 'Route details' : `Network fee ${feeSummaryLabel}`}</span>
-              {detailsOpen ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-            </button>
-
-            {detailsOpen ? (
-              <div className="mt-2 rounded-xl border border-border/50 bg-background/70 p-3 text-sm">
-                <div className="space-y-2">
-                  <QuoteRow
-                    label="Route"
-                    value={currentQuote.steps[0]?.routeLabel || 'Best available route'}
-                  />
-                  <QuoteRow label="Provider" value="Kyber Aggregator" />
-                  <QuoteRow
-                    label="Expected receive"
-                    value={formatRawAmount(buyToken, currentQuote.expectedOut)}
-                    emphasis
-                  />
-                  <QuoteRow
-                    label="Minimum receive"
-                    value={formatRawAmount(buyToken, currentQuote.minOut)}
-                  />
-                  {seedLegStep?.grossOut ? (
-                    <QuoteRow
-                      label="Gross receive before tax"
-                      value={formatRawAmount(seedLegStep.buyToken, seedLegStep.grossOut)}
-                    />
-                  ) : null}
-                  {seedLegStep?.effectiveIn ? (
-                    <QuoteRow
-                      label="SEED reaching pool"
-                      value={formatRawAmount(seedLegStep.sellToken, seedLegStep.effectiveIn)}
-                    />
-                  ) : null}
-                  {currentQuote.taxBps > 0 ? (
-                    <QuoteRow
-                      label="SEED tax"
-                      value={formatBasisPoints(currentQuote.taxBps)}
-                    />
-                  ) : null}
-                  <QuoteRow
-                    label="Market slippage"
-                    value={formatBasisPoints(currentQuote.marketSlippageBps)}
-                  />
-                  {currentQuote.taxBps > 0 ? (
-                    <QuoteRow
-                      label="Router tolerance"
-                      value={formatBasisPoints(
-                        currentQuote.taxBps + currentQuote.marketSlippageBps,
-                      )}
-                    />
-                  ) : null}
-                  <QuoteRow label="Estimated fee" value={feeSummaryLabel} />
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
       {quoteState.status === 'error' ? (
