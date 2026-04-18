@@ -12,12 +12,10 @@ import {
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 import {
-  ArrowDownUp,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   CircleAlert,
-  Info,
   Loader2,
 } from 'lucide-react';
 import {
@@ -31,14 +29,12 @@ import {
 import { base } from 'viem/chains';
 import { useAccount, useBalance, useWalletClient } from 'wagmi';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { ERC20_TOKEN_ABI } from '@/lib/swap/base-swap-abi';
 import {
   BASE_CHAIN_ID,
@@ -104,38 +100,47 @@ function TokenSelector({
   options,
   onSelect,
   disabled,
+  className,
 }: {
   value: UserSwapTokenId;
   options: readonly UserSwapTokenId[];
   onSelect: (next: UserSwapTokenId) => void;
   disabled?: boolean;
+  className?: string;
 }) {
   const token = SWAP_TOKEN_MAP[value];
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
+        <button
           type="button"
-          variant="outline"
-          className="h-12 justify-between gap-3 rounded-full border-border/70 bg-background/90 px-4 text-sm shadow-[0_14px_24px_-22px_hsl(var(--foreground)/0.9)] backdrop-blur-sm hover:border-primary/25 hover:bg-background"
+          className={cn(
+            'ock:cursor-pointer ock:bg-ock-background ock:hover:bg-ock-background-hover ock:active:bg-ock-background-active ock:focus:bg-ock-background-active',
+            'ock:shadow-ock-default ock:rounded-ock-default ock:border-ock-line ock:border',
+            'ock:flex ock:w-fit ock:items-center ock:gap-2 ock:px-3 ock:py-1',
+            'disabled:opacity-[0.38] disabled:pointer-events-none',
+            className,
+          )}
           disabled={disabled}
           aria-label={`Select ${token.displaySymbol}`}
         >
-          <span className="flex items-center gap-3">
+          <span className="ock:flex ock:items-center ock:gap-2">
             <Image
               src={token.image}
               alt={token.displaySymbol}
-              width={24}
-              height={24}
-              className="h-6 w-6 rounded-full"
+              width={16}
+              height={16}
+              className="ock:h-4 ock:w-4 ock:rounded-full"
             />
-            <span className="font-medium">{token.displaySymbol}</span>
+            <span className="ock:font-ock ock:font-semibold ock:text-ock-foreground">
+              {token.displaySymbol}
+            </span>
           </span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </Button>
+          <ChevronDown className="h-4 w-4 text-foreground/70" />
+        </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56 rounded-2xl p-2">
+      <DropdownMenuContent align="start" className="w-56 rounded-xl p-2">
         {options.map((option) => {
           const optionToken = SWAP_TOKEN_MAP[option];
           return (
@@ -360,6 +365,17 @@ export default function PixotchiSwapPanel() {
       enabled: Boolean(address),
     },
   });
+  const { data: buyBalanceData, isLoading: buyBalanceLoading } = useBalance({
+    address,
+    chainId: BASE_CHAIN_ID,
+    token:
+      buyToken === 'ETH'
+        ? undefined
+        : (SWAP_TOKEN_MAP[buyToken].address as Address | undefined),
+    query: {
+      enabled: Boolean(address),
+    },
+  });
 
   const allowedTargets = useMemo(
     () => getAllowedSwapTargets(sellToken),
@@ -376,20 +392,27 @@ export default function PixotchiSwapPanel() {
   );
   const sellBalanceRaw = sellBalanceData?.value ?? BigInt(0);
   const sellBalanceText = useMemo(() => {
-    if (!address) {
-      return 'Connect wallet';
+    if (!address || sellBalanceLoading) {
+      return '';
     }
 
-    if (sellBalanceLoading) {
-      return 'Loading balance...';
-    }
-
-    return `Balance ${formatTokenAmountRounded(
+    return `Balance: ${formatTokenAmountRounded(
       sellBalanceRaw,
       SWAP_TOKEN_MAP[sellToken].decimals,
       sellToken === 'USDC' ? 2 : 6,
     )}`;
   }, [address, sellBalanceLoading, sellBalanceRaw, sellToken]);
+  const buyBalanceText = useMemo(() => {
+    if (!address || buyBalanceLoading) {
+      return '';
+    }
+
+    return `Balance: ${formatTokenAmountRounded(
+      buyBalanceData?.value ?? BigInt(0),
+      SWAP_TOKEN_MAP[buyToken].decimals,
+      buyToken === 'USDC' ? 2 : 6,
+    )}`;
+  }, [address, buyBalanceData?.value, buyBalanceLoading, buyToken]);
 
   const currentQuote = quoteState.status === 'ready' ? quoteState.quote : null;
   const seedLegStep =
@@ -844,235 +867,198 @@ export default function PixotchiSwapPanel() {
         : '--';
 
   return (
-    <div className="space-y-4">
-      <div
-        className="relative overflow-hidden rounded-[30px] border border-border/60 bg-card/95 p-3 shadow-[0_28px_60px_-42px_hsl(var(--foreground)/0.55)] sm:p-4"
-        style={{
-          backgroundImage:
-            'linear-gradient(180deg, hsl(var(--card) / 0.98), hsl(var(--background) / 0.96))',
-        }}
-      >
+    <div data-ock-theme="pixotchi" className="space-y-4">
+      <div className="space-y-0.5">
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-80"
-          style={{
-            background:
-              'radial-gradient(circle at top left, hsl(var(--primary) / 0.12), transparent 36%), radial-gradient(circle at bottom right, hsl(var(--accent) / 0.26), transparent 34%)',
-          }}
-        />
-
-        <div className="relative space-y-3">
-          <div className="rounded-[24px] border border-border/55 bg-background/70 px-4 py-4 backdrop-blur-sm sm:px-5 sm:py-5">
-            <div className="flex items-start justify-between gap-4">
-              <TokenSelector
-                value={sellToken}
-                options={allowedSources}
-                onSelect={setSellToken}
-                disabled={isExecuting}
-              />
-              <div className="min-w-0 flex-1 text-right">
-                <Input
-                  value={sellAmount}
-                  onChange={(event) => {
-                    setSellAmount(sanitizeDecimalInput(event.target.value));
-                  }}
-                  inputMode="decimal"
-                  placeholder="0.0"
-                  className="h-auto border-0 bg-transparent px-0 py-0 text-right text-[40px] font-semibold leading-none tracking-[-0.04em] shadow-none focus-visible:ring-0 sm:text-[44px]"
-                  disabled={isExecuting}
-                  aria-label={`Sell amount in ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
-                />
-              </div>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between gap-4">
-              <button
-                type="button"
-                onClick={handleSetMax}
-                disabled={isExecuting || !address || sellBalanceRaw <= BigInt(0)}
-                className="inline-flex h-8 items-center rounded-full border border-border/55 bg-background/80 px-3 text-[11px] font-medium text-muted-foreground transition hover:border-primary/25 hover:bg-primary/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-              >
-                Max
-              </button>
-              <span className="text-xs text-muted-foreground">{sellBalanceText}</span>
-            </div>
+          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+          data-testid="ockSwapAmountInput_Container"
+        >
+          <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
+            Sell
           </div>
-
-          <div className="-my-3 flex justify-center">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="relative z-10 h-12 w-12 rounded-full border-primary/20 bg-background/95 text-primary shadow-[0_18px_30px_-22px_hsl(var(--primary)/0.9)] backdrop-blur hover:border-primary/30 hover:bg-background"
-              onClick={handleFlipTokens}
+          <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
+            <input
+              value={sellAmount}
+              onChange={(event) => {
+                setSellAmount(sanitizeDecimalInput(event.target.value));
+              }}
+              inputMode="decimal"
+              placeholder="0.0"
               disabled={isExecuting}
-              aria-label="Toggle swap direction"
-            >
-              <ArrowDownUp className="h-4 w-4" />
-            </Button>
+              aria-label={`Sell amount in ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
+              className="ock:mr-2 ock:w-full ock:border-[none] ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:outline-none ock:truncate text-foreground placeholder:text-muted-foreground"
+            />
+            <TokenSelector
+              value={sellToken}
+              options={allowedSources}
+              onSelect={setSellToken}
+              disabled={isExecuting}
+            />
           </div>
-
-          <div className="rounded-[24px] border border-border/55 bg-background/70 px-4 py-4 backdrop-blur-sm sm:px-5 sm:py-5">
-            <div className="flex items-start justify-between gap-4">
-              <TokenSelector
-                value={buyToken}
-                options={allowedTargets}
-                onSelect={setBuyToken}
-                disabled={isExecuting}
-              />
-              <div className="min-w-0 flex-1 text-right">
-                <div className="text-[40px] font-semibold leading-none tracking-[-0.04em] sm:text-[44px]">
-                  {quoteState.status === 'loading' ? (
-                    <span className="inline-flex items-center gap-2 text-base font-medium text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Quoting
-                    </span>
-                  ) : (
-                    buyAmountDisplay
-                  )}
-                </div>
-                <div className="mt-3 text-xs text-muted-foreground">
-                  {currentQuote && currentQuote.strategy !== 'blocked'
-                    ? `Min ${formatRawAmount(buyToken, currentQuote.minOut)}`
-                    : 'Output updates as you type'}
-                </div>
-              </div>
+          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
+              {quoteState.status === 'loading'
+                ? 'Fetching quote...'
+                : feeEstimateState.status === 'loading'
+                  ? 'Estimating gas...'
+                  : '\u00A0'}
             </div>
-
-            <div className="mt-5 flex items-center justify-between gap-4">
-              <span className="text-xs text-muted-foreground">
-                {rateDisplay || 'Best route selected automatically'}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                1 transaction
-              </span>
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+              {sellBalanceText ? <span>{sellBalanceText}</span> : null}
+              {address ? (
+                <button
+                  type="button"
+                  className="ock:font-ock ock:font-semibold ock:text-sm ock:text-ock-primary ock:flex ock:cursor-pointer ock:items-center ock:justify-center ock:px-2 ock:py-1 disabled:opacity-[0.38] disabled:pointer-events-none"
+                  onClick={handleSetMax}
+                  disabled={isExecuting || sellBalanceRaw <= BigInt(0)}
+                >
+                  Max
+                </button>
+              ) : null}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((current) => !current)}
-            className="flex w-full items-center justify-between gap-4 rounded-2xl px-1 py-2 text-left"
-            aria-expanded={detailsOpen}
-          >
-            <span className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Network fees</span>
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-background/75">
-                <Info className="h-3.5 w-3.5" />
-              </span>
-            </span>
-
-            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <span>{feeSummaryLabel}</span>
-              <span className="text-xs font-medium text-primary">
-                More details
-              </span>
-              {detailsOpen ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-            </span>
-          </button>
-
-          {detailsOpen && currentQuote && currentQuote.strategy !== 'blocked' ? (
-            <div className="rounded-[22px] border border-border/55 bg-background/72 p-4 backdrop-blur-sm">
-              <div className="space-y-3">
-                <QuoteRow label="Provider" value="Kyber Aggregator" />
-                <QuoteRow
-                  label="Route"
-                  value={currentQuote.steps[0]?.routeLabel || 'Best available route'}
-                />
-                <QuoteRow
-                  label="Expected receive"
-                  value={formatRawAmount(buyToken, currentQuote.expectedOut)}
-                  emphasis
-                />
-                <QuoteRow
-                  label="Minimum receive"
-                  value={formatRawAmount(buyToken, currentQuote.minOut)}
-                />
-                {seedLegStep?.grossOut ? (
-                  <QuoteRow
-                    label="Gross receive before tax"
-                    value={formatRawAmount(
-                      seedLegStep.buyToken,
-                      seedLegStep.grossOut,
-                    )}
-                  />
-                ) : null}
-                {seedLegStep?.effectiveIn ? (
-                  <QuoteRow
-                    label="SEED reaching pool"
-                    value={formatRawAmount(
-                      seedLegStep.sellToken,
-                      seedLegStep.effectiveIn,
-                    )}
-                  />
-                ) : null}
-                {currentQuote.taxBps > 0 ? (
-                  <QuoteRow
-                    label="SEED tax"
-                    value={formatBasisPoints(currentQuote.taxBps)}
-                  />
-                ) : null}
-                <QuoteRow
-                  label="Market slippage"
-                  value={formatBasisPoints(currentQuote.marketSlippageBps)}
-                />
-                {currentQuote.taxBps > 0 ? (
-                  <QuoteRow
-                    label="Router tolerance"
-                    value={formatBasisPoints(
-                      currentQuote.taxBps + currentQuote.marketSlippageBps,
-                    )}
-                  />
-                ) : null}
-                <QuoteRow
-                  label="Approval"
-                  value={
-                    feeEstimateState.status === 'ready'
-                      ? feeEstimateState.approvalRequired
-                        ? 'Required on first swap'
-                        : 'Already approved'
-                      : 'Estimated automatically'
-                  }
-                />
-                <QuoteRow
-                  label="Fee estimate"
-                  value={feeSummaryLabel}
-                />
-              </div>
-
-              {currentQuote.steps[0]?.routeSources.length ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {currentQuote.steps[0].routeSources.map((source) => (
-                    <span
-                      key={source}
-                      className="inline-flex items-center rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary"
-                    >
-                      {source}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-
-              {currentQuote.steps[0]?.warnings.length ? (
-                <div className="mt-4 space-y-2 border-t border-border/50 pt-4 text-xs text-muted-foreground">
-                  {currentQuote.steps[0].warnings.map((warning) => (
-                    <p key={warning}>{warning}</p>
-                  ))}
-                </div>
-              ) : null}
-
-              {feeEstimateState.status === 'error' ? (
-                <p className="mt-4 border-t border-border/50 pt-4 text-xs text-muted-foreground">
-                  Fee estimate is best-effort and will finalize in your wallet.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
+
+        <button
+          type="button"
+          className={cn(
+            'ock:cursor-pointer ock:bg-ock-background-alternate ock:hover:bg-ock-background-alternate-hover ock:active:bg-ock-background-alternate-active ock:focus:bg-ock-background-alternate-active',
+            'ock:border-ock-background -my-6 relative mx-auto flex h-12 w-12 items-center justify-center rounded-lg border-4 border-solid',
+          )}
+          data-testid="SwapTokensButton"
+          onClick={handleFlipTokens}
+          disabled={isExecuting}
+          aria-label="Toggle swap direction"
+        >
+          <svg
+            role="img"
+            aria-label="Toggle swap direction"
+            width="16"
+            height="17"
+            viewBox="0 0 16 17"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M14.5659 4.93434L13.4345 6.06571L11.8002 4.43139L11.8002 10.75L10.2002 10.75L10.2002 4.43139L8.56592 6.06571L7.43455 4.93434L11.0002 1.36865L14.5659 4.93434ZM8.56592 12.0657L5.00023 15.6314L1.43455 12.0657L2.56592 10.9343L4.20023 12.5687L4.20023 6.25002L5.80023 6.25002L5.80023 12.5687L7.43455 10.9343L8.56592 12.0657Z"
+              className="ock:fill-ock-foreground"
+            />
+          </svg>
+        </button>
+
+        <div
+          className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+          data-testid="ockSwapAmountInput_Container"
+        >
+          <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
+            Buy
+          </div>
+          <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="ock:mr-2 ock:w-full ock:truncate ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:text-ock-foreground">
+              {quoteState.status === 'loading' ? (
+                <span className="inline-flex items-center gap-2 text-base text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Quoting...
+                </span>
+              ) : (
+                buyAmountDisplay
+              )}
+            </div>
+            <TokenSelector
+              value={buyToken}
+              options={allowedTargets}
+              onSelect={setBuyToken}
+              disabled={isExecuting}
+            />
+          </div>
+          <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
+              {rateDisplay || `Min ${currentQuote ? formatRawAmount(buyToken, currentQuote.minOut) : '--'}`}
+            </div>
+            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+              {buyBalanceText ? <span>{buyBalanceText}</span> : null}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="ock:bg-ock-primary ock:rounded-ock-default mt-4 w-full rounded-xl px-4 py-3 text-primary-foreground"
+          disabled={actionDisabled}
+          onClick={() => currentQuote && executeQuote(currentQuote)}
+        >
+          {isExecuting ? 'Working...' : 'Swap'}
+        </button>
+
+        {currentQuote && currentQuote.strategy !== 'blocked' ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setDetailsOpen((current) => !current)}
+              className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted flex w-full items-center justify-between text-left"
+              aria-expanded={detailsOpen}
+            >
+              <span>{feeSummaryLabel === '--' ? 'Route details' : `Network fee ${feeSummaryLabel}`}</span>
+              {detailsOpen ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </button>
+
+            {detailsOpen ? (
+              <div className="mt-2 rounded-xl border border-border/50 bg-background/70 p-3 text-sm">
+                <div className="space-y-2">
+                  <QuoteRow
+                    label="Route"
+                    value={currentQuote.steps[0]?.routeLabel || 'Best available route'}
+                  />
+                  <QuoteRow label="Provider" value="Kyber Aggregator" />
+                  <QuoteRow
+                    label="Expected receive"
+                    value={formatRawAmount(buyToken, currentQuote.expectedOut)}
+                    emphasis
+                  />
+                  <QuoteRow
+                    label="Minimum receive"
+                    value={formatRawAmount(buyToken, currentQuote.minOut)}
+                  />
+                  {seedLegStep?.grossOut ? (
+                    <QuoteRow
+                      label="Gross receive before tax"
+                      value={formatRawAmount(seedLegStep.buyToken, seedLegStep.grossOut)}
+                    />
+                  ) : null}
+                  {seedLegStep?.effectiveIn ? (
+                    <QuoteRow
+                      label="SEED reaching pool"
+                      value={formatRawAmount(seedLegStep.sellToken, seedLegStep.effectiveIn)}
+                    />
+                  ) : null}
+                  {currentQuote.taxBps > 0 ? (
+                    <QuoteRow
+                      label="SEED tax"
+                      value={formatBasisPoints(currentQuote.taxBps)}
+                    />
+                  ) : null}
+                  <QuoteRow
+                    label="Market slippage"
+                    value={formatBasisPoints(currentQuote.marketSlippageBps)}
+                  />
+                  {currentQuote.taxBps > 0 ? (
+                    <QuoteRow
+                      label="Router tolerance"
+                      value={formatBasisPoints(
+                        currentQuote.taxBps + currentQuote.marketSlippageBps,
+                      )}
+                    />
+                  ) : null}
+                  <QuoteRow label="Estimated fee" value={feeSummaryLabel} />
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {quoteState.status === 'error' ? (
@@ -1102,7 +1088,7 @@ export default function PixotchiSwapPanel() {
       ) : null}
 
       {executionSteps?.[0] ? (
-        <div className="rounded-[22px] border border-border/55 bg-background/75 p-4 backdrop-blur-sm">
+        <div className="rounded-xl border border-border/55 bg-background/75 p-3">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold">{executionSteps[0].label}</p>
@@ -1123,15 +1109,6 @@ export default function PixotchiSwapPanel() {
           </div>
         </div>
       ) : null}
-
-      <Button
-        type="button"
-        className="h-12 w-full rounded-2xl text-sm font-semibold shadow-[0_16px_34px_-18px_hsl(var(--primary)/0.7)]"
-        disabled={actionDisabled}
-        onClick={() => currentQuote && executeQuote(currentQuote)}
-      >
-        {isExecuting ? 'Working...' : 'Swap now'}
-      </Button>
 
       {!walletClient?.account ? (
         <p className="text-center text-xs text-muted-foreground">
