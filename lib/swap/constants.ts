@@ -1,0 +1,139 @@
+import type { Address } from 'viem';
+import type { SwapTokenDefinition, SwapTokenId, UserSwapTokenId } from './types';
+
+export const BASE_CHAIN_ID = 8453;
+export const BASIS_POINTS = 10_000;
+export const SEED_TAX_BPS = 500;
+export const MARKET_SLIPPAGE_BPS = 50;
+export const MAX_APPROVAL_AMOUNT =
+  (BigInt(2) ** BigInt(256)) - BigInt(1);
+export const TOKEN_APPROVAL_THRESHOLD = BigInt(0);
+
+export const KYBER_NATIVE_TOKEN_ADDRESS =
+  '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as Address;
+export const BASESWAP_ROUTER_ADDRESS =
+  '0x327Df1E6de05895d2ab08513aaDD9313Fe505d86' as Address;
+export const WETH_ADDRESS =
+  '0x4200000000000000000000000000000000000006' as Address;
+export const SEED_ADDRESS =
+  '0x546D239032b24eCEEE0cb05c92FC39090846adc7' as Address;
+export const USDC_ADDRESS =
+  '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;
+export const JESSE_ADDRESS =
+  '0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59' as Address;
+export const PIXOTCHI_ADDRESS =
+  '0xa2ef17bb7eea1143196678337069dfa24d37d2ac' as Address;
+
+export const SWAP_TOKEN_MAP: Record<SwapTokenId, SwapTokenDefinition> = {
+  ETH: {
+    id: 'ETH',
+    symbol: 'ETH',
+    displaySymbol: 'ETH',
+    name: 'ETH',
+    decimals: 18,
+    chainId: BASE_CHAIN_ID,
+    address: null,
+    image:
+      'https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png',
+    isNative: true,
+  },
+  WETH: {
+    id: 'WETH',
+    symbol: 'WETH',
+    displaySymbol: 'WETH',
+    name: 'Wrapped ETH',
+    decimals: 18,
+    chainId: BASE_CHAIN_ID,
+    address: WETH_ADDRESS,
+    image:
+      'https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png',
+    isInternal: true,
+  },
+  USDC: {
+    id: 'USDC',
+    symbol: 'USDC',
+    displaySymbol: 'USDC',
+    name: 'USDC',
+    decimals: 6,
+    chainId: BASE_CHAIN_ID,
+    address: USDC_ADDRESS,
+    image:
+      'https://dynamic-assets.coinbase.com/3c15df5e2ac7d4abbe9499ed9335041f00c620f28e8de2f93474a9f432058742cdf4674bd43f309e69778a26969372310135be97eb183d91c492154176d455b8/asset_icons/9d67b728b6c8f457717154b3a35f9ddc702eae7e76c4684ee39302c4d7fd0bb8.png',
+  },
+  SEED: {
+    id: 'SEED',
+    symbol: 'SEED',
+    displaySymbol: 'SEED',
+    name: 'SEED',
+    decimals: 18,
+    chainId: BASE_CHAIN_ID,
+    address: SEED_ADDRESS,
+    image: '/PixotchiKit/COIN.svg',
+  },
+  JESSE: {
+    id: 'JESSE',
+    symbol: 'JESSE',
+    displaySymbol: '$JESSE',
+    name: 'JESSE',
+    decimals: 18,
+    chainId: BASE_CHAIN_ID,
+    address: JESSE_ADDRESS,
+    image: '/icons/jessetoken.png',
+  },
+  PIXOTCHI: {
+    id: 'PIXOTCHI',
+    symbol: 'PIXOTCHI',
+    displaySymbol: 'PIXOTCHI',
+    name: 'PIXOTCHI',
+    decimals: 18,
+    chainId: BASE_CHAIN_ID,
+    address: PIXOTCHI_ADDRESS,
+    image: '/icons/cc.png',
+  },
+};
+
+export const USER_SWAP_TOKEN_IDS = [
+  'ETH',
+  'USDC',
+  'SEED',
+  'JESSE',
+  'PIXOTCHI',
+] as const satisfies readonly UserSwapTokenId[];
+
+export const INTERNAL_INTERMEDIATE_TOKEN: SwapTokenId = 'WETH';
+
+export function isSwapTokenId(value: string): value is SwapTokenId {
+  return value in SWAP_TOKEN_MAP;
+}
+
+export function isUserSwapTokenId(value: string): value is UserSwapTokenId {
+  return USER_SWAP_TOKEN_IDS.includes(value as UserSwapTokenId);
+}
+
+export function isNativeSwapToken(tokenId: SwapTokenId): boolean {
+  return SWAP_TOKEN_MAP[tokenId].isNative === true;
+}
+
+export function isSeedSwapToken(tokenId: SwapTokenId): boolean {
+  return tokenId === 'SEED';
+}
+
+export function getSwapToken(tokenId: SwapTokenId): SwapTokenDefinition {
+  return SWAP_TOKEN_MAP[tokenId];
+}
+
+export function getTokenAddress(tokenId: Exclude<SwapTokenId, 'ETH'>): Address {
+  const token = SWAP_TOKEN_MAP[tokenId];
+  if (!token.address) {
+    throw new Error(`Token ${tokenId} does not have a contract address`);
+  }
+  return token.address;
+}
+
+export function getKyberTokenAddress(tokenId: SwapTokenId): Address {
+  if (tokenId === 'ETH') {
+    return KYBER_NATIVE_TOKEN_ADDRESS;
+  }
+
+  return getTokenAddress(tokenId);
+}
