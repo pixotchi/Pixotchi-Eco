@@ -5,8 +5,6 @@ import {
   Transaction,
   TransactionButton,
   TransactionStatus,
-  TransactionStatusAction,
-  TransactionStatusLabel,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from './transaction-kit';
@@ -93,10 +91,7 @@ export default function ClaimRewardsTransaction({
         />
 
         {!minimal && (
-          <TransactionStatus>
-            <TransactionStatusLabel />
-            <TransactionStatusAction />
-          </TransactionStatus>
+          <TransactionStatus />
         )}
 
         <GlobalTransactionToast />

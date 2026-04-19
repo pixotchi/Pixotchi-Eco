@@ -5,8 +5,6 @@ import {
   Transaction,
   TransactionButton,
   TransactionStatus,
-  TransactionStatusAction,
-  TransactionStatusLabel,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from './transaction-kit';
@@ -99,10 +97,7 @@ export function PlantNameTransaction({
           disabled={disabled}
         />
 
-        <TransactionStatus>
-          <TransactionStatusLabel />
-          <TransactionStatusAction />
-        </TransactionStatus>
+        <TransactionStatus />
 
         <GlobalTransactionToast />
       </Transaction>

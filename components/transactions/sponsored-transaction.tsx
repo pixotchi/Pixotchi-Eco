@@ -5,8 +5,6 @@ import {
   Transaction,
   TransactionButton,
   TransactionStatus,
-  TransactionStatusAction,
-  TransactionStatusLabel,
 } from './transaction-kit';
 import type { LifecycleStatus } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
@@ -117,10 +115,7 @@ export default function SponsoredTransaction({
         }}
       />
       {!hideStatus && (
-        <TransactionStatus>
-          <TransactionStatusAction />
-          <TransactionStatusLabel />
-        </TransactionStatus>
+        <TransactionStatus />
       )}
 
       {showToast && <GlobalTransactionToast />}

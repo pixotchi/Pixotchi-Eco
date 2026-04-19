@@ -5,8 +5,6 @@ import {
   Transaction,
   TransactionButton,
   TransactionStatus,
-  TransactionStatusAction,
-  TransactionStatusLabel,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from './transaction-kit';
@@ -92,10 +90,7 @@ export default function SmartWalletTransaction({
         disabled={disabled}
       />
 
-      <TransactionStatus>
-        <TransactionStatusAction />
-        <TransactionStatusLabel />
-      </TransactionStatus>
+      <TransactionStatus />
 
       {showToast && <GlobalTransactionToast />}
     </Transaction>
