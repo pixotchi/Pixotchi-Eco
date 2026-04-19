@@ -157,7 +157,44 @@ export const SERVER_ENV = {
   INDEXER_UPSTREAM_URL: process.env.INDEXER_UPSTREAM_URL,
   INDEXER_SHARED_SECRET: process.env.INDEXER_SHARED_SECRET,
   STATUS_SNAPSHOT_TTL_SECONDS: process.env.STATUS_SNAPSHOT_TTL_SECONDS,
+  PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET,
+  PRIVY_JWT_VERIFICATION_KEY: process.env.PRIVY_JWT_VERIFICATION_KEY,
 } as const;
+
+function getTrimmedEnvValue(key: string): string | undefined {
+  const value = process.env[key];
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export function getPrivyChatAuthConfigStatus() {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+
+  if (!getTrimmedEnvValue('NEXT_PUBLIC_PRIVY_APP_ID')) {
+    missing.push('NEXT_PUBLIC_PRIVY_APP_ID');
+  }
+
+  if (!getTrimmedEnvValue('PRIVY_APP_SECRET')) {
+    missing.push('PRIVY_APP_SECRET');
+  }
+
+  if (!getTrimmedEnvValue('PRIVY_JWT_VERIFICATION_KEY')) {
+    warnings.push(
+      'PRIVY_JWT_VERIFICATION_KEY is not configured; Privy token verification will use the cached remote JWKS fallback.',
+    );
+  }
+
+  return {
+    missing,
+    ready: missing.length === 0,
+    warnings,
+  };
+}
 
 // Validation function to ensure sensitive data isn't exposed
 export const validateEnvSecurity = () => {

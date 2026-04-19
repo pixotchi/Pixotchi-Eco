@@ -7,7 +7,7 @@ import {
   TransactionToastIcon,
   TransactionToastLabel,
   TransactionToastAction,
-} from '@coinbase/onchainkit/transaction';
+} from './transaction-kit';
 
 interface GlobalTransactionToastProps {
   className?: string;
@@ -28,4 +28,3 @@ export default function GlobalTransactionToast({
     document.body
   );
 }
-

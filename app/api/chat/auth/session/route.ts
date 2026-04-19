@@ -27,6 +27,19 @@ function getStringField(body: Record<string, unknown>, key: string): string | un
   return typeof value === 'string' ? value : undefined;
 }
 
+function getPrivyIdentityToken(
+  request: NextRequest,
+  body: Record<string, unknown>,
+): string | null {
+  const headerValue = request.headers.get('privy-id-token');
+  if (typeof headerValue === 'string' && headerValue.trim()) {
+    return headerValue.trim();
+  }
+
+  const bodyValue = getStringField(body, 'identityToken');
+  return typeof bodyValue === 'string' && bodyValue.trim() ? bodyValue.trim() : null;
+}
+
 function getRequestedChatAuthAddress(body: unknown, provider: unknown): string | null {
   if (!body || typeof body !== 'object') {
     return null;
@@ -139,8 +152,9 @@ export async function POST(request: NextRequest) {
 
     if (provider === 'privy') {
       const identity = await verifyPrivyChatIdentity({
-        accessToken: getStringField(body, 'accessToken') ?? '',
+        accessToken: getStringField(body, 'accessToken') ?? null,
         expectedAddress: getStringField(body, 'expectedAddress') ?? null,
+        identityToken: getPrivyIdentityToken(request, body),
         solanaAddress: getStringField(body, 'solanaAddress') ?? null,
       });
       return createChatSessionResponse(request, identity);

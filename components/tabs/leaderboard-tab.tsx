@@ -26,8 +26,6 @@ import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
-import { Avatar } from "@coinbase/onchainkit/identity";
-import { base } from "viem/chains";
 import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { CLIENT_ENV } from "@/lib/env-config";
@@ -36,6 +34,7 @@ import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { postMissionProgress } from "@/lib/mission-tracking";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
+import { WalletAvatar } from "@/components/ui/wallet-avatar";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -1134,9 +1133,8 @@ export default function LeaderboardTab() {
                         </div>
                         <div className="flex items-center gap-3">
                           {row.address ? (
-                            <Avatar
+                            <WalletAvatar
                               address={row.address as `0x${string}`}
-                              chain={base}
                               className="w-10 h-10 rounded-full"
                             />
                           ) : (

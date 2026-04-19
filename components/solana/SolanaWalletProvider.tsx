@@ -8,6 +8,7 @@
 
 import React, { useMemo } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
+import { useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import { SolanaWalletProvider as SolanaWalletContextProvider } from '@/lib/solana-wallet-context';
 import { isSolanaEnabled } from '@/lib/solana-constants';
 import { useAuthSurface } from '@/hooks/useAuthSurface';
@@ -46,31 +47,34 @@ interface SolanaProviderProps {
  */
 export function SolanaWalletProvider({ children }: SolanaProviderProps) {
   const { user, authenticated } = usePrivy();
+  const { ready: solanaWalletsReady, wallets: solanaWallets } = useSolanaWallets();
   const { surface: authSurface } = useAuthSurface();
   const isPrivySolanaSurface = authSurface === 'privysolana';
   
-  // Find Solana wallet from user's linked accounts
-  // Privy stores Solana wallets in linkedAccounts with chainType: 'solana'
+  // Wait until Privy has settled the connected wallet set before falling back to linked accounts.
   const solanaWallet = useMemo(() => {
-    if (!isPrivySolanaSurface || !authenticated || !user) return null;
+    if (!isPrivySolanaSurface || !authenticated || !solanaWalletsReady) return null;
+
+    if (solanaWallets.length > 0) {
+      return solanaWallets[0];
+    }
+
+    if (!user?.linkedAccounts) {
+      return null;
+    }
     
-    // Check user's linked accounts for Solana wallet
-    // This is the correct way to find Solana wallets in Privy
-    if (user.linkedAccounts) {
-      for (const account of user.linkedAccounts) {
-        // Check if this is a Solana wallet account
-        if (
-          account.type === 'wallet' && 
-          'chainType' in account && 
-          (account as any).chainType === 'solana'
-        ) {
-          return account;
-        }
+    for (const account of user.linkedAccounts) {
+      if (
+        account.type === 'wallet' &&
+        'chainType' in account &&
+        (account as any).chainType === 'solana'
+      ) {
+        return account;
       }
     }
     
     return null;
-  }, [authenticated, isPrivySolanaSurface, user]);
+  }, [authenticated, isPrivySolanaSurface, solanaWallets, solanaWalletsReady, user]);
   
   // Get Solana address from the wallet
   const solanaAddress = useMemo(() => {
@@ -81,8 +85,14 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
   
   // Check if connected - requires authentication, address, and Solana to be enabled
   const isConnected = useMemo(() => {
-    return isPrivySolanaSurface && authenticated && !!solanaAddress && isSolanaEnabled();
-  }, [authenticated, isPrivySolanaSurface, solanaAddress]);
+    return (
+      isPrivySolanaSurface &&
+      authenticated &&
+      solanaWalletsReady &&
+      !!solanaAddress &&
+      isSolanaEnabled()
+    );
+  }, [authenticated, isPrivySolanaSurface, solanaAddress, solanaWalletsReady]);
   
   return (
     <SolanaWalletContextProvider

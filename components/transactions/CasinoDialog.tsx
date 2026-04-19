@@ -23,7 +23,7 @@ import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { formatTokenAmount, formatTokenAmountRounded, getCasinoTokenImage } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
-import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+import type { LifecycleStatus } from '@/components/transactions/transaction-kit';
 import { loadBetPreference, storeBetPreference } from '@/lib/casino-bet-preferences';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
 

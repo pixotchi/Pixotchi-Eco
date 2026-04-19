@@ -434,7 +434,7 @@ export default function MintTab() {
   const { needsSetup } = bridge;
   const solanaWalletHook = useSolanaWallet();
   // Use Solana-specific hooks from @privy-io/react-auth/solana
-  const { wallets: solanaWallets } = useSolanaWallets();
+  const { ready: solanaWalletsReady, wallets: solanaWallets } = useSolanaWallets();
   const { user, authenticated } = usePrivy();
   const { signAndSendTransaction: privySignAndSendTransaction } = useSignAndSendTransaction();
 
@@ -444,9 +444,15 @@ export default function MintTab() {
       return null;
     }
 
+    if (!solanaWalletsReady) {
+      solLog('[SolanaMint] Waiting for Privy Solana wallets to settle');
+      return null;
+    }
+
     // Debug: log all Solana wallets
     solLog('[SolanaMint] Looking for Solana wallet:', {
       authenticated,
+      solanaWalletsReady,
       solanaWalletsCount: solanaWallets?.length || 0,
       linkedAccountsCount: user?.linkedAccounts?.length || 0,
     });
@@ -481,7 +487,7 @@ export default function MintTab() {
 
     solLog('[SolanaMint] No Solana wallet found');
     return null;
-  }, [isSolana, solanaWallets, user, authenticated]);
+  }, [authenticated, isSolana, solanaWallets, solanaWalletsReady, user]);
 
   const [solanaMintLoading, setSolanaMintLoading] = useState(false);
   const [solQuote, setSolQuote] = useState<{ wsolAmount: bigint; seedAmount: bigint } | null>(null);

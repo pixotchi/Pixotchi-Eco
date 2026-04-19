@@ -29,7 +29,7 @@ const baseWithRpc = {
 const baseTransport = createResilientTransport();
 const dataSuffix = getDataSuffix() as `0x${string}` | undefined;
 
-export const wagmiWebOnchainkitConfig = createConfig({
+export const wagmiWebBaseConfig = createConfig({
   chains: [baseWithRpc],
   transports: {
     [base.id]: baseTransport,

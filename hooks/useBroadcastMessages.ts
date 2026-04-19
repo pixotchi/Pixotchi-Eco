@@ -26,7 +26,7 @@ function isTutorialCompleted(): boolean {
 
 export function useBroadcastMessages() {
   const { address, isConnected } = useAccount();
-  const { user, authenticated } = usePrivy();
+  const { user, authenticated, ready } = usePrivy();
   const frameContext = useFrameContext();
   const { surface: authSurface } = useAuthSurface();
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
@@ -57,12 +57,12 @@ export function useBroadcastMessages() {
         : undefined;
 
     if (address) return `addr:${address.toLowerCase()}`;
-    if ((authSurface === 'privy' || authSurface === 'privysolana') && authenticated && user?.id) {
+    if ((authSurface === 'privy' || authSurface === 'privysolana') && ready && authenticated && user?.id) {
       return `privy:${user.id}`;
     }
     if (typeof fid === 'number' && fid > 0) return `fid:${fid}`;
     return undefined;
-  }, [address, authSurface, authenticated, user?.id, frameContext?.context]);
+  }, [address, authSurface, authenticated, ready, user?.id, frameContext?.context]);
 
   // Local dismissed IDs are loaded synchronously in state initializer
 
@@ -139,7 +139,7 @@ export function useBroadcastMessages() {
         setLoading(false);
       }
     }
-  }, [address, isConnected, localDismissedIds, identity]);
+  }, [identity, localDismissedIds]);
 
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {
@@ -159,7 +159,7 @@ export function useBroadcastMessages() {
     }
     
     // Send dismissal to server (only when connected)
-    if (identity && (isConnected || ((authSurface === 'privy' || authSurface === 'privysolana') && authenticated))) {
+    if (identity && (isConnected || ((authSurface === 'privy' || authSurface === 'privysolana') && ready && authenticated))) {
       try {
         await fetch('/api/broadcast/dismiss', {
           method: 'POST',
@@ -170,7 +170,7 @@ export function useBroadcastMessages() {
         console.error('Failed to record dismissal:', error);
       }
     }
-  }, [authSurface, identity, isConnected, authenticated, localDismissedIds]);
+  }, [authSurface, identity, isConnected, authenticated, localDismissedIds, ready]);
 
   // Track impression (message was shown)
   const trackImpression = useCallback(async (messageId: string) => {
@@ -215,12 +215,12 @@ export function useBroadcastMessages() {
   useEffect(() => {
     if (!mountedRef.current) return;
     
-    if (address !== undefined || (((authSurface === 'privy' || authSurface === 'privysolana') && authenticated) && user?.id)) {
+    if (address !== undefined || (((authSurface === 'privy' || authSurface === 'privysolana') && ready && authenticated) && user?.id)) {
       console.log('[Broadcast] Wallet address changed, fetching messages');
       fetchMessages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, authSurface, authenticated, user?.id]); // Identity-related triggers
+  }, [address, authSurface, authenticated, ready, user?.id]); // Identity-related triggers
 
   return {
     messages,

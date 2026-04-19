@@ -10,7 +10,7 @@ import {
 import { casinoAbi, CasinoBetType } from "@/public/abi/casino-abi";
 import { toast } from "react-hot-toast";
 import { decodeEventLog, formatUnits } from "viem";
-import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
+import type { LifecycleStatus } from "./transaction-kit";
 import { extractTransactionHash } from "@/lib/transaction-utils";
 import { useAccount } from "wagmi";
 import { postMissionProgress } from "@/lib/mission-tracking";

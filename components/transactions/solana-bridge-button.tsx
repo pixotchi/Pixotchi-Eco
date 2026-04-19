@@ -73,7 +73,7 @@ export default function SolanaBridgeButton({
 }: SolanaBridgeButtonProps) {
   const bridge = useSolanaBridge();
   const { solanaAddress, isTwinSetup, isConnected } = useSolanaWallet();
-  const { wallets: solanaWallets } = useSolanaWallets();
+  const { ready: solanaWalletsReady, wallets: solanaWallets } = useSolanaWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
   
   const [isLoading, setIsLoading] = useState(false);
@@ -86,10 +86,15 @@ export default function SolanaBridgeButton({
   
   // Store bridge.getQuote in a ref to avoid dependency issues
   const getQuoteRef = useRef(bridge.getQuote);
-  getQuoteRef.current = bridge.getQuote;
+  useEffect(() => {
+    getQuoteRef.current = bridge.getQuote;
+  }, [bridge.getQuote]);
   
-  // Pick the first available Privy-provided Solana wallet (they are already usable)
-  const solanaWallet = useMemo(() => solanaWallets?.[0] ?? null, [solanaWallets]);
+  // Wait for Privy wallet discovery to settle before treating the connected wallet list as authoritative.
+  const solanaWallet = useMemo(
+    () => (solanaWalletsReady ? solanaWallets?.[0] ?? null : null),
+    [solanaWallets, solanaWalletsReady],
+  );
   
   // Check if setup is required for this action
   const needsSetup = !isTwinSetup && ['shopItem', 'gardenItem', 'setName'].includes(actionType);
@@ -421,4 +426,3 @@ export default function SolanaBridgeButton({
     </Button>
   );
 }
-

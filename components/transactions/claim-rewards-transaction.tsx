@@ -5,11 +5,9 @@ import {
   Transaction,
   TransactionButton,
   TransactionStatus,
-  TransactionStatusAction,
-  TransactionStatusLabel,
-} from '@coinbase/onchainkit/transaction';
+} from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
-import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+import type { LifecycleStatus } from './transaction-kit';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 
@@ -93,10 +91,7 @@ export default function ClaimRewardsTransaction({
         />
 
         {!minimal && (
-          <TransactionStatus>
-            <TransactionStatusLabel />
-            <TransactionStatusAction />
-          </TransactionStatus>
+          <TransactionStatus />
         )}
 
         <GlobalTransactionToast />

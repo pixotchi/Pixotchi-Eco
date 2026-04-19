@@ -33,10 +33,8 @@ import {
   Key,
   ShieldAlert,
 } from "lucide-react";
-import { Avatar } from "@coinbase/onchainkit/identity";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { openExternalUrl } from "@/lib/open-external";
-import { base } from "viem/chains";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { StandardContainer } from "./ui/pixel-container";
 import { usePrivy, useLogin, useLogout } from "@privy-io/react-auth";
@@ -55,6 +53,7 @@ import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { useAuthSurface } from "@/hooks/useAuthSurface";
+import { WalletAvatar } from "@/components/ui/wallet-avatar";
 
 const AUTH_CACHE_PREFIXES = [
   "wagmi",
@@ -395,6 +394,20 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     }
   };
 
+  const getWalletTypeLabel = () => {
+    if (isSolana) return "Solana Twin (Smart Wallet)";
+    switch (walletType) {
+      case "coinbase-smart":
+      case "other-smart":
+        return "Smart Wallet";
+      case "eoa":
+      case "eip7702-delegated":
+        return "Regular Wallet";
+      default:
+        return "Unknown";
+    }
+  };
+
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied!`);
@@ -553,7 +566,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 }}
               >
                 {address ? (
-                  <Avatar address={address} chain={base} className="w-6 h-6" />
+                  <WalletAvatar address={address} className="w-6 h-6" />
                 ) : (
                   <Wallet className="w-6 h-6 text-primary" />
                 )}
@@ -670,22 +683,21 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <div className="flex items-center space-x-1">
                           <Wallet className="w-3 h-3 text-purple-500" />
                           <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
-                            Solana Twin (Smart Wallet)
+                            {getWalletTypeLabel()}
                           </span>
                         </div>
                       ) : isSmartWallet ? (
                         <div className="flex items-center space-x-1">
                           <CheckCircle className="w-3 h-3 text-value" />
                           <span className="text-xs font-semibold text-value">
-                            Smart Wallet
-                            {walletType === 'coinbase-smart' && ' (Coinbase)'}
+                            {getWalletTypeLabel()}
                           </span>
                         </div>
                       ) : (
                         <div className="flex items-center space-x-1">
                           <Wallet className="w-3 h-3 text-blue-500" />
                           <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                            Regular Wallet
+                            {getWalletTypeLabel()}
                           </span>
                         </div>
                       )}

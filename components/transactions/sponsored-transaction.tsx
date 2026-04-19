@@ -5,10 +5,8 @@ import {
   Transaction,
   TransactionButton,
   TransactionStatus,
-  TransactionStatusAction,
-  TransactionStatusLabel,
-} from '@coinbase/onchainkit/transaction';
-import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+} from './transaction-kit';
+import type { LifecycleStatus } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
@@ -117,10 +115,7 @@ export default function SponsoredTransaction({
         }}
       />
       {!hideStatus && (
-        <TransactionStatus>
-          <TransactionStatusAction />
-          <TransactionStatusLabel />
-        </TransactionStatus>
+        <TransactionStatus />
       )}
 
       {showToast && <GlobalTransactionToast />}

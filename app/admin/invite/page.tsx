@@ -3730,7 +3730,7 @@ export default function AdminInviteDashboard() {
                             <div className="grid grid-cols-2 gap-2 gap-x-3 mb-3 p-2 bg-muted/30 rounded text-xs">
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground text-xs">Wallet Type</span>
-                                <span className="font-semibold text-sm">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : 'EOA'}</span>
+                                <span className="font-semibold text-sm">{feedback.walletType === 'coinbase-smart' ? 'Coinbase Smart' : feedback.walletType === 'other-smart' ? 'Smart Wallet' : feedback.walletType === 'eip7702-delegated' ? 'Delegated EOA (EIP-7702)' : 'EOA'}</span>
                               </div>
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground text-xs">Smart Wallet</span>

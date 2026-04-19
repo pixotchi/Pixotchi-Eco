@@ -25,8 +25,9 @@ type PublicChatSessionCacheEntry = {
 };
 
 type PrivyChatSessionRequest = {
-  accessToken: string;
+  accessToken?: string;
   expectedAddress?: string | null;
+  identityToken?: string | null;
   provider: 'privy';
   solanaAddress?: string | null;
 };
@@ -158,15 +159,17 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
 
 export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
   const miniAppHeaders = getMiniAppChatHeaders();
+  const { identityToken, ...bodyPayload } = payload;
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
-      ...payload,
+      ...bodyPayload,
       provider: 'privy',
     }),
     cache: 'no-store',
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
+      ...(identityToken ? { 'privy-id-token': identityToken } : {}),
       ...miniAppHeaders,
     },
     method: 'POST',

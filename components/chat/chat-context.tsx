@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { usePrivy, useToken } from '@privy-io/react-auth';
+import { useIdentityToken, usePrivy } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
 import { useAccount } from 'wagmi';
 import { sdk } from '@farcaster/miniapp-sdk';
@@ -68,8 +68,8 @@ function delay(ms: number) {
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { address } = useAccount();
-  const { authenticated, ready: privyReady } = usePrivy();
-  const { getAccessToken } = useToken();
+  const { authenticated, getAccessToken, ready: privyReady } = usePrivy();
+  const { identityToken } = useIdentityToken();
   const fc = useFrameContext();
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const confirmedMiniAppSession = useConfirmedMiniAppSession();
@@ -280,35 +280,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isMiniApp]);
 
-  const setMode = (next: ChatMode) => {
-    if (mode) {
-      messageCacheRef.current[mode] = messages;
-    }
-
-    const targetCached = messageCacheRef.current[next] || [];
-
-    setModeState(next);
-    setMessages(targetCached);
-
-    if (next === 'public') {
-      if (isChatOpen && publicChatAuthenticated) {
-        void fetchHistory(true, 'public');
-      }
-    } else if (next === 'ai') {
-      void fetchHistory(true, 'ai');
-    } else if (next === 'agent') {
-      setMessages(messageCacheRef.current.agent || []);
-    }
-  };
-
-  useEffect(() => {
-    const savedMode = localStorage.getItem('chat-mode') as ChatMode;
-    if (savedMode && ['public', 'ai', 'agent'].includes(savedMode)) {
-      setMode(savedMode);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     localStorage.setItem('chat-mode', mode);
     modeRef.current = mode;
@@ -467,6 +438,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [chatAddress, conversationId, getMiniAppBypassHeaders, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
 
+  const setMode = useCallback((next: ChatMode) => {
+    if (mode) {
+      messageCacheRef.current[mode] = messages;
+    }
+
+    const targetCached = messageCacheRef.current[next] || [];
+
+    setModeState(next);
+    setMessages(targetCached);
+
+    if (next === 'public') {
+      if (isChatOpen && publicChatAuthenticated) {
+        void fetchHistory(true, 'public');
+      }
+    } else if (next === 'ai') {
+      void fetchHistory(true, 'ai');
+    } else if (next === 'agent') {
+      setMessages(messageCacheRef.current.agent || []);
+    }
+  }, [fetchHistory, isChatOpen, messages, mode, publicChatAuthenticated]);
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem('chat-mode') as ChatMode;
+    if (savedMode && ['public', 'ai', 'agent'].includes(savedMode)) {
+      setMode(savedMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchPublicPreview = useCallback(async () => {
     if (!publicChatAuthenticated) {
       return;
@@ -503,6 +503,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       solanaAddress ?? 'none',
       authenticated ? '1' : '0',
       privyReady ? '1' : '0',
+      identityToken ? '1' : '0',
       publicChatSessionVersion.toString(),
       publicChatRetryVersion.toString(),
     ].join(':');
@@ -616,13 +617,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          const accessToken = await getAccessToken();
-          if (!accessToken) {
-            throw new Error('Privy access token unavailable.');
+          const accessToken = identityToken ? null : await getAccessToken();
+          if (!identityToken && !accessToken) {
+            throw new Error('Privy token unavailable.');
           }
 
           const nextSession = await createPrivyPublicChatSession({
-            accessToken,
+            ...(identityToken ? { identityToken } : {}),
+            ...(accessToken ? { accessToken } : {}),
             expectedAddress: chatAddress,
             ...(currentSurface === 'privysolana' ? { solanaAddress } : {}),
           });
@@ -721,6 +723,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     authenticated,
     chatAddress,
     getAccessToken,
+    identityToken,
     isMiniApp,
     publicChatSession,
     publicChatSessionVersion,

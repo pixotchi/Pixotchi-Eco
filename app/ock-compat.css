@@ -1,0 +1,40 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
+
+:root {
+  --ock-compat-font: "DM Sans", var(--font-coinbase, system-ui), sans-serif;
+  --ock-compat-foreground: oklch(13% 0.028 261.692);
+  --ock-compat-foreground-muted: oklch(44.6% 0.03 256.802);
+  --ock-compat-foreground-inverse: oklch(98.5% 0.002 247.839);
+  --ock-compat-background: oklch(98.5% 0.002 247.839);
+  --ock-compat-background-hover: oklch(92.8% 0.006 264.531);
+  --ock-compat-background-active: oklch(87.2% 0.01 258.338);
+  --ock-compat-background-alternate: oklch(92.8% 0.006 264.531);
+  --ock-compat-background-alternate-hover: oklch(87.2% 0.01 258.338);
+  --ock-compat-background-alternate-active: oklch(70.7% 0.022 261.325);
+  --ock-compat-primary: oklch(51.1% 0.262 276.966);
+  --ock-compat-primary-hover: oklch(45.7% 0.24 277.023);
+  --ock-compat-primary-active: oklch(39.8% 0.195 277.366);
+  --ock-compat-error: oklch(58.6% 0.253 17.585);
+  --ock-compat-line: oklch(87.2% 0.01 258.338);
+}
+
+.dark {
+  --ock-compat-foreground: oklch(98.5% 0.002 247.839);
+  --ock-compat-foreground-muted: oklch(70.7% 0.022 261.325);
+  --ock-compat-foreground-inverse: oklch(13% 0.028 261.692);
+  --ock-compat-background: oklch(13% 0.028 261.692);
+  --ock-compat-background-hover: oklch(27.8% 0.033 256.848);
+  --ock-compat-background-active: oklch(37.3% 0.034 259.733);
+  --ock-compat-background-alternate: oklch(27.8% 0.033 256.848);
+  --ock-compat-background-alternate-hover: oklch(37.3% 0.034 259.733);
+  --ock-compat-background-alternate-active: oklch(44.6% 0.043 257.281);
+  --ock-compat-primary: oklch(67.3% 0.182 276.935);
+  --ock-compat-primary-hover: oklch(78.5% 0.115 274.713);
+  --ock-compat-primary-active: oklch(87% 0.065 274.039);
+  --ock-compat-error: oklch(71.2% 0.194 13.428);
+  --ock-compat-line: oklch(37.3% 0.034 259.733);
+}
+
+.ock-compat-font {
+  font-family: var(--ock-compat-font);
+}

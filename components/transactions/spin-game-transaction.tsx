@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import { PIXOTCHI_NFT_ADDRESS, SPIN_GAME_ABI } from "@/lib/contracts";
 import { toast } from "react-hot-toast";
-import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
+import type { LifecycleStatus } from "./transaction-kit";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';

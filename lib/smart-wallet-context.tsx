@@ -1,14 +1,24 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useState, useEffect, useRef } from "react";
+import { createContext, useContext, ReactNode, useState, useEffect, useRef, useCallback } from "react";
 import { useAccount, usePublicClient } from "wagmi";
+
+export type SmartWalletType =
+  | 'coinbase-smart'
+  | 'other-smart'
+  | 'eip7702-delegated'
+  | 'eoa'
+  | 'unknown';
 
 export interface SmartWalletDetection {
   isSmartWallet: boolean;
-  walletType: 'coinbase-smart' | 'other-smart' | 'eoa' | 'unknown';
+  walletType: SmartWalletType;
   capabilities: null;
   detectionMethods: string[];
   isContract: boolean;
+  hasCode: boolean;
+  delegationTarget: string | null;
+  isDelegatedEoa: boolean;
   isLoading: boolean;
   lastChecked: number | null;
 }
@@ -29,24 +39,35 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     capabilities: null,
     detectionMethods: [],
     isContract: false,
+    hasCode: false,
+    delegationTarget: null,
+    isDelegatedEoa: false,
     isLoading: false,
     lastChecked: null,
   });
 
-  // Check if address is a smart contract
-  const isContractAddress = async (addr: string): Promise<boolean> => {
-    if (!publicClient) return false;
+  const getAddressBytecode = useCallback(async (addr: string): Promise<`0x${string}` | undefined> => {
+    if (!publicClient) return undefined;
     try {
-      const code = await publicClient.getBytecode({ address: addr as `0x${string}` });
-      return code !== undefined && code !== '0x' && code.length > 2;
+      return await publicClient.getBytecode({ address: addr as `0x${string}` });
     } catch (error) {
       console.warn('Contract address check failed:', error);
-      return false;
+      return undefined;
     }
-  };
+  }, [publicClient]);
+
+  const parseEip7702DelegationTarget = useCallback((code: `0x${string}` | undefined): string | null => {
+    if (!code) return null;
+    const normalizedCode = code.toLowerCase();
+    if (!/^0xef0100[0-9a-f]{40}$/.test(normalizedCode)) {
+      return null;
+    }
+
+    return `0x${normalizedCode.slice(8)}`;
+  }, []);
 
   // Comprehensive smart wallet detection
-  const detectSmartWallet = async (): Promise<SmartWalletDetection> => {
+  const detectSmartWallet = useCallback(async (): Promise<SmartWalletDetection> => {
     if (!address || !isConnected) {
       return {
         isSmartWallet: false,
@@ -54,6 +75,9 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
         capabilities: null,
         detectionMethods: [],
         isContract: false,
+        hasCode: false,
+        delegationTarget: null,
+        isDelegatedEoa: false,
         isLoading: false,
         lastChecked: null,
       };
@@ -67,6 +91,9 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
       capabilities: null,
       detectionMethods: [],
       isContract: false,
+      hasCode: false,
+      delegationTarget: null,
+      isDelegatedEoa: false,
       isLoading: false,
       lastChecked: Date.now(),
     };
@@ -74,26 +101,26 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     try {
       // Method 1: Contract address check (most definitive)
       // console.log('🔍 Method 1: Checking if address is a contract...');
-      const isContract = await isContractAddress(address);
-      results.isContract = isContract;
-      
-      if (isContract) {
+      const code = await getAddressBytecode(address);
+      const hasCode = code !== undefined && code !== '0x' && code.length > 2;
+      const delegationTarget = parseEip7702DelegationTarget(code);
+
+      results.hasCode = hasCode;
+      results.delegationTarget = delegationTarget;
+
+      if (delegationTarget) {
+        results.isDelegatedEoa = true;
+        results.walletType = 'eip7702-delegated';
+        results.detectionMethods.push('eip7702-delegation');
+      } else if (hasCode) {
         results.isSmartWallet = true;
-        results.detectionMethods.push('contract-address');
-        // console.log('✅ Method 1: Address is a smart contract');
-      } else {
-        // console.log('❌ Method 1: Address is not a contract (EOA)');
-      }
-
-      // Simplified: Only use contract code to determine smart wallet
-      if (results.isSmartWallet) {
+        results.isContract = true;
         results.walletType = 'other-smart';
+        results.detectionMethods.push('contract-address');
       }
-
-
 
       // Final classification
-      if (!results.isSmartWallet) {
+      if (!results.isSmartWallet && !results.isDelegatedEoa) {
         results.walletType = 'eoa';
       }
 
@@ -116,11 +143,14 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
         capabilities: null,
         detectionMethods: ['error'],
         isContract: false,
+        hasCode: false,
+        delegationTarget: null,
+        isDelegatedEoa: false,
         isLoading: false,
         lastChecked: Date.now(),
       };
     }
-  };
+  }, [address, getAddressBytecode, isConnected, parseEip7702DelegationTarget]);
 
   // Track mounted state to prevent state updates after unmount
   const mountedRef = useRef(true);
@@ -137,6 +167,9 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
           capabilities: null,
           detectionMethods: [],
           isContract: false,
+          hasCode: false,
+          delegationTarget: null,
+          isDelegatedEoa: false,
           isLoading: false,
           lastChecked: null,
         });
@@ -169,16 +202,16 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
       mountedRef.current = false;
       clearTimeout(timer);
     };
-  }, [address, isConnected]); // Removed publicClient from deps to prevent unnecessary re-runs
+  }, [address, detectSmartWallet, isConnected]);
 
   // Manual refetch function
-  const refetch = async () => {
+  const refetch = useCallback(async () => {
     if (!address || !isConnected) return;
     
     setDetection(prev => ({ ...prev, isLoading: true }));
     const result = await detectSmartWallet();
     setDetection({ ...result, isLoading: false });
-  };
+  }, [address, detectSmartWallet, isConnected]);
 
   return (
     <SmartWalletContext.Provider 
