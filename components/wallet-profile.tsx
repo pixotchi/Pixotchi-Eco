@@ -128,9 +128,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     isLoading: smartWalletLoading,
     detectionMethods,
     isContract,
-    delegationTarget,
-    hasCode,
-    isDelegatedEoa,
     refetch: refetchSmartWallet
   } = useSmartWallet();
 
@@ -401,12 +398,10 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     if (isSolana) return "Solana Twin (Smart Wallet)";
     switch (walletType) {
       case "coinbase-smart":
-        return "Smart Wallet (Coinbase)";
       case "other-smart":
         return "Smart Wallet";
-      case "eip7702-delegated":
-        return "Delegated EOA (EIP-7702)";
       case "eoa":
+      case "eip7702-delegated":
         return "Regular Wallet";
       default:
         return "Unknown";
@@ -691,13 +686,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             {getWalletTypeLabel()}
                           </span>
                         </div>
-                      ) : isDelegatedEoa ? (
-                        <div className="flex items-center space-x-1">
-                          <Info className="w-3 h-3 text-amber-500" />
-                          <span className="text-xs font-semibold text-amber-600 dark:text-amber-300">
-                            {getWalletTypeLabel()}
-                          </span>
-                        </div>
                       ) : isSmartWallet ? (
                         <div className="flex items-center space-x-1">
                           <CheckCircle className="w-3 h-3 text-value" />
@@ -729,13 +717,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             Sponsored
                           </span>
                         </div>
-                      ) : isDelegatedEoa ? (
-                        <div className="flex items-center space-x-1">
-                          <Info className="w-3 h-3 text-amber-500" />
-                          <span className="text-xs text-amber-600 dark:text-amber-300">
-                            Depends on delegation
-                          </span>
-                        </div>
                       ) : (
                         <div className="flex items-center space-x-1">
                           <XCircle className="w-3 h-3 text-muted-foreground" />
@@ -750,16 +731,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                   {/* ETH Mode Toggle - only for smart wallet users */}
                   {(isSmartWallet || isSolana) && (
                     <EthModeToggleRow />
-                  )}
-
-                  {!smartWalletLoading && isDelegatedEoa && (
-                    <div className="flex items-start space-x-2">
-                      <Info className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground">
-                        This address has an EIP-7702 delegation target
-                        {delegationTarget ? ` (${formatAddress(delegationTarget)})` : ''}, but it is not a standalone smart-wallet contract.
-                      </span>
-                    </div>
                   )}
 
                   {/* Farcaster Mini App Context (collapsible) - only shown in debug mode */}
@@ -812,9 +783,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     <div className="flex items-start space-x-2">
                       <Lightbulb className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
                       <span className="text-xs text-muted-foreground">
-                        {isDelegatedEoa
-                          ? `Detected delegated code${hasCode ? ' on this address' : ''}; advanced features still depend on the connected wallet implementation.`
-                          : 'For best experience, consider using a smart wallet'}
+                        For best experience, consider using a smart wallet
                       </span>
                     </div>
                   )}
