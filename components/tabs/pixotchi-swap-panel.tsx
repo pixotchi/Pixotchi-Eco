@@ -137,7 +137,10 @@ function TokenSelector({
           className={cn(
             'ock:cursor-pointer ock:bg-ock-background ock:hover:bg-ock-background-hover ock:active:bg-ock-background-active ock:focus:bg-ock-background-active',
             'ock:shadow-ock-default ock:rounded-ock-default ock:border-ock-line ock:border',
-            'ock:flex ock:w-fit ock:items-center ock:gap-2 ock:px-3 ock:py-1',
+            // shrink-0 is critical: without it, flexbox squeezes the button
+            // below its fit-content width and long tickers (e.g. PIXOTCHI)
+            // overflow the span, shoving the chevron past the right padding.
+            'ock:flex ock:w-fit ock:shrink-0 ock:items-center ock:gap-2 ock:px-3 ock:py-1',
             'disabled:opacity-[0.38] disabled:pointer-events-none',
             className,
           )}
