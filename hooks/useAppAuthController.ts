@@ -19,6 +19,12 @@ import {
   getCurrentPublicChatSession,
   requestBasePublicChatNonce,
 } from "@/lib/chat-auth-client";
+import {
+  BASE_CHAT_SESSION_REFRESH_REQUEST_EVENT,
+  emitBaseChatSessionRefreshResult,
+  type BaseChatSessionRefreshReason,
+  type BaseChatSessionRefreshRequest,
+} from "@/lib/base-chat-session-refresh";
 import { clearConfirmedMiniAppSession } from "@/lib/confirmed-miniapp-session";
 import {
   clearMiniAppBypassCookies,
@@ -142,6 +148,11 @@ export function useAppAuthController() {
   const privySessionResetRef = useRef(false);
   const baseAutologinAttemptRef = useRef(false);
   const baseAuthInFlightRef = useRef(false);
+  const baseSessionCheckRef = useRef<{
+    address: string;
+    result: "invalid" | "valid";
+  } | null>(null);
+  const baseSessionRecoveryAttemptRef = useRef<string | null>(null);
 
   const hasSolanaWallet = useMemo(() => {
     if (!authenticated || !user) {
@@ -825,6 +836,173 @@ export function useAppAuthController() {
     ],
   );
 
+  const recoverBasePublicChatSession = useCallback(
+    async (options: {
+      clearAutologinOnFailure?: boolean;
+      clearAutologinOnSuccess?: boolean;
+      disconnectOnFailure?: boolean;
+      reason: BaseChatSessionRefreshReason;
+      reportFailure?: boolean;
+      toastOnFailure?: boolean;
+    }): Promise<{ message?: string; ok: boolean }> => {
+      if (isMiniApp || state.surface !== "base") {
+        return {
+          message: "Base chat session recovery is only available on the Base surface.",
+          ok: false,
+        };
+      }
+
+      if (!isEvmConnected || !normalizedAddress) {
+        return {
+          message: "Connect your Base wallet to restore the chat session.",
+          ok: false,
+        };
+      }
+
+      if (baseAuthInFlightRef.current) {
+        return {
+          message: "Base authentication is already in progress.",
+          ok: false,
+        };
+      }
+
+      const base =
+        (connectors || []).find((connector: any) => connector.id === "baseAccount") ||
+        (connectors || [])[0];
+      const legacyBase = (connectors || []).find(
+        (connector: any) => connector.id === "coinbaseWalletSDK",
+      );
+
+      if (!base) {
+        return {
+          message: "Base wallet connector unavailable.",
+          ok: false,
+        };
+      }
+
+      baseAuthInFlightRef.current = true;
+      dispatch({ type: "set-base-auth-status", status: "authenticating" });
+
+      try {
+        try {
+          await completeBaseAuthentication(base as any);
+        } catch (error) {
+          if (legacyBase && shouldUseLegacyBaseFallback(error)) {
+            void logBaseClientDiagnostic("legacy-fallback-selected", {
+              baseConnectorId: base?.id ?? null,
+              legacyConnectorId: legacyBase?.id ?? null,
+              errorCode: getErrorCode(error),
+              message: getErrorMessage(error, "Base auth failed."),
+              normalizedAddress,
+              reason: options.reason,
+            });
+            await completeLegacyBaseAuthentication(legacyBase as any);
+          } else {
+            throw error;
+          }
+        }
+
+        if (options.clearAutologinOnSuccess) {
+          await sessionStorageManager.removeAutologin();
+        }
+
+        baseSessionCheckRef.current = {
+          address: normalizedAddress,
+          result: "valid",
+        };
+        baseSessionRecoveryAttemptRef.current = null;
+        dispatch({ type: "set-base-auth-status", status: "idle" });
+        dispatch({ type: "set-error", message: null });
+
+        return { ok: true };
+      } catch (error) {
+        if (options.disconnectOnFailure) {
+          try {
+            disconnect();
+          } catch (disconnectError) {
+            console.warn(
+              "Failed to disconnect Base wallet after auth failure:",
+              disconnectError,
+            );
+          }
+        }
+
+        if (options.clearAutologinOnFailure || options.clearAutologinOnSuccess) {
+          await sessionStorageManager.removeAutologin().catch((storageError) => {
+            console.warn(
+              "Failed to clear Base autologin after auth failure:",
+              storageError,
+            );
+          });
+        }
+
+        await sessionStorageManager.clearPendingBaseChatAuth().catch((storageError) => {
+          console.warn(
+            "Failed to clear pending Base auth after auth failure:",
+            storageError,
+          );
+        });
+        await clearPublicChatSession().catch((chatError) => {
+          console.warn("Failed to clear Base chat session after auth failure:", chatError);
+        });
+        await persistBaseAuthenticatedAddress(null).catch((storageError) => {
+          console.warn("Failed to clear persisted Base auth after auth failure:", storageError);
+        });
+
+        baseSessionCheckRef.current = {
+          address: normalizedAddress,
+          result: "invalid",
+        };
+        baseSessionRecoveryAttemptRef.current = normalizedAddress;
+        dispatch({ type: "set-base-auth-status", status: "idle" });
+
+        const fallbackMessage = shouldUseLegacyBaseFallback(error)
+          ? "This Coinbase app version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy."
+          : "Base authentication failed. Please try again.";
+        const message = getErrorMessage(error, fallbackMessage);
+
+        if (options.reportFailure) {
+          dispatch({ type: "set-error", message });
+        }
+
+        void logBaseClientDiagnostic("base-session-recovery-failed", {
+          baseConnectorId: base?.id ?? null,
+          legacyConnectorId: legacyBase?.id ?? null,
+          errorCode: getErrorCode(error),
+          message,
+          normalizedAddress,
+          reason: options.reason,
+        });
+
+        if (options.toastOnFailure) {
+          toast.error(message);
+        }
+
+        return {
+          message,
+          ok: false,
+        };
+      } finally {
+        baseAuthInFlightRef.current = false;
+      }
+    },
+    [
+      completeBaseAuthentication,
+      completeLegacyBaseAuthentication,
+      connectors,
+      disconnect,
+      getErrorCode,
+      getErrorMessage,
+      isEvmConnected,
+      isMiniApp,
+      logBaseClientDiagnostic,
+      normalizedAddress,
+      persistBaseAuthenticatedAddress,
+      shouldUseLegacyBaseFallback,
+      state.surface,
+    ],
+  );
+
   const { login } = useLogin({
     onComplete: ({ loginAccount }) => {
       const loginAddress =
@@ -953,6 +1131,8 @@ export function useAppAuthController() {
 
   useEffect(() => {
     if (!state.surfaceInitialized || isMiniApp || state.surface !== "base") {
+      baseSessionCheckRef.current = null;
+      baseSessionRecoveryAttemptRef.current = null;
       dispatch({ type: "set-base-authenticated-address", address: null });
       dispatch({ type: "set-base-auth-status", status: "idle" });
       baseAuthInFlightRef.current = false;
@@ -960,13 +1140,23 @@ export function useAppAuthController() {
     }
 
     if (!isEvmConnected || !normalizedAddress) {
+      baseSessionCheckRef.current = null;
+      baseSessionRecoveryAttemptRef.current = null;
       if (!baseAuthInFlightRef.current) {
         dispatch({ type: "set-base-auth-status", status: "idle" });
       }
       return;
     }
 
-    if (state.baseAuthenticatedAddress === normalizedAddress || baseAuthInFlightRef.current) {
+    const currentCheck = baseSessionCheckRef.current;
+    const alreadyValidated =
+      currentCheck?.address === normalizedAddress &&
+      ((currentCheck.result === "valid" &&
+        state.baseAuthenticatedAddress === normalizedAddress) ||
+        (currentCheck.result === "invalid" &&
+          state.baseAuthenticatedAddress !== normalizedAddress));
+
+    if (alreadyValidated || baseAuthInFlightRef.current) {
       return;
     }
 
@@ -983,6 +1173,11 @@ export function useAppAuthController() {
         }
 
         if (session?.provider === "base" && sessionAddress === normalizedAddress) {
+          baseSessionCheckRef.current = {
+            address: normalizedAddress,
+            result: "valid",
+          };
+          baseSessionRecoveryAttemptRef.current = null;
           await persistBaseAuthenticatedAddress(normalizedAddress);
           return;
         }
@@ -994,9 +1189,45 @@ export function useAppAuthController() {
         }
 
         await persistBaseAuthenticatedAddress(null);
+
+        const shouldAttemptRecovery =
+          state.baseAuthenticatedAddress === normalizedAddress &&
+          baseSessionRecoveryAttemptRef.current !== normalizedAddress;
+
+        if (!shouldAttemptRecovery) {
+          baseSessionCheckRef.current = {
+            address: normalizedAddress,
+            result: "invalid",
+          };
+          return;
+        }
+
+        baseSessionRecoveryAttemptRef.current = normalizedAddress;
+        const recovery = await recoverBasePublicChatSession({
+          disconnectOnFailure: false,
+          reason: "session-validation",
+          reportFailure: false,
+          toastOnFailure: false,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        baseSessionCheckRef.current = {
+          address: normalizedAddress,
+          result: recovery.ok ? "valid" : "invalid",
+        };
+        if (recovery.ok) {
+          baseSessionRecoveryAttemptRef.current = null;
+        }
       } catch (error) {
         if (!cancelled) {
           console.warn("Failed to check Base authentication session:", error);
+          baseSessionCheckRef.current = {
+            address: normalizedAddress,
+            result: "invalid",
+          };
           await persistBaseAuthenticatedAddress(null);
         }
       } finally {
@@ -1014,10 +1245,60 @@ export function useAppAuthController() {
     isMiniApp,
     normalizedAddress,
     persistBaseAuthenticatedAddress,
+    recoverBasePublicChatSession,
     state.baseAuthenticatedAddress,
     state.surface,
     state.surfaceInitialized,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleBaseChatSessionRefreshRequest = async (event: Event) => {
+      const detail = (
+        event as CustomEvent<BaseChatSessionRefreshRequest>
+      ).detail;
+
+      if (!detail?.requestId) {
+        return;
+      }
+
+      if (isMiniApp || state.surface !== "base") {
+        emitBaseChatSessionRefreshResult({
+          message: "Base chat session recovery is unavailable on this auth surface.",
+          requestId: detail.requestId,
+          status: "ignored",
+        });
+        return;
+      }
+
+      const recovery = await recoverBasePublicChatSession({
+        disconnectOnFailure: false,
+        reason: detail.reason,
+        reportFailure: false,
+        toastOnFailure: false,
+      });
+
+      emitBaseChatSessionRefreshResult({
+        ...(recovery.message ? { message: recovery.message } : {}),
+        requestId: detail.requestId,
+        status: recovery.ok ? "success" : "error",
+      });
+    };
+
+    window.addEventListener(
+      BASE_CHAT_SESSION_REFRESH_REQUEST_EVENT,
+      handleBaseChatSessionRefreshRequest as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        BASE_CHAT_SESSION_REFRESH_REQUEST_EVENT,
+        handleBaseChatSessionRefreshRequest as EventListener,
+      );
+    };
+  }, [isMiniApp, recoverBasePublicChatSession, state.surface]);
 
   useEffect(() => {
     if (!isWebPrivySurface || !privyReady || !authenticated || !normalizedAddress) {

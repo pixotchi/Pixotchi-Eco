@@ -75,7 +75,7 @@ interface FarcasterChatAuthPayload {
 }
 
 const CHAT_SESSION_COOKIE_NAME = 'pixotchi_chat_session';
-const CHAT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const CHAT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const BASE_AUTH_NONCE_TTL_SECONDS = 60 * 10;
 const BASE_NONCE_CONSUME_SCRIPT = `
 if redis.call("EXISTS", KEYS[1]) == 1 then
@@ -392,7 +392,7 @@ function buildPrivateNoStoreHeaders(): HeadersInit {
   };
 }
 
-function setChatSessionCookie(response: NextResponse, sessionId: string) {
+export function setChatSessionCookie(response: NextResponse, sessionId: string) {
   response.cookies.set(CHAT_SESSION_COOKIE_NAME, sessionId, {
     httpOnly: true,
     maxAge: CHAT_SESSION_TTL_SECONDS,
@@ -507,6 +507,13 @@ export async function getChatSessionFromRequest(request: NextRequest): Promise<{
   }
 
   const session = await redisGetJSON<ChatSessionRecord>(getChatSessionKey(sessionId));
+  if (session) {
+    void redisSetJSON(getChatSessionKey(sessionId), session, CHAT_SESSION_TTL_SECONDS).catch(
+      (error) => {
+        console.warn('[chat-auth] Failed to refresh public chat session TTL.', error);
+      },
+    );
+  }
   return {
     session,
     sessionId,

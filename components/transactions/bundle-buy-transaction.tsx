@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { ShopItem, GardenItem, Plant } from '@/lib/types';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -95,11 +96,7 @@ export default function BundleBuyTransaction({
                 if (txHash) {
                   payload.proof = { txHash };
                 }
-                const res = await fetch('/api/gamification/missions', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload)
-                });
+                const res = await postMissionProgress(payload);
                 if (!res.ok) throw new Error('missions post failed');
               } catch (e) {
                 if (attempt < 2) {

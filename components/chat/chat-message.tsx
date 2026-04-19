@@ -7,6 +7,7 @@ import { useAccount } from "wagmi";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Bot, User, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { postMissionProgress } from "@/lib/mission-tracking";
 import ChatProfileDialog from "./chat-profile-dialog";
 
 // Function to format AI messages with bold syntax **text**
@@ -77,11 +78,7 @@ export default function ChatMessageComponent({
 
   const trackProfileVisit = useCallback(() => {
     if (!address) return;
-    fetch('/api/gamification/missions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, taskId: 's2_visit_profile' })
-    }).catch(() => {});
+    postMissionProgress({ address, taskId: 's2_visit_profile' }).catch(() => {});
   }, [address]);
   
   let displayName = '';

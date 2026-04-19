@@ -9,6 +9,7 @@ import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { extractBestSpinRewardFromLogs } from "@/lib/spin-game-events";
+import { postMissionProgress } from "@/lib/mission-tracking";
 
 const FUNCTION_MAP = {
   commit: "spinGameV2Commit",
@@ -106,14 +107,10 @@ export default function SpinGameTransaction({
         const txHash = extractTransactionHash(receipts[0]);
         if (txHash) {
           try {
-            fetch('/api/gamification/missions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                address,
-                taskId: 's4_play_arcade',
-                proof: { txHash },
-              }),
+            postMissionProgress({
+              address,
+              taskId: 's4_play_arcade',
+              proof: { txHash },
             }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
           } catch (error) {
             console.warn('Failed to dispatch gamification mission (spin arcade):', error);

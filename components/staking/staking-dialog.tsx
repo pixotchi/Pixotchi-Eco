@@ -19,6 +19,7 @@ import { formatUnits, parseUnits } from "viem";
 import { RefreshCw } from "lucide-react";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 type StakingDialogProps = {
   open: boolean;
@@ -452,11 +453,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                        if (txHash) {
                          payload.proof = { txHash };
                        }
-                       fetch('/api/gamification/missions', {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify(payload)
-                       });
+                       postMissionProgress(payload);
                      } catch {}
                    }}
                  />
@@ -492,11 +489,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                   if (txHash) {
                     payload.proof = { txHash };
                   }
-                  fetch('/api/gamification/missions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                  });
+                  postMissionProgress(payload);
                 } catch {}
               }}
             />
@@ -507,4 +500,3 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   </Dialog>
   );
 }
-

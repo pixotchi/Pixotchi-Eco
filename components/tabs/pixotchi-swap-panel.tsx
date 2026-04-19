@@ -51,6 +51,7 @@ import {
   getBuilderCapabilities,
   transformCallsWithBuilderCode,
 } from '@/lib/builder-code';
+import { postMissionProgress } from '@/lib/mission-tracking';
 import {
   extractTransactionHash,
   normalizeTransactionReceipt,
@@ -679,11 +680,7 @@ export default function PixotchiSwapPanel() {
       };
 
       try {
-        await fetch('/api/gamification/missions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        await postMissionProgress(payload);
       } catch (error) {
         console.warn('[PixotchiSwapPanel] Failed to track mission', error);
       }

@@ -13,6 +13,7 @@ import { decodeEventLog, formatUnits } from "viem";
 import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
 import { extractTransactionHash } from "@/lib/transaction-utils";
 import { useAccount } from "wagmi";
+import { postMissionProgress } from "@/lib/mission-tracking";
 
 interface CasinoTransactionProps {
     mode: "placeBets" | "reveal";
@@ -130,14 +131,10 @@ export default function CasinoTransaction({
                 const txHash = extractTransactionHash(receipts[0]);
                 if (txHash) {
                     try {
-                        fetch("/api/gamification/missions", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                address,
-                                taskId: "s3_play_casino_game",
-                                proof: { txHash },
-                            }),
+                        postMissionProgress({
+                            address,
+                            taskId: "s3_play_casino_game",
+                            proof: { txHash },
                         }).catch((err) =>
                             console.warn("Gamification tracking failed (non-critical):", err)
                         );

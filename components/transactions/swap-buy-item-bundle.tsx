@@ -6,6 +6,7 @@ import SmartWalletTransaction from './smart-wallet-transaction';
 import { PIXOTCHI_TOKEN_ADDRESS, PIXOTCHI_NFT_ADDRESS, UNISWAP_ROUTER_ADDRESS, WETH_ADDRESS } from '@/lib/contracts';
 import type { ShopItem, GardenItem, Plant } from '@/lib/types';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 // UniswapV2 Router ABI for swapExactETHForTokens
 const UNISWAP_ROUTER_ABI = [
@@ -169,11 +170,7 @@ export default function SwapBuyItemBundle({
                     if (txHash) {
                         payload.proof = { txHash };
                     }
-                    const res = await fetch('/api/gamification/missions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+                    const res = await postMissionProgress(payload);
                     if (!res.ok) throw new Error('missions post failed');
                 } catch (e) {
                     if (attempt < 2) {
