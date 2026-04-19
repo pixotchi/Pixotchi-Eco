@@ -41,9 +41,12 @@ import type {
   SwapQuoteStep,
   UserSwapTokenId,
 } from '@/lib/swap/types';
+import { SponsoredBadge } from '@/components/paymaster-toggle';
+import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
 import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
+import { requestBalanceRefresh } from '@/lib/app-events';
 import {
   getBuilderCapabilities,
   transformCallsWithBuilderCode,
@@ -339,6 +342,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
 export default function PixotchiSwapPanel() {
   const { address, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const { isTabVisible } = useTabVisibility();
   const readClient = useMemo(() => getBaseReadClient(), []);
@@ -370,7 +374,11 @@ export default function PixotchiSwapPanel() {
       enabled: Boolean(address),
     },
   });
-  const { data: buyBalanceData, isLoading: buyBalanceLoading } = useBalance({
+  const {
+    data: buyBalanceData,
+    isLoading: buyBalanceLoading,
+    refetch: refetchBuyBalance,
+  } = useBalance({
     address,
     chainId: BASE_CHAIN_ID,
     token:
@@ -381,7 +389,7 @@ export default function PixotchiSwapPanel() {
       enabled: Boolean(address),
     },
   });
-  const { data: ethBalanceData } = useBalance({
+  const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
     address,
     chainId: BASE_CHAIN_ID,
     query: {
@@ -816,20 +824,24 @@ export default function PixotchiSwapPanel() {
     [address, readAllowance, updateExecutionStep, walletClient],
   );
 
-  const executeApprovalAndSwapBatch = useCallback(
+  const executeSmartWalletSwapBatch = useCallback(
     async (
-      approval: NonNullable<SwapBuildStepResponse['approval']>,
       builtStep: SwapBuildStepResponse,
       stepIndex: number,
+      approval?: NonNullable<SwapBuildStepResponse['approval']>,
     ): Promise<TransactionReceipt> => {
-      if (!address || !walletClient?.account) {
+      if (
+        !address ||
+        !walletClient?.account ||
+        typeof walletClient.sendCalls !== 'function'
+      ) {
         throw new Error(S.errors.walletClientUnavailable);
       }
 
-      const requiredAmount = BigInt(approval.requiredAmount);
-
-      const calls = transformCallsWithBuilderCode<SmartWalletBatchCall>([
-        {
+      const calls: SmartWalletBatchCall[] = [];
+      if (approval) {
+        const requiredAmount = BigInt(approval.requiredAmount);
+        calls.push({
           to: approval.token,
           data: encodeFunctionData({
             abi: ERC20_TOKEN_ABI,
@@ -837,23 +849,29 @@ export default function PixotchiSwapPanel() {
             args: [approval.spender, requiredAmount],
           }),
           value: BigInt(0),
-        },
-        {
-          to: builtStep.transaction.to,
-          data: builtStep.transaction.data,
-          value: BigInt(builtStep.transaction.value),
-        },
-      ]);
+        });
+      }
+      calls.push({
+        to: builtStep.transaction.to,
+        data: builtStep.transaction.data,
+        value: BigInt(builtStep.transaction.value),
+      });
+
+      const transformedCalls = transformCallsWithBuilderCode<SmartWalletBatchCall>(
+        calls,
+      );
 
       updateExecutionStep(stepIndex, {
         status: 'swapping',
-        message: S.execution.approvingAndSwapping,
+        message: approval
+          ? S.execution.approvingAndSwapping
+          : builtStep.step.routeLabel,
       });
 
       const batch = await walletClient.sendCalls({
         account: walletClient.account,
         chain: base,
-        calls,
+        calls: transformedCalls,
         capabilities: getBuilderCapabilities(),
         forceAtomic: true,
       });
@@ -909,26 +927,31 @@ export default function PixotchiSwapPanel() {
 
       const amountIn = amountInOverride || step.amountIn;
       const builtStep = await buildStep(step, amountIn, quote.quoteToken);
+      const canUseSmartWalletBatch =
+        isSmartWallet && typeof walletClient?.sendCalls === 'function';
+      const usesSponsoredSmartWallet = canUseSmartWalletBatch && isSponsored;
 
       // Gas safety: make sure the wallet has enough ETH to actually broadcast
-      // the approval + swap beyond whatever ETH value we attach.
+      // the transaction. Sponsored smart-wallet paths still need any ETH value
+      // attached to the swap itself, but they do not need the extra gas buffer.
       if (address && ethBalanceData?.value !== undefined) {
         const requiredEth =
-          BigInt(builtStep.transaction.value || '0') + ETH_GAS_REQUIRED_WEI;
+          BigInt(builtStep.transaction.value || '0') +
+          (usesSponsoredSmartWallet ? BigInt(0) : ETH_GAS_REQUIRED_WEI);
         if (ethBalanceData.value < requiredEth) {
           throw new Error(S.errors.insufficientGas);
         }
       }
 
-      if (builtStep.approval) {
-        if (isSmartWallet && typeof walletClient?.sendCalls === 'function') {
-          return executeApprovalAndSwapBatch(
-            builtStep.approval,
-            builtStep,
-            stepIndex,
-          );
-        }
+      if (canUseSmartWalletBatch) {
+        return executeSmartWalletSwapBatch(
+          builtStep,
+          stepIndex,
+          builtStep.approval ?? undefined,
+        );
+      }
 
+      if (builtStep.approval) {
         await ensureApproval(builtStep.approval, stepIndex);
       }
 
@@ -970,7 +993,8 @@ export default function PixotchiSwapPanel() {
       buildStep,
       ensureApproval,
       ethBalanceData?.value,
-      executeApprovalAndSwapBatch,
+      executeSmartWalletSwapBatch,
+      isSponsored,
       isSmartWallet,
       updateExecutionStep,
       walletClient,
@@ -979,10 +1003,12 @@ export default function PixotchiSwapPanel() {
 
   const finalizeSwapSuccess = useCallback(
     async (receipt: TransactionReceipt) => {
-      try {
-        window.dispatchEvent(new Event('balances:refresh'));
-      } catch {}
-      void refetchSellBalance();
+      requestBalanceRefresh();
+      void Promise.allSettled([
+        refetchSellBalance(),
+        refetchBuyBalance(),
+        refetchEthBalance(),
+      ]);
       await trackSwapMission(receipt);
       toast.success(S.execution.completed);
 
@@ -990,7 +1016,12 @@ export default function PixotchiSwapPanel() {
         setExecutionSteps(null);
       }, 2200);
     },
-    [refetchSellBalance, trackSwapMission],
+    [
+      refetchBuyBalance,
+      refetchEthBalance,
+      refetchSellBalance,
+      trackSwapMission,
+    ],
   );
 
   const refreshQuoteNow = useCallback(async (): Promise<SwapQuoteResponse | null> => {
@@ -1288,10 +1319,13 @@ export default function PixotchiSwapPanel() {
             </div>
           </div>
 
+          <div className="mt-4 flex justify-end">
+            <SponsoredBadge show={isSponsored && isSmartWallet} />
+          </div>
           <button
             type="submit"
             className={cn(
-              'ock:bg-ock-primary ock:rounded-ock-default mt-4 w-full rounded-xl px-4 py-3',
+              'ock:bg-ock-primary ock:rounded-ock-default w-full rounded-xl px-4 py-3',
               'ock:font-ock ock:font-semibold',
               'flex items-center justify-center gap-2',
               actionDisabled && 'opacity-[0.38] pointer-events-none',
