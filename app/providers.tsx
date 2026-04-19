@@ -154,19 +154,88 @@ const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundl
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
 
-// TanStack Query client - created outside component to prevent recreation on every render
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      retry: 2,
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
+        retry: 2,
+      },
+      mutations: {
+        retry: 1,
+      },
     },
-    mutations: {
-      retry: 1,
-    },
-  },
-});
+  });
+}
+
+function WagmiRouter({
+  authSurface,
+  children,
+  hostEnvironmentState,
+}: {
+  authSurface: AuthSurface;
+  children: ReactNode;
+  hostEnvironmentState: HostEnvironmentState;
+}) {
+  const isMiniApp = hostEnvironmentState.isMiniApp;
+  const surface = authSurface;
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.surface = isMiniApp ? 'miniapp' : 'web';
+    return () => {
+      delete document.documentElement.dataset.surface;
+    };
+  }, [isMiniApp]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const miniTitle = "Pixotchi Mini - Grow your farm, Earn rewards!";
+    const webTitle = "Pixotchi - Grow your farm, Earn rewards!";
+    document.title = isMiniApp ? miniTitle : webTitle;
+  }, [isMiniApp]);
+
+  if (isMiniApp) {
+    return (
+      <CoreWagmiProvider config={wagmiMiniAppConfig}>
+        <TransactionProvider
+          defaultChainId={8453}
+          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+        >
+          {children}
+          <TransactionModalWrapper className="!z-[1300]" />
+        </TransactionProvider>
+      </CoreWagmiProvider>
+    );
+  }
+
+  if (surface === 'base') {
+    return (
+      <CoreWagmiProvider config={wagmiWebBaseConfig}>
+        <TransactionProvider
+          defaultChainId={8453}
+          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+        >
+          {children}
+          <TransactionModalWrapper className="!z-[1300]" />
+        </TransactionProvider>
+      </CoreWagmiProvider>
+    );
+  }
+
+  return (
+    <PrivyWagmiProvider config={wagmiPrivyConfig}>
+      <TransactionProvider
+        defaultChainId={8453}
+        paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+      >
+        {children}
+        <TransactionModalWrapper className="!z-[1300]" />
+      </TransactionProvider>
+    </PrivyWagmiProvider>
+  );
+}
 
 export function Providers(props: { children: ReactNode }) {
   // MiniKit API key validation handled internally
@@ -190,6 +259,7 @@ export function Providers(props: { children: ReactNode }) {
   const [authSurface, setAuthSurface] = useState<AuthSurface>('privy');
   const [isMobilePrivyBrowser, setIsMobilePrivyBrowser] = useState(false);
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
+  const [queryClient] = useState(createQueryClient);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -290,76 +360,25 @@ export function Providers(props: { children: ReactNode }) {
       solana: undefined,
     };
   }, [authSurface, isMobilePrivyBrowser]);
-
-  function WagmiRouter({
-    children,
-    hostEnvironmentState,
-  }: {
-    children: ReactNode;
-    hostEnvironmentState: HostEnvironmentState;
-  }) {
-    const isMiniApp = hostEnvironmentState.isMiniApp;
-    const surface = authSurface;
-
-    useEffect(() => {
-      if (typeof document === 'undefined') return;
-      document.documentElement.dataset.surface = isMiniApp ? 'miniapp' : 'web';
-      return () => {
-        delete document.documentElement.dataset.surface;
-      };
-    }, [isMiniApp]);
-
-    useEffect(() => {
-      if (typeof document === 'undefined') return;
-      const miniTitle = "Pixotchi Mini - Grow your farm, Earn rewards!";
-      const webTitle = "Pixotchi - Grow your farm, Earn rewards!";
-      document.title = isMiniApp ? miniTitle : webTitle;
-    }, [isMiniApp]);
-
-    // Mini App: use Farcaster connector.
-    if (isMiniApp) {
-      return (
-        <CoreWagmiProvider config={wagmiMiniAppConfig}>
-          <TransactionProvider
-            defaultChainId={8453}
-            paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-          >
-            {children}
-            <TransactionModalWrapper className="!z-[1300]" />
-          </TransactionProvider>
-        </CoreWagmiProvider>
-      );
-    }
-
-    // Web: choose provider based on surface
-    if (surface === 'base') {
-      return (
-        <CoreWagmiProvider config={wagmiWebBaseConfig}>
-          <TransactionProvider
-            defaultChainId={8453}
-            paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-          >
-            {children}
-            <TransactionModalWrapper className="!z-[1300]" />
-          </TransactionProvider>
-        </CoreWagmiProvider>
-      );
-    }
-
-    // 'privy' and 'privysolana' both use PrivyWagmiProvider
-    // (Solana doesn't use wagmi, so same provider works)
-    return (
-      <PrivyWagmiProvider config={wagmiPrivyConfig}>
-        <TransactionProvider
-          defaultChainId={8453}
-          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-        >
-          {children}
-          <TransactionModalWrapper className="!z-[1300]" />
-        </TransactionProvider>
-      </PrivyWagmiProvider>
-    );
-  }
+  const privyConfig = useMemo(() => ({
+    appearance: {
+      theme: 'light' as const,
+      walletChainType: privyWalletConfig.walletChainType,
+      ...(privyWalletConfig.walletList && {
+        walletList: privyWalletConfig.walletList,
+      }),
+    },
+    defaultChain: base,
+    supportedChains: [base],
+    loginMethods: privyWalletConfig.loginMethods,
+    embeddedWallets: privyWalletConfig.embeddedWallets,
+    ...(privyWalletConfig.solana && {
+      solana: privyWalletConfig.solana,
+    }),
+    ...(privyWalletConfig.externalWallets && {
+      externalWallets: privyWalletConfig.externalWallets,
+    }),
+  }), [privyWalletConfig]);
 
   return (
     <ErrorBoundary variant="card" onError={(error) => {
@@ -376,36 +395,13 @@ export function Providers(props: { children: ReactNode }) {
             <PaymasterProvider>
               <PrivyProvider
                 appId={privyAppId}
-                config={{
-                  // Dynamic config based on selected surface (privy vs privysolana)
-                  appearance: {
-                    theme: 'light',
-                    walletChainType: privyWalletConfig.walletChainType,
-                    // Specify walletList based on mode
-                    ...(privyWalletConfig.walletList && {
-                      walletList: privyWalletConfig.walletList,
-                    }),
-                  },
-                  defaultChain: base,
-                  supportedChains: [base],
-                  loginMethods: privyWalletConfig.loginMethods,
-                  // Avoid session race conditions by not auto-connecting until hooks report ready
-                  embeddedWallets: privyWalletConfig.embeddedWallets,
-                  // Solana RPC config (only when in Solana mode)
-                  ...(privyWalletConfig.solana && {
-                    solana: privyWalletConfig.solana,
-                  }),
-                  // External Solana wallet connectors (only when in Solana mode)
-                  ...(privyWalletConfig.externalWallets && {
-                    externalWallets: privyWalletConfig.externalWallets,
-                  }),
-                }}
+                config={privyConfig}
               >
                 <QueryClientProvider client={queryClient}>
-                    <HostEnvironmentProvider>
-                      <ProvidersContent
-                        surfaceInitialized={surfaceInitialized}
-                        wagmiRouter={WagmiRouter}
+                  <HostEnvironmentProvider>
+                    <ProvidersContent
+                      authSurface={authSurface}
+                      surfaceInitialized={surfaceInitialized}
                     >
                       {props.children}
                     </ProvidersContent>
@@ -432,19 +428,13 @@ function RouteAwareChatProvider({ children }: { children: ReactNode }) {
 }
 
 function ProvidersContent({
+  authSurface,
   children,
   surfaceInitialized,
-  wagmiRouter: WagmiRouter,
 }: {
+  authSurface: AuthSurface;
   children: ReactNode;
   surfaceInitialized: boolean;
-  wagmiRouter: ({
-    children,
-    hostEnvironmentState,
-  }: {
-    children: ReactNode;
-    hostEnvironmentState: HostEnvironmentState;
-  }) => ReactNode;
 }) {
   const hostEnvironment = useHostEnvironment();
   const confirmedMiniAppSession = useConfirmedMiniAppSession();
@@ -526,7 +516,7 @@ function ProvidersContent({
   }
 
   return (
-    <WagmiRouter hostEnvironmentState={hostEnvironment}>
+    <WagmiRouter authSurface={authSurface} hostEnvironmentState={hostEnvironment}>
       <FrameProvider>
         <SmartWalletProvider>
           <EthModeProvider>

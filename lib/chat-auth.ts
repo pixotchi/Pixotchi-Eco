@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { base } from 'viem/chains';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
-import { PrivyClient } from '@privy-io/node';
+import { InvalidAuthTokenError, PrivyClient } from '@privy-io/node';
 import { getBaseReadClient } from '@/lib/base-rpc';
+import { getPrivyChatAuthConfigStatus } from '@/lib/env-config';
 import { getTwinAddress } from '@/lib/solana-twin';
 import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
 import { MINIAPP_BYPASS_ADDRESS_COOKIE, MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
@@ -64,8 +65,9 @@ interface ParsedBaseSiweMessage {
 }
 
 interface PrivyChatAuthPayload {
-  accessToken: string;
+  accessToken?: string | null;
   expectedAddress?: string | null;
+  identityToken?: string | null;
   solanaAddress?: string | null;
 }
 
@@ -86,6 +88,12 @@ return 0
 `;
 
 const basePublicClient = getBaseReadClient();
+let privyServerClientCache:
+  | {
+      cacheKey: string;
+      client: PrivyClient;
+    }
+  | null = null;
 
 export class ChatAuthError extends Error {
   status: number;
@@ -641,14 +649,28 @@ export async function createChatSessionResponse(request: NextRequest, identity: 
 }
 
 function getPrivyServerClient(): PrivyClient {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
-  const appSecret = process.env.PRIVY_APP_SECRET?.trim();
-
-  if (!appId || !appSecret) {
+  const configStatus = getPrivyChatAuthConfigStatus();
+  if (!configStatus.ready) {
     throw new ChatAuthError('Privy server authentication is not configured.', 503);
   }
 
-  return new PrivyClient({ appId, appSecret });
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID!.trim();
+  const appSecret = process.env.PRIVY_APP_SECRET!.trim();
+  const jwtVerificationKey = process.env.PRIVY_JWT_VERIFICATION_KEY?.trim() || undefined;
+  const cacheKey = `${appId}:${appSecret}:${jwtVerificationKey ?? ''}`;
+
+  if (!privyServerClientCache || privyServerClientCache.cacheKey !== cacheKey) {
+    privyServerClientCache = {
+      cacheKey,
+      client: new PrivyClient({
+        appId,
+        appSecret,
+        ...(jwtVerificationKey ? { jwtVerificationKey } : {}),
+      }),
+    };
+  }
+
+  return privyServerClientCache.client;
 }
 
 function getPrivyWalletAccounts(user: any, chainType: 'ethereum' | 'solana'): Array<{ address: string }> {
@@ -677,24 +699,49 @@ function getPrivyWalletAccounts(user: any, chainType: 'ethereum' | 'solana'): Ar
 export async function verifyPrivyChatIdentity(
   payload: PrivyChatAuthPayload,
 ): Promise<ChatIdentity> {
-  if (!payload.accessToken) {
-    throw new ChatAuthError('Privy access token is required.', 400);
-  }
-
   const expectedAddress = payload.expectedAddress ? normalizeAddress(payload.expectedAddress) : null;
   const privy = getPrivyServerClient();
-  const claims = await privy.utils().auth().verifyAccessToken(payload.accessToken);
-  const user = await privy.users()._get(claims.user_id);
+  const identityToken = payload.identityToken?.trim() || null;
+  const accessToken = payload.accessToken?.trim() || null;
+
+  if (!identityToken && !accessToken) {
+    throw new ChatAuthError('Privy identity or access token is required.', 400);
+  }
+
+  let user: any;
+  let userId: string;
+
+  try {
+    if (identityToken) {
+      user = await privy.users().get({ id_token: identityToken });
+      userId = typeof user?.id === 'string' ? user.id : '';
+      if (!userId) {
+        throw new ChatAuthError('Privy identity token is missing a valid user ID.', 401);
+      }
+    } else {
+      const claims = await privy.utils().auth().verifyAccessToken(accessToken!);
+      user = await privy.users()._get(claims.user_id);
+      userId = claims.user_id;
+    }
+  } catch (error) {
+    if (error instanceof ChatAuthError) {
+      throw error;
+    }
+
+    if (error instanceof InvalidAuthTokenError) {
+      throw new ChatAuthError('Invalid Privy token.', 401);
+    }
+
+    throw error;
+  }
 
   if (payload.solanaAddress) {
     const normalizedSolanaAddress = payload.solanaAddress.trim();
     const solanaWallets = getPrivyWalletAccounts(user, 'solana');
-    const matchedWallet =
-      solanaWallets.find((wallet) => wallet.address === normalizedSolanaAddress) ??
-      solanaWallets[0];
+    const matchedWallet = solanaWallets.find((wallet) => wallet.address === normalizedSolanaAddress);
 
-    if (!matchedWallet?.address) {
-      throw new ChatAuthError('No verified Solana wallet is linked to this Privy user.', 401);
+    if (!matchedWallet) {
+      throw new ChatAuthError('Privy Solana session does not match the connected wallet.', 401);
     }
 
     const twinAddress = normalizeAddress(await getTwinAddress(matchedWallet.address));
@@ -707,7 +754,7 @@ export async function verifyPrivyChatIdentity(
       method: 'privy-solana',
       provider: 'privy',
       sourceAddress: matchedWallet.address,
-      userId: claims.user_id,
+      userId,
     };
   }
 
@@ -726,7 +773,7 @@ export async function verifyPrivyChatIdentity(
     address,
     method: 'privy-ethereum',
     provider: 'privy',
-    userId: claims.user_id,
+    userId,
   };
 }
 

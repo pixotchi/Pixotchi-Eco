@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
+import { useIdentityToken, usePrivy } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
 import { useAccount } from 'wagmi';
 import { sdk } from '@farcaster/miniapp-sdk';
@@ -69,6 +69,7 @@ function delay(ms: number) {
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { address } = useAccount();
   const { authenticated, getAccessToken, ready: privyReady } = usePrivy();
+  const { identityToken } = useIdentityToken();
   const fc = useFrameContext();
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const confirmedMiniAppSession = useConfirmedMiniAppSession();
@@ -502,6 +503,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       solanaAddress ?? 'none',
       authenticated ? '1' : '0',
       privyReady ? '1' : '0',
+      identityToken ? '1' : '0',
       publicChatSessionVersion.toString(),
       publicChatRetryVersion.toString(),
     ].join(':');
@@ -615,13 +617,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          const accessToken = await getAccessToken();
-          if (!accessToken) {
-            throw new Error('Privy access token unavailable.');
+          const accessToken = identityToken ? null : await getAccessToken();
+          if (!identityToken && !accessToken) {
+            throw new Error('Privy token unavailable.');
           }
 
           const nextSession = await createPrivyPublicChatSession({
-            accessToken,
+            ...(identityToken ? { identityToken } : {}),
+            ...(accessToken ? { accessToken } : {}),
             expectedAddress: chatAddress,
             ...(currentSurface === 'privysolana' ? { solanaAddress } : {}),
           });
@@ -720,6 +723,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     authenticated,
     chatAddress,
     getAccessToken,
+    identityToken,
     isMiniApp,
     publicChatSession,
     publicChatSessionVersion,
