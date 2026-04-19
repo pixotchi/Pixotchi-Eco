@@ -8,8 +8,8 @@ import {
     TransactionStatus,
     TransactionStatusAction,
     TransactionStatusLabel,
-} from '@coinbase/onchainkit/transaction';
-import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+} from './transaction-kit';
+import type { LifecycleStatus } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import {
     blackjackFetchRandomness,

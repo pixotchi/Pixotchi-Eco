@@ -9,7 +9,7 @@ import { toast } from "react-hot-toast";
 import { useAccount, usePublicClient } from "wagmi";
 import BoxGameTransaction from "@/components/transactions/box-game-transaction";
 import SpinGameTransaction from "@/components/transactions/spin-game-transaction";
-import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
+import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { PIXOTCHI_NFT_ADDRESS, BOX_GAME_ABI, SPIN_GAME_ABI } from "@/lib/contracts";
 import { cn, formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
 import { usePaymaster } from "@/lib/paymaster-context";

@@ -7,9 +7,9 @@ import {
   TransactionStatus,
   TransactionStatusAction,
   TransactionStatusLabel,
-} from '@coinbase/onchainkit/transaction';
+} from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
-import type { LifecycleStatus } from '@coinbase/onchainkit/transaction';
+import type { LifecycleStatus } from './transaction-kit';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
