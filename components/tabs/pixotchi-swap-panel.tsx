@@ -1007,12 +1007,19 @@ export default function PixotchiSwapPanel() {
 
   const finalizeSwapSuccess = useCallback(
     async (receipt: TransactionReceipt) => {
-      requestBalanceRefresh();
-      void Promise.allSettled([
-        refetchSellBalance(),
-        refetchBuyBalance(),
-        refetchEthBalance(),
-      ]);
+      // Base block time is ~2s. Receipt is already confirmed, so waiting
+      // ~1.5s before reading gives every reasonable RPC time to index the
+      // swap's block. Firing refetches immediately risks caching stale
+      // pre-swap data for 30s (global staleTime). One well-timed pass.
+      requestBalanceRefresh(1500);
+      window.setTimeout(() => {
+        void Promise.allSettled([
+          refetchSellBalance(),
+          refetchBuyBalance(),
+          refetchEthBalance(),
+        ]);
+      }, 1500);
+
       await trackSwapMission(receipt);
       toast.success(S.execution.completed);
 
