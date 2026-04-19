@@ -77,7 +77,7 @@ export const SWAP_TOKEN_MAP: Record<SwapTokenId, SwapTokenDefinition> = {
   JESSE: {
     id: 'JESSE',
     symbol: 'JESSE',
-    displaySymbol: '$JESSE',
+    displaySymbol: 'JESSE',
     name: 'JESSE',
     decimals: 18,
     chainId: BASE_CHAIN_ID,

@@ -146,66 +146,43 @@ function TokenSelector({
           aria-haspopup="menu"
           aria-expanded={isOpen}
         >
-          <>
-            <div className="ock:w-4">
-              <img
-                src={token.image}
-                alt=""
-                className="ock:overflow-hidden ock:rounded-[50%]"
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  minWidth: '16px',
-                  minHeight: '16px',
-                }}
-                aria-hidden="true"
-              />
-            </div>
-            <span
-              className="ock:font-ock ock:whitespace-nowrap ock:font-semibold ock:text-ock-foreground"
-              data-testid="ockTokenSelectButton_Symbol"
-            >
-              {token.displaySymbol}
-            </span>
-          </>
-          <div className="ock:flex ock:h-4 ock:w-4 ock:shrink-0 ock:items-center ock:justify-center">
-            {isOpen ? (
-              <svg
-                role="img"
-                aria-label="Collapse token list"
-                className="ock:h-4 ock:w-4"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M3.05329 10.9866L7.99996 6.03997L12.9466 10.9866L14.1266 9.80663L7.99996 3.67997L1.87329 9.80663L3.05329 10.9866Z"
-                  className="ock:fill-ock-foreground"
-                />
-              </svg>
-            ) : (
-              <svg
-                role="img"
-                aria-label="Expand token list"
-                className="ock:h-4 ock:w-4"
-                viewBox="0 0 16 17"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12.95 4.85999L8.00001 9.80999L3.05001 4.85999L1.64001 6.27999L8.00001 12.64L14.36 6.27999L12.95 4.85999Z"
-                  className="ock:fill-ock-foreground"
-                />
-              </svg>
+          <img
+            src={token.image}
+            alt=""
+            aria-hidden="true"
+            className="h-5 w-5 shrink-0 overflow-hidden rounded-full object-contain"
+          />
+          <span
+            className="ock:font-ock ock:whitespace-nowrap ock:font-semibold ock:text-ock-foreground"
+            data-testid="ockTokenSelectButton_Symbol"
+          >
+            {token.displaySymbol}
+          </span>
+          {/* Single chevron-down SVG; rotate 180° when the menu is open so
+              the glyph transitions smoothly instead of swapping shapes. */}
+          <svg
+            role="img"
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={cn(
+              'h-4 w-4 shrink-0 transition-transform duration-150',
+              isOpen && 'rotate-180',
             )}
-          </div>
+          >
+            <path
+              d="M12.95 4.86L8 9.81L3.05 4.86L1.64 6.28L8 12.64L14.36 6.28L12.95 4.86Z"
+              className="ock:fill-ock-foreground"
+            />
+          </svg>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        align="start"
+        align="end"
         sideOffset={6}
         collisionPadding={12}
-        className="w-[calc(100vw-2rem)] max-w-xs rounded-xl p-2 sm:w-56"
+        className="w-max min-w-[10rem] max-w-[calc(100vw-2rem)] rounded-xl p-2"
       >
         {options.map((option) => {
           const optionToken = SWAP_TOKEN_MAP[option];
@@ -219,8 +196,8 @@ function TokenSelector({
                 <img
                   src={optionToken.image}
                   alt=""
-                  className="h-[22px] w-[22px] rounded-full object-contain"
                   aria-hidden="true"
+                  className="h-5 w-5 shrink-0 rounded-full object-contain"
                 />
                 <span>{optionToken.displaySymbol}</span>
               </span>
@@ -1213,7 +1190,7 @@ export default function PixotchiSwapPanel() {
                 placeholder="0.0"
                 disabled={isExecuting}
                 aria-label={S.aria.sellAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol)}
-                className="ock:mr-2 ock:w-full ock:border-[none] ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:outline-none ock:truncate text-foreground placeholder:text-muted-foreground"
+                className="ock:mr-2 ock:w-full ock:min-w-0 ock:border-[none] ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:outline-none ock:truncate text-foreground placeholder:text-muted-foreground"
               />
               <TokenSelector
                 value={sellToken}
@@ -1294,7 +1271,7 @@ export default function PixotchiSwapPanel() {
             </div>
             <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
               <div
-                className="ock:mr-2 ock:w-full ock:truncate ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:text-ock-foreground"
+                className="ock:mr-2 ock:w-full ock:min-w-0 ock:truncate ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:text-ock-foreground"
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
