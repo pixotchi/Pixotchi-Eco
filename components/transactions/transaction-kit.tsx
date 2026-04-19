@@ -158,6 +158,7 @@ const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
 const TEXT_ERROR = "text-[var(--ock-compat-error)]";
 const BG_SURFACE = "bg-[var(--ock-compat-background)]";
 const TOAST_SHADOW = "shadow-[0px_8px_24px_0px_rgba(0,0,0,0.12)]";
+const unsupportedSendCallsKeys = new Set<string>();
 
 function Spinner({ className }: { className?: string }) {
   return (
@@ -291,6 +292,37 @@ function getExplorerHref(hash?: string | null, chainUrl?: string | null) {
   return `${explorerBase.replace(/\/$/, "")}/tx/${hash}`;
 }
 
+function getSendCallsSupportKey({
+  accountAddress,
+  chainId,
+  connectorId,
+}: {
+  accountAddress?: string | null;
+  chainId?: number | null;
+  connectorId?: string | null;
+}) {
+  if (!accountAddress) return null;
+  return `${connectorId || "unknown"}:${chainId || "unknown"}:${accountAddress.toLowerCase()}`;
+}
+
+function isUnsupportedSendCallsError(error: unknown) {
+  const code =
+    typeof (error as { code?: unknown })?.code === "number"
+      ? Number((error as { code?: number }).code)
+      : null;
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    code === -32601
+    || message.includes("wallet_sendcalls")
+    || message.includes("method not found")
+    || message.includes("does not exist")
+    || message.includes("not available")
+    || message.includes("corresponding handler")
+    || message.includes("unsupported method")
+  );
+}
+
 function getStatusLabelData({
   errorMessage,
   isExecuting,
@@ -388,6 +420,7 @@ export function Transaction({
   resetAfter = 2000,
   children,
 }: TransactionProps) {
+  const { connector } = useAccount();
   const { data: walletClient } = useWalletClient();
   const accountChainId = useChainId();
   const { isSmartWallet } = useSmartWallet();
@@ -521,6 +554,21 @@ export function Transaction({
     });
 
     const chain = walletClient.chain ?? base;
+    const sendCallsSupportKey = getSendCallsSupportKey({
+      accountAddress: walletClient.account.address,
+      chainId: chain.id,
+      connectorId: connector?.id ?? null,
+    });
+    const canBatch =
+      typeof (walletClient as any).sendCalls === "function"
+      && typeof (walletClient as any).waitForCallsStatus === "function";
+    const shouldUseBatchedExecution =
+      canBatch
+      && !(
+        sendCallsSupportKey
+        && unsupportedSendCallsKeys.has(sendCallsSupportKey)
+      )
+      && (normalizedCalls.length > 1 || isSponsored || isSmartWallet);
     const paymasterUrl =
       process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL
       || process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL
@@ -533,119 +581,140 @@ export function Transaction({
           : {}
       ),
     };
-    const canBatch =
-      typeof (walletClient as any).sendCalls === "function"
-      && typeof (walletClient as any).waitForCallsStatus === "function";
-    const shouldUseBatchedExecution =
-      canBatch && (normalizedCalls.length > 1 || isSponsored || isSmartWallet);
+    let completedReceipts: TransactionReceiptLike[] = [];
 
-    try {
-      if (shouldUseBatchedExecution) {
-        const batch = await (walletClient as any).sendCalls({
+    const executeDirectTransactions = async () => {
+      for (const call of normalizedCalls) {
+        const hash = await walletClient.sendTransaction({
           account: walletClient.account,
-          ...(Object.keys(mergedCapabilities).length > 0 ? { capabilities: mergedCapabilities } : {}),
           chain,
-          calls: normalizedCalls,
-          ...(normalizedCalls.length > 1 ? { forceAtomic: true } : {}),
+          data: call.data,
+          to: call.to!,
+          value: call.value,
         });
 
-        const nextTransactionId =
-          typeof batch?.id === "string" && batch.id.trim() !== ""
-            ? batch.id
-            : null;
-
-        transactionIdRef.current = nextTransactionId;
+        transactionHashRef.current = hash;
         if (mountedRef.current) {
-          setTransactionId(nextTransactionId);
+          setTransactionHash(hash);
         }
 
         emitStatus({
           statusData: {
-            ...(nextTransactionId ? { transactionId: nextTransactionId } : {}),
-            transactionReceipts: [],
+            transactionHash: hash,
+            transactionReceipts: completedReceipts,
           },
           statusName: "transactionPending",
         });
 
-        const result = await (walletClient as any).waitForCallsStatus({
-          id: batch.id,
-          throwOnFailure: false,
-          timeout: 120_000,
-        });
+        const confirmedReceipt = await waitForBaseReceipt(hash);
+        const receipt = normalizeTransactionReceipt(confirmedReceipt);
+        const receiptHash = extractTransactionHash(receipt) as Hex | undefined;
 
-        const receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
-          normalizeTransactionReceipt(receipt),
-        );
-        const nextTransactionHash = extractTransactionHash(receipts[0]) as Hex | undefined;
-
-        transactionHashRef.current = nextTransactionHash;
+        completedReceipts = [...completedReceipts, receipt];
+        transactionHashRef.current = receiptHash ?? hash;
         if (mountedRef.current) {
-          setTransactionHash(nextTransactionHash);
+          setTransactionHash(receiptHash ?? hash);
         }
 
-        if (result?.status !== "success") {
-          const error = new Error("Transaction reverted.");
+        if (confirmedReceipt.status !== "success") {
+          throw new Error("Transaction reverted.");
+        }
+      }
+
+      emitStatus({
+        statusData: {
+          ...(transactionHashRef.current ? { transactionHash: transactionHashRef.current } : {}),
+          transactionReceipts: completedReceipts,
+        },
+        statusName: "success",
+      });
+    };
+
+    try {
+      if (shouldUseBatchedExecution) {
+        try {
+          const batch = await (walletClient as any).sendCalls({
+            account: walletClient.account,
+            ...(Object.keys(mergedCapabilities).length > 0 ? { capabilities: mergedCapabilities } : {}),
+            chain,
+            calls: normalizedCalls,
+            ...(normalizedCalls.length > 1 ? { forceAtomic: true } : {}),
+          });
+
+          const nextTransactionId =
+            typeof batch?.id === "string" && batch.id.trim() !== ""
+              ? batch.id
+              : null;
+
+          transactionIdRef.current = nextTransactionId;
+          if (mountedRef.current) {
+            setTransactionId(nextTransactionId);
+          }
+
           emitStatus({
             statusData: {
-              error,
+              ...(nextTransactionId ? { transactionId: nextTransactionId } : {}),
+              transactionReceipts: [],
+            },
+            statusName: "transactionPending",
+          });
+
+          const result = await (walletClient as any).waitForCallsStatus({
+            id: batch.id,
+            throwOnFailure: false,
+            timeout: 120_000,
+          });
+
+          const receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
+            normalizeTransactionReceipt(receipt),
+          );
+          const nextTransactionHash = extractTransactionHash(receipts[0]) as Hex | undefined;
+
+          transactionHashRef.current = nextTransactionHash;
+          if (mountedRef.current) {
+            setTransactionHash(nextTransactionHash);
+          }
+
+          if (result?.status !== "success") {
+            const error = new Error("Transaction reverted.");
+            emitStatus({
+              statusData: {
+                error,
+                ...(nextTransactionHash ? { transactionHash: nextTransactionHash } : {}),
+                ...(nextTransactionId ? { transactionId: nextTransactionId } : {}),
+                transactionReceipts: receipts,
+              },
+              statusName: "reverted",
+            });
+            onError?.(error);
+            return;
+          }
+
+          emitStatus({
+            statusData: {
               ...(nextTransactionHash ? { transactionHash: nextTransactionHash } : {}),
               ...(nextTransactionId ? { transactionId: nextTransactionId } : {}),
               transactionReceipts: receipts,
             },
-            statusName: "reverted",
+            statusName: "success",
           });
-          onError?.(error);
+          return;
+        } catch (error) {
+          if (!isUnsupportedSendCallsError(error) || transactionIdRef.current) {
+            throw error;
+          }
+
+          if (sendCallsSupportKey) {
+            unsupportedSendCallsKeys.add(sendCallsSupportKey);
+          }
+
+          clearTransactionArtifacts();
+          await executeDirectTransactions();
           return;
         }
-
-        emitStatus({
-          statusData: {
-            ...(nextTransactionHash ? { transactionHash: nextTransactionHash } : {}),
-            ...(nextTransactionId ? { transactionId: nextTransactionId } : {}),
-            transactionReceipts: receipts,
-          },
-          statusName: "success",
-        });
-        return;
       }
 
-      const [call] = normalizedCalls;
-      const hash = await walletClient.sendTransaction({
-        account: walletClient.account,
-        chain,
-        data: call.data,
-        to: call.to!,
-        value: call.value,
-      });
-
-      transactionHashRef.current = hash;
-      if (mountedRef.current) {
-        setTransactionHash(hash);
-      }
-
-      emitStatus({
-        statusData: {
-          transactionHash: hash,
-          transactionReceipts: [],
-        },
-        statusName: "transactionPending",
-      });
-
-      const receipt = normalizeTransactionReceipt(await waitForBaseReceipt(hash));
-      const receiptHash = extractTransactionHash(receipt) as Hex | undefined;
-
-      transactionHashRef.current = receiptHash;
-      if (mountedRef.current) {
-        setTransactionHash(receiptHash);
-      }
-
-      emitStatus({
-        statusData: {
-          ...(receiptHash ? { transactionHash: receiptHash } : {}),
-          transactionReceipts: [receipt],
-        },
-        statusName: "success",
-      });
+      await executeDirectTransactions();
     } catch (error) {
       const statusName = getErrorStatusName(error);
       emitStatus({
@@ -653,7 +722,7 @@ export function Transaction({
           error,
           ...(transactionHashRef.current ? { transactionHash: transactionHashRef.current } : {}),
           ...(transactionIdRef.current ? { transactionId: transactionIdRef.current } : {}),
-          transactionReceipts: [],
+          transactionReceipts: completedReceipts,
         },
         statusName,
       });
@@ -669,6 +738,7 @@ export function Transaction({
     clearResetTimer,
     clearTransactionArtifacts,
     emitStatus,
+    connector?.id,
     isSmartWallet,
     isSponsored,
     normalizedCalls,

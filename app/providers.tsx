@@ -50,16 +50,84 @@ import {
   setMiniAppBypassCookies,
 } from "@/lib/miniapp-bypass";
 
+const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
+const DESKTOP_EVM_WALLET_LIST = [
+  'metamask',
+  'coinbase_wallet',
+  'rainbow',
+  'detected_ethereum_wallets',
+  'wallet_connect_qr',
+] as const;
+const MOBILE_EVM_WALLET_LIST = [
+  'metamask',
+  'coinbase_wallet',
+  'rainbow',
+] as const;
+const DESKTOP_SOLANA_WALLET_LIST = [
+  'phantom',
+  'solflare',
+  'backpack',
+  'detected_solana_wallets',
+  'wallet_connect_qr_solana',
+] as const;
+const MOBILE_SOLANA_WALLET_LIST = [
+  'phantom',
+  'solflare',
+  'backpack',
+] as const;
+const PRIVY_LOGIN_METHODS: Array<'wallet' | 'email'> = ['wallet', 'email'];
+
+function isMobileWalletBrowser() {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function toSolanaRpcSubscriptionsUrl(rpcUrl: string) {
+  try {
+    const url = new URL(rpcUrl);
+    if (url.protocol === 'https:') {
+      url.protocol = 'wss:';
+    } else if (url.protocol === 'http:') {
+      url.protocol = 'ws:';
+    }
+    return url.toString();
+  } catch {
+    if (rpcUrl.startsWith('https://')) {
+      return `wss://${rpcUrl.slice('https://'.length)}`;
+    }
+    if (rpcUrl.startsWith('http://')) {
+      return `ws://${rpcUrl.slice('http://'.length)}`;
+    }
+    return rpcUrl;
+  }
+}
+
 // Solana RPC config for Privy - mainnet only
 const getSolanaRpcConfig = () => {
   if (typeof window === 'undefined' || !isSolanaEnabled()) return undefined;
 
-  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || DEFAULT_SOLANA_RPC_URL;
+  const rpcSubscriptionsUrl = toSolanaRpcSubscriptionsUrl(rpcUrl);
 
-  // Return simple RPC config for Privy (not @solana/kit format)
-  return {
-    mainnet: rpcUrl,
-  };
+  try {
+    const { createSolanaRpc, createSolanaRpcSubscriptions } = require('@solana/kit');
+
+    return {
+      rpcs: {
+        'solana:mainnet': {
+          blockExplorerUrl: 'https://explorer.solana.com',
+          rpc: createSolanaRpc(rpcUrl),
+          rpcSubscriptions: createSolanaRpcSubscriptions(rpcSubscriptionsUrl),
+        },
+      },
+    };
+  } catch (error) {
+    console.warn('[Providers] Failed to load Solana RPC clients for Privy:', error);
+    return undefined;
+  }
 };
 
 // Get Solana connectors for Privy
@@ -120,6 +188,7 @@ export function Providers(props: { children: ReactNode }) {
   // ===== EARLY SURFACE DETECTION =====
   // Determine surface BEFORE rendering PrivyProvider so we can configure it correctly
   const [authSurface, setAuthSurface] = useState<AuthSurface>('privy');
+  const [isMobilePrivyBrowser, setIsMobilePrivyBrowser] = useState(false);
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
 
   useEffect(() => {
@@ -137,6 +206,10 @@ export function Providers(props: { children: ReactNode }) {
     setAuthSurface(resolvedSurface);
 
     setSurfaceInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    setIsMobilePrivyBrowser(isMobileWalletBrowser());
   }, []);
 
   // Respect user preference for reduced motion (don't arbitrarily disable on touch devices)
@@ -163,6 +236,16 @@ export function Providers(props: { children: ReactNode }) {
   const privyWalletConfig = useMemo(() => {
     const isSolanaMode = authSurface === 'privysolana';
     const solanaEnabled = isSolanaEnabled();
+    const evmWalletList = (
+      isMobilePrivyBrowser
+        ? MOBILE_EVM_WALLET_LIST
+        : DESKTOP_EVM_WALLET_LIST
+    ) as any;
+    const solanaWalletList = (
+      isMobilePrivyBrowser
+        ? MOBILE_SOLANA_WALLET_LIST
+        : DESKTOP_SOLANA_WALLET_LIST
+    ) as any;
 
     // Solana-only mode: only show Solana wallets
     if (isSolanaMode && solanaEnabled) {
@@ -172,18 +255,21 @@ export function Providers(props: { children: ReactNode }) {
       // Safety check: connectors must be present for Solana mode
       if (solanaConnectors) {
         return {
+          embeddedWallets: {
+            ethereum: { createOnLogin: 'off' as const },
+            solana: { createOnLogin: 'users-without-wallets' as const },
+          },
+          loginMethods: PRIVY_LOGIN_METHODS,
           walletChainType: 'solana-only' as const,
-          // Show popular Solana wallets
-          walletList: ['phantom', 'solflare', 'backpack', 'detected_solana_wallets'] as any,
+          // Prefer explicit Solana wallets on mobile; add detection/WalletConnect QR on desktop.
+          walletList: solanaWalletList,
           externalWallets: {
             solana: {
               connectors: solanaConnectors,
             },
           },
-          // Privy Solana RPC config (mainnet only)
-          solana: solanaRpcs ? {
-            rpcUrl: solanaRpcs.mainnet,
-          } : undefined,
+          // Privy Solana RPC config for embedded wallet UIs.
+          solana: solanaRpcs,
         };
       }
 
@@ -193,12 +279,17 @@ export function Providers(props: { children: ReactNode }) {
     // EVM-only mode (default): only show Ethereum wallets
     // This runs if not Solana mode OR if Solana mode failed to load connectors
     return {
+      embeddedWallets: {
+        ethereum: { createOnLogin: 'users-without-wallets' as const },
+      },
+      loginMethods: PRIVY_LOGIN_METHODS,
       walletChainType: 'ethereum-only' as const,
-      walletList: ['detected_ethereum_wallets'],
+      // Explicit wallets keep Privy usable on mobile, while detected wallets + QR cover desktop.
+      walletList: evmWalletList,
       externalWallets: undefined,
       solana: undefined,
     };
-  }, [authSurface]);
+  }, [authSurface, isMobilePrivyBrowser]);
 
   function WagmiRouter({
     children,
@@ -297,20 +388,12 @@ export function Providers(props: { children: ReactNode }) {
                   },
                   defaultChain: base,
                   supportedChains: [base],
-                  loginMethods: ['wallet', 'email'],
+                  loginMethods: privyWalletConfig.loginMethods,
                   // Avoid session race conditions by not auto-connecting until hooks report ready
-                  embeddedWallets: {
-                    // Privy v3: configure per-chain behavior (top-level createOnLogin removed)
-                    ethereum: { createOnLogin: 'off' },
-                  },
+                  embeddedWallets: privyWalletConfig.embeddedWallets,
                   // Solana RPC config (only when in Solana mode)
                   ...(privyWalletConfig.solana && {
-                    solanaClusters: [
-                      {
-                        name: 'mainnet-beta',
-                        rpcUrl: privyWalletConfig.solana.rpcUrl || 'https://api.mainnet-beta.solana.com',
-                      },
-                    ],
+                    solana: privyWalletConfig.solana,
                   }),
                   // External Solana wallet connectors (only when in Solana mode)
                   ...(privyWalletConfig.externalWallets && {

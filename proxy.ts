@@ -24,12 +24,36 @@ const EDGE_SAME_ORIGIN_ONLY_API_PATHS = new Set([
   '/api/swap/quote',
   '/api/swap/build-step',
 ]);
+const DEFAULT_ADMIN_ORIGINS = [
+  'https://mini.pixotchi.tech',
+  'https://beta.mini.pixotchi.tech',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+const DEFAULT_FRAME_ANCESTORS = [
+  "'self'",
+  'https://mini.pixotchi.tech',
+  'https://beta.mini.pixotchi.tech',
+  'https://*.farcaster.xyz',
+  'https://*.warpcast.com',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
 
 function parseOrigins(value?: string): string[] {
   return (value || '')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin) => origin.trim().replace(/^['"]|['"]$/g, ''))
     .filter(Boolean);
+}
+
+function getFrameAncestors() {
+  return Array.from(
+    new Set([
+      ...DEFAULT_FRAME_ANCESTORS,
+      ...parseOrigins(process.env.ALLOWED_FRAME_ANCESTORS),
+    ]),
+  ).join(' ');
 }
 
 function isEdgeSessionRequiredApiPath(pathname: string): boolean {
@@ -133,15 +157,13 @@ export async function proxy(request: NextRequest) {
     
     // Special handling for admin routes - restrict to known origins
     if (pathname.startsWith('/api/invite/admin/') || pathname.startsWith('/api/gamification/admin/') || pathname.startsWith('/api/admin/')) {
-      const allowedAdminOrigins = process.env.ALLOWED_ADMIN_ORIGINS?.split(',') || [
-        'https://mini.pixotchi.tech',
-        'https://beta.mini.pixotchi.tech',
-        'http://localhost:3000',
-        'http://127.0.0.1:3000'
-      ];
+      const allowedAdminOrigins = parseOrigins(process.env.ALLOWED_ADMIN_ORIGINS);
+      const adminOriginSet = new Set(
+        allowedAdminOrigins.length > 0 ? allowedAdminOrigins : DEFAULT_ADMIN_ORIGINS,
+      );
       
       // Allow same-origin requests (when origin is null/undefined) or from allowed origins
-      if (!origin || allowedAdminOrigins.includes(origin)) {
+      if (!origin || adminOriginSet.has(origin)) {
         if (origin) {
           response.headers.set('Access-Control-Allow-Origin', origin);
           response.headers.set('Access-Control-Allow-Credentials', 'true');
@@ -180,6 +202,7 @@ export async function proxy(request: NextRequest) {
   
   // Content Security Policy - aligned with Privy guidelines + blockchain RPC connections
   // See: https://docs.privy.io/guide/react/content-security-policy
+  const frameAncestors = getFrameAncestors();
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://*.vercel-scripts.com https://challenges.cloudflare.com https://s3.tradingview.com;
@@ -189,7 +212,7 @@ export async function proxy(request: NextRequest) {
     object-src 'none';
     base-uri 'self';
     form-action 'self';
-    frame-ancestors *;
+    frame-ancestors ${frameAncestors};
     child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org;
     frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://*.farcaster.xyz https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.tradingview-widget.com;
     connect-src 'self' https://auth.privy.io https://*.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://cca-lite.coinbase.com https://*.base.org https: wss:;

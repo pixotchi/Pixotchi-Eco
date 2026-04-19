@@ -105,10 +105,11 @@ const SWAP_AMOUNT_INPUT_CLASS =
 const SWAP_MAX_BUTTON_CLASS =
   `${OCK_COMPAT_FONT} flex cursor-pointer items-center justify-center px-2 py-1 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
-  'relative mx-auto -my-6 flex h-12 w-12 items-center justify-center rounded-lg border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'relative z-10 mx-auto -my-4 flex h-10 w-16 items-center justify-center rounded-xl border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_PRIMARY_ACTION_CLASS =
   `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
+const SWAP_BALANCE_ROW_CLASS = 'mt-4 flex h-7 w-full items-center justify-between';
 
 function isTransientStatus(status: number | undefined): boolean {
   if (status === undefined) return true;
@@ -1241,7 +1242,7 @@ export default function PixotchiSwapPanel() {
                 disabled={isExecuting}
               />
             </div>
-            <div className="mt-4 flex w-full items-center justify-between">
+            <div className={SWAP_BALANCE_ROW_CLASS}>
               <div
                 className={cn(SWAP_STATUS_TEXT_CLASS, 'flex items-center gap-1')}
                 role="status"
@@ -1328,7 +1329,7 @@ export default function PixotchiSwapPanel() {
                 disabled={isExecuting}
               />
             </div>
-            <div className="mt-4 flex w-full items-center justify-between">
+            <div className={SWAP_BALANCE_ROW_CLASS}>
               <div className={SWAP_STATUS_TEXT_CLASS}>
                 {'\u00A0'}
               </div>
