@@ -78,7 +78,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   const [totalClaimedThisSession, setTotalClaimedThisSession] = useState(0);
   // Key to force re-mount of Transaction component after each batch (resets button state)
   const [txKey, setTxKey] = useState(0);
-  const { isSmartWallet } = useSmartWallet();
+  const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const { pixotchiBalance } = useBalances();
   const { address } = useAccount();
 
@@ -93,7 +93,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   );
 
   const scanLands = async () => {
-    if (lands.length === 0) return;
+    if (lands.length === 0 || !isSmartWallet) return;
 
     setLoading(true);
     try {
@@ -137,6 +137,13 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   };
 
   useEffect(() => {
+    if (!isSmartWallet) {
+      setClaimableItems([]);
+      setLastScannedLandIds("");
+      setLoading(false);
+      return;
+    }
+
     // Only scan if land list has changed
     if (landIdsHash !== lastScannedLandIds) {
       scanLands();
@@ -144,15 +151,19 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
       setTxKey(0); // Reset transaction component key
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landIdsHash]);
+  }, [isSmartWallet, landIdsHash]);
 
   // Listen for global building refresh events to re-scan
   useEffect(() => {
+    if (!isSmartWallet) {
+      return;
+    }
+
     const handler = () => scanLands();
     window.addEventListener('buildings:refresh', handler);
     return () => window.removeEventListener('buildings:refresh', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lands]); // Re-bind if lands change, but scanLands uses current props/state
+  }, [isSmartWallet, lands]); // Re-bind if lands change, but scanLands uses current props/state
 
   // Calculate batch info
   const totalBatches = Math.ceil(claimableItems.length / MAX_BATCH_SIZE);
@@ -207,6 +218,10 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
     return [burnCall, ...claimCalls];
   }, [currentBatchItems, burnAmountWei]);
+
+  if (smartWalletLoading || !isSmartWallet) {
+    return null;
+  }
 
   if (loading && claimableItems.length === 0) {
     return (
@@ -270,15 +285,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           </div>
         )}
 
-        {/* Gating Logic */}
-        {!isSmartWallet ? (
-          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg space-y-2">
-            <div className="flex items-center gap-2 text-primary font-bold text-xs">
-              <Lock className="w-3 h-3" />
-              Smart Wallet Required
-            </div>
-          </div>
-        ) : !hasEnoughTokens ? (
+        {!hasEnoughTokens ? (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
             <div className="flex items-center gap-2 text-value font-bold text-xs">
               <Lock className="w-3 h-3" />

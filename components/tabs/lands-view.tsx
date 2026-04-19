@@ -55,7 +55,7 @@ export default function LandsView() {
     );
   }
   const { address } = useAccount();
-  const { isSmartWallet } = useSmartWallet();
+  const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
   const { isTabVisible } = useTabVisibility();
@@ -487,8 +487,8 @@ export default function LandsView() {
 
   return (
     <div className="space-y-4">
-      {/* Batch Claim Card - Only shows if there are claimable rewards */}
-      {lands.length > 0 && (
+      {/* Batch Claim is only supported on smart wallets with batched calls */}
+      {lands.length > 0 && !smartWalletLoading && isSmartWallet && (
         <BatchClaimCard
           lands={lands}
           onSuccess={() => {
