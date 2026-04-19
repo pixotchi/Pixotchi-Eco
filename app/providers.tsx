@@ -2,17 +2,15 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { base } from "wagmi/chains";
-import { OnchainKitProvider } from "@coinbase/onchainkit";
 import { Toaster } from "react-hot-toast";
 import { PaymasterProvider } from "@/lib/paymaster-context";
 import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
-// Privy wagmi will be scoped locally where needed (login UI) to avoid intercepting OnchainKit
 import { WagmiProvider as CoreWagmiProvider } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
-import { wagmiWebOnchainkitConfig } from "@/lib/wagmi-web-onchainkit-config";
+import { wagmiWebBaseConfig } from "@/lib/wagmi-web-base-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
 import { FrameProvider } from "@/lib/frame-context";
@@ -38,7 +36,6 @@ import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { AppUpdateBanner } from "@/components/app-update-banner";
 import { usePathname } from "next/navigation";
-import { patchOnchainKitClientMetaBridge } from "@/lib/onchainkit-client-meta-patch";
 import {
   AuthSurface,
   DEFAULT_AUTH_SURFACE,
@@ -104,11 +101,6 @@ const queryClient = new QueryClient({
 });
 
 export function Providers(props: { children: ReactNode }) {
-  patchOnchainKitClientMetaBridge();
-
-  // Use CDP Client API key for Coinbase SDK
-  const apiKey = process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY;
-
   // MiniKit API key validation handled internally
 
   // Environment variable validation (fail fast in production, warn in dev)
@@ -251,7 +243,7 @@ export function Providers(props: { children: ReactNode }) {
     // Web: choose provider based on surface
     if (surface === 'base') {
       return (
-        <CoreWagmiProvider config={wagmiWebOnchainkitConfig}>
+        <CoreWagmiProvider config={wagmiWebBaseConfig}>
           <TransactionProvider
             defaultChainId={8453}
             paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
@@ -327,12 +319,10 @@ export function Providers(props: { children: ReactNode }) {
                 }}
               >
                 <QueryClientProvider client={queryClient}>
-                  <HostEnvironmentProvider>
-                    <ProvidersContent
-                      apiKey={apiKey}
-                      authSurface={authSurface}
-                      surfaceInitialized={surfaceInitialized}
-                      wagmiRouter={WagmiRouter}
+                    <HostEnvironmentProvider>
+                      <ProvidersContent
+                        surfaceInitialized={surfaceInitialized}
+                        wagmiRouter={WagmiRouter}
                     >
                       {props.children}
                     </ProvidersContent>
@@ -359,14 +349,10 @@ function RouteAwareChatProvider({ children }: { children: ReactNode }) {
 }
 
 function ProvidersContent({
-  apiKey,
-  authSurface,
   children,
   surfaceInitialized,
   wagmiRouter: WagmiRouter,
 }: {
-  apiKey?: string;
-  authSurface: AuthSurface;
   children: ReactNode;
   surfaceInitialized: boolean;
   wagmiRouter: ({
@@ -458,73 +444,59 @@ function ProvidersContent({
 
   return (
     <WagmiRouter hostEnvironmentState={hostEnvironment}>
-      <OnchainKitProvider
-        apiKey={apiKey}
-        chain={base}
-        config={{
-          appearance: {
-            mode: "auto",
-            name: authSurface === 'base' ? "Pixotchi" : "Pixotchi Mini",
-            logo: process.env.NEXT_PUBLIC_ICON_URL,
-          },
-          paymaster: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
-          analytics: true,
-        }}
-      >
-        <FrameProvider>
-          <SmartWalletProvider>
-            <EthModeProvider>
-              <SolanaWalletProvider>
-                <BalanceProvider>
-                  <LoadingProvider>
-                    <RouteAwareChatProvider>
-                      <TutorialBundle>
-                        <AppUpdateBanner disabled={hostEnvironment.isMiniApp} />
-                        {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                        {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                        {/** added provider wrapper **/}
-                        <Toaster
-                          position="top-center"
-                          toastOptions={{
-                            duration: 4000,
-                            style: {
-                              backgroundColor: "hsl(var(--background))",
-                              color: "hsl(var(--foreground))",
-                              border: "1px solid hsl(var(--border))",
-                              zIndex: 9999,
-                            },
-                            success: {
-                              iconTheme: {
-                                primary: "hsl(var(--primary))",
-                                secondary: "hsl(var(--primary-foreground))",
-                              },
-                            },
-                            error: {
-                              iconTheme: {
-                                primary: "hsl(var(--destructive))",
-                                secondary: "hsl(var(--destructive-foreground))",
-                              },
-                            },
-                          }}
-                          containerStyle={{
-                            top: "max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top))",
+      <FrameProvider>
+        <SmartWalletProvider>
+          <EthModeProvider>
+            <SolanaWalletProvider>
+              <BalanceProvider>
+                <LoadingProvider>
+                  <RouteAwareChatProvider>
+                    <TutorialBundle>
+                      <AppUpdateBanner disabled={hostEnvironment.isMiniApp} />
+                      {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
+                      {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
+                      {/** added provider wrapper **/}
+                      <Toaster
+                        position="top-center"
+                        toastOptions={{
+                          duration: 4000,
+                          style: {
+                            backgroundColor: "hsl(var(--background))",
+                            color: "hsl(var(--foreground))",
+                            border: "1px solid hsl(var(--border))",
                             zIndex: 9999,
-                          }}
-                        />
-                        {children}
-                        <SlideshowModal />
-                      </TutorialBundle>
-                      <TasksInfoDialog />
-                      <SecretGardenListener />
-                      <SnowEffect />
-                    </RouteAwareChatProvider>
-                  </LoadingProvider>
-                </BalanceProvider>
-              </SolanaWalletProvider>
-            </EthModeProvider>
-          </SmartWalletProvider>
-        </FrameProvider>
-      </OnchainKitProvider>
+                          },
+                          success: {
+                            iconTheme: {
+                              primary: "hsl(var(--primary))",
+                              secondary: "hsl(var(--primary-foreground))",
+                            },
+                          },
+                          error: {
+                            iconTheme: {
+                              primary: "hsl(var(--destructive))",
+                              secondary: "hsl(var(--destructive-foreground))",
+                            },
+                          },
+                        }}
+                        containerStyle={{
+                          top: "max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top))",
+                          zIndex: 9999,
+                        }}
+                      />
+                      {children}
+                      <SlideshowModal />
+                    </TutorialBundle>
+                    <TasksInfoDialog />
+                    <SecretGardenListener />
+                    <SnowEffect />
+                  </RouteAwareChatProvider>
+                </LoadingProvider>
+              </BalanceProvider>
+            </SolanaWalletProvider>
+          </EthModeProvider>
+        </SmartWalletProvider>
+      </FrameProvider>
     </WagmiRouter>
   );
 }

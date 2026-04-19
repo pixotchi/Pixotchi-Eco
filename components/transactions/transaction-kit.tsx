@@ -146,11 +146,18 @@ const TERMINAL_STATUSES = new Set<StatusName>([
 ]);
 
 const PRESSABLE_PRIMARY =
-  "ock:cursor-pointer ock:bg-ock-primary ock:hover:bg-ock-primary-hover ock:active:bg-ock-primary-active ock:focus:bg-ock-primary-active";
-const PRESSABLE_DISABLED = "ock:opacity-[0.38] ock:pointer-events-none";
-const TEXT_HEADLINE = "ock:font-ock ock:font-semibold";
-const TEXT_LABEL1 = "ock:font-ock ock:font-semibold ock:text-sm";
-const TEXT_LABEL2 = "ock:font-ock ock:text-sm";
+  "cursor-pointer bg-[var(--ock-compat-primary)] hover:bg-[var(--ock-compat-primary-hover)] active:bg-[var(--ock-compat-primary-active)] focus:bg-[var(--ock-compat-primary-active)]";
+const PRESSABLE_DISABLED = "opacity-[0.38] pointer-events-none";
+const TEXT_HEADLINE = "ock-compat-font font-semibold";
+const TEXT_LABEL1 = "ock-compat-font text-sm font-semibold";
+const TEXT_LABEL2 = "ock-compat-font text-sm";
+const TEXT_DEFAULT = "text-[var(--ock-compat-foreground)]";
+const TEXT_MUTED = "text-[var(--ock-compat-foreground-muted)]";
+const TEXT_INVERSE = "text-[var(--ock-compat-foreground-inverse)]";
+const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
+const TEXT_ERROR = "text-[var(--ock-compat-error)]";
+const BG_SURFACE = "bg-[var(--ock-compat-background)]";
+const TOAST_SHADOW = "shadow-[0px_8px_24px_0px_rgba(0,0,0,0.12)]";
 
 function Spinner({ className }: { className?: string }) {
   return (
@@ -208,7 +215,7 @@ function ErrorSvg({ className = "fill-[#E11D48]" }: { className?: string }) {
   );
 }
 
-function CloseSvg({ className = "fill-ock-foreground" }: { className?: string }) {
+function CloseSvg({ className = TEXT_DEFAULT }: { className?: string }) {
   return (
     <svg
       aria-label="ock-closeSvg"
@@ -300,7 +307,7 @@ function getStatusLabelData({
   transactionId: string | null;
 }) {
   let label = "";
-  let labelClassName = "text-ock-foreground-muted";
+  let labelClassName = TEXT_MUTED;
 
   if (status.statusName === "buildingTransaction") {
     label = "Building transaction...";
@@ -320,7 +327,7 @@ function getStatusLabelData({
 
   if (errorMessage) {
     label = errorMessage;
-    labelClassName = "text-ock-error";
+    labelClassName = TEXT_ERROR;
   }
 
   return { label, labelClassName };
@@ -342,7 +349,7 @@ function getToastLabelData({
   transactionId: string | null;
 }) {
   let label = "";
-  let labelClassName = "text-ock-foreground-muted";
+  let labelClassName = TEXT_MUTED;
 
   if (status.statusName === "buildingTransaction") {
     label = "Building transaction";
@@ -358,7 +365,7 @@ function getToastLabelData({
 
   if (errorMessage) {
     label = "Something went wrong";
-    labelClassName = "text-ock-error";
+    labelClassName = TEXT_ERROR;
   }
 
   return { label, labelClassName };
@@ -842,10 +849,10 @@ export function TransactionButton({
     <button
       className={cn(
         PRESSABLE_PRIMARY,
-        "rounded-ock-default w-full rounded-xl px-4 py-3 font-medium leading-6",
+        "w-full rounded-xl px-4 py-3 font-medium leading-6",
         isDisabled && PRESSABLE_DISABLED,
         TEXT_HEADLINE,
-        "text-ock-foreground-inverse",
+        TEXT_INVERSE,
         className,
       )}
       onClick={handleSubmit}
@@ -896,6 +903,10 @@ export function TransactionStatusAction({
   const { showCallsStatus } = useShowCallsStatus();
 
   const actionElement = useMemo(() => {
+    if (receipt) {
+      return null;
+    }
+
     const transactionHref =
       explorerHref || getExplorerHref(transactionHash, base.blockExplorers?.default.url);
 
@@ -906,7 +917,7 @@ export function TransactionStatusAction({
           target="_blank"
           rel="noreferrer"
         >
-          <span className={cn(TEXT_LABEL1, "text-ock-primary")}>View transaction</span>
+          <span className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>View transaction</span>
         </a>
       );
     }
@@ -917,7 +928,7 @@ export function TransactionStatusAction({
           onClick={() => showCallsStatus({ id: transactionId })}
           type="button"
         >
-          <span className={cn(TEXT_LABEL1, "text-ock-primary")}>View transaction</span>
+          <span className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>View transaction</span>
         </button>
       );
     }
@@ -983,24 +994,27 @@ export function TransactionToast({
   }
 
   const positionClassName = {
-    "bottom-center": "bottom-4 left-1/2 -translate-x-1/2",
-    "bottom-right": "bottom-4 right-4",
-    "top-center": "top-4 left-1/2 -translate-x-1/2",
-    "top-right": "top-4 right-4",
+        "bottom-center": "bottom-4 left-1/2 -translate-x-1/2",
+        "bottom-right": "bottom-4 right-4",
+        "top-center": "top-4 left-1/2 -translate-x-1/2",
+        "top-right": "top-4 right-4",
   }[position];
 
   const animationClassName = {
-    "bottom-center": "ock:animate-enterUp",
-    "bottom-right": "ock:animate-enterRight",
-    "top-center": "ock:animate-enterDown",
-    "top-right": "ock:animate-enterRight",
+    "bottom-center": "animate-in fade-in-0 slide-in-from-bottom-8 duration-500",
+    "bottom-right": "animate-in fade-in-0 slide-in-from-right-8 duration-500",
+    "top-center": "animate-in fade-in-0 slide-in-from-top-8 duration-500",
+    "top-right": "animate-in fade-in-0 slide-in-from-right-8 duration-500",
   }[position];
 
   return (
     <div
       aria-live="polite"
       className={cn(
-        "ock-toast fixed z-[10000] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-lg bg-ock-background p-2 text-ock-foreground shadow-[0px_8px_24px_0px_rgba(0,0,0,0.12)] sm:max-w-sm",
+        "fixed z-[10000] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-lg p-2 sm:max-w-sm",
+        BG_SURFACE,
+        TEXT_DEFAULT,
+        TOAST_SHADOW,
         animationClassName,
         positionClassName,
         className,
@@ -1075,7 +1089,7 @@ export function TransactionToastLabel({
 
   return (
     <div className={cn(TEXT_LABEL1, "text-nowrap", className)}>
-      <p className={labelClassName === "text-ock-error" ? labelClassName : "text-ock-foreground"}>
+      <p className={labelClassName === TEXT_ERROR ? labelClassName : TEXT_DEFAULT}>
         {label}
       </p>
     </div>
@@ -1097,7 +1111,7 @@ export function TransactionToastAction({
           target="_blank"
           rel="noreferrer"
         >
-          <span className={cn(TEXT_LABEL1, "text-ock-primary")}>View transaction</span>
+          <span className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>View transaction</span>
         </a>
       );
     }
@@ -1108,7 +1122,7 @@ export function TransactionToastAction({
           onClick={() => showCallsStatus({ id: transactionId })}
           type="button"
         >
-          <span className={cn(TEXT_LABEL1, "text-ock-primary")}>View transaction</span>
+          <span className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>View transaction</span>
         </button>
       );
     }
@@ -1121,7 +1135,7 @@ export function TransactionToastAction({
             void execute();
           }}
         >
-          <span className={cn(TEXT_LABEL1, "text-ock-primary")}>Try again</span>
+          <span className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>Try again</span>
         </button>
       );
     }

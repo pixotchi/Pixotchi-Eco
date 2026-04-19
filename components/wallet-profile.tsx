@@ -33,10 +33,8 @@ import {
   Key,
   ShieldAlert,
 } from "lucide-react";
-import { Avatar } from "@coinbase/onchainkit/identity";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { openExternalUrl } from "@/lib/open-external";
-import { base } from "viem/chains";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { StandardContainer } from "./ui/pixel-container";
 import { usePrivy, useLogin, useLogout } from "@privy-io/react-auth";
@@ -55,6 +53,7 @@ import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { useAuthSurface } from "@/hooks/useAuthSurface";
+import { WalletAvatar } from "@/components/ui/wallet-avatar";
 
 const AUTH_CACHE_PREFIXES = [
   "wagmi",
@@ -553,7 +552,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 }}
               >
                 {address ? (
-                  <Avatar address={address} chain={base} className="w-6 h-6" />
+                  <WalletAvatar address={address} className="w-6 h-6" />
                 ) : (
                   <Wallet className="w-6 h-6 text-primary" />
                 )}

@@ -17,10 +17,9 @@ import type { Plant } from '@/lib/types';
 import { fetchEfpStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
 import { FollowButton, fetchFollowState, useTransactions } from 'ethereum-identity-kit';
-import { Avatar } from '@coinbase/onchainkit/identity';
-import { base } from 'viem/chains';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import { WalletAvatar } from '@/components/ui/wallet-avatar';
 
 interface PlantProfileDialogProps {
   open: boolean;
@@ -300,9 +299,8 @@ export default function PlantProfileDialog({
                       <Skeleton className="h-full w-full" />
                     ) : isWalletVariant ? (
                       ownerAddress ? (
-                        <Avatar
+                        <WalletAvatar
                           address={ownerAddress as `0x${string}`}
-                          chain={base}
                           className="w-full h-full"
                           style={{ width: '100%', height: '100%' }}
                         />

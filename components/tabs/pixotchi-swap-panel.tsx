@@ -94,6 +94,21 @@ const ETH_GAS_REQUIRED_WEI = BigInt(200_000_000_000_000);
 const QUOTE_DEBOUNCE_MS = 250;
 const QUOTE_MAX_RETRIES = 2;
 const QUOTE_IDLE_REFRESH_MS = 5_000;
+const OCK_COMPAT_FONT = 'ock-compat-font';
+const SWAP_CARD_CLASS =
+  'my-0.5 box-border flex h-[148px] w-full flex-col items-start rounded-lg bg-secondary p-4';
+const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-between text-sm text-muted-foreground`;
+const SWAP_TOKEN_TRIGGER_CLASS =
+  'flex w-fit shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 shadow-[0px_8px_12px_0px_rgba(91,97,110,0.12)] hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+const SWAP_AMOUNT_INPUT_CLASS =
+  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground`;
+const SWAP_MAX_BUTTON_CLASS =
+  `${OCK_COMPAT_FONT} flex cursor-pointer items-center justify-center px-2 py-1 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-[0.38]`;
+const SWAP_DIRECTION_BUTTON_CLASS =
+  'relative mx-auto -my-6 flex h-12 w-12 items-center justify-center rounded-lg border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+const SWAP_PRIMARY_ACTION_CLASS =
+  `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
+const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
 
 function isTransientStatus(status: number | undefined): boolean {
   if (status === undefined) return true;
@@ -163,13 +178,7 @@ function TokenSelector({
           type="button"
           data-testid="ockTokenSelectButton_Button"
           className={cn(
-            'ock:cursor-pointer ock:bg-ock-background ock:hover:bg-ock-background-hover ock:active:bg-ock-background-active ock:focus:bg-ock-background-active',
-            'ock:shadow-ock-default ock:rounded-ock-default ock:border-ock-line ock:border',
-            // shrink-0 is critical: without it, flexbox squeezes the button
-            // below its fit-content width and long tickers (e.g. PIXOTCHI)
-            // overflow the span, shoving the chevron past the right padding.
-            'ock:flex ock:w-fit ock:shrink-0 ock:items-center ock:gap-2 ock:px-3 ock:py-1',
-            'disabled:opacity-[0.38] disabled:pointer-events-none',
+            SWAP_TOKEN_TRIGGER_CLASS,
             className,
           )}
           disabled={disabled}
@@ -184,7 +193,7 @@ function TokenSelector({
             className="h-5 w-5 shrink-0 overflow-hidden rounded-full object-contain"
           />
           <span
-            className="ock:font-ock ock:whitespace-nowrap ock:font-semibold ock:text-ock-foreground"
+            className={cn(OCK_COMPAT_FONT, 'whitespace-nowrap font-semibold text-foreground')}
             data-testid="ockTokenSelectButton_Symbol"
           >
             {token.displaySymbol}
@@ -201,13 +210,13 @@ function TokenSelector({
               'h-4 w-4 shrink-0 transition-transform duration-150',
               isOpen && 'rotate-180',
             )}
-          >
-            <path
-              d="M12.95 4.86L8 9.81L3.05 4.86L1.64 6.28L8 12.64L14.36 6.28L12.95 4.86Z"
-              className="ock:fill-ock-foreground"
-            />
-          </svg>
-        </button>
+            >
+              <path
+                d="M12.95 4.86L8 9.81L3.05 4.86L1.64 6.28L8 12.64L14.36 6.28L12.95 4.86Z"
+              className="fill-foreground"
+              />
+            </svg>
+          </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
@@ -1194,7 +1203,7 @@ export default function PixotchiSwapPanel() {
   const showQuoteLoadingText = isQuoteLoading || isDeferredLagging;
 
   return (
-    <div data-ock-theme="pixotchi">
+    <div>
       <form
         onSubmit={handleSubmit}
         aria-busy={isExecuting}
@@ -1202,16 +1211,16 @@ export default function PixotchiSwapPanel() {
       >
         <div className="space-y-0.5">
           <div
-            className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+            className={SWAP_CARD_CLASS}
             data-testid="ockSwapAmountInput_Container"
           >
             <label
-              className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between"
+              className={SWAP_LABEL_CLASS}
               htmlFor="pixotchi-swap-sell-amount"
             >
               {S.labels.sell}
             </label>
-            <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="flex w-full items-center justify-between">
               <input
                 id="pixotchi-swap-sell-amount"
                 value={sellAmount}
@@ -1223,7 +1232,7 @@ export default function PixotchiSwapPanel() {
                 placeholder="0.0"
                 disabled={isExecuting}
                 aria-label={S.aria.sellAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol)}
-                className="ock:mr-2 ock:w-full ock:min-w-0 ock:border-[none] ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:outline-none ock:truncate text-foreground placeholder:text-muted-foreground"
+                className={SWAP_AMOUNT_INPUT_CLASS}
               />
               <TokenSelector
                 value={sellToken}
@@ -1232,9 +1241,9 @@ export default function PixotchiSwapPanel() {
                 disabled={isExecuting}
               />
             </div>
-            <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="mt-4 flex w-full items-center justify-between">
               <div
-                className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:items-center ock:gap-1"
+                className={cn(SWAP_STATUS_TEXT_CLASS, 'flex items-center gap-1')}
                 role="status"
                 aria-live="polite"
               >
@@ -1251,12 +1260,12 @@ export default function PixotchiSwapPanel() {
                   '\u00A0'
                 )}
               </div>
-              <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+              <div className={cn(SWAP_STATUS_TEXT_CLASS, 'flex grow items-center justify-end')}>
                 {sellBalanceText ? <span>{sellBalanceText}</span> : null}
                 {address ? (
                   <button
                     type="button"
-                    className="ock:font-ock ock:font-semibold ock:text-sm ock:text-ock-primary ock:flex ock:cursor-pointer ock:items-center ock:justify-center ock:px-2 ock:py-1 disabled:opacity-[0.38] disabled:pointer-events-none"
+                    className={SWAP_MAX_BUTTON_CLASS}
                     onClick={handleSetMax}
                     disabled={isExecuting || sellBalanceLoading || sellBalanceRaw <= BigInt(0)}
                     aria-label={`${S.labels.max} ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
@@ -1270,10 +1279,7 @@ export default function PixotchiSwapPanel() {
 
           <button
             type="button"
-            className={cn(
-              'ock:cursor-pointer ock:bg-ock-background-alternate ock:hover:bg-ock-background-alternate-hover ock:active:bg-ock-background-alternate-active ock:focus:bg-ock-background-alternate-active',
-              'ock:border-ock-background -my-6 relative mx-auto flex h-12 w-12 items-center justify-center rounded-lg border-4 border-solid',
-            )}
+            className={SWAP_DIRECTION_BUTTON_CLASS}
             data-testid="SwapTokensButton"
             onClick={handleFlipTokens}
             disabled={isExecuting}
@@ -1290,21 +1296,24 @@ export default function PixotchiSwapPanel() {
             >
               <path
                 d="M14.5659 4.93434L13.4345 6.06571L11.8002 4.43139L11.8002 10.75L10.2002 10.75L10.2002 4.43139L8.56592 6.06571L7.43455 4.93434L11.0002 1.36865L14.5659 4.93434ZM8.56592 12.0657L5.00023 15.6314L1.43455 12.0657L2.56592 10.9343L4.20023 12.5687L4.20023 6.25002L5.80023 6.25002L5.80023 12.5687L7.43455 10.9343L8.56592 12.0657Z"
-                className="ock:fill-ock-foreground"
+                className="fill-foreground"
               />
             </svg>
           </button>
 
           <div
-            className="ock:bg-ock-secondary ock:rounded-ock-default ock:my-0.5 ock:box-border ock:flex ock:h-[148px] ock:w-full ock:flex-col ock:items-start ock:p-4"
+            className={SWAP_CARD_CLASS}
             data-testid="ockSwapAmountInput_Container"
           >
-            <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className={SWAP_LABEL_CLASS}>
               {S.labels.buy}
             </div>
-            <div className="ock:flex ock:w-full ock:items-center ock:justify-between">
+            <div className="flex w-full items-center justify-between">
               <div
-                className="ock:mr-2 ock:w-full ock:min-w-0 ock:truncate ock:bg-transparent ock:font-display ock:text-[2.5rem] ock:leading-none ock:text-ock-foreground"
+                className={cn(
+                  OCK_COMPAT_FONT,
+                  'mr-2 w-full min-w-0 truncate bg-transparent text-[2.5rem] leading-none text-foreground',
+                )}
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
@@ -1319,11 +1328,11 @@ export default function PixotchiSwapPanel() {
                 disabled={isExecuting}
               />
             </div>
-            <div className="ock:mt-4 ock:flex ock:w-full ock:items-center ock:justify-between">
-              <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted">
+            <div className="mt-4 flex w-full items-center justify-between">
+              <div className={SWAP_STATUS_TEXT_CLASS}>
                 {'\u00A0'}
               </div>
-              <div className="ock:font-ock ock:text-sm ock:text-ock-foreground-muted ock:flex ock:grow ock:items-center ock:justify-end">
+              <div className={cn(SWAP_STATUS_TEXT_CLASS, 'flex grow items-center justify-end')}>
                 {buyBalanceText ? <span>{buyBalanceText}</span> : null}
               </div>
             </div>
@@ -1331,12 +1340,7 @@ export default function PixotchiSwapPanel() {
 
           <button
             type="submit"
-            className={cn(
-              'ock:bg-ock-primary ock:rounded-ock-default mt-4 w-full rounded-xl px-4 py-3',
-              'ock:font-ock ock:font-semibold',
-              'flex items-center justify-center gap-2',
-              actionDisabled && 'opacity-[0.38] pointer-events-none',
-            )}
+            className={SWAP_PRIMARY_ACTION_CLASS}
             disabled={actionDisabled}
           >
             {isExecuting ? (
@@ -1350,7 +1354,7 @@ export default function PixotchiSwapPanel() {
           </button>
           <div
             id={messageId}
-            className="ock:flex ock:h-7 ock:pt-2 ock:font-ock ock:text-sm ock:text-ock-foreground-muted"
+            className={cn(SWAP_STATUS_TEXT_CLASS, 'flex h-7 pt-2')}
             data-testid="ockSwapMessage_Message"
             role="status"
             aria-live="polite"
