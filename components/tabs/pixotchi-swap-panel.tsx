@@ -41,7 +41,6 @@ import type {
   SwapQuoteStep,
   UserSwapTokenId,
 } from '@/lib/swap/types';
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
@@ -99,6 +98,34 @@ const QUOTE_IDLE_REFRESH_MS = 5_000;
 function isTransientStatus(status: number | undefined): boolean {
   if (status === undefined) return true;
   return status === 429 || status >= 500;
+}
+
+// Turns wallet/viem errors into something a user can actually read.
+// Viem rejection errors include a pile of metadata (chain id, RPC url, version,
+// request args, contract selectors…) that we never want to toast verbatim.
+function humanizeSwapError(error: unknown): string {
+  if (!(error instanceof Error)) return 'Swap failed.';
+
+  const anyErr = error as Error & {
+    code?: number | string;
+    shortMessage?: string;
+    cause?: { code?: number | string; name?: string };
+  };
+  const haystack = `${anyErr.shortMessage ?? ''} ${anyErr.message ?? ''}`.toLowerCase();
+  const rejectionCode = 4001;
+  const isRejection =
+    anyErr.code === rejectionCode ||
+    anyErr.cause?.code === rejectionCode ||
+    anyErr.name === 'UserRejectedRequestError' ||
+    anyErr.cause?.name === 'UserRejectedRequestError' ||
+    /user\s+(rejected|denied)|request\s+rejected|user\s+cancell?ed/.test(haystack);
+
+  if (isRejection) return 'Swap rejected.';
+
+  if (anyErr.shortMessage) return anyErr.shortMessage;
+
+  const firstLine = (anyErr.message || '').split('\n')[0]?.trim();
+  return firstLine || 'Swap failed.';
 }
 
 function TokenSelector({
@@ -1073,8 +1100,7 @@ export default function PixotchiSwapPanel() {
         const receipt = await executeSingleStep(quote, quote.steps[0], 0);
         await finalizeSwapSuccess(receipt);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : S.errors.swapFailed;
+        const message = humanizeSwapError(error);
         setExecutionSteps((current) =>
           current?.map((step, index) =>
             index === 0 && step.status !== 'complete'
@@ -1296,13 +1322,10 @@ export default function PixotchiSwapPanel() {
             </div>
           </div>
 
-          <div className="mt-4 flex justify-end">
-            <SponsoredBadge show={isSponsored && isSmartWallet} />
-          </div>
           <button
             type="submit"
             className={cn(
-              'ock:bg-ock-primary ock:rounded-ock-default w-full rounded-xl px-4 py-3',
+              'ock:bg-ock-primary ock:rounded-ock-default mt-4 w-full rounded-xl px-4 py-3',
               'ock:font-ock ock:font-semibold',
               'flex items-center justify-center gap-2',
               actionDisabled && 'opacity-[0.38] pointer-events-none',
