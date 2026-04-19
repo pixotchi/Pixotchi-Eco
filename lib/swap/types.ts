@@ -4,6 +4,7 @@ export type SwapTokenId =
   | 'ETH'
   | 'WETH'
   | 'USDC'
+  | 'ZORA'
   | 'SEED'
   | 'JESSE'
   | 'PIXOTCHI';

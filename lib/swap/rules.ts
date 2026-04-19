@@ -3,11 +3,12 @@ import type { UserSwapTokenId } from './types';
 type PairMap = Record<UserSwapTokenId, readonly UserSwapTokenId[]>;
 
 const ALLOWED_TARGETS: PairMap = {
-  ETH: ['SEED', 'JESSE', 'PIXOTCHI'],
-  USDC: ['SEED', 'JESSE', 'PIXOTCHI'],
-  SEED: ['ETH', 'USDC', 'JESSE', 'PIXOTCHI'],
-  JESSE: ['ETH', 'USDC', 'SEED', 'PIXOTCHI'],
-  PIXOTCHI: ['ETH', 'USDC', 'SEED', 'JESSE'],
+  ETH: ['USDC', 'ZORA', 'SEED', 'JESSE', 'PIXOTCHI'],
+  USDC: ['ETH', 'ZORA', 'SEED', 'JESSE', 'PIXOTCHI'],
+  ZORA: ['ETH', 'USDC', 'SEED', 'JESSE', 'PIXOTCHI'],
+  SEED: ['ETH', 'USDC', 'ZORA', 'JESSE', 'PIXOTCHI'],
+  JESSE: ['ETH', 'USDC', 'ZORA', 'SEED', 'PIXOTCHI'],
+  PIXOTCHI: ['ETH', 'USDC', 'ZORA', 'SEED', 'JESSE'],
 };
 
 const ALLOWED_SOURCES: PairMap = (() => {

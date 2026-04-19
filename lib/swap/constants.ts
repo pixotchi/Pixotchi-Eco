@@ -26,6 +26,8 @@ export const SEED_ADDRESS =
   '0x546D239032b24eCEEE0cb05c92FC39090846adc7' as Address;
 export const USDC_ADDRESS =
   '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;
+export const ZORA_ADDRESS =
+  '0x1111111111166b7FE7bd91427724B487980aFc69' as Address;
 export const JESSE_ADDRESS =
   '0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59' as Address;
 export const PIXOTCHI_ADDRESS =
@@ -64,6 +66,16 @@ export const SWAP_TOKEN_MAP: Record<SwapTokenId, SwapTokenDefinition> = {
     address: USDC_ADDRESS,
     image: '/icons/usdc.png',
   },
+  ZORA: {
+    id: 'ZORA',
+    symbol: 'ZORA',
+    displaySymbol: 'ZORA',
+    name: 'ZORA',
+    decimals: 18,
+    chainId: BASE_CHAIN_ID,
+    address: ZORA_ADDRESS,
+    image: '/icons/zora.png',
+  },
   SEED: {
     id: 'SEED',
     symbol: 'SEED',
@@ -99,6 +111,7 @@ export const SWAP_TOKEN_MAP: Record<SwapTokenId, SwapTokenDefinition> = {
 export const USER_SWAP_TOKEN_IDS = [
   'ETH',
   'USDC',
+  'ZORA',
   'SEED',
   'JESSE',
   'PIXOTCHI',
