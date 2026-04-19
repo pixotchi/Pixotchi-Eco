@@ -8,6 +8,7 @@ import BuildingClaimTransaction from '@/components/transactions/building-claim-t
 import { toast } from 'react-hot-toast';
 import { StandardContainer } from '@/components/ui/pixel-container';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 interface ProductionPanelProps {
   building: BuildingData;
@@ -81,11 +82,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
                   if (txHash) {
                     payload.proof = { txHash };
                   }
-                  fetch('/api/gamification/missions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                  });
+                  postMissionProgress(payload);
                 } catch {}
               }}
               onError={(e) => toast.error(`Collect failed: ${e.message || e}`)}

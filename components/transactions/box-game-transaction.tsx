@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast';
 import { formatDuration, formatScore } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 const BOX_GAME_ABI = [
   {
@@ -91,14 +92,10 @@ export default function BoxGameTransaction({
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {
-        fetch('/api/gamification/missions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            address,
-            taskId: 's4_play_arcade',
-            proof: { txHash },
-          }),
+        postMissionProgress({
+          address,
+          taskId: 's4_play_arcade',
+          proof: { txHash },
         }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
       } catch (error) {
         console.warn('Failed to dispatch gamification mission (arcade):', error);
@@ -151,5 +148,4 @@ export default function BoxGameTransaction({
     />
   );
 }
-
 

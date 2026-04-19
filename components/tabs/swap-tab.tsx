@@ -1,23 +1,24 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+import { useEffect, useState } from 'react';
+import { useAccount, useReadContract } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
-import { useState } from 'react';
+import { erc20Abi } from 'viem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup } from '@/components/ui/toggle-group';
+import ErrorBoundary from '@/components/ui/error-boundary';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { useFrameContext } from '@/lib/frame-context';
-import { Swap, SwapAmountInput, SwapButton, SwapMessage, SwapToast, SwapToggleButton } from '@coinbase/onchainkit/swap';
 import { useTabVisibility } from "@/lib/tab-visibility-context";
-import type { Token } from '@coinbase/onchainkit/token';
-import type { LifecycleStatus } from '@coinbase/onchainkit/swap';
-import { PIXOTCHI_TOKEN_ADDRESS, USDC_ADDRESS, JESSE_TOKEN_ADDRESS, CREATOR_TOKEN_ADDRESS } from '@/lib/contracts';
 import TradingViewWidget from './TradingViewWidget';
-import type { TransactionReceipt } from 'viem';
+import PixotchiSwapPanel from './pixotchi-swap-panel';
+import { SEED_ADDRESS } from '@/lib/swap/constants';
+
+const INITIAL_SEED_SUPPLY = BigInt(20_000_000) * BigInt(10) ** BigInt(18);
+const PERCENTAGE_BASIS_POINTS = BigInt(10_000);
 
 function SwapLockedState({ message }: { message: string }) {
   return (
@@ -42,165 +43,26 @@ export default function SwapTab() {
   const isSwapModuleDisabled = CLIENT_ENV.SWAP_MODULE_DISABLED;
   const swapDisabledMessage = CLIENT_ENV.SWAP_MODULE_DISABLED_MESSAGE;
   const [swapView, setSwapView] = useState<'swap' | 'chart'>('swap');
-  const [fromTokenSymbol, setFromTokenSymbol] = useState<string>('ETH');
-  const [toTokenSymbol, setToTokenSymbol] = useState<string>('SEED');
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('swap');
   const isChartView = swapView === 'chart';
+  const { data: seedTotalSupply } = useReadContract({
+    address: SEED_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'totalSupply',
+    query: {
+      enabled: isVisible,
+      staleTime: 60_000,
+      refetchInterval: isVisible ? 60_000 : false,
+    },
+  });
 
   // Rewards distributed today (2% of 24h volume)
   const [rewardsData, setRewardsData] = useState<{ volume24h: number; rewards: number } | null>(null);
-
-  // Track OnchainKit's internal token state to detect when toggle happens
-  const lastKnownStateRef = useRef<{ from: string; to: string }>({ from: 'ETH', to: 'SEED' });
-
-  const { ETH, SEED, USDC, JESSE, PIXOTCHI } = useMemo(() => {
-    const eth: Token = {
-      address: "", // Empty string for native ETH (per OnchainKit guidelines)
-      chainId: 8453,
-      decimals: 18,
-      name: "ETH",
-      symbol: "ETH",
-      image: "https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png",
-    };
-
-    const seed: Token = {
-      address: PIXOTCHI_TOKEN_ADDRESS,
-      chainId: 8453,
-      decimals: 18,
-      name: "SEED",
-      symbol: "SEED",
-      image: "/PixotchiKit/COIN.svg",
-    };
-
-    const usdc: Token = {
-      address: USDC_ADDRESS,
-      chainId: 8453,
-      decimals: 6,
-      name: "USDC",
-      symbol: "USDC",
-      image: "https://dynamic-assets.coinbase.com/3c15df5e2ac7d4abbe9499ed9335041f00c620f28e8de2f93474a9f432058742cdf4674bd43f309e69778a26969372310135be97eb183d91c492154176d455b8/asset_icons/9d67b728b6c8f457717154b3a35f9ddc702eae7e76c4684ee39302c4d7fd0bb8.png",
-    };
-
-    const jesse: Token = {
-      address: JESSE_TOKEN_ADDRESS,
-      chainId: 8453,
-      decimals: 18,
-      name: "JESSE",
-      symbol: "$JESSE",
-      image: "/icons/jessetoken.png",
-    };
-
-    const pixotchi: Token = {
-      address: CREATOR_TOKEN_ADDRESS,
-      chainId: 8453,
-      decimals: 18,
-      name: "PIXOTCHI",
-      symbol: "PIXOTCHI",
-      image: "/icons/cc.png",
-    };
-
-    return {
-      ETH: eth,
-      SEED: seed,
-      USDC: usdc,
-      JESSE: jesse,
-      PIXOTCHI: pixotchi,
-    };
-  }, []);
-
-  // SEED or JESSE or PIXOTCHI must always be part of the swap
-  // If "to" is SEED or JESSE or PIXOTCHI, "from" can be ETH, USDC, SEED, JESSE, or PIXOTCHI (but not same as "to")
-  // If "to" is ETH or USDC, "from" must be SEED or JESSE or PIXOTCHI
-  const fromSwappable = useMemo(() => {
-    if (toTokenSymbol === 'SEED') {
-      return [ETH, USDC, JESSE, PIXOTCHI];
-    } else if (toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE') {
-      return [ETH, USDC, SEED, PIXOTCHI];
-    } else if (toTokenSymbol === 'PIXOTCHI') {
-      return [ETH, USDC, SEED, JESSE];
-    } else {
-      // "to" is ETH or USDC, so "from" must be SEED or JESSE or PIXOTCHI
-      return [SEED, JESSE, PIXOTCHI];
-    }
-  }, [toTokenSymbol, ETH, USDC, SEED, JESSE, PIXOTCHI]);
-
-  // If "from" is SEED or JESSE or PIXOTCHI, "to" can be ETH, USDC, SEED, JESSE, or PIXOTCHI (but not same as "from")
-  // If "from" is ETH or USDC, "to" must be SEED or JESSE or PIXOTCHI
-  const toSwappable = useMemo(() => {
-    if (fromTokenSymbol === 'SEED') {
-      return [ETH, USDC, JESSE, PIXOTCHI];
-    } else if (fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE') {
-      return [ETH, USDC, SEED, PIXOTCHI];
-    } else if (fromTokenSymbol === 'PIXOTCHI') {
-      return [ETH, USDC, SEED, JESSE];
-    } else {
-      // "from" is ETH or USDC, so "to" must be SEED or JESSE or PIXOTCHI
-      return [SEED, JESSE, PIXOTCHI];
-    }
-  }, [fromTokenSymbol, ETH, USDC, SEED, JESSE, PIXOTCHI]);
-
-  const handleSuccess = useCallback((receipt: TransactionReceipt) => {
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
-    toast.success('Swap successful!');
-
-    if (!address) return;
-    const hash = receipt?.transactionHash ?? null;
-
-    if (!hash) {
-      console.warn('[SwapTab] Swap completed without transaction hash; skipping mission update');
-      return;
-    }
-
-    try {
-      const payload: Record<string, unknown> = {
-        address,
-        taskId: 's1_make_swap',
-        proof: { txHash: hash },
-      };
-      fetch('/api/gamification/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).catch((err) => console.warn('[SwapTab] Gamification tracking failed (non-critical):', err));
-    } catch (error) {
-      console.warn('[SwapTab] Failed to dispatch gamification mission:', error);
-    }
-  }, [address]);
-
-  const handleError = useCallback((error: any) => {
-    try {
-      const errorMessage = error?.message || error?.error || String(error) || 'Swap failed';
-      toast.error(errorMessage);
-      console.error('[SwapTab] Swap error:', error);
-    } catch (e) {
-      console.error('[SwapTab] Error handling failed:', e);
-      toast.error('An unexpected error occurred');
-    }
-  }, []);
-
-  const handleStatus = useCallback((status: LifecycleStatus) => {
-    // Detect when OnchainKit's internal tokens have changed (via toggle or manual selection)
-    // and sync our state to match
-    if (status.statusName === 'amountChange') {
-      const statusData = status.statusData as any;
-      if (statusData?.tokenFrom?.symbol && statusData?.tokenTo?.symbol) {
-        const onchainFromSymbol = statusData.tokenFrom.symbol;
-        const onchainToSymbol = statusData.tokenTo.symbol;
-
-        // Check if OnchainKit's state is different from our last known state
-        if (
-          onchainFromSymbol !== lastKnownStateRef.current.from ||
-          onchainToSymbol !== lastKnownStateRef.current.to
-        ) {
-          // Token pair changed - update our state to match OnchainKit
-          lastKnownStateRef.current = { from: onchainFromSymbol, to: onchainToSymbol };
-          setFromTokenSymbol(onchainFromSymbol);
-          setToTokenSymbol(onchainToSymbol);
-        }
-      }
-    }
-  }, []);
+  const currentBurnedSupplyLabel =
+    typeof seedTotalSupply === 'bigint' && seedTotalSupply <= INITIAL_SEED_SUPPLY
+      ? `${(Number(((INITIAL_SEED_SUPPLY - seedTotalSupply) * PERCENTAGE_BASIS_POINTS) / INITIAL_SEED_SUPPLY) / 100).toFixed(2)}%`
+      : '...';
 
   // Refresh global balances when swap tab is visible (in case user swapped elsewhere/added funds)
   useEffect(() => {
@@ -258,46 +120,9 @@ export default function SwapTab() {
             isSwapModuleDisabled ? (
               <SwapLockedState message={swapDisabledMessage} />
             ) : (
-              <div data-ock-theme="pixotchi">
-                <Swap
-                  isSponsored={false}
-                  experimental={{ useAggregator: true }}
-                  config={{ maxSlippage: 5.5 }}
-                  onSuccess={handleSuccess}
-                  onError={handleError}
-                  onStatus={handleStatus}
-                >
-                  {/* SEED or JESSE or PIXOTCHI must always be part of the swap - only show valid token pairs */}
-                  <SwapAmountInput
-                    label="Sell"
-                    token={
-                      fromTokenSymbol === 'ETH' ? ETH
-                        : fromTokenSymbol === 'USDC' ? USDC
-                          : fromTokenSymbol === '$JESSE' || fromTokenSymbol === 'JESSE' ? JESSE
-                            : fromTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
-                              : SEED
-                    }
-                    swappableTokens={fromSwappable}
-                    type="from"
-                  />
-                  <SwapToggleButton />
-                  <SwapAmountInput
-                    label="Buy"
-                    token={
-                      toTokenSymbol === 'ETH' ? ETH
-                        : toTokenSymbol === 'USDC' ? USDC
-                          : toTokenSymbol === '$JESSE' || toTokenSymbol === 'JESSE' ? JESSE
-                            : toTokenSymbol === 'PIXOTCHI' ? PIXOTCHI
-                              : SEED
-                    }
-                    swappableTokens={toSwappable}
-                    type="to"
-                  />
-                  <SwapButton />
-                  <SwapMessage />
-                  <SwapToast />
-                </Swap>
-              </div>
+              <ErrorBoundary variant="inline" showErrorDetails>
+                <PixotchiSwapPanel />
+              </ErrorBoundary>
             )
           ) : (
             <TradingViewWidget />
@@ -314,7 +139,12 @@ export default function SwapTab() {
           <div className="flex items-start space-x-3">
             <Image src="/icons/fire.svg" alt="Burn" width={20} height={20} className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold">70% In-Game Burn</h4>
+              <h4 className="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-semibold">
+                <span>70% In-Game Burn</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  (Current burnt supply: {currentBurnedSupplyLabel})
+                </span>
+              </h4>
               <p className="text-muted-foreground text-xs">
                 Currently, 70% of the SEED tokens spent within the game on items or upgrades are permanently burned. 30% are added to the rewards pool.
               </p>
@@ -359,7 +189,7 @@ export default function SwapTab() {
                 className="w-full"
                 onClick={async () => {
                   try {
-                    await sdk.actions.viewToken({ token: `eip155:8453/erc20:${PIXOTCHI_TOKEN_ADDRESS}` });
+                    await sdk.actions.viewToken({ token: `eip155:8453/erc20:${SEED_ADDRESS}` });
                   } catch {
                     toast.error('View Token is only available in supported Farcaster clients.');
                   }

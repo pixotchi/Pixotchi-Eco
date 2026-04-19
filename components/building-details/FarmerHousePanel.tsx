@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 import { usePublicClient } from 'wagmi';
 import { parseUnits } from 'viem';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
 
 interface FarmerHousePanelProps {
@@ -229,11 +230,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                             if (txHash) {
                               payload.proof = { txHash };
                             }
-                            fetch('/api/gamification/missions', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(payload)
-                            });
+                            postMissionProgress(payload);
                           } catch { }
                         }}
                       />

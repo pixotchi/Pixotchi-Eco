@@ -10,6 +10,7 @@ import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, E
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import { toast } from "react-hot-toast";
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 type OrderView = {
   id: bigint;
@@ -350,11 +351,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     if (txHash) {
       payload.proof = { txHash };
     }
-    fetch('/api/gamification/missions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(err => console.warn('Gamification tracking failed (non-critical):', err));
+    postMissionProgress(payload).catch(err => console.warn('Gamification tracking failed (non-critical):', err));
   };
 
   return (
@@ -865,4 +862,3 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     </Dialog>
   );
 }
-

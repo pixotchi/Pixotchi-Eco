@@ -1089,12 +1089,9 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
 
 /* OnchainKit theme bridge: make OCK use Pixotchi theme tokens */
 [data-ock-theme='pixotchi'] {
-  /* Core surfaces & text */
   --ock-background: hsl(var(--background));
   --ock-text-foreground: hsl(var(--foreground));
   --ock-border: hsl(var(--border));
-
-  /* Brand colors */
   --ock-primary: hsl(var(--primary));
   --ock-primary-foreground: hsl(var(--primary-foreground));
   --ock-secondary: hsl(var(--secondary));
@@ -1103,23 +1100,16 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   --ock-accent-foreground: hsl(var(--accent-foreground));
   --ock-muted: hsl(var(--muted));
   --ock-muted-foreground: hsl(var(--muted-foreground));
-
-  /* Focus ring */
   --ock-ring: hsl(var(--ring));
-
-  /* Additional OCK tokens used by lists/rows */
   --ock-background-inverse: hsl(var(--card));
   --ock-background-hover: hsl(var(--accent));
   --ock-background-active: hsl(var(--secondary));
   --ock-foreground-muted: hsl(var(--muted-foreground));
-
-  /* Toggle button (alternate) palette */
   --ock-background-alternate: hsl(var(--card));
   --ock-background-alternate-hover: hsl(var(--accent));
   --ock-background-alternate-active: hsl(var(--secondary));
 }
 
-/* Fine-tune token label color in OCK Swap (ETH/SEED text) */
 [data-ock-theme='pixotchi'] .ock-swap-token-button {
   color: hsl(var(--foreground));
 }
@@ -1128,7 +1118,6 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   color: inherit;
 }
 
-/* Override OCK utility color used by token symbol span */
 [data-ock-theme='pixotchi'] .ock\:text-ock-foreground {
   color: hsl(var(--foreground)) !important;
 }
@@ -1137,14 +1126,12 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   color: var(--ock-foreground-muted) !important;
 }
 
-/* Ensure icons (caret/arrow) inside token button inherit text color */
 [data-ock-theme='pixotchi'] .ock-swap-token-button svg,
 [data-ock-theme='pixotchi'] .ock-swap-token-button svg * {
   fill: currentColor !important;
   stroke: currentColor !important;
 }
 
-/* Dropdown/listbox theming (token selector menu) */
 [data-ock-theme='pixotchi'] [role='menu'],
 [data-ock-theme='pixotchi'] [role='listbox'] {
   background-color: var(--ock-background) !important;
@@ -1157,12 +1144,10 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   color: inherit !important;
 }
 
-/* Fallback for list items/titles rendered without explicit color utility */
 [data-ock-theme='pixotchi'] .ock\:font-ock {
   color: hsl(var(--foreground));
 }
 
-/* Map utility classes referenced by rows to our tokens */
 [data-ock-theme='pixotchi'] .ock\:bg-ock-background-inverse {
   background-color: var(--ock-background-inverse) !important;
 }
@@ -1176,7 +1161,6 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   background-color: var(--ock-background-active) !important;
 }
 
-/* Map toggle button background tokens */
 [data-ock-theme='pixotchi'] .ock\:bg-ock-background-alternate {
   background-color: var(--ock-background-alternate) !important;
 }
@@ -1190,20 +1174,15 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   background-color: var(--ock-background-alternate-active) !important;
 }
 
-/* Ensure toggle icon inherits theme foreground */
 [data-ock-theme='pixotchi'] .ock\:fill-ock-foreground {
   fill: hsl(var(--foreground)) !important;
   stroke: hsl(var(--foreground)) !important;
 }
 
-/* Reduce toggle button size and negative margins to avoid balance overlap */
 [data-ock-theme='pixotchi'] [data-testid='SwapTokensButton'] {
   height: 2.25rem !important;
-  /* h-9 */
   width: 2.25rem !important;
-  /* w-9 */
   margin-top: -0.5rem !important;
-  /* was -my-6 ~= -1.5rem */
   margin-bottom: -0.5rem !important;
 }
 

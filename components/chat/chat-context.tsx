@@ -23,6 +23,7 @@ import {
   PUBLIC_CHAT_SESSION_EVENT,
   type PublicChatSession,
 } from '@/lib/chat-auth-client';
+import { requestBaseChatSessionRefresh } from '@/lib/base-chat-session-refresh';
 import {
   clearConfirmedMiniAppSession,
   useConfirmedMiniAppSession,
@@ -181,6 +182,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleChatAuthFailure = useCallback(async () => {
+    const currentSurface = !isMiniApp
+      ? sessionStorageManager.getAuthSurface()
+      : null;
+
+    if (currentSurface === 'base' && chatAddress) {
+      const recovery = await requestBaseChatSessionRefresh('chat-auth-failure');
+      if (recovery.status === 'success') {
+        setPublicChatState('booting');
+        setPublicChatRetryVersion((version) => version + 1);
+        return;
+      }
+    }
+
     setPublicChatSession(null);
     setPublicChatState(isMiniApp || chatAddress ? 'error' : 'unneeded');
     setConversationId(null);

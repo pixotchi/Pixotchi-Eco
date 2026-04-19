@@ -33,6 +33,7 @@ import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
+import { postMissionProgress } from "@/lib/mission-tracking";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
 
@@ -583,11 +584,7 @@ export default function LeaderboardTab() {
     setSelectedPlantForProfile(plant);
     setProfileDialogOpen(true);
     if (!address) return;
-    fetch('/api/gamification/missions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, taskId: 's2_visit_profile' })
-    }).catch(() => { });
+    postMissionProgress({ address, taskId: 's2_visit_profile' }).catch(() => { });
   };
 
   const isAttackable = (plant: LeaderboardPlant) => !isUserPlant(plant) && !plant.isDead && eligibleAttackers(plant).length > 0 && !hasActiveFence(plant);

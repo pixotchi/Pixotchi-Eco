@@ -24,6 +24,7 @@ import { decodeEventLog, formatUnits } from "viem";
 import { extractTransactionHash } from "@/lib/transaction-utils";
 import { useAccount } from "wagmi";
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 interface BlackjackTransactionProps {
     mode: "deal" | "action";
@@ -508,10 +509,10 @@ export default function BlackjackTransaction({
             if (address && mode === "action" && gameSettled) {
                 const txHash = extractTransactionHash(newReceipts[0] ?? receipts[0]);
                 if (txHash) {
-                    fetch("/api/gamification/missions", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ address, taskId: "s3_play_casino_game", proof: { txHash } }),
+                    postMissionProgress({
+                        address,
+                        taskId: "s3_play_casino_game",
+                        proof: { txHash },
                     }).catch(() => { });
                 }
             }

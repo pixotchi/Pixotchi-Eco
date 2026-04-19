@@ -1,0 +1,45 @@
+export const SWAP_PANEL_STRINGS = {
+  labels: {
+    sell: 'Sell',
+    buy: 'Buy',
+    max: 'Max',
+    balancePrefix: 'Balance: ',
+    loadingBalance: 'Loading balance\u2026',
+  },
+  buttons: {
+    swap: 'Swap',
+    swapping: 'Working\u2026',
+  },
+  quote: {
+    loading: 'Fetching quote\u2026',
+    retrying: 'Retrying quote\u2026',
+    stale: 'Quote expired. Refreshing\u2026',
+  },
+  execution: {
+    approveToken: 'Approve token spending',
+    approvingAndSwapping: 'Approving and swapping in one transaction',
+    transactionPending: 'Transaction pending\u2026',
+    completed: 'Swap successful',
+    generic: 'Swap execution failed',
+  },
+  errors: {
+    connectWallet: 'Connect your wallet to swap',
+    walletClientUnavailable: 'Wallet client unavailable',
+    switchToBase: 'Switch your wallet to Base to swap.',
+    enterValidAmount: (symbol: string) => `Enter a valid ${symbol} amount.`,
+    insufficientBalance: (symbol: string) => `Insufficient ${symbol} balance.`,
+    insufficientGas: 'Not enough ETH to cover gas for this swap.',
+    quoteStale: 'Quote is stale. Fetching a fresh quote\u2026',
+    quoteStillLoading: 'Still calculating the quote\u2026 please wait.',
+    blockedPairFallback: 'This swap pair is unavailable.',
+    keepEthForGas: 'Keep a bit of ETH for gas.',
+    noBalance: 'No balance available.',
+    swapFailed: 'Swap execution failed',
+  },
+  aria: {
+    sellAmount: (symbol: string) => `Sell amount in ${symbol}`,
+    buyAmount: (symbol: string) => `Buy amount in ${symbol}`,
+    selectToken: (symbol: string) => `Select ${symbol}`,
+    toggleDirection: 'Toggle swap direction',
+  },
+} as const;

@@ -7,6 +7,7 @@ import {
   createChatSessionResponse,
   createChatUnavailableResponse,
   getChatSessionFromRequest,
+  setChatSessionCookie,
   verifyBaseChatIdentity,
   verifyFarcasterChatIdentity,
   verifyPrivyChatIdentity,
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest) {
     return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
   }
 
-  return NextResponse.json(
+  const response = NextResponse.json(
     {
       address: session.address,
       authenticated: true,
@@ -99,6 +100,9 @@ export async function GET(request: NextRequest) {
       },
     },
   );
+
+  setChatSessionCookie(response, session.id);
+  return response;
 }
 
 export async function POST(request: NextRequest) {

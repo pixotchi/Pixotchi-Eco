@@ -22,6 +22,7 @@ import SponsoredTransaction from '@/components/transactions/sponsored-transactio
 import type { FenceV2Config } from '@/lib/contracts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import { useIsSolanaWallet, SolanaNotSupported } from '@/components/solana';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
@@ -643,11 +644,7 @@ export default function ItemDetailsPanel({
                       if (txHash) {
                         payload.proof = { txHash };
                       }
-                      fetch('/api/gamification/missions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                      });
+                      postMissionProgress(payload);
                     } catch { }
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -667,11 +664,7 @@ export default function ItemDetailsPanel({
                       if (txHash) {
                         payload.proof = { txHash };
                       }
-                      fetch('/api/gamification/missions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                      });
+                      postMissionProgress(payload);
                     } catch { }
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -694,11 +687,7 @@ export default function ItemDetailsPanel({
                         if (txHash) {
                           payload.proof = { txHash };
                         }
-                        const res = await fetch('/api/gamification/missions', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(payload)
-                        });
+                        const res = await postMissionProgress(payload);
                         if (!res.ok) throw new Error('missions post failed');
                       } catch (e) {
                         if (attempt < 2) {

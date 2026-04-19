@@ -6,9 +6,8 @@
  * 
  * Quote flow:
  * 1. Read SEED price from contract (via adapter view functions)
- * 2. Get wSOL estimate from 1inch Oracle
- * 3. Get exact quote and calldata from 1inch API
- * 4. Build transaction with wsolAmount + minSeedOut
+ * 2. Read the required wSOL amount from the TwinAdapter quote view
+ * 3. Build transaction with wsolAmount + minSeedOut
  */
 
 // Debug flag - set to true for verbose logging
@@ -31,15 +30,13 @@ import {
 } from '@/lib/solana-bridge-service';
 import {
   getWsolToSeedQuote,
-  formatWsol,
-  formatSeed,
   isQuoteValid,
   type SolanaQuoteResult,
 } from '@/lib/solana-quote';
 import { BRIDGE_CONFIG, SOLANA_TWIN_ADAPTER_ABI, getPixotchiSolanaConfig } from '@/lib/solana-constants';
 import { getReadClient } from '@/lib/contracts';
 import { getAddress } from 'viem';
-import { executeBridgeTransaction, checkSolBalance, getSolanaExplorerTxUrl } from '@/lib/solana-bridge-executor';
+import { executeBridgeTransaction, checkSolBalance } from '@/lib/solana-bridge-executor';
 import type { Transaction } from '@solana/web3.js';
 
 // ============ Types ============
@@ -201,7 +198,7 @@ async function getNameChangePriceInSeed(): Promise<bigint> {
 // Default slippage from config (7% for cross-chain transactions)
 const DEFAULT_SLIPPAGE = BRIDGE_CONFIG.defaultSlippagePercent;
 
-// Get the twin adapter address for quotes (needed for 1inch swap data)
+// Get the twin adapter address for quote reads
 function getTwinAdapterAddress(): string | undefined {
   try {
     const config = getPixotchiSolanaConfig();
@@ -502,7 +499,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       const quote = hasValidExistingQuote ? existingQuote! : await quoteShopItemCost(itemId);
 
       if (!isQuoteValid(quote)) {
-        throw new Error(quote.error || 'Failed to get quote from BaseSwap');
+        throw new Error(quote.error || 'Failed to get quote from the TwinAdapter');
       }
 
       updateState({ quote, status: 'building' });
@@ -542,7 +539,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       const quote = hasValidExistingQuote ? existingQuote! : await quoteGardenItemCost(itemId);
 
       if (!isQuoteValid(quote)) {
-        throw new Error(quote.error || 'Failed to get quote from BaseSwap');
+        throw new Error(quote.error || 'Failed to get quote from the TwinAdapter');
       }
 
       updateState({ quote, status: 'building' });
@@ -666,7 +663,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
 
       // Name change might be free
       if (quote.seedAmount > BigInt(0) && !isQuoteValid(quote)) {
-        throw new Error(quote.error || 'Failed to get quote from BaseSwap');
+        throw new Error(quote.error || 'Failed to get quote from the TwinAdapter');
       }
 
       updateState({ quote, status: 'building' });

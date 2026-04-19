@@ -20,6 +20,7 @@ import { FollowButton, fetchFollowState, useTransactions } from 'ethereum-identi
 import { Avatar } from '@coinbase/onchainkit/identity';
 import { base } from 'viem/chains';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 interface PlantProfileDialogProps {
   open: boolean;
@@ -151,10 +152,9 @@ export default function PlantProfileDialog({
   const postFollowMissionProgress = useCallback(async (): Promise<boolean> => {
     if (!connectedAddress) return false;
     try {
-      const response = await fetch('/api/gamification/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: connectedAddress, taskId: 's2_follow_player' })
+      const response = await postMissionProgress({
+        address: connectedAddress,
+        taskId: 's2_follow_player',
       });
       return response.ok;
     } catch {

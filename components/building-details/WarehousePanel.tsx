@@ -13,6 +13,7 @@ import { toast } from 'react-hot-toast';
 import CountdownTimer from '@/components/countdown-timer';
 import { Plant } from '@/lib/types';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 interface WarehousePanelProps {
   landId: bigint;
@@ -188,11 +189,7 @@ export default function WarehousePanel({
               if (txHash) {
                 payload.proof = { txHash };
               }
-              fetch('/api/gamification/missions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
+              postMissionProgress(payload);
             } catch {}
           }}
           onError={(e) => toast.error(`Apply failed: ${e.message || e}`)}
@@ -239,11 +236,7 @@ export default function WarehousePanel({
               if (txHash) {
                 payload.proof = { txHash };
               }
-              fetch('/api/gamification/missions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
+              postMissionProgress(payload);
             } catch {}
           }}
           onError={(e) => toast.error(`Apply failed: ${e.message || e}`)}

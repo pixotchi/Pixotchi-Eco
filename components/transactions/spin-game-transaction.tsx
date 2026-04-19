@@ -4,12 +4,12 @@ import { useMemo } from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import { PIXOTCHI_NFT_ADDRESS, SPIN_GAME_ABI } from "@/lib/contracts";
 import { toast } from "react-hot-toast";
-import { AbiEventSignatureNotFoundError, decodeEventLog } from "viem";
-import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
 import type { LifecycleStatus } from "@coinbase/onchainkit/transaction";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { extractBestSpinRewardFromLogs } from "@/lib/spin-game-events";
+import { postMissionProgress } from "@/lib/mission-tracking";
 
 const FUNCTION_MAP = {
   commit: "spinGameV2Commit",
@@ -50,7 +50,6 @@ export default function SpinGameTransaction({
   onStatusUpdate,
   onComplete,
   onButtonClick,
-  onRewardConfigUpdate,
 }: SpinGameTransactionProps) {
   const { address } = useAccount();
   const calls = useMemo(() => {
@@ -86,15 +85,13 @@ export default function SpinGameTransaction({
   const handleStatus = (status: LifecycleStatus) => {
     onStatusUpdate?.(status);
 
-    // Handle transaction failures - call onComplete with undefined to reset wheel state
+    // Parent already handles reveal failures through onStatusUpdate. Calling
+    // onComplete on failure clears the pending secret and prevents a retry.
     const failureStatuses = new Set([
       "error", "failed", "reverted", "cancelled", "canceled", "rejected",
       "transactionRejected", "userRejected", "buildError"
     ]);
     if (failureStatuses.has(status.statusName ?? "")) {
-      if (mode === "reveal") {
-        onComplete?.(undefined);
-      }
       return;
     }
 
@@ -104,119 +101,73 @@ export default function SpinGameTransaction({
       toast.success("Spin committed! Reveal after the next block.", {
         id: "spin-leaf-commit",
       });
-    } else if (mode === "reveal") {
-      const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
-      if (address) {
+      } else if (mode === "reveal") {
+        const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
+        if (address) {
         const txHash = extractTransactionHash(receipts[0]);
         if (txHash) {
           try {
-            fetch('/api/gamification/missions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                address,
-                taskId: 's4_play_arcade',
-                proof: { txHash },
-              }),
+            postMissionProgress({
+              address,
+              taskId: 's4_play_arcade',
+              proof: { txHash },
             }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
           } catch (error) {
             console.warn('Failed to dispatch gamification mission (spin arcade):', error);
           }
         } else {
-          console.warn('Spin reveal completed without transaction hash; skipping mission update');
-        }
-      }
-      const abi = (PixotchiNFT as any).abi || PixotchiNFT;
-      let summaryShown = false;
-      let revealResult: {
-        rewardIndex?: number;
-        pointsDelta?: number;
-        timeAdded?: number;
-        leafAmount?: bigint;
-      } | undefined;
-
-      for (const receipt of receipts) {
-        const logs = receipt?.logs || [];
-        for (const log of logs) {
-          try {
-            const decoded: any = decodeEventLog({
-              abi,
-              data: log.data as `0x${string}`,
-              topics: log.topics as any,
-            });
-
-            if (
-              decoded.eventName === "SpinGameV2Played" ||
-              decoded.eventName === "SpinGameV2Reveal" ||
-              decoded.eventName === "Played" ||
-              decoded.eventName === "PlayedV2"
-            ) {
-              const points = Number(
-                decoded.args.pointsDelta ?? decoded.args.points ?? decoded.args.pointsAdjustment ?? 0,
-              );
-              const time = Number(
-                decoded.args.timeAdded ?? decoded.args.timeExtension ?? decoded.args.timeAdjustment ?? 0,
-              );
-              const leafRaw = decoded.args.leafAmount ?? decoded.args.leaf ?? 0;
-              const rewardIndex = decoded.args.rewardIndex ?? undefined;
-
-              revealResult = {
-                rewardIndex: rewardIndex !== undefined ? Number(rewardIndex) : undefined,
-                pointsDelta: points,
-                timeAdded: time,
-                leafAmount: typeof leafRaw === "bigint" ? leafRaw : BigInt(leafRaw ?? 0),
-              };
-
-              const parts: string[] = [];
-
-              if (points !== 0) {
-                parts.push(`${points > 0 ? "+" : ""}${formatScore(Math.abs(points))} PTS`);
-              }
-              if (time !== 0) {
-                parts.push(`${time > 0 ? "+" : ""}${formatDuration(Math.abs(time))} TOD`);
-              }
-              if (leafRaw && BigInt(leafRaw) !== BigInt("0")) {
-                const leafFormatted = formatTokenAmount(BigInt(leafRaw));
-                parts.push(`${BigInt(leafRaw) > BigInt("0") ? "+" : ""}${leafFormatted} LEAF`);
-              }
-
-              toast.success(parts.length ? `Spin result: ${parts.join(" • ")}` : "Spin result: no reward this time", {
-                id: "spin-leaf-result",
-              });
-              summaryShown = true;
-              break;
-            }
-
-            if (decoded.eventName === "SpinGameV2RewardUpdated") {
-              try {
-                const indexRaw = decoded.args.index ?? decoded.args[0];
-                const pointDelta = decoded.args.pointDelta ?? decoded.args[1];
-                const timeExtension = decoded.args.timeExtension ?? decoded.args[2];
-                const leafAmount = decoded.args.leafAmount ?? decoded.args[3];
-                const index = Number(indexRaw ?? 0);
-                if (!Number.isNaN(index) && onRewardConfigUpdate) {
-                  onRewardConfigUpdate(index, {
-                    pointDelta: BigInt(pointDelta ?? 0),
-                    timeExtension: BigInt(timeExtension ?? 0),
-                    leafAmount: BigInt(leafAmount ?? 0),
-                  });
-                }
-              } catch (updateError) {
-                console.warn("Failed to process reward update event", updateError);
-              }
-              continue;
-            }
-          } catch (error) {
-            if (error instanceof AbiEventSignatureNotFoundError) {
-              continue;
-            }
-            console.warn("Failed to decode spin event", error);
+            console.warn('Spin reveal completed without transaction hash; skipping mission update');
           }
         }
-        if (summaryShown) break;
+      let revealResult:
+        | {
+            rewardIndex?: number;
+            pointsDelta?: number;
+            timeAdded?: number;
+            leafAmount?: bigint;
+          }
+        | undefined;
+
+      try {
+        const rewardLogs = receipts.flatMap((receipt) => receipt?.logs || []);
+        revealResult = extractBestSpinRewardFromLogs(rewardLogs);
+      } catch (error) {
+        console.warn("Failed to decode spin event", error);
       }
 
-      if (!summaryShown) {
+      if (revealResult) {
+        const parts: string[] = [];
+
+        if ((revealResult.pointsDelta ?? 0) !== 0) {
+          parts.push(
+            `${revealResult.pointsDelta! > 0 ? "+" : ""}${formatScore(
+              Math.abs(revealResult.pointsDelta!),
+            )} PTS`,
+          );
+        }
+        if ((revealResult.timeAdded ?? 0) !== 0) {
+          parts.push(
+            `${revealResult.timeAdded! > 0 ? "+" : ""}${formatDuration(
+              Math.abs(revealResult.timeAdded!),
+            )} TOD`,
+          );
+        }
+        if ((revealResult.leafAmount ?? BigInt(0)) !== BigInt(0)) {
+          const leafFormatted = formatTokenAmount(revealResult.leafAmount!);
+          parts.push(
+            `${revealResult.leafAmount! > BigInt(0) ? "+" : ""}${leafFormatted} LEAF`,
+          );
+        }
+
+        toast.success(
+          parts.length
+            ? `Spin result: ${parts.join(" • ")}`
+            : "Spin result: no reward this time",
+          {
+            id: "spin-leaf-result",
+          },
+        );
+      } else {
         toast.success("Spin complete!", { id: "spin-leaf-result" });
       }
 

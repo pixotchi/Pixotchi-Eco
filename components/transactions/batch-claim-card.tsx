@@ -17,6 +17,7 @@ import { formatUnits, parseUnits, erc20Abi } from 'viem';
 import { Button } from '@/components/ui/button';
 import { useAccount } from 'wagmi';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 interface BatchClaimCardProps {
   lands: Land[];
@@ -326,11 +327,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
                   if (txHash) {
                     payload.proof = { txHash };
                   }
-                  fetch('/api/gamification/missions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                  });
+                  postMissionProgress(payload);
                 } catch { }
               }}
               onError={(e) => toast.error("Batch claim failed")}

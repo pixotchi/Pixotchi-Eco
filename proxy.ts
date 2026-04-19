@@ -21,6 +21,8 @@ const EDGE_SAME_ORIGIN_ONLY_API_PATHS = new Set([
   '/api/chat/auth/base/debug',
   '/api/broadcast/active',
   '/api/ens/resolve',
+  '/api/swap/quote',
+  '/api/swap/build-step',
 ]);
 
 function parseOrigins(value?: string): string[] {

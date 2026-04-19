@@ -5,6 +5,7 @@ import SponsoredTransaction from "./sponsored-transaction";
 import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { postMissionProgress } from '@/lib/mission-tracking';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -56,14 +57,10 @@ export default function KillTransaction({
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {
-        fetch('/api/gamification/missions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            address,
-            taskId: 's4_collect_star',
-            proof: { txHash },
-          }),
+        postMissionProgress({
+          address,
+          taskId: 's4_collect_star',
+          proof: { txHash },
         }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
       } catch (error) {
         console.warn('Failed to dispatch gamification mission (collect star):', error);
@@ -85,5 +82,4 @@ export default function KillTransaction({
     />
   );
 }
-
 
