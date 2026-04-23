@@ -94,7 +94,6 @@ const ETH_GAS_REQUIRED_WEI = BigInt(200_000_000_000_000);
 const QUOTE_DEBOUNCE_MS = 250;
 const QUOTE_MAX_RETRIES = 2;
 const QUOTE_IDLE_REFRESH_MS = 5_000;
-const PIXOTCHI_LOCK_COUNTERPART: UserSwapTokenId = 'ZORA';
 const OCK_COMPAT_FONT = 'ock-compat-font';
 const SWAP_CARD_CLASS =
   'my-0.5 box-border flex h-[148px] w-full flex-col items-start rounded-lg bg-secondary p-4';
@@ -550,17 +549,6 @@ export default function PixotchiSwapPanel() {
       setBuyToken(allowedTargets[0]);
     }
   }, [allowedTargets, buyToken]);
-
-  useEffect(() => {
-    if (sellToken === 'PIXOTCHI' && buyToken !== PIXOTCHI_LOCK_COUNTERPART) {
-      setBuyToken(PIXOTCHI_LOCK_COUNTERPART);
-      return;
-    }
-
-    if (buyToken === 'PIXOTCHI' && sellToken !== PIXOTCHI_LOCK_COUNTERPART) {
-      setSellToken(PIXOTCHI_LOCK_COUNTERPART);
-    }
-  }, [buyToken, sellToken]);
 
   useEffect(() => {
     markQuoteActivity();
@@ -1190,9 +1178,6 @@ export default function PixotchiSwapPanel() {
   const handleSellTokenSelect = useCallback(
     (next: UserSwapTokenId) => {
       markQuoteActivity();
-      if (next === 'PIXOTCHI') {
-        setBuyToken(PIXOTCHI_LOCK_COUNTERPART);
-      }
       setSellToken(next);
     },
     [markQuoteActivity],
@@ -1201,9 +1186,6 @@ export default function PixotchiSwapPanel() {
   const handleBuyTokenSelect = useCallback(
     (next: UserSwapTokenId) => {
       markQuoteActivity();
-      if (next === 'PIXOTCHI') {
-        setSellToken(PIXOTCHI_LOCK_COUNTERPART);
-      }
       setBuyToken(next);
     },
     [markQuoteActivity],
