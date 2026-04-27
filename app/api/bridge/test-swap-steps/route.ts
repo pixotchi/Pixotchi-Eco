@@ -5,10 +5,10 @@
  * GET /api/bridge/test-swap-steps?wsolAmount=639108
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
-import { formatUnits, encodeFunctionData, type Address } from 'viem';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
+import { formatUnits,type Address } from 'viem';
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;

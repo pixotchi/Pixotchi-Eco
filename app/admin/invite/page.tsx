@@ -1,54 +1,54 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ThemeSelector } from '@/components/theme-selector';
+import { Alert,AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from '@/components/ui/card';
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Shield,
-  Users,
-  Code,
-  Trash2,
-  Plus,
-  BarChart3,
-  Download,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  CheckCircle,
-  Gift,
-  Upload,
-  Clock,
-  UserX,
-  MessageCircle,
-  Bot,
-  Search,
-  FileText,
-  TrendingUp,
-  DollarSign,
-  Bell,
-  Megaphone,
-  Edit2,
-  X as XIcon,
-  BadgeCheck
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { AdminChatMessage, ChatStats, AIConversation, AIChatMessage, AIUsageStats } from '@/lib/types';
-import { formatDistanceToNow } from 'date-fns';
-import { ThemeSelector } from '@/components/theme-selector';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
 import { CLIENT_ENV } from '@/lib/env-config';
+import { AdminChatMessage,AIChatMessage,AIConversation,AIUsageStats,ChatStats } from '@/lib/types';
+import { formatDistanceToNow } from 'date-fns';
+import {
+AlertTriangle,
+BadgeCheck,
+BarChart3,
+Bell,
+Bot,
+CheckCircle,
+Clock,
+Code,
+DollarSign,
+Download,
+Edit2,
+Eye,
+EyeOff,
+FileText,
+Gift,
+Megaphone,
+MessageCircle,
+Plus,
+RefreshCw,
+Search,
+Shield,
+Trash2,
+TrendingUp,
+Upload,
+Users,
+UserX,
+X as XIcon
+} from 'lucide-react';
+import { useCallback,useEffect,useRef,useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 interface AdminStats {
   codes: {
@@ -285,7 +285,7 @@ export default function AdminInviteDashboard() {
         const errorData = await response.json().catch(() => ({}));
         toast.error(errorData.message || `Authentication failed (${response.status})`);
       }
-    } catch (error: any) {
+    } catch {
       console.error('Authentication error:', error);
       toast.error(error.message || 'Network error during authentication');
     } finally {
@@ -317,7 +317,7 @@ export default function AdminInviteDashboard() {
         const errorData = await response.json().catch(() => ({}));
         toast.error(errorData.message || 'Failed to refresh stats');
       }
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Refresh stats error:', error);
         toast.error('Failed to refresh stats');
@@ -349,7 +349,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to generate codes');
       }
-    } catch (error) {
+    } catch {
       toast.error('Generation failed');
     } finally {
       setGenerating(false);
@@ -368,7 +368,7 @@ export default function AdminInviteDashboard() {
         setBroadcastMessages(data.messages || []);
         setBroadcastStats(data.stats || null);
       }
-    } catch (error) {
+    } catch {
       console.error('Failed to fetch broadcast messages:', error);
     }
   }, [isAuthenticated, adminKey]);
@@ -424,7 +424,7 @@ export default function AdminInviteDashboard() {
         const data = await response.json();
         toast.error(data.error || 'Failed to save broadcast');
       }
-    } catch (error) {
+    } catch {
       toast.error('Error saving broadcast');
     } finally {
       setBroadcastLoading(false);
@@ -472,7 +472,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error('Failed to delete broadcast');
       }
-    } catch (error) {
+    } catch {
       toast.error('Error deleting broadcast');
     }
   };
@@ -505,7 +505,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Cleanup failed');
       }
-    } catch (error) {
+    } catch {
       toast.error('Error during cleanup');
     }
   };
@@ -536,7 +536,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Nuke operation failed');
       }
-    } catch (error) {
+    } catch {
       toast.error('Error during nuke operation');
     }
   };
@@ -616,7 +616,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || `Cleanup failed: ${actionNames[action as keyof typeof actionNames]}`);
       }
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Cleanup error:', error);
         toast.error(error.message || 'Cleanup operation failed');
@@ -679,7 +679,7 @@ export default function AdminInviteDashboard() {
   };
 
   // Chat management functions
-  const fetchChatData = async () => {
+  const fetchChatData = useCallback(async () => {
     if (!adminKey.trim()) return;
 
     setChatLoading(true);
@@ -697,13 +697,13 @@ export default function AdminInviteDashboard() {
       const data = await response.json();
       setChatMessages(data.messages || []);
       setChatStats(data.stats || null);
-    } catch (error) {
+    } catch {
       console.error('Error fetching chat data:', error);
       toast.error('Failed to fetch chat data');
     } finally {
       setChatLoading(false);
     }
-  };
+  }, [adminKey]);
 
   const deleteMessage = async (messageId: string, timestamp: number) => {
     if (!adminKey.trim()) return;
@@ -724,7 +724,7 @@ export default function AdminInviteDashboard() {
 
       toast.success('Message deleted');
       fetchChatData(); // Refresh data
-    } catch (error) {
+    } catch {
       console.error('Error deleting message:', error);
       toast.error('Failed to delete message');
     }
@@ -751,7 +751,7 @@ export default function AdminInviteDashboard() {
       const data = await response.json();
       toast.success(`Deleted ${data.deletedCount} messages`);
       fetchChatData(); // Refresh data
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Error deleting all messages:', error);
         toast.error(error.message || 'Failed to delete all messages');
@@ -770,7 +770,7 @@ export default function AdminInviteDashboard() {
   };
 
   // AI Chat management functions
-  const fetchAIChatData = async () => {
+  const fetchAIChatData = useCallback(async () => {
     if (!adminKey.trim()) return;
 
     setAIChatLoading(true);
@@ -788,13 +788,13 @@ export default function AdminInviteDashboard() {
       const data = await response.json();
       setAIConversations(data.conversations || []);
       setAIStats(data.stats || null);
-    } catch (error) {
+    } catch {
       console.error('Error fetching AI chat data:', error);
       toast.error('Failed to fetch AI chat data');
     } finally {
       setAIChatLoading(false);
     }
-  };
+  }, [adminKey]);
 
   const loadConversationMessages = async (conversationId: string) => {
     try {
@@ -811,7 +811,7 @@ export default function AdminInviteDashboard() {
       const result = await response.json();
       setConversationMessages(result.messages);
       setSelectedConversation(conversationId);
-    } catch (error) {
+    } catch {
       console.error('Error loading conversation messages:', error);
       toast.error('Failed to load conversation');
     }
@@ -838,7 +838,7 @@ export default function AdminInviteDashboard() {
         setSelectedConversation(null);
         setConversationMessages([]);
       }
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Error deleting conversation:', error);
         toast.error(error.message || 'Failed to delete conversation');
@@ -885,7 +885,7 @@ export default function AdminInviteDashboard() {
       setSelectedConversation(null);
       setConversationMessages([]);
       await fetchAIChatData();
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Error deleting all AI conversations:', error);
         toast.error(error.message || 'Failed to delete all AI conversations');
@@ -915,7 +915,7 @@ export default function AdminInviteDashboard() {
   const [feedbackList, setFeedbackList] = useState<any[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
 
-  const fetchFeedback = async () => {
+  const fetchFeedback = useCallback(async () => {
     if (!adminKey.trim()) return;
     setFeedbackLoading(true);
     try {
@@ -929,7 +929,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to fetch feedback');
       }
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Feedback fetch error:', error);
         toast.error('Failed to fetch feedback');
@@ -937,7 +937,7 @@ export default function AdminInviteDashboard() {
     } finally {
       setFeedbackLoading(false);
     }
-  };
+  }, [adminKey]);
 
   const deleteFeedback = async (feedbackId: string) => {
     setLoading(true);
@@ -957,7 +957,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to delete feedback');
       }
-    } catch (error) {
+    } catch {
       console.error('Delete feedback error:', error);
       toast.error('Failed to delete feedback');
     } finally {
@@ -988,7 +988,7 @@ export default function AdminInviteDashboard() {
           } else {
             toast.error(data.error || 'Failed to delete all feedback');
           }
-        } catch (error) {
+        } catch {
           console.error('Delete all feedback error:', error);
           toast.error('Failed to delete all feedback');
         } finally {
@@ -998,57 +998,6 @@ export default function AdminInviteDashboard() {
       isDangerous: true,
     });
   };
-
-  // Fetch data when switching tabs - with AbortController cleanup
-  useEffect(() => {
-    if (!isAuthenticated || !adminKey) return;
-
-    // Cancel any pending requests from previous tab
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new AbortController for this tab
-    abortControllerRef.current = new AbortController();
-
-    if (activeTab === 'chat') {
-      fetchChatData();
-    } else if (activeTab === 'ai-chat') {
-      fetchAIChatData();
-    } else if (activeTab === 'gamification') {
-      (async () => {
-        try {
-          const res = await fetch('/api/gamification/leaderboards', {
-            headers: { 'Authorization': `Bearer ${adminKey}` },
-            signal: abortControllerRef.current?.signal,
-          });
-          if (!res.ok) {
-            console.warn('Failed to fetch gamification leaderboards:', res.status);
-            return;
-          }
-          const data = await res.json();
-          setGmLb({ streakTop: data.streakTop || [], missionTop: data.missionTop || [] });
-        } catch (error: any) {
-          if (error.name !== 'AbortError') {
-            console.error('Error fetching gamification data:', error);
-          }
-        }
-      })();
-    } else if (activeTab === 'rpc') {
-      fetchRpcStatus();
-    } else if (activeTab === 'notifications') {
-      fetchNotifStats();
-    } else if (activeTab === 'feedback') {
-      fetchFeedback();
-    }
-
-    // Cleanup on unmount or tab change
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [activeTab, isAuthenticated, adminKey]);
 
   // Gamification helpers
   const resetGamification = async (scope: 'streaks' | 'missions' | 'all') => {
@@ -1065,7 +1014,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || `Failed to reset ${scope}`);
       }
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Reset gamification error:', error);
         toast.error(error.message || 'Reset failed');
@@ -1158,7 +1107,7 @@ export default function AdminInviteDashboard() {
     summary: any;
   } | null>(null);
   const [rpcLoading, setRpcLoading] = useState(false);
-  const fetchRpcStatus = async () => {
+  const fetchRpcStatus = useCallback(async () => {
     if (!adminKey.trim()) return;
     setRpcLoading(true);
     try {
@@ -1169,7 +1118,7 @@ export default function AdminInviteDashboard() {
     } catch {
       toast.error('Failed RPC status');
     } finally { setRpcLoading(false); }
-  };
+  }, [adminKey]);
 
   // Notifications admin data
   const [notifStats, setNotifStats] = useState<PlantNotificationStats | null>(null);
@@ -1223,7 +1172,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to load notification keys');
       }
-    } catch (error) {
+    } catch {
       console.error('Failed to load notification keys:', error);
       toast.error('Failed to load notification keys');
     } finally {
@@ -1245,7 +1194,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to delete key');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete key');
     }
   };
@@ -1264,12 +1213,12 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to delete keys');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete keys');
     }
   };
 
-  const fetchNotifStats = async () => {
+  const fetchNotifStats = useCallback(async () => {
     if (!adminKey.trim()) return;
     setNotifLoading(true);
     try {
@@ -1291,11 +1240,71 @@ export default function AdminInviteDashboard() {
         const errorMessage = (data as { error?: string })?.error || 'Failed to load notifications stats';
         toast.error(errorMessage);
       }
-    } catch (error) {
+    } catch {
       console.error('Failed to load notifications stats:', error);
       toast.error('Failed to load notifications stats');
     } finally { setNotifLoading(false); }
-  };
+  }, [adminKey]);
+
+  // Fetch data when switching tabs - with AbortController cleanup
+  useEffect(() => {
+    if (!isAuthenticated || !adminKey) return;
+
+    // Cancel any pending requests from previous tab
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new AbortController for this tab
+    abortControllerRef.current = new AbortController();
+
+    if (activeTab === 'chat') {
+      fetchChatData();
+    } else if (activeTab === 'ai-chat') {
+      fetchAIChatData();
+    } else if (activeTab === 'gamification') {
+      (async () => {
+        try {
+          const res = await fetch('/api/gamification/leaderboards', {
+            headers: { 'Authorization': `Bearer ${adminKey}` },
+            signal: abortControllerRef.current?.signal,
+          });
+          if (!res.ok) {
+            console.warn('Failed to fetch gamification leaderboards:', res.status);
+            return;
+          }
+          const data = await res.json();
+          setGmLb({ streakTop: data.streakTop || [], missionTop: data.missionTop || [] });
+        } catch {
+          if (error.name !== 'AbortError') {
+            console.error('Error fetching gamification data:', error);
+          }
+        }
+      })();
+    } else if (activeTab === 'rpc') {
+      fetchRpcStatus();
+    } else if (activeTab === 'notifications') {
+      fetchNotifStats();
+    } else if (activeTab === 'feedback') {
+      fetchFeedback();
+    }
+
+    // Cleanup on unmount or tab change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [
+    activeTab,
+    adminKey,
+    fetchAIChatData,
+    fetchChatData,
+    fetchFeedback,
+    fetchNotifStats,
+    fetchRpcStatus,
+    isAuthenticated,
+  ]);
 
   const runNotifDebug = async () => {
     setLoading(true);
@@ -1333,7 +1342,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || 'Reset failed');
       }
-    } catch (error: any) {
+    } catch {
       if (error.name !== 'AbortError') {
         console.error('Reset notifications error:', error);
         toast.error(error.message || 'Reset failed');
@@ -1368,7 +1377,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || 'Failed to fetch eligible plants');
       }
-    } catch (error) {
+    } catch {
       console.error('Failed to fetch eligible plants:', error);
       toast.error('Failed to fetch eligible plants');
     } finally { setEligibleLoading(false); }
@@ -1400,7 +1409,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || 'Trigger failed');
       }
-    } catch (error) {
+    } catch {
       console.error('Trigger notifications failed:', error);
       toast.error('Trigger failed');
     } finally { setTriggerLoading(false); }
@@ -1441,7 +1450,7 @@ export default function AdminInviteDashboard() {
         } else {
           errors.push(`FID ${fid}: ${data?.error || 'Failed'}`);
         }
-      } catch (error) {
+      } catch {
         errors.push(`FID ${fid}: Network error`);
       }
       setSendNotifProgress({ sent, total: fidsToNotify.length, errors: [...errors] });
@@ -1476,7 +1485,7 @@ export default function AdminInviteDashboard() {
         toast.success(data?.completed ? 'Audience sync completed' : 'Audience sync checkpoint saved');
         fetchNotifStats();
       }
-    } catch (error) {
+    } catch {
       console.error('Base audience sync failed:', error);
       toast.error('Audience sync failed');
     } finally {
@@ -1509,7 +1518,7 @@ export default function AdminInviteDashboard() {
         setBaseCampaignPreview(data.preview);
         toast.success(`Preview ready for ${data.preview?.resolvedCount || 0} wallets`);
       }
-    } catch (error) {
+    } catch {
       console.error('Preview failed:', error);
       toast.error('Preview failed');
     } finally {
@@ -1545,7 +1554,7 @@ export default function AdminInviteDashboard() {
         toast.success(dryRun ? 'Dry run saved' : `Campaign processed: ${data.result?.sentCount || 0} sent`);
         fetchNotifStats();
       }
-    } catch (error) {
+    } catch {
       console.error('Campaign failed:', error);
       toast.error('Campaign failed');
     } finally {
@@ -1566,7 +1575,7 @@ export default function AdminInviteDashboard() {
         toast.success(type === 'warn' ? 'Warn debug run completed' : 'Expire debug run completed');
       }
       fetchNotifStats();
-    } catch (error) {
+    } catch {
       console.error('Debug run failed:', error);
       toast.error('Debug run failed');
     } finally { setLoading(false); }
@@ -1589,7 +1598,7 @@ export default function AdminInviteDashboard() {
         toast.success('Fence data reset');
         fetchNotifStats();
       }
-    } catch (error) {
+    } catch {
       console.error('Reset fence data failed:', error);
       toast.error('Reset fence data failed');
     } finally {
@@ -1632,7 +1641,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error('Failed to generate short URL');
       }
-    } catch (error) {
+    } catch {
       console.error('Failed to generate short URL', error);
       toast.error('Error generating short URL');
     } finally {

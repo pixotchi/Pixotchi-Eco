@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Land } from "@/lib/types";
-import { getTokenIdFromCoordinate, getTerrainNoise, visualToContract, getVisualTerrainType } from '@/lib/land-utils';
 import { LandLeaderboardEntry } from "@/lib/contracts";
+import { getTerrainNoise,getTokenIdFromCoordinate,getVisualTerrainType,visualToContract } from '@/lib/land-utils';
+import { Land } from "@/lib/types";
+import React,{ useEffect,useMemo,useRef,useState } from 'react';
 
 interface LandMapCanvasProps {
   center: { x: number; y: number }; // Visual coordinates

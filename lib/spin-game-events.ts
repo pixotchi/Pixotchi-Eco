@@ -1,8 +1,8 @@
 import {
-  AbiEventSignatureNotFoundError,
-  decodeEventLog,
-  parseAbiItem,
-  type Hex,
+AbiEventSignatureNotFoundError,
+decodeEventLog,
+parseAbiItem,
+type Hex,
 } from 'viem';
 
 export const SPIN_GAME_V2_COMMITTED_EVENT = parseAbiItem(

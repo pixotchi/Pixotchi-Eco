@@ -1,28 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import Image from "next/image";
-import { Card, CardContent } from "@/components/ui/card";
-import { Plant } from "@/lib/types";
-import { toast } from "react-hot-toast";
-import { useAccount, usePublicClient } from "wagmi";
+import { SponsoredBadge } from "@/components/paymaster-toggle";
+import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BoxGameTransaction from "@/components/transactions/box-game-transaction";
 import SpinGameTransaction from "@/components/transactions/spin-game-transaction";
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
-import { PIXOTCHI_NFT_ADDRESS, BOX_GAME_ABI, SPIN_GAME_ABI } from "@/lib/contracts";
-import { cn, formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { getBaseLogClient } from "@/lib/base-rpc";
+import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
 import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { SponsoredBadge } from "@/components/paymaster-toggle";
-import { keccak256, encodePacked, toHex, hexToBytes, RpcRequestError } from "viem";
-import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
-import { getBaseLogClient } from "@/lib/base-rpc";
 import {
-  SPIN_GAME_V2_COMMITTED_EVENT,
-  SPIN_GAME_V2_FORFEITED_EVENT,
-  SPIN_GAME_V2_PLAYED_EVENT,
+SPIN_GAME_V2_COMMITTED_EVENT,
+SPIN_GAME_V2_FORFEITED_EVENT,
+SPIN_GAME_V2_PLAYED_EVENT,
 } from "@/lib/spin-game-events";
+import { Plant } from "@/lib/types";
+import { cn,formatDuration,formatScore,formatTokenAmount } from "@/lib/utils";
+import Image from "next/image";
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { toast } from "react-hot-toast";
+import { encodePacked,hexToBytes,keccak256,toHex } from "viem";
+import { useAccount,usePublicClient } from "wagmi";
 
 type ArcadeDialogProps = {
   open: boolean;
@@ -142,6 +141,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
+  const plantId = plant.id;
   const [selectedGame, setSelectedGame] = useState<GameId>("box");
   const [seed, setSeed] = useState<number | null>(null);
   const [withStar, setWithStar] = useState(false);
@@ -238,19 +238,19 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   const persistLastSeenBlock = useCallback(
     async (block: number) => {
-      if (!address || !plant || Number.isNaN(block) || block <= 0) return;
+      if (!address || Number.isNaN(block) || block <= 0) return;
       setLastSeenCommitBlock((prev) => (prev !== null ? Math.max(prev, block) : block));
       try {
         await fetch("/api/spin/commit-state", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ address, plantId: plant.id, block }),
+          body: JSON.stringify({ address, plantId, block }),
         });
       } catch (error) {
         console.warn("Failed to persist spin commit block", error);
       }
     },
-    [address, plant]
+    [address, plantId]
   );
 
   // Generate a deterministic-ish default seed on open
@@ -262,12 +262,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   }, [open]);
 
   useEffect(() => {
-    if (!open || selectedGame !== "spin" || !address || !plant) return;
+    if (!open || selectedGame !== "spin" || !address) return;
 
     let cancelled = false;
     (async () => {
       try {
-        const params = new URLSearchParams({ address, plantId: String(plant.id) });
+        const params = new URLSearchParams({ address, plantId: String(plantId) });
         const res = await fetch(`/api/spin/commit-state?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
@@ -283,12 +283,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     return () => {
       cancelled = true;
     };
-  }, [open, selectedGame, address, plant]);
+  }, [open, selectedGame, address, plantId]);
 
   // Fetch cooldowns when dialog opens or when plant changes
   useEffect(() => {
-    if (!open || !publicClient || !plant) return;
-    const plantId = plant.id; // Capture stable value
+    if (!open || !publicClient) return;
+    const currentPlantId = plantId;
     let mounted = true;
     (async () => {
       try {
@@ -297,20 +297,20 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             address: PIXOTCHI_NFT_ADDRESS,
             abi: BOX_GAME_ABI,
             functionName: 'boxGameGetCoolDownTimePerNFT',
-            args: [BigInt(plantId)],
+            args: [BigInt(currentPlantId)],
           }) as Promise<bigint>,
           publicClient.readContract({
             address: PIXOTCHI_NFT_ADDRESS,
             abi: BOX_GAME_ABI,
             functionName: 'boxGameGetCoolDownTimeWithStar',
-            args: [BigInt(plantId)],
+            args: [BigInt(currentPlantId)],
           }) as Promise<bigint>,
         ]);
         if (mounted) setCooldown({ normal: Number(normal), star: Number(star) });
       } catch { }
     })();
     return () => { mounted = false; };
-  }, [open, plant?.id, publicClient]);
+  }, [open, plantId, publicClient]);
 
   // Countdown tick
   useEffect(() => {
@@ -328,7 +328,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   }, [open, cooldown.normal, cooldown.star]);
 
   const enrichPendingFromLogs = useCallback(async () => {
-    if (!plant || !address) return null;
+    if (!address) return null;
 
     try {
       const currentBlock = await baseLogClient.getBlockNumber();
@@ -358,7 +358,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           | typeof SPIN_GAME_V2_FORFEITED_EVENT,
       ) => {
         const argsFilter = address
-          ? { args: { nftId: BigInt(plant.id), player: address as `0x${string}` } }
+          ? { args: { nftId: BigInt(plantId), player: address as `0x${string}` } }
           : {};
 
         const baseFrom = filterBase.fromBlock ?? fromBlock;
@@ -444,12 +444,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       console.warn("Failed to reconcile spin logs", error);
       return null;
     }
-  }, [address, baseLogClient, plant]);
+  }, [address, baseLogClient, persistLastSeenBlock, plantId]);
 
   const hydratePendingState = useCallback(async () => {
-    if (!plant) return;
-
-    const localKey = `spinleaf:pending:${plant.id}`;
+    const localKey = `spinleaf:pending:${plantId}`;
     let pendingCommit: PendingCommit | null = null;
 
     if (typeof window !== "undefined") {
@@ -475,10 +473,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     const reconciled = await enrichPendingFromLogs();
 
     return reconciled ?? pendingCommit ?? null;
-  }, [enrichPendingFromLogs, plant]);
+  }, [enrichPendingFromLogs, plantId]);
 
   useEffect(() => {
-    if (!open || selectedGame !== "spin" || !publicClient || !plant) {
+    if (!open || selectedGame !== "spin" || !publicClient) {
       return;
     }
 
@@ -502,7 +500,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             address: PIXOTCHI_NFT_ADDRESS,
             abi: SPIN_GAME_ABI,
             functionName: "spinGameV2GetCoolDownTimePerNFT",
-            args: [BigInt(plant.id)],
+            args: [BigInt(plantId)],
           }) as Promise<bigint>,
           Promise.all(
             Array.from({ length: 6 }, (_, i) =>
@@ -562,7 +560,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     return () => {
       cancelled = true;
     };
-  }, [hydratePendingState, open, selectedGame, publicClient, plant, spinRefreshKey]);
+  }, [hydratePendingState, open, selectedGame, pendingEquals, plantId, publicClient, rewardsAreEqual, spinRefreshKey]);
 
   useEffect(() => {
     if (!open || selectedGame !== "spin" || !publicClient) return;
@@ -598,7 +596,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           }
 
           if (expiryBlocks === 0) {
-            const localKey = `spinleaf:pending:${plant?.id}`;
+            const localKey = `spinleaf:pending:${plantId}`;
             try {
               localStorage.removeItem(localKey);
             } catch { }
@@ -623,7 +621,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       cancelled = true;
       clearInterval(interval);
     };
-  }, [open, selectedGame, publicClient, spinMeta, plant]);
+  }, [open, selectedGame, publicClient, spinMeta, plantId]);
 
   useEffect(() => {
     if (!open || selectedGame !== "spin") return;
@@ -663,9 +661,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   }, [open, selectedGame, pendingSecret, spinMeta]);
 
   const commitmentHex = useMemo(() => {
-    if (!pendingSecret || !plant || !address) return null;
-    return createCommitment(pendingSecret, plant.id, address);
-  }, [pendingSecret, plant, address]);
+    if (!pendingSecret || !address) return null;
+    return createCommitment(pendingSecret, plantId, address);
+  }, [pendingSecret, plantId, address]);
 
   const secretHex = useMemo(() => {
     if (!pendingSecret) return undefined;
@@ -700,8 +698,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   // Force reset for users stuck with lost secrets from bugged version
   const handleForceReset = useCallback(() => {
-    if (!plant) return;
-    const localKey = `spinleaf:pending:${plant.id}`;
+    const localKey = `spinleaf:pending:${plantId}`;
     try {
       localStorage.removeItem(localKey);
     } catch { }
@@ -713,11 +710,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     const secret = crypto.getRandomValues(new Uint8Array(32));
     setPendingSecret(secret);
     toast.success('Spin reset. You can start a new spin now.');
-  }, [plant]);
+  }, [plantId]);
 
   const handleSpinStatus = useCallback(
     (mode: "commit" | "reveal") => (status: LifecycleStatus) => {
-      if (!plant) return;
       const txHash = status.statusData?.transactionReceipts?.[0]?.transactionHash as string | undefined;
 
       if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
@@ -730,7 +726,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       if (mode === "commit" && status.statusName === "success" && spinMeta && commitmentHex) {
         if (txHash && lastHandledCommitRef.current === txHash) return;
         if (txHash) lastHandledCommitRef.current = txHash;
-        const localKey = `spinleaf:pending:${plant.id}`;
+        const localKey = `spinleaf:pending:${plantId}`;
         const blockNumberValue = status.statusData?.transactionReceipts?.[0]?.blockNumber;
         const blockNumber = Number(blockNumberValue !== undefined ? blockNumberValue : BigInt("0"));
         const data: PendingCommit = {
@@ -762,13 +758,13 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       if (mode === "reveal" && status.statusName === "success") {
         if (txHash && lastHandledRevealRef.current === txHash) return;
         if (txHash) lastHandledRevealRef.current = txHash;
-        const localKey = `spinleaf:pending:${plant.id}`;
+        const localKey = `spinleaf:pending:${plantId}`;
         try {
           localStorage.removeItem(localKey);
         } catch { }
       }
     },
-    [address, commitmentHex, plant, secretHex, spinMeta, startWheelSpin],
+    [address, commitmentHex, persistLastSeenBlock, plantId, secretHex, spinMeta, startWheelSpin],
   );
 
   useEffect(() => {

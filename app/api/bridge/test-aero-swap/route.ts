@@ -6,10 +6,10 @@
  * GET /api/bridge/test-aero-swap?amount=639108
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
-import { formatUnits, encodeFunctionData, type Address, parseAbi } from 'viem';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
+import { encodeFunctionData,formatUnits,parseAbi,type Address } from 'viem';
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         success: true, 
         note: '✅ Would succeed IF adapter has balance' 
       };
-    } catch (e: any) {
+    } catch {
       results.tests.routerTransferFromAdapter = { 
         success: false, 
         error: e.shortMessage || e.message,
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
         note: 'Pool address exists and can receive tokens (assuming sender has balance)',
         poolAddress: WSOL_USDC_POOL,
       };
-    } catch (e) {
+    } catch {
       results.tests.poolCanReceive = { error: 'Unknown' };
     }
 
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
         usdcOut: formatUnits(amounts[1], 6),
         wethOut: formatUnits(amounts[2], 18),
       };
-    } catch (e: any) {
+    } catch {
       results.tests.getAmountsOut = { 
         success: false, 
         error: e.shortMessage || e.message,
@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
         data: swapData,
       });
       results.tests.swapSimulation = { success: true, note: 'Swap would succeed' };
-    } catch (e: any) {
+    } catch {
       const errorMsg = e.shortMessage || e.message || '';
       results.tests.swapSimulation = { 
         success: false, 

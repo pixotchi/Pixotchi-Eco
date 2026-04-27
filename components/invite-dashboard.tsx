@@ -1,25 +1,24 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAccount } from 'wagmi';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import {
-  Gift,
-  Copy,
-  Check,
-  Users,
-  TrendingUp,
-  Calendar,
-  Share2,
-  Plus,
-  Info
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { formatInviteUrl } from '@/lib/invite-utils';
 import { InviteStats } from '@/lib/types';
+import { useMutation,useQuery,useQueryClient } from '@tanstack/react-query';
+import {
+Calendar,
+Check,
+Copy,
+Gift,
+Info,
+Plus,
+Share2,
+Users
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAccount } from 'wagmi';
 
 interface InviteDashboardProps {
   open: boolean;

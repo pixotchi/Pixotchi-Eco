@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import Image from 'next/image';
-import { BuildingData, BuildingType } from '@/lib/types';
-import { CLIENT_ENV } from '@/lib/env-config';
-import { getBuildingName, getBuildingIcon } from '@/lib/utils';
 import { casinoIsBuilt } from '@/lib/contracts';
+import { CLIENT_ENV } from '@/lib/env-config';
+import { BuildingData,BuildingType } from '@/lib/types';
+import { getBuildingIcon,getBuildingName } from '@/lib/utils';
+import Image from 'next/image';
+import React,{ useCallback,useEffect,useMemo,useState } from 'react';
 
 // Casino feature flag - hide casino building when disabled
 const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
@@ -14,9 +14,12 @@ interface BuildingGridProps {
   buildings: BuildingData[];
   buildingType: BuildingType;
   selectedBuilding: BuildingData | null;
+  selectedBuildingType?: BuildingType;
   onBuildingSelect: (building: BuildingData) => void;
   currentBlock: bigint;
   landId: bigint;
+  gridClassName?: string;
+  denseLabels?: boolean;
 }
 
 // Individual building item memoized to prevent unnecessary re-renders
@@ -25,13 +28,15 @@ const BuildingItem = React.memo(({
   buildingType,
   isSelected,
   onBuildingSelect,
-  casinoBuiltState
+  casinoBuiltState,
+  denseLabels
 }: {
   building: BuildingData;
   buildingType: BuildingType;
   isSelected: boolean;
   onBuildingSelect: (building: BuildingData) => void;
   casinoBuiltState?: boolean | null;
+  denseLabels?: boolean;
 }) => {
   // Memoize building name and icon computation
   const { buildingName, buildingIcon } = useMemo(() => {
@@ -46,12 +51,14 @@ const BuildingItem = React.memo(({
   const isMaxLevel = effectiveLevel >= building.maxLevel;
 
   return (
-    <div className="space-y-1">
+    <div className={`${denseLabels ? 'w-20 min-w-0 ' : ''}space-y-1`}>
       {/* Building Icon Button */}
       <div className="flex justify-center">
         <button
           type="button"
           onClick={() => onBuildingSelect(building)}
+          aria-label={`Select ${buildingName}`}
+          aria-pressed={isSelected}
           className={`building-button p-0.5 transition-all rounded-md building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:cursor-default disabled:opacity-100 ${isSelected ? 'bg-primary' : 'bg-transparent'
             }`}
         >
@@ -78,17 +85,23 @@ const BuildingItem = React.memo(({
       </div>
 
       {/* Building Info */}
-      <div className="text-center">
-        <div className="text-xs font-semibold truncate" title={buildingName}>
+      <div className={`${denseLabels ? 'min-w-0 ' : ''}text-center`}>
+        <div
+          className={denseLabels
+            ? "min-h-[1.75rem] text-[11px] font-semibold leading-tight [overflow-wrap:anywhere]"
+            : "text-xs font-semibold truncate"
+          }
+          title={buildingName}
+        >
           {buildingName}
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className={denseLabels ? "text-[11px] leading-tight text-muted-foreground" : "text-xs text-muted-foreground"}>
           {`Lv. ${effectiveLevel}/${building.maxLevel}`}
         </div>
 
         {/* Upgrade Status */}
         {building.isUpgrading && (
-          <div className="text-xs text-primary animate-pulse">
+          <div className={denseLabels ? "text-[11px] leading-tight text-primary animate-pulse" : "text-xs text-primary animate-pulse"}>
             Upgrading...
           </div>
         )}
@@ -103,9 +116,12 @@ export default function BuildingGrid({
   buildings,
   buildingType,
   selectedBuilding,
+  selectedBuildingType = buildingType,
   onBuildingSelect,
   currentBlock,
-  landId
+  landId,
+  gridClassName,
+  denseLabels = false
 }: BuildingGridProps) {
   const [casinoBuiltState, setCasinoBuiltState] = useState<boolean | null>(null);
 
@@ -147,9 +163,9 @@ export default function BuildingGrid({
   }
 
   return (
-    <div className="grid grid-cols-4 gap-4 justify-items-center">
+    <div className={gridClassName || "grid grid-cols-4 gap-4 justify-items-center"}>
       {visibleBuildings.map((building) => {
-        const isSelected = selectedBuilding?.id === building.id;
+        const isSelected = selectedBuildingType === buildingType && selectedBuilding?.id === building.id;
 
         return (
           <BuildingItem
@@ -159,6 +175,7 @@ export default function BuildingGrid({
             isSelected={isSelected}
             onBuildingSelect={handleBuildingSelect}
             casinoBuiltState={casinoBuiltState}
+            denseLabels={denseLabels}
           />
         );
       })}

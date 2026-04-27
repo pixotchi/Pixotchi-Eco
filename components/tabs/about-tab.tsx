@@ -1,23 +1,55 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Book, Gamepad2, Tractor, Gift, Copy, Check, Users, Calendar, Plus, Info, Flame, Shield, MessageCircle, Swords, Box, MessageSquare } from "lucide-react";
-import Image from "next/image";
-import { useState, useEffect, useId } from "react";
-import { openExternalUrl } from "@/lib/open-external";
-import { toast } from 'react-hot-toast';
-import { formatInviteUrl, INVITE_CONFIG } from '@/lib/invite-utils';
-import { InviteStats } from '@/lib/types';
-import { useAccount } from 'wagmi';
-import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { useSlideshow } from "@/components/tutorial";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { Textarea } from "@/components/ui/textarea";
-import packageJson from '@/package.json';
-import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useFrameContext } from "@/lib/frame-context";
+import { INVITE_CONFIG } from '@/lib/invite-utils';
+import { openExternalUrl } from "@/lib/open-external";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { InviteStats } from '@/lib/types';
+import packageJson from '@/package.json';
+import { ArrowUpRight,Book,Calendar,Check,Copy,Gift,MessageCircle,Plus } from "lucide-react";
+import Image from "next/image";
+import { useCallback,useEffect,useId,useRef,useState } from "react";
+import { toast } from 'react-hot-toast';
+import { useAccount } from 'wagmi';
+
+const ABOUT_SCENE_SPRITES = [
+  { src: "/icons/plantGrowth.gif", alt: "", width: 190, height: 190, className: "left-[6%] top-[4%] w-[30%]", animation: "about-scene-bob 6s ease-in-out infinite" },
+  { src: "/icons/plantGrowth4.gif", alt: "", width: 260, height: 260, className: "left-[36%] top-[26%] w-[41%]", animation: "about-scene-bob 7s ease-in-out infinite -1s" },
+  { src: "/icons/plantGrowth2.gif", alt: "", width: 150, height: 150, className: "right-[8%] top-[10%] w-[24%]", animation: "about-scene-bob 5s ease-in-out infinite -2s" },
+  { src: "/icons/plantGrowth5.gif", alt: "", width: 130, height: 130, className: "bottom-[10%] left-[16%] w-[20%]", animation: "about-scene-bob 8s ease-in-out infinite -3s" },
+  { src: "/icons/plantGrowth6.gif", alt: "", width: 170, height: 170, className: "bottom-[4%] right-[8%] w-[27%]", animation: "about-scene-bob 6.5s ease-in-out infinite -0.5s" },
+  { src: "/icons/farmer-house.svg", alt: "", width: 110, height: 110, className: "left-[28%] top-[18%] w-[17%]", animation: "about-scene-bob 7.5s ease-in-out infinite -1.5s" },
+  { src: "/icons/bee-house.svg", alt: "", width: 140, height: 140, className: "left-[4%] top-[50%] w-[22%]", animation: "about-scene-bob 6.2s ease-in-out infinite -2.4s" },
+  { src: "/icons/stake-house.svg", alt: "", width: 120, height: 120, className: "right-[4%] top-[44%] w-[19%]", animation: "about-scene-bob 7.8s ease-in-out infinite -0.8s" },
+  { src: "/icons/soil-factory.svg", alt: "", width: 100, height: 100, className: "bottom-[20%] left-[44%] w-[16%]", animation: "about-scene-bob 5.6s ease-in-out infinite -3.2s" },
+  { src: "/icons/solar-panels.svg", alt: "", width: 96, height: 96, className: "left-[48%] top-[2%] w-[15%]", animation: "about-scene-bob 6.8s ease-in-out infinite -1.1s" },
+] as const;
+
+const AboutWorldScene = () => (
+  <div className="hidden xl:flex xl:min-h-[390px] xl:items-center xl:justify-center" aria-hidden="true">
+    <div className="relative aspect-square w-full max-w-[440px]">
+      {ABOUT_SCENE_SPRITES.map((sprite) => (
+        <Image
+          key={sprite.src}
+          src={sprite.src}
+          alt={sprite.alt}
+          width={sprite.width}
+          height={sprite.height}
+          className={`absolute h-auto select-none object-contain [image-rendering:pixelated] drop-shadow-[0_14px_22px_rgba(15,23,42,0.18)] ${sprite.className}`}
+          style={{ animation: sprite.animation }}
+          unoptimized={sprite.src.endsWith(".gif")}
+        />
+      ))}
+    </div>
+  </div>
+);
 
 const InfoCard = ({
   icon,
@@ -96,28 +128,17 @@ export default function AboutTab() {
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const statsRef = useRef<InviteStats | null>(null);
 
-  // Load invite stats and user codes when component mounts
   useEffect(() => {
-    if (address && INVITE_CONFIG.SYSTEM_ENABLED) {
-      loadInviteStats();
-      loadUserCodes();
-    }
-  }, [address]);
+    statsRef.current = stats;
+  }, [stats]);
 
-  // Refresh when tab becomes visible
-  useEffect(() => {
-    if (isVisible && address && INVITE_CONFIG.SYSTEM_ENABLED) {
-      loadInviteStats();
-      loadUserCodes();
-    }
-  }, [isVisible, address]);
-
-  const loadInviteStats = async () => {
+  const loadInviteStats = useCallback(async () => {
     if (!address) return;
 
     // Only show loading state if we have no stats yet
-    if (!stats) {
+    if (!statsRef.current) {
       setLoading(true);
     }
     try {
@@ -138,9 +159,9 @@ export default function AboutTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [address]);
 
-  const loadUserCodes = async () => {
+  const loadUserCodes = useCallback(async () => {
     if (!address) return;
 
     try {
@@ -165,7 +186,23 @@ export default function AboutTab() {
       console.error('Error loading user codes:', error);
       // Don't show error to user as this is not critical
     }
-  };
+  }, [address]);
+
+  // Load invite stats and user codes when component mounts
+  useEffect(() => {
+    if (address && INVITE_CONFIG.SYSTEM_ENABLED) {
+      loadInviteStats();
+      loadUserCodes();
+    }
+  }, [address, loadInviteStats, loadUserCodes]);
+
+  // Refresh when tab becomes visible
+  useEffect(() => {
+    if (isVisible && address && INVITE_CONFIG.SYSTEM_ENABLED) {
+      loadInviteStats();
+      loadUserCodes();
+    }
+  }, [isVisible, address, loadInviteStats, loadUserCodes]);
 
   const generateInviteCode = async () => {
     if (!address) {
@@ -291,7 +328,7 @@ export default function AboutTab() {
 
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 xl:mx-auto xl:max-w-5xl">
 
       {/* Invite Section - Only show if system is enabled */}
       {INVITE_CONFIG.SYSTEM_ENABLED && (
@@ -425,8 +462,9 @@ export default function AboutTab() {
         </div>
       )}
 
+      <div className="space-y-8 xl:grid xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch xl:gap-5 xl:space-y-0">
       {/* Description */}
-      <Card>
+      <Card className="xl:h-fit">
         <CardContent>
           <p className="text-muted-foreground mb-4">
             <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
@@ -435,12 +473,12 @@ export default function AboutTab() {
             Every player follows a different strategy. Some invest in Lands for long-term, passive growth, while others push their plants aggressively using the marketplace to climb rankings faster at a higher cost.
           </p>
 
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="space-y-3 xl:flex xl:flex-wrap xl:gap-2 xl:space-y-0">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:contents">
               <Button
                 variant="secondary"
                 onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
-                className="w-full"
+                className="w-full xl:w-auto"
               >
                 <Book className="w-4 h-4 mr-2" />
                 Documentation
@@ -448,22 +486,23 @@ export default function AboutTab() {
               <Button
                 variant="secondary"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
-                className="w-full"
+                className="w-full xl:w-auto"
               >
                 Status
               </Button>
             </div>
             {enabled && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 xl:contents">
                 <Button
                   onClick={() => start({ reset: true })}
-                  className="bg-value text-white hover:opacity-90"
+                  className="bg-value text-white hover:opacity-90 xl:w-auto"
                 >
                   Tutorial
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowFeedbackDialog(true)}
+                  className="xl:w-auto"
                 >
                   Feedback
                 </Button>
@@ -473,6 +512,7 @@ export default function AboutTab() {
               <Button
                 variant="outline"
                 onClick={() => setShowFeedbackDialog(true)}
+                className="xl:w-auto"
               >
                 Feedback
               </Button>
@@ -533,15 +573,15 @@ export default function AboutTab() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4">
+      <div className="space-y-4 xl:flex xl:h-full xl:flex-col xl:justify-between xl:gap-4 xl:space-y-0 xl:rounded-lg xl:border xl:border-border xl:bg-card xl:p-4 xl:shadow-sm">
         {/* Version Number */}
-        <div className="text-center">
+        <div className="text-center xl:order-2 xl:border-t xl:border-border/60 xl:pt-4">
           <span className="text-xs text-muted-foreground/60 font-mono">
             v{packageJson.version}
           </span>
         </div>
 
-        <div className="text-center">
+        <div className="text-center xl:order-1 xl:flex xl:flex-1 xl:flex-col xl:justify-center">
           <h3 className="text-sm font-semibold mb-2">Join our Community</h3>
           <div className="flex justify-center space-x-4">
             <button
@@ -561,12 +601,11 @@ export default function AboutTab() {
               <span className="sr-only">Telegram</span>
             </button>
           </div>
-        </div>
-
-        <div>
-          <BaseAnimatedLogo className="mx-auto w-full" />
+          <BaseAnimatedLogo className="mx-auto mt-4 w-full" />
         </div>
       </div>
+      </div>
+      <AboutWorldScene />
     </div>
   );
 }

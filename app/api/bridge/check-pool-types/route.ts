@@ -6,9 +6,9 @@
  * GET /api/bridge/check-pool-types
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
 import { type Address } from 'viem';
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
         if (poolFactory.toLowerCase() !== AERODROME_FACTORY.toLowerCase()) {
           results.issues.push(`⚠️ wSOL/USDC pool factory (${poolFactory}) doesn't match expected (${AERODROME_FACTORY})`);
         }
-      } catch (e) {
+      } catch {
         results.pools.wsolUsdc.poolDetails = { error: 'Could not read pool properties' };
       }
     }
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
         if (poolFactory.toLowerCase() !== AERODROME_FACTORY.toLowerCase()) {
           results.issues.push(`⚠️ USDC/WETH pool factory (${poolFactory}) doesn't match expected (${AERODROME_FACTORY})`);
         }
-      } catch (e) {
+      } catch {
         results.pools.usdcWeth.poolDetails = { error: 'Could not read pool properties' };
       }
     }

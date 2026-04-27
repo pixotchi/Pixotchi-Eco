@@ -1,40 +1,39 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useAccount, usePublicClient } from "wagmi";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
-import { Plant } from "@/lib/types";
-import { getAliveTokenIds, getPlantsInfoExtended, getPlantsByOwner, getTokenBalance, getLandLeaderboard, getKillCooldown, getRevivePrice } from "@/lib/contracts";
-import { formatScoreShort, formatEthShort, formatScore, formatAddress, cn, getFenceStatus, formatTokenAmount } from "@/lib/utils";
+import { SponsoredBadge } from "@/components/paymaster-toggle";
+import PlantProfileDialog from "@/components/plant-profile-dialog";
 import PlantImage from "@/components/PlantImage";
-import { Trophy, Skull, Sword } from "lucide-react";
-import Image from "next/image";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
 import AttackTransaction from "@/components/transactions/attack-transaction";
 import KillTransaction from "@/components/transactions/kill-transaction";
 import ReviveTransaction from "@/components/transactions/revive-transaction";
-import toast from "react-hot-toast";
-import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { decodeEventLog } from "viem";
-import { usePaymaster } from "@/lib/paymaster-context";
-import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { SponsoredBadge } from "@/components/paymaster-toggle";
-import { ToggleGroup } from "@/components/ui/toggle-group";
-import { useTabVisibility } from "@/lib/tab-visibility-context";
-import PlantProfileDialog from "@/components/plant-profile-dialog";
-import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
+import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { ToggleGroup } from "@/components/ui/toggle-group";
+import { WalletAvatar } from "@/components/ui/wallet-avatar";
+import { useWebQueryState } from "@/hooks/useWebQueryState";
+import { getBaseTransactionReceipt } from "@/lib/base-rpc";
+import { getAliveTokenIds,getKillCooldown,getLandLeaderboard,getPlantsByOwner,getPlantsInfoExtended,getRevivePrice,getTokenBalance } from "@/lib/contracts";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { postMissionProgress } from "@/lib/mission-tracking";
-import { useWebQueryState } from "@/hooks/useWebQueryState";
-import { getBaseTransactionReceipt } from "@/lib/base-rpc";
-import { WalletAvatar } from "@/components/ui/wallet-avatar";
+import { usePaymaster } from "@/lib/paymaster-context";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { Plant } from "@/lib/types";
+import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
+import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
+import { Skull,Sword,Terminal } from "lucide-react";
+import Image from "next/image";
+import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
+import toast from "react-hot-toast";
+import { decodeEventLog } from "viem";
+import { useAccount,usePublicClient } from "wagmi";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -55,12 +54,67 @@ type RocksLeaderboardEntry = {
   name?: string | null;
 };
 
+type LandLeaderboardRow = {
+  rank: number;
+  landId: number;
+  name: string;
+  exp: number;
+};
+
+type RankedRow = {
+  rank: number;
+};
+
 const ITEMS_PER_PAGE = 12;
+const DESKTOP_ITEMS_PER_PAGE = 20;
+const DESKTOP_COLUMN_SIZE = 10;
 
 // Client-side cache duration for stake data (24 hours since cron runs once at midnight)
 const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const LAND_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
+
+function getTotalPages(itemCount: number, pageSize: number) {
+  return Math.ceil(itemCount / pageSize) || 1;
+}
+
+function getBoundedPage(page: number, itemCount: number, pageSize: number) {
+  return Math.min(Math.max(page, 1), getTotalPages(itemCount, pageSize));
+}
+
+function getPageRows<T>(rows: T[], page: number, pageSize: number) {
+  const activePage = getBoundedPage(page, rows.length, pageSize);
+  const start = (activePage - 1) * pageSize;
+  return rows.slice(start, start + pageSize);
+}
+
+function splitDesktopRows<T>(rows: T[]) {
+  return [
+    rows.slice(0, DESKTOP_COLUMN_SIZE),
+    rows.slice(DESKTOP_COLUMN_SIZE, DESKTOP_ITEMS_PER_PAGE),
+  ];
+}
+
+function getRankRangeLabel(rows: RankedRow[]) {
+  if (rows.length === 0) return "No entries";
+  const firstRank = rows[0]?.rank;
+  const lastRank = rows[rows.length - 1]?.rank;
+  return firstRank === lastRank ? `Rank #${firstRank}` : `Ranks #${firstRank}-${lastRank}`;
+}
+
+function hasActiveFence(plant: LeaderboardPlant) {
+  const fenceInfo = getFenceStatus(plant);
+  return fenceInfo.hasActiveFence;
+}
+
+function isDead(p: { status: number }) {
+  return p.status === 4;
+}
+
+function nowSec() {
+  return Math.floor(Date.now() / 1000);
+}
 
 export default function LeaderboardTab() {
   const gamificationDisabled = CLIENT_ENV.GAMIFICATION_DISABLED;
@@ -82,7 +136,7 @@ export default function LeaderboardTab() {
     return isSolana && twinAddress ? twinAddress as `0x${string}` : evmAddress;
   }, [isSolana, twinAddress, evmAddress]);
   const [plants, setPlants] = useState<LeaderboardPlant[]>([]);
-  const [landRows, setLandRows] = useState<Array<{ rank: number; landId: number; name: string; exp: number }>>([]);
+  const [landRows, setLandRows] = useState<LandLeaderboardRow[]>([]);
   const [stakeRows, setStakeRows] = useState<StakeLeaderboardEntry[]>([]);
   const [rocksRows, setRocksRows] = useState<RocksLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -183,14 +237,15 @@ export default function LeaderboardTab() {
 
   // Cache for land leaderboard data (5 minutes)
   const landDataCacheRef = useRef<{
-    data: Array<{ rank: number; landId: number; name: string; exp: number }> | null;
+    data: LandLeaderboardRow[] | null;
     timestamp: number;
   }>({ data: null, timestamp: 0 });
-  const LAND_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   // Request deduplication refs to prevent multiple simultaneous calls
   const fetchLeaderboardDataPendingRef = useRef<boolean>(false);
   const fetchMyPlantsPendingRef = useRef<string | null>(null);
+  const leaderboardDataLoadedRef = useRef(false);
+  const stakeDataLoadedRef = useRef(false);
 
   const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
     if (!hash) return;
@@ -208,11 +263,11 @@ export default function LeaderboardTab() {
             toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
             return;
           }
-        } catch (e) { }
+        } catch { }
       }
       // Fallback
       toast.success('Attack confirmed', { id: 'attack-result' });
-    } catch (e) {
+    } catch {
       // Swallow decoding errors; keep UX smooth
     }
   }, []);
@@ -231,7 +286,7 @@ export default function LeaderboardTab() {
             toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
             return true;
           }
-        } catch (e) { }
+        } catch { }
       }
     } catch { }
     return false;
@@ -246,7 +301,7 @@ export default function LeaderboardTab() {
     fetchLeaderboardDataPendingRef.current = true;
 
     // Only show loader on initial data fetch
-    if (plants.length === 0) {
+    if (!leaderboardDataLoadedRef.current) {
       setLoading(true);
     }
     setError(null);
@@ -268,6 +323,7 @@ export default function LeaderboardTab() {
         }));
 
       setPlants(sortedPlants);
+      leaderboardDataLoadedRef.current = true;
       // Fetch lands leaderboard as well (with caching)
       try {
         const now = Date.now();
@@ -315,12 +371,13 @@ export default function LeaderboardTab() {
     ) {
       console.log(`📊 [Stake] Using cached data (age: ${Math.round(cacheAge / 1000)}s)`);
       setStakeRows(stakeDataCacheRef.current.data);
+      stakeDataLoadedRef.current = true;
       return;
     }
 
     // Fetch fresh data if cache expired or first load
     // Only show loading spinner if we have no existing data
-    if (stakeRows.length === 0) {
+    if (!stakeDataLoadedRef.current) {
       setStakeLoading(true);
     }
     try {
@@ -342,6 +399,7 @@ export default function LeaderboardTab() {
         };
 
         setStakeRows(sortedStakes);
+        stakeDataLoadedRef.current = true;
         console.log(`📊 [Stake] Cached fresh data (${sortedStakes.length} stakers)`);
       }
     } catch (error) {
@@ -451,7 +509,7 @@ export default function LeaderboardTab() {
       if (fetchMyPlantsPendingRef.current === address) {
         setMyPlants(owned);
       }
-    } catch (e) {
+    } catch {
       // ignore
     } finally {
       // Clear pending flag only if address hasn't changed
@@ -543,31 +601,24 @@ export default function LeaderboardTab() {
     }
   };
 
-  const isUserPlant = (plant: LeaderboardPlant) => {
+  const isUserPlant = useCallback((plant: LeaderboardPlant) => {
     // Robust ownership detection: compare owner to connected address and fall back to myPlants list
     const addr = address ? address.toLowerCase() : null;
     const ownerMatches = addr ? plant.owner?.toLowerCase() === addr : false;
     const listedAsMine = myPlants.some((p) => p.id === plant.id);
     return ownerMatches || listedAsMine;
-  };
-
-  const hasActiveFence = (plant: LeaderboardPlant) => {
-    const fenceInfo = getFenceStatus(plant);
-    return fenceInfo.hasActiveFence;
-  };
+  }, [address, myPlants]);
 
   // Eligibility checks (client-side guardrails based on app rules)
-  const isDead = (p: { status: number }) => p.status === 4;
-  const nowSec = () => Math.floor(Date.now() / 1000);
-  const attackerCooldownOver = (attacker: Plant) => {
+  const attackerCooldownOver = useCallback((attacker: Plant) => {
     const last = Number(attacker.lastAttackUsed || '0');
     return nowSec() >= last + 30 * 60; // 30 minutes
-  };
-  const targetCooldownOver = (target: LeaderboardPlant) => {
+  }, []);
+  const targetCooldownOver = useCallback((target: LeaderboardPlant) => {
     const last = Number(target.lastAttacked || '0');
     return nowSec() >= last + 60 * 60; // 60 minutes
-  };
-  const canAttackWith = (attacker: Plant, target: LeaderboardPlant) => {
+  }, []);
+  const canAttackWith = useCallback((attacker: Plant, target: LeaderboardPlant) => {
     if (!attacker || !target) return false;
     if (isDead(attacker) || isDead(target)) return false;
     if (attacker.id === target.id) return false;
@@ -576,8 +627,8 @@ export default function LeaderboardTab() {
     if (!targetCooldownOver(target)) return false;
     if (hasActiveFence(target)) return false;
     return true;
-  };
-  const eligibleAttackers = (target: LeaderboardPlant): Plant[] => myPlants.filter((p) => canAttackWith(p, target));
+  }, [attackerCooldownOver, targetCooldownOver]);
+  const eligibleAttackers = useCallback((target: LeaderboardPlant): Plant[] => myPlants.filter((p) => canAttackWith(p, target)), [canAttackWith, myPlants]);
 
   const handlePlantImageClick = (plant: LeaderboardPlant) => {
     setSelectedPlantForProfile(plant);
@@ -586,7 +637,7 @@ export default function LeaderboardTab() {
     postMissionProgress({ address, taskId: 's2_visit_profile' }).catch(() => { });
   };
 
-  const isAttackable = (plant: LeaderboardPlant) => !isUserPlant(plant) && !plant.isDead && eligibleAttackers(plant).length > 0 && !hasActiveFence(plant);
+  const isAttackable = useCallback((plant: LeaderboardPlant) => !isUserPlant(plant) && !plant.isDead && eligibleAttackers(plant).length > 0 && !hasActiveFence(plant), [eligibleAttackers, isUserPlant]);
 
   // Apply filters: My Plants filter takes priority, then All/Attackable mode
   const filteredPlants = useMemo(() => {
@@ -605,33 +656,514 @@ export default function LeaderboardTab() {
     }
 
     return filtered;
-  }, [plants, showOnlyMyPlants, filterMode, myPlants, address]);
+  }, [plants, showOnlyMyPlants, filterMode, isUserPlant, isAttackable]);
 
   const totalItems = filteredPlants.length;
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentPlants = filteredPlants.slice(startIndex, endIndex);
+  const totalPages = getTotalPages(totalItems, ITEMS_PER_PAGE);
+  const desktopTotalPages = getTotalPages(totalItems, DESKTOP_ITEMS_PER_PAGE);
+  const currentPlants = getPageRows(filteredPlants, currentPage, ITEMS_PER_PAGE);
+  const desktopPlants = getPageRows(filteredPlants, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
   // Lands pagination
   const totalLandItems = landRows.length;
-  const totalLandPages = Math.ceil(totalLandItems / ITEMS_PER_PAGE) || 1;
-  const startLandIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endLandIndex = startLandIndex + ITEMS_PER_PAGE;
-  const currentLands = landRows.slice(startLandIndex, endLandIndex);
+  const totalLandPages = getTotalPages(totalLandItems, ITEMS_PER_PAGE);
+  const desktopLandPages = getTotalPages(totalLandItems, DESKTOP_ITEMS_PER_PAGE);
+  const currentLands = getPageRows(landRows, currentPage, ITEMS_PER_PAGE);
+  const desktopLands = getPageRows(landRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
   // Stake pagination
   const totalStakeItems = stakeRows.length;
-  const totalStakePages = Math.ceil(totalStakeItems / ITEMS_PER_PAGE) || 1;
-  const startStakeIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endStakeIndex = startStakeIndex + ITEMS_PER_PAGE;
-  const currentStakes = stakeRows.slice(startStakeIndex, endStakeIndex);
+  const totalStakePages = getTotalPages(totalStakeItems, ITEMS_PER_PAGE);
+  const desktopStakePages = getTotalPages(totalStakeItems, DESKTOP_ITEMS_PER_PAGE);
+  const currentStakes = getPageRows(stakeRows, currentPage, ITEMS_PER_PAGE);
+  const desktopStakes = getPageRows(stakeRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
   const totalRockItems = rocksRows.length;
-  const totalRockPages = Math.ceil(totalRockItems / ITEMS_PER_PAGE) || 1;
-  const startRockIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endRockIndex = startRockIndex + ITEMS_PER_PAGE;
-  const currentRocks = rocksRows.slice(startRockIndex, endRockIndex);
+  const totalRockPages = getTotalPages(totalRockItems, ITEMS_PER_PAGE);
+  const desktopRockPages = getTotalPages(totalRockItems, DESKTOP_ITEMS_PER_PAGE);
+  const currentRocks = getPageRows(rocksRows, currentPage, ITEMS_PER_PAGE);
+  const desktopRocks = getPageRows(rocksRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
+
+  function renderPagination(totalPageCount: number, className?: string) {
+    if (totalPageCount <= 1) return null;
+
+    const activePage = getBoundedPage(currentPage, totalPageCount, 1);
+
+    return (
+      <div className={cn("flex justify-center items-center pt-4", className)}>
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(activePage - 1, 1))}
+            disabled={activePage === 1}
+          >
+            Back
+          </Button>
+          <span className="flex items-center px-3 text-sm">
+            Page {activePage} of {totalPageCount}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(activePage + 1, totalPageCount))}
+            disabled={activePage === totalPageCount}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderDesktopColumns<T extends RankedRow>(
+    rows: T[],
+    renderRow: (row: T, compact?: boolean) => React.ReactNode,
+    fillHeight = false
+  ) {
+    const columns = splitDesktopRows(rows);
+
+    return (
+      <div className={cn("hidden xl:grid xl:grid-cols-2 xl:gap-4", fillHeight && "xl:min-h-0 xl:flex-1")}>
+        {columns.map((column, columnIndex) => (
+          <div
+            key={columnIndex}
+            className={cn(
+              "xl:flex xl:flex-col xl:rounded-md xl:border xl:border-border/70 xl:bg-background/10 xl:px-3 xl:py-2",
+              fillHeight && "xl:min-h-0"
+            )}
+          >
+            <div className="flex h-8 flex-none items-center justify-between border-b border-border/60 text-xs font-semibold text-muted-foreground">
+              <span>{getRankRangeLabel(column)}</span>
+            </div>
+            <div className={cn(
+              "divide-y divide-border",
+              fillHeight
+                ? "min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                : "overflow-visible"
+            )}>
+              {column.length > 0 ? (
+                column.map((row) => renderRow(row, true))
+              ) : (
+                <div className="flex min-h-[160px] items-center justify-center text-sm text-muted-foreground">
+                  No more entries
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function renderResponsiveRows<T extends RankedRow>(
+    mobileRows: T[],
+    desktopRows: T[],
+    mobilePageCount: number,
+    desktopPageCount: number,
+    renderRow: (row: T, compact?: boolean) => React.ReactNode,
+    fillDesktop = false
+  ) {
+    return (
+      <div className={cn("space-y-4", fillDesktop && "xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0")}>
+        <div className="space-y-2 divide-y divide-border -mx-4 px-4 xl:hidden">
+          {mobileRows.map((row) => renderRow(row))}
+        </div>
+
+        {renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
+
+        {renderPagination(mobilePageCount, "xl:hidden")}
+        {renderPagination(desktopPageCount, "hidden xl:flex xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:pt-3")}
+      </div>
+    );
+  }
+
+  const renderPlantRow = (plant: LeaderboardPlant, compact = false) => {
+    const canShowAttack =
+      !isUserPlant(plant) &&
+      !plant.isDead &&
+      eligibleAttackers(plant).length > 0 &&
+      !hasActiveFence(plant);
+    const isMine = isUserPlant(plant);
+    const canShowKill = !isMine && plant.isDead;
+    const canShowRevive = isMine && plant.isDead;
+    const plantImageSize = compact ? 28 : 48;
+
+    return (
+      <div
+        key={plant.id}
+        className={cn(
+          compact ? "py-0.5 transition-all" : "py-3 transition-all",
+          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3",
+          plant.isDead && "opacity-60"
+        )}
+      >
+        <div className={cn("flex items-center space-x-2", compact && "min-h-10")}>
+          <div className={cn("flex items-center justify-center", compact ? "w-6" : "w-8")}>
+            <div className={`flex items-center ${getRankColor(plant.rank)}`}>
+              {plant.rank <= 3 ? (
+                getRankIcon(plant.rank)
+              ) : (
+                <span className="text-sm font-semibold">#{plant.rank}</span>
+              )}
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity",
+              compact && "flex h-8 w-8 items-center justify-center"
+            )}
+            onClick={() => handlePlantImageClick(plant)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handlePlantImageClick(plant);
+              }
+            }}
+            aria-label="View plant profile"
+          >
+            <PlantImage
+              selectedPlant={plant}
+              width={plantImageSize}
+              height={plantImageSize}
+              className={compact ? "h-7 w-7" : ""}
+            />
+            {hasActiveFence(plant) && (
+              <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
+                <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} />
+              </div>
+            )}
+            {plant.isDead && (
+              <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
+                <Skull className="w-3 h-3 text-red-500" />
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {compact ? (
+              <div className="flex min-w-0 items-baseline gap-2">
+                <h4 className="min-w-0 truncate pr-2 text-sm font-semibold">
+                  {plant.name || `Plant #${plant.id}`}
+                  {isMine && <span className="ml-1 text-xs text-primary font-medium">(You)</span>}
+                </h4>
+                <span className="flex-none text-xs text-muted-foreground">LvL {plant.level}</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center space-x-2">
+                  <div className="relative min-w-0">
+                    <h4 className="font-semibold text-base truncate pr-6">
+                      {plant.name || `Plant #${plant.id}`}
+                      {isMine && (
+                        <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                      )}
+                    </h4>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
+                  <span>LvL {plant.level}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-2 text-right">
+            {compact ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1 text-foreground">
+                  <Image src="/icons/pts.svg" alt="Points" width={12} height={12} />
+                  <span className="text-sm font-bold">{formatScoreShort(plant.score)}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Image src="/icons/Star.svg" alt="Stars" width={11} height={11} />
+                  <span>{plant.stars}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Image src="/icons/ethlogo.svg" alt="ETH" width={11} height={11} />
+                  <span>{formatEthShort(plant.rewards)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-end space-y-1">
+                <div className="flex items-center space-x-1">
+                  <Image src="/icons/pts.svg" alt="Points" width={16} height={16} />
+                  <span className="text-base font-bold">{formatScoreShort(plant.score)}</span>
+                </div>
+                <div className="flex items-center space-x-3 text-sm text-muted-foreground">
+                  <div className="flex items-center space-x-1">
+                    <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} />
+                    <span>{plant.stars}</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={14} height={14} />
+                    <span>{formatEthShort(plant.rewards)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {canShowAttack && (
+              compact ? (
+                <button
+                  type="button"
+                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
+                  aria-label="Attack this plant"
+                  title="Attack"
+                >
+                  <Sword className="w-4 h-4" />
+                </button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-md"
+                  onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
+                  aria-label="Attack this plant"
+                  title="Attack"
+                >
+                  <Sword className="w-4 h-4" />
+                </Button>
+              )
+            )}
+            {canShowKill && (
+              compact ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    !killCooldown.canKill && "opacity-50"
+                  )}
+                  onClick={() => {
+                    if (!killCooldown.canKill) {
+                      setCooldownDialogOpen(true);
+                    } else {
+                      setTargetPlant(plant);
+                      setSelectedKillerId(null);
+                      setKillDialogOpen(true);
+                    }
+                  }}
+                  aria-label="Kill dead plant to collect star"
+                  title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
+                >
+                  <Skull className="w-4 h-4" />
+                </button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={cn("rounded-md", !killCooldown.canKill && "opacity-50")}
+                  onClick={() => {
+                    if (!killCooldown.canKill) {
+                      setCooldownDialogOpen(true);
+                    } else {
+                      setTargetPlant(plant);
+                      setSelectedKillerId(null);
+                      setKillDialogOpen(true);
+                    }
+                  }}
+                  aria-label="Kill dead plant to collect star"
+                  title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
+                >
+                  <Skull className="w-4 h-4" />
+                </Button>
+              )
+            )}
+            {canShowRevive && (
+              compact ? (
+                <button
+                  type="button"
+                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
+                  aria-label="Revive your plant"
+                  title="Revive"
+                >
+                  <Image
+                    src="/icons/skull.png"
+                    alt="Revive plant"
+                    width={16}
+                    height={16}
+                    className="h-4 w-4 object-contain"
+                  />
+                </button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-md"
+                  onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
+                  aria-label="Revive your plant"
+                  title="Revive"
+                >
+                  <Image
+                    src="/icons/skull.png"
+                    alt="Revive plant"
+                    width={16}
+                    height={16}
+                    className="h-4 w-4 object-contain"
+                  />
+                </Button>
+              )
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLandRow = (row: LandLeaderboardRow, compact = false) => (
+    <div key={row.landId} className={compact ? "py-2" : "py-3"}>
+      <div className="flex items-center space-x-2">
+        <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
+          <div className={`flex items-center ${getRankColor(row.rank)}`}>
+            {row.rank <= 3 ? (
+              getRankIcon(row.rank)
+            ) : (
+              <span className="text-sm font-semibold">#{row.rank}</span>
+            )}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center space-x-2">
+            <h4 className={cn("font-semibold truncate pr-6", compact ? "text-sm" : "text-base")}>
+              {row.name}
+            </h4>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2 text-right">
+          <div className="flex flex-col items-end space-y-1">
+            <div className="flex items-center space-x-1">
+              <Image src="/icons/pts.svg" alt="EXP" width={compact ? 14 : 16} height={compact ? 14 : 16} />
+              <span className={cn("font-bold", compact ? "text-sm" : "text-base")}>{row.exp.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStakeRow = (row: StakeLeaderboardEntry, compact = false) => {
+    const formattedStake = (Number(row.stakedAmount) / 1e18).toLocaleString(undefined, {
+      maximumFractionDigits: 2
+    });
+    const isCurrentUser = address && row.address.toLowerCase() === address.toLowerCase();
+
+    return (
+      <div
+        key={row.address}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3")}
+      >
+        <div className="flex items-center space-x-2">
+          <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
+            <div className={`flex items-center ${getRankColor(row.rank)}`}>
+              {row.rank <= 3 ? (
+                getRankIcon(row.rank)
+              ) : (
+                <span className="text-sm font-semibold">#{row.rank}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col">
+              {row.ensName ? (
+                <>
+                  <h4 className={cn("font-semibold truncate pr-6", compact ? "text-sm" : "text-base")}>
+                    {row.ensName}
+                    {isCurrentUser && (
+                      <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                    )}
+                  </h4>
+                  <span className="text-xs text-muted-foreground font-mono truncate">
+                    {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                  </span>
+                </>
+              ) : compact ? (
+                <>
+                  <h4 className="font-semibold text-sm font-mono truncate pr-6">
+                    {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                    {isCurrentUser && (
+                      <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                    )}
+                  </h4>
+                  <span className="block h-4" aria-hidden="true" />
+                </>
+              ) : (
+                <h4 className={cn("font-semibold font-mono truncate pr-6", compact ? "text-sm" : "text-base")}>
+                  {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                  {isCurrentUser && (
+                    <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                  )}
+                </h4>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 text-right">
+            <div className="flex flex-col items-end space-y-1">
+              <div className="flex items-center space-x-1">
+                <Image src="/PixotchiKit/COIN.svg" alt="Staked SEED" width={compact ? 14 : 16} height={compact ? 14 : 16} />
+                <span className={cn("font-bold", compact ? "text-sm" : "text-base")}>{formattedStake}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRockRow = (row: RocksLeaderboardEntry, compact = false) => {
+    const isCurrentUser = address && row.address?.toLowerCase() === address.toLowerCase();
+
+    return (
+      <div
+        key={row.address || `rock-${row.rank}`}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3")}
+      >
+        <div className="flex items-center space-x-2">
+          <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
+            <div className={`flex items-center ${getRankColor(row.rank)}`}>
+              {row.rank <= 3 ? (
+                getRankIcon(row.rank)
+              ) : (
+                <span className="text-sm font-semibold">#{row.rank}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {row.address ? (
+              <WalletAvatar
+                address={row.address as `0x${string}`}
+                className={cn("rounded-full", compact ? "w-8 h-8" : "w-10 h-10")}
+              />
+            ) : (
+              <div className={cn("rounded-full bg-muted", compact ? "w-8 h-8" : "w-10 h-10")} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className={cn("font-semibold truncate pr-6", compact ? "text-sm" : "text-base")}>
+              {row.name || (row.address ? formatAddress(row.address) : 'Unknown')}
+              {isCurrentUser && (
+                <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+              )}
+            </h4>
+            {row.name && row.address && (
+              <span className="text-xs text-muted-foreground font-mono">
+                {formatAddress(row.address)}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-2 text-right">
+            <div className="flex items-center space-x-1">
+              <Image src="/icons/Volcanic_Rock.svg" alt="Rocks" width={compact ? 14 : 16} height={compact ? 14 : 16} />
+              <span className={cn("font-bold", compact ? "text-sm" : "text-base")}>{row.rocks.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderContent = () => {
     // Only show full page loader if we have NO plants data and are loading
@@ -690,211 +1222,72 @@ export default function LeaderboardTab() {
       );
     }
 
-    return (
-      <div className="space-y-4">
-        <div className="space-y-2 divide-y divide-border -mx-4 px-4">
-          {currentPlants.map((plant) => {
-            const canShowAttack =
-              !isUserPlant(plant) &&
-              !plant.isDead &&
-              eligibleAttackers(plant).length > 0 &&
-              !hasActiveFence(plant);
-            const isMine = isUserPlant(plant);
-            const canShowKill = !isMine && plant.isDead;
-            const canShowRevive = isMine && plant.isDead;
-
-            return (
-              <div
-                key={plant.id}
-                className={`py-3 transition-all ${isUserPlant(plant) ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''
-                  } ${plant.isDead ? 'opacity-60' : ''}`}
-              >
-                <div className="flex items-center space-x-2">
-                  {/* Rank */}
-                  <div className="flex items-center justify-center w-8">
-                    <div className={`flex items-center ${getRankColor(plant.rank)}`}>
-                      {plant.rank <= 3 ? (
-                        getRankIcon(plant.rank)
-                      ) : (
-                        <span className="text-sm font-semibold">#{plant.rank}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Plant Image */}
-                  <div
-                    className="relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => handlePlantImageClick(plant)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handlePlantImageClick(plant);
-                      }
-                    }}
-                    aria-label="View plant profile"
-                  >
-                    <PlantImage selectedPlant={plant} width={48} height={48} />
-                    {hasActiveFence(plant) && (
-                      <div className="absolute -top-1 -right-1">
-                        <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} />
-                      </div>
-                    )}
-                    {plant.isDead && (
-                      <div className="absolute -top-1 -right-1">
-                        <Skull className="w-3 h-3 text-red-500" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Plant Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <div className="relative">
-                        <h4 className="font-semibold text-base truncate pr-6">
-                          {plant.name || `Plant #${plant.id}`}
-                          {isUserPlant(plant) && (
-                            <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                          )}
-                        </h4>
-                        {/* Edit name removed for leaderboard view */}
-                      </div>
-                      {/* Dead label removed. Skull indicator is shown over image and actions show accordingly. */}
-                    </div>
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                      <span>LvL {plant.level}</span>
-                    </div>
-                  </div>
-
-                  {/* Stats with right-aligned action buttons */}
-                  <div className="flex items-center space-x-2 text-right">
-                    <div className="flex flex-col items-end space-y-1">
-                      <div className="flex items-center space-x-1">
-                        <Image src="/icons/pts.svg" alt="Points" width={16} height={16} />
-                        <span className="text-base font-bold">{formatScoreShort(plant.score)}</span>
-                      </div>
-                      <div className="flex items-center space-x-3 text-sm text-muted-foreground">
-                        <div className="flex items-center space-x-1">
-                          <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} />
-                          <span>{plant.stars}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Image src="/icons/ethlogo.svg" alt="ETH" width={14} height={14} />
-                          <span>{formatEthShort(plant.rewards)}</span>
-                        </div>
-                      </div>
-                    </div>
-                    {canShowAttack && (
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="rounded-md"
-                        onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
-                        aria-label="Attack this plant"
-                        title="Attack"
-                      >
-                        <Sword className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {canShowKill && (
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className={`rounded-md ${!killCooldown.canKill ? 'opacity-50' : ''}`}
-                        onClick={() => {
-                          if (!killCooldown.canKill) {
-                            setCooldownDialogOpen(true);
-                          } else {
-                            setTargetPlant(plant);
-                            setSelectedKillerId(null);
-                            setKillDialogOpen(true);
-                          }
-                        }}
-                        aria-label="Kill dead plant to collect star"
-                        title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
-                      >
-                        <Skull className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {canShowRevive && (
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="rounded-md"
-                        onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
-                        aria-label="Revive your plant"
-                        title="Revive"
-                      >
-                        <Image
-                          src="/icons/skull.png"
-                          alt="Revive plant"
-                          width={16}
-                          height={16}
-                          className="h-4 w-4 object-contain"
-                        />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex justify-center items-center pt-4">
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Back
-              </Button>
-              <span className="flex items-center px-3 text-sm">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow, true);
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
+    <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
+      <Card className={cn("xl:flex xl:flex-col", boardType === 'plants' && "xl:h-[calc(100dvh-8rem)]")}>
+        <CardHeader className="xl:flex-none">
+          <div className="flex justify-between items-center gap-3 xl:grid xl:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
             </CardTitle>
-            <ToggleGroup
-              value={boardType}
-              onValueChange={(nextValue) => {
-                setCurrentPage(1);
-                setBoardType((nextValue as typeof boardType) || 'plants');
-              }}
-              options={[
-                { value: 'plants', label: 'Plants' },
-                { value: 'lands', label: 'Lands' },
-                { value: 'stake', label: 'Stake' },
-                ...(showRocksBoard ? [{ value: 'rocks', label: 'Rocks' }] : []),
-              ]}
-            />
+            {boardType === 'plants' && (
+              <div className="hidden items-center justify-center gap-4 xl:flex">
+                <ToggleGroup
+                  value={filterMode}
+                  onValueChange={(v) => {
+                    if (v !== 'all' && v !== 'attackable' && v !== 'dead') {
+                      return;
+                    }
+
+                    setCurrentPage(1);
+                    setFilterMode(v);
+                    if (v === 'attackable' || v === 'dead') {
+                      setShowOnlyMyPlants(false);
+                    }
+                  }}
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'attackable', label: 'Attackable' },
+                    { value: 'dead', label: 'Dead' },
+                  ]}
+                />
+                {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={showOnlyMyPlants}
+                      onChange={(e) => {
+                        setShowOnlyMyPlants(e.target.checked);
+                        setCurrentPage(1);
+                      }}
+                      className="w-4 h-4 rounded border-border accent-primary"
+                    />
+                    <span className="text-muted-foreground">My Plants</span>
+                  </label>
+                )}
+              </div>
+            )}
+            <div className="xl:col-start-3 xl:justify-self-end">
+              <ToggleGroup
+                value={boardType}
+                onValueChange={(nextValue) => {
+                  setCurrentPage(1);
+                  setBoardType((nextValue as typeof boardType) || 'plants');
+                }}
+                options={[
+                  { value: 'plants', label: 'Plants' },
+                  { value: 'lands', label: 'Lands' },
+                  { value: 'stake', label: 'Stake' },
+                  ...(showRocksBoard ? [{ value: 'rocks', label: 'Rocks' }] : []),
+                ]}
+              />
+            </div>
           </div>
           {boardType === 'plants' && (
-            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap xl:hidden">
               <ToggleGroup
                 value={filterMode}
                 onValueChange={(v) => {
@@ -928,7 +1321,7 @@ export default function LeaderboardTab() {
             </div>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent className={cn("xl:min-h-0", boardType === 'plants' && "xl:flex-1")}>
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (
@@ -936,161 +1329,20 @@ export default function LeaderboardTab() {
               <div className="flex items-center justify-center py-8">
                 <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
               </div>
+            ) : totalLandItems === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No lands found.</div>
             ) : (
-              <div className="space-y-2 divide-y divide-border -mx-4 px-4">
-                {totalLandItems === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">No lands found.</div>
-                )}
-                {currentLands.map((row) => (
-                  <div key={row.landId} className="py-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex items-center justify-center w-8">
-                        <div className={`flex items-center ${getRankColor(row.rank)}`}>
-                          {row.rank <= 3 ? (
-                            getRankIcon(row.rank)
-                          ) : (
-                            <span className="text-sm font-semibold">#{row.rank}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-semibold text-base truncate pr-6">
-                            {row.name}
-                          </h4>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2 text-right">
-                        <div className="flex flex-col items-end space-y-1">
-                          <div className="flex items-center space-x-1">
-                            <Image src="/icons/pts.svg" alt="EXP" width={16} height={16} />
-                            <span className="text-base font-bold">{row.exp.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {totalLandPages > 1 && (
-                  <div className="flex justify-center items-center pt-4">
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1}
-                      >
-                        Back
-                      </Button>
-                      <span className="flex items-center px-3 text-sm">
-                        Page {currentPage} of {totalLandPages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalLandPages))}
-                        disabled={currentPage === totalLandPages}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow)
             )
           ) : boardType === 'stake' ? (
             stakeLoading && totalStakeItems === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
               </div>
+            ) : totalStakeItems === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No stakers found.</div>
             ) : (
-              <div className="space-y-2 divide-y divide-border -mx-4 px-4">
-                {totalStakeItems === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">No stakers found.</div>
-                )}
-                {currentStakes.map((row) => {
-                  const formattedStake = (Number(row.stakedAmount) / 1e18).toLocaleString(undefined, {
-                    maximumFractionDigits: 2
-                  });
-                  const isCurrentUser = address && row.address.toLowerCase() === address.toLowerCase();
-
-                  return (
-                    <div
-                      key={row.address}
-                      className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <div className="flex items-center justify-center w-8">
-                          <div className={`flex items-center ${getRankColor(row.rank)}`}>
-                            {row.rank <= 3 ? (
-                              getRankIcon(row.rank)
-                            ) : (
-                              <span className="text-sm font-semibold">#{row.rank}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col">
-                            {row.ensName ? (
-                              <>
-                                <h4 className="font-semibold text-base truncate pr-6">
-                                  {row.ensName}
-                                  {isCurrentUser && (
-                                    <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                                  )}
-                                </h4>
-                                <span className="text-xs text-muted-foreground font-mono truncate">
-                                  {row.address.slice(0, 6)}...{row.address.slice(-4)}
-                                </span>
-                              </>
-                            ) : (
-                              <h4 className="font-semibold text-base font-mono truncate pr-6">
-                                {row.address.slice(0, 6)}...{row.address.slice(-4)}
-                                {isCurrentUser && (
-                                  <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                                )}
-                              </h4>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2 text-right">
-                          <div className="flex flex-col items-end space-y-1">
-                            <div className="flex items-center space-x-1">
-                              <Image src="/PixotchiKit/COIN.svg" alt="Staked SEED" width={16} height={16} />
-                              <span className="text-base font-bold">{formattedStake}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {totalStakePages > 1 && (
-                  <div className="flex justify-center items-center pt-4">
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1}
-                      >
-                        Back
-                      </Button>
-                      <span className="flex items-center px-3 text-sm">
-                        Page {currentPage} of {totalStakePages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalStakePages))}
-                        disabled={currentPage === totalStakePages}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow)
             )
           ) : rocksDisabledNotice ? (
             <Alert className="mt-4">
@@ -1109,87 +1361,10 @@ export default function LeaderboardTab() {
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>{rocksError}</AlertDescription>
               </Alert>
+            ) : totalRockItems === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No rock earners found.</div>
             ) : (
-              <div className="space-y-2 divide-y divide-border -mx-4 px-4">
-                {totalRockItems === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">No rock earners found.</div>
-                )}
-                {currentRocks.map((row) => {
-                  const isCurrentUser = address && row.address?.toLowerCase() === address.toLowerCase();
-                  return (
-                    <div
-                      key={row.address || `rock-${row.rank}`}
-                      className={`py-3 ${isCurrentUser ? 'bg-primary/5 -mx-6 px-6 rounded-lg' : ''}`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <div className="flex items-center justify-center w-8">
-                          <div className={`flex items-center ${getRankColor(row.rank)}`}>
-                            {row.rank <= 3 ? (
-                              getRankIcon(row.rank)
-                            ) : (
-                              <span className="text-sm font-semibold">#{row.rank}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {row.address ? (
-                            <WalletAvatar
-                              address={row.address as `0x${string}`}
-                              className="w-10 h-10 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-muted" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-base truncate pr-6">
-                            {row.name || (row.address ? formatAddress(row.address) : 'Unknown')}
-                            {isCurrentUser && (
-                              <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                            )}
-                          </h4>
-                          {row.name && row.address && (
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {formatAddress(row.address)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2 text-right">
-                          <div className="flex items-center space-x-1">
-                            <Image src="/icons/Volcanic_Rock.svg" alt="Rocks" width={16} height={16} />
-                            <span className="text-base font-bold">{row.rocks.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {totalRockPages > 1 && (
-                  <div className="flex justify-center items-center pt-4">
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1}
-                      >
-                        Back
-                      </Button>
-                      <span className="flex items-center px-3 text-sm">
-                        Page {currentPage} of {totalRockPages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalRockPages))}
-                        disabled={currentPage === totalRockPages}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow)
             )
           )}
         </CardContent>

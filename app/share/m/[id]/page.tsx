@@ -1,9 +1,8 @@
-import { notFound } from "next/navigation";
-import { Metadata, ResolvingMetadata } from "next";
-import { redis } from "@/lib/redis";
+import { PIXOTCHI_BASE_APP_REFERRAL_URL } from "@/lib/pixotchi-links";
 import { redisGetJSON } from "@/lib/redis";
 import type { MintShareData } from "@/lib/types";
-import { PIXOTCHI_BASE_APP_REFERRAL_URL } from "@/lib/pixotchi-links";
+import { Metadata,ResolvingMetadata } from "next";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 

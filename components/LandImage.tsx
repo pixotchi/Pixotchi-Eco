@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { Land, BuildingType, BuildingData } from '@/lib/types';
-import { getBuildingName } from '@/lib/utils';
 import { casinoIsBuilt } from '@/lib/contracts';
+import { BuildingData,BuildingType,Land } from '@/lib/types';
+import { getBuildingName } from '@/lib/utils';
+import React,{ useEffect,useMemo,useState } from 'react';
 
 interface LandImageProps {
   selectedLand: Land | null;
@@ -34,13 +34,29 @@ const LandImage = ({
   priority = false // Keep prop for potential future use (e.g., preloading)
 }: LandImageProps) => {
   const [casinoBuiltState, setCasinoBuiltState] = useState<boolean>(false);
+  const landId = selectedLand?.tokenId;
 
   // Fetch casino built state
   useEffect(() => {
-    if (selectedLand) {
-      casinoIsBuilt(selectedLand.tokenId).then(setCasinoBuiltState).catch(() => setCasinoBuiltState(false));
+    let cancelled = false;
+
+    if (!landId) {
+      setCasinoBuiltState(false);
+      return;
     }
-  }, [selectedLand?.tokenId]);
+
+    casinoIsBuilt(landId)
+      .then((built) => {
+        if (!cancelled) setCasinoBuiltState(built);
+      })
+      .catch(() => {
+        if (!cancelled) setCasinoBuiltState(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [landId]);
 
   const backgroundStyle = useMemo(() => {
     if (!selectedLand) return {};

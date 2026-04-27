@@ -7,10 +7,10 @@
  * MAINNET ONLY
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSolanaWalletContext, useIsSolanaWallet } from '@/lib/solana-wallet-context';
-import { getTwinAddress, getTwinAddressInfo, type TwinAddressInfo } from '@/lib/solana-twin';
 import { isSolanaEnabled } from '@/lib/solana-constants';
+import { getTwinAddress,getTwinAddressInfo,type TwinAddressInfo } from '@/lib/solana-twin';
+import { useSolanaWalletContext } from '@/lib/solana-wallet-context';
+import { useCallback,useEffect,useMemo,useState } from 'react';
 
 // ============ Types ============
 
@@ -169,4 +169,4 @@ export function useTwinInfo(solanaAddress: string | null) {
 }
 
 // Re-export for convenience
-export { useIsSolanaWallet, useTwinAddress } from '@/lib/solana-wallet-context';
+export { useIsSolanaWallet,useTwinAddress } from '@/lib/solana-wallet-context';

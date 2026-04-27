@@ -1,15 +1,16 @@
-const appBuildId =
+const rawAppBuildId =
   process.env.NEXT_PUBLIC_APP_BUILD_ID ||
   process.env.VERCEL_DEPLOYMENT_ID ||
   process.env.VERCEL_GIT_COMMIT_SHA ||
   process.env.npm_package_version ||
   "development";
+const appBuildId = rawAppBuildId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   ...(process.env.NODE_ENV === "production" ? { deploymentId: appBuildId } : {}),
   turbopack: {},
-  // NOTE: cacheComponents is NOT enabled because it's incompatible with 
+  // NOTE: cacheComponents is NOT enabled because it's incompatible with
   // dynamic/runtime/revalidate segment configs used for fresh onchain data
   // Silence warnings
   // https://github.com/WalletConnect/walletconnect-monorepo/issues/1908

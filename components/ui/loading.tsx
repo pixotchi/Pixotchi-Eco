@@ -1,5 +1,4 @@
-import { cn } from '@/lib/utils';
-import { BaseExpandedLoadingLogo, BaseExpandedLoadingPageLoader, BaseExpandedLoadingSpinner } from './BaseExpandedLoadingLogo';
+import { BaseExpandedLoadingLogo,BaseExpandedLoadingPageLoader,BaseExpandedLoadingSpinner } from './BaseExpandedLoadingLogo';
 
 export function LoadingSpinner({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
   return <BaseExpandedLoadingSpinner size={size} className={className} />;
@@ -53,5 +52,5 @@ export function PageLoader() {
 }
 
 // Export consistent loading components
-export { BaseExpandedLoadingLogo as LoadingLogo, BaseExpandedLoadingPageLoader as BasePageLoader, BaseExpandedLoadingPageLoader, BaseExpandedLoadingSpinner };
-export { BaseAnimatedLogo } from './BaseAnimatedLogo'; 
+export { BaseAnimatedLogo } from './BaseAnimatedLogo';
+export { BaseExpandedLoadingPageLoader,BaseExpandedLoadingSpinner,BaseExpandedLoadingPageLoader as BasePageLoader,BaseExpandedLoadingLogo as LoadingLogo };

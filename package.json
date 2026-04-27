@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . && npm run lint:base-rpc",
+    "lint": "node ./scripts/run-eslint-chunked.mjs && npm run lint:base-rpc",
     "lint:base-rpc": "node ./scripts/check-base-rpc-hardening.mjs",
     "typecheck": "tsc --noEmit"
   },

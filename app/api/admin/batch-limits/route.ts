@@ -9,12 +9,12 @@
  * Returns gas estimates for batch sizes from 1 to maxBatch
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { encodeFunctionData } from 'viem';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
 import { getBaseReadClient } from '@/lib/base-rpc';
+import { LAND_CONTRACT_ADDRESS,getLandBuildingsBatch,getLandsByOwner } from '@/lib/contracts';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
-import { LAND_CONTRACT_ADDRESS, getLandsByOwner, getLandBuildingsBatch } from '@/lib/contracts';
+import { NextRequest,NextResponse } from 'next/server';
+import { encodeFunctionData } from 'viem';
 
 // Base per-transaction gas limits
 // Pre-Fusaka: 25,000,000 gas per transaction
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
               data: call.data,
             });
             totalGas += gas;
-          } catch (e) {
+          } catch {
             // If estimation fails, use a conservative estimate
             totalGas += BigInt(100_000);
           }

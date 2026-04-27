@@ -1,4 +1,4 @@
-import { nanoid, customAlphabet } from 'nanoid';
+import { customAlphabet } from 'nanoid';
 
 // Create custom alphabet excluding confusing characters (0, O, I, l, 1)
 const createInviteCode = customAlphabet('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8);

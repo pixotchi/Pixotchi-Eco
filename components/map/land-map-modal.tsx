@@ -1,19 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Land } from "@/lib/types";
-import { X, Minus, Plus, Compass, MapPin, Info, Trophy, User, Copy, ExternalLink } from "lucide-react";
-import { LandMapCanvas } from './land-map-canvas';
-import { formatXP, cn } from "@/lib/utils";
-import { contractToVisual, getCoordinateFromTokenId } from "@/lib/land-utils";
-import Image from "next/image";
-import { LandLeaderboardEntry, getLandOwner } from "@/lib/contracts";
-import { getAddress } from 'viem';
-import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import ChatProfileDialog from "@/components/chat/chat-profile-dialog";
+import { usePrimaryName } from "@/components/hooks/usePrimaryName";
+import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogTitle } from "@/components/ui/dialog";
+import { LandLeaderboardEntry,getLandOwner } from "@/lib/contracts";
+import { contractToVisual,getCoordinateFromTokenId } from "@/lib/land-utils";
+import { Land } from "@/lib/types";
 import { useTransactions } from 'ethereum-identity-kit';
+import { Compass,Minus,Plus,User,X } from "lucide-react";
+import Image from "next/image";
+import { useEffect,useState } from 'react';
+import { LandMapCanvas } from './land-map-canvas';
 
 // Helper to truncate address
 const truncateAddress = (address: string) => {

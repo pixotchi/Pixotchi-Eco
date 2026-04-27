@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
-import Image from 'next/image';
-import { calculateImageLevel } from '@/lib/utils';
 import { Plant } from '@/lib/types';
+import { calculateImageLevel } from '@/lib/utils';
+import Image from 'next/image';
+import React,{ useMemo,useState } from 'react';
 
 interface PlantImageProps {
   selectedPlant: Plant;

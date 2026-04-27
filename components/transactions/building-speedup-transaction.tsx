@@ -1,12 +1,9 @@
 "use client";
 
-import { formatTokenAmount } from '@/lib/utils';
-import { toast } from 'react-hot-toast';
-import { useAccount } from 'wagmi';
-import SponsoredTransaction from './sponsored-transaction';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { BuildingData } from '@/lib/types';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
+import SponsoredTransaction from './sponsored-transaction';
 
 interface BuildingSpeedUpTransactionProps {
   building: BuildingData;

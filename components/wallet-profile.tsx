@@ -1,59 +1,56 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { useAccount, useBalance, useDisconnect, useChainId } from "wagmi";
-import { sdk } from "@farcaster/miniapp-sdk";
-import { useFrameContext } from "@/lib/frame-context";
-import Image from "next/image";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { formatAddress } from "@/lib/utils";
-import BalanceCard from "./balance-card";
-import toast from "react-hot-toast";
-import {
-  Copy,
-  LogOut,
-  RefreshCw,
-  Wallet,
-  CheckCircle,
-  XCircle,
-  Info,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  X,
-  Lightbulb,
-  Key,
-  ShieldAlert,
-} from "lucide-react";
-import { usePrimaryName } from "@/components/hooks/usePrimaryName";
-import { openExternalUrl } from "@/lib/open-external";
-import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { StandardContainer } from "./ui/pixel-container";
-import { usePrivy, useLogin, useLogout } from "@privy-io/react-auth";
-import type { WalletWithMetadata } from "@privy-io/react-auth";
-import { clearAppCaches } from "@/lib/cache-utils";
-import { Skeleton } from "./ui/skeleton";
-import { useBalances } from "@/lib/balance-context";
-import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useIsSolanaWallet, useSolanaWallet, SolanaBridgeBadge } from "@/components/solana";
-import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana";
-import { isSolanaEnabled } from "@/lib/solana-constants";
-import { useEthMode } from "@/lib/eth-mode-context";
 import { AirdropClaimCard } from "@/components/airdrop-claim-card";
-import { clearPublicChatSession } from "@/lib/chat-auth-client";
-import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
-import { sessionStorageManager } from "@/lib/session-storage-manager";
-import { useAuthSurface } from "@/hooks/useAuthSurface";
+import { usePrimaryName } from "@/components/hooks/usePrimaryName";
+import { SolanaBridgeBadge,useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
+} from "@/components/ui/dialog";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
+import { useAuthSurface } from "@/hooks/useAuthSurface";
+import { useBalances } from "@/lib/balance-context";
+import { clearAppCaches } from "@/lib/cache-utils";
+import { clearPublicChatSession } from "@/lib/chat-auth-client";
+import { useEthMode } from "@/lib/eth-mode-context";
+import { useFrameContext } from "@/lib/frame-context";
+import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
+import { openExternalUrl } from "@/lib/open-external";
+import { sessionStorageManager } from "@/lib/session-storage-manager";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { isSolanaEnabled } from "@/lib/solana-constants";
+import { formatAddress } from "@/lib/utils";
+import { sdk } from "@farcaster/miniapp-sdk";
+import type { WalletWithMetadata } from "@privy-io/react-auth";
+import { useLogin,useLogout,usePrivy } from "@privy-io/react-auth";
+import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana";
+import {
+CheckCircle,
+ChevronRight,
+Copy,
+Info,
+Key,
+Lightbulb,
+LogOut,
+RefreshCw,
+ShieldAlert,
+Wallet,
+X,
+XCircle
+} from "lucide-react";
+import React,{ useEffect,useMemo,useState } from "react";
+import toast from "react-hot-toast";
+import { useAccount,useBalance,useChainId,useDisconnect } from "wagmi";
+import BalanceCard from "./balance-card";
+import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
+import { StandardContainer } from "./ui/pixel-container";
+import { Skeleton } from "./ui/skeleton";
 
 const AUTH_CACHE_PREFIXES = [
   "wagmi",

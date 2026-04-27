@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAccount } from 'wagmi';
-import { createBaseAccountSDK } from '@base-org/account';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
+import { createBaseAccountSDK } from '@base-org/account';
+import { useCallback,useEffect,useState } from 'react';
 import { parseUnits } from 'viem';
+import { useAccount } from 'wagmi';
 
 type PermissionSummary = { 
   token?: string; 
@@ -49,7 +48,7 @@ export default function AgentPermissionsPanel() {
     }
   }
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!address) return;
     setLoading(true);
     try {
@@ -85,9 +84,9 @@ export default function AgentPermissionsPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [address]);
 
-  useEffect(() => { refresh(); }, [address]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   const formatToken = (wei?: bigint | null) => {
     if (!wei) return '0';
@@ -223,4 +222,3 @@ export default function AgentPermissionsPanel() {
     </div>
   );
 }
-

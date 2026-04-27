@@ -7,8 +7,8 @@ declare const process: any;
 
 import { validateBaseRpcEndpointDiversity } from './base-rpc-policy';
 import {
-  normalizeNotificationProvider,
-  type NotificationProvider,
+normalizeNotificationProvider,
+type NotificationProvider,
 } from './notifications/provider';
 
 const rawClientNotificationProvider = process.env.NEXT_PUBLIC_NOTIFICATION_PROVIDER;

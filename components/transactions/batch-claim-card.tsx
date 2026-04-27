@@ -1,23 +1,21 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
-import Image from 'next/image';
-import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, AlertTriangle, Lock } from 'lucide-react';
-import { Land } from '@/lib/types';
-import { formatScore, formatLifetimeProduction } from '@/lib/utils';
-import { getLandBuildingsBatch, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import { landAbi } from '@/public/abi/pixotchi-v3-abi';
-import SmartWalletTransaction from './smart-wallet-transaction';
-import { StandardContainer } from '@/components/ui/pixel-container';
-import { toast } from 'react-hot-toast';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
+import { Card,CardContent } from "@/components/ui/card";
 import { useBalances } from '@/lib/balance-context';
-import { formatUnits, parseUnits, erc20Abi } from 'viem';
-import { Button } from '@/components/ui/button';
-import { useAccount } from 'wagmi';
-import { extractTransactionHash } from '@/lib/transaction-utils';
+import { getLandBuildingsBatch,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import { useSmartWallet } from '@/lib/smart-wallet-context';
+import { extractTransactionHash } from '@/lib/transaction-utils';
+import { Land } from '@/lib/types';
+import { formatLifetimeProduction,formatScore } from '@/lib/utils';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
+import { AlertTriangle,Loader2,Lock } from 'lucide-react';
+import Image from 'next/image';
+import { useEffect,useMemo,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { erc20Abi,formatUnits,parseUnits } from 'viem';
+import { useAccount } from 'wagmi';
+import SmartWalletTransaction from './smart-wallet-transaction';
 
 interface BatchClaimCardProps {
   lands: Land[];

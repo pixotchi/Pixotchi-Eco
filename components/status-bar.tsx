@@ -6,6 +6,7 @@ import StakingDialog from "@/components/staking/staking-dialog";
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import { formatUnits } from "viem";
+import { useAccount, useBalance } from "wagmi";
 import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/components/solana";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onStakingDialogOpen, openTasksDialog } from "@/lib/app-events";
@@ -17,10 +18,23 @@ function formatTokenShort(amount: bigint, decimals: number = 18): string {
   return num.toFixed(4).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
-export default function StatusBar() {
+type StatusBarPlacement = "standalone" | "header";
+
+export default function StatusBar({ placement = "standalone" }: { placement?: StatusBarPlacement }) {
   const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading } = useBalances();
+  const { address } = useAccount();
   const isSolana = useIsSolanaWallet();
   const { solBalance } = useSolanaWallet();
+  const isHeaderPlacement = placement === "header";
+  const showEthBalance = isHeaderPlacement && !isSolana;
+  const { data: ethBalance, isLoading: ethLoading } = useBalance({
+    address,
+    query: {
+      enabled: showEthBalance && !!address,
+      staleTime: 10_000,
+      refetchInterval: 30_000,
+    },
+  });
 
   const [stakingOpen, setStakingOpen] = useState(false);
   const gamificationPolicy = getClientGamificationPolicy();
@@ -39,12 +53,15 @@ export default function StatusBar() {
   const seedValue = formatTokenShort(seed);
   const leafValue = formatTokenShort(leaf);
   const pixotchiValue = formatTokenShort(pixotchi);
+  const ethValue = ethBalance ? formatTokenShort(ethBalance.value, ethBalance.decimals) : "0";
   const seedText = loading ? <Skeleton className="h-5 w-20" /> : seedValue;
   const leafText = loading ? <Skeleton className="h-5 w-20" /> : leafValue;
   const pixotchiText = loading ? <Skeleton className="h-5 w-20" /> : pixotchiValue;
+  const ethText = ethLoading ? <Skeleton className="h-5 w-16" /> : ethValue;
   const seedAriaLabel = loading ? "Seed balance loading" : `Seed balance: ${seedValue} SEED`;
   const leafAriaLabel = loading ? "Leaf balance loading" : `Leaf balance: ${leafValue} LEAF`;
   const pixotchiAriaLabel = loading ? "PIXOTCHI balance loading" : `PIXOTCHI balance: ${pixotchiValue}`;
+  const ethAriaLabel = ethLoading ? "ETH balance loading" : `ETH balance: ${ethValue} ETH`;
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
@@ -53,15 +70,31 @@ export default function StatusBar() {
   };
 
   return (
-    <div className="w-full bg-background" role="region" aria-label="Account balance and staking">
-      <div className="rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0" role="group" aria-label="Token balances">
+    <div
+      className={isHeaderPlacement ? "shrink-0" : "w-full bg-background xl:flex xl:justify-end xl:bg-transparent"}
+      role="region"
+      aria-label="Account balance and staking"
+    >
+      <div
+        className={
+          isHeaderPlacement
+            ? "w-fit max-w-full rounded-lg border border-border/70 bg-background/60 px-3 py-1 shadow-none backdrop-blur-md"
+            : "rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:bg-background/60 xl:shadow-none"
+        }
+      >
+        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex items-center justify-between gap-3 xl:justify-start"}>
+          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex items-center gap-2 min-w-0 xl:gap-3"} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className="flex items-center gap-1.5 min-w-0" aria-label={`SOL balance: ${solText} SOL`}>
                 <img src="/icons/solana.svg" alt="" width={16} height={16} aria-hidden="true" />
                 <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{solText}</span>
+              </div>
+            )}
+            {showEthBalance && (
+              <div className="flex items-center gap-1.5 min-w-0" aria-label={ethAriaLabel}>
+                <img src="/icons/ethlogo.svg" alt="" width={16} height={16} aria-hidden="true" />
+                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ethText}</span>
               </div>
             )}
             <div className="flex items-center gap-1.5 min-w-0" aria-label={seedAriaLabel}>
@@ -80,6 +113,7 @@ export default function StatusBar() {
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{pixotchiText}</span>
             </div>
           </div>
+          <div className={isHeaderPlacement ? "h-5 w-px bg-border/70" : "hidden h-5 w-px bg-border/70 xl:block"} aria-hidden="true" />
           <div className="shrink-0 flex items-center gap-2">
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}

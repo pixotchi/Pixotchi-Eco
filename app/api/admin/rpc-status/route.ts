@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
 import { getBaseRpcStatusSnapshot } from '@/lib/base-rpc';
+import { NextRequest,NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   if (!validateAdminKey(request)) {
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       rankedUrls: snapshot.rankedUrls,
       timestamp: snapshot.generatedAt,
     });
-  } catch (e: any) {
+  } catch {
     return NextResponse.json(createErrorResponse('Failed to check RPC status', 500).body, { status: 500 });
   }
 }

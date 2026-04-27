@@ -1,8 +1,7 @@
 "use client";
 
-import React from 'react';
 import { usePaymaster } from '@/lib/paymaster-context';
-import { Zap, ZapOff } from 'lucide-react';
+import { Zap } from 'lucide-react';
 
 interface PaymasterStatusProps {
   className?: string;

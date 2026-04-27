@@ -52,6 +52,10 @@
   ],
   "exclude": [
     "node_modules",
-    "v22"
+    "v22",
+    "pixotchi-onchain",
+    "contracts",
+    "exports",
+    "tools"
   ]
 }

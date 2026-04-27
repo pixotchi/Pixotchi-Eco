@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,8 @@ function formatToken(amount?: bigint): string {
   return num.toFixed(4).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
 }
 
+const MIN_REFRESH_INTERVAL_MS = 1000;
+
 export default function StakingDialog({ open, onOpenChange }: StakingDialogProps) {
   const { address } = useAccount();
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
@@ -89,15 +91,15 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const [rewardTimeUnit, setRewardTimeUnit] = useState<bigint | null>(null);
   const [totalStaked, setTotalStaked] = useState<bigint | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!address) return;
     if (refreshingRef.current) {
       return; // drop overlapping calls
     }
     
-    // Rate limiting: prevent refreshes more frequent than MIN_REFRESH_INTERVAL
+    // Rate limiting: prevent refreshes more frequent than MIN_REFRESH_INTERVAL_MS
     const now = Date.now();
-    if (now - lastRefreshTime.current < MIN_REFRESH_INTERVAL) {
+    if (now - lastRefreshTime.current < MIN_REFRESH_INTERVAL_MS) {
       return;
     }
     lastRefreshTime.current = now;
@@ -173,20 +175,20 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       setLoading(false);
       refreshingRef.current = false;
     }
-  };
+  }, [address]);
 
   useEffect(() => {
     if (open) {
       refresh();
     }
-  }, [open, address]);
+  }, [open, refresh]);
 
   // Also refresh when global balances:refresh is emitted after tx success
   useEffect(() => {
     const handler = () => refresh();
     window.addEventListener('balances:refresh', handler as EventListener);
     return () => window.removeEventListener('balances:refresh', handler as EventListener);
-  }, [address]);
+  }, [refresh]);
 
   // Note: Removed balances:refresh listener to prevent double refresh with status bar
   // The staking dialog will only refresh on manual refresh or dialog open
@@ -281,7 +283,6 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const { isSponsored } = usePaymaster();
   const refreshingRef = useRef<boolean>(false);
   const lastRefreshTime = useRef<number>(0);
-  const MIN_REFRESH_INTERVAL = 1000; // Minimum 1 second between refreshes
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

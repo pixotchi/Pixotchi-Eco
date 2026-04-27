@@ -5,9 +5,9 @@
  * GET /api/bridge/verify-wsol
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
 import { type Address } from 'viem';
 
 // Segment config: Always fetch fresh onchain data

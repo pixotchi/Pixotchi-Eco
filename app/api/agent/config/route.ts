@@ -17,7 +17,7 @@ export async function GET() {
         periodInDays: 1,
       }
     });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Failed to load agent config' }, { status: 500 });
   }
 }

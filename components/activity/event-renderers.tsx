@@ -1,39 +1,21 @@
 "use client";
 
-import React from 'react';
-import { AttackEvent, KilledEvent, MintEvent, PlayedEvent, ItemConsumedEvent, ShopItemPurchasedEvent, ActivityEvent, BundledItemConsumedEvent } from '@/lib/types';
-import { formatAddress, formatTokenAmount, formatScore, formatDuration } from '@/lib/utils';
-import { Sword, Skull, Sparkles, Gamepad2, Apple, ShoppingCart, HelpCircle } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import Image from 'next/image';
+import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { ITEM_ICONS } from '@/lib/constants';
-import { LAND_EVENT_ICONS } from '@/lib/constants';
+import {
+ActivityEvent,AttackEvent,BarracksBuiltEvent,
+BarracksRaidEvent,BlackjackResultEvent,BundledItemConsumedEvent,CasinoBuiltEvent,KilledEvent,LandMintedEvent,
+LandNameChangedEvent,LandTransferEvent,MintEvent,PlayedEvent,QuestFinalizedEvent,QuestStartedEvent,RouletteSpinResultEvent,ShopItemPurchasedEvent,TownSpeedUpWithSeedEvent,TownUpgradedWithLeafEvent,VillageProductionClaimedEvent,VillageSpeedUpWithSeedEvent,VillageUpgradedWithLeafEvent
+} from '@/lib/types';
+import { formatAddress,formatDuration,formatQuestReward,formatScore,formatTokenAmount,getBuildingName,getQuestDifficulty } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { HelpCircle } from 'lucide-react';
+import Image from 'next/image';
+import React from 'react';
 
 const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
   '1': { name: 'Fence', icon: '/icons/Fence.png' },
 };
-import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward } from '@/lib/utils';
-import { useTokenMetadata } from '@/hooks/useTokenMetadata';
-import { useReadContract } from 'wagmi';
-import { casinoAbi } from '@/public/abi/casino-abi';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import {
-  LandTransferEvent,
-  LandMintedEvent,
-  LandNameChangedEvent,
-  VillageUpgradedWithLeafEvent,
-  VillageSpeedUpWithSeedEvent,
-  TownUpgradedWithLeafEvent,
-  TownSpeedUpWithSeedEvent,
-  QuestStartedEvent,
-  QuestFinalizedEvent,
-  VillageProductionClaimedEvent,
-  BarracksBuiltEvent,
-  BarracksRaidEvent,
-  CasinoBuiltEvent,
-  RouletteSpinResultEvent,
-  BlackjackResultEvent
-} from '@/lib/types';
 
 const TimeAgo = React.memo(({ timestamp }: { timestamp: string }) => {
   const timeAgo = React.useMemo(() => {

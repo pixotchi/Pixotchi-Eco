@@ -1,17 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { generateText, tool } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
+import { generateText,tool } from 'ai';
+import { NextRequest,NextResponse } from 'next/server';
 // Use centralized strain data for Agent
-import { z } from 'zod';
+import { getAgentAIProvider,getAgentModelConfig } from '@/lib/ai-config';
 import {
-  createChatAuthRequiredResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+createChatAuthRequiredResponse,
+getChatSessionOrMiniAppBypassFromRequest,
 } from '@/lib/chat-auth';
 import { PLANT_STRAINS } from '@/lib/constants';
-import { getAgentAIProvider, getAgentModelConfig } from '@/lib/ai-config';
-import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
+import { enforceRateLimit,getRequestIp } from '@/lib/request-rate-limit';
+import { z } from 'zod';
 // Removed generic AgentKit/Vercel AI tools to avoid requiring RPC URLs in this route
 
 export const dynamic = 'force-dynamic';

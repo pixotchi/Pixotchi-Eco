@@ -11,16 +11,16 @@
  * - Only refetch when item changes (tracked by stable key)
  */
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSolanaBridge } from '@/hooks/useSolanaBridge';
 import { useSolanaWallet } from '@/hooks/useSolanaWallet';
-import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
-import { PublicKey } from '@solana/web3.js';
-import bs58 from 'bs58';
-import { toast } from 'react-hot-toast';
 import { solanaBridgeImplementation } from '@/lib/solana-bridge-implementation';
 import { SOLANA_BRIDGE_CONFIG } from '@/lib/solana-constants';
+import { useSignAndSendTransaction,useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
+import { PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
 

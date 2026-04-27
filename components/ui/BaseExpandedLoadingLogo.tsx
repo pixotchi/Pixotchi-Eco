@@ -3,6 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
+const RANDOM_COLORS = [
+  '#0033a0',
+  '#0090de',
+  '#d3bc8d',
+  '#ffd700',
+  '#5bc500',
+  '#8edd65',
+  '#ee2737',
+  '#fc9bb3'
+];
+
+const getRandomColor = () => RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)];
+
 interface BaseExpandedLoadingLogoProps {
   className?: string;
   text?: string;
@@ -10,19 +23,6 @@ interface BaseExpandedLoadingLogoProps {
 }
 
 export function BaseExpandedLoadingLogo({ className, text, size = 'md' }: BaseExpandedLoadingLogoProps) {
-  const randomColors = [
-    '#0033a0',
-    '#0090de', 
-    '#d3bc8d',
-    '#ffd700',
-    '#5bc500',
-    '#8edd65',
-    '#ee2737',
-    '#fc9bb3'
-  ];
-
-  const getRandomColor = () => randomColors[Math.floor(Math.random() * randomColors.length)];
-
   const [boxColors, setBoxColors] = useState({
     box1: getRandomColor(), // Random starting color
     box2: getRandomColor(), // Random starting color
@@ -127,4 +127,4 @@ export function BaseExpandedLoadingPageLoader({ text = "Loading..." }: { text?: 
 
 export function BaseExpandedLoadingSpinner({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
   return <BaseExpandedLoadingLogo size={size} className={className} />;
-} 
+}

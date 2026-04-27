@@ -1,8 +1,7 @@
 "use client";
 
-import { StatusService, StatusLevel } from "@/lib/status-checks";
-import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Clock, Info, WifiOff } from "lucide-react";
+import { StatusLevel,StatusService } from "@/lib/status-checks";
+import { AlertTriangle,CheckCircle2,Info,WifiOff } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 
 const iconMap: Record<StatusLevel, React.ReactNode> = {

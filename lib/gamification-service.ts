@@ -1,7 +1,7 @@
-import { redis, redisGetJSON, redisSetJSON, redisKeys, redisDel, withPrefix, redisCompareAndSetJSON, redisScanKeys } from '@/lib/redis';
 import { getTodayDateString } from '@/lib/invite-utils';
-import type { GmDay, GmLeaderEntry, GmMissionDay, GmProgressProof, GmSectionKey, GmStreak, GmTaskId } from './gamification-types';
+import { redis,redisCompareAndSetJSON,redisGetJSON,redisKeys,redisScanKeys,redisSetJSON,withPrefix } from '@/lib/redis';
 import { isGamificationDisabled } from './gamification-feature';
+import type { GmDay,GmLeaderEntry,GmMissionDay,GmProgressProof,GmStreak,GmTaskId } from './gamification-types';
 
 const PX = 'pixotchi:gm:';
 

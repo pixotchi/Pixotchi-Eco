@@ -1,29 +1,29 @@
-import { createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
-import { base, baseSepolia } from 'viem/chains';
-import {
-  Plant,
-  ShopItem,
-  Strain,
-  GardenItem,
-  Land,
-  FenceV2State,
-  BarracksConfig,
-  BarracksConfigV2,
-  BarracksLandState,
-  BarracksLandStateV2,
-  BarracksRaidPreview,
-  BarracksRaidPreviewV2,
-  BarracksRaidReport,
-  BarracksRaidReportV2,
-} from './types';
-import { appendBuilderSuffix } from './builder-code';
-import UniswapAbi from '@/public/abi/Uniswap.json';
-import { landAbi } from '../public/abi/pixotchi-v3-abi';
-import { leafAbi } from '../public/abi/leaf-abi';
-import { stakingAbi } from '@/public/abi/staking-abi';
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
+import { stakingAbi } from '@/public/abi/staking-abi';
+import UniswapAbi from '@/public/abi/Uniswap.json';
+import { encodeFunctionData,formatUnits,getAddress,parseUnits,PublicClient,WalletClient } from 'viem';
+import { base } from 'viem/chains';
+import { leafAbi } from '../public/abi/leaf-abi';
+import { landAbi } from '../public/abi/pixotchi-v3-abi';
+import { BaseRpcError,getBaseReadClient,waitForBaseReceipt } from './base-rpc';
+import { appendBuilderSuffix } from './builder-code';
 import { CLIENT_ENV } from './env-config';
-import { BaseRpcError, getBaseReadClient, waitForBaseReceipt } from './base-rpc';
+import {
+BarracksConfig,
+BarracksConfigV2,
+BarracksLandState,
+BarracksLandStateV2,
+BarracksRaidPreview,
+BarracksRaidPreviewV2,
+BarracksRaidReport,
+BarracksRaidReportV2,
+FenceV2State,
+GardenItem,
+Land,
+Plant,
+ShopItem,
+Strain,
+} from './types';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
 export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);
@@ -1147,7 +1147,7 @@ export const getStakeInfo = async (address: string): Promise<{ staked: bigint; r
       return { staked, rewards };
     }
     return null;
-  } catch (e) {
+  } catch {
     console.warn('getStakeInfo failed:', e);
     return null;
   }
@@ -1251,7 +1251,7 @@ export const getStakeComposite = async (
     }
 
     return { stake, approved, rewardRatio, timeUnit, totalStaked };
-  } catch (e) {
+  } catch {
     console.warn('getStakeComposite failed:', e);
     return { stake: null, approved: false, rewardRatio: null, timeUnit: null, totalStaked: null };
   }
@@ -1480,7 +1480,7 @@ export const transferPlants = async (
       const success = await waitForBaseTransactionSuccess(hash);
       if (success) successIds.push(id);
       else failedIds.push(id);
-    } catch (e) {
+    } catch {
       failedIds.push(id);
     }
   }
@@ -1522,7 +1522,7 @@ export const transferLands = async (
       const success = await waitForBaseTransactionSuccess(hash);
       if (success) successIds.push(id);
       else failedIds.push(id);
-    } catch (e) {
+    } catch {
       failedIds.push(id);
     }
   }
@@ -3175,7 +3175,7 @@ export const getKillCooldown = async (walletAddress: string): Promise<{ canKill:
 
 // -------------------- CASINO (ROULETTE) HELPERS - MULTI-BET VERSION --------------------
 
-import { casinoAbi, CasinoBetType } from '@/public/abi/casino-abi';
+import { casinoAbi,CasinoBetType } from '@/public/abi/casino-abi';
 
 export type CasinoBuildingConfig = {
   buildingToken: string;
@@ -3743,8 +3743,8 @@ export const approveCasinoTokenSpending = async (
 // BLACKJACK FUNCTIONS
 // ============================================================================
 
-import { blackjackAbi, BlackjackPhase, BlackjackAction, BlackjackResult } from '@/public/abi/blackjack-abi';
-export { BlackjackPhase, BlackjackAction, BlackjackResult };
+import { blackjackAbi,BlackjackAction,BlackjackPhase,BlackjackResult } from '@/public/abi/blackjack-abi';
+export { BlackjackAction,BlackjackPhase,BlackjackResult };
 
 // Types
 export interface BlackjackGameBasic {

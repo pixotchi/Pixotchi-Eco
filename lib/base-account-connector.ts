@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  baseAccount as wagmiBaseAccountConnector,
-  type BaseAccountParameters,
+baseAccount as wagmiBaseAccountConnector,
+type BaseAccountParameters,
 } from "wagmi/connectors";
 
 type BaseAccountConnectorParameters = BaseAccountParameters & {

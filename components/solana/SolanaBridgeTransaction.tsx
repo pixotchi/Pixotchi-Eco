@@ -5,12 +5,12 @@
  * UI component for executing bridge transactions
  */
 
-import React, { useState, useCallback } from 'react';
-import { useSolanaBridge, type BridgeStatus } from '@/hooks/useSolanaBridge';
+import { useSolanaBridge,type BridgeStatus } from '@/hooks/useSolanaBridge';
 import { useSolanaWallet } from '@/hooks/useSolanaWallet';
-import { formatWsol } from '@/lib/solana-quote';
-import { getSolanaExplorerUrl, getBaseExplorerUrl } from '@/lib/solana-twin';
 import { BRIDGE_CONFIG } from '@/lib/solana-constants';
+import { formatWsol } from '@/lib/solana-quote';
+import { getBaseExplorerUrl,getSolanaExplorerUrl } from '@/lib/solana-twin';
+import { useCallback,useState } from 'react';
 
 // ============ Types ============
 

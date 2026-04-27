@@ -5,10 +5,10 @@
  * GET /api/bridge/test-transfer?twin=<address>&amount=639108
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
-import { formatUnits, encodeFunctionData, type Address } from 'viem';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
+import { encodeFunctionData,formatUnits,type Address } from 'viem';
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 const ADAPTER = '0x8d3056a3e5144187fde837ea1b206f4bcaea85bc' as Address;
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
         data: transferFromData,
       });
       transferFromResult = { success: true, message: '✅ transferFrom would succeed when called by adapter' };
-    } catch (e: any) {
+    } catch {
       transferFromResult = { 
         success: false, 
         error: e.shortMessage || e.message,
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
           proxyInfo.codeSize = code ? (code.length - 2) / 2 : 0;
         }
       }
-    } catch (e) {
+    } catch {
       proxyInfo.error = 'Could not detect proxy type';
     }
 
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       // Check if the balance is stored at the proxy or implementation
       // For CrossChainERC20, balances should be at the proxy address
       deepCheck.note = 'Balance read succeeded in preChecks, so storage is accessible';
-    } catch (e) {
+    } catch {
       deepCheck.error = e instanceof Error ? e.message : 'Unknown';
     }
 

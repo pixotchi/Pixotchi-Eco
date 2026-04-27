@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { createContext,ReactNode,useCallback,useContext,useEffect,useState } from "react";
 
 const STORAGE_KEY = 'pixotchi:ethMode';
 
@@ -30,7 +30,7 @@ export function EthModeProvider({ children }: { children: ReactNode }) {
             if (stored !== null) {
                 setIsEthMode(stored === 'true');
             }
-        } catch (e) {
+        } catch {
             // localStorage not available (SSR or privacy mode)
             console.warn('[EthMode] localStorage not available');
         }
@@ -42,7 +42,7 @@ export function EthModeProvider({ children }: { children: ReactNode }) {
         if (!isInitialized) return;
         try {
             localStorage.setItem(STORAGE_KEY, String(isEthMode));
-        } catch (e) {
+        } catch {
             console.warn('[EthMode] Failed to persist to localStorage');
         }
     }, [isEthMode, isInitialized]);
