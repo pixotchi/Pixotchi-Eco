@@ -2,7 +2,7 @@
 
 import { useSlideshow } from "@/components/tutorial";
 import { Button } from "@/components/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { InviteStats } from '@/lib/types';
 import packageJson from '@/package.json';
-import { ArrowUpRight,Book,Calendar,Check,Copy,Gift,MessageCircle,Plus } from "lucide-react";
+import { Book,Calendar,Check,Copy,Gift,MessageCircle,Plus } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useId,useRef,useState } from "react";
 import { toast } from 'react-hot-toast';
@@ -50,61 +50,6 @@ const AboutWorldScene = () => (
     </div>
   </div>
 );
-
-const InfoCard = ({
-  icon,
-  iconSrc,
-  title,
-  description,
-  link,
-  linkLabel,
-}: {
-  icon?: React.ElementType;
-  iconSrc?: string;
-  title: string;
-  description: string;
-  link: string;
-  linkLabel: string;
-}) => {
-  const Icon = icon;
-
-  const handleExternalLink = () => { openExternalUrl(link); };
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10">
-            {Icon && (
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Icon className="w-6 h-6 text-primary" />
-              </div>
-            )}
-            {iconSrc && (
-              <Image
-                src={iconSrc}
-                alt={title}
-                width={40}
-                height={40}
-                className="w-10 h-10 rounded-xl object-cover"
-              />
-            )}
-          </div>
-          <CardTitle className="font-pixel">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground mb-4">{description}</p>
-        <Button variant="secondary" onClick={handleExternalLink}>
-          {linkLabel}
-          <ArrowUpRight className="w-4 h-4 ml-2" />
-        </Button>
-      </CardContent>
-    </Card>
-  );
-};
-
-
 
 export default function AboutTab() {
   const feedbackTextId = useId();

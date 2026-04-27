@@ -198,14 +198,6 @@ export function getPrivyChatAuthConfigStatus() {
 
 // Validation function to ensure sensitive data isn't exposed
 export const validateEnvSecurity = () => {
-  const sensitiveKeys = [
-    'ADMIN_INVITE_KEY',
-    'PRIVY_APP_SECRET',
-    'REDIS_TOKEN',
-    'UPSTASH_REDIS_REST_TOKEN',
-    'KV_REST_API_TOKEN',
-  ];
-
   // Avoid client-side environment introspection
   if (typeof window === 'undefined') {
     // Optionally, perform server-side sanity checks/logging here if needed

@@ -1,21 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAccount, useReadContract } from 'wagmi';
-import { toast } from 'react-hot-toast';
-import Image from 'next/image';
-import { erc20Abi } from 'viem';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ToggleGroup } from '@/components/ui/toggle-group';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import ErrorBoundary from '@/components/ui/error-boundary';
-import { sdk } from '@farcaster/miniapp-sdk';
+import { ToggleGroup } from '@/components/ui/toggle-group';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { useFrameContext } from '@/lib/frame-context';
+import { SEED_ADDRESS } from '@/lib/swap/constants';
 import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { sdk } from '@farcaster/miniapp-sdk';
+import Image from 'next/image';
+import { useEffect,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { erc20Abi } from 'viem';
+import { useAccount,useReadContract } from 'wagmi';
 import TradingViewWidget from './TradingViewWidget';
 import PixotchiSwapPanel from './pixotchi-swap-panel';
-import { SEED_ADDRESS } from '@/lib/swap/constants';
 
 const INITIAL_SEED_SUPPLY = BigInt(20_000_000) * BigInt(10) ** BigInt(18);
 const PERCENTAGE_BASIS_POINTS = BigInt(10_000);

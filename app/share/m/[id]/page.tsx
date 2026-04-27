@@ -1,7 +1,7 @@
 import { PIXOTCHI_BASE_APP_REFERRAL_URL } from "@/lib/pixotchi-links";
 import { redisGetJSON } from "@/lib/redis";
 import type { MintShareData } from "@/lib/types";
-import { Metadata,ResolvingMetadata } from "next";
+import { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,6 @@ function getOgImageUrl(data: MintShareData, platform: 'twitter' | 'farcaster' = 
 
 export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> },
-  _parent: ResolvingMetadata,
 ): Promise<Metadata> {
   // Resolve params in Next.js 15
   const { id } = await params;

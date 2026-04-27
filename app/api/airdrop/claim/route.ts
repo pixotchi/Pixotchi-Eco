@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { redis } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { encodeFunctionData, parseUnits } from 'viem';
+import { NextRequest,NextResponse } from 'next/server';
+import { encodeFunctionData,parseUnits } from 'viem';
 
 // Create public client for signature verification (supports ERC-1271)
 const publicClient = getBaseReadClient();

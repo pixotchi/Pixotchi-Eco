@@ -45,7 +45,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
 
   // Stake info for wallet profile variant
   const [stakeInfo, setStakeInfo] = useState<{ staked: bigint; rewards: bigint } | null>(null);
-  const [stakeLoading, setStakeLoading] = useState(false);
+  const [, setStakeLoading] = useState(false);
 
   // NFT counts for wallet profile variant
   const [plantCount, setPlantCount] = useState<number>(0);

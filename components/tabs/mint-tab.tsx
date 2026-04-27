@@ -48,7 +48,6 @@ const solLog = (...args: any[]) => { if (SOLANA_DEBUG) console.log(...args); };
 const solWarn = (...args: any[]) => { if (SOLANA_DEBUG) console.warn(...args); };
 const solError = (...args: any[]) => { if (SOLANA_DEBUG) console.error(...args); };
 
-const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
 const PLANT_MINT_DESCRIPTION = 'Choose a strain and mint your Plant onchain. Each Plant starts with 24 hours of lifetime, and its PTS define your share of ETH rewards.';
 const LAND_MINT_DESCRIPTION = 'Mint a Land to produce PTS and TOD passively by staking SEED instead of spending it, helping grow your Plant and ETH rewards over the long term.';
 
@@ -116,7 +115,7 @@ export default function MintTab() {
   // Resolve basename/ENS for share functionality
   const { name: primaryName } = usePrimaryName(address ?? undefined);
 
-  const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
   const [paymentTokenAllowance, setPaymentTokenAllowance] = useState<bigint>(BigInt(0));
@@ -130,7 +129,7 @@ export default function MintTab() {
     parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
     serialize: (value) => (value === 'plant' ? null : value),
   });
-  const [landBalance, setLandBalance] = useState(0);
+  const [, setLandBalance] = useState(0);
   const [landSupply, setLandSupply] = useState<{ totalSupply: number; maxSupply: number; } | null>(null);
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);
   const [landMintAllowance, setLandMintAllowance] = useState<bigint>(BigInt(0));
@@ -283,8 +282,6 @@ export default function MintTab() {
       try {
         // Determine payment token (use paymentToken if available, otherwise default to SEED)
         const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
-        const paymentPrice = selectedStrain.paymentPrice;
-
         // Fetch token symbol and balance in parallel
         const [symbol, rawBalance] = await Promise.allSettled([
           getTokenSymbol(paymentToken),

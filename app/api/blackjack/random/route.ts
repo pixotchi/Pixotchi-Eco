@@ -358,7 +358,7 @@ export async function POST(request: NextRequest) {
                 functionName: 'blackjackGetNonce',
                 args: [BigInt(landId)],
             }) as bigint;
-        } catch {
+        } catch (err) {
             console.error('Failed to read nonce from contract:', err);
             return NextResponse.json(
                 { error: 'Failed to read game state' },
@@ -377,7 +377,7 @@ export async function POST(request: NextRequest) {
                     functionName: 'blackjackGetGameToken',
                     args: [BigInt(landId)],
                 }) as string;
-            } catch {
+            } catch (err) {
                 console.error('Failed to read active blackjack token from contract:', err);
                 return NextResponse.json(
                     { error: 'Failed to read active game token' },

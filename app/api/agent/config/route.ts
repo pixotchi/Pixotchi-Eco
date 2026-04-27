@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_URL || '';
     // Placeholder values; client can override via contracts/constants
     const agentConfigured = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET && process.env.CDP_WALLET_SECRET);
 

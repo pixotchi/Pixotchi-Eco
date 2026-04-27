@@ -8,11 +8,11 @@ interface PaymasterStatusProps {
   showLabel?: boolean;
 }
 
-export function PaymasterStatus({ 
-  className = "", 
+export function PaymasterStatus({
+  className = "",
   showLabel = true
 }: PaymasterStatusProps) {
-  const { isPaymasterEnabled, isSponsored } = usePaymaster();
+  const { isPaymasterEnabled } = usePaymaster();
 
   if (!isPaymasterEnabled) return null;
 
@@ -45,4 +45,4 @@ export function SponsoredBadge({ show, className = "" }: SponsoredBadgeProps) {
       <span>Gasless</span>
     </div>
   );
-} 
+}

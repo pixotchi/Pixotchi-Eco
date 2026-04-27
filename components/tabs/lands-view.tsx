@@ -55,7 +55,7 @@ export default function LandsView() {
     );
   }
   const { address } = useAccount();
-  const { isSmartWallet } = useSmartWallet();
+  useSmartWallet();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
   const { isTabVisible } = useTabVisibility();

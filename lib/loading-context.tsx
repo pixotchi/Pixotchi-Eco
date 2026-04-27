@@ -113,7 +113,7 @@ export function useLoading() {
 
 // Utility hook for managing loading states in async operations
 export function useAsyncLoading() {
-  const { startLoading, stopLoading, updateLoading } = useLoading();
+  const { startLoading, stopLoading } = useLoading();
 
   const executeAsync = useCallback(async <T,>(
     id: string,

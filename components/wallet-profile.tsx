@@ -15,7 +15,6 @@ DialogTitle,
 } from "@/components/ui/dialog";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useAuthSurface } from "@/hooks/useAuthSurface";
-import { useBalances } from "@/lib/balance-context";
 import { clearAppCaches } from "@/lib/cache-utils";
 import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { useEthMode } from "@/lib/eth-mode-context";
@@ -46,7 +45,7 @@ XCircle
 } from "lucide-react";
 import React,{ useEffect,useMemo,useState } from "react";
 import toast from "react-hot-toast";
-import { useAccount,useBalance,useChainId,useDisconnect } from "wagmi";
+import { useAccount,useChainId,useDisconnect } from "wagmi";
 import BalanceCard from "./balance-card";
 import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
 import { StandardContainer } from "./ui/pixel-container";
@@ -99,7 +98,7 @@ interface WalletProfileProps {
 }
 
 export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
-  const { address, isConnected, connector } = useAccount();
+  const { address, connector } = useAccount();
   const { disconnect } = useDisconnect();
   const {
     ready: privyReady,
@@ -123,9 +122,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     isSmartWallet,
     walletType,
     isLoading: smartWalletLoading,
-    detectionMethods,
-    isContract,
-    refetch: refetchSmartWallet
   } = useSmartWallet();
 
 
@@ -137,8 +133,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const { solanaAddress, twinAddress, isTwinSetup, isLoading: solanaLoading } = useSolanaWallet();
   const { wallets: solanaPrivyWallets } = useSolanaPrivyWallets();
 
-  const { loading, refreshBalances } = useBalances();
-  const [showFullAddress, setShowFullAddress] = useState(false);
   const [referrerDomain, setReferrerDomain] = useState<string | null>(null);
   const [showFcDetails, setShowFcDetails] = useState<boolean>(false);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -317,15 +311,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       setReferrerDomain(null);
     }
   }, [fcContext, open]);
-
-  // Use wagmi's balance hook for ETH
-  const {
-    data: ethBalance,
-    isLoading: ethLoading,
-    refetch: refetchEthBalance,
-  } = useBalance({
-    address: address,
-  });
 
   // Network info
   const getNetworkName = (chainId: number) => {
@@ -510,14 +495,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     } catch {
       toast.error("Close action not supported in this context");
     }
-  };
-
-  const handleRefreshBalances = () => {
-    refetchEthBalance();
-    refetchSmartWallet();
-    refreshBalances().then(() => {
-      toast.success("Balances refreshed");
-    });
   };
 
   const handleEmbeddedWalletAddressChange = (event: React.ChangeEvent<HTMLInputElement>) => {

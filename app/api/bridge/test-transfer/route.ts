@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
         data: transferFromData,
       });
       transferFromResult = { success: true, message: '✅ transferFrom would succeed when called by adapter' };
-    } catch {
+    } catch (e: any) {
       transferFromResult = { 
         success: false, 
         error: e.shortMessage || e.message,
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       // Check if the balance is stored at the proxy or implementation
       // For CrossChainERC20, balances should be at the proxy address
       deepCheck.note = 'Balance read succeeded in preChecks, so storage is accessible';
-    } catch {
+    } catch (e) {
       deepCheck.error = e instanceof Error ? e.message : 'Unknown';
     }
 

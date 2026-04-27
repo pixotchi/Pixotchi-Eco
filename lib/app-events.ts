@@ -17,22 +17,6 @@ function dispatchTypedEvent<T>(name: string, detail?: T) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
-function subscribeToTypedEvent<T>(
-  name: string,
-  listener: (detail: T | undefined) => void,
-): EventCleanup {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  const handler = (event: Event) => {
-    listener((event as CustomEvent<T>).detail);
-  };
-
-  window.addEventListener(name, handler as EventListener);
-  return () => window.removeEventListener(name, handler as EventListener);
-}
-
 function subscribeToTypedEvents<T>(
   names: string[],
   listener: (detail: T | undefined) => void,

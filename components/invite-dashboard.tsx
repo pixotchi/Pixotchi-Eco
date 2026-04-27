@@ -29,7 +29,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
   const { address } = useAccount();
   const queryClient = useQueryClient();
   const [stats, setStats] = useState<InviteStats | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [recentCodes, setRecentCodes] = useState<string[]>([]);
   const [systemEnabled, setSystemEnabled] = useState(true);
@@ -238,7 +238,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {recentCodes.map((code, index) => (
+                  {recentCodes.map((code) => (
                     <div
                       key={code}
                       className="flex items-center justify-between p-3 bg-muted rounded-md"
@@ -296,4 +296,4 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
       </DialogContent>
     </Dialog>
   );
-} 
+}

@@ -33,7 +33,7 @@ import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
 import { decodeEventLog } from "viem";
-import { useAccount,usePublicClient } from "wagmi";
+import { useAccount } from "wagmi";
 
 type LeaderboardPlant = Plant & {
   rank: number;
@@ -188,7 +188,6 @@ export default function LeaderboardTab() {
     },
     serialize: (value) => (value ? '1' : null),
   });
-  const publicClient = usePublicClient();
   const [boardType, setBoardType] = useWebQueryState<'plants' | 'lands' | 'stake' | 'rocks'>({
     key: 'leaderboardBoard',
     defaultValue: 'plants',

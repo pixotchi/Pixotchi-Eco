@@ -133,6 +133,9 @@ interface AdminStatsResponse {
   endpoints?: Record<string, string>;
 }
 
+const getErrorName = (error: unknown): string => error instanceof Error ? error.name : '';
+const getErrorMessage = (error: unknown): string | undefined => error instanceof Error ? error.message : undefined;
+
 // Loading spinner component for consistency
 const LoadingSpinner = ({ text }: { text?: string }) => (
   <div className="text-center py-8">
@@ -285,9 +288,9 @@ export default function AdminInviteDashboard() {
         const errorData = await response.json().catch(() => ({}));
         toast.error(errorData.message || `Authentication failed (${response.status})`);
       }
-    } catch {
+    } catch (error) {
       console.error('Authentication error:', error);
-      toast.error(error.message || 'Network error during authentication');
+      toast.error(getErrorMessage(error) || 'Network error during authentication');
     } finally {
       setLoading(false);
     }
@@ -317,8 +320,8 @@ export default function AdminInviteDashboard() {
         const errorData = await response.json().catch(() => ({}));
         toast.error(errorData.message || 'Failed to refresh stats');
       }
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Refresh stats error:', error);
         toast.error('Failed to refresh stats');
       }
@@ -368,7 +371,7 @@ export default function AdminInviteDashboard() {
         setBroadcastMessages(data.messages || []);
         setBroadcastStats(data.stats || null);
       }
-    } catch {
+    } catch (error) {
       console.error('Failed to fetch broadcast messages:', error);
     }
   }, [isAuthenticated, adminKey]);
@@ -616,10 +619,10 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || `Cleanup failed: ${actionNames[action as keyof typeof actionNames]}`);
       }
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Cleanup error:', error);
-        toast.error(error.message || 'Cleanup operation failed');
+        toast.error(getErrorMessage(error) || 'Cleanup operation failed');
       }
     } finally {
       setLoading(false);
@@ -697,7 +700,7 @@ export default function AdminInviteDashboard() {
       const data = await response.json();
       setChatMessages(data.messages || []);
       setChatStats(data.stats || null);
-    } catch {
+    } catch (error) {
       console.error('Error fetching chat data:', error);
       toast.error('Failed to fetch chat data');
     } finally {
@@ -724,7 +727,7 @@ export default function AdminInviteDashboard() {
 
       toast.success('Message deleted');
       fetchChatData(); // Refresh data
-    } catch {
+    } catch (error) {
       console.error('Error deleting message:', error);
       toast.error('Failed to delete message');
     }
@@ -751,10 +754,10 @@ export default function AdminInviteDashboard() {
       const data = await response.json();
       toast.success(`Deleted ${data.deletedCount} messages`);
       fetchChatData(); // Refresh data
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Error deleting all messages:', error);
-        toast.error(error.message || 'Failed to delete all messages');
+        toast.error(getErrorMessage(error) || 'Failed to delete all messages');
       }
     }
   };
@@ -788,7 +791,7 @@ export default function AdminInviteDashboard() {
       const data = await response.json();
       setAIConversations(data.conversations || []);
       setAIStats(data.stats || null);
-    } catch {
+    } catch (error) {
       console.error('Error fetching AI chat data:', error);
       toast.error('Failed to fetch AI chat data');
     } finally {
@@ -811,7 +814,7 @@ export default function AdminInviteDashboard() {
       const result = await response.json();
       setConversationMessages(result.messages);
       setSelectedConversation(conversationId);
-    } catch {
+    } catch (error) {
       console.error('Error loading conversation messages:', error);
       toast.error('Failed to load conversation');
     }
@@ -838,10 +841,10 @@ export default function AdminInviteDashboard() {
         setSelectedConversation(null);
         setConversationMessages([]);
       }
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Error deleting conversation:', error);
-        toast.error(error.message || 'Failed to delete conversation');
+        toast.error(getErrorMessage(error) || 'Failed to delete conversation');
       }
     }
   };
@@ -885,10 +888,10 @@ export default function AdminInviteDashboard() {
       setSelectedConversation(null);
       setConversationMessages([]);
       await fetchAIChatData();
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Error deleting all AI conversations:', error);
-        toast.error(error.message || 'Failed to delete all AI conversations');
+        toast.error(getErrorMessage(error) || 'Failed to delete all AI conversations');
       }
     } finally {
       setDeletingAllAIConversations(false);
@@ -929,8 +932,8 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to fetch feedback');
       }
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Feedback fetch error:', error);
         toast.error('Failed to fetch feedback');
       }
@@ -957,7 +960,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to delete feedback');
       }
-    } catch {
+    } catch (error) {
       console.error('Delete feedback error:', error);
       toast.error('Failed to delete feedback');
     } finally {
@@ -988,7 +991,7 @@ export default function AdminInviteDashboard() {
           } else {
             toast.error(data.error || 'Failed to delete all feedback');
           }
-        } catch {
+        } catch (error) {
           console.error('Delete all feedback error:', error);
           toast.error('Failed to delete all feedback');
         } finally {
@@ -1014,10 +1017,10 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || `Failed to reset ${scope}`);
       }
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Reset gamification error:', error);
-        toast.error(error.message || 'Reset failed');
+        toast.error(getErrorMessage(error) || 'Reset failed');
       }
     }
   };
@@ -1123,13 +1126,10 @@ export default function AdminInviteDashboard() {
   // Notifications admin data
   const [notifStats, setNotifStats] = useState<PlantNotificationStats | null>(null);
   const [notifGlobalStats, setNotifGlobalStats] = useState<GlobalNotificationStats | null>(null);
-  const [notifFenceStats, setNotifFenceStats] = useState<FenceStats | null>(null);
-  const [notifFenceV2Stats, setNotifFenceV2Stats] = useState<FenceStats | null>(null);
+  const [, setNotifFenceStats] = useState<FenceStats | null>(null);
+  const [, setNotifFenceV2Stats] = useState<FenceStats | null>(null);
   const [eligibleFids, setEligibleFids] = useState<string[]>([]);
   const [notifDebugResult, setNotifDebugResult] = useState<any>(null);
-  const [notifDebugLoadingWarn, setNotifDebugLoadingWarn] = useState(false);
-  const [notifDebugLoadingExpire, setNotifDebugLoadingExpire] = useState(false);
-  const [notifResetFenceLoading, setNotifResetFenceLoading] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
   const [baseAudience, setBaseAudience] = useState<any>(null);
   const [baseCampaigns, setBaseCampaigns] = useState<any[]>([]);
@@ -1172,7 +1172,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data.error || 'Failed to load notification keys');
       }
-    } catch {
+    } catch (error) {
       console.error('Failed to load notification keys:', error);
       toast.error('Failed to load notification keys');
     } finally {
@@ -1240,7 +1240,7 @@ export default function AdminInviteDashboard() {
         const errorMessage = (data as { error?: string })?.error || 'Failed to load notifications stats';
         toast.error(errorMessage);
       }
-    } catch {
+    } catch (error) {
       console.error('Failed to load notifications stats:', error);
       toast.error('Failed to load notifications stats');
     } finally { setNotifLoading(false); }
@@ -1275,8 +1275,8 @@ export default function AdminInviteDashboard() {
           }
           const data = await res.json();
           setGmLb({ streakTop: data.streakTop || [], missionTop: data.missionTop || [] });
-        } catch {
-          if (error.name !== 'AbortError') {
+        } catch (error) {
+          if (getErrorName(error) !== 'AbortError') {
             console.error('Error fetching gamification data:', error);
           }
         }
@@ -1342,10 +1342,10 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || 'Reset failed');
       }
-    } catch {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (getErrorName(error) !== 'AbortError') {
         console.error('Reset notifications error:', error);
-        toast.error(error.message || 'Reset failed');
+        toast.error(getErrorMessage(error) || 'Reset failed');
       }
     } finally { setLoading(false); }
   };
@@ -1377,7 +1377,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || 'Failed to fetch eligible plants');
       }
-    } catch {
+    } catch (error) {
       console.error('Failed to fetch eligible plants:', error);
       toast.error('Failed to fetch eligible plants');
     } finally { setEligibleLoading(false); }
@@ -1409,7 +1409,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error(data?.error || 'Trigger failed');
       }
-    } catch {
+    } catch (error) {
       console.error('Trigger notifications failed:', error);
       toast.error('Trigger failed');
     } finally { setTriggerLoading(false); }
@@ -1485,7 +1485,7 @@ export default function AdminInviteDashboard() {
         toast.success(data?.completed ? 'Audience sync completed' : 'Audience sync checkpoint saved');
         fetchNotifStats();
       }
-    } catch {
+    } catch (error) {
       console.error('Base audience sync failed:', error);
       toast.error('Audience sync failed');
     } finally {
@@ -1518,7 +1518,7 @@ export default function AdminInviteDashboard() {
         setBaseCampaignPreview(data.preview);
         toast.success(`Preview ready for ${data.preview?.resolvedCount || 0} wallets`);
       }
-    } catch {
+    } catch (error) {
       console.error('Preview failed:', error);
       toast.error('Preview failed');
     } finally {
@@ -1554,66 +1554,12 @@ export default function AdminInviteDashboard() {
         toast.success(dryRun ? 'Dry run saved' : `Campaign processed: ${data.result?.sentCount || 0} sent`);
         fetchNotifStats();
       }
-    } catch {
+    } catch (error) {
       console.error('Campaign failed:', error);
       toast.error('Campaign failed');
     } finally {
       setBaseCampaignLoading(false);
     }
-  };
-
-  const runFenceDebug = async (type: 'warn' | 'expire') => {
-    const setLoading = type === 'warn' ? setNotifDebugLoadingWarn : setNotifDebugLoadingExpire;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/notifications/cron/fence-expiry?debug=1`, { method: 'POST' });
-      const data = await res.json();
-      setNotifDebugResult(data);
-      if (!res.ok || data?.success === false) {
-        toast.error(data?.error || 'Debug run failed');
-      } else {
-        toast.success(type === 'warn' ? 'Warn debug run completed' : 'Expire debug run completed');
-      }
-      fetchNotifStats();
-    } catch {
-      console.error('Debug run failed:', error);
-      toast.error('Debug run failed');
-    } finally { setLoading(false); }
-  };
-
-  const resetFenceData = async (fid?: string, plant?: string) => {
-    setNotifResetFenceLoading(true);
-    try {
-      const params = new URLSearchParams({ scope: 'fence' });
-      if (fid) params.set('fid', fid);
-      if (plant) params.set('plantId', plant);
-      const res = await fetch(`/api/admin/notifications/reset?${params.toString()}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${adminKey}` },
-      });
-      const data = await res.json();
-      if (!res.ok || data?.success === false) {
-        toast.error(data?.error || 'Failed to reset fence data');
-      } else {
-        toast.success('Fence data reset');
-        fetchNotifStats();
-      }
-    } catch {
-      console.error('Reset fence data failed:', error);
-      toast.error('Reset fence data failed');
-    } finally {
-      setNotifResetFenceLoading(false);
-    }
-  };
-
-  const confirmResetNotifFence = () => {
-    showConfirmDialog({
-      title: 'Reset Fence Data',
-      description: 'Are you sure you want to reset fence alert data? This clears all logs, counts, and throttles.',
-      confirmText: 'Reset',
-      onConfirm: () => resetFenceData(),
-      isDangerous: true,
-    });
   };
 
   // OG Image test handlers
@@ -1641,7 +1587,7 @@ export default function AdminInviteDashboard() {
       } else {
         toast.error('Failed to generate short URL');
       }
-    } catch {
+    } catch (error) {
       console.error('Failed to generate short URL', error);
       toast.error('Error generating short URL');
     } finally {

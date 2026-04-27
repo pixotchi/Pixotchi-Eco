@@ -118,7 +118,6 @@ export default function BuildingGrid({
   selectedBuilding,
   selectedBuildingType = buildingType,
   onBuildingSelect,
-  currentBlock,
   landId,
   gridClassName,
   denseLabels = false

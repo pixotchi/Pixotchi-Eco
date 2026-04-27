@@ -26,7 +26,7 @@ import { formatDuration,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/
 import Image from 'next/image';
 import { useEffect,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { useAccount,useBalance,useWalletClient } from 'wagmi';
+import { useAccount,useBalance } from 'wagmi';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -44,13 +44,12 @@ export default function ItemDetailsPanel({
   quantity
 }: ItemDetailsPanelProps) {
   const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
   const { isSponsored } = usePaymaster();
-  const { isSmartWallet, walletType, isLoading: smartWalletLoading } = useSmartWallet();
+  const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const { isEthMode } = useEthModeSafe();
   const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
-  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [, setBalanceLoading] = useState(true);
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
   const [fenceV2Days, setFenceV2Days] = useState<number>(1);
   const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
@@ -262,8 +261,6 @@ export default function ItemDetailsPanel({
   const currentTimeSec = Math.floor(Date.now() / 1000);
   const fenceV2State = selectedPlant?.fenceV2 ?? null;
   const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > currentTimeSec);
-  const fenceV2MirroringV1 = Boolean(fenceV2State?.isMirroringV1);
-  const fenceV2EffectUntil = Number(fenceV2State?.activeUntil || 0);
   const fenceV2BlockedByV1 = Boolean(fenceV2State?.v1Active);
 
   const plantTimeUntilStarving = Number(selectedPlant?.timeUntilStarving || 0);
@@ -527,7 +524,7 @@ export default function ItemDetailsPanel({
               buttonClassName="w-full"
               onQuote={setSolanaQuote}
               disabled={!selectedPlant || !selectedItem || selectedPlant.status === 4 || (itemType === 'garden' && !hasQuantitySelected)}
-              onSuccess={(signature) => {
+              onSuccess={() => {
                 onPurchaseSuccess();
                 toast.success('Purchase submitted via bridge!');
               }}

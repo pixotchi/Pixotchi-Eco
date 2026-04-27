@@ -121,7 +121,7 @@ export function EditPlantName({
     return () => { cancelled = true; };
   }, [isOpen, isSmartWallet, isEthMode, isSolana, nameChangeCostWei]);
 
-  const handleSuccess = (tx: any) => {
+  const handleSuccess = () => {
     toast.success(`Plant name changed to "${newName.trim()}"!`);
     setIsTransactionPending(false);
 
@@ -286,7 +286,7 @@ export function EditPlantName({
               buttonClassName="w-full"
               onQuote={setSolanaQuote}
               disabled={!isNameValid || isTransactionPending}
-              onSuccess={(signature) => {
+              onSuccess={() => {
                 toast.success(`Plant name changed to "${newName.trim()}"!`);
                 setIsTransactionPending(false);
                 if (onNameChanged) {
@@ -308,8 +308,8 @@ export function EditPlantName({
               newName={newName.trim()}
               ethAmount={ethQuote.ethAmountWithBuffer}
               minSeedOut={nameChangeCostWei}
-              onSuccess={(tx) => {
-                handleSuccess(tx);
+              onSuccess={() => {
+                handleSuccess();
               }}
               onError={handleError}
               buttonText={

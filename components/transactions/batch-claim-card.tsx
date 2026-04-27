@@ -180,11 +180,6 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
     [currentBatchItems]
   );
 
-  const batchLifetime = useMemo(() =>
-    currentBatchItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)),
-    [currentBatchItems]
-  );
-
   // Only create calls for current batch
   const calls = useMemo(() => {
     // 1. Burn transaction (First call in batch)
@@ -328,7 +323,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
                   postMissionProgress(payload);
                 } catch { }
               }}
-              onError={(e) => toast.error("Batch claim failed")}
+              onError={() => toast.error("Batch claim failed")}
             />
           </div>
         )}

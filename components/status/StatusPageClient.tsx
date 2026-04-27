@@ -2,10 +2,10 @@
 
 import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
-import { StatusLevel,StatusService,StatusSnapshot } from "@/lib/status-checks";
+import { StatusService,StatusSnapshot } from "@/lib/status-checks";
 import { RefreshCcw } from "lucide-react";
 import Image from "next/image";
-import { useCallback,useEffect,useMemo,useState,useTransition } from "react";
+import { useCallback,useEffect,useState,useTransition } from "react";
 import { StatusCard } from "./StatusCard";
 
 interface StatusPageClientProps {
@@ -13,25 +13,6 @@ interface StatusPageClientProps {
   refreshMinutes: number;
   showManualRefresh: boolean;
 }
-
-const statusCopy: Record<StatusLevel, { headline: string; description: string }> = {
-  operational: {
-    headline: "All systems operational",
-    description: "Everything looks healthy across Pixotchi services.",
-  },
-  degraded: {
-    headline: "Performance degraded",
-    description: "Some systems are experiencing slowdowns. Our team is monitoring.",
-  },
-  outage: {
-    headline: "Service disruption detected",
-    description: "One or more systems are unavailable. Check details below.",
-  },
-  unknown: {
-    headline: "Status unknown",
-    description: "We couldn’t determine the current state. Please try refreshing.",
-  },
-};
 
 export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRefresh }: StatusPageClientProps) {
   const [snapshot, setSnapshot] = useState<StatusSnapshot>(initialSnapshot);
@@ -85,8 +66,6 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
     };
   }, []);
 
-  const summary = useMemo(() => statusCopy[snapshot.overall] ?? statusCopy.unknown, [snapshot.overall]);
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-card/90 px-4 py-3 backdrop-blur-sm">
@@ -135,4 +114,3 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
     </div>
   );
 }
-

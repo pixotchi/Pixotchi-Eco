@@ -49,7 +49,7 @@ export const redis = (() => {
       try {
         await instance!.ping();
         logger.debug('Redis connection test successful');
-      } catch {
+      } catch (e) {
         logger.error('Redis connection test failed', e);
       }
     }, 0);

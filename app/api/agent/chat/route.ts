@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       reason: z.string().optional().describe('Reason for listing strains')
     });
 
-    const listStrainsExecute = async (args: z.infer<typeof listStrainsParams>) => {
+    const listStrainsExecute = async () => {
       // Return centralized strain dataset
       // Use explicit type casting to avoid union type complexities in inference
       const strains = HARDCODED_STRAINS.map(s => ({ id: Number(s.id), name: String(s.name), mintPriceSeed: Number(s.mintPriceSeed) }));

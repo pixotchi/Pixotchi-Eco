@@ -44,7 +44,7 @@ export function useBroadcastMessages() {
     }
     return new Set();
   });
-  const [tutorialCompleted, setTutorialCompleted] = useState(isTutorialCompleted());
+  const [, setTutorialCompleted] = useState(isTutorialCompleted());
   const lastFetchRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fetchCountRef = useRef<number>(0);

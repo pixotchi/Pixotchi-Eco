@@ -77,7 +77,6 @@ export function SolanaBridgeTransaction({
   params,
   buttonText,
   disabled = false,
-  onSuccess,
   onError,
   className = '',
   showCost = true,

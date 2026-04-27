@@ -208,7 +208,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 } else {
                     setAllowanceWei(BigInt(0));
                 }
-            } catch { console.error('Failed to load casino config:', e); }
+            } catch (e) { console.error('Failed to load casino config:', e); }
         };
         if (open) loadConfig();
     }, [open, address, landId, selectedToken, casinoPolicy.playable]);
@@ -394,7 +394,6 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         const isLastCol = colIndex === 11;
 
         // Calculate adjacent numbers for complex bets
-        const numAbove = num + 1; // e.g., if num=2, above=3
         const numBelow = num - 1; // e.g., if num=2, below=1
         const numRight = num + 3; // e.g., if num=3, right=6
 

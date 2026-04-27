@@ -360,10 +360,6 @@ export default function SolanaBridgeButton({
     onSuccess, onError
   ]);
   
-  // Determine if quote is ready (successful with amount)
-  const hasValidQuote = localQuote && localQuote.wsolAmount > BigInt(0) && !localQuote.error;
-  const quoteError = localQuote?.error;
-  
   // For paid actions: disable only while loading quote for the first time (not on error)
   // If quote fails, user can still click - the prepare function will retry getting a fresh quote
   // Note: We use isConnected (from useSolanaWallet) as the primary check, not solanaWallet

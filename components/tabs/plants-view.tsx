@@ -71,7 +71,7 @@ export default function PlantsView() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
   const [selectedItem, setSelectedItem] = useState<ShopItem | GardenItem | null>(null);
-  const { shopItems, gardenItems, isLoading: catalogsLoading } = useItemCatalogs();
+  const { shopItems, gardenItems } = useItemCatalogs();
   const [itemType, setItemType] = useState<"shop" | "garden">("garden");
 
   const [loading, setLoading] = useState(true);
@@ -777,7 +777,6 @@ export default function PlantsView() {
                       // Shop items - no grouping needed (all are protection items)
                       <div className="grid grid-cols-3 gap-2">
                         {shopItems.map((item: ShopItem) => {
-                          const quantity = getItemQuantity(item.id);
                           return (
                             <div key={item.id} className="space-y-1">
                               <div className="flex justify-center">

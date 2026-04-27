@@ -147,10 +147,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [withStar, setWithStar] = useState(false);
   const [cooldown, setCooldown] = useState({ normal: 0, star: 0 });
   const [spinMeta, setSpinMeta] = useState<SpinState | null>(null);
-  const [loadingSpinMeta, setLoadingSpinMeta] = useState(false);
+  const [, setLoadingSpinMeta] = useState(false);
   const [pendingSecret, setPendingSecret] = useState<Uint8Array | null>(null);
-  const [blockCountdown, setBlockCountdown] = useState(0);
-  const [blockSecondsRemaining, setBlockSecondsRemaining] = useState(0);
+  const [, setBlockCountdown] = useState(0);
+  const [, setBlockSecondsRemaining] = useState(0);
   const [spinRefreshKey, setSpinRefreshKey] = useState(0);
   const [wheelState, setWheelState] = useState<{
     spinning: boolean;

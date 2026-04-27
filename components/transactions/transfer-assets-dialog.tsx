@@ -106,7 +106,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
             } catch {}
           }
         }
-      } catch {
+      } catch (e) {
         if (!active) return;
         console.error("Failed to refresh transferable assets:", e);
       } finally {
@@ -273,7 +273,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       onOpenChange(false);
       setConfirmStep(false);
       setAck(false);
-    } catch {
+    } catch (e: any) {
       const msg = (e?.shortMessage || e?.message || "").toString().toLowerCase();
       if (e?.code === 4001 || e?.cause?.code === 4001 || e?.name === 'UserRejectedRequestError' || msg.includes('user rejected')) {
         toast('Transfer cancelled', { icon: '✖️' });
@@ -454,7 +454,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                       await waitForBaseReceipt(hash);
                       setApprovals(s => ({ ...s, plants: true }));
                       toast.success('Plants approved');
-                    } catch {
+                    } catch (e: any) {
                       const msg = (e?.shortMessage || e?.message || "").toString().toLowerCase();
                       if (e?.code === 4001 || e?.cause?.code === 4001 || e?.name === 'UserRejectedRequestError' || msg.includes('user rejected')) {
                         toast('Approval cancelled', { icon: '✖️' });
@@ -490,7 +490,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                       await waitForBaseReceipt(hash);
                       setApprovals(s => ({ ...s, lands: true }));
                       toast.success('Lands approved');
-                    } catch {
+                    } catch (e: any) {
                       const msg = (e?.shortMessage || e?.message || "").toString().toLowerCase();
                       if (e?.code === 4001 || e?.cause?.code === 4001 || e?.name === 'UserRejectedRequestError' || msg.includes('user rejected')) {
                         toast('Approval cancelled', { icon: '✖️' });

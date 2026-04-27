@@ -67,10 +67,6 @@ export async function GET(request: NextRequest) {
     const isToken1Match = token1.toLowerCase() === BRIDGE_WSOL.toLowerCase();
     const hasMatch = isToken0Match || isToken1Match;
 
-    // Identify which token is wSOL and which is USDC in the pool
-    const poolWsol = isToken0Match ? token0 : (isToken1Match ? token1 : null);
-    const poolOther = isToken0Match ? token1 : token0;
-
     return NextResponse.json({
       bridgeWsol: {
         address: BRIDGE_WSOL,

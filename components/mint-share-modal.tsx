@@ -1,21 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Share2, Sparkles } from "lucide-react";
-import Image from "next/image";
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogHeader,
+DialogTitle,
+} from "@/components/ui/dialog";
 import { useFrameContext } from "@/lib/frame-context";
-import { sdk } from "@farcaster/miniapp-sdk";
-import { toast } from "react-hot-toast";
 import { openExternalUrl } from "@/lib/open-external";
 import type { MintShareData } from "@/lib/types";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { Copy,Share2,Sparkles } from "lucide-react";
+import Image from "next/image";
+import { useCallback,useEffect,useMemo,useState } from "react";
+import { toast } from "react-hot-toast";
 
 interface MintShareModalProps {
   open: boolean;

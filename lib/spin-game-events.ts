@@ -129,6 +129,7 @@ export function extractBestSpinRewardFromLogs(
     return undefined;
   }
 
-  const { score: _score, ...result } = best;
+  const { score, ...result } = best;
+  void score;
   return result;
 }

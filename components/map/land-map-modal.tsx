@@ -42,7 +42,6 @@ export function LandMapModal({
   const [center, setCenter] = useState({ x: 0, y: 0 });
   const [tappedLandId, setTappedLandId] = useState<number | null>(null);
   const [tappedWilderness, setTappedWilderness] = useState<{ x: number, y: number, type: string } | null>(null);
-  const [copied, setCopied] = useState(false);
   const [fetchedOwner, setFetchedOwner] = useState<string | null>(null);
   const [isOwnerLoading, setIsOwnerLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -100,13 +99,6 @@ export function LandMapModal({
       setTappedLandId(null);
       setTappedWilderness(null);
     }
-  };
-
-  const copyAddress = (address: string) => {
-      if (!address) return;
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
   };
 
   const neighbor = tappedLandId ? neighborData[tappedLandId] : null;

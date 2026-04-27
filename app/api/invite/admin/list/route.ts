@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     codes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     // Log successful admin action
-    await logAdminAction('admin_list_success', 'valid_key', { 
+    await logAdminAction('admin_list_success', 'valid_key', {
       totalCodes: codes.length,
       activeCodes: codes.filter(c => !c.isUsed && !c.isExpired).length,
       usedCodes: codes.filter(c => c.isUsed).length,
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   const error = createErrorResponse('Use GET method to list codes', 405);
   return NextResponse.json(error.body, { status: error.status });
-} 
+}

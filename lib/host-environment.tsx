@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
 import { sdk } from "@farcaster/miniapp-sdk";
+import React,{ createContext,useContext,useEffect,useState } from "react";
 
 export type SafeAreaInsets = {
   top: number;

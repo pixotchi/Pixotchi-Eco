@@ -21,11 +21,6 @@ type OrderView = {
   amountAsk: bigint; // wei
 };
 
-function formatToken(amount: bigint): string {
-  const s = (Number(amount) / 1e18).toFixed(6);
-  return s.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
-}
-
 function toNumberWei(v: bigint): number {
   return Number(v) / 1e18;
 }
@@ -64,7 +59,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [sellSide, setSellSide] = useState<"SEED" | "LEAF">("LEAF");
   const [amount, setAmount] = useState<string>("");
   const [price, setPrice] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
+  const [, setLoading] = useState<boolean>(false);
   const [focusedSide, setFocusedSide] = useState<"asks" | "bids" | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [selectedSide, setSelectedSide] = useState<"asks" | "bids" | null>(null);
@@ -190,25 +185,6 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     isActive: Boolean(o.isActive),
     amountAsk: BigInt(o.amountAsk),
   });
-
-  const createOrderCall: { address: `0x${string}`; abi: any; functionName: string; args: any[] } | null = useMemo(() => {
-    if (!amount || !price || transactionLandId === null) return null;
-    const toWei = (v: string) => {
-      const n = Number(v);
-      if (!Number.isFinite(n) || n <= 0) return null;
-      return BigInt(Math.floor(n * 1e18));
-    };
-    const sellToken = sellSide === 'LEAF' ? 1 : 0;
-    const orderAmount = toWei(amount);
-    const amountAsk = toWei(price);
-    if (orderAmount === null || amountAsk === null) return null;
-    return {
-      address: LAND_CONTRACT_ADDRESS as `0x${string}`,
-      abi: landAbi as any,
-      functionName: 'marketPlaceCreateOrder',
-      args: [transactionLandId, BigInt(sellToken), orderAmount, amountAsk] as any[],
-    };
-  }, [sellSide, amount, price, transactionLandId]);
 
   const refresh = () => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }

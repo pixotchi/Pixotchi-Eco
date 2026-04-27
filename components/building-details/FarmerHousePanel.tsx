@@ -33,7 +33,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   const [currentBlock, setCurrentBlock] = React.useState<bigint>(BigInt(0));
   const [difficulty, setDifficulty] = React.useState<Record<number, number>>({});
   const [rewardsWalletBalance, setRewardsWalletBalance] = React.useState<bigint>(BigInt(0));
-  const [balanceLoading, setBalanceLoading] = React.useState<boolean>(false);
+  const [, setBalanceLoading] = React.useState<boolean>(false);
 
   const fetchRewardsBalance = React.useCallback(async () => {
     if (!publicClient) return;
@@ -46,8 +46,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
         args: [QUEST_REWARDS_WALLET as `0x${string}`],
       }) as bigint;
       setRewardsWalletBalance(balance);
-    } catch {
-      console.error('Failed to fetch rewards wallet balance:', e);
+    } catch (error) {
+      console.error('Failed to fetch rewards wallet balance:', error);
     } finally {
       setBalanceLoading(false);
     }
@@ -113,8 +113,6 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
   };
-  const difficultyLabel = (d: number) => (d === 0 ? 'EASY' : d === 1 ? 'MEDIUM' : 'HARD');
-
   const handleSuccess = async (opts?: { slotIndex?: number; awaitCommitted?: boolean; awaitUncommitted?: boolean; awaitInProgress?: boolean }) => {
     await fetchSlots();
     onQuestUpdate();

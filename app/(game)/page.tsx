@@ -66,8 +66,7 @@ function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => v
 // Factory function to create dynamic imports with error handling
 const createDynamicTab = (
   importFn: () => Promise<any>,
-  tabName: string,
-  chunkName: string
+  tabName: string
 ) => {
   return dynamic(
     () => importFn().catch((error) => {
@@ -88,33 +87,27 @@ const createDynamicTab = (
 const tabComponents = {
   dashboard: createDynamicTab(
     () => import(/* webpackChunkName: "dashboard-tab" */ "@/components/tabs/dashboard-tab"),
-    "Farm",
-    "dashboard-tab"
+    "Farm"
   ),
   mint: createDynamicTab(
     () => import(/* webpackChunkName: "mint-tab" */ "@/components/tabs/mint-tab"),
-    "Mint",
-    "mint-tab"
+    "Mint"
   ),
   about: createDynamicTab(
     () => import(/* webpackChunkName: "about-tab" */ "@/components/tabs/about-tab"),
-    "About",
-    "about-tab"
+    "About"
   ),
   swap: createDynamicTab(
     () => import(/* webpackChunkName: "swap-tab" */ "@/components/tabs/swap-tab"),
-    "Swap",
-    "swap-tab"
+    "Swap"
   ),
   activity: createDynamicTab(
     () => import(/* webpackChunkName: "activity-tab" */ "@/components/tabs/activity-tab"),
-    "Activity",
-    "activity-tab"
+    "Activity"
   ),
   leaderboard: createDynamicTab(
     () => import(/* webpackChunkName: "leaderboard-tab" */ "@/components/tabs/leaderboard-tab"),
-    "Ranking",
-    "leaderboard-tab"
+    "Ranking"
   ),
 };
 
