@@ -13,6 +13,7 @@ import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebBaseConfig } from "@/lib/wagmi-web-base-config";
 import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
 import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
+import { wagmiLocalTestConfig } from "@/lib/wagmi-local-test-config";
 import { FrameProvider } from "@/lib/frame-context";
 import {
   HostEnvironmentProvider,
@@ -213,6 +214,20 @@ function WagmiRouter({
   if (surface === 'base') {
     return (
       <CoreWagmiProvider config={wagmiWebBaseConfig}>
+        <TransactionProvider
+          defaultChainId={8453}
+          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
+        >
+          {children}
+          <TransactionModalWrapper className="!z-[1300]" />
+        </TransactionProvider>
+      </CoreWagmiProvider>
+    );
+  }
+
+  if (surface === 'test') {
+    return (
+      <CoreWagmiProvider config={wagmiLocalTestConfig}>
         <TransactionProvider
           defaultChainId={8453}
           paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}

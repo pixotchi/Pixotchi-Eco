@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AUTH_SURFACE_CHANGE_EVENT, sessionStorageManager } from "@/lib/session-storage-manager";
 
-type EffectiveAuthSurface = "privy" | "base" | "privysolana" | null;
+type EffectiveAuthSurface = "privy" | "base" | "privysolana" | "test" | null;
 
 export function useAuthSurface() {
   const [surface, setSurface] = useState<EffectiveAuthSurface>(null);

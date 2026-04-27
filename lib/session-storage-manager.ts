@@ -2,7 +2,7 @@
 // Durable auth state uses localStorage so it survives new tabs/windows.
 // One-shot auth flow state remains in sessionStorage so it stays tab-scoped.
 
-type AuthSurface = 'privy' | 'base' | 'coinbase' | 'privysolana' | null;
+type AuthSurface = 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test' | null;
 type PendingBaseChatAuth = {
   address: string;
   message: string;
@@ -124,7 +124,7 @@ class SessionStorageManager {
     
     try {
       const stored = this.getDurableItem(this.KEY_AUTH_SURFACE);
-      if (stored === 'privy' || stored === 'base' || stored === 'coinbase' || stored === 'privysolana') {
+      if (stored === 'privy' || stored === 'base' || stored === 'coinbase' || stored === 'privysolana' || stored === 'test') {
         return stored as AuthSurface;
       }
       return null;
@@ -134,13 +134,13 @@ class SessionStorageManager {
     }
   }
 
-  getEffectiveAuthSurface(): 'privy' | 'base' | 'privysolana' | null {
+  getEffectiveAuthSurface(): 'privy' | 'base' | 'privysolana' | 'test' | null {
     const stored = this.getAuthSurface();
     return stored === 'coinbase' ? 'base' : stored;
   }
 
   // Thread-safe setter for auth surface
-  async setAuthSurface(surface: 'privy' | 'base' | 'coinbase' | 'privysolana'): Promise<void> {
+  async setAuthSurface(surface: 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test'): Promise<void> {
     // Chain operations to prevent race conditions
     this.lock = this.lock.then(async () => {
       if (typeof window === 'undefined') return;
@@ -158,13 +158,13 @@ class SessionStorageManager {
   }
 
   // Thread-safe getter for autologin flag
-  getAutologin(): 'privy' | 'base' | 'coinbase' | 'privysolana' | null {
+  getAutologin(): 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test' | null {
     if (typeof window === 'undefined') return null;
     
     try {
       const stored = sessionStorage.getItem(this.KEY_AUTOLOGIN);
-      if (stored === 'privy' || stored === 'base' || stored === 'coinbase' || stored === 'privysolana') {
-        return stored as 'privy' | 'base' | 'coinbase' | 'privysolana';
+      if (stored === 'privy' || stored === 'base' || stored === 'coinbase' || stored === 'privysolana' || stored === 'test') {
+        return stored as 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test';
       }
       return null;
     } catch (error) {
@@ -174,7 +174,7 @@ class SessionStorageManager {
   }
 
   // Thread-safe setter for autologin flag
-  async setAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana'): Promise<void> {
+  async setAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test'): Promise<void> {
     this.lock = this.lock.then(async () => {
       if (typeof window === 'undefined') return;
       
@@ -405,7 +405,7 @@ class SessionStorageManager {
   }
 
   // Batch set both auth surface and autologin atomically
-  async setAuthSurfaceAndAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana'): Promise<void> {
+  async setAuthSurfaceAndAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test'): Promise<void> {
     this.lock = this.lock.then(async () => {
       if (typeof window === 'undefined') return;
       

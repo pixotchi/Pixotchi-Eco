@@ -37,6 +37,8 @@ import {
   DEFAULT_AUTH_SURFACE,
   resolvePreferredAuthSurface,
 } from "@/lib/auth-surface";
+import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
+import { ensureLocalTestWallet } from "@/lib/local-test-wallet";
 
 const AUTH_CACHE_PREFIXES = [
   "wagmi",
@@ -277,6 +279,10 @@ export function useAppAuthController() {
       await clearAppCaches({
         onlyPrefixes: AUTH_CACHE_PREFIXES,
       });
+
+      if (nextSurface === "test") {
+        ensureLocalTestWallet();
+      }
 
       await sessionStorageManager.setAuthSurfaceAndAutologin(nextSurface);
       dispatch({ type: "set-surface", surface: nextSurface });
@@ -1039,6 +1045,8 @@ export function useAppAuthController() {
         return privyReady && authenticated && isEvmConnected;
       case "privysolana":
         return privyReady && authenticated && hasSolanaWallet;
+      case "test":
+        return isLocalTestAuthAllowed() && isEvmConnected;
       case "base":
         return Boolean(
           isEvmConnected &&
@@ -1389,6 +1397,23 @@ export function useAppAuthController() {
     const handleAutologin = async () => {
       try {
         const storedAuto = sessionStorageManager.getAutologin();
+        if (state.surface === "test" && isLocalTestAuthAllowed()) {
+          const testConnector = (connectors || []).find(
+            (connector: any) => connector?.id === "localTest" || connector?.type === "localTest",
+          );
+
+          if (!testConnector) {
+            return;
+          }
+
+          ensureLocalTestWallet();
+          await connectAsync({ connector: testConnector as any });
+          if (storedAuto === "test") {
+            await sessionStorageManager.removeAutologin();
+          }
+          return;
+        }
+
         if (!storedAuto) {
           return;
         }
@@ -1405,6 +1430,8 @@ export function useAppAuthController() {
           if (mounted) {
             login();
           }
+        } else if (auto === "test") {
+          await sessionStorageManager.removeAutologin();
         } else if (auto === "base" && state.surface === "base") {
           if (baseAutologinAttemptRef.current) {
             return;
@@ -1508,6 +1535,7 @@ export function useAppAuthController() {
   }, [
     completeBaseAuthentication,
     completeLegacyBaseAuthentication,
+    connectAsync,
     connectors,
     disconnect,
     getErrorCode,

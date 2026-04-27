@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
 import { Tab } from "@/lib/types";
 import { WalletProfile } from "@/components/wallet-profile";
-import { PlusCircle, Leaf, Sparkles, Info, Repeat, History, Trophy } from "lucide-react";
+import { KeyRound, PlusCircle, Leaf, Sparkles, Info, Repeat, History, Trophy } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { ThemeSelector } from "@/components/theme-selector";
@@ -32,6 +32,7 @@ import {
 } from "@/components/auth/surface-switch-buttons";
 import { requestBalanceRefresh } from "@/lib/app-events";
 import { CLIENT_ENV } from "@/lib/env-config";
+import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -238,17 +239,25 @@ export default function App() {
   });
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
+  const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
   const lastDismissedRef = useRef<string | null>(null);
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
+  const isLocalTestSession = localTestAuthAvailable && state.surface === "test";
+  const isInviteValidated = userValidated || isLocalTestSession;
   const readyBlocker =
     isConnected &&
     INVITE_CONFIG.SYSTEM_ENABLED &&
+    !isLocalTestSession &&
     (checkingValidation || !userValidated);
 
   useTabPrefetching(activeTab, isConnected);
 
   useFarcaster({ readyBlocker });
   useAutoConnect();
+
+  useEffect(() => {
+    setLocalTestAuthAvailable(isLocalTestAuthAllowed());
+  }, []);
 
   useEffect(() => {
     if (isMiniApp || typeof window === "undefined") {
@@ -296,10 +305,10 @@ export default function App() {
 
   // Start tutorial only after wallet connect (and invite gate passed)
   useEffect(() => {
-    if (isConnected && userValidated) {
+    if (isConnected && isInviteValidated) {
       startIfFirstVisit();
     }
-  }, [isConnected, userValidated, startIfFirstVisit]);
+  }, [isConnected, isInviteValidated, startIfFirstVisit]);
 
   // Auto-prompt to add mini app when user opens in miniapp mode and hasn't added yet
   useEffect(() => {
@@ -427,7 +436,7 @@ export default function App() {
   };
 
   // Show loading while checking validation (only if wallet is connected and invite system enabled)
-  if (checkingValidation && isConnected && INVITE_CONFIG.SYSTEM_ENABLED) {
+  if (checkingValidation && isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isLocalTestSession) {
     return (
       <div className="flex flex-col h-dvh bg-background items-center justify-center p-4">
         <div className="flex flex-col items-center justify-center gap-4">
@@ -439,7 +448,7 @@ export default function App() {
   }
 
   // Show invite gate if wallet is connected but not validated (and system is enabled)
-  if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !userValidated) {
+  if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isInviteValidated) {
     return (
       <InviteGate
         onValidated={handleInviteValidated}
@@ -601,6 +610,30 @@ export default function App() {
                           <div className="flex-1 h-px bg-border" />
                         </div>
                         <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
+                      </>
+                    )}
+                    {localTestAuthAvailable && (
+                      <>
+                        <div className="flex items-center gap-2 my-2">
+                          <div className="flex-1 h-px bg-border" />
+                          <span className="text-xs text-muted-foreground">or local testing</span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                        <Button
+                          className="w-full h-11 rounded-md text-base font-semibold"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              await switchAuthSurface('test');
+                            } catch (error) {
+                              console.error('Failed to switch to local test auth:', error);
+                              toast.error('Local test auth is only available on localhost.');
+                            }
+                          }}
+                        >
+                          <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Local Test Wallet
+                        </Button>
                       </>
                     )}
                   </>

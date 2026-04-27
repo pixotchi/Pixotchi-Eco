@@ -1,4 +1,6 @@
-export type AuthSurface = "privy" | "base" | "privysolana";
+import { isLocalTestAuthAllowed, LOCAL_TEST_AUTH_SURFACE } from "@/lib/local-test-mode";
+
+export type AuthSurface = "privy" | "base" | "privysolana" | typeof LOCAL_TEST_AUTH_SURFACE;
 export type LegacyAuthSurface = AuthSurface | "coinbase" | null;
 
 export type SecureSessionState = "unneeded" | "booting" | "ready" | "error";
@@ -21,6 +23,10 @@ export const DEFAULT_AUTH_SURFACE: AuthSurface = "privy";
 export function normalizeAuthSurface(value: string | null | undefined): AuthSurface | null {
   if (value === "privy" || value === "base" || value === "privysolana") {
     return value;
+  }
+
+  if (value === LOCAL_TEST_AUTH_SURFACE && isLocalTestAuthAllowed()) {
+    return LOCAL_TEST_AUTH_SURFACE;
   }
 
   return null;
@@ -52,4 +58,3 @@ export function resolvePreferredAuthSurface(input: {
 
   return resolveStoredAuthSurface(input.storedSurface ?? null) ?? fallback;
 }
-
