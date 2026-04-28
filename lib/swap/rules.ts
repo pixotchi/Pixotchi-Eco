@@ -7,8 +7,8 @@ const ALLOWED_TARGETS: PairMap = {
   USDC: ['ETH', 'ZORA', 'SEED', 'JESSE', 'PIXOTCHI'],
   ZORA: ['ETH', 'USDC', 'SEED', 'JESSE', 'PIXOTCHI'],
   SEED: ['ETH', 'USDC', 'ZORA', 'JESSE', 'PIXOTCHI'],
-  JESSE: ['ETH', 'USDC', 'ZORA', 'SEED', 'PIXOTCHI'],
-  PIXOTCHI: ['ETH', 'USDC', 'ZORA', 'SEED', 'JESSE'],
+  JESSE: ['ETH', 'USDC', 'ZORA', 'SEED'],
+  PIXOTCHI: ['ETH', 'USDC', 'ZORA', 'SEED'],
 };
 
 const ALLOWED_SOURCES: PairMap = (() => {
