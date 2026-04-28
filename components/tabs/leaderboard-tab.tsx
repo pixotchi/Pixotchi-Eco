@@ -1221,13 +1221,13 @@ export default function LeaderboardTab() {
       );
     }
 
-    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow, true);
+    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow);
   };
 
   return (
     <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
-      <Card className={cn("xl:flex xl:flex-col", boardType === 'plants' && "xl:h-[calc(100dvh-8rem)]")}>
-        <CardHeader className="xl:flex-none">
+      <Card>
+        <CardHeader>
           <div className="flex justify-between items-center gap-3 xl:grid xl:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
@@ -1320,7 +1320,7 @@ export default function LeaderboardTab() {
             </div>
           )}
         </CardHeader>
-        <CardContent className={cn("xl:min-h-0", boardType === 'plants' && "xl:flex-1")}>
+        <CardContent>
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (
