@@ -320,7 +320,13 @@ export default function PlantsView() {
       </div>
 
       {selectedPlant && (
-        <div className="space-y-4 xl:grid xl:grid-cols-[minmax(320px,420px)_minmax(420px,1fr)] xl:items-start xl:gap-5 xl:space-y-0">
+        <div
+          className={
+            selectedPlant.status === 4
+              ? "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[980px] xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
+              : "space-y-4 xl:grid xl:grid-cols-[minmax(320px,420px)_minmax(420px,1fr)] xl:items-start xl:gap-5 xl:space-y-0"
+          }
+        >
           <div className="space-y-4 xl:sticky xl:top-0">
           {/* Plant "Screen" Display */}
           <Card>
@@ -592,10 +598,10 @@ export default function PlantsView() {
 
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 xl:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <Card>
+            <Card className="xl:w-full">
               <CardHeader>
                 <CardTitle className="font-pixel">Revive Plant</CardTitle>
               </CardHeader>
