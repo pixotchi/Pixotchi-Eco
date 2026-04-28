@@ -544,7 +544,7 @@ export default function LandsView() {
       </div>
 
       {selectedLand && (
-        <div className="space-y-4 xl:grid xl:grid-cols-[minmax(320px,420px)_minmax(460px,1fr)] xl:items-start xl:gap-5 xl:space-y-0">
+        <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0">
           <div className="space-y-4 xl:sticky xl:top-0">
           <Card className="rounded-2xl">
             <CardContent className="space-y-3">
@@ -647,7 +647,7 @@ export default function LandsView() {
 
           <div className="min-w-0">
           {/* Building Management Section */}
-          <Card className="rounded-2xl xl:h-fit">
+          <Card className="rounded-2xl xl:h-fit xl:w-full">
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="font-pixel">Buildings</CardTitle>
@@ -668,7 +668,7 @@ export default function LandsView() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 xl:grid-cols-[minmax(250px,360px)_minmax(360px,1fr)] gap-4 xl:items-start">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)] xl:items-start xl:justify-center">
                 {/* Building Grid */}
                 <div className="space-y-4">
                   {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (

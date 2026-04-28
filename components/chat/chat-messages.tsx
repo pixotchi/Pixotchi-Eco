@@ -5,12 +5,20 @@ import ChatMessageComponent from "./chat-message";
 import { useChat } from "./chat-context";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import Image from "next/image";
+import type { ChatMode } from "@/lib/types";
 
 const SCROLL_THRESHOLD = 56;
 
-export default function ChatMessages() {
-  const { messages, loading, mode } = useChat();
-  const isAssistantMode = mode === 'ai' || mode === 'agent';
+type ChatMessagesProps = {
+  modeOverride?: ChatMode;
+};
+
+export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
+  const { messages, loading, mode, getLoadingForMode, getMessagesForMode } = useChat();
+  const activeMode = modeOverride ?? mode;
+  const activeMessages = modeOverride ? getMessagesForMode(modeOverride) : messages;
+  const activeLoading = modeOverride ? getLoadingForMode(modeOverride) : loading;
+  const isAssistantMode = activeMode === 'ai' || activeMode === 'agent';
   const containerRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
@@ -25,9 +33,9 @@ export default function ChatMessages() {
     const node = containerRef.current;
     if (!node || !stickToBottom) return;
     node.scrollTop = node.scrollHeight;
-  }, [messages, stickToBottom]);
+  }, [activeMessages, stickToBottom]);
 
-  if (loading && messages.length === 0) {
+  if (activeLoading && activeMessages.length === 0) {
     return (
       <div ref={containerRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
         <div className="flex items-center justify-center h-full">
@@ -37,7 +45,7 @@ export default function ChatMessages() {
     );
   }
 
-  if (messages.length === 0) {
+  if (activeMessages.length === 0) {
     return (
       <div ref={containerRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
         <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -86,12 +94,12 @@ export default function ChatMessages() {
         aria-live={isAssistantMode ? "polite" : "off"}
         aria-atomic="false"
       >
-        {messages.map((message, index) => (
+        {activeMessages.map((message, index) => (
           <ChatMessageComponent
             key={message.id}
             message={message}
             isAIMode={isAssistantMode}
-            aria-setsize={messages.length}
+            aria-setsize={activeMessages.length}
             aria-posinset={index + 1}
           />
         ))}

@@ -324,7 +324,7 @@ export default function PlantsView() {
           className={
             selectedPlant.status === 4
               ? "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[980px] xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
-              : "space-y-4 xl:grid xl:grid-cols-[minmax(320px,420px)_minmax(420px,1fr)] xl:items-start xl:gap-5 xl:space-y-0"
+              : "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1100px] xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
           }
         >
           <div className="space-y-4 xl:sticky xl:top-0">
@@ -672,7 +672,7 @@ export default function PlantsView() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="xl:h-fit">
+            <Card className="xl:h-fit xl:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle className="font-pixel">Marketplace</CardTitle>
@@ -687,7 +687,7 @@ export default function PlantsView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(250px,0.9fr)_minmax(280px,1fr)] gap-4 xl:items-start">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(220px,260px)_minmax(280px,340px)] xl:items-start xl:justify-center">
                   {/* Regular Wallet Info Message */}
                   {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
                     <StandardContainer className="p-3 rounded-md border bg-primary/10 xl:col-span-2">

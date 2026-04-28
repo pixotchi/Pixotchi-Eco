@@ -7,21 +7,40 @@ import { Input } from '@/components/ui/input';
 import { Send, Bot, Loader2 } from 'lucide-react';
 import { useBalances } from '@/lib/balance-context';
 import { parseUnits } from 'viem';
+import type { ChatMode } from '@/lib/types';
 
-export default function ChatInput() {
-  const { sendMessage, isSending, mode, publicChatAuthenticated, publicChatLoading } = useChat();
+type ChatInputProps = {
+  modeOverride?: ChatMode;
+};
+
+export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
+  const {
+    isSending,
+    isSendingForMode,
+    mode,
+    publicChatAuthenticated,
+    publicChatLoading,
+    sendMessage,
+    sendMessageForMode,
+  } = useChat();
+  const activeMode = modeOverride ?? mode;
+  const activeSending = modeOverride ? isSendingForMode(modeOverride) : isSending;
   const [message, setMessage] = useState('');
   const { seedBalance, loading: balanceLoading } = useBalances();
 
-  const isAIMode = mode === 'ai';
+  const isAIMode = activeMode === 'ai';
   const MIN_REQUIRED_SEED = parseUnits('10', 18);
-  const insufficientForAgent = mode === 'agent' && !balanceLoading && seedBalance < MIN_REQUIRED_SEED;
-  const sharedChatUnavailable = (mode === 'public' || isAIMode || mode === 'agent') && !publicChatAuthenticated;
+  const insufficientForAgent = activeMode === 'agent' && !balanceLoading && seedBalance < MIN_REQUIRED_SEED;
+  const sharedChatUnavailable = (activeMode === 'public' || isAIMode || activeMode === 'agent') && !publicChatAuthenticated;
   const inputDisabled = isSending || insufficientForAgent || sharedChatUnavailable;
 
   const handleSend = async () => {
     if (!message.trim()) return;
-    await sendMessage(message.trim());
+    if (modeOverride) {
+      await sendMessageForMode(modeOverride, message.trim());
+    } else {
+      await sendMessage(message.trim());
+    }
     setMessage('');
   };
 
@@ -44,7 +63,7 @@ export default function ChatInput() {
           {publicChatLoading
             ? 'Connecting chat...'
             : (
-              mode === 'agent'
+              activeMode === 'agent'
                 ? 'Agent chat is unavailable for this session.'
                 : (isAIMode ? 'AI chat is unavailable, refresh the app.' : 'Public chat is unavailable, refresh the app.')
             )}
@@ -56,7 +75,7 @@ export default function ChatInput() {
           onChange={(e) => setMessage(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={
-            mode === 'agent'
+            activeMode === 'agent'
               ? (
                 insufficientForAgent
                   ? "SEED balance insufficient (min 10). Visit Swap."
@@ -68,19 +87,19 @@ export default function ChatInput() {
           }
           disabled={inputDisabled}
           className="flex-1"
-          maxLength={mode === 'agent' ? 200 : (isAIMode ? 300 : 200)}
-          aria-label={mode === 'agent' ? "Ask onchain agent" : (isAIMode ? "Ask AI assistant a question" : "Type a chat message")}
+          maxLength={activeMode === 'agent' ? 200 : (isAIMode ? 300 : 200)}
+          aria-label={activeMode === 'agent' ? "Ask onchain agent" : (isAIMode ? "Ask AI assistant a question" : "Type a chat message")}
           aria-describedby="chat-character-count"
-          aria-invalid={message.length > (mode === 'agent' ? 200 : (isAIMode ? 300 : 200))}
+          aria-invalid={message.length > (activeMode === 'agent' ? 200 : (isAIMode ? 300 : 200))}
         />
         <Button
           onClick={handleSend}
           disabled={inputDisabled || !message.trim()}
           size="icon"
-          aria-label={isSending ? "Sending message..." : (mode === 'agent' ? "Send prompt to agent" : (isAIMode ? "Send question to AI" : "Send chat message"))}
+          aria-label={activeSending ? "Sending message..." : (activeMode === 'agent' ? "Send prompt to agent" : (isAIMode ? "Send question to AI" : "Send chat message"))}
           aria-describedby="chat-character-count"
         >
-          {isSending ? (
+          {activeSending ? (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
           ) : isAIMode ? (
             <Bot className="w-4 h-4" aria-hidden="true" />
@@ -96,8 +115,8 @@ export default function ChatInput() {
           aria-live="polite"
           aria-atomic="true"
         >
-          {message.length}/{mode === 'agent' ? 200 : (isAIMode ? 300 : 200)} characters
-          {message.length > (mode === 'agent' ? 200 : (isAIMode ? 300 : 200)) && " - Message too long"}
+          {message.length}/{activeMode === 'agent' ? 200 : (isAIMode ? 300 : 200)} characters
+          {message.length > (activeMode === 'agent' ? 200 : (isAIMode ? 300 : 200)) && " - Message too long"}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useChat } from './chat-context';
 import ChatMessages from './chat-messages';
@@ -14,10 +14,49 @@ import { useFrameContext } from '@/lib/frame-context';
 import { useTransactions } from 'ethereum-identity-kit';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { createPortal } from 'react-dom';
+import type { ChatMode } from '@/lib/types';
 
 interface ChatDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+function DesktopChatPane({
+  icon,
+  mode,
+  title,
+}: {
+  icon: string;
+  mode: Extract<ChatMode, 'public' | 'ai'>;
+  title: string;
+}) {
+  const { fetchHistoryForMode, isAITypingForMode, publicChatAuthenticated } = useChat();
+
+  useEffect(() => {
+    if (!publicChatAuthenticated) {
+      return;
+    }
+
+    void fetchHistoryForMode(mode, true);
+  }, [fetchHistoryForMode, mode, publicChatAuthenticated]);
+
+  return (
+    <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background/40">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <Image src={icon} alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <ChatMessages modeOverride={mode} />
+      </div>
+      <div className="border-t border-border p-3">
+        <div className="space-y-2">
+          {isAITypingForMode(mode) && <AITypingIndicator />}
+          <ChatInput modeOverride={mode} />
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
@@ -34,7 +73,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
 
   return (
     <DialogContent
-      className={`max-w-md w-full h-[80vh] flex flex-col ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
+      className={`w-[calc(100vw-2rem)] max-w-md xl:max-w-5xl h-[80vh] flex flex-col ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
       aria-hidden={txModalOpen || undefined}
       onInteractOutside={(event) => {
         if (txModalOpen) event.preventDefault();
@@ -47,43 +86,57 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
         <DialogTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {mode === 'ai' ? (
-              <Image src="/icons/neuralseed.png" alt="Neural Seed" width={20} height={20} />
+              <Image src="/icons/neuralseed.png" alt="Neural Seed" width={20} height={20} className="xl:hidden" />
             ) : (
-              <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} />
+              <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="xl:hidden" />
             )}
-            {mode === 'ai' ? 'Assistant' : mode === 'agent' ? 'Agent' : 'Chat'}
+            <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="hidden xl:block" />
+            <span className="xl:hidden">{mode === 'ai' ? 'Assistant' : mode === 'agent' ? 'Agent' : 'Chat'}</span>
+            <span className="hidden xl:inline">Chat</span>
           </div>
-          <ToggleGroup
-            value={mode}
-            onValueChange={(v) => setMode(v as any)}
-            options={[
-              { value: 'public', label: 'Public' },
-              { value: 'ai', label: 'AI' },
-              ...(isAgentAvailable ? [{ value: 'agent', label: 'Agent' }] : []),
-            ]}
-          />
+          <div className="xl:hidden">
+            <ToggleGroup
+              value={mode}
+              onValueChange={(v) => setMode(v as ChatMode)}
+              options={[
+                { value: 'public', label: 'Public' },
+                { value: 'ai', label: 'AI' },
+                ...(isAgentAvailable ? [{ value: 'agent', label: 'Agent' }] : []),
+              ]}
+            />
+          </div>
         </DialogTitle>
         <DialogDescription>
-          {mode === 'agent'
-            ? (isInMiniApp
-              ? 'Agent is not available in Mini App.'
-              : (!isSmartWallet
-                ? 'Agent requires a smart wallet.'
-                : 'Neural Seed Agent can mint plants using your spend permission.'))
-            : 'Chat with the community or get help from Neural Seed AI assistant.'}
+          <span className="xl:hidden">
+            {mode === 'agent'
+              ? (isInMiniApp
+                ? 'Agent is not available in Mini App.'
+                : (!isSmartWallet
+                  ? 'Agent requires a smart wallet.'
+                  : 'Neural Seed Agent can mint plants using your spend permission.'))
+              : 'Chat with the community or get help from Neural Seed AI assistant.'}
+          </span>
+          <span className="hidden xl:inline">
+            Chat with the community or get help from Neural Seed AI assistant.
+          </span>
         </DialogDescription>
         {mode === 'agent' && isSmartWallet && !isInMiniApp && (
-          <div className="mt-2">
+          <div className="mt-2 xl:hidden">
             <AgentPermissionsPanel />
           </div>
         )}
       </DialogHeader>
 
-      <div className="flex-grow overflow-hidden">
+      <div className="flex-grow overflow-hidden xl:hidden">
         <ChatMessages />
       </div>
 
-      <DialogFooter className="border-t border-border pt-3">
+      <div className="hidden min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden pt-3 xl:grid">
+        <DesktopChatPane mode="public" title="Public" icon="/icons/chat.svg" />
+        <DesktopChatPane mode="ai" title="AI Assistant" icon="/icons/neuralseed.png" />
+      </div>
+
+      <DialogFooter className="border-t border-border pt-3 xl:hidden">
         <div className="w-full space-y-2">
           {isAITyping && <AITypingIndicator />}
           <ChatInput />

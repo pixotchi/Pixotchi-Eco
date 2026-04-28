@@ -40,8 +40,12 @@ type AnyChatMessage = ChatMessage | AIChatMessage;
 interface ChatContextState {
   conversationId: string | null;
   error: string | null;
+  getLoadingForMode: (mode: ChatMode) => boolean;
+  getMessagesForMode: (mode: ChatMode) => AnyChatMessage[];
   isAITyping: boolean;
+  isAITypingForMode: (mode: ChatMode) => boolean;
   isSending: boolean;
+  isSendingForMode: (mode: ChatMode) => boolean;
   loading: boolean;
   markAsRead: () => void;
   messages: AnyChatMessage[];
@@ -51,7 +55,9 @@ interface ChatContextState {
   publicChatLoading: boolean;
   publicChatState: SecureSessionState;
   retryPublicChatSession: () => void;
+  fetchHistoryForMode: (mode: ChatMode, showLoading?: boolean) => Promise<void>;
   sendMessage: (message: string) => Promise<void>;
+  sendMessageForMode: (mode: ChatMode, message: string) => Promise<void>;
   setChatOpen: (open: boolean) => void;
   setConversationId: (id: string | null) => void;
   setMode: (mode: ChatMode) => void;
@@ -80,10 +86,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [sendingMode, setSendingMode] = useState<ChatMode | null>(null);
   const [mode, setModeState] = useState<ChatMode>('public');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isAITyping, setIsAITyping] = useState(false);
+  const [aiTypingModes, setAiTypingModes] = useState<Partial<Record<ChatMode, boolean>>>({});
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [loadingModes, setLoadingModes] = useState<Partial<Record<ChatMode, boolean>>>({});
+  const [, setMessageCacheVersion] = useState(0);
   const [publicMessageVersion, setPublicMessageVersion] = useState(0);
   const [publicChatSession, setPublicChatSession] = useState<PublicChatSession | null>(null);
   const [publicChatLoading, setPublicChatLoading] = useState(false);
@@ -200,6 +210,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setConversationId(null);
     messageCacheRef.current.public = [];
     messageCacheRef.current.ai = [];
+    setMessageCacheVersion((version) => version + 1);
     setPublicMessageVersion((version) => version + 1);
 
     if (modeRef.current === 'public' || modeRef.current === 'ai') {
@@ -242,6 +253,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messageCacheRef.current.public = [];
     messageCacheRef.current.ai = [];
     setConversationId(null);
+    setMessageCacheVersion((version) => version + 1);
     setPublicMessageVersion((version) => version + 1);
 
     if (modeRef.current === 'public' || modeRef.current === 'ai') {
@@ -254,6 +266,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (previousAddress && previousAddress !== publicIdentityAddress) {
       messageCacheRef.current.ai = [];
       setConversationId(null);
+      setMessageCacheVersion((version) => version + 1);
 
       if (modeRef.current === 'ai') {
         setMessages([]);
@@ -349,18 +362,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setUnreadCount(0);
   }, []);
 
-  const updatePublicMessages = useCallback((next: AnyChatMessage[]) => {
-    messageCacheRef.current.public = next;
-    setPublicMessageVersion((version) => version + 1);
+  const writeModeMessages = useCallback((targetMode: ChatMode, next: AnyChatMessage[]) => {
+    messageCacheRef.current[targetMode] = next;
+    setMessageCacheVersion((version) => version + 1);
 
-    if (modeRef.current === 'public' && isChatOpen) {
+    if (targetMode === 'public') {
+      setPublicMessageVersion((version) => version + 1);
+    }
+
+    if (modeRef.current === targetMode) {
       setMessages(next);
     }
-  }, [isChatOpen]);
+  }, []);
+
+  const updatePublicMessages = useCallback((next: AnyChatMessage[]) => {
+    writeModeMessages('public', next);
+  }, [writeModeMessages]);
 
   const fetchHistory = useCallback(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
     if (showLoading) {
-      setLoading(true);
+      setLoadingModes((previous) => ({ ...previous, [requestedMode]: true }));
+      if (modeRef.current === requestedMode) {
+        setLoading(true);
+      }
     }
     setError(null);
 
@@ -389,7 +413,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (!publicChatAuthenticated) {
           setConversationId(null);
           messageCacheRef.current.ai = [];
-          setMessages([]);
+          setMessageCacheVersion((version) => version + 1);
+          if (modeRef.current === 'ai') {
+            setMessages([]);
+          }
           return;
         }
 
@@ -414,29 +441,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
 
         const data = await response.json();
-        if (modeRef.current !== requestedMode) {
-          return;
-        }
         const next = data.messages || [];
-        setMessages(next);
-        messageCacheRef.current.ai = next;
+        writeModeMessages('ai', next);
         if (typeof data.conversationId === 'string' && data.conversationId !== conversationId) {
           setConversationId(data.conversationId);
         }
       } else if (requestedMode === 'agent' && chatAddress) {
-        setMessages(messageCacheRef.current.agent || []);
+        writeModeMessages('agent', messageCacheRef.current.agent || []);
       } else {
-        setMessages([]);
+        writeModeMessages(requestedMode, []);
       }
     } catch (err) {
       setError('Failed to fetch message history.');
       console.error(err);
     } finally {
       if (showLoading) {
-        setLoading(false);
+        setLoadingModes((previous) => ({ ...previous, [requestedMode]: false }));
+        if (modeRef.current === requestedMode) {
+          setLoading(false);
+        }
       }
     }
-  }, [chatAddress, conversationId, getMiniAppBypassHeaders, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
+  }, [chatAddress, conversationId, getMiniAppBypassHeaders, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages, writeModeMessages]);
 
   const setMode = useCallback((next: ChatMode) => {
     if (mode) {
@@ -733,39 +759,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   ]);
 
   useEffect(() => {
-    if (mode === 'public') {
-      if (!isChatOpen || !publicChatAuthenticated) {
-        return () => {
-          if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-          }
-        };
-      }
-
-      void fetchHistory(true, 'public');
-      const refreshPublicChat = () => {
-        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-          void fetchHistory(false, 'public');
-        }
-      };
-
-      const interval = setInterval(refreshPublicChat, 5000);
-      const handleVisibilityChange = () => refreshPublicChat();
-      if (typeof document !== 'undefined') {
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-      }
-
+    if (!isChatOpen || !publicChatAuthenticated) {
       return () => {
-        clearInterval(interval);
-        if (typeof document !== 'undefined') {
-          document.removeEventListener('visibilitychange', handleVisibilityChange);
-        }
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
         }
       };
     }
 
+    void fetchHistory(mode === 'public', 'public');
+    const refreshPublicChat = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void fetchHistory(false, 'public');
+      }
+    };
+
+    const interval = setInterval(refreshPublicChat, 5000);
+    const handleVisibilityChange = () => refreshPublicChat();
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchHistory, isChatOpen, mode, publicChatAuthenticated]);
+
+  useEffect(() => {
     if (mode === 'ai' && publicChatAuthenticated) {
       void fetchHistory(true, 'ai');
       return () => {
@@ -806,29 +832,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchPublicPreview, isChatOpen, publicChatAuthenticated]);
 
-  const sendMessage = async (messageText: string) => {
+  const sendMessageForMode = async (targetMode: ChatMode, messageText: string) => {
     if (!messageText.trim()) {
       return;
     }
 
-    if (mode === 'agent' && !chatAddress) {
+    if (targetMode === 'agent' && !chatAddress) {
       return;
     }
 
-    if (mode === 'ai' && !publicIdentityAddress) {
+    if (targetMode === 'ai' && !publicIdentityAddress) {
       return;
     }
 
-    if ((mode === 'public' || mode === 'ai' || mode === 'agent') && !publicChatAuthenticated) {
+    if ((targetMode === 'public' || targetMode === 'ai' || targetMode === 'agent') && !publicChatAuthenticated) {
       toast.error(
-        mode === 'agent'
+        targetMode === 'agent'
           ? 'Agent chat is not ready yet.'
-          : (mode === 'ai' ? 'AI chat is not ready yet.' : 'Public chat is not ready yet.'),
+          : (targetMode === 'ai' ? 'AI chat is not ready yet.' : 'Public chat is not ready yet.'),
       );
       return;
     }
 
-    if (mode === 'public' && !publicChatAddress) {
+    if (targetMode === 'public' && !publicChatAddress) {
       toast.error('Public chat is not ready yet.');
       return;
     }
@@ -841,14 +867,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const signal = abortControllerRef.current.signal;
 
     setIsSending(true);
+    setSendingMode(targetMode);
     setError(null);
 
-    const endpoint = mode === 'ai' ? '/api/chat/ai/send' : '/api/chat/send';
-    const senderAddress = mode === 'public'
+    const endpoint = targetMode === 'ai' ? '/api/chat/ai/send' : '/api/chat/send';
+    const senderAddress = targetMode === 'public'
       ? publicChatAddress
-      : ((mode === 'ai' || mode === 'agent') ? publicIdentityAddress : chatAddress);
+      : ((targetMode === 'ai' || targetMode === 'agent') ? publicIdentityAddress : chatAddress);
     const optimisticId = `optimistic-${Date.now()}`;
-    const optimisticUserMessage: AnyChatMessage = mode === 'ai'
+    const optimisticUserMessage: AnyChatMessage = targetMode === 'ai'
       ? {
         address: senderAddress!,
         conversationId: conversationId || '',
@@ -867,29 +894,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         timestamp: Date.now(),
       };
 
-    setMessages((previous) => {
-      const next = [...previous, optimisticUserMessage];
-      if (mode === 'public') {
-        messageCacheRef.current.public = next;
-        setPublicMessageVersion((version) => version + 1);
-      }
-      if (mode === 'agent') {
-        messageCacheRef.current.agent = next;
-        try {
-          localStorage.setItem('agent-chat-history', JSON.stringify(next));
-        } catch {
-          // Ignore localStorage failures.
-        }
-      }
-      return next;
-    });
+    const previousMessages = targetMode === modeRef.current
+      ? messages
+      : (messageCacheRef.current[targetMode] || []);
+    const nextOptimisticMessages = [...previousMessages, optimisticUserMessage];
+    writeModeMessages(targetMode, nextOptimisticMessages);
 
-    if (mode === 'ai' || mode === 'agent') {
+    if (targetMode === 'agent') {
+      try {
+        localStorage.setItem('agent-chat-history', JSON.stringify(nextOptimisticMessages));
+      } catch {
+        // Ignore localStorage failures.
+      }
+    }
+
+    if (targetMode === 'ai' || targetMode === 'agent') {
       setIsAITyping(true);
+      setAiTypingModes((previous) => ({ ...previous, [targetMode]: true }));
     }
 
     try {
-      if (mode === 'agent') {
+      if (targetMode === 'agent') {
         const agentMessages = messageCacheRef.current.agent || [];
         const conversationHistory = agentMessages.slice(-6).map((message) => ({
           content: message.message,
@@ -1025,20 +1050,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           message: replyText,
           timestamp: Date.now(),
         } as any;
-        setMessages((previous) => {
-          const next = [...previous, agentReply];
-          messageCacheRef.current.agent = next;
-          try {
-            localStorage.setItem('agent-chat-history', JSON.stringify(next));
-          } catch {
-            // Ignore localStorage failures.
-          }
-          return next;
-        });
+        const next = [...(messageCacheRef.current.agent || []), agentReply];
+        writeModeMessages('agent', next);
+        try {
+          localStorage.setItem('agent-chat-history', JSON.stringify(next));
+        } catch {
+          // Ignore localStorage failures.
+        }
       } else {
         const response = await fetch(endpoint, {
           body: JSON.stringify(
-            mode === 'ai'
+            targetMode === 'ai'
               ? { message: messageText }
               : { message: messageText },
           ),
@@ -1052,7 +1074,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         if (response.status === 401) {
           await handleChatAuthFailure();
-          throw new Error(mode === 'ai' ? 'AI chat is unavailable for this session.' : 'Public chat is unavailable for this session.');
+          throw new Error(targetMode === 'ai' ? 'AI chat is unavailable for this session.' : 'Public chat is unavailable for this session.');
         }
 
         if (!response.ok) {
@@ -1062,44 +1084,88 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         const data = await response.json();
 
-        if (mode === 'ai') {
+        if (targetMode === 'ai') {
           const { aiResponse, userMessage } = data;
           if (!conversationId && userMessage.conversationId) {
             setConversationId(userMessage.conversationId);
           }
-          setMessages((previous) => [...previous.filter((message) => message.id !== optimisticId), userMessage, aiResponse]);
+          const next = [
+            ...(messageCacheRef.current.ai || []).filter((message) => message.id !== optimisticId),
+            userMessage,
+            aiResponse,
+          ];
+          writeModeMessages('ai', next);
         } else {
           const newMessage = data.message;
-          setMessages((previous) => {
-            const next = [...previous.filter((message) => message.id !== optimisticId), newMessage];
-            messageCacheRef.current.public = next;
-            setPublicMessageVersion((version) => version + 1);
-            return next;
-          });
+          const next = [
+            ...(messageCacheRef.current.public || []).filter((message) => message.id !== optimisticId),
+            newMessage,
+          ];
+          writeModeMessages('public', next);
         }
       }
     } catch (err: any) {
+      const next = (messageCacheRef.current[targetMode] || []).filter((message) => message.id !== optimisticId);
       if (err.name === 'AbortError') {
-        setMessages((previous) => previous.filter((message) => message.id !== optimisticId));
+        writeModeMessages(targetMode, next);
       } else {
         const friendlyMessage = err.message || 'An unexpected error occurred.';
         setError(friendlyMessage);
         toast.error(friendlyMessage);
-        setMessages((previous) => previous.filter((message) => message.id !== optimisticId));
+        writeModeMessages(targetMode, next);
       }
     } finally {
       setIsSending(false);
-      if (mode === 'ai' || mode === 'agent') {
+      setSendingMode(null);
+      if (targetMode === 'ai' || targetMode === 'agent') {
         setIsAITyping(false);
+        setAiTypingModes((previous) => ({ ...previous, [targetMode]: false }));
       }
     }
   };
 
+  const sendMessage = async (messageText: string) => {
+    await sendMessageForMode(modeRef.current, messageText);
+  };
+
+  const getMessagesForMode = useCallback((targetMode: ChatMode) => {
+    if (targetMode === mode) {
+      return messages;
+    }
+
+    return messageCacheRef.current[targetMode] || [];
+  }, [messages, mode]);
+
+  const getLoadingForMode = useCallback((targetMode: ChatMode) => {
+    if (targetMode === mode) {
+      return loading;
+    }
+
+    return Boolean(loadingModes[targetMode]);
+  }, [loading, loadingModes, mode]);
+
+  const isSendingForMode = useCallback((targetMode: ChatMode) => {
+    return sendingMode === targetMode;
+  }, [sendingMode]);
+
+  const isAITypingForMode = useCallback((targetMode: ChatMode) => {
+    return Boolean(aiTypingModes[targetMode]);
+  }, [aiTypingModes]);
+
+  const fetchHistoryForMode = useCallback(async (targetMode: ChatMode, showLoading = false) => {
+    await fetchHistory(showLoading, targetMode);
+  }, [fetchHistory]);
+
   const value = {
     conversationId,
     error,
+    fetchHistoryForMode,
+    getLoadingForMode,
+    getMessagesForMode,
     isAITyping,
+    isAITypingForMode,
     isSending,
+    isSendingForMode,
     loading,
     markAsRead,
     messages,
@@ -1110,6 +1176,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     publicChatState,
     retryPublicChatSession,
     sendMessage,
+    sendMessageForMode,
     setChatOpen: setIsChatOpen,
     setConversationId,
     setMode,
