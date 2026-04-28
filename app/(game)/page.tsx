@@ -31,6 +31,7 @@ import { useFarcaster } from "@/hooks/useFarcaster";
 import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { requestBalanceRefresh } from "@/lib/app-events";
+import type { AuthSurface } from "@/lib/auth-surface";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
 
@@ -204,6 +205,115 @@ import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { useKeyboardAware,useKeyboardNavigation,useViewportInsets } from "@/hooks/useKeyboardAware";
 
+type LoginAuthActionsProps = {
+  className: string;
+  handleMiniAppReconnect: () => void;
+  isInMiniApp: boolean;
+  isMiniConnectRetrying: boolean;
+  isRestoringBaseSession: boolean;
+  localTestAuthAvailable: boolean;
+  privyReady: boolean;
+  switchAuthSurface: (surface: AuthSurface) => Promise<void>;
+};
+
+function LoginAuthActions({
+  className,
+  handleMiniAppReconnect,
+  isInMiniApp,
+  isMiniConnectRetrying,
+  isRestoringBaseSession,
+  localTestAuthAvailable,
+  privyReady,
+  switchAuthSurface,
+}: LoginAuthActionsProps) {
+  if (isRestoringBaseSession) {
+    return (
+      <div className={className}>
+        <BasePageLoader text="Restoring your Base session…" />
+      </div>
+    );
+  }
+
+  if (isInMiniApp) {
+    return (
+      <div className={className}>
+        <div className="space-y-2">
+          <div className="text-muted-foreground text-sm text-center md:text-left">Connecting…</div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleMiniAppReconnect}
+            disabled={isMiniConnectRetrying}
+          >
+            {isMiniConnectRetrying ? "Retrying…" : "Retry Connection"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertTitle>Web App</AlertTitle>
+        <AlertDescription>
+          You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
+        </AlertDescription>
+      </Alert>
+      <Button
+        className="w-full rounded-md text-base font-semibold text-white h-11 bg-[#ff8170] hover:bg-[#ff6b56] active:bg-[#ff8170] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ff8170] disabled:opacity-60 disabled:cursor-not-allowed"
+        variant="default"
+        onClick={async () => {
+          try {
+            await switchAuthSurface('privy');
+          } catch (error) {
+            console.error('Failed to switch to Privy surface:', error);
+            toast.error('Failed to switch to Privy sign-in. Please try again.');
+          }
+        }}
+        disabled={!privyReady}
+      >
+        {privyReady ? 'Continue with Privy' : 'Loading Privy…'}
+      </Button>
+      <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
+      {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
+        <>
+          <div className="flex items-center gap-2 my-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or bridge from Solana</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
+        </>
+      )}
+      {localTestAuthAvailable && (
+        <>
+          <div className="flex items-center gap-2 my-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or local testing</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <Button
+            className="w-full h-11 rounded-md text-base font-semibold"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await switchAuthSurface('test');
+              } catch (error) {
+                console.error('Failed to switch to local test auth:', error);
+                toast.error('Local test auth is only available on localhost.');
+              }
+            }}
+          >
+            <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
+            Local Test Wallet
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const { theme } = useTheme();
@@ -476,7 +586,9 @@ export default function App() {
     >
       <div
         data-viewport-shell="inner"
-        className="w-full max-w-md xl:max-w-none xl:w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
+        className={`w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none ${
+          isConnected ? "max-w-md xl:max-w-none xl:w-full" : "max-w-md md:max-w-none md:w-full"
+        }`}
       >
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">
@@ -561,8 +673,8 @@ export default function App() {
         {/* Main Content */}
         <main data-viewport-shell="main" className="flex-1 bg-muted/40 flex flex-col xl:flex-row overflow-hidden" role="main" aria-label="Main content area">
           {(!isConnected) ? (
-            <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom">
-              <div className="flex-grow flex flex-col items-center justify-center text-center">
+            <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
+              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-lg md:border md:border-b-0 md:border-border md:bg-card/80 md:px-5 md:pt-5">
                 <div className="flex flex-col items-center space-y-3 mb-8">
                   <Image
                     src="/PixotchiKit/Logonotext.svg"
@@ -581,97 +693,20 @@ export default function App() {
                 <h2 className="text-xl font-semibold text-foreground mb-2">
                   Welcome!
                 </h2>
-                <p className="text-muted-foreground mb-6 max-w-xs">
+                <p className="text-muted-foreground mb-6 max-w-xs md:max-w-md">
                   Connect your wallet, mint a plant and begin your farming journey on Base.
                 </p>
               </div>
-              {isRestoringBaseSession ? (
-                <div className="w-full max-w-xs space-y-3">
-                  <BasePageLoader text="Restoring your Base session…" />
-                </div>
-              ) : (
-              <div className="w-full max-w-xs space-y-3">
-                {!fc?.isInMiniApp && (
-                  <Alert>
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>Web App</AlertTitle>
-                    <AlertDescription>
-                      You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                {/* Web-only login buttons; MiniApp autoconnects above */}
-                {!fc?.isInMiniApp ? (
-                  <Button
-                    className="w-full rounded-md text-base font-semibold text-white h-11 bg-[#ff8170] hover:bg-[#ff6b56] active:bg-[#ff8170] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ff8170] disabled:opacity-60 disabled:cursor-not-allowed"
-                    variant="default"
-                    onClick={async () => {
-                      try {
-                        await switchAuthSurface('privy');
-                      } catch (error) {
-                        console.error('Failed to switch to Privy surface:', error);
-                        toast.error('Failed to switch to Privy sign-in. Please try again.');
-                      }
-                    }}
-                    disabled={!privyReady}
-                  >
-                    {privyReady ? 'Continue with Privy' : 'Loading Privy…'}
-                  </Button>
-                ) : null}
-                {!fc?.isInMiniApp ? (
-                  <>
-                    <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
-                    {/* Solana Bridge option - connects via Base-Solana bridge */}
-                    {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
-                      <>
-                        <div className="flex items-center gap-2 my-2">
-                          <div className="flex-1 h-px bg-border" />
-                          <span className="text-xs text-muted-foreground">or bridge from Solana</span>
-                          <div className="flex-1 h-px bg-border" />
-                        </div>
-                        <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
-                      </>
-                    )}
-                    {localTestAuthAvailable && (
-                      <>
-                        <div className="flex items-center gap-2 my-2">
-                          <div className="flex-1 h-px bg-border" />
-                          <span className="text-xs text-muted-foreground">or local testing</span>
-                          <div className="flex-1 h-px bg-border" />
-                        </div>
-                        <Button
-                          className="w-full h-11 rounded-md text-base font-semibold"
-                          variant="outline"
-                          onClick={async () => {
-                            try {
-                              await switchAuthSurface('test');
-                            } catch (error) {
-                              console.error('Failed to switch to local test auth:', error);
-                              toast.error('Local test auth is only available on localhost.');
-                            }
-                          }}
-                        >
-                          <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Local Test Wallet
-                        </Button>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-muted-foreground text-sm text-center">Connecting…</div>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleMiniAppReconnect}
-                      disabled={state.isMiniConnectRetrying}
-                    >
-                      {state.isMiniConnectRetrying ? "Retrying…" : "Retry Connection"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-              )}
+              <LoginAuthActions
+                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-lg md:border md:border-t-0 md:border-border md:bg-card/80 md:px-5 md:pb-5 md:shadow-sm"
+                handleMiniAppReconnect={handleMiniAppReconnect}
+                isInMiniApp={Boolean(fc?.isInMiniApp)}
+                isMiniConnectRetrying={state.isMiniConnectRetrying}
+                isRestoringBaseSession={isRestoringBaseSession}
+                localTestAuthAvailable={localTestAuthAvailable}
+                privyReady={privyReady}
+                switchAuthSurface={switchAuthSurface}
+              />
             </div>
           ) : (
             <>
