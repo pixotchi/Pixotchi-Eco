@@ -1,59 +1,53 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useAccount } from "wagmi";
-import Image from "next/image";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import ArcadeDialog from "@/components/arcade/ArcadeDialog";
+import EditPlantName from "@/components/edit-plant-name";
+import { SponsoredBadge } from "@/components/paymaster-toggle";
+import QuantitySelector from "@/components/quantity-selector";
+import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
+import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
+import ReviveTransaction from "@/components/transactions/revive-transaction";
+import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+DropdownMenu,
+DropdownMenuContent,
+DropdownMenuItem,
+DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
-import { Plant, ShopItem, GardenItem } from "@/lib/types";
+import { StandardContainer } from "@/components/ui/pixel-container";
+import { ToggleGroup } from "@/components/ui/toggle-group";
+import { useItemCatalogs } from "@/hooks/useItemCatalogs";
+import { ITEM_ICONS } from "@/lib/constants";
 import {
-  getPlantsByOwner,
-  getRevivePrice,
-  getTokenBalance,
+getPlantsByOwner,
+getRevivePrice,
+getTokenBalance,
 } from "@/lib/contracts";
-import { getStrainName, formatScore, formatEth, formatTokenAmount, getPlantStatusText, cn, getActiveFences } from '@/lib/utils';
+import { usePaymaster } from "@/lib/paymaster-context";
+import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { GardenItem,Plant,ShopItem } from "@/lib/types";
+import { formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
+import {
+ChevronDown,
+ChevronLeft,
+ChevronRight,
+Flower,
+Info
+} from "lucide-react";
+import Image from "next/image";
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { toast } from "react-hot-toast";
+import { useAccount } from "wagmi";
 import PlantImage from "../PlantImage";
 import CountdownTimer from "../countdown-timer";
 import FenceTimer from "../fence-timer";
 import ItemDetailsPanel from "../item-details-panel";
-import {
-  Shield,
-  Star,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Apple,
-  Flower,
-  Award,
-  TrendingUp,
-  Info,
-} from "lucide-react";
-import { toast } from "react-hot-toast";
-import { ITEM_ICONS } from "@/lib/constants";
-import { usePaymaster } from "@/lib/paymaster-context";
-import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { useTabVisibility } from "@/lib/tab-visibility-context";
-import QuantitySelector from "@/components/quantity-selector";
-import { ToggleGroup } from "@/components/ui/toggle-group";
-import { StandardContainer } from "@/components/ui/pixel-container";
-import { SponsoredBadge } from "@/components/paymaster-toggle";
-import EditPlantName from "@/components/edit-plant-name";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
-import ReviveTransaction from "@/components/transactions/revive-transaction";
-import ArcadeDialog from "@/components/arcade/ArcadeDialog";
-import { Gamepad2 } from "lucide-react";
-import { useItemCatalogs } from "@/hooks/useItemCatalogs";
-import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported } from "@/components/solana";
-import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 // Removed BalanceCard from tabs; status bar now shows balances globally
@@ -77,7 +71,7 @@ export default function PlantsView() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
   const [selectedItem, setSelectedItem] = useState<ShopItem | GardenItem | null>(null);
-  const { shopItems, gardenItems, isLoading: catalogsLoading } = useItemCatalogs();
+  const { shopItems, gardenItems } = useItemCatalogs();
   const [itemType, setItemType] = useState<"shop" | "garden">("garden");
 
   const [loading, setLoading] = useState(true);
@@ -92,6 +86,9 @@ export default function PlantsView() {
 
   // Use ref to track selected plant ID without causing re-renders or re-fetches
   const selectedPlantIdRef = useRef<number | null>(null);
+  const loadedPlantsAddressRef = useRef<string | null>(null);
+  const selectedPlantId = selectedPlant?.id ?? null;
+  const selectedPlantStatus = selectedPlant?.status ?? null;
 
   // Request deduplication ref to prevent multiple simultaneous calls
   const fetchDataPendingRef = useRef<string | null>(null);
@@ -131,6 +128,7 @@ export default function PlantsView() {
   const fetchData = useCallback(async () => {
     if (!address) {
       fetchDataPendingRef.current = null;
+      loadedPlantsAddressRef.current = null;
       return;
     }
 
@@ -142,8 +140,8 @@ export default function PlantsView() {
     fetchDataPendingRef.current = address;
 
     try {
-      // Only show full page loader on initial load
-      if (plants.length === 0) {
+      // Only show full page loader on initial load for this wallet.
+      if (loadedPlantsAddressRef.current !== address) {
         setLoading(true);
       }
       setError(null);
@@ -170,6 +168,7 @@ export default function PlantsView() {
           setSelectedPlant(null);
           selectedPlantIdRef.current = null;
         }
+        loadedPlantsAddressRef.current = address;
       }
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
@@ -184,12 +183,12 @@ export default function PlantsView() {
         fetchDataPendingRef.current = null;
       }
     }
-  }, [address]); // Only depend on address - selectedPlant is handled via ref
+  }, [address]); // Selection and initial-load state are handled through refs.
 
   // Sync ref when selectedPlant changes (so ref is always up to date)
   useEffect(() => {
-    selectedPlantIdRef.current = selectedPlant?.id ?? null;
-  }, [selectedPlant?.id]);
+    selectedPlantIdRef.current = selectedPlantId;
+  }, [selectedPlantId]);
 
   // Set default selected item when catalogs are loaded
   useEffect(() => {
@@ -205,7 +204,7 @@ export default function PlantsView() {
   }, [selectedItem, gardenItems, shopItems]);
 
   useEffect(() => {
-    if (!selectedPlant || selectedPlant.status !== 4) {
+    if (!selectedPlantId || selectedPlantStatus !== 4) {
       setReviveDataLoading(false);
       return;
     }
@@ -237,7 +236,7 @@ export default function PlantsView() {
     return () => {
       cancelled = true;
     };
-  }, [address, selectedPlant?.id, selectedPlant?.status]);
+  }, [address, selectedPlantId, selectedPlantStatus]);
 
   // Fetch data when address changes - properly include fetchData in deps
   // Refresh when dashboard becomes visible
@@ -321,7 +320,14 @@ export default function PlantsView() {
       </div>
 
       {selectedPlant && (
-        <>
+        <div
+          className={
+            selectedPlant.status === 4
+              ? "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[980px] xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
+              : "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1100px] xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
+          }
+        >
+          <div className="space-y-4 xl:sticky xl:top-0">
           {/* Plant "Screen" Display */}
           <Card>
             <CardContent className="p-4 space-y-3">
@@ -590,9 +596,12 @@ export default function PlantsView() {
             plant={selectedPlant}
           />
 
+          </div>
+
+          <div className="min-w-0 xl:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <Card>
+            <Card className="xl:w-full">
               <CardHeader>
                 <CardTitle className="font-pixel">Revive Plant</CardTitle>
               </CardHeader>
@@ -663,7 +672,7 @@ export default function PlantsView() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
+            <Card className="xl:h-fit xl:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle className="font-pixel">Marketplace</CardTitle>
@@ -678,10 +687,10 @@ export default function PlantsView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(220px,260px)_minmax(280px,340px)] xl:items-start xl:justify-center">
                   {/* Regular Wallet Info Message */}
                   {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                    <StandardContainer className="p-3 rounded-md border bg-primary/10">
+                    <StandardContainer className="p-3 rounded-md border bg-primary/10 xl:col-span-2">
                       <div className="flex items-start space-x-2">
                         <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                         <div className="text-sm text-foreground">
@@ -774,7 +783,6 @@ export default function PlantsView() {
                       // Shop items - no grouping needed (all are protection items)
                       <div className="grid grid-cols-3 gap-2">
                         {shopItems.map((item: ShopItem) => {
-                          const quantity = getItemQuantity(item.id);
                           return (
                             <div key={item.id} className="space-y-1">
                               <div className="flex justify-center">
@@ -806,7 +814,8 @@ export default function PlantsView() {
               </CardContent>
             </Card>
           )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

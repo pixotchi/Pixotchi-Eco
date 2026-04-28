@@ -1,31 +1,31 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useAccount, useBalance } from 'wagmi';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Plant } from '@/lib/types';
-import { PlantNameTransaction } from '@/components/transactions/plant-name-transaction';
-import SwapPlantNameBundle from '@/components/transactions/swap-plant-name-bundle';
-import { toast } from 'react-hot-toast';
-import Image from 'next/image';
-import { useBalances } from '@/lib/balance-context';
-import { formatUnits } from "viem";
 import { useIsSolanaWallet } from '@/components/solana';
+import { PlantNameTransaction } from '@/components/transactions/plant-name-transaction';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
-import { formatWsol } from '@/lib/solana-quote';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { useEthModeSafe } from '@/lib/eth-mode-context';
-import { getEthQuoteForSeedAmount } from '@/lib/contracts';
+import SwapPlantNameBundle from '@/components/transactions/swap-plant-name-bundle';
+import { Button } from '@/components/ui/button';
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogHeader,
+DialogTitle,
+DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useBalances } from '@/lib/balance-context';
+import { getEthQuoteForSeedAmount } from '@/lib/contracts';
+import { useEthModeSafe } from '@/lib/eth-mode-context';
+import { useSmartWallet } from '@/lib/smart-wallet-context';
+import { formatWsol } from '@/lib/solana-quote';
+import { Plant } from '@/lib/types';
+import Image from 'next/image';
+import { useEffect,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { formatUnits } from "viem";
+import { useAccount,useBalance } from 'wagmi';
 
 interface EditPlantNameProps {
   plant: Plant;
@@ -121,7 +121,7 @@ export function EditPlantName({
     return () => { cancelled = true; };
   }, [isOpen, isSmartWallet, isEthMode, isSolana, nameChangeCostWei]);
 
-  const handleSuccess = (tx: any) => {
+  const handleSuccess = () => {
     toast.success(`Plant name changed to "${newName.trim()}"!`);
     setIsTransactionPending(false);
 
@@ -286,7 +286,7 @@ export function EditPlantName({
               buttonClassName="w-full"
               onQuote={setSolanaQuote}
               disabled={!isNameValid || isTransactionPending}
-              onSuccess={(signature) => {
+              onSuccess={() => {
                 toast.success(`Plant name changed to "${newName.trim()}"!`);
                 setIsTransactionPending(false);
                 if (onNameChanged) {
@@ -308,8 +308,8 @@ export function EditPlantName({
               newName={newName.trim()}
               ethAmount={ethQuote.ethAmountWithBuffer}
               minSeedOut={nameChangeCostWei}
-              onSuccess={(tx) => {
-                handleSuccess(tx);
+              onSuccess={() => {
+                handleSuccess();
               }}
               onError={handleError}
               buttonText={

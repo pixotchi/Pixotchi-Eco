@@ -1,19 +1,19 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useAccount } from 'wagmi';
-import { getPlantsByOwner } from '@/lib/contracts';
-import PlantImage from '@/components/PlantImage';
-import { ChevronDown } from 'lucide-react';
-import WarehouseApplyTransaction from '@/components/transactions/warehouse-apply-transaction';
-import { toast } from 'react-hot-toast';
 import CountdownTimer from '@/components/countdown-timer';
-import { Plant } from '@/lib/types';
-import { extractTransactionHash } from '@/lib/transaction-utils';
+import PlantImage from '@/components/PlantImage';
+import WarehouseApplyTransaction from '@/components/transactions/warehouse-apply-transaction';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { getPlantsByOwner } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import { extractTransactionHash } from '@/lib/transaction-utils';
+import { Plant } from '@/lib/types';
+import { ChevronDown } from 'lucide-react';
+import { useCallback,useEffect,useMemo,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAccount } from 'wagmi';
 
 interface WarehousePanelProps {
   landId: bigint;
@@ -42,7 +42,7 @@ export default function WarehousePanel({
       if (!selectedPlantId && list.length > 0) {
         setSelectedPlantId(list[0].id);
       }
-    } catch (e) {
+    } catch {
       // Silently ignore
     }
   }, [address, selectedPlantId]);

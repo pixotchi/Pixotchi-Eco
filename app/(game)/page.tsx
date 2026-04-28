@@ -1,37 +1,39 @@
 "use client";
 
-import { sdk } from "@farcaster/miniapp-sdk";
-import { Activity, useCallback, useEffect, useRef, useState } from "react";
+import { ChatButton } from "@/components/chat";
+import InviteGate from "@/components/invite-gate";
+import StatusBar from "@/components/status-bar";
+import { ThemeSelector } from "@/components/theme-selector";
+import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
-import { Tab } from "@/lib/types";
 import { WalletProfile } from "@/components/wallet-profile";
-import { PlusCircle, Leaf, Sparkles, Info, Repeat, History, Trophy } from "lucide-react";
-import Image from "next/image";
-import { useTheme } from "next-themes";
-import { ThemeSelector } from "@/components/theme-selector";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { INVITE_CONFIG, getLocalStorageKeys } from "@/lib/invite-utils";
-import InviteGate from "@/components/invite-gate";
-import { ChatButton } from "@/components/chat";
-import StatusBar from "@/components/status-bar";
-import dynamic from "next/dynamic";
+import { INVITE_CONFIG,getLocalStorageKeys } from "@/lib/invite-utils";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
+import { Tab } from "@/lib/types";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { History,Info,KeyRound,Leaf,PlusCircle,Repeat,Sparkles,Trophy } from "lucide-react";
+import { useTheme } from "next-themes";
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import { Activity,useCallback,useEffect,useRef,useState } from "react";
 import toast from "react-hot-toast";
 
 // Import custom hooks
-import { useAppAuthController } from "@/hooks/useAppAuthController";
-import { useInviteValidation } from "@/hooks/useInviteValidation";
-import { useFarcaster } from "@/hooks/useFarcaster";
-import { useAutoConnect } from "@/hooks/useAutoConnect";
-import { useWebQueryState } from "@/hooks/useWebQueryState";
-import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import {
-  BaseAccountSurfaceButton,
-  SolanaSurfaceButton,
+BaseAccountSurfaceButton,
+SolanaSurfaceButton,
 } from "@/components/auth/surface-switch-buttons";
+import { useAppAuthController } from "@/hooks/useAppAuthController";
+import { useAutoConnect } from "@/hooks/useAutoConnect";
+import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
+import { useFarcaster } from "@/hooks/useFarcaster";
+import { useInviteValidation } from "@/hooks/useInviteValidation";
+import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { requestBalanceRefresh } from "@/lib/app-events";
+import type { AuthSurface } from "@/lib/auth-surface";
 import { CLIENT_ENV } from "@/lib/env-config";
+import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -65,8 +67,7 @@ function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => v
 // Factory function to create dynamic imports with error handling
 const createDynamicTab = (
   importFn: () => Promise<any>,
-  tabName: string,
-  chunkName: string
+  tabName: string
 ) => {
   return dynamic(
     () => importFn().catch((error) => {
@@ -87,33 +88,27 @@ const createDynamicTab = (
 const tabComponents = {
   dashboard: createDynamicTab(
     () => import(/* webpackChunkName: "dashboard-tab" */ "@/components/tabs/dashboard-tab"),
-    "Farm",
-    "dashboard-tab"
+    "Farm"
   ),
   mint: createDynamicTab(
     () => import(/* webpackChunkName: "mint-tab" */ "@/components/tabs/mint-tab"),
-    "Mint",
-    "mint-tab"
+    "Mint"
   ),
   about: createDynamicTab(
     () => import(/* webpackChunkName: "about-tab" */ "@/components/tabs/about-tab"),
-    "About",
-    "about-tab"
+    "About"
   ),
   swap: createDynamicTab(
     () => import(/* webpackChunkName: "swap-tab" */ "@/components/tabs/swap-tab"),
-    "Swap",
-    "swap-tab"
+    "Swap"
   ),
   activity: createDynamicTab(
     () => import(/* webpackChunkName: "activity-tab" */ "@/components/tabs/activity-tab"),
-    "Activity",
-    "activity-tab"
+    "Activity"
   ),
   leaderboard: createDynamicTab(
     () => import(/* webpackChunkName: "leaderboard-tab" */ "@/components/tabs/leaderboard-tab"),
-    "Ranking",
-    "leaderboard-tab"
+    "Ranking"
   ),
 };
 
@@ -152,6 +147,8 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 
   useEffect(() => {
     if (!isConnected) return;
+    const prefetchingTabsRef = prefetchingTabs.current;
+    const prefetchPromisesRef = prefetchPromises.current;
 
     // Define tab navigation patterns for prefetching
     const currentIndex = TAB_VALUES.indexOf(activeTab);
@@ -173,17 +170,17 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
         tabsToPrefetch.forEach((tab) => {
           const key = String(tab);
           if (key === activeTab) return;
-          if (loadedTabs.current.has(key) || prefetchingTabs.current.has(key)) return;
-          prefetchingTabs.current.add(key);
+          if (loadedTabs.current.has(key) || prefetchingTabsRef.has(key)) return;
+          prefetchingTabsRef.add(key);
 
           const prefetchPromise = import(`@/components/tabs/${tab}-tab`)
             .finally(() => {
-              prefetchingTabs.current.delete(key);
+              prefetchingTabsRef.delete(key);
               loadedTabs.current.add(key);
-              prefetchPromises.current.delete(key);
+              prefetchPromisesRef.delete(key);
             });
 
-          prefetchPromises.current.set(key, prefetchPromise);
+          prefetchPromisesRef.set(key, prefetchPromise);
         });
       });
 
@@ -192,22 +189,131 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
         if (idleCallbackId && typeof idleCallbackId === 'number') {
           (window as any).cancelIdleCallback?.(idleCallbackId);
         }
-        prefetchingTabs.current.clear();
-        prefetchPromises.current.clear();
+        prefetchingTabsRef.clear();
+        prefetchPromisesRef.clear();
       };
     }
 
     return () => {
-      prefetchingTabs.current.clear();
-      prefetchPromises.current.clear();
+      prefetchingTabsRef.clear();
+      prefetchPromisesRef.clear();
     };
   }, [activeTab, isConnected]);
 };
 
 import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
-import { useKeyboardAware, useViewportInsets, useKeyboardNavigation } from "@/hooks/useKeyboardAware";
+import { useKeyboardAware,useKeyboardNavigation,useViewportInsets } from "@/hooks/useKeyboardAware";
 
+type LoginAuthActionsProps = {
+  className: string;
+  handleMiniAppReconnect: () => void;
+  isInMiniApp: boolean;
+  isMiniConnectRetrying: boolean;
+  isRestoringBaseSession: boolean;
+  localTestAuthAvailable: boolean;
+  privyReady: boolean;
+  switchAuthSurface: (surface: AuthSurface) => Promise<void>;
+};
+
+function LoginAuthActions({
+  className,
+  handleMiniAppReconnect,
+  isInMiniApp,
+  isMiniConnectRetrying,
+  isRestoringBaseSession,
+  localTestAuthAvailable,
+  privyReady,
+  switchAuthSurface,
+}: LoginAuthActionsProps) {
+  if (isRestoringBaseSession) {
+    return (
+      <div className={className}>
+        <BasePageLoader text="Restoring your Base session…" />
+      </div>
+    );
+  }
+
+  if (isInMiniApp) {
+    return (
+      <div className={className}>
+        <div className="space-y-2">
+          <div className="text-muted-foreground text-sm text-center md:text-left">Connecting…</div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleMiniAppReconnect}
+            disabled={isMiniConnectRetrying}
+          >
+            {isMiniConnectRetrying ? "Retrying…" : "Retry Connection"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertTitle>Web App</AlertTitle>
+        <AlertDescription>
+          You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
+        </AlertDescription>
+      </Alert>
+      <Button
+        className="w-full rounded-md text-base font-semibold text-white h-11 bg-[#ff8170] hover:bg-[#ff6b56] active:bg-[#ff8170] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ff8170] disabled:opacity-60 disabled:cursor-not-allowed"
+        variant="default"
+        onClick={async () => {
+          try {
+            await switchAuthSurface('privy');
+          } catch (error) {
+            console.error('Failed to switch to Privy surface:', error);
+            toast.error('Failed to switch to Privy sign-in. Please try again.');
+          }
+        }}
+        disabled={!privyReady}
+      >
+        {privyReady ? 'Continue with Privy' : 'Loading Privy…'}
+      </Button>
+      <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
+      {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
+        <>
+          <div className="flex items-center gap-2 my-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or bridge from Solana</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
+        </>
+      )}
+      {localTestAuthAvailable && (
+        <>
+          <div className="flex items-center gap-2 my-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or local testing</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <Button
+            className="w-full h-11 rounded-md text-base font-semibold"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await switchAuthSurface('test');
+              } catch (error) {
+                console.error('Failed to switch to local test auth:', error);
+                toast.error('Local test auth is only available on localhost.');
+              }
+            }}
+          >
+            <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
+            Local Test Wallet
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const { theme } = useTheme();
@@ -238,17 +344,38 @@ export default function App() {
   });
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
+  const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
+  const [isDesktopHeader, setIsDesktopHeader] = useState(false);
   const lastDismissedRef = useRef<string | null>(null);
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
+  const isLocalTestSession = localTestAuthAvailable && state.surface === "test";
+  const isInviteValidated = userValidated || isLocalTestSession;
   const readyBlocker =
     isConnected &&
     INVITE_CONFIG.SYSTEM_ENABLED &&
+    !isLocalTestSession &&
     (checkingValidation || !userValidated);
 
   useTabPrefetching(activeTab, isConnected);
 
   useFarcaster({ readyBlocker });
   useAutoConnect();
+
+  useEffect(() => {
+    setLocalTestAuthAvailable(isLocalTestAuthAllowed());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia("(min-width: 80rem)");
+    const syncDesktopHeader = () => setIsDesktopHeader(mediaQuery.matches);
+
+    syncDesktopHeader();
+    mediaQuery.addEventListener("change", syncDesktopHeader);
+
+    return () => mediaQuery.removeEventListener("change", syncDesktopHeader);
+  }, []);
 
   useEffect(() => {
     if (isMiniApp || typeof window === "undefined") {
@@ -296,10 +423,10 @@ export default function App() {
 
   // Start tutorial only after wallet connect (and invite gate passed)
   useEffect(() => {
-    if (isConnected && userValidated) {
+    if (isConnected && isInviteValidated) {
       startIfFirstVisit();
     }
-  }, [isConnected, userValidated, startIfFirstVisit]);
+  }, [isConnected, isInviteValidated, startIfFirstVisit]);
 
   // Auto-prompt to add mini app when user opens in miniapp mode and hasn't added yet
   useEffect(() => {
@@ -427,7 +554,7 @@ export default function App() {
   };
 
   // Show loading while checking validation (only if wallet is connected and invite system enabled)
-  if (checkingValidation && isConnected && INVITE_CONFIG.SYSTEM_ENABLED) {
+  if (checkingValidation && isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isLocalTestSession) {
     return (
       <div className="flex flex-col h-dvh bg-background items-center justify-center p-4">
         <div className="flex flex-col items-center justify-center gap-4">
@@ -439,7 +566,7 @@ export default function App() {
   }
 
   // Show invite gate if wallet is connected but not validated (and system is enabled)
-  if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !userValidated) {
+  if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isInviteValidated) {
     return (
       <InviteGate
         onValidated={handleInviteValidated}
@@ -459,7 +586,9 @@ export default function App() {
     >
       <div
         data-viewport-shell="inner"
-        className="w-full max-w-md flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
+        className={`w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none ${
+          isConnected ? "max-w-md xl:max-w-none xl:w-full" : "max-w-md md:max-w-none md:w-full"
+        }`}
       >
         {/* Header wrapper with matching background and safe area */}
         <div className="bg-card/90 backdrop-blur-sm overscroll-none">
@@ -478,6 +607,18 @@ export default function App() {
               </div>
 
               <div className="flex items-center space-x-2">
+                {isConnected && isDesktopHeader && (
+                  <ErrorBoundary
+                    variant="inline"
+                    resetKeys={address ? [address] : []}
+                    onError={(error, errorInfo) => {
+                      console.error('Error in StatusBar:', { error, errorInfo });
+                    }}
+                  >
+                    <StatusBar placement="header" />
+                  </ErrorBoundary>
+                )}
+
                 {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
                   <Button
                     type="button"
@@ -516,7 +657,7 @@ export default function App() {
               </div>
             </div>
           </header>
-          {isConnected && (
+          {isConnected && !isDesktopHeader && (
             <ErrorBoundary
               variant="inline"
               resetKeys={address ? [address] : []}
@@ -530,10 +671,10 @@ export default function App() {
         </div>
 
         {/* Main Content */}
-        <main data-viewport-shell="main" className="flex-1 bg-muted/40 flex flex-col overflow-hidden" role="main" aria-label="Main content area">
+        <main data-viewport-shell="main" className="flex-1 bg-muted/40 flex flex-col xl:flex-row overflow-hidden" role="main" aria-label="Main content area">
           {(!isConnected) ? (
-            <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom">
-              <div className="flex-grow flex flex-col items-center justify-center text-center">
+            <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
+              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-lg md:border md:border-b-0 md:border-border md:bg-card/80 md:px-5 md:pt-5">
                 <div className="flex flex-col items-center space-y-3 mb-8">
                   <Image
                     src="/PixotchiKit/Logonotext.svg"
@@ -552,80 +693,55 @@ export default function App() {
                 <h2 className="text-xl font-semibold text-foreground mb-2">
                   Welcome!
                 </h2>
-                <p className="text-muted-foreground mb-6 max-w-xs">
+                <p className="text-muted-foreground mb-6 max-w-xs md:max-w-md">
                   Connect your wallet, mint a plant and begin your farming journey on Base.
                 </p>
               </div>
-              {isRestoringBaseSession ? (
-                <div className="w-full max-w-xs space-y-3">
-                  <BasePageLoader text="Restoring your Base session…" />
-                </div>
-              ) : (
-              <div className="w-full max-w-xs space-y-3">
-                {!fc?.isInMiniApp && (
-                  <Alert>
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>Web App</AlertTitle>
-                    <AlertDescription>
-                      You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                {/* Web-only login buttons; MiniApp autoconnects above */}
-                {!fc?.isInMiniApp ? (
-                  <Button
-                    className="w-full rounded-md text-base font-semibold text-white h-11 bg-[#ff8170] hover:bg-[#ff6b56] active:bg-[#ff8170] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ff8170] disabled:opacity-60 disabled:cursor-not-allowed"
-                    variant="default"
-                    onClick={async () => {
-                      try {
-                        await switchAuthSurface('privy');
-                      } catch (error) {
-                        console.error('Failed to switch to Privy surface:', error);
-                        toast.error('Failed to switch to Privy sign-in. Please try again.');
-                      }
-                    }}
-                    disabled={!privyReady}
-                  >
-                    {privyReady ? 'Continue with Privy' : 'Loading Privy…'}
-                  </Button>
-                ) : null}
-                {!fc?.isInMiniApp ? (
-                  <>
-                    <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
-                    {/* Solana Bridge option - connects via Base-Solana bridge */}
-                    {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
-                      <>
-                        <div className="flex items-center gap-2 my-2">
-                          <div className="flex-1 h-px bg-border" />
-                          <span className="text-xs text-muted-foreground">or bridge from Solana</span>
-                          <div className="flex-1 h-px bg-border" />
-                        </div>
-                        <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-muted-foreground text-sm text-center">Connecting…</div>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleMiniAppReconnect}
-                      disabled={state.isMiniConnectRetrying}
-                    >
-                      {state.isMiniConnectRetrying ? "Retrying…" : "Retry Connection"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-              )}
+              <LoginAuthActions
+                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-lg md:border md:border-t-0 md:border-border md:bg-card/80 md:px-5 md:pb-5 md:shadow-sm"
+                handleMiniAppReconnect={handleMiniAppReconnect}
+                isInMiniApp={Boolean(fc?.isInMiniApp)}
+                isMiniConnectRetrying={state.isMiniConnectRetrying}
+                isRestoringBaseSession={isRestoringBaseSession}
+                localTestAuthAvailable={localTestAuthAvailable}
+                privyReady={privyReady}
+                switchAuthSurface={switchAuthSurface}
+              />
             </div>
           ) : (
             <>
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border bg-card/80 p-3" role="navigation" aria-label="Main navigation">
+                <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
+                  {tabs.map((tab) => (
+                    <Button
+                      key={tab.id}
+                      variant="ghost"
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                        activeTab === tab.id
+                          ? "bg-primary/10 text-primary border-primary/20"
+                          : "text-muted-foreground border-transparent hover:bg-background/80"
+                      }`}
+                      role="tab"
+                      aria-selected={activeTab === tab.id}
+                      aria-controls={`tabpanel-${tab.id}`}
+                      aria-label={`Switch to ${tab.label} tab`}
+                      tabIndex={activeTab === tab.id ? 0 : -1}
+                    >
+                      <tab.icon
+                        className={`h-5 w-5 ${activeTab === tab.id ? "text-primary" : ""}`}
+                        aria-hidden="true"
+                      />
+                      <span className="font-medium leading-tight">{tab.label}</span>
+                    </Button>
+                  ))}
+                </div>
+              </nav>
+
               {/* Tab Content */}
               <div
                 data-viewport-shell="content"
-                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-4 pb-16 safe-area-inset"
+                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-4 pb-16 safe-area-inset xl:p-5 xl:pb-5 xl:safe-area-bottom"
                 role="tabpanel"
                 id={`tabpanel-${activeTab}`}
                 aria-labelledby={`tab-${activeTab}`}
@@ -659,7 +775,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button

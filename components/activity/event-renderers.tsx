@@ -1,39 +1,21 @@
 "use client";
 
-import React from 'react';
-import { AttackEvent, KilledEvent, MintEvent, PlayedEvent, ItemConsumedEvent, ShopItemPurchasedEvent, ActivityEvent, BundledItemConsumedEvent } from '@/lib/types';
-import { formatAddress, formatTokenAmount, formatScore, formatDuration } from '@/lib/utils';
-import { Sword, Skull, Sparkles, Gamepad2, Apple, ShoppingCart, HelpCircle } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import Image from 'next/image';
+import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { ITEM_ICONS } from '@/lib/constants';
-import { LAND_EVENT_ICONS } from '@/lib/constants';
+import {
+ActivityEvent,AttackEvent,BarracksBuiltEvent,
+BarracksRaidEvent,BlackjackResultEvent,BundledItemConsumedEvent,CasinoBuiltEvent,KilledEvent,LandMintedEvent,
+LandNameChangedEvent,LandTransferEvent,MintEvent,PlayedEvent,QuestFinalizedEvent,QuestStartedEvent,RouletteSpinResultEvent,ShopItemPurchasedEvent,TownSpeedUpWithSeedEvent,TownUpgradedWithLeafEvent,VillageProductionClaimedEvent,VillageSpeedUpWithSeedEvent,VillageUpgradedWithLeafEvent
+} from '@/lib/types';
+import { formatDuration,formatQuestReward,formatScore,formatTokenAmount,getBuildingName,getQuestDifficulty } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { HelpCircle } from 'lucide-react';
+import Image from 'next/image';
+import React from 'react';
 
 const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
   '1': { name: 'Fence', icon: '/icons/Fence.png' },
 };
-import { getBuildingName, getQuestDifficulty, getQuestReward, formatQuestReward } from '@/lib/utils';
-import { useTokenMetadata } from '@/hooks/useTokenMetadata';
-import { useReadContract } from 'wagmi';
-import { casinoAbi } from '@/public/abi/casino-abi';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import {
-  LandTransferEvent,
-  LandMintedEvent,
-  LandNameChangedEvent,
-  VillageUpgradedWithLeafEvent,
-  VillageSpeedUpWithSeedEvent,
-  TownUpgradedWithLeafEvent,
-  TownSpeedUpWithSeedEvent,
-  QuestStartedEvent,
-  QuestFinalizedEvent,
-  VillageProductionClaimedEvent,
-  BarracksBuiltEvent,
-  BarracksRaidEvent,
-  CasinoBuiltEvent,
-  RouletteSpinResultEvent,
-  BlackjackResultEvent
-} from '@/lib/types';
 
 const TimeAgo = React.memo(({ timestamp }: { timestamp: string }) => {
   const timeAgo = React.useMemo(() => {
@@ -184,13 +166,6 @@ const LandName = ({ landId, isYou }: { landId: string, isYou: boolean }) => (
     Land #{landId}
     {isYou && <YouBadge />}
   </span>
-);
-
-const PlayerName = ({ address, isYou }: { address: string, isYou: boolean }) => (
-  <>
-    {isYou && <YouBadge />}
-    <span className="font-bold">{isYou ? "You" : formatAddress(address)}</span>
-  </>
 );
 
 const EventWrapper = ({
@@ -394,7 +369,7 @@ export const LandTransferEventRenderer = ({ event, userAddress }: { event: LandT
   );
 };
 
-export const LandMintedEventRenderer = ({ event, userAddress }: { event: LandMintedEvent, userAddress?: string | null }) => {
+export const LandMintedEventRenderer = ({ event }: { event: LandMintedEvent, userAddress?: string | null }) => {
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
@@ -412,7 +387,7 @@ export const LandNameChangedEventRenderer = ({ event }: { event: LandNameChanged
   </EventWrapper>
 );
 
-export const VillageUpgradeEventRenderer = ({ event, userAddress }: { event: VillageUpgradedWithLeafEvent, userAddress?: string | null }) => {
+export const VillageUpgradeEventRenderer = ({ event }: { event: VillageUpgradedWithLeafEvent, userAddress?: string | null }) => {
   const buildingName = getBuildingName(event.buildingId, false);
 
   return (
@@ -424,7 +399,7 @@ export const VillageUpgradeEventRenderer = ({ event, userAddress }: { event: Vil
   );
 };
 
-export const VillageSpeedUpEventRenderer = ({ event, userAddress }: { event: VillageSpeedUpWithSeedEvent, userAddress?: string | null }) => {
+export const VillageSpeedUpEventRenderer = ({ event }: { event: VillageSpeedUpWithSeedEvent, userAddress?: string | null }) => {
   const buildingName = getBuildingName(event.buildingId, false);
 
   return (
@@ -436,7 +411,7 @@ export const VillageSpeedUpEventRenderer = ({ event, userAddress }: { event: Vil
   );
 };
 
-export const TownUpgradeEventRenderer = ({ event, userAddress }: { event: TownUpgradedWithLeafEvent, userAddress?: string | null }) => {
+export const TownUpgradeEventRenderer = ({ event }: { event: TownUpgradedWithLeafEvent, userAddress?: string | null }) => {
   const buildingName = getBuildingName(event.buildingId, true);
 
   return (
@@ -448,7 +423,7 @@ export const TownUpgradeEventRenderer = ({ event, userAddress }: { event: TownUp
   );
 };
 
-export const TownSpeedUpEventRenderer = ({ event, userAddress }: { event: TownSpeedUpWithSeedEvent, userAddress?: string | null }) => {
+export const TownSpeedUpEventRenderer = ({ event }: { event: TownSpeedUpWithSeedEvent, userAddress?: string | null }) => {
   const buildingName = getBuildingName(event.buildingId, true);
 
   return (
@@ -472,7 +447,7 @@ export const QuestStartedEventRenderer = ({ event }: { event: QuestStartedEvent 
   );
 };
 
-export const QuestFinalizedEventRenderer = ({ event, userAddress }: { event: QuestFinalizedEvent, userAddress?: string | null }) => {
+export const QuestFinalizedEventRenderer = ({ event }: { event: QuestFinalizedEvent, userAddress?: string | null }) => {
   const reward = formatQuestReward(event.rewardType, event.amount);
 
   return (

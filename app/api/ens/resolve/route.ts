@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { resolvePrimaryNames } from '@/lib/ens-resolver';
+import { NextRequest,NextResponse } from 'next/server';
 import { isAddress } from 'viem';
 
 export const runtime = 'nodejs';
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, names });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { success: false, error: 'Failed to resolve names' },
       { status: 500 },

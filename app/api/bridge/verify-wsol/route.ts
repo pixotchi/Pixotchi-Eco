@@ -5,9 +5,9 @@
  * GET /api/bridge/verify-wsol
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
 import { type Address } from 'viem';
 
 // Segment config: Always fetch fresh onchain data
@@ -66,10 +66,6 @@ export async function GET(request: NextRequest) {
     const isToken0Match = token0.toLowerCase() === BRIDGE_WSOL.toLowerCase();
     const isToken1Match = token1.toLowerCase() === BRIDGE_WSOL.toLowerCase();
     const hasMatch = isToken0Match || isToken1Match;
-
-    // Identify which token is wSOL and which is USDC in the pool
-    const poolWsol = isToken0Match ? token0 : (isToken1Match ? token1 : null);
-    const poolOther = isToken0Match ? token1 : token0;
 
     return NextResponse.json({
       bridgeWsol: {

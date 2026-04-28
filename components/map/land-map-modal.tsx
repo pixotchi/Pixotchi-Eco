@@ -1,19 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Land } from "@/lib/types";
-import { X, Minus, Plus, Compass, MapPin, Info, Trophy, User, Copy, ExternalLink } from "lucide-react";
-import { LandMapCanvas } from './land-map-canvas';
-import { formatXP, cn } from "@/lib/utils";
-import { contractToVisual, getCoordinateFromTokenId } from "@/lib/land-utils";
-import Image from "next/image";
-import { LandLeaderboardEntry, getLandOwner } from "@/lib/contracts";
-import { getAddress } from 'viem';
-import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import ChatProfileDialog from "@/components/chat/chat-profile-dialog";
+import { usePrimaryName } from "@/components/hooks/usePrimaryName";
+import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogTitle } from "@/components/ui/dialog";
+import { LandLeaderboardEntry,getLandOwner } from "@/lib/contracts";
+import { contractToVisual,getCoordinateFromTokenId } from "@/lib/land-utils";
+import { Land } from "@/lib/types";
 import { useTransactions } from 'ethereum-identity-kit';
+import { Compass,Minus,Plus,User,X } from "lucide-react";
+import Image from "next/image";
+import { useEffect,useState } from 'react';
+import { LandMapCanvas } from './land-map-canvas';
 
 // Helper to truncate address
 const truncateAddress = (address: string) => {
@@ -44,7 +42,6 @@ export function LandMapModal({
   const [center, setCenter] = useState({ x: 0, y: 0 });
   const [tappedLandId, setTappedLandId] = useState<number | null>(null);
   const [tappedWilderness, setTappedWilderness] = useState<{ x: number, y: number, type: string } | null>(null);
-  const [copied, setCopied] = useState(false);
   const [fetchedOwner, setFetchedOwner] = useState<string | null>(null);
   const [isOwnerLoading, setIsOwnerLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -102,13 +99,6 @@ export function LandMapModal({
       setTappedLandId(null);
       setTappedWilderness(null);
     }
-  };
-
-  const copyAddress = (address: string) => {
-      if (!address) return;
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
   };
 
   const neighbor = tappedLandId ? neighborData[tappedLandId] : null;

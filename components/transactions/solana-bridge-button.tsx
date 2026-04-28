@@ -11,16 +11,16 @@
  * - Only refetch when item changes (tracked by stable key)
  */
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSolanaBridge } from '@/hooks/useSolanaBridge';
 import { useSolanaWallet } from '@/hooks/useSolanaWallet';
-import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
-import { PublicKey } from '@solana/web3.js';
-import bs58 from 'bs58';
-import { toast } from 'react-hot-toast';
 import { solanaBridgeImplementation } from '@/lib/solana-bridge-implementation';
 import { SOLANA_BRIDGE_CONFIG } from '@/lib/solana-constants';
+import { useSignAndSendTransaction,useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
+import { PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
 
@@ -359,10 +359,6 @@ export default function SolanaBridgeButton({
     solanaWallet, solanaAddress, signAndSendTransaction, bridge,
     onSuccess, onError
   ]);
-  
-  // Determine if quote is ready (successful with amount)
-  const hasValidQuote = localQuote && localQuote.wsolAmount > BigInt(0) && !localQuote.error;
-  const quoteError = localQuote?.error;
   
   // For paid actions: disable only while loading quote for the first time (not on error)
   // If quote fails, user can still click - the prepare function will retry getting a fresh quote

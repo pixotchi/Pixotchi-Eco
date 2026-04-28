@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,35 @@ interface InviteCodeInputProps {
   initialCode?: string;
   autoSubmit?: boolean;
 }
+
+const markCodeAsUsed = async (inviteCode: string, userAddress: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const response = await fetch('/api/invite/use', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: inviteCode,
+        address: userAddress
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.success) {
+      return {
+        success: false,
+        error: typeof data?.error === 'string' ? data.error : 'Failed to activate invite code.',
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error marking code as used:', error);
+    return {
+      success: false,
+      error: 'Failed to activate invite code. Please try again.',
+    };
+  }
+};
 
 export default function InviteCodeInput({ 
   onValidated, 
@@ -30,6 +59,7 @@ export default function InviteCodeInput({
   const [isValidating, setIsValidating] = useState(false);
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const autoSubmittedRef = useRef(false);
   const requiresSecureSession = Boolean(address);
   const sessionUnavailable = requiresSecureSession && publicChatState !== 'ready';
   const sessionStatusText = !requiresSecureSession
@@ -54,13 +84,6 @@ export default function InviteCodeInput({
     requiresSecureSession ? sessionId : null,
   ].filter(Boolean).join(' ');
 
-  // Auto-submit if initial code is provided and autoSubmit is true
-  useEffect(() => {
-    if (initialCode && autoSubmit) {
-      handleValidate();
-    }
-  }, [initialCode, autoSubmit]);
-
   const handleCodeChange = (value: string) => {
     const upperCode = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (upperCode.length <= 8) {
@@ -70,7 +93,7 @@ export default function InviteCodeInput({
     }
   };
 
-  const handleValidate = async () => {
+  const handleValidate = useCallback(async () => {
     if (!code || code.length !== 8) {
       setErrorMessage('Please enter a valid 8-character invite code');
       setIsValid(false);
@@ -130,36 +153,15 @@ export default function InviteCodeInput({
     } finally {
       setIsValidating(false);
     }
-  };
+  }, [address, code, onValidated, publicChatState, sessionUnavailable]);
 
-  const markCodeAsUsed = async (inviteCode: string, userAddress: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const response = await fetch('/api/invite/use', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          code: inviteCode, 
-          address: userAddress 
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data?.success) {
-        return {
-          success: false,
-          error: typeof data?.error === 'string' ? data.error : 'Failed to activate invite code.',
-        };
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('Error marking code as used:', error);
-      return {
-        success: false,
-        error: 'Failed to activate invite code. Please try again.',
-      };
+  // Auto-submit if initial code is provided and autoSubmit is true
+  useEffect(() => {
+    if (initialCode && autoSubmit && !autoSubmittedRef.current) {
+      autoSubmittedRef.current = true;
+      handleValidate();
     }
-  };
+  }, [initialCode, autoSubmit, handleValidate]);
 
   const getStatusIcon = () => {
     if (isValidating) {

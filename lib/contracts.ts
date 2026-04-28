@@ -1,29 +1,29 @@
-import { createWalletClient, custom, WalletClient, getAddress, parseUnits, formatUnits, PublicClient, encodeFunctionData } from 'viem';
-import { base, baseSepolia } from 'viem/chains';
-import {
-  Plant,
-  ShopItem,
-  Strain,
-  GardenItem,
-  Land,
-  FenceV2State,
-  BarracksConfig,
-  BarracksConfigV2,
-  BarracksLandState,
-  BarracksLandStateV2,
-  BarracksRaidPreview,
-  BarracksRaidPreviewV2,
-  BarracksRaidReport,
-  BarracksRaidReportV2,
-} from './types';
-import { appendBuilderSuffix } from './builder-code';
-import UniswapAbi from '@/public/abi/Uniswap.json';
-import { landAbi } from '../public/abi/pixotchi-v3-abi';
-import { leafAbi } from '../public/abi/leaf-abi';
-import { stakingAbi } from '@/public/abi/staking-abi';
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
+import { stakingAbi } from '@/public/abi/staking-abi';
+import UniswapAbi from '@/public/abi/Uniswap.json';
+import { encodeFunctionData,formatUnits,getAddress,parseUnits,WalletClient } from 'viem';
+import { base } from 'viem/chains';
+import { leafAbi } from '../public/abi/leaf-abi';
+import { landAbi } from '../public/abi/pixotchi-v3-abi';
+import { BaseRpcError,getBaseReadClient,waitForBaseReceipt } from './base-rpc';
+import { appendBuilderSuffix } from './builder-code';
 import { CLIENT_ENV } from './env-config';
-import { BaseRpcError, getBaseReadClient, waitForBaseReceipt } from './base-rpc';
+import {
+BarracksConfig,
+BarracksConfigV2,
+BarracksLandState,
+BarracksLandStateV2,
+BarracksRaidPreview,
+BarracksRaidPreviewV2,
+BarracksRaidReport,
+BarracksRaidReportV2,
+FenceV2State,
+GardenItem,
+Land,
+Plant,
+ShopItem,
+Strain,
+} from './types';
 
 export const LAND_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LAND_CONTRACT_ADDRESS);
 export const LEAF_CONTRACT_ADDRESS = getAddress(CLIENT_ENV.LEAF_CONTRACT_ADDRESS);
@@ -43,25 +43,6 @@ const isFenceItemName = (name: unknown): boolean => {
   if (typeof name !== 'string') return false;
   const lower = name.toLowerCase();
   return lower.includes('fence') || lower.includes('shield');
-};
-
-const approxTimestampEqual = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
-
-const getMaxFenceEffectUntil = (extensions: any[]): number => {
-  let max = 0;
-  if (!Array.isArray(extensions)) return max;
-  for (const extension of extensions) {
-    const owned = extension?.shopItemOwned || [];
-    if (!Array.isArray(owned)) continue;
-    for (const item of owned) {
-      if (!item?.effectIsOngoingActive) continue;
-      if (!isFenceItemName(item?.name)) continue;
-      const effectUntil = Number(item?.effectUntil ?? 0);
-      if (!Number.isFinite(effectUntil)) continue;
-      if (effectUntil > max) max = effectUntil;
-    }
-  }
-  return max;
 };
 
 // Derive Fence V2 state from extensions (since Fence V2 writes to the same storage)
@@ -1480,7 +1461,7 @@ export const transferPlants = async (
       const success = await waitForBaseTransactionSuccess(hash);
       if (success) successIds.push(id);
       else failedIds.push(id);
-    } catch (e) {
+    } catch {
       failedIds.push(id);
     }
   }
@@ -1522,7 +1503,7 @@ export const transferLands = async (
       const success = await waitForBaseTransactionSuccess(hash);
       if (success) successIds.push(id);
       else failedIds.push(id);
-    } catch (e) {
+    } catch {
       failedIds.push(id);
     }
   }
@@ -2128,59 +2109,6 @@ const normalizeFenceV2Config = (result: any): FenceV2Config => {
   };
 };
 
-const computeFenceV2State = (effectUntilRaw: any, isActiveRaw: any, v1ActiveRaw: any): FenceV2State | null => {
-  const effectUntilNumber = Number(effectUntilRaw ?? 0);
-  const isActive = Boolean(isActiveRaw);
-  const v1Active = Boolean(v1ActiveRaw);
-  const nowSec = Math.floor(Date.now() / 1000);
-  const secondsRemaining = effectUntilNumber > 0 ? Math.max(0, effectUntilNumber - nowSec) : 0;
-  const totalDaysPurchased = secondsRemaining > 0 ? Math.ceil(secondsRemaining / (24 * 60 * 60)) : 0;
-
-  return {
-    activeUntil: effectUntilNumber,
-    isActive,
-    v1Active,
-    totalDaysPurchased,
-    quotedDays: null,
-    isMirroringV1: false,
-  };
-};
-
-type PublicClientType = PublicClient;
-
-const getFenceV2StatesInternal = async (
-  plantIds: number[],
-  client: PublicClientType,
-): Promise<Record<number, FenceV2State | null>> => {
-  if (plantIds.length === 0) return {};
-
-  // Use fenceV2GetPurchaseStats which returns everything we need in one call
-  const calls = plantIds.map((id) => ({
-    address: FENCE_V2_EXTENSION_ADDRESS,
-    abi: fenceV2Abi,
-    functionName: 'fenceV2GetPurchaseStats' as const,
-    args: [BigInt(id)],
-  }));
-
-  const responses = await retryWithBackoff(async () => {
-    return client.multicall({ contracts: calls, allowFailure: true });
-  });
-
-  const result: Record<number, FenceV2State | null> = {};
-  for (let index = 0; index < plantIds.length; index++) {
-    const stats = responses[index]?.result as any;
-    if (stats) {
-      const effectUntilRes = stats[1]; // activeUntil
-      const isActiveRes = stats[1] && Number(stats[1]) > Math.floor(Date.now() / 1000); // Check if activeUntil is in future
-      const hasV1Res = stats[3]; // fenceV1Active
-      result[plantIds[index]] = computeFenceV2State(effectUntilRes, isActiveRes, hasV1Res);
-    } else {
-      result[plantIds[index]] = null;
-    }
-  }
-  return result;
-};
-
 export const getFenceV2Config = async (): Promise<FenceV2Config | null> => {
   const readClient = getReadClient();
   try {
@@ -2252,21 +2180,6 @@ export const setFenceV2PricePerDay = async (walletClient: WalletClient, pricePer
     chain: base,
   });
   return waitForBaseTransactionSuccess(hash);
-};
-
-const attachFenceV2State = async (
-  client: PublicClientType,
-  plants: any[],
-): Promise<Record<number, FenceV2State | null>> => {
-  try {
-    const ids = plants
-      .map((plant) => Number(plant?.id ?? plant?.[0] ?? 0))
-      .filter((id) => Number.isFinite(id) && id >= 0);
-    return await getFenceV2StatesInternal(ids, client);
-  } catch (error) {
-    console.warn('attachFenceV2State failed:', error);
-    return {};
-  }
 };
 
 // LEAF token balance (returns raw bigint for precision)
@@ -3175,7 +3088,7 @@ export const getKillCooldown = async (walletAddress: string): Promise<{ canKill:
 
 // -------------------- CASINO (ROULETTE) HELPERS - MULTI-BET VERSION --------------------
 
-import { casinoAbi, CasinoBetType } from '@/public/abi/casino-abi';
+import { casinoAbi,CasinoBetType } from '@/public/abi/casino-abi';
 
 export type CasinoBuildingConfig = {
   buildingToken: string;
@@ -3743,8 +3656,8 @@ export const approveCasinoTokenSpending = async (
 // BLACKJACK FUNCTIONS
 // ============================================================================
 
-import { blackjackAbi, BlackjackPhase, BlackjackAction, BlackjackResult } from '@/public/abi/blackjack-abi';
-export { BlackjackPhase, BlackjackAction, BlackjackResult };
+import { blackjackAbi,BlackjackAction,BlackjackPhase,BlackjackResult } from '@/public/abi/blackjack-abi';
+export { BlackjackAction,BlackjackPhase,BlackjackResult };
 
 // Types
 export interface BlackjackGameBasic {

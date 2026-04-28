@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAccount, useBalance } from "wagmi";
-import Image from "next/image";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
-import { formatTokenAmount, formatNumber, formatLargeNumber } from "@/lib/utils";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
-import { useIsSolanaWallet, useSolanaWallet } from "@/components/solana";
+import { getLandsByOwner,getPlantsByOwner,getStakeInfo } from "@/lib/contracts";
 import { formatSolAmount } from "@/lib/solana-bridge-executor";
-import { getStakeInfo, getPlantsByOwner, getLandsByOwner } from "@/lib/contracts";
+import { formatLargeNumber } from "@/lib/utils";
+import { RefreshCw } from "lucide-react";
+import Image from "next/image";
+import { useEffect,useState } from "react";
+import { useAccount,useBalance } from "wagmi";
 
 import { StandardContainer } from "./ui/pixel-container";
 
@@ -45,7 +45,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
 
   // Stake info for wallet profile variant
   const [stakeInfo, setStakeInfo] = useState<{ staked: bigint; rewards: bigint } | null>(null);
-  const [stakeLoading, setStakeLoading] = useState(false);
+  const [, setStakeLoading] = useState(false);
 
   // NFT counts for wallet profile variant
   const [plantCount, setPlantCount] = useState<number>(0);

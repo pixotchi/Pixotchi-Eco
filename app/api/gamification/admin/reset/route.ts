@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { createErrorResponse,logAdminAction,validateAdminKey } from '@/lib/auth-utils';
 import { adminReset } from '@/lib/gamification-service';
-import { validateAdminKey, createErrorResponse, logAdminAction } from '@/lib/auth-utils';
+import { NextRequest,NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const result = await adminReset(scope);
     await logAdminAction('gm_admin_reset_success', 'valid_key', { scope, deleted: result.deleted }, true);
     return NextResponse.json({ success: true, deleted: result.deleted });
-  } catch (error) {
+  } catch {
     const e = createErrorResponse('Failed to reset', 500);
     return NextResponse.json(e.body, { status: e.status });
   }

@@ -1,48 +1,46 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useAccount, useBalance } from 'wagmi';
-import { toast } from 'react-hot-toast';
-import Image from 'next/image';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { BaseExpandedLoadingPageLoader } from '../ui/loading';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { getFormattedTokenBalance, getFormattedTokenBalanceForToken, getTokenBalanceForToken, getStrainInfo, checkTokenApproval, getLandBalance, getLandSupply, getLandMintStatus, checkLandMintApproval, getLandMintPrice, getTokenSymbol, getEthQuoteForSeedAmount, LAND_CONTRACT_ADDRESS, PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, JESSE_TOKEN_ADDRESS } from '@/lib/contracts';
-import { useBalances } from '@/lib/balance-context';
-import { Strain } from '@/lib/types';
-import { formatNumber, formatTokenAmount } from '@/lib/utils';
-import { ChevronDown } from 'lucide-react';
-import { getFriendlyErrorMessage } from '@/lib/utils';
-import { usePaymaster } from '@/lib/paymaster-context';
-import { SponsoredBadge } from '@/components/paymaster-toggle';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { useFrameContext } from '@/lib/frame-context';
-import ApproveTransaction from '@/components/transactions/approve-transaction';
-import MintTransaction from '@/components/transactions/mint-transaction';
-import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
-import SwapMintBundle from '@/components/transactions/swap-mint-bundle';
-import SwapLandMintBundle from '@/components/transactions/swap-land-mint-bundle';
-import DisabledTransaction from '@/components/transactions/disabled-transaction';
-import { ToggleGroup } from '@/components/ui/toggle-group';
-import { useTabVisibility } from "@/lib/tab-visibility-context";
-import LandMintTransaction from '../transactions/land-mint-transaction';
-import { MintShareModal } from '@/components/mint-share-modal';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
+import { MintShareModal } from '@/components/mint-share-modal';
+import { SponsoredBadge } from '@/components/paymaster-toggle';
+import { SolanaNotSupported,useIsSolanaWallet,useSolanaBridge,useSolanaWallet,useTwinAddress } from '@/components/solana';
+import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
+import ApproveTransaction from '@/components/transactions/approve-transaction';
+import DisabledTransaction from '@/components/transactions/disabled-transaction';
+import MintTransaction from '@/components/transactions/mint-transaction';
+import SwapLandMintBundle from '@/components/transactions/swap-land-mint-bundle';
+import SwapMintBundle from '@/components/transactions/swap-mint-bundle';
+import {
+DropdownMenu,
+DropdownMenuContent,
+DropdownMenuItem,
+DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ToggleGroup } from '@/components/ui/toggle-group';
 import { VerifyClaim } from '@/components/verify-claim';
-import { useEthModeSafe } from '@/lib/eth-mode-context';
-import { useIsSolanaWallet, useTwinAddress, SolanaNotSupported, useSolanaBridge, useSolanaWallet } from '@/components/solana';
-import { usePrivy } from '@privy-io/react-auth';
-import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
-import { Transaction } from '@solana/web3.js';
-import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
 import { useWebQueryState } from '@/hooks/useWebQueryState';
+import { useBalances } from '@/lib/balance-context';
+import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
+import { checkLandMintApproval,checkTokenApproval,getEthQuoteForSeedAmount,getFormattedTokenBalance,getLandBalance,getLandMintPrice,getLandMintStatus,getLandSupply,getStrainInfo,getTokenBalanceForToken,getTokenSymbol,JESSE_TOKEN_ADDRESS,LAND_CONTRACT_ADDRESS,PIXOTCHI_NFT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { CLIENT_ENV } from '@/lib/env-config';
+import { useEthModeSafe } from '@/lib/eth-mode-context';
+import { useFrameContext } from '@/lib/frame-context';
+import { usePaymaster } from '@/lib/paymaster-context';
+import { useSmartWallet } from '@/lib/smart-wallet-context';
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { Strain } from '@/lib/types';
+import { formatNumber,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/utils';
+import { usePrivy } from '@privy-io/react-auth';
+import { useSignAndSendTransaction,useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
+import { ChevronDown } from 'lucide-react';
+import Image from 'next/image';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAccount,useBalance } from 'wagmi';
+import LandMintTransaction from '../transactions/land-mint-transaction';
+import { Button } from '../ui/button';
+import { Card,CardContent,CardHeader,CardTitle } from '../ui/card';
+import { BaseExpandedLoadingPageLoader } from '../ui/loading';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
@@ -50,7 +48,8 @@ const solLog = (...args: any[]) => { if (SOLANA_DEBUG) console.log(...args); };
 const solWarn = (...args: any[]) => { if (SOLANA_DEBUG) console.warn(...args); };
 const solError = (...args: any[]) => { if (SOLANA_DEBUG) console.error(...args); };
 
-const STRAIN_NAMES = ['OG', 'FLORA', 'TAKI', 'ROSA', 'ZEST'];
+const PLANT_MINT_DESCRIPTION = 'Choose a strain and mint your Plant onchain. Each Plant starts with 24 hours of lifetime, and its PTS define your share of ETH rewards.';
+const LAND_MINT_DESCRIPTION = 'Mint a Land to produce PTS and TOD passively by staking SEED instead of spending it, helping grow your Plant and ETH rewards over the long term.';
 
 // Placeholder for plant images, assuming you might have them
 const PLANT_STATIC_IMAGES = [
@@ -61,6 +60,19 @@ const PLANT_STATIC_IMAGES = [
   '/icons/plant5.png'
 ];
 
+const PLANT_GROWTH_IMAGES = [
+  '/icons/plantGrowth.gif',
+  '/icons/plantGrowth2.gif',
+  '/icons/plantGrowth4.gif',
+  '/icons/plantGrowth5.gif',
+  '/icons/plantGrowth6.gif'
+];
+
+const getPlantGrowthImage = (strainId: number | undefined) => {
+  if (!strainId) return PLANT_GROWTH_IMAGES[0];
+  return PLANT_GROWTH_IMAGES[strainId - 1] || PLANT_STATIC_IMAGES[strainId - 1] || PLANT_GROWTH_IMAGES[0];
+};
+
 export default function MintTab() {
   const { address: evmAddress, chainId } = useAccount();
   const { isSponsored } = usePaymaster();
@@ -69,6 +81,7 @@ export default function MintTab() {
   const frameContext = useFrameContext();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('mint');
+  const [isDesktopMintLayout, setIsDesktopMintLayout] = useState(false);
 
   // ETH Mode for smart wallet users
   const { isEthMode } = useEthModeSafe();
@@ -102,7 +115,7 @@ export default function MintTab() {
   // Resolve basename/ENS for share functionality
   const { name: primaryName } = usePrimaryName(address ?? undefined);
 
-  const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
   const [paymentTokenAllowance, setPaymentTokenAllowance] = useState<bigint>(BigInt(0));
@@ -116,11 +129,13 @@ export default function MintTab() {
     parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
     serialize: (value) => (value === 'plant' ? null : value),
   });
-  const [landBalance, setLandBalance] = useState(0);
+  const [, setLandBalance] = useState(0);
   const [landSupply, setLandSupply] = useState<{ totalSupply: number; maxSupply: number; } | null>(null);
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);
   const [landMintAllowance, setLandMintAllowance] = useState<bigint>(BigInt(0));
   const [landMintPrice, setLandMintPrice] = useState<bigint>(BigInt(0));
+  const plantMintDataLoadedKeyRef = useRef<string | null>(null);
+  const landMintDataLoadedKeyRef = useRef<string | null>(null);
 
   const [forcedFetchCount, setForcedFetchCount] = useState(0);
   const [shareData, setShareData] = useState<{
@@ -136,6 +151,17 @@ export default function MintTab() {
   const incrementForcedFetch = () => {
     setForcedFetchCount(prev => prev + 1);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia('(min-width: 80rem)');
+    const updateDesktopLayout = () => setIsDesktopMintLayout(mediaQuery.matches);
+
+    updateDesktopLayout();
+    mediaQuery.addEventListener('change', updateDesktopLayout);
+    return () => mediaQuery.removeEventListener('change', updateDesktopLayout);
+  }, []);
 
   const openMintShareModal = useCallback((strainId: number, strainName: string, txHash?: string) => {
     if (!address) return;
@@ -181,15 +207,21 @@ export default function MintTab() {
   const fetchData = useCallback(async () => {
     if (!address) return;
 
-    // Only show full page loader on initial load based on current view
-    if (mintType === 'plant') {
-      if (strains.length === 0) setLoading(true);
-    } else {
-      if (!landSupply) setLoading(true);
-    }
-
     try {
-      if (mintType === 'plant') {
+      const shouldUseDesktopWorkspace = isDesktopMintLayout && !isSolana;
+      const shouldFetchPlantData = mintType === 'plant' || shouldUseDesktopWorkspace;
+      const shouldFetchLandData = !isSolana && (mintType === 'land' || shouldUseDesktopWorkspace);
+      const fetchKey = `${address}:${chainId ?? 'no-chain'}:${isSolana ? 'solana' : 'evm'}:${isDesktopMintLayout ? 'desktop' : 'compact'}`;
+
+      // Only show full page loader on the first fetch for the relevant wallet/network/layout.
+      if (
+        (shouldFetchPlantData && plantMintDataLoadedKeyRef.current !== fetchKey) ||
+        (shouldFetchLandData && landMintDataLoadedKeyRef.current !== fetchKey)
+      ) {
+        setLoading(true);
+      }
+
+      if (shouldFetchPlantData) {
         const [balance, strainsData] = await Promise.allSettled([
           getFormattedTokenBalance(address),
           getStrainInfo(),
@@ -199,38 +231,15 @@ export default function MintTab() {
         if (strainsData.status === 'fulfilled') {
           const availableStrains = strainsData.value.filter(s => s.maxSupply - s.totalMinted > 0);
           setStrains(strainsData.value);
-          // Only select default if not already selected (or if previous selection is invalid/empty)
-          // We can't easily check validity against new data inside callback without deps
-          // But preventing overwrite of user selection is key.
-          // Since selectedStrain is state, we check if it is truthy. 
-          // However, we can't access selectedStrain here without adding it to deps (loop).
-          // But standard pattern: set if null.
-          if (!selectedStrain && availableStrains.length > 0) {
-            setSelectedStrain(availableStrains[0]); // This might trigger update
+          // Initialize once without overwriting a strain the user already picked.
+          if (availableStrains.length > 0) {
+            setSelectedStrain(prev => prev ?? availableStrains[0]);
           }
-          // Better: just setStrains. Selection logic can be separate or handled carefully.
-          // Actually, original code read selectedStrain in render logic? No, it was in fetchData.
-          // To be safe and break loop: we rely on functional updates or ref if needed.
-          // Here simpler: just setting data. Selection logic is minor side effect.
-          // If we omit selectedStrain from deps, we use stale value? 
-          // Actually, if we just want to init:
-          // We can use a ref for 'initialized' or just check setStrains callback?
-          // Let's stick to the original logic but wrapped. 
-          // CAUTION: 'selectedStrain' dependency would cause loop if we set it.
-          // But we only set it if !selectedStrain. Once set, it won't change, so no loop.
-          // BUT: if user selects something, selectedStrain changes -> fetchData changes -> useEffect runs -> fetchData runs...
-          // WAIT. If selectedStrain changes, we probably DON'T want to refetch everything?
-          // The query is about RPC calls.
-          // The fetchData fetches STRAINS and BALANCE. This shouldn't depend on selectedStrain.
-          // So we should REMOVE selectedStrain from this logic or just not depend on it.
-          // Correct fix: check strains state or usage elsewhere?
-          // Actually, if we just check `strains.length` or similar? 
-          // Let's use functional update for setStrains to avoid dependency? 
-          // No, `setStrains` helps.
-          // Best approach: remove selectedStrain dependency. Initialize selection in a separate effect or use functional state updater.
-          // Or just standard:
         }
-      } else {
+        plantMintDataLoadedKeyRef.current = fetchKey;
+      }
+
+      if (shouldFetchLandData) {
         if (!chainId || !address) return; // Guard against undefined chainId or address
         const [lands, supply, status, landAllowance, price] = await Promise.all([
           getLandBalance(address),
@@ -244,6 +253,7 @@ export default function MintTab() {
         setLandMintStatus(status);
         setLandMintAllowance(landAllowance);
         setLandMintPrice(price);
+        landMintDataLoadedKeyRef.current = fetchKey;
       }
 
     } catch (error) {
@@ -252,11 +262,12 @@ export default function MintTab() {
     } finally {
       setLoading(false);
     }
-  }, [address, mintType, chainId]); // Removed selectedStrain, strains, landSupply, etc to prevent loops
+  }, [address, mintType, chainId, isSolana, isDesktopMintLayout]); // Removed selectedStrain, strains, landSupply, etc to prevent loops
 
   // Fetch payment token info when selected strain changes
   useEffect(() => {
-    if (!address || !selectedStrain || mintType !== 'plant') return;
+    const shouldFetchPlantPaymentInfo = mintType === 'plant' || (isDesktopMintLayout && !isSolana);
+    if (!address || !selectedStrain || !shouldFetchPlantPaymentInfo) return;
 
     // Immediately format symbol based on payment token address
     const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
@@ -271,8 +282,6 @@ export default function MintTab() {
       try {
         // Determine payment token (use paymentToken if available, otherwise default to SEED)
         const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
-        const paymentPrice = selectedStrain.paymentPrice;
-
         // Fetch token symbol and balance in parallel
         const [symbol, rawBalance] = await Promise.allSettled([
           getTokenSymbol(paymentToken),
@@ -313,13 +322,14 @@ export default function MintTab() {
     };
 
     fetchPaymentTokenInfo();
-  }, [selectedStrain, address, mintType]);
+  }, [selectedStrain, address, mintType, isDesktopMintLayout, isSolana]);
 
   // Fetch ETH quote when strain changes and ETH mode is active
   useEffect(() => {
     // Only fetch ETH quotes for smart wallet users with ETH mode enabled, on plant tab
     // AND only for strains that use SEED as payment token (ETH mode doesn't support JESSE, etc.)
-    if (!isSmartWallet || !isEthMode || !selectedStrain || mintType !== 'plant' || isSolana || !isSeedPaymentStrain(selectedStrain)) {
+    const shouldFetchPlantQuote = mintType === 'plant' || (isDesktopMintLayout && !isSolana);
+    if (!isSmartWallet || !isEthMode || !selectedStrain || !shouldFetchPlantQuote || isSolana || !isSeedPaymentStrain(selectedStrain)) {
       setEthQuote(null);
       return;
     }
@@ -366,12 +376,13 @@ export default function MintTab() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [isSmartWallet, isEthMode, selectedStrain, mintType, isSolana]);
+  }, [isSmartWallet, isEthMode, selectedStrain, mintType, isDesktopMintLayout, isSolana]);
 
   // Fetch ETH quote for land minting when on land tab + ETH mode active
   useEffect(() => {
     // Only fetch ETH quotes for smart wallet users with ETH mode enabled, on land tab
-    if (!isSmartWallet || !isEthMode || mintType !== 'land' || isSolana || landMintPrice <= BigInt(0)) {
+    const shouldFetchLandQuote = mintType === 'land' || (isDesktopMintLayout && !isSolana);
+    if (!isSmartWallet || !isEthMode || !shouldFetchLandQuote || isSolana || landMintPrice <= BigInt(0)) {
       setLandEthQuote(null);
       return;
     }
@@ -411,7 +422,7 @@ export default function MintTab() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [isSmartWallet, isEthMode, mintType, isSolana, landMintPrice]);
+  }, [isSmartWallet, isEthMode, mintType, isDesktopMintLayout, isSolana, landMintPrice]);
 
   useEffect(() => {
     if (!address) {
@@ -420,7 +431,7 @@ export default function MintTab() {
     }
 
     fetchData();
-  }, [address, forcedFetchCount, mintType, chainId]);
+  }, [address, forcedFetchCount, fetchData]);
 
   // Refresh when tab becomes visible
   useEffect(() => {
@@ -958,7 +969,7 @@ export default function MintTab() {
                   <Button variant="outline" className="w-full justify-between">
                     {selectedStrain ? (
                       <div className="flex items-center space-x-2">
-                        <Image src={PLANT_STATIC_IMAGES[selectedStrain.id - 1]} alt={selectedStrain.name} width={24} height={24} />
+                        <Image src={getPlantGrowthImage(selectedStrain.id)} alt={selectedStrain.name} width={24} height={24} unoptimized />
                         <span>{selectedStrain.name}</span>
                       </div>
                     ) : (
@@ -980,7 +991,7 @@ export default function MintTab() {
                       >
                         <div className="flex items-center justify-between w-full">
                           <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
-                            <Image src={PLANT_STATIC_IMAGES[strain.id - 1]} alt={strain.name} width={24} height={24} />
+                            <Image src={getPlantGrowthImage(strain.id)} alt={strain.name} width={24} height={24} unoptimized />
                             <span>{strain.name}</span>
                           </div>
                           {isSoldOut && (
@@ -1165,6 +1176,24 @@ export default function MintTab() {
     }
 
     // Regular EVM wallet minting
+    const requiredPayment = selectedStrain
+      ? (selectedStrain.paymentPrice ?? BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18)))
+      : BigInt(0);
+    const needsPlantApproval = Boolean(selectedStrain && paymentTokenAllowance < requiredPayment);
+    const hasInsufficientPlantBalance = selectedStrain
+      ? selectedStrain.paymentPrice
+        ? paymentTokenBalance < selectedStrain.paymentPrice
+        : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))
+      : false;
+    const plantPaymentToken = selectedStrain?.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+    const plantBalanceLabel = selectedStrain?.paymentPrice
+      ? formatTokenAmount(paymentTokenBalance)
+      : formatTokenAmount(seedBalanceRaw);
+    const plantRequiredLabel = selectedStrain?.paymentPrice
+      ? formatTokenAmount(selectedStrain.paymentPrice)
+      : formatNumber(selectedStrain?.mintPrice || 0);
+    const showPlantEthFlow = Boolean(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading));
+
     return (
       <>
         <div className="mb-6">
@@ -1189,7 +1218,7 @@ export default function MintTab() {
                 <Button variant="outline" className="w-full justify-between">
                   {selectedStrain ? (
                     <div className="flex items-center space-x-2">
-                      <Image src={PLANT_STATIC_IMAGES[selectedStrain.id - 1]} alt={selectedStrain.name} width={24} height={24} />
+                      <Image src={getPlantGrowthImage(selectedStrain.id)} alt={selectedStrain.name} width={24} height={24} unoptimized />
                       <span>{selectedStrain.name}</span>
                     </div>
                   ) : (
@@ -1211,7 +1240,7 @@ export default function MintTab() {
                     >
                       <div className="flex items-center justify-between w-full">
                         <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
-                          <Image src={PLANT_STATIC_IMAGES[strain.id - 1]} alt={strain.name} width={24} height={24} />
+                          <Image src={getPlantGrowthImage(strain.id)} alt={strain.name} width={24} height={24} unoptimized />
                           <span>{strain.name}</span>
                         </div>
                         {isSoldOut && (
@@ -1294,7 +1323,8 @@ export default function MintTab() {
 
         {/* StatusBar replaces BalanceCard globally under header */}
 
-        <div className="flex flex-col space-y-2">
+        <div className="flex flex-col space-y-2 xl:space-y-3 xl:rounded-lg xl:border xl:border-border xl:bg-card xl:p-4 xl:shadow-sm">
+          <h3 className="hidden text-base font-semibold leading-none xl:block">Mint Plant</h3>
           {/* ETH Mode: Show SwapMintBundle for atomic ETH->SEED->Mint transaction (SEED strains only) */}
           {isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && isSeedPaymentStrain(selectedStrain) && (
             <div className="flex flex-col space-y-2">
@@ -1338,8 +1368,24 @@ export default function MintTab() {
             </div>
           )}
 
-          {/* Standard SEED minting (not ETH mode or no quote) */}
-          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && (paymentTokenAllowance < (selectedStrain?.paymentPrice ?? BigInt((selectedStrain?.mintPrice || 0) * 1e18))) && (
+          {/** Standard plant action. Exactly one primary action is visible. **/}
+          {!showPlantEthFlow && selectedStrain && hasInsufficientPlantBalance && (
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Mint Plant</span>
+                <SponsoredBadge show={isSponsored && isSmartWallet} />
+              </div>
+              <DisabledTransaction
+                buttonText="Insufficient Balance"
+                buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+              />
+              <p className="text-xs text-value text-center mt-2">
+                Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} {paymentTokenSymbol} • Required: {plantRequiredLabel} {paymentTokenSymbol}
+              </p>
+            </div>
+          )}
+
+          {!showPlantEthFlow && selectedStrain && !hasInsufficientPlantBalance && needsPlantApproval && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Approval</span>
@@ -1347,21 +1393,13 @@ export default function MintTab() {
               </div>
               {/* If smart wallet + sponsored, offer bundled Approve + Mint */}
               {(() => {
-                if (!selectedStrain) return null;
                 const useBundle = isSmartWallet && isSponsored;
-                const paymentToken = selectedStrain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
-
-                const hasInsufficientBalance = selectedStrain.paymentPrice
-                  ? paymentTokenBalance < selectedStrain.paymentPrice
-                  : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18));
-
-                const hasInsufficientAllowance = paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18));
 
                 return useBundle ? (
                   <>
                     <ApproveMintBundle
                       strain={selectedStrain.id}
-                      tokenAddress={paymentToken}
+                      tokenAddress={plantPaymentToken}
                       onSuccess={() => {
                         toast.success('Approved and minted successfully!');
                         if (address) {
@@ -1374,25 +1412,19 @@ export default function MintTab() {
                         openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                       }}
                       onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                      buttonText={hasInsufficientBalance ? "Insufficient Balance" : "Approve + Mint"}
+                      buttonText="Approve + Mint"
                       buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                      disabled={hasInsufficientBalance}
                       showToast={false}
                     />
-                    {hasInsufficientBalance && (
-                      <p className="text-xs text-value text-center mt-2">
-                        Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
-                      </p>
-                    )}
                   </>
                 ) : (
                   <ApproveTransaction
                     spenderAddress={PIXOTCHI_NFT_ADDRESS}
-                    tokenAddress={paymentToken}
+                    tokenAddress={plantPaymentToken}
                     onSuccess={() => {
                       toast.success('Token approval successful!');
                       if (address) {
-                        checkTokenApproval(address, paymentToken).then(setPaymentTokenAllowance);
+                        checkTokenApproval(address, plantPaymentToken).then(setPaymentTokenAllowance);
                       }
                       incrementForcedFetch();
                     }}
@@ -1406,62 +1438,56 @@ export default function MintTab() {
             </div>
           )}
 
-          {/** Hide Mint step if using bundle path (smart wallet + sponsored + needsApproval) or ETH mode **/}
-          {!(isSmartWallet && isEthMode && selectedStrain && (ethQuote || ethQuoteLoading)) && !(isSmartWallet && isSponsored && (paymentTokenAllowance < (selectedStrain?.paymentPrice ?? BigInt((selectedStrain?.mintPrice || 0) * 1e18))) && selectedStrain) && (
+          {!showPlantEthFlow && selectedStrain && !hasInsufficientPlantBalance && !needsPlantApproval && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Mint Plant</span>
+                <span className="text-sm font-medium">
+                  <span className="xl:hidden">Mint Plant</span>
+                  <span className="hidden xl:inline">Confirm Mint</span>
+                </span>
                 <SponsoredBadge show={isSponsored && isSmartWallet} />
               </div>
-              {selectedStrain ? (
-                <>
-                  <MintTransaction
-                    strain={selectedStrain.id}
-                    onSuccess={(tx) => {
-                      toast.success('Plant minted successfully!');
-                      incrementForcedFetch();
-                      window.dispatchEvent(new Event('balances:refresh'));
-                      openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
-                      if (CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar') {
-                        try {
-                          const fid = farcasterUser?.fid;
-                          const notificationDetails = farcasterClient?.notificationDetails;
-                          if (fid) {
-                            fetch('/api/notify', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                fid,
-                                notification: {
-                                  title: 'Mint Completed! 🌱',
-                                  body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
-                                  notificationDetails,
-                                },
-                              }),
-                            }).catch(() => { });
-                          }
-                        } catch { }
+              <MintTransaction
+                strain={selectedStrain.id}
+                onSuccess={(tx) => {
+                  toast.success('Plant minted successfully!');
+                  incrementForcedFetch();
+                  window.dispatchEvent(new Event('balances:refresh'));
+                  openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
+                  if (CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar') {
+                    try {
+                      const fid = farcasterUser?.fid;
+                      const notificationDetails = farcasterClient?.notificationDetails;
+                      if (fid) {
+                        fetch('/api/notify', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            fid,
+                            notification: {
+                              title: 'Mint Completed! 🌱',
+                              body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
+                              notificationDetails,
+                            },
+                          }),
+                        }).catch(() => { });
                       }
-                    }}
-                    onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                    buttonText="Mint Plant"
-                    buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                    disabled={(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) || (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18)))}
-                    showToast={false}
-                  />
-                  {!(paymentTokenAllowance < (selectedStrain.paymentPrice ?? BigInt(selectedStrain.mintPrice * 1e18))) && (selectedStrain.paymentPrice ? paymentTokenBalance < selectedStrain.paymentPrice : seedBalanceRaw < BigInt(Math.floor((selectedStrain?.mintPrice || 0) * 1e18))) && (
-                    <p className="text-xs text-value text-center mt-2">
-                      Not enough {paymentTokenSymbol}. Balance: {formatTokenAmount(selectedStrain.paymentPrice ? paymentTokenBalance : seedBalanceRaw)} {paymentTokenSymbol} • Required: {selectedStrain.paymentPrice ? formatTokenAmount(selectedStrain.paymentPrice) : formatNumber(selectedStrain.mintPrice)} {paymentTokenSymbol}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <DisabledTransaction
-                  buttonText="Select a Strain First"
-                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                />
-              )}
+                    } catch { }
+                  }
+                }}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                buttonText="Mint Plant"
+                buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                showToast={false}
+              />
             </div>
+          )}
+
+          {!showPlantEthFlow && !selectedStrain && (
+            <DisabledTransaction
+              buttonText="Select a Strain First"
+              buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+            />
           )}
         </div>
       </>
@@ -1509,7 +1535,8 @@ export default function MintTab() {
         </Card>
       )}
       {/* StatusBar replaces BalanceCard globally under header */}
-      <div className="flex flex-col space-y-2">
+      <div className="flex flex-col space-y-2 xl:space-y-3 xl:rounded-lg xl:border xl:border-border xl:bg-card xl:p-4 xl:shadow-sm">
+        <h3 className="hidden text-base font-semibold leading-none xl:block">Mint Land</h3>
         {/* ETH Mode: Show SwapLandMintBundle for atomic ETH->SEED->Mint Land transaction */}
         {isSmartWallet && isEthMode && landEthQuote && !landEthQuoteLoading && landMintStatus?.canMint && (
           <div className="flex flex-col space-y-2">
@@ -1578,7 +1605,12 @@ export default function MintTab() {
             )}
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {landMintAllowance < landMintPrice ? 'Step 2: Mint Land' : 'Mint Land'}
+                {landMintAllowance < landMintPrice ? 'Step 2: Mint Land' : (
+                  <>
+                    <span className="xl:hidden">Mint Land</span>
+                    <span className="hidden xl:inline">Confirm Mint</span>
+                  </>
+                )}
               </span>
               <SponsoredBadge show={isSmartWallet} />
             </div>
@@ -1614,6 +1646,489 @@ export default function MintTab() {
     </>
   );
 
+  const renderDesktopPlantMinting = () => {
+    if (isSolana) {
+      return renderPlantMinting();
+    }
+
+    const selectedImage = getPlantGrowthImage(selectedStrain?.id);
+    const availableCount = selectedStrain ? selectedStrain.maxSupply - selectedStrain.totalMinted : 0;
+    const mintedPercent = selectedStrain?.maxSupply
+      ? Math.min(100, Math.max(0, (selectedStrain.totalMinted / selectedStrain.maxSupply) * 100))
+      : 0;
+    const requiredPayment = selectedStrain
+      ? (selectedStrain.paymentPrice ?? BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18)))
+      : BigInt(0);
+    const needsPlantApproval = paymentTokenAllowance < requiredPayment;
+    const hasInsufficientPlantBalance = selectedStrain
+      ? selectedStrain.paymentPrice
+        ? paymentTokenBalance < selectedStrain.paymentPrice
+        : seedBalanceRaw < BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))
+      : false;
+    const showEthPlantMint = isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && isSeedPaymentStrain(selectedStrain);
+    const showEthPlantLoading = isSmartWallet && isEthMode && selectedStrain && ethQuoteLoading;
+    const paymentToken = selectedStrain?.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+    const plantBalanceLabel = selectedStrain?.paymentPrice
+      ? formatTokenAmount(paymentTokenBalance)
+      : formatTokenAmount(seedBalanceRaw);
+    const plantRequiredLabel = selectedStrain?.paymentPrice
+      ? formatTokenAmount(selectedStrain.paymentPrice)
+      : formatNumber(selectedStrain?.mintPrice || 0);
+
+    return (
+      <Card padding="sm" className="xl:min-h-[520px]">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Mint a Plant</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{PLANT_MINT_DESCRIPTION}</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
+          <div className="flex min-h-[372px] flex-col justify-between rounded-lg border border-border/70 bg-background/35 p-4">
+            <div className="flex flex-1 items-center justify-center">
+              <div className="relative flex h-48 w-48 items-center justify-center rounded-lg border border-border/60 bg-card/55 2xl:h-56 2xl:w-56">
+                <Image
+                  src={selectedImage}
+                  alt={selectedStrain?.name || 'Selected plant'}
+                  width={168}
+                  height={168}
+                  className="object-contain"
+                  unoptimized
+                  priority
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xl font-semibold">{selectedStrain?.name || 'Select a strain'}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {selectedStrain ? 'Selected strain' : 'Pick one of the available strains.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border/70 bg-background/35 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-base font-semibold">Strain</h3>
+                <span className="text-xs text-muted-foreground">{strains.length} options</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {strains.map(strain => {
+                  const isSoldOut = strain.maxSupply - strain.totalMinted <= 0;
+                  const isBaseOnly = isSolana && ['FLORA', 'TYJ'].includes(strain.name?.toUpperCase?.() || '');
+                  const isSelected = selectedStrain?.id === strain.id;
+
+                  return (
+                    <button
+                      key={strain.id}
+                      type="button"
+                      onClick={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
+                      disabled={isSoldOut || isBaseOnly}
+                      className={`btn-compact flex min-h-[58px] items-center justify-between rounded-md border px-3 py-2 text-left transition-colors ${isSelected
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border bg-card/70 hover:bg-accent'
+                        } ${isSoldOut || isBaseOnly ? 'opacity-50' : ''}`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Image src={getPlantGrowthImage(strain.id)} alt={strain.name} width={28} height={28} unoptimized />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold">{strain.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatNumber(strain.maxSupply - strain.totalMinted)} left
+                          </span>
+                        </span>
+                      </span>
+                      {isSoldOut && <span className="text-xs font-semibold text-red-500">Sold</span>}
+                      {isBaseOnly && !isSoldOut && <span className="text-xs font-semibold text-blue-500">Base</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/70 bg-background/35 p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-card/55">
+                  <Image
+                    src={selectedImage}
+                    alt={selectedStrain?.name || 'Selected plant'}
+                    width={46}
+                    height={46}
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Price</span>
+                    <span className="flex items-center gap-1 text-sm font-semibold">
+                      {selectedStrain && isSmartWallet && isEthMode && ethQuote && isSeedPaymentStrain(selectedStrain) ? (
+                        <>
+                          <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                          {ethQuoteLoading ? '...' : (Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                        </>
+                      ) : selectedStrain && isSmartWallet && isEthMode && ethQuoteLoading && isSeedPaymentStrain(selectedStrain) ? (
+                        <>
+                          <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                          Loading...
+                        </>
+                      ) : selectedStrain ? (
+                        <>
+                          <Image src={getTokenLogo(selectedStrain.paymentToken)} alt={paymentTokenSymbol} width={16} height={16} />
+                          {plantRequiredLabel} {paymentTokenSymbol}
+                        </>
+                      ) : (
+                        '-'
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Available</span>
+                    <span className="text-sm font-semibold">
+                      {selectedStrain ? `${formatNumber(availableCount)} / ${formatNumber(selectedStrain.maxSupply)}` : '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedStrain && (
+                <div className="mt-4 space-y-2">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${mintedPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{formatNumber(selectedStrain.totalMinted)} minted</span>
+                    <span>{formatNumber(selectedStrain.maxSupply)} max</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-base font-semibold">Confirm Mint</h3>
+                <SponsoredBadge show={Boolean(isSmartWallet && (showEthPlantMint || isSponsored))} />
+              </div>
+
+              {showEthPlantMint && (
+                <div className="space-y-2">
+                  <SwapMintBundle
+                    strain={selectedStrain.id}
+                    ethAmount={ethQuote.ethAmountWithBuffer}
+                    minSeedOut={selectedStrain.paymentPrice ?? BigInt(Math.floor((selectedStrain.mintPrice || 0) * 1e18))}
+                    onSuccess={(tx) => {
+                      toast.success('Plant minted successfully with ETH!');
+                      incrementForcedFetch();
+                      window.dispatchEvent(new Event('balances:refresh'));
+                      openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
+                    }}
+                    onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                    buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint with ETH"}
+                    buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                    disabled={ethBalance < ethQuote.ethAmountWithBuffer}
+                    showToast={false}
+                  />
+                  {ethBalance < ethQuote.ethAmountWithBuffer && (
+                    <p className="text-xs text-value text-center">
+                      Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {showEthPlantLoading && (
+                <Button disabled className="w-full">Fetching ETH quote...</Button>
+              )}
+
+              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && hasInsufficientPlantBalance && (
+                <div className="space-y-2">
+                  <DisabledTransaction
+                    buttonText="Insufficient Balance"
+                    buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  />
+                  <p className="text-xs text-value text-center">
+                    Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} {paymentTokenSymbol} • Required: {plantRequiredLabel} {paymentTokenSymbol}
+                  </p>
+                </div>
+              )}
+
+              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !hasInsufficientPlantBalance && needsPlantApproval && (
+                <div className="space-y-2">
+                  {isSmartWallet && isSponsored ? (
+                    <>
+                      <ApproveMintBundle
+                        strain={selectedStrain.id}
+                        tokenAddress={paymentToken}
+                        onSuccess={() => {
+                          toast.success('Approved and minted successfully!');
+                          if (address) {
+                            checkTokenApproval(address, selectedStrain.paymentToken).then(setPaymentTokenAllowance);
+                          }
+                          incrementForcedFetch();
+                          window.dispatchEvent(new Event('balances:refresh'));
+                        }}
+                        onTransactionComplete={(tx) => {
+                          openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
+                        }}
+                        onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                        buttonText="Approve + Mint"
+                        buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                        showToast={false}
+                      />
+                    </>
+                  ) : (
+                    <ApproveTransaction
+                      spenderAddress={PIXOTCHI_NFT_ADDRESS}
+                      tokenAddress={paymentToken}
+                      onSuccess={() => {
+                        toast.success('Token approval successful!');
+                        if (address) {
+                          checkTokenApproval(address, paymentToken).then(setPaymentTokenAllowance);
+                        }
+                        incrementForcedFetch();
+                      }}
+                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                      buttonText={`Approve ${paymentTokenSymbol}`}
+                      buttonClassName="w-full"
+                      showToast={false}
+                    />
+                  )}
+                </div>
+              )}
+
+              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !hasInsufficientPlantBalance && !needsPlantApproval && (
+                <div className="space-y-2">
+                  <MintTransaction
+                    strain={selectedStrain.id}
+                    onSuccess={(tx) => {
+                      toast.success('Plant minted successfully!');
+                      incrementForcedFetch();
+                      window.dispatchEvent(new Event('balances:refresh'));
+                      openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
+                      if (CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar') {
+                        try {
+                          const fid = farcasterUser?.fid;
+                          const notificationDetails = farcasterClient?.notificationDetails;
+                          if (fid) {
+                            fetch('/api/notify', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                fid,
+                                notification: {
+                                  title: 'Mint Completed! 🌱',
+                                  body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
+                                  notificationDetails,
+                                },
+                              }),
+                            }).catch(() => { });
+                          }
+                        } catch { }
+                      }
+                    }}
+                    onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                    buttonText="Mint Plant"
+                    buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                    showToast={false}
+                  />
+                </div>
+              )}
+
+              {!selectedStrain && (
+                <DisabledTransaction
+                  buttonText="Select a Strain First"
+                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                />
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderDesktopLandMinting = () => {
+    const landAvailable = landSupply ? landSupply.maxSupply - landSupply.totalSupply : 0;
+    const landMintedPercent = landSupply?.maxSupply
+      ? Math.min(100, Math.max(0, (landSupply.totalSupply / landSupply.maxSupply) * 100))
+      : 0;
+    const needsLandApproval = landMintAllowance < landMintPrice;
+    const hasInsufficientLandBalance = seedBalanceRaw < landMintPrice;
+    const showEthLandMint = Boolean(isSmartWallet && isEthMode && landEthQuote && !landEthQuoteLoading && landMintStatus?.canMint);
+    const showEthLandLoading = Boolean(isSmartWallet && isEthMode && landEthQuoteLoading && landMintStatus?.canMint);
+
+    return (
+      <Card padding="sm">
+        <CardHeader className="pb-3">
+          <CardTitle>Mint Land</CardTitle>
+          <p className="text-sm text-muted-foreground">{LAND_MINT_DESCRIPTION}</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="rounded-lg border border-border/70 bg-background/35 p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-card/55">
+                <Image
+                  src="/icons/village-start.png"
+                  alt="Land"
+                  width={66}
+                  height={66}
+                  className="object-contain"
+                />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Price</span>
+                  <span className="flex items-center gap-1 text-sm font-semibold">
+                    {isSmartWallet && isEthMode && landEthQuote ? (
+                      <>
+                        <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                        {landEthQuoteLoading ? '...' : (Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                      </>
+                    ) : isSmartWallet && isEthMode && landEthQuoteLoading ? (
+                      <>
+                        <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
+                        {formatTokenAmount(landMintPrice)} SEED
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Available</span>
+                  <span className="text-sm font-semibold">
+                    {landSupply ? `${formatNumber(landAvailable)} / ${formatNumber(landSupply.maxSupply)}` : '-'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {landSupply && (
+              <div className="mt-4 space-y-2">
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${landMintedPercent}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{formatNumber(landSupply.totalSupply)} minted</span>
+                  <span>{formatNumber(landSupply.maxSupply)} max</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold">Confirm Mint</h3>
+              <SponsoredBadge show={Boolean(isSmartWallet && (showEthLandMint || isSponsored))} />
+            </div>
+
+            {showEthLandMint && landEthQuote && (
+              <div className="space-y-2">
+                <SwapLandMintBundle
+                  ethAmount={landEthQuote.ethAmountWithBuffer}
+                  minSeedOut={landMintPrice}
+                  onSuccess={() => {
+                    toast.success('Land minted successfully with ETH!');
+                    incrementForcedFetch();
+                    window.dispatchEvent(new Event('balances:refresh'));
+                  }}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                  buttonText={ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
+                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
+                  showToast={false}
+                />
+                {ethBalance < landEthQuote.ethAmountWithBuffer && (
+                  <p className="text-xs text-value text-center">
+                    Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                  </p>
+                )}
+              </div>
+            )}
+
+            {showEthLandLoading && (
+              <Button disabled className="w-full">Fetching ETH quote...</Button>
+            )}
+
+            {!showEthLandMint && !showEthLandLoading && (
+              <div className="space-y-3">
+                {needsLandApproval && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Step 1: Approve SEED</span>
+                      <SponsoredBadge show={isSponsored && isSmartWallet} />
+                    </div>
+                    <ApproveTransaction
+                      spenderAddress={LAND_CONTRACT_ADDRESS}
+                      onSuccess={() => {
+                        toast.success('Token approval successful!');
+                        if (address) {
+                          checkLandMintApproval(address).then(setLandMintAllowance);
+                        }
+                        incrementForcedFetch();
+                      }}
+                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                      buttonText="Approve SEED for Land"
+                      buttonClassName="w-full"
+                      showToast={false}
+                    />
+                  </div>
+                )}
+
+                {needsLandApproval && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Step 2: Mint Land</span>
+                    <SponsoredBadge show={isSmartWallet} />
+                  </div>
+                )}
+                {landMintStatus && !landMintStatus.canMint ? (
+                  <DisabledTransaction
+                    buttonText={landMintStatus.reason}
+                    buttonClassName="w-full"
+                  />
+                ) : (
+                  <>
+                    <LandMintTransaction
+                      onSuccess={() => {
+                        toast.success('Land minted successfully!');
+                        incrementForcedFetch();
+                        window.dispatchEvent(new Event('balances:refresh'));
+                      }}
+                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                      buttonText="Mint Land"
+                      buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                      disabled={!landMintStatus?.canMint || needsLandApproval || hasInsufficientLandBalance}
+                      showToast={false}
+                    />
+                    {landMintStatus?.canMint && !needsLandApproval && hasInsufficientLandBalance && (
+                      <p className="text-xs text-value text-center mt-2">
+                        Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
 
   const renderContent = () => {
     if (!isConnected) {
@@ -1637,18 +2152,24 @@ export default function MintTab() {
     const showLandOption = !isSolana;
 
     return (
-      <div className="space-y-4">
-        <Card>
+      <div className="space-y-4 xl:space-y-3">
+        <Card className={showLandOption ? 'xl:hidden' : undefined}>
           <CardContent className="flex flex-col space-y-3">
             <div className="flex justify-between items-start w-full gap-4">
               <div className="space-y-2">
                 <h3 className="text-xl font-pixel font-bold">
-                  {mintType === 'plant' ? 'Mint a Plant' : 'Mint a Land'}
+                  <span className="xl:hidden">{mintType === 'plant' ? 'Mint a Plant' : 'Mint a Land'}</span>
+                  <span className="hidden xl:inline">{showLandOption ? 'Mint' : 'Mint a Plant'}</span>
                 </h3>
                 <p className="text-muted-foreground text-sm max-w-xl">
-                  {mintType === 'plant'
-                    ? 'Plant your SEED and mint your very own Pixotchi Plant NFT. Each strain has a unique look and feel.'
-                    : 'Expand your onchain farm by minting a new land plot. Lands unlock new buildings and opportunities.'}
+                  <span className="xl:hidden">
+                    {mintType === 'plant'
+                      ? PLANT_MINT_DESCRIPTION
+                      : LAND_MINT_DESCRIPTION}
+                  </span>
+                  <span className="hidden xl:inline">
+                    Mint plants and lands from one desktop workspace.
+                  </span>
                 </p>
                 {isSolana && (
                   <p className="text-xs text-purple-400">
@@ -1657,14 +2178,16 @@ export default function MintTab() {
                 )}
               </div>
               {showLandOption ? (
-                <ToggleGroup
-                  value={mintType}
-                  onValueChange={(v) => setMintType(v as 'plant' | 'land')}
-                  options={[
-                    { value: 'plant', label: 'Plants' },
-                    { value: 'land', label: 'Lands' },
-                  ]}
-                />
+                <div className="xl:hidden">
+                  <ToggleGroup
+                    value={mintType}
+                    onValueChange={(v) => setMintType(v as 'plant' | 'land')}
+                    options={[
+                      { value: 'plant', label: 'Plants' },
+                      { value: 'land', label: 'Lands' },
+                    ]}
+                  />
+                </div>
               ) : (
                 // Solana users only see Plants tab
                 <div className="text-xs text-muted-foreground">
@@ -1675,12 +2198,33 @@ export default function MintTab() {
           </CardContent>
         </Card>
 
-        {/* Show land not supported for Solana users if they somehow got to land view */}
-        {mintType === 'land' && isSolana ? (
-          <SolanaNotSupported feature="Land minting" />
-        ) : (
-          mintType === 'plant' ? renderPlantMinting() : renderLandMinting()
+        {showLandOption && !isSolana && (
+          <div className="hidden xl:grid xl:grid-cols-[minmax(0,1.58fr)_minmax(340px,0.86fr)] xl:items-start xl:gap-3 2xl:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.8fr)]">
+            {renderDesktopPlantMinting()}
+
+            <aside className="min-w-0 space-y-3">
+              {renderDesktopLandMinting()}
+              <VerifyClaim
+                strainId={4}
+                onClaimSuccess={({ strainId, mintTxHash }) => {
+                  incrementForcedFetch();
+                  window.dispatchEvent(new Event('balances:refresh'));
+                  const claimStrain = PLANT_STRAINS_BY_ID[strainId];
+                  openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
+                }}
+              />
+            </aside>
+          </div>
         )}
+
+        <div className={showLandOption ? "space-y-4 xl:hidden" : "space-y-4"}>
+          {/* Show land not supported for Solana users if they somehow got to land view */}
+          {mintType === 'land' && isSolana ? (
+            <SolanaNotSupported feature="Land minting" />
+          ) : (
+            mintType === 'plant' ? renderPlantMinting() : renderLandMinting()
+          )}
+        </div>
 
         <MintShareModal
           open={showShareModal}
@@ -1691,5 +2235,5 @@ export default function MintTab() {
     );
   };
 
-  return <div>{renderContent()}</div>;
+  return <div className="xl:mx-auto xl:max-w-7xl 2xl:max-w-[1360px]">{renderContent()}</div>;
 } 

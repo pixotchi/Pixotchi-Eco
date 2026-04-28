@@ -1,8 +1,8 @@
 import {
-  AbiEventSignatureNotFoundError,
-  decodeEventLog,
-  parseAbiItem,
-  type Hex,
+AbiEventSignatureNotFoundError,
+decodeEventLog,
+parseAbiItem,
+type Hex,
 } from 'viem';
 
 export const SPIN_GAME_V2_COMMITTED_EVENT = parseAbiItem(
@@ -129,6 +129,7 @@ export function extractBestSpinRewardFromLogs(
     return undefined;
   }
 
-  const { score: _score, ...result } = best;
+  const { score, ...result } = best;
+  void score;
   return result;
 }

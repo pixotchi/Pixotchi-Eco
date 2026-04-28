@@ -62,7 +62,7 @@ export default function SponsoredTransaction({
         body: JSON.stringify({ address })
       }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
     }
-  }, [onSuccess]);
+  }, [address, onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
   const successHandledRef = useRef(false);

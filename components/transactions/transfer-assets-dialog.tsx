@@ -1,20 +1,20 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { useAccount, useWalletClient } from "wagmi";
-import { getBaseReadClient, waitForBaseReceipt } from "@/lib/base-rpc";
-import { getPlantsByOwner, getLandsByOwner, transferPlants, transferLands, BATCH_ROUTER_ADDRESS, PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS, routerBatchTransfer } from "@/lib/contracts";
-import { isAddress, getAddress, encodeFunctionData } from "viem";
-import { toast } from "react-hot-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/useDebounce";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown } from "lucide-react";
-import { Land, Plant } from "@/lib/types";
+import { getBaseReadClient,waitForBaseReceipt } from "@/lib/base-rpc";
 import { appendBuilderSuffix } from "@/lib/builder-code";
+import { BATCH_ROUTER_ADDRESS,getLandsByOwner,getPlantsByOwner,LAND_CONTRACT_ADDRESS,PIXOTCHI_NFT_ADDRESS,routerBatchTransfer,transferLands,transferPlants } from "@/lib/contracts";
+import { Land,Plant } from "@/lib/types";
+import { ChevronDown } from "lucide-react";
+import { useEffect,useMemo,useRef,useState } from "react";
+import { toast } from "react-hot-toast";
+import { encodeFunctionData,getAddress,isAddress } from "viem";
+import { useAccount,useWalletClient } from "wagmi";
 
 interface TransferAssetsDialogProps {
   open: boolean;
@@ -182,7 +182,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
         } else {
           setEnsError('Name not found');
         }
-      } catch (e: any) {
+      } catch {
         if (!cancelled) setEnsError('Unable to resolve ENS');
       } finally {
         if (!cancelled) setResolvingEns(false);

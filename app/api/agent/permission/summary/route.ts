@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { CdpClient } from '@coinbase/cdp-sdk';
-import { parseUnits } from 'viem';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
+import { CdpClient } from '@coinbase/cdp-sdk';
+import { NextRequest,NextResponse } from 'next/server';
 
 // Create a single CDP client instance per runtime
 let cdp: CdpClient | null = null;

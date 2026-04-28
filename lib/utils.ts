@@ -1,10 +1,9 @@
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
-import { formatUnits } from "viem";
-import { ADDRESS_REGEX, CREATOR_TOKEN_ADDRESS, CRYPTICPOET_TOKEN_ADDRESS, PIXOTCHI_TOKEN_ADDRESS } from "./contracts";
+import { type ClassValue,clsx } from "clsx";
+import { intervalToDuration } from "date-fns";
+import { twMerge } from "tailwind-merge";
 import { ADDRESS_TRUNCATION } from "./constants";
+import { ADDRESS_REGEX,CREATOR_TOKEN_ADDRESS,CRYPTICPOET_TOKEN_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from "./contracts";
 import { type Plant } from "./types";
-import { formatDuration as formatDurationDateFns, intervalToDuration } from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { useCountdown } from '@/hooks/useCountdown';
+import Image from 'next/image';
 
 interface CountdownTimerProps {
   timeUntilStarving: number; // Unix timestamp

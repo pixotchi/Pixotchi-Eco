@@ -1,33 +1,32 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useAccount, useWalletClient, useBalance } from 'wagmi';
-import { ShopItem, GardenItem, Plant } from '@/lib/types';
-import { buyShopItem, buyGardenItem, getTokenBalance, quoteFenceV2, buildFenceV2PurchaseCall, getFenceV2Config, checkTokenApproval, PIXOTCHI_NFT_ADDRESS, getEthQuoteForSeedAmount } from '@/lib/contracts';
-import { formatTokenAmount, formatDuration, getFriendlyErrorMessage } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import Image from 'next/image';
-import { ITEM_ICONS } from '@/lib/constants';
-import { toast } from 'react-hot-toast';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { BuyShopItemTransaction, BuyGardenItemTransaction } from '@/components/transactions/buy-item-transaction';
+import { SolanaNotSupported,useIsSolanaWallet } from '@/components/solana';
+import ApproveTransaction from '@/components/transactions/approve-transaction';
 import BundleBuyTransaction from '@/components/transactions/bundle-buy-transaction';
+import { BuyGardenItemTransaction,BuyShopItemTransaction } from '@/components/transactions/buy-item-transaction';
+import DisabledTransaction from '@/components/transactions/disabled-transaction';
+import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
+import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import SwapBuyItemBundle from '@/components/transactions/swap-buy-item-bundle';
 import SwapFencePurchaseBundle from '@/components/transactions/swap-fence-purchase-bundle';
-import DisabledTransaction from '@/components/transactions/disabled-transaction';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
-import type { FenceV2Config } from '@/lib/contracts';
 import { Skeleton } from '@/components/ui/skeleton';
-import { extractTransactionHash } from '@/lib/transaction-utils';
-import { postMissionProgress } from '@/lib/mission-tracking';
-import ApproveTransaction from '@/components/transactions/approve-transaction';
-import { useIsSolanaWallet, SolanaNotSupported } from '@/components/solana';
-import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
-import { formatWsol } from '@/lib/solana-quote';
+import type { FenceV2Config } from '@/lib/contracts';
+import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,getTokenBalance,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
+import { postMissionProgress } from '@/lib/mission-tracking';
+import { usePaymaster } from '@/lib/paymaster-context';
+import { useSmartWallet } from '@/lib/smart-wallet-context';
+import { formatWsol } from '@/lib/solana-quote';
+import { extractTransactionHash } from '@/lib/transaction-utils';
+import { GardenItem,Plant,ShopItem } from '@/lib/types';
+import { formatDuration,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/utils';
+import Image from 'next/image';
+import { useEffect,useMemo,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAccount,useBalance } from 'wagmi';
 
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
@@ -45,13 +44,12 @@ export default function ItemDetailsPanel({
   quantity
 }: ItemDetailsPanelProps) {
   const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
   const { isSponsored } = usePaymaster();
-  const { isSmartWallet, walletType, isLoading: smartWalletLoading } = useSmartWallet();
+  const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const { isEthMode } = useEthModeSafe();
   const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
-  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [, setBalanceLoading] = useState(true);
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
   const [fenceV2Days, setFenceV2Days] = useState<number>(1);
   const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
@@ -263,8 +261,6 @@ export default function ItemDetailsPanel({
   const currentTimeSec = Math.floor(Date.now() / 1000);
   const fenceV2State = selectedPlant?.fenceV2 ?? null;
   const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > currentTimeSec);
-  const fenceV2MirroringV1 = Boolean(fenceV2State?.isMirroringV1);
-  const fenceV2EffectUntil = Number(fenceV2State?.activeUntil || 0);
   const fenceV2BlockedByV1 = Boolean(fenceV2State?.v1Active);
 
   const plantTimeUntilStarving = Number(selectedPlant?.timeUntilStarving || 0);
@@ -528,7 +524,7 @@ export default function ItemDetailsPanel({
               buttonClassName="w-full"
               onQuote={setSolanaQuote}
               disabled={!selectedPlant || !selectedItem || selectedPlant.status === 4 || (itemType === 'garden' && !hasQuantitySelected)}
-              onSuccess={(signature) => {
+              onSuccess={() => {
                 onPurchaseSuccess();
                 toast.success('Purchase submitted via bridge!');
               }}
@@ -689,7 +685,7 @@ export default function ItemDetailsPanel({
                         }
                         const res = await postMissionProgress(payload);
                         if (!res.ok) throw new Error('missions post failed');
-                      } catch (e) {
+                      } catch {
                         if (attempt < 2) {
                           const delay = 400 * Math.pow(2, attempt);
                           setTimeout(() => post(currentTx, attempt + 1), delay);

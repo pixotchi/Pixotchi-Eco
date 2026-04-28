@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useAccount } from "wagmi";
-import { landAbi } from "@/public/abi/pixotchi-v3-abi";
-import { PIXOTCHI_TOKEN_ADDRESS, LAND_CONTRACT_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_APPROVE_ABI, getTokenBalance, getLeafBalance, getReadClient, getSeedAllowanceForLand, getLeafAllowanceForLand } from '@/lib/contracts';
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
-import { toast } from "react-hot-toast";
-import { extractTransactionHash } from '@/lib/transaction-utils';
+import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ERC20_APPROVE_ABI,getLeafAllowanceForLand,getLeafBalance,getReadClient,getSeedAllowanceForLand,getTokenBalance,LAND_CONTRACT_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import { extractTransactionHash } from '@/lib/transaction-utils';
+import { landAbi } from "@/public/abi/pixotchi-v3-abi";
+import { useCallback,useEffect,useMemo,useState } from "react";
+import { toast } from "react-hot-toast";
+import { useAccount } from "wagmi";
 
 type OrderView = {
   id: bigint;
@@ -20,11 +20,6 @@ type OrderView = {
   isActive: boolean;
   amountAsk: bigint; // wei
 };
-
-function formatToken(amount: bigint): string {
-  const s = (Number(amount) / 1e18).toFixed(6);
-  return s.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
-}
 
 function toNumberWei(v: bigint): number {
   return Number(v) / 1e18;
@@ -64,7 +59,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [sellSide, setSellSide] = useState<"SEED" | "LEAF">("LEAF");
   const [amount, setAmount] = useState<string>("");
   const [price, setPrice] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
+  const [, setLoading] = useState<boolean>(false);
   const [focusedSide, setFocusedSide] = useState<"asks" | "bids" | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [selectedSide, setSelectedSide] = useState<"asks" | "bids" | null>(null);
@@ -190,25 +185,6 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     isActive: Boolean(o.isActive),
     amountAsk: BigInt(o.amountAsk),
   });
-
-  const createOrderCall: { address: `0x${string}`; abi: any; functionName: string; args: any[] } | null = useMemo(() => {
-    if (!amount || !price || transactionLandId === null) return null;
-    const toWei = (v: string) => {
-      const n = Number(v);
-      if (!Number.isFinite(n) || n <= 0) return null;
-      return BigInt(Math.floor(n * 1e18));
-    };
-    const sellToken = sellSide === 'LEAF' ? 1 : 0;
-    const orderAmount = toWei(amount);
-    const amountAsk = toWei(price);
-    if (orderAmount === null || amountAsk === null) return null;
-    return {
-      address: LAND_CONTRACT_ADDRESS as `0x${string}`,
-      abi: landAbi as any,
-      functionName: 'marketPlaceCreateOrder',
-      args: [transactionLandId, BigInt(sellToken), orderAmount, amountAsk] as any[],
-    };
-  }, [sellSide, amount, price, transactionLandId]);
 
   const refresh = () => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }

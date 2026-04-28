@@ -6,14 +6,14 @@
  * Compatible with Privy Solana wallet signing
  */
 
-import { Connection, PublicKey, Transaction } from '@solana/web3.js';
+import { PublicKey,Transaction } from '@solana/web3.js';
 import { formatUnits } from 'viem';
-import { 
-  SOLANA_BRIDGE_CONFIG,
-  getSolanaExplorerTxUrl,
-} from './solana-constants';
-import { solanaBridgeImplementation, type BaseContractCall } from './solana-bridge-implementation';
+import { solanaBridgeImplementation,type BaseContractCall } from './solana-bridge-implementation';
 import type { BridgeTransactionParams } from './solana-bridge-service';
+import {
+SOLANA_BRIDGE_CONFIG,
+getSolanaExplorerTxUrl,
+} from './solana-constants';
 
 export interface BridgeExecuteOptions {
   /** Solana wallet public key (base58 string) */

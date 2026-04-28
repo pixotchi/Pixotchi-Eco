@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { NextRequest,NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -97,7 +97,7 @@ async function getKeyInfo(key: string): Promise<KeyInfo> {
         const ttl = await redis.ttl(key);
 
         return { key, value, ttl: typeof ttl === 'number' ? ttl : null, type };
-    } catch (error) {
+    } catch {
         return { key, value: null, ttl: null, type: 'error' };
     }
 }

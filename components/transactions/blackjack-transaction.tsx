@@ -251,7 +251,7 @@ export default function BlackjackTransaction({
     }, [address, landId, mode, betAmount, action, handIndex, onButtonClick, onError, bettingToken]);
 
     // Handle transaction status
-    const handleStatus = useCallback((status: LifecycleStatus) => {
+    const handleStatus = (status: LifecycleStatus) => {
 
         onStatusUpdate?.(status);
 
@@ -518,7 +518,7 @@ export default function BlackjackTransaction({
             setTimeout(() => { setPhase("idle"); setCalls([]); }, 500);
             onComplete?.(resultData);
         }
-    }, [mode, action, address, tokenDecimals, tokenSymbol, onComplete, onStatusUpdate]);
+    };
 
     // Get button text
     const getButtonText = () => {

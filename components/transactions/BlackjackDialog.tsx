@@ -1,34 +1,33 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import Image from 'next/image';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2, AlertTriangle } from 'lucide-react';
-import { parseUnits, formatUnits } from 'viem';
-import { useAccount, useBalance } from 'wagmi';
-import { CardHand, getCardValue, calculateHandValue } from '@/components/ui/PlayingCard';
-import { useTokenMetadata } from '@/hooks/useTokenMetadata';
-import { formatTokenAmount, formatTokenAmountRounded, getCasinoTokenImage } from '@/lib/utils';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
+import { Button } from '@/components/ui/button';
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { CardHand,calculateHandValue,getCardValue } from '@/components/ui/PlayingCard';
+import { useTokenMetadata } from '@/hooks/useTokenMetadata';
+import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
+import { getClientCasinoPolicy } from '@/lib/casino-client';
+import {
+BlackjackAction,
+BlackjackPhase,
+BlackjackResult,
+LAND_CONTRACT_ADDRESS,
+blackjackGetGameSnapshot,
+blackjackGetGameToken,
+blackjackGetTokenConfig,
+checkCasinoApproval,
+} from '@/lib/contracts';
+import { usePaymaster } from '@/lib/paymaster-context';
+import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
+import { getResultText } from '@/public/abi/blackjack-abi';
+import Image from 'next/image';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { formatUnits,parseUnits } from 'viem';
+import { useAccount,useBalance } from 'wagmi';
 import ApproveTransaction from './approve-transaction';
 import BlackjackTransaction from './blackjack-transaction';
-import {
-    LAND_CONTRACT_ADDRESS,
-    blackjackGetGameToken,
-    blackjackGetGameSnapshot,
-    blackjackGetTokenConfig,
-    checkCasinoApproval,
-    BlackjackPhase,
-    BlackjackAction,
-    BlackjackResult,
-} from '@/lib/contracts';
-import { getResultText } from '@/public/abi/blackjack-abi';
-import { loadBetPreference, storeBetPreference } from '@/lib/casino-bet-preferences';
-import { getClientCasinoPolicy } from '@/lib/casino-client';
 
 interface BlackjackDialogProps {
     open: boolean;
@@ -591,25 +590,29 @@ export default function BlackjackDialog({
         loadConfig();
     }, [open, address, landId, selectedToken, blackjackPlayable]);
 
+    const configBettingToken = config?.bettingToken ?? null;
+    const configMinBet = config?.minBet ?? null;
+    const configMaxBet = config?.maxBet ?? null;
+
     useEffect(() => {
-        if (!open || !config || gameState.contractPhase !== BlackjackPhase.NONE) return;
+        if (!open || !configBettingToken || configMinBet === null || configMaxBet === null || gameState.contractPhase !== BlackjackPhase.NONE) return;
         setGameState(prev => ({
             ...prev,
             betAmountInput: loadBetPreference({
                 game: 'blackjack',
-                token: config.bettingToken,
-                minBet: config.minBet,
-                maxBet: config.maxBet,
+                token: configBettingToken,
+                minBet: configMinBet,
+                maxBet: configMaxBet,
                 decimals: tokenDecimals,
                 fallback: formattedMinBet,
             }),
         }));
-    }, [config?.bettingToken, config?.minBet, config?.maxBet, gameState.contractPhase, open, formattedMinBet, tokenDecimals]);
+    }, [configBettingToken, configMinBet, configMaxBet, gameState.contractPhase, open, formattedMinBet, tokenDecimals]);
 
     useEffect(() => {
-        if (!config?.bettingToken) return;
-        storeBetPreference('blackjack', config.bettingToken, gameState.betAmountInput, tokenDecimals);
-    }, [config?.bettingToken, gameState.betAmountInput, tokenDecimals]);
+        if (!configBettingToken) return;
+        storeBetPreference('blackjack', configBettingToken, gameState.betAmountInput, tokenDecimals);
+    }, [configBettingToken, gameState.betAmountInput, tokenDecimals]);
 
     // Refresh game state on open
     useEffect(() => {
@@ -737,7 +740,7 @@ export default function BlackjackDialog({
         } finally {
             setTxInProgress(null);
         }
-    }, [invalidatePendingRefreshes, refetchBalance, syncActionButtonsWithRetries, landId, gameState.betAmountInput, address]);
+    }, [invalidatePendingRefreshes, refetchBalance, refreshGameState, syncActionButtonsWithRetries, gameState.betAmountInput, address, tokenDecimals]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: any) => {

@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  baseAccount as wagmiBaseAccountConnector,
-  type BaseAccountParameters,
+baseAccount as wagmiBaseAccountConnector,
+type BaseAccountParameters,
 } from "wagmi/connectors";
 
 type BaseAccountConnectorParameters = BaseAccountParameters & {
@@ -12,7 +12,8 @@ type BaseAccountConnectorParameters = BaseAccountParameters & {
 export function baseAccountConnector(
   parameters: BaseAccountConnectorParameters = {},
 ) {
-  const { displayName: _displayName, ...baseParameters } = parameters;
+  const { displayName, ...baseParameters } = parameters;
+  void displayName;
 
   return wagmiBaseAccountConnector({
     appName: baseParameters.appName ?? "Pixotchi Mini",

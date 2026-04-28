@@ -1,31 +1,31 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Image from 'next/image';
-import EuropeanRouletteWheel from '@/components/ui/EuropeanRouletteWheel';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2, X, Trash2 } from 'lucide-react';
-import { parseUnits, formatUnits } from 'viem';
-import { useAccount, useBalance } from 'wagmi';
-import {
-    casinoGetActiveBetV2,
-    casinoGetTokenConfig,
-    checkCasinoApproval,
-    LAND_CONTRACT_ADDRESS,
-} from '@/lib/contracts';
-import { CasinoBetType, CASINO_PAYOUT_MULTIPLIERS, RED_NUMBERS } from '@/public/abi/casino-abi';
-import ApproveTransaction from './approve-transaction';
-import CasinoTransaction from './casino-transaction';
-import { toast } from 'react-hot-toast';
-import { useTokenMetadata } from '@/hooks/useTokenMetadata';
-import { formatTokenAmount, formatTokenAmountRounded, getCasinoTokenImage } from '@/lib/utils';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import type { LifecycleStatus } from '@/components/transactions/transaction-kit';
-import { loadBetPreference, storeBetPreference } from '@/lib/casino-bet-preferences';
+import EuropeanRouletteWheel from '@/components/ui/EuropeanRouletteWheel';
+import { Button } from '@/components/ui/button';
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { useTokenMetadata } from '@/hooks/useTokenMetadata';
+import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
+import {
+casinoGetActiveBetV2,
+casinoGetTokenConfig,
+checkCasinoApproval,
+LAND_CONTRACT_ADDRESS,
+} from '@/lib/contracts';
+import { usePaymaster } from '@/lib/paymaster-context';
+import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
+import { CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
+import { Loader2,Trash2,X } from 'lucide-react';
+import Image from 'next/image';
+import { useCallback,useEffect,useMemo,useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { formatUnits,parseUnits } from 'viem';
+import { useAccount,useBalance } from 'wagmi';
+import ApproveTransaction from './approve-transaction';
+import CasinoTransaction from './casino-transaction';
 
 interface CasinoDialogProps {
     open: boolean;
@@ -213,29 +213,34 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         if (open) loadConfig();
     }, [open, address, landId, selectedToken, casinoPolicy.playable]);
 
+    const configBettingToken = config?.bettingToken ?? null;
+    const configMinBet = config?.minBet ?? null;
+    const configMaxBet = config?.maxBet ?? null;
+    const configMaxBetsPerGame = config?.maxBetsPerGame ?? null;
+
     useEffect(() => {
-        if (!open || pendingGame || !config) return;
+        if (!open || pendingGame || !configBettingToken) return;
         setPlacedBets([]);
         setResult(null);
         setError(null);
-    }, [config?.bettingToken, open, pendingGame, config]);
+    }, [configBettingToken, configMinBet, configMaxBet, configMaxBetsPerGame, open, pendingGame]);
 
     useEffect(() => {
-        if (!open || pendingGame || !config) return;
+        if (!open || pendingGame || !configBettingToken || configMinBet === null || configMaxBet === null) return;
         setCurrentBetAmount(loadBetPreference({
             game: 'roulette',
-            token: config.bettingToken,
-            minBet: config.minBet,
-            maxBet: config.maxBet,
+            token: configBettingToken,
+            minBet: configMinBet,
+            maxBet: configMaxBet,
             decimals: tokenDecimals,
             fallback: formattedMinBet,
         }));
-    }, [config?.bettingToken, config?.minBet, config?.maxBet, open, pendingGame, tokenDecimals, formattedMinBet]);
+    }, [configBettingToken, configMinBet, configMaxBet, open, pendingGame, tokenDecimals, formattedMinBet]);
 
     useEffect(() => {
-        if (!config?.bettingToken) return;
-        storeBetPreference('roulette', config.bettingToken, currentBetAmount, tokenDecimals);
-    }, [config?.bettingToken, currentBetAmount, tokenDecimals]);
+        if (!configBettingToken) return;
+        storeBetPreference('roulette', configBettingToken, currentBetAmount, tokenDecimals);
+    }, [configBettingToken, currentBetAmount, tokenDecimals]);
 
     // Callback when wheel animation ends
     const handleWheelSpinEnd = useCallback(() => {
@@ -269,7 +274,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     toast.error(`Total bet limit is ${formattedMaxBet} ${tokenSymbol}. You can add max ${formatTokenAmountRounded(remaining > BigInt(0) ? remaining : BigInt(0), tokenDecimals)} ${tokenSymbol}`);
                     return;
                 }
-            } catch (e) {
+            } catch {
                 toast.error('Invalid bet amount');
                 return;
             }
@@ -389,7 +394,6 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         const isLastCol = colIndex === 11;
 
         // Calculate adjacent numbers for complex bets
-        const numAbove = num + 1; // e.g., if num=2, above=3
         const numBelow = num - 1; // e.g., if num=2, below=1
         const numRight = num + 3; // e.g., if num=3, right=6
 

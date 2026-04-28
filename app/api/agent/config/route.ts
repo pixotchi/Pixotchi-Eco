@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_URL || '';
     // Placeholder values; client can override via contracts/constants
     const agentConfigured = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET && process.env.CDP_WALLET_SECRET);
 
@@ -17,7 +16,7 @@ export async function GET() {
         periodInDays: 1,
       }
     });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Failed to load agent config' }, { status: 500 });
   }
 }

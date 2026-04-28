@@ -78,7 +78,7 @@ export async function redisGetJSON<T>(key: string): Promise<T | null> {
     if (typeof raw === 'string') {
       try {
         return JSON.parse(raw) as T;
-      } catch (e) {
+      } catch {
         // Some providers may already return objects
         logger.warn('Failed to parse JSON value; returning raw', { key });
         return raw as unknown as T;

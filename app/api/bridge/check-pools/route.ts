@@ -5,10 +5,10 @@
  * GET /api/bridge/check-pools
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
-import { formatUnits, type Address } from 'viem';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
+import { formatUnits,type Address } from 'viem';
 
 // Segment config: Always fetch fresh onchain data
 export const dynamic = 'force-dynamic';
@@ -33,12 +33,6 @@ const FACTORY_ABI = [
     ],
     outputs: [{ type: 'address' }],
   },
-] as const;
-
-const ERC20_ABI = [
-  { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
-  { name: 'symbol', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
 ] as const;
 
 const POOL_ABI = [

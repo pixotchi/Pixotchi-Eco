@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { getLandSupply, getLandLeaderboard, LandLeaderboardEntry } from '@/lib/contracts';
+import { getLandLeaderboard,getLandSupply,LandLeaderboardEntry } from '@/lib/contracts';
 import { Land } from '@/lib/types';
-import { getCoordinateFromTokenId } from '@/lib/land-utils';
+import { useEffect,useState } from 'react';
 
 // Cache neighbor data to avoid refetching
 let cachedLeaderboard: LandLeaderboardEntry[] = [];

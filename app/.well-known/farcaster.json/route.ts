@@ -2,7 +2,7 @@ function withValidProperties(
   properties: Record<string, undefined | string | string[] | boolean>,
 ) {
   return Object.fromEntries(
-    Object.entries(properties).filter(([key, value]) => {
+    Object.entries(properties).filter(([, value]) => {
       if (Array.isArray(value)) {
         return value.length > 0;
       }
@@ -65,7 +65,7 @@ export async function GET() {
         "https://*.farcaster.xyz",
         "https://*.base.org",
         "https://*.base.app",
-        "https://base.app",	
+        "https://base.app",
         "https://*.coinbase.com",
         "https://mini.pixotchi.tech",
         "https://*.pixotchi.tech",
@@ -78,4 +78,4 @@ export async function GET() {
       ],
     },
   });
-} 
+}

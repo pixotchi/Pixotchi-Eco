@@ -5,9 +5,9 @@
  * GET /api/bridge/check-wsol-impl
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
 import { type Address } from 'viem';
 
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
         address: FACTORY,
         hasCode: factoryCode && factoryCode !== '0x',
       };
-    } catch (e) {
+    } catch {
       results.bridgeContract = { error: 'Could not check' };
     }
 

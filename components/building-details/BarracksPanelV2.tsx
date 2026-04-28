@@ -709,7 +709,6 @@ export default function BarracksPanelV2({
     };
   }, [
     activeTab,
-    BARRACKS_PREVIEW_ENABLED,
     config?.enabled,
     currentBlock,
     landId,

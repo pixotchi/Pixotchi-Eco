@@ -5,17 +5,13 @@
  * GET /api/bridge/debug-deep
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
 import { getBaseReadClient } from '@/lib/base-rpc';
-import { formatUnits, encodeFunctionData, type Address, parseAbi } from 'viem';
+import { requireBridgeDebugAccess } from '@/lib/bridge-debug-access';
+import { NextRequest,NextResponse } from 'next/server';
+import { encodeFunctionData,formatUnits,parseAbi,type Address } from 'viem';
 
-const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
-const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;
 const WETH = '0x4200000000000000000000000000000000000006' as Address;
 const SEED = '0x546D239032b24eCEEE0cb05c92FC39090846adc7' as Address;
-const AERODROME_ROUTER = '0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43' as Address;
-const AERODROME_FACTORY = '0x420DD381b31aEf6683db6B902084cB0FFECe40Da' as Address;
 const BASESWAP_ROUTER = '0x327Df1E6de05895d2ab08513aaDD9313Fe505d86' as Address;
 const ADAPTER = '0x8d3056a3e5144187fde837ea1b206f4bcaea85bc' as Address;
 const TWIN = '0x71256e3d36435b0cc7ac41a43ee123d2aab43275' as Address;
@@ -28,7 +24,6 @@ export async function GET(request: NextRequest) {
   try {
     const publicClient = getBaseReadClient();
 
-    const wsolAmount = BigInt(639108);
     const results: any = {
       tests: [],
     };

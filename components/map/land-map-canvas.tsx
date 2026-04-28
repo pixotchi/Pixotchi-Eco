@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Land } from "@/lib/types";
-import { getTokenIdFromCoordinate, getTerrainNoise, visualToContract, getVisualTerrainType } from '@/lib/land-utils';
 import { LandLeaderboardEntry } from "@/lib/contracts";
+import { getTerrainNoise,getTokenIdFromCoordinate,getVisualTerrainType,visualToContract } from '@/lib/land-utils';
+import { Land } from "@/lib/types";
+import React,{ useEffect,useMemo,useRef,useState } from 'react';
 
 interface LandMapCanvasProps {
   center: { x: number; y: number }; // Visual coordinates
@@ -53,7 +53,6 @@ export function LandMapCanvas({
 
   // Constants for rendering
   const TILE_SIZE = 40; // Base size of a tile in pixels
-  const GAP = 0; // No gap for sprites
   const DRAG_CANCEL_THRESHOLD = 5; // Pixels of movement before we treat it as a drag
 
   const ownedTokenIds = useMemo(() => {
@@ -67,7 +66,7 @@ export function LandMapCanvas({
 
       // Load helper
       const loadImage = (src: string): Promise<HTMLImageElement> => {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
           const img = new Image();
           img.src = src;
           img.onload = () => resolve(img);
@@ -206,8 +205,6 @@ export function LandMapCanvas({
           const isMinted = tokenId <= totalSupply;
           const isUserOwned = ownedTokenIds.has(tokenId);
           const isSelected = selectedLand && Number(selectedLand.tokenId) === tokenId;
-          const neighbor = neighborData[tokenId];
-
           // Terrain Generation (Deterministic Noise) for variety
           const noise = getTerrainNoise(cx, cy); // Use contract coords for consistent land look
 

@@ -1,49 +1,49 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
-import { useAccount, useWatchBlockNumber } from "wagmi";
-import Image from "next/image";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+DropdownMenu,
+DropdownMenuContent,
+DropdownMenuItem,
+DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
-import { Land, BuildingData, BuildingType } from "@/lib/types";
 import {
-  barracksGetLandStateV2,
-  casinoIsBuilt,
-  checkLeafTokenApproval,
-  checkLandMintApproval,
-  checkLandSpeedUpApproval,
-  getLandById,
-  getLandsByOwner,
-  getTownBuildingsByLandId,
-  getVillageBuildingsByLandId,
+barracksGetLandStateV2,
+casinoIsBuilt,
+checkLandSpeedUpApproval,
+checkLeafTokenApproval,
+getLandById,
+getLandsByOwner,
+getTownBuildingsByLandId,
+getVillageBuildingsByLandId
 } from "@/lib/contracts";
 import { CLIENT_ENV } from "@/lib/env-config";
-import { formatTokenAmount, formatAddress, formatXP } from "@/lib/utils";
+import { BuildingData,BuildingType,Land } from "@/lib/types";
+import { formatXP } from "@/lib/utils";
+import Image from "next/image";
+import { useCallback,useEffect,useRef,useState } from "react";
+import { useAccount,useWatchBlockNumber } from "wagmi";
 // Removed BalanceCard from tabs; status bar now shows balances globally
-import BuildingGrid from "@/components/building-grid";
 import BuildingDetailsPanel from "@/components/building-details-panel";
-import { ToggleGroup } from "@/components/ui/toggle-group";
-import { LandPlot, Hash, Star, MapPin, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import LandImage from "../LandImage";
+import BuildingGrid from "@/components/building-grid";
 import { EditLandName } from "@/components/edit-land-name";
 import { LandMapModal } from "@/components/map/land-map-modal";
-import { useLandMap } from "@/hooks/useLandMap";
-import { useIsSolanaWallet, SolanaNotSupported } from "@/components/solana";
+import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BatchClaimCard from "@/components/transactions/batch-claim-card";
+import { ToggleGroup } from "@/components/ui/toggle-group";
+import { useLandMap } from "@/hooks/useLandMap";
+import { ChevronDown,ChevronLeft,ChevronRight,LandPlot } from "lucide-react";
+import LandImage from "../LandImage";
 
-import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
+
+const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
+const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
 
 export default function LandsView() {
-  const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
-  const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
   // Gate: Solana wallets cannot use Land features
   const isSolana = useIsSolanaWallet();
 
@@ -55,7 +55,7 @@ export default function LandsView() {
     );
   }
   const { address } = useAccount();
-  const { isSmartWallet } = useSmartWallet();
+  useSmartWallet();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
   const { isTabVisible } = useTabVisibility();
@@ -73,6 +73,8 @@ export default function LandsView() {
   const [villageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
   const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
+  const selectedLandId = selectedLand?.tokenId ?? null;
+  const selectedBuildingId = selectedBuilding?.id ?? null;
   const [buildingsLoading, setBuildingsLoading] = useState(false);
   const [currentBlock, setCurrentBlock] = useState<bigint>(BigInt(0));
   // Remember last selected building id to persist across land switches
@@ -179,7 +181,7 @@ export default function LandsView() {
   }, [address, selectedLand?.tokenId, lands.length]);
 
   const fetchBuildingData = useCallback(async () => {
-    if (!selectedLand) {
+    if (selectedLandId == null) {
       setVillageBuildings([]);
       setTownBuildings([]);
       setSelectedBuilding(null);
@@ -188,7 +190,7 @@ export default function LandsView() {
       return;
     }
 
-    const landId = selectedLand.tokenId;
+    const landId = selectedLandId;
 
     // Prevent duplicate calls for the same land
     if (fetchBuildingDataPendingRef.current === landId) {
@@ -337,32 +339,31 @@ export default function LandsView() {
         fetchBuildingDataPendingRef.current = null;
       }
 
-      if (fetchBuildingDataQueuedRef.current && selectedLand?.tokenId === landId) {
+      if (fetchBuildingDataQueuedRef.current && selectedLandId === landId) {
         fetchBuildingDataQueuedRef.current = false;
         setTimeout(() => {
           void fetchBuildingData();
         }, 0);
       }
     }
-  }, [BARRACKS_ENABLED, selectedLand, buildingType]); // Removed selectedBuilding to prevent infinite loop (updates trigger Effect -> calls func -> updates state -> triggers Effect)
+  }, [selectedLandId, buildingType]); // Selection persistence is tracked through lastSelectedBuildingIdRef.
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
   useEffect(() => {
     const refreshWarehouseOnSelect = async () => {
-      if (!selectedLand || buildingType !== 'town' || selectedBuilding?.id !== 3) return;
+      if (selectedLandId == null || buildingType !== 'town' || selectedBuildingId !== 3) return;
       try {
-        const latest = await getLandById(selectedLand.tokenId);
+        const latest = await getLandById(selectedLandId);
         if (latest) {
           // Update only the selected land info (keeping array intact to avoid extra renders)
           setSelectedLand(latest);
         }
-      } catch (e) {
+      } catch {
         // noop
       }
     };
     refreshWarehouseOnSelect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBuilding?.id, buildingType, selectedLand?.tokenId]);
+  }, [selectedBuildingId, buildingType, selectedLandId]);
 
   // Combined function to refresh both building data and balances after transactions
   const handleBuildingTransactionSuccess = useCallback(() => {
@@ -371,15 +372,15 @@ export default function LandsView() {
     // Also refresh selected land summary (Warehouse totals) so WarehousePanel props stay current
     (async () => {
       try {
-        if (selectedLand) {
-          const latest = await getLandById(selectedLand.tokenId);
+        if (selectedLandId != null) {
+          const latest = await getLandById(selectedLandId);
           if (latest) setSelectedLand(latest);
         }
       } catch { }
     })();
     // Balances are refreshed globally via the 'balances:refresh' event
     window.dispatchEvent(new Event('balances:refresh'));
-  }, [fetchBuildingData, selectedLand]);
+  }, [fetchBuildingData, selectedLandId]);
 
   // Refresh when dashboard becomes visible
   useEffect(() => {
@@ -401,8 +402,8 @@ export default function LandsView() {
       // Also refresh the selected land summary to reflect warehouse/accumulated changes
       (async () => {
         try {
-          if (selectedLand) {
-            const latest = await getLandById(selectedLand.tokenId);
+          if (selectedLandId != null) {
+            const latest = await getLandById(selectedLandId);
             if (latest) setSelectedLand(latest);
           }
         } catch { }
@@ -410,34 +411,33 @@ export default function LandsView() {
     };
     window.addEventListener('buildings:refresh', handler as EventListener);
     return () => window.removeEventListener('buildings:refresh', handler as EventListener);
-  }, [fetchBuildingData, selectedLand]);
+  }, [fetchBuildingData, selectedLandId]);
 
   // Remove aggressive image preloads; Next/Image will handle efficient lazy-loading
 
   useEffect(() => {
     fetchBuildingData();
-  }, [selectedLand, fetchBuildingData]);
+  }, [fetchBuildingData]);
 
   // When switching lands, refresh the selected land summary and reset visible building
   useEffect(() => {
-    if (!selectedLand) return;
+    if (selectedLandId == null) return;
     // Reset selected building so fetchBuildingData will pick first of new land
     setSelectedBuilding(null);
     (async () => {
       try {
-        const latest = await getLandById(selectedLand.tokenId);
+        const latest = await getLandById(selectedLandId);
         if (latest) setSelectedLand(latest);
       } catch { }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLand?.tokenId]);
+  }, [selectedLandId]);
 
   // Track last selected building id to persist across land switches
   useEffect(() => {
-    if (selectedBuilding && typeof selectedBuilding.id !== 'undefined') {
-      lastSelectedBuildingIdRef.current = Number(selectedBuilding.id);
+    if (selectedBuildingId !== null && typeof selectedBuildingId !== 'undefined') {
+      lastSelectedBuildingIdRef.current = Number(selectedBuildingId);
     }
-  }, [selectedBuilding?.id]);
+  }, [selectedBuildingId]);
 
   // Watch for block updates to track upgrade progress
   // Only watch when we have buildings that are actually upgrading
@@ -450,6 +450,11 @@ export default function LandsView() {
     enabled: hasUpgradingBuildings, // Only watch blocks when buildings are upgrading
     pollingInterval: 3000 // Check every 3 seconds instead of every block
   });
+
+  const handleBuildingSelect = useCallback((type: BuildingType, building: BuildingData) => {
+    setBuildingType(type);
+    setSelectedBuilding(building);
+  }, []);
 
 
   // Only block render if we have NO lands data at all
@@ -539,7 +544,8 @@ export default function LandsView() {
       </div>
 
       {selectedLand && (
-        <>
+        <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0">
+          <div className="space-y-4 xl:sticky xl:top-0">
           <Card className="rounded-2xl">
             <CardContent className="space-y-3">
               <div className="relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
@@ -637,42 +643,96 @@ export default function LandsView() {
             </CardContent>
           </Card>
 
+          </div>
+
+          <div className="min-w-0">
           {/* Building Management Section */}
-          <Card className="rounded-2xl">
+          <Card className="rounded-2xl xl:h-fit xl:w-full">
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="font-pixel">Buildings</CardTitle>
-                <ToggleGroup
-                  value={buildingType}
-                  onValueChange={(v) => {
-                    const newType = v as 'village' | 'town';
-                    setBuildingType(newType);
-                    setSelectedBuilding((newType === 'village' ? villageBuildings[0] : townBuildings[0]) || null);
-                  }}
-                  options={[
-                    { value: 'village', label: 'Village' },
-                    { value: 'town', label: 'Town' },
-                  ]}
-                />
+                <div className="xl:hidden">
+                  <ToggleGroup
+                    value={buildingType}
+                    onValueChange={(v) => {
+                      const newType = v as 'village' | 'town';
+                      setBuildingType(newType);
+                      setSelectedBuilding((newType === 'village' ? villageBuildings[0] : townBuildings[0]) || null);
+                    }}
+                    options={[
+                      { value: 'village', label: 'Village' },
+                      { value: 'town', label: 'Town' },
+                    ]}
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)] xl:items-start xl:justify-center">
                 {/* Building Grid */}
-                <div>
+                <div className="space-y-4">
                   {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
                     <div className="text-center text-muted-foreground p-6">
                       Loading buildings...
                     </div>
                   ) : (
-                    <BuildingGrid
-                      buildings={buildingType === 'village' ? villageBuildings : townBuildings}
-                      buildingType={buildingType}
-                      selectedBuilding={selectedBuilding}
-                      onBuildingSelect={setSelectedBuilding}
-                      currentBlock={currentBlock}
-                      landId={selectedLand.tokenId}
-                    />
+                    <>
+                      <div className="xl:hidden">
+                        <BuildingGrid
+                          buildings={buildingType === 'village' ? villageBuildings : townBuildings}
+                          buildingType={buildingType}
+                          selectedBuilding={selectedBuilding}
+                          selectedBuildingType={buildingType}
+                          onBuildingSelect={(building) => handleBuildingSelect(buildingType, building)}
+                          currentBlock={currentBlock}
+                          landId={selectedLand.tokenId}
+                        />
+                      </div>
+
+                      <div className="hidden xl:block space-y-4">
+                        <section
+                          className={`rounded-xl border p-3 transition-colors ${buildingType === 'village' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
+                            }`}
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <h3 className="text-sm font-semibold">Village</h3>
+                            <span className="text-xs text-muted-foreground">{villageBuildings.length} buildings</span>
+                          </div>
+                          <BuildingGrid
+                            buildings={villageBuildings}
+                            buildingType="village"
+                            selectedBuilding={selectedBuilding}
+                            selectedBuildingType={buildingType}
+                            onBuildingSelect={(building) => handleBuildingSelect('village', building)}
+                            currentBlock={currentBlock}
+                            landId={selectedLand.tokenId}
+                            gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
+                            denseLabels
+                          />
+                        </section>
+
+                        <section
+                          className={`rounded-xl border p-3 transition-colors ${buildingType === 'town' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
+                            }`}
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <h3 className="text-sm font-semibold">Town</h3>
+                            <span className="text-xs text-muted-foreground">{townBuildings.length} buildings</span>
+                          </div>
+                          <BuildingGrid
+                            buildings={townBuildings}
+                            buildingType="town"
+                            selectedBuilding={selectedBuilding}
+                            selectedBuildingType={buildingType}
+                            onBuildingSelect={(building) => handleBuildingSelect('town', building)}
+                            currentBlock={currentBlock}
+                            landId={selectedLand.tokenId}
+                            gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
+                            denseLabels
+                          />
+                        </section>
+                      </div>
+                    </>
                   )}
                 </div>
 
@@ -696,7 +756,8 @@ export default function LandsView() {
               </div>
             </CardContent>
           </Card>
-        </>
+          </div>
+        </div>
       )}
       {/* Map Modal */}
       {selectedLand && (

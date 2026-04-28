@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
-import Image from 'next/image';
-import { calculateImageLevel } from '@/lib/utils';
 import { Plant } from '@/lib/types';
+import { calculateImageLevel } from '@/lib/utils';
+import Image from 'next/image';
+import React,{ useMemo,useState } from 'react';
 
 interface PlantImageProps {
   selectedPlant: Plant;
@@ -28,7 +28,7 @@ const PlantImage = React.memo(({
   const [imageLoaded, setImageLoaded] = useState(false);
 
   // Memoize expensive calculations
-  const { level, imageSrc, altText, sizes } = useMemo(() => {
+  const { imageSrc, altText, sizes } = useMemo(() => {
     const calculatedLevel = calculateImageLevel(selectedPlant.level);
     const src = `/ipfs/strain${selectedPlant.strain}/${calculatedLevel}.svg`;
     const alt = selectedPlant.name || `Plant #${selectedPlant.id}`;
@@ -41,7 +41,6 @@ const PlantImage = React.memo(({
       : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
 
     return {
-      level: calculatedLevel,
       imageSrc: src,
       altText: alt,
       sizes: responsiveSizes
@@ -115,4 +114,4 @@ const PlantImage = React.memo(({
 
 PlantImage.displayName = 'PlantImage';
 
-export default PlantImage; 
+export default PlantImage;

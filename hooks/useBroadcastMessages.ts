@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useAccount } from 'wagmi';
-import { usePrivy } from '@privy-io/react-auth';
+import { useAuthSurface } from '@/hooks/useAuthSurface';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
 import { useFrameContext } from '@/lib/frame-context';
-import { useAuthSurface } from '@/hooks/useAuthSurface';
+import { usePrivy } from '@privy-io/react-auth';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { useAccount } from 'wagmi';
 
 const POLL_INTERVAL = 90000; // 90 seconds
 const STORAGE_KEY = 'pixotchi:dismissed-broadcasts';
@@ -44,7 +44,7 @@ export function useBroadcastMessages() {
     }
     return new Set();
   });
-  const [tutorialCompleted, setTutorialCompleted] = useState(isTutorialCompleted());
+  const [, setTutorialCompleted] = useState(isTutorialCompleted());
   const lastFetchRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fetchCountRef = useRef<number>(0);

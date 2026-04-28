@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { toast } from 'react-hot-toast';
+import { TransactionState } from '@/lib/types';
 import { getFriendlyErrorMessage } from '@/lib/utils';
-import { TransactionState, TransactionStatus } from '@/lib/types';
+import { useCallback,useEffect,useRef,useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 interface UseTransactionOptions<T> {
   onSuccess?: (data: T) => void;

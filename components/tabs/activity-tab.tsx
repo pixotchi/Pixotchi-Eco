@@ -42,8 +42,49 @@ import { useWebQueryState } from "@/hooks/useWebQueryState";
 type ActivityView = "all" | "my";
 type ItemMap = { [key: string]: string };
 type ProcessedActivityEvent = Exclude<ActivityEvent, ItemConsumedEvent> | BundledItemConsumedEvent;
+type PaginationConfig = {
+  page: number;
+  setPage: (nextPage: number | ((previousPage: number) => number)) => void;
+};
 
 const ITEMS_PER_PAGE = 12;
+
+function bundleItemConsumedEvents(activities: ActivityEvent[]): ProcessedActivityEvent[] {
+  const bundledMap = new Map<string, BundledItemConsumedEvent>();
+  const otherEvents: Exclude<ActivityEvent, ItemConsumedEvent>[] = [];
+
+  activities.forEach(activity => {
+    if (activity.__typename === 'ItemConsumed') {
+      const key = `${activity.nftId}-${activity.timestamp}-${activity.itemId}`;
+
+      if (bundledMap.has(key)) {
+        const existing = bundledMap.get(key)!;
+        existing.quantity += 1;
+      } else {
+        bundledMap.set(key, {
+          ...activity,
+          quantity: 1
+        });
+      }
+    } else {
+      otherEvents.push(activity as Exclude<ActivityEvent, ItemConsumedEvent>);
+    }
+  });
+
+  const bundledEvents = Array.from(bundledMap.values());
+  const allProcessedEvents = [...otherEvents, ...bundledEvents];
+
+  allProcessedEvents.sort((a, b) => {
+    const timeA = Number(a.timestamp);
+    const timeB = Number(b.timestamp);
+    if (isNaN(timeA) && isNaN(timeB)) return 0;
+    if (isNaN(timeA)) return 1;
+    if (isNaN(timeB)) return -1;
+    return timeB - timeA;
+  });
+
+  return allProcessedEvents;
+}
 
 export default function ActivityTab() {
   const frame = useFrameContext();
@@ -55,9 +96,22 @@ export default function ActivityTab() {
   const isVisible = isTabVisible('activity');
   const myAddress = isSolana ? twinAddress : address;
   const isWalletConnected = isConnected || (isSolana && !!twinAddress);
-  const [allActivities, setAllActivities] = useState<ProcessedActivityEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [activitiesByView, setActivitiesByView] = useState<Record<ActivityView, ProcessedActivityEvent[]>>({
+    all: [],
+    my: [],
+  });
+  const [loadingByView, setLoadingByView] = useState<Record<ActivityView, boolean>>({
+    all: true,
+    my: false,
+  });
+  const [errorByView, setErrorByView] = useState<Record<ActivityView, string | null>>({
+    all: null,
+    my: null,
+  });
+  const [desktopPageByView, setDesktopPageByView] = useState<Record<ActivityView, number>>({
+    all: 1,
+    my: 1,
+  });
   const [view, setView] = useWebQueryState<ActivityView>({
     key: "activityView",
     defaultValue: "all",
@@ -82,104 +136,94 @@ export default function ActivityTab() {
 
   // Request deduplication ref to prevent multiple simultaneous calls
   const fetchActivitiesPendingRef = useRef<string | null>(null);
-  const allActivitiesRef = useRef<ProcessedActivityEvent[]>([]);
-
-  const bundleItemConsumedEvents = (activities: ActivityEvent[]): ProcessedActivityEvent[] => {
-    const bundledMap = new Map<string, BundledItemConsumedEvent>();
-    const otherEvents: Exclude<ActivityEvent, ItemConsumedEvent>[] = [];
-
-    activities.forEach(activity => {
-      if (activity.__typename === 'ItemConsumed') {
-        const key = `${activity.nftId}-${activity.timestamp}-${activity.itemId}`;
-
-        if (bundledMap.has(key)) {
-          const existing = bundledMap.get(key)!;
-          existing.quantity += 1;
-        } else {
-          bundledMap.set(key, {
-            ...activity,
-            quantity: 1
-          });
-        }
-      } else {
-        otherEvents.push(activity as Exclude<ActivityEvent, ItemConsumedEvent>);
-      }
-    });
-
-    const bundledEvents = Array.from(bundledMap.values());
-    const allProcessedEvents = [...otherEvents, ...bundledEvents];
-
-    // Re-sort by timestamp safely
-    allProcessedEvents.sort((a, b) => {
-      const timeA = Number(a.timestamp);
-      const timeB = Number(b.timestamp);
-      // Fallback to 0 if invalid, but generally sort descending (newer first)
-      if (isNaN(timeA) && isNaN(timeB)) return 0;
-      if (isNaN(timeA)) return 1;
-      if (isNaN(timeB)) return -1;
-      return timeB - timeA;
-    });
-
-    return allProcessedEvents;
-  };
+  const activitiesByViewRef = useRef(activitiesByView);
 
   const fetchActivities = useCallback(async () => {
-    // Create a unique key for this fetch based on parameters
-    const fetchKey = `${view}-${myAddress || 'all'}`;
+    const fetchKey = myAddress || 'public';
 
-    // Prevent duplicate calls with the same parameters
     if (fetchActivitiesPendingRef.current === fetchKey) {
       return;
     }
 
     fetchActivitiesPendingRef.current = fetchKey;
 
+    const feedsToFetch: ActivityView[] = myAddress ? ["all", "my"] : ["all"];
+
+    setLoadingByView(prev => ({
+      all: feedsToFetch.includes("all") && activitiesByViewRef.current.all.length === 0 ? true : prev.all,
+      my: feedsToFetch.includes("my") && activitiesByViewRef.current.my.length === 0 ? true : false,
+    }));
+    setErrorByView(prev => ({
+      all: feedsToFetch.includes("all") ? null : prev.all,
+      my: feedsToFetch.includes("my") ? null : prev.my,
+    }));
+
     try {
-      // Only show full page loader on first load for the selected view
-      if (allActivitiesRef.current.length === 0) {
-        setLoading(true);
-      }
-      setError(null);
+      const results = await Promise.allSettled(
+        feedsToFetch.map(async (feedView) => {
+          const recentActivities =
+            feedView === "my" && myAddress
+              ? await getMyActivity(myAddress)
+              : await getAllActivity();
 
-      let recentActivities: ActivityEvent[] = [];
+          return {
+            feedView,
+            activities: bundleItemConsumedEvents(recentActivities),
+          };
+        })
+      );
 
-      if (view === "my") {
-        // In 'my' view but address not ready - exit early, UI will show appropriate message
-        if (!myAddress) {
-          if (fetchActivitiesPendingRef.current === fetchKey) {
-            setLoading(false);
-            fetchActivitiesPendingRef.current = null;
-          }
-          return;
-        }
-        recentActivities = await getMyActivity(myAddress);
-      } else {
-        recentActivities = await getAllActivity();
-      }
-
-      // Only update if parameters haven't changed during the fetch
       if (fetchActivitiesPendingRef.current === fetchKey) {
-        const processedActivities = bundleItemConsumedEvents(recentActivities);
-        setAllActivities(processedActivities);
+        setActivitiesByView(prev => {
+          const next = { ...prev };
+
+          results.forEach((result, index) => {
+            const feedView = feedsToFetch[index];
+            if (result.status === "fulfilled") {
+              next[feedView] = result.value.activities;
+            }
+          });
+
+          return next;
+        });
+
+        setErrorByView(prev => {
+          const next = { ...prev };
+
+          results.forEach((result, index) => {
+            const feedView = feedsToFetch[index];
+            next[feedView] = result.status === "rejected"
+              ? "Failed to load activities. Please try again later."
+              : null;
+          });
+
+          return next;
+        });
       }
     } catch (err) {
       console.error(err);
-      // Only set error if parameters haven't changed
       if (fetchActivitiesPendingRef.current === fetchKey) {
-        setError("Failed to load activities. Please try again later.");
+        setErrorByView(prev => ({
+          ...prev,
+          all: "Failed to load activities. Please try again later.",
+          my: myAddress ? "Failed to load activities. Please try again later." : prev.my,
+        }));
       }
     } finally {
-      // Clear pending flag only if parameters haven't changed
       if (fetchActivitiesPendingRef.current === fetchKey) {
-        setLoading(false);
+        setLoadingByView(prev => ({
+          ...prev,
+          all: false,
+          my: false,
+        }));
         fetchActivitiesPendingRef.current = null;
       }
     }
-  }, [view, myAddress]);
+  }, [myAddress]);
 
   useEffect(() => {
-    allActivitiesRef.current = allActivities;
-  }, [allActivities]);
+    activitiesByViewRef.current = activitiesByView;
+  }, [activitiesByView]);
 
   useEffect(() => {
     const newShopItemMap: ItemMap = {};
@@ -256,30 +300,65 @@ export default function ActivityTab() {
     }
   };
 
-  // Calculate pagination values
-  const totalItems = allActivities.length;
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentActivities = allActivities.slice(startIndex, endIndex);
+  const selectedActivities = activitiesByView[view];
+  const selectedLoading = loadingByView[view];
+  const selectedError = errorByView[view];
+  const selectedTotalPages = Math.ceil(selectedActivities.length / ITEMS_PER_PAGE);
+
+  const setDesktopPage = useCallback((
+    feedView: ActivityView,
+    nextPage: number | ((previousPage: number) => number)
+  ) => {
+    setDesktopPageByView(prev => ({
+      ...prev,
+      [feedView]: typeof nextPage === "function" ? nextPage(prev[feedView]) : nextPage,
+    }));
+  }, []);
 
   useEffect(() => {
-    if (totalPages === 0) {
+    if (selectedTotalPages === 0) {
       if (currentPage !== 1) {
         setCurrentPage(1);
       }
       return;
     }
 
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
+    if (currentPage > selectedTotalPages) {
+      setCurrentPage(selectedTotalPages);
     }
-  }, [currentPage, setCurrentPage, totalPages]);
+  }, [currentPage, selectedTotalPages, setCurrentPage]);
 
-  const renderContent = () => {
-    // Only block render if we have NO data at all
-    // If we have data, we show it (Activity API maintains state) and update silently
-    if (loading && allActivities.length === 0) {
+  useEffect(() => {
+    setDesktopPageByView(prev => {
+      let changed = false;
+      const next = { ...prev };
+
+      (["all", "my"] as ActivityView[]).forEach((feedView) => {
+        const maxPage = Math.max(1, Math.ceil(activitiesByView[feedView].length / ITEMS_PER_PAGE));
+
+        if (next[feedView] > maxPage) {
+          next[feedView] = maxPage;
+          changed = true;
+        }
+
+        if (next[feedView] < 1) {
+          next[feedView] = 1;
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [activitiesByView]);
+
+  const renderFeedContent = (
+    feedView: ActivityView,
+    activities: ProcessedActivityEvent[],
+    loading: boolean,
+    error: string | null,
+    pagination?: PaginationConfig
+  ) => {
+    if (loading && activities.length === 0) {
       return (
         <div className="flex items-center justify-center py-8">
           <BaseExpandedLoadingPageLoader text="Loading activities..." />
@@ -297,7 +376,7 @@ export default function ActivityTab() {
       );
     }
 
-    if (view === 'my' && !isWalletConnected) {
+    if (feedView === 'my' && !isWalletConnected) {
       return (
         <div className="text-center py-8 text-muted-foreground">
           <p>Connect your wallet to see your activity.</p>
@@ -305,39 +384,46 @@ export default function ActivityTab() {
       );
     }
 
-    if (totalItems === 0) {
+    if (activities.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground">
-          <p>No recent {view === 'my' ? 'personal' : ''} activity found in the last 24 hours.</p>
+          <p>No recent {feedView === 'my' ? 'personal' : ''} activity found in the last 24 hours.</p>
         </div>
       );
     }
 
+    const totalPages = Math.ceil(activities.length / ITEMS_PER_PAGE);
+    const activePage = pagination ? Math.min(Math.max(pagination.page, 1), Math.max(totalPages, 1)) : 1;
+    const startIndex = (activePage - 1) * ITEMS_PER_PAGE;
+    const visibleActivities = pagination
+      ? activities.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+      : activities;
+
     return (
-      <div className="space-y-4">
-        <div className="space-y-2 divide-y -mx-4 px-4">
-          {currentActivities.map(renderActivity)}
+      <div className="space-y-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0">
+        <div className="space-y-2 divide-y -mx-4 px-4 xl:mx-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:px-0 xl:pr-2">
+          {visibleActivities.map(renderActivity)}
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-center items-center pt-4">
+        {pagination && totalPages > 1 && (
+          <div className="flex justify-center items-center pt-4 xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:pt-3">
             <div className="flex space-x-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
+                onClick={() => pagination.setPage(prev => Math.max(prev - 1, 1))}
+                disabled={activePage === 1}
               >
                 Back
               </Button>
               <span className="flex items-center px-3 text-sm">
-                Page {currentPage} of {totalPages}
+                Page {activePage} of {totalPages}
               </span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
+                onClick={() => pagination.setPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={activePage === totalPages}
               >
                 Next
               </Button>
@@ -349,8 +435,8 @@ export default function ActivityTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
+      <Card className="xl:hidden">
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Activity (Last 24h)</CardTitle>
@@ -376,9 +462,44 @@ export default function ActivityTab() {
           </div>
         </CardHeader>
         <CardContent>
-          {renderContent()}
+          {renderFeedContent(view, selectedActivities, selectedLoading, selectedError, {
+            page: currentPage,
+            setPage: setCurrentPage,
+          })}
         </CardContent>
       </Card>
+
+      <div className="hidden xl:grid xl:min-h-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:gap-5">
+        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>All Activity</CardTitle>
+              <span className="text-xs font-medium text-muted-foreground">{activitiesByView.all.length} events</span>
+            </div>
+          </CardHeader>
+          <CardContent className="xl:min-h-0 xl:flex-1">
+            {renderFeedContent("all", activitiesByView.all, loadingByView.all, errorByView.all, {
+              page: desktopPageByView.all,
+              setPage: (nextPage) => setDesktopPage("all", nextPage),
+            })}
+          </CardContent>
+        </Card>
+
+        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>My Activity</CardTitle>
+              <span className="text-xs font-medium text-muted-foreground">{activitiesByView.my.length} events</span>
+            </div>
+          </CardHeader>
+          <CardContent className="xl:min-h-0 xl:flex-1">
+            {renderFeedContent("my", activitiesByView.my, loadingByView.my, errorByView.my, {
+              page: desktopPageByView.my,
+              setPage: (nextPage) => setDesktopPage("my", nextPage),
+            })}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 } 

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { CdpClient } from '@coinbase/cdp-sdk';
+import { NextResponse } from 'next/server';
 
 // Create a single CDP client instance per runtime
 let cdp: CdpClient | null = null;
@@ -17,7 +17,7 @@ function getClient() {
 // In-memory cache of the agent smart account address
 let agentSmartAddress: string | null = null;
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   try {
     const client = getClient();
     // Ensure an EOA exists for the agent

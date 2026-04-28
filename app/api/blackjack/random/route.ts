@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { keccak256, encodePacked, type Hex } from 'viem';
-import { privateKeyToAccount, signMessage } from 'viem/accounts';
-import { blackjackAbi } from '@/public/abi/blackjack-abi';
 import { getBaseReadClient } from '@/lib/base-rpc';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import { redis, redisCompareAndSetJSON, redisDel, redisGetJSON } from '@/lib/redis';
 import { getCasinoPolicy } from '@/lib/casino-feature';
 import { BLACKJACK_DISABLED_MESSAGE } from '@/lib/casino-policy';
+import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { redis,redisCompareAndSetJSON,redisDel,redisGetJSON } from '@/lib/redis';
+import { blackjackAbi } from '@/public/abi/blackjack-abi';
+import { NextRequest,NextResponse } from 'next/server';
+import { encodePacked,keccak256,type Hex } from 'viem';
+import { privateKeyToAccount,signMessage } from 'viem/accounts';
 
 /**
  * Server-Signed Randomness API for Blackjack
@@ -565,7 +565,7 @@ export async function GET() {
             cacheSize: nonceRandomnessCache.size, // In-memory fallback cache size
             lockStore: redis ? 'redis' : 'memory',
         });
-    } catch (err) {
+    } catch {
         return NextResponse.json({
             status: 'error',
             message: 'Invalid signer configuration',

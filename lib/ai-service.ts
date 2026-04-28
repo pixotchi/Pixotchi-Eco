@@ -1,14 +1,14 @@
-import { redis, redisScanKeysRaw } from './redis';
-import { nanoid } from 'nanoid';
-import { AIChatMessage, AIConversation, AIUsageStats, AICostMetrics } from './types';
-import { getCurrentAIProvider, getCurrentModelConfig, validateAIConfig } from './ai-config';
-import { buildAIPrompt, generateConversationTitle } from './ai-context';
-import { formatDisplayName } from './chat-service';
-import { getUserGameStats, formatStatsForAI } from './user-stats-service';
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
+import { generateText } from 'ai';
+import { nanoid } from 'nanoid';
+import { getCurrentAIProvider,getCurrentModelConfig,validateAIConfig } from './ai-config';
+import { buildAIPrompt,generateConversationTitle } from './ai-context';
+import { formatDisplayName } from './chat-service';
+import { redis,redisScanKeysRaw } from './redis';
+import { AIChatMessage,AIConversation,AIUsageStats } from './types';
+import { formatStatsForAI,getUserGameStats } from './user-stats-service';
 
 const AI_MESSAGE_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const AI_RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
@@ -290,7 +290,7 @@ export async function getAIConversationMessages(conversationId: string, limit: n
         try {
           const message = typeof data === 'object' ? data : JSON.parse(data as string);
           messages.push(message as AIChatMessage);
-        } catch (e) {
+        } catch {
           // Ignore malformed messages
         }
       }
@@ -524,7 +524,7 @@ export async function getAllAIConversations(): Promise<AIConversation[]> {
           try {
             const conversation = typeof data === 'object' ? data : JSON.parse(data as string);
             conversations.push(conversation as AIConversation);
-          } catch (e) {
+          } catch {
             // skip bad data
           }
         }

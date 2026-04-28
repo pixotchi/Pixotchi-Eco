@@ -1,17 +1,16 @@
 "use client";
 
-import React from 'react';
-import { useAccount, useBlockNumber } from 'wagmi';
-import { getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
-import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { ToggleGroup } from '@/components/ui/toggle-group';
-import { toast } from 'react-hot-toast';
-import { usePublicClient } from 'wagmi';
-import { parseUnits } from 'viem';
-import { extractTransactionHash } from '@/lib/transaction-utils';
+import { ERC20_BALANCE_ABI,getQuestSlotsByLandId,LAND_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
+import { extractTransactionHash } from '@/lib/transaction-utils';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
+import React from 'react';
+import { toast } from 'react-hot-toast';
+import { parseUnits } from 'viem';
+import { useAccount,useBlockNumber,usePublicClient } from 'wagmi';
 
 interface FarmerHousePanelProps {
   landId: bigint;
@@ -34,7 +33,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   const [currentBlock, setCurrentBlock] = React.useState<bigint>(BigInt(0));
   const [difficulty, setDifficulty] = React.useState<Record<number, number>>({});
   const [rewardsWalletBalance, setRewardsWalletBalance] = React.useState<bigint>(BigInt(0));
-  const [balanceLoading, setBalanceLoading] = React.useState<boolean>(false);
+  const [, setBalanceLoading] = React.useState<boolean>(false);
 
   const fetchRewardsBalance = React.useCallback(async () => {
     if (!publicClient) return;
@@ -47,8 +46,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
         args: [QUEST_REWARDS_WALLET as `0x${string}`],
       }) as bigint;
       setRewardsWalletBalance(balance);
-    } catch (e: any) {
-      console.error('Failed to fetch rewards wallet balance:', e);
+    } catch (error) {
+      console.error('Failed to fetch rewards wallet balance:', error);
     } finally {
       setBalanceLoading(false);
     }
@@ -60,7 +59,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     try {
       const data = await getQuestSlotsByLandId(landId);
       setSlots(data);
-    } catch (e: any) {
+    } catch {
       setError('Failed to load quests');
     } finally {
       setLoading(false);
@@ -114,8 +113,6 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
   };
-  const difficultyLabel = (d: number) => (d === 0 ? 'EASY' : d === 1 ? 'MEDIUM' : 'HARD');
-
   const handleSuccess = async (opts?: { slotIndex?: number; awaitCommitted?: boolean; awaitUncommitted?: boolean; awaitInProgress?: boolean }) => {
     await fetchSlots();
     onQuestUpdate();

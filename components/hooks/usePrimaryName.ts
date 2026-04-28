@@ -21,7 +21,11 @@ async function flushQueue() {
     });
 
     if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
+      addresses.forEach((addr) => {
+        cache.set(addr, null);
+      });
+      console.warn(`[usePrimaryName] Name resolver returned ${response.status}`);
+      return;
     }
 
     const data = await response.json();
@@ -35,7 +39,7 @@ async function flushQueue() {
     addresses.forEach((addr) => {
       cache.set(addr, null);
     });
-    console.error('[usePrimaryName] Failed to resolve names', error);
+    console.warn('[usePrimaryName] Failed to resolve names', error);
   }
 }
 
