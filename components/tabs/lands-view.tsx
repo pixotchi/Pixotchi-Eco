@@ -492,25 +492,25 @@ export default function LandsView() {
 
   return (
     <div className="space-y-4">
-      {/* Batch Claim Card - Only shows if there are claimable rewards */}
-      {lands.length > 0 && (
-        <BatchClaimCard
-          lands={lands}
-          onSuccess={() => {
-            fetchBuildingData(); // Refresh current land buildings
-            // Also refresh selected land to update warehouse numbers
-            if (selectedLand) {
-              getLandById(selectedLand.tokenId).then(latest => {
-                if (latest) setSelectedLand(latest);
-              });
-            }
-          }}
-        />
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* StatusBar replaces BalanceCard globally under header */}
-
+      <div className={`grid grid-cols-1 gap-4 xl:mx-auto xl:w-full ${lands.length > 1
+        ? "xl:max-w-[860px] xl:grid-cols-2 xl:items-start"
+        : "xl:max-w-[420px]"
+        }`}>
+        {/* Batch Claim Card - Only shows if there are claimable rewards */}
+        {lands.length > 0 && (
+          <BatchClaimCard
+            lands={lands}
+            onSuccess={() => {
+              fetchBuildingData(); // Refresh current land buildings
+              // Also refresh selected land to update warehouse numbers
+              if (selectedLand) {
+                getLandById(selectedLand.tokenId).then(latest => {
+                  if (latest) setSelectedLand(latest);
+                });
+              }
+            }}
+          />
+        )}
         {lands.length > 1 && (
           <Card className="rounded-2xl">
             <CardHeader><CardTitle>Select Land</CardTitle></CardHeader>
