@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.7.40",
+  "version": "1.7.41",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "3.0.71",
-    "@ai-sdk/google": "3.0.64",
-    "@ai-sdk/openai": "3.0.53",
-    "@base-org/account": "2.5.4",
+    "@ai-sdk/anthropic": "3.0.72",
+    "@ai-sdk/google": "3.0.65",
+    "@ai-sdk/openai": "3.0.54",
+    "@base-org/account": "2.5.5",
     "@base-org/account-ui": "1.0.1",
     "@coinbase/cdp-sdk": "1.48.2",
     "@farcaster/miniapp-node": "0.2.0",
@@ -38,7 +38,7 @@
     "@upstash/redis": "1.37.0",
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
-    "ai": "6.0.168",
+    "ai": "6.0.170",
     "bs58": "6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -81,7 +81,7 @@
   },
   "overrides": {
     "@wagmi/connectors": {
-      "@base-org/account": "2.5.4"
+      "@base-org/account": "2.5.5"
     },
     "axios": "1.15.0",
     "pino": "10.3.1",
