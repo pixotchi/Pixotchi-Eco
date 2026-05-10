@@ -32,12 +32,16 @@ const PLANT_IMAGES: Record<number, string> = {
   5: '/icons/plant5.png',   // TYJ
 };
 
+const SHARE_LINK_RETRY_DELAYS_MS = [0, 750, 1500] as const;
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps) {
   const frame = useFrameContext();
   const [isSharing, setIsSharing] = useState(false);
   const [shortUrl, setShortUrl] = useState<string>("");
   const [isGeneratingUrl, setIsGeneratingUrl] = useState(false);
   const [generationAttemptKey, setGenerationAttemptKey] = useState<string | null>(null);
+  const [generationFailed, setGenerationFailed] = useState(false);
 
   const isMiniApp = Boolean(frame?.isInMiniApp);
   const fallbackShareUrl = useMemo(() => {
@@ -64,26 +68,32 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     let errorMessage: string | null = null;
 
     try {
-      const response = await fetch("/api/share/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: data.address,
-          basename: data.basename,
-          strain: String(data.strainId),
-          name: data.strainName,
-          mintedAt: data.mintedAt,
-          tx: data.txHash,
-        }),
-      });
+      for (const delayMs of SHARE_LINK_RETRY_DELAYS_MS) {
+        if (delayMs > 0) await wait(delayMs);
 
-      if (response.ok) {
-        const result = await response.json();
-        return typeof result.shortUrl === "string" ? result.shortUrl : "";
-      } else {
+        const response = await fetch("/api/share/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address: data.address,
+            basename: data.basename,
+            strain: String(data.strainId),
+            name: data.strainName,
+            mintedAt: data.mintedAt,
+            tx: data.txHash,
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (typeof result.shortUrl === "string" && result.shortUrl) {
+            return result.shortUrl;
+          }
+        }
+
         console.error("Failed to generate short URL - server returned error");
-        errorMessage = "Unable to generate share link";
       }
+      errorMessage = "Unable to generate share link";
     } catch (error) {
       console.error("Failed to generate short URL:", error);
       errorMessage = "Unable to generate share link";
@@ -102,6 +112,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
     let cancelled = false;
     setGenerationAttemptKey(shareRequestKey);
+    setGenerationFailed(false);
 
     void (async () => {
       try {
@@ -112,6 +123,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
       } catch (error) {
         if (cancelled) return;
         console.warn("Share link generation failed", error);
+        setGenerationFailed(true);
         toast.error("Unable to generate share link");
       }
     })();
@@ -121,7 +133,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     };
   }, [data, generateShortUrl, generationAttemptKey, isGeneratingUrl, open, shareRequestKey, shortUrl]);
 
-  const shareUrl = shortUrl || fallbackShareUrl;
+  const canUseFallbackShareUrl = generationFailed && !shortUrl;
+  const shareUrl = shortUrl || (canUseFallbackShareUrl ? fallbackShareUrl : "");
 
   // Enhanced share text with engaging copy
   const shareText = useMemo(() => {
@@ -141,9 +154,9 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
   }, [data, shareUrl, shareText]);
 
   const handleCopyLink = useCallback(async () => {
-    if (!shareUrl) return;
+    if (!shortUrl) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(shortUrl);
       toast.success("Share link copied! 🎉");
     } catch (error) {
       console.warn("Copy failed", error);
@@ -160,7 +173,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
         toast.error("Failed to copy link");
       }
     }
-  }, [shareUrl]);
+  }, [shortUrl]);
 
   const handleMiniAppShare = useCallback(async () => {
     if (!data || !frame?.isInMiniApp) return;
@@ -196,6 +209,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
       setShortUrl("");
       setIsGeneratingUrl(false);
       setGenerationAttemptKey(null);
+      setGenerationFailed(false);
     }
     onOpenChange(newOpen);
   }, [onOpenChange]);
@@ -259,33 +273,33 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 <Button
                   className="w-full"
                   onClick={handleMiniAppShare}
-                  disabled={isSharing || isGeneratingUrl}
+                  disabled={isSharing || isGeneratingUrl || !shareUrl}
                   aria-busy={isSharing || isGeneratingUrl}
                   aria-label={`Share your ${data.strainName} mint on Farcaster`}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
-                  {isGeneratingUrl ? "Generating link..." : "Share"}
+                  {isGeneratingUrl ? "Generating link..." : canUseFallbackShareUrl ? "Share app link" : "Share"}
                 </Button>
               ) : (
                 <Button
                   className="w-full"
                   onClick={handleTwitterShare}
-                  disabled={isGeneratingUrl}
+                  disabled={isGeneratingUrl || !shareUrl}
                   aria-busy={isGeneratingUrl}
                   aria-label={`Share your ${data.strainName} mint on Twitter`}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
-                  {isGeneratingUrl ? "Generating link..." : "Share"}
+                  {isGeneratingUrl ? "Generating link..." : canUseFallbackShareUrl ? "Share app link" : "Share"}
                 </Button>
               )}
             </div>
 
             {/* Share URL with inline copy button */}
-            {shareUrl && !isGeneratingUrl && (
+            {shortUrl && !isGeneratingUrl && (
               <div className="relative">
                 <input
                   readOnly
-                  value={shareUrl.replace('https://', '')}
+                  value={shortUrl.replace('https://', '')}
                   data-share-url
                   onFocus={(e) => e.target.select()}
                   className="w-full text-xs font-mono bg-muted text-muted-foreground p-3 pr-10 rounded border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-text"
