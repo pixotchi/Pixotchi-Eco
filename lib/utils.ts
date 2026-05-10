@@ -2,7 +2,7 @@ import { type ClassValue,clsx } from "clsx";
 import { intervalToDuration } from "date-fns";
 import { twMerge } from "tailwind-merge";
 import { ADDRESS_TRUNCATION } from "./constants";
-import { ADDRESS_REGEX,CREATOR_TOKEN_ADDRESS,CRYPTICPOET_TOKEN_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from "./contracts";
+import { ADDRESS_REGEX,CREATOR_TOKEN_ADDRESS,CRYPTICPOET_TOKEN_ADDRESS,JESSE_TOKEN_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from "./contracts";
 import { type Plant } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
@@ -208,6 +208,7 @@ export function getCasinoTokenImage(tokenAddress: string | null | undefined): st
   if (normalized === PIXOTCHI_TOKEN_ADDRESS.toLowerCase()) return '/PixotchiKit/COIN.svg';
   if (normalized === CREATOR_TOKEN_ADDRESS.toLowerCase()) return '/icons/cc.png';
   if (normalized === CRYPTICPOET_TOKEN_ADDRESS.toLowerCase()) return '/icons/poet.png';
+  if (normalized === JESSE_TOKEN_ADDRESS.toLowerCase()) return '/icons/jessetoken.png';
   return '/PixotchiKit/COIN.svg';
 }
 
