@@ -33,6 +33,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   // Resolve params in Next.js 15
   const { id } = await params;
+  const shareUrl = `${BASE_URL}/share/m/${id}`;
   
   // Resolve the short ID from Redis
   const data = await redisGetJSON<MintShareData>(`share:mint:${id}`);
@@ -42,6 +43,9 @@ export async function generateMetadata(
     return {
       title: "Pixotchi Mini - Plant & Earn",
       description: "Join Pixotchi Mini – Plant your SEED and climb the leaderboard to earn ETH rewards!",
+      alternates: {
+        canonical: shareUrl,
+      },
     };
   }
 
@@ -78,10 +82,13 @@ export async function generateMetadata(
   return {
     title: `I just minted a ${data.name}!`,
     description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
+    alternates: {
+      canonical: shareUrl,
+    },
     openGraph: {
       title: `I just minted a ${data.name}!`,
       description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
-      url: `${BASE_URL}/share/m/${id}`,
+      url: shareUrl,
       type: "website",
       images: [{ url: farcasterImageUrl, width: 1200, height: 800, alt: data.name }],
     },
