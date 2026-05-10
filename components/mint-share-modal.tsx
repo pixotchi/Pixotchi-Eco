@@ -14,7 +14,7 @@ import type { MintShareData } from "@/lib/types";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { Copy,Share2,Sparkles } from "lucide-react";
 import Image from "next/image";
-import { useCallback,useEffect,useMemo,useState } from "react";
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 
 interface MintShareModalProps {
@@ -40,8 +40,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
   const [isSharing, setIsSharing] = useState(false);
   const [shortUrl, setShortUrl] = useState<string>("");
   const [isGeneratingUrl, setIsGeneratingUrl] = useState(false);
-  const [generationAttemptKey, setGenerationAttemptKey] = useState<string | null>(null);
   const [generationFailed, setGenerationFailed] = useState(false);
+  const generationAttemptKeyRef = useRef<string | null>(null);
 
   const isMiniApp = Boolean(frame?.isInMiniApp);
   const fallbackShareUrl = useMemo(() => {
@@ -108,10 +108,10 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
   useEffect(() => {
     if (!open || !data || !shareRequestKey) return;
-    if (shortUrl || isGeneratingUrl || generationAttemptKey === shareRequestKey) return;
+    if (shortUrl || generationAttemptKeyRef.current === shareRequestKey) return;
 
     let cancelled = false;
-    setGenerationAttemptKey(shareRequestKey);
+    generationAttemptKeyRef.current = shareRequestKey;
     setGenerationFailed(false);
 
     void (async () => {
@@ -131,7 +131,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     return () => {
       cancelled = true;
     };
-  }, [data, generateShortUrl, generationAttemptKey, isGeneratingUrl, open, shareRequestKey, shortUrl]);
+  }, [data, generateShortUrl, open, shareRequestKey, shortUrl]);
 
   const canUseFallbackShareUrl = generationFailed && !shortUrl;
   const shareUrl = shortUrl || (canUseFallbackShareUrl ? fallbackShareUrl : "");
@@ -208,7 +208,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     if (!newOpen) {
       setShortUrl("");
       setIsGeneratingUrl(false);
-      setGenerationAttemptKey(null);
+      generationAttemptKeyRef.current = null;
       setGenerationFailed(false);
     }
     onOpenChange(newOpen);
