@@ -37,6 +37,10 @@ interface BlackjackDialogProps {
     selectedToken: string | null;
 }
 
+const MAX_TOKEN_APPROVAL = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
+const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
  * Simplified UI phase model for server-signed randomness flow
  * No more commit-reveal phases!
@@ -906,11 +910,22 @@ export default function BlackjackDialog({
     // Handle approval success
     const handleApproveSuccess = useCallback(async () => {
         toast.success('Token approved!');
-        if (address && config) {
+        if (!address || !config) return;
+
+        setAllowanceWei(MAX_TOKEN_APPROVAL);
+
+        for (const delayMs of APPROVAL_REFRESH_DELAYS_MS) {
+            if (delayMs > 0) await wait(delayMs);
+
             const allowance = await checkCasinoApproval(address, config.bettingToken);
-            setAllowanceWei(allowance);
+            if (allowance >= requiredApprovalWei) {
+                setAllowanceWei(allowance);
+                return;
+            }
         }
-    }, [address, config]);
+
+        console.warn('Approval transaction succeeded, but allowance read has not caught up yet.');
+    }, [address, config, requiredApprovalWei]);
 
     // Play again
     const handlePlayAgain = useCallback(() => {

@@ -40,6 +40,12 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
   const [generationAttemptKey, setGenerationAttemptKey] = useState<string | null>(null);
 
   const isMiniApp = Boolean(frame?.isInMiniApp);
+  const fallbackShareUrl = useMemo(() => {
+    if (typeof window !== "undefined" && window.location.origin) {
+      return window.location.origin;
+    }
+    return "https://mini.pixotchi.tech";
+  }, []);
   const shareRequestKey = useMemo(() => {
     if (!data) return null;
     return [
@@ -115,7 +121,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     };
   }, [data, generateShortUrl, generationAttemptKey, isGeneratingUrl, open, shareRequestKey, shortUrl]);
 
-  const shareUrl = shortUrl;
+  const shareUrl = shortUrl || fallbackShareUrl;
 
   // Enhanced share text with engaging copy
   const shareText = useMemo(() => {
@@ -157,7 +163,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
   }, [shareUrl]);
 
   const handleMiniAppShare = useCallback(async () => {
-    if (!data || !shareUrl || !frame?.isInMiniApp) return;
+    if (!data || !frame?.isInMiniApp) return;
     setIsSharing(true);
     try {
       await sdk.actions.composeCast({
@@ -253,7 +259,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 <Button
                   className="w-full"
                   onClick={handleMiniAppShare}
-                  disabled={isSharing || isGeneratingUrl || !shareUrl}
+                  disabled={isSharing || isGeneratingUrl}
                   aria-busy={isSharing || isGeneratingUrl}
                   aria-label={`Share your ${data.strainName} mint on Farcaster`}
                 >
@@ -264,7 +270,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 <Button
                   className="w-full"
                   onClick={handleTwitterShare}
-                  disabled={isGeneratingUrl || !shareUrl}
+                  disabled={isGeneratingUrl}
                   aria-busy={isGeneratingUrl}
                   aria-label={`Share your ${data.strainName} mint on Twitter`}
                 >

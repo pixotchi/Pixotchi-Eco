@@ -44,6 +44,10 @@ interface PlacedBet {
     payout: string;
 }
 
+const MAX_TOKEN_APPROVAL = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
+const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete, selectedToken }: CasinoDialogProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
@@ -377,12 +381,31 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         setWheelSpinning(true);
     }, []);
 
-    const refreshApproval = useCallback(async () => {
-        if (address && config?.bettingToken) {
-            const approval = await checkCasinoApproval(address, config.bettingToken);
-            setAllowanceWei(approval);
+    const refreshApproval = useCallback(async (optimistic = false) => {
+        if (!address || !config?.bettingToken) return;
+
+        if (optimistic) {
+            setAllowanceWei(MAX_TOKEN_APPROVAL);
         }
-    }, [address, config]);
+
+        let latestAllowance = BigInt(0);
+        for (const delayMs of APPROVAL_REFRESH_DELAYS_MS) {
+            if (delayMs > 0) await wait(delayMs);
+
+            const approval = await checkCasinoApproval(address, config.bettingToken);
+            latestAllowance = approval;
+            if (approval >= requiredApprovalWei) {
+                setAllowanceWei(approval);
+                return;
+            }
+        }
+
+        if (!optimistic) {
+            setAllowanceWei(latestAllowance);
+        } else {
+            console.warn('Approval transaction succeeded, but allowance read has not caught up yet.');
+        }
+    }, [address, config?.bettingToken, requiredApprovalWei]);
 
     const getNumberColor = (n: number): string => n === 0 ? 'bg-green-600' : RED_NUMBERS.includes(n) ? 'bg-red-600' : 'bg-gray-900';
 
@@ -693,7 +716,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 Roulette disabled
                             </Button>
                         ) : !hasApproval ? (
-                            <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={config?.bettingToken as `0x${string}`} onSuccess={refreshApproval} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
+                            <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={config?.bettingToken as `0x${string}`} onSuccess={() => refreshApproval(true)} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
                         ) : isInsufficientBalance && !pendingGame ? (
                             <Button className="w-full" disabled variant="destructive">
                                 Insufficient Balance
