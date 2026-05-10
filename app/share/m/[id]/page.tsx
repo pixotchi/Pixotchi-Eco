@@ -1,13 +1,20 @@
-import { PIXOTCHI_BASE_APP_REFERRAL_URL } from "@/lib/pixotchi-links";
 import { redisGetJSON } from "@/lib/redis";
 import type { MintShareData } from "@/lib/types";
 import { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 const DEPLOYMENT_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 const BASE_URL = process.env.NEXT_PUBLIC_URL || DEPLOYMENT_URL || "https://mini.pixotchi.tech";
+const PLANT_IMAGE_BY_STRAIN: Record<number, string> = {
+  1: "/icons/plant1.svg",
+  2: "/icons/plant2.svg",
+  3: "/icons/plant3WithFrame.svg",
+  4: "/icons/plant4WithFrame.svg",
+  5: "/icons/plant5.png",
+};
 
 function getOgImageUrl(data: MintShareData, platform: 'twitter' | 'farcaster' = 'farcaster') {
   const og = new URL("/api/og/mint", BASE_URL);
@@ -102,23 +109,37 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
     notFound();
   }
 
-  const redirectUrl = PIXOTCHI_BASE_APP_REFERRAL_URL;
+  const plantName = data.name || "Plant";
+  const strainId = Number(data.strain || 1);
+  const plantImage = PLANT_IMAGE_BY_STRAIN[strainId] || PLANT_IMAGE_BY_STRAIN[1];
 
-  // Return a page with meta refresh for crawlers and immediate JS redirect for users
+  // Keep this page stable so social crawlers can render the mint-specific OG image.
   return (
-    <html>
-      <head>
-        <meta httpEquiv="refresh" content={`0;url=${redirectUrl}`} />
-      </head>
-      <body>
-        <script dangerouslySetInnerHTML={{
-          __html: `window.location.href = ${JSON.stringify(redirectUrl)};`
-        }} />
-        <noscript>
-          <p>Redirecting to Pixotchi Mini...</p>
-          <a href={redirectUrl}>Click here if you are not redirected</a>
-        </noscript>
-      </body>
-    </html>
+    <main className="relative flex min-h-dvh items-center justify-center bg-gradient-to-b from-background via-background to-muted/60 px-6 py-12">
+      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 text-center">
+        <Image
+          src={plantImage}
+          alt={`${plantName} plant`}
+          width={128}
+          height={128}
+          className="h-32 w-32 object-contain"
+        />
+        <div className="space-y-3">
+          <p className="text-xs uppercase tracking-[0.35em] text-primary/70">Pixotchi Mini</p>
+          <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">
+            I just minted a {plantName}!
+          </h1>
+          <p className="mx-auto max-w-xl text-sm text-muted-foreground sm:text-base">
+            Join me in Pixotchi Mini, plant your own SEED, and climb the leaderboard to earn ETH rewards.
+          </p>
+        </div>
+        <a
+          href={BASE_URL}
+          className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Play Pixotchi Mini
+        </a>
+      </div>
+    </main>
   );
 }
