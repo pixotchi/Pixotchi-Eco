@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuItem,DropdownMenuSeparator,DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -9,6 +10,7 @@ import { getBaseReadClient,waitForBaseReceipt } from "@/lib/base-rpc";
 import { appendBuilderSuffix } from "@/lib/builder-code";
 import { BATCH_ROUTER_ADDRESS,getLandsByOwner,getPlantsByOwner,LAND_CONTRACT_ADDRESS,PIXOTCHI_NFT_ADDRESS,routerBatchTransfer,transferLands,transferPlants } from "@/lib/contracts";
 import { Land,Plant } from "@/lib/types";
+import { ChevronDown } from "lucide-react";
 import { useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { encodeFunctionData,getAddress,isAddress } from "viem";
@@ -49,6 +51,8 @@ const isUserRejectedError = (error: unknown) => {
     message.includes('user rejected')
   );
 };
+
+const formatSelectedLabel = (count: number) => `${count} selected`;
 
 export default function TransferAssetsDialog({ open, onOpenChange }: TransferAssetsDialogProps) {
   const { address } = useAccount();
@@ -386,48 +390,57 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     <span>Plants selected</span>
                     <span className="text-xs text-muted-foreground">{selectedPlantsCount}/{plantsList.length}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 flex-1"
-                      onClick={() => setSelectedPlantIds(plantsList.map((plant) => plant.id))}
-                      disabled={allPlantsSelected}
-                    >
-                      Select all
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 flex-1"
-                      onClick={() => setSelectedPlantIds([])}
-                      disabled={selectedPlantsCount === 0}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                  <div className="max-h-44 overflow-y-auto rounded-md border border-border/60 divide-y divide-border/60">
-                    {plantsList.map((plant) => {
-                      const checked = selectedPlantIds.includes(plant.id);
-                      return (
-                        <label
-                          key={plant.id}
-                          className="flex min-h-10 cursor-pointer select-none items-center gap-3 px-3 py-2 hover:bg-muted/50"
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14 w-full justify-between px-4 text-base font-semibold"
+                      >
+                        <span>{formatSelectedLabel(selectedPlantsCount)}</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-1 p-1">
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={allPlantsSelected}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedPlantIds(plantsList.map((plant) => plant.id));
+                          }}
                         >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 shrink-0 accent-current"
+                          Select all
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={selectedPlantsCount === 0}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedPlantIds([]);
+                          }}
+                        >
+                          Clear
+                        </DropdownMenuItem>
+                      </div>
+                      <DropdownMenuSeparator />
+                      {plantsList.map((plant) => {
+                        const checked = selectedPlantIds.includes(plant.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={plant.id}
                             checked={checked}
-                            onChange={(event) => setPlantSelected(plant.id, event.currentTarget.checked)}
-                          />
-                          <span className="min-w-0 flex-1 truncate">{plant.name || `Plant #${plant.id}`}</span>
-                          {plant.name && <span className="shrink-0 text-xs text-muted-foreground">#{plant.id}</span>}
-                        </label>
-                      );
-                    })}
-                  </div>
+                            onCheckedChange={(nextChecked) => setPlantSelected(plant.id, nextChecked === true)}
+                            onSelect={(event) => event.preventDefault()}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{plant.name || `Plant #${plant.id}`}</span>
+                            {plant.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{plant.id}</span>}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               )}
 
@@ -437,49 +450,58 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     <span>Lands selected</span>
                     <span className="text-xs text-muted-foreground">{selectedLandsCount}/{landsList.length}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 flex-1"
-                      onClick={() => setSelectedLandIds(landsList.map((land) => land.tokenId.toString()))}
-                      disabled={allLandsSelected}
-                    >
-                      Select all
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 flex-1"
-                      onClick={() => setSelectedLandIds([])}
-                      disabled={selectedLandsCount === 0}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                  <div className="max-h-44 overflow-y-auto rounded-md border border-border/60 divide-y divide-border/60">
-                    {landsList.map((land) => {
-                      const id = land.tokenId.toString();
-                      const checked = selectedLandIds.includes(id);
-                      return (
-                        <label
-                          key={id}
-                          className="flex min-h-10 cursor-pointer select-none items-center gap-3 px-3 py-2 hover:bg-muted/50"
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14 w-full justify-between px-4 text-base font-semibold"
+                      >
+                        <span>{formatSelectedLabel(selectedLandsCount)}</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-1 p-1">
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={allLandsSelected}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedLandIds(landsList.map((land) => land.tokenId.toString()));
+                          }}
                         >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 shrink-0 accent-current"
+                          Select all
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={selectedLandsCount === 0}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedLandIds([]);
+                          }}
+                        >
+                          Clear
+                        </DropdownMenuItem>
+                      </div>
+                      <DropdownMenuSeparator />
+                      {landsList.map((land) => {
+                        const id = land.tokenId.toString();
+                        const checked = selectedLandIds.includes(id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={id}
                             checked={checked}
-                            onChange={(event) => setLandSelected(id, event.currentTarget.checked)}
-                          />
-                          <span className="min-w-0 flex-1 truncate">{land.name || `Land #${id}`}</span>
-                          {land.name && <span className="shrink-0 text-xs text-muted-foreground">#{id}</span>}
-                        </label>
-                      );
-                    })}
-                  </div>
+                            onCheckedChange={(nextChecked) => setLandSelected(id, nextChecked === true)}
+                            onSelect={(event) => event.preventDefault()}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{land.name || `Land #${id}`}</span>
+                            {land.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{id}</span>}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               )}
             </div>
