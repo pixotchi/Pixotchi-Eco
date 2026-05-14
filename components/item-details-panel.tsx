@@ -28,6 +28,16 @@ import { useEffect,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
 
+const parseFenceDaysInput = (value: string): number | null => {
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
+
+const clampFenceDays = (value: number, min: number, max: number) => (
+  Math.min(Math.max(value, min), max)
+);
+
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
   selectedPlant: Plant | null;
@@ -52,6 +62,7 @@ export default function ItemDetailsPanel({
   const [, setBalanceLoading] = useState(true);
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
   const [fenceV2Days, setFenceV2Days] = useState<number>(1);
+  const [fenceV2DaysInput, setFenceV2DaysInput] = useState("1");
   const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
   const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
   const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
@@ -157,12 +168,6 @@ export default function ItemDetailsPanel({
         const config = await getFenceV2Config();
         if (!cancelled && config) {
           setFenceV2Config(config);
-          setFenceV2Days((prev) => {
-            const min = Math.max(1, config.minDurationDays || 1);
-            const max = Math.max(min, config.maxDurationDays || 30);
-            if (prev >= min && prev <= max) return prev;
-            return min;
-          });
         }
       } catch (error) {
         console.error('Failed to load Fence config:', error);
@@ -176,13 +181,80 @@ export default function ItemDetailsPanel({
     };
   }, [isFenceItem]);
 
+  // Calculate fence-related values (must be before any early returns to comply with Rules of Hooks)
+  const currentTimeSec = Math.floor(Date.now() / 1000);
+  const fenceV2State = selectedPlant?.fenceV2 ?? null;
+  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > currentTimeSec);
+  const fenceV2BlockedByV1 = Boolean(fenceV2State?.v1Active);
+
+  const plantTimeUntilStarving = Number(selectedPlant?.timeUntilStarving || 0);
+  const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
+  const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
+  const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
+
+  // These useMemo hooks must be called unconditionally (before any early returns)
+  const fenceV2Bounds = useMemo(() => {
+    const minFromConfig = fenceV2Config ? Math.max(1, fenceV2Config.minDurationDays || 1) : 1;
+    const maxFromConfig = fenceV2Config ? fenceV2Config.maxDurationDays || 30 : 30;
+    const todLimitedMax = plantTodDaysCap > 0 ? Math.min(maxFromConfig, plantTodDaysCap) : plantTodDaysCap;
+    const todCapBreached = todLimitedMax < minFromConfig;
+    const max = todCapBreached ? minFromConfig : Math.max(minFromConfig, todLimitedMax);
+    return { min: minFromConfig, max, todCapBreached };
+  }, [fenceV2Config, plantTodDaysCap]);
+
+  const rawFenceV2Days = useMemo(
+    () => parseFenceDaysInput(fenceV2DaysInput),
+    [fenceV2DaysInput]
+  );
+
+  const validFenceV2Days = useMemo(() => {
+    if (rawFenceV2Days === null) return null;
+    if (rawFenceV2Days < fenceV2Bounds.min || rawFenceV2Days > fenceV2Bounds.max) return null;
+    return rawFenceV2Days;
+  }, [rawFenceV2Days, fenceV2Bounds.min, fenceV2Bounds.max]);
+
+  const fenceV2InputInvalid = isFenceItem && !fenceV2Bounds.todCapBreached && validFenceV2Days === null;
+  const activeFenceV2Days = validFenceV2Days ?? fenceV2Days;
+
+  const fenceV2Calls = useMemo(() => {
+    if (!selectedPlant || validFenceV2Days === null) return [];
+    return [buildFenceV2PurchaseCall(selectedPlant.id, validFenceV2Days)];
+  }, [selectedPlant, validFenceV2Days]);
+
+  const fenceButtonText = fenceV2Active
+    ? `Extend Fence (+${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'})`
+    : `Buy Fence (${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'})`;
+
+  // This useEffect must also be before any early returns
   useEffect(() => {
     if (!isFenceItem) return;
+    if (fenceV2Bounds.todCapBreached) return;
+    if (fenceV2Days > fenceV2Bounds.max) {
+      setFenceV2Days(fenceV2Bounds.max);
+      setFenceV2DaysInput(fenceV2Bounds.max.toString());
+    } else if (fenceV2Days < fenceV2Bounds.min) {
+      setFenceV2Days(fenceV2Bounds.min);
+      setFenceV2DaysInput(fenceV2Bounds.min.toString());
+    }
+  }, [isFenceItem, fenceV2Bounds, fenceV2Days]);
+
+  useEffect(() => {
+    if (!isFenceItem || validFenceV2Days === null || validFenceV2Days === fenceV2Days) return;
+    setFenceV2Days(validFenceV2Days);
+  }, [isFenceItem, validFenceV2Days, fenceV2Days]);
+
+  useEffect(() => {
+    if (!isFenceItem || fenceV2Bounds.todCapBreached || validFenceV2Days === null) {
+      setFenceV2Quote(BigInt(0));
+      setFenceV2QuoteLoading(false);
+      return;
+    }
+
     let cancelled = false;
     const fetchQuote = async () => {
       setFenceV2QuoteLoading(true);
       try {
-        const quote = await quoteFenceV2(fenceV2Days);
+        const quote = await quoteFenceV2(validFenceV2Days);
         if (!cancelled) {
           setFenceV2Quote(quote);
         }
@@ -203,7 +275,7 @@ export default function ItemDetailsPanel({
     return () => {
       cancelled = true;
     };
-  }, [isFenceItem, fenceV2Days]);
+  }, [isFenceItem, fenceV2Bounds.todCapBreached, validFenceV2Days]);
 
   // Fetch ETH quote when ETH mode is active - only for per-unit price (fence uses its own quote)
   useEffect(() => {
@@ -257,46 +329,14 @@ export default function ItemDetailsPanel({
     };
   }, [isSmartWallet, isEthMode, isSolana, isFenceItem, fenceV2Quote, basePrice]);
 
-  // Calculate fence-related values (must be before any early returns to comply with Rules of Hooks)
-  const currentTimeSec = Math.floor(Date.now() / 1000);
-  const fenceV2State = selectedPlant?.fenceV2 ?? null;
-  const fenceV2Active = Boolean(fenceV2State?.isActive && fenceV2State.activeUntil > currentTimeSec);
-  const fenceV2BlockedByV1 = Boolean(fenceV2State?.v1Active);
-
-  const plantTimeUntilStarving = Number(selectedPlant?.timeUntilStarving || 0);
-  const plantSecondsLeft = Math.max(0, plantTimeUntilStarving - currentTimeSec);
-  const maxFenceSecondsAllowed = Math.max(0, plantSecondsLeft - 1);
-  const plantTodDaysCap = Math.floor(maxFenceSecondsAllowed / (24 * 60 * 60));
-
-  // These useMemo hooks must be called unconditionally (before any early returns)
-  const fenceV2Bounds = useMemo(() => {
-    const minFromConfig = fenceV2Config ? Math.max(1, fenceV2Config.minDurationDays || 1) : 1;
-    const maxFromConfig = fenceV2Config ? fenceV2Config.maxDurationDays || 30 : 30;
-    const todLimitedMax = plantTodDaysCap > 0 ? Math.min(maxFromConfig, plantTodDaysCap) : plantTodDaysCap;
-    const todCapBreached = todLimitedMax < minFromConfig;
-    const max = todCapBreached ? minFromConfig : Math.max(minFromConfig, todLimitedMax);
-    return { min: minFromConfig, max, todCapBreached };
-  }, [fenceV2Config, plantTodDaysCap]);
-
-  const fenceV2Calls = useMemo(() => {
-    if (!selectedPlant) return [];
-    return [buildFenceV2PurchaseCall(selectedPlant.id, fenceV2Days)];
-  }, [selectedPlant, fenceV2Days]);
-
-  const fenceButtonText = fenceV2Active
-    ? `Extend Fence (+${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`
-    : `Buy Fence (${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`;
-
-  // This useEffect must also be before any early returns
-  useEffect(() => {
-    if (!isFenceItem) return;
+  const commitFenceV2DaysInput = () => {
     if (fenceV2Bounds.todCapBreached) return;
-    if (fenceV2Days > fenceV2Bounds.max) {
-      setFenceV2Days(fenceV2Bounds.max);
-    } else if (fenceV2Days < fenceV2Bounds.min) {
-      setFenceV2Days(fenceV2Bounds.min);
-    }
-  }, [isFenceItem, fenceV2Bounds, fenceV2Days]);
+    const nextDays = rawFenceV2Days === null
+      ? fenceV2Days
+      : clampFenceDays(rawFenceV2Days, fenceV2Bounds.min, fenceV2Bounds.max);
+    setFenceV2Days(nextDays);
+    setFenceV2DaysInput(nextDays.toString());
+  };
 
   // Early return AFTER all hooks have been called
   if (!selectedItem || !selectedPlant) {
@@ -318,6 +358,11 @@ export default function ItemDetailsPanel({
   const disabledMessage = (() => {
     if (!hasQuantitySelected && itemType === 'garden') return 'Select quantity above';
     if (isFenceItem && fenceV2Bounds.todCapBreached) return 'Fence duration exceeds plant TOD';
+    if (isFenceItem && fenceV2InputInvalid) {
+      if (fenceV2DaysInput.trim() === '') return 'Enter fence duration';
+      if (fenceV2Bounds.min === fenceV2Bounds.max) return `Use ${fenceV2Bounds.min} day${fenceV2Bounds.min === 1 ? '' : 's'}`;
+      return `Use ${fenceV2Bounds.min}-${fenceV2Bounds.max} days`;
+    }
     if (isFenceItem && fenceV2BlockedByV1) return 'Existing fence active. Wait for expiry.';
     if (hasInsufficientFunds) return 'Insufficient SEED Balance';
     if (canBundle && itemType === 'garden' && !isSmartWallet) {
@@ -327,7 +372,7 @@ export default function ItemDetailsPanel({
   })();
 
   const headerTitle = isFenceItem
-    ? `Fence (${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'})`
+    ? `Fence (${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'})`
     : itemType === 'shop'
       ? `Use 1 ${selectedItem.name}`
       : quantity === 0
@@ -352,7 +397,7 @@ export default function ItemDetailsPanel({
 
   const getItemBenefits = () => {
     if (isFenceItem) {
-      return `${fenceV2Days} day${fenceV2Days === 1 ? '' : 's'} protection`;
+      return `${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'} protection`;
     }
 
     if (quantity === 0 && itemType === 'garden') return 'Select quantity above';
@@ -440,16 +485,24 @@ export default function ItemDetailsPanel({
               <span className="text-muted-foreground">Duration (days):</span>
               <div className="flex items-center gap-2">
                 <Input
-                  type="number"
-                  min={fenceV2Bounds.min}
-                  max={fenceV2Bounds.max}
-                  value={fenceV2Days}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={fenceV2DaysInput}
                   onChange={(event) => {
-                    const value = Number(event.target.value);
-                    if (Number.isNaN(value)) return;
-                    const clamped = Math.min(Math.max(value, fenceV2Bounds.min), fenceV2Bounds.max);
-                    setFenceV2Days(clamped);
+                    const value = event.target.value.trim();
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setFenceV2DaysInput(value);
+                    }
                   }}
+                  onBlur={commitFenceV2DaysInput}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      commitFenceV2DaysInput();
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  aria-invalid={fenceV2InputInvalid}
                   className="w-20"
                 />
                 <span className="text-xs text-muted-foreground">
@@ -559,7 +612,7 @@ export default function ItemDetailsPanel({
                 // Fence purchases use specialized bundle
                 <SwapFencePurchaseBundle
                   plantId={selectedPlant.id}
-                  days={fenceV2Days}
+                  days={activeFenceV2Days}
                   ethAmount={ethQuote.ethAmountWithBuffer}
                   minSeedOut={fenceV2Quote}
                   onSuccess={() => {
@@ -571,10 +624,10 @@ export default function ItemDetailsPanel({
                   buttonText={
                     ethBalance < ethQuote.ethAmountWithBuffer
                       ? "Insufficient ETH Balance"
-                      : `Buy ${fenceV2Days} Day${fenceV2Days === 1 ? '' : 's'} Fence with ETH`
+                      : `Buy ${activeFenceV2Days} Day${activeFenceV2Days === 1 ? '' : 's'} Fence with ETH`
                   }
                   buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || fenceV2Bounds.todCapBreached || fenceV2BlockedByV1}
+                  disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || fenceV2Bounds.todCapBreached || fenceV2BlockedByV1 || fenceV2InputInvalid}
                 />
               ) : (
                 // Regular item purchases
@@ -646,7 +699,7 @@ export default function ItemDetailsPanel({
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={fenceButtonText}
                   buttonClassName="w-full"
-                  disabled={selectedPlant.status === 4 || fenceV2QuoteLoading || fenceV2BlockedByV1 || hasInsufficientFunds || fenceV2Bounds.todCapBreached}
+                  disabled={selectedPlant.status === 4 || fenceV2QuoteLoading || fenceV2BlockedByV1 || hasInsufficientFunds || fenceV2Bounds.todCapBreached || fenceV2InputInvalid}
                 />
               ) : (
                 <BuyShopItemTransaction
