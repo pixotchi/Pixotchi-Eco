@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuItem,DropdownMenuSeparator,DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -20,6 +20,39 @@ interface TransferAssetsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+type WalletErrorLike = {
+  code?: unknown;
+  cause?: { code?: unknown } | null;
+  name?: unknown;
+  shortMessage?: unknown;
+  message?: unknown;
+};
+
+const getWalletErrorDetails = (error: unknown): WalletErrorLike => {
+  if (!error || typeof error !== "object") return {};
+  return error as WalletErrorLike;
+};
+
+const getWalletErrorMessage = (error: unknown) => {
+  if (typeof error === "string") return error;
+  const details = getWalletErrorDetails(error);
+  const message = details.shortMessage ?? details.message;
+  return typeof message === "string" ? message : "";
+};
+
+const isUserRejectedError = (error: unknown) => {
+  const details = getWalletErrorDetails(error);
+  const message = getWalletErrorMessage(error).toLowerCase();
+  return (
+    details.code === 4001 ||
+    details.cause?.code === 4001 ||
+    details.name === 'UserRejectedRequestError' ||
+    message.includes('user rejected')
+  );
+};
+
+const formatSelectedLabel = (count: number) => `${count} selected`;
 
 export default function TransferAssetsDialog({ open, onOpenChange }: TransferAssetsDialogProps) {
   const { address } = useAccount();
@@ -149,6 +182,8 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   const selectedPlantsCount = selectedPlantIds.length;
   const selectedLandsCount = selectedLandIds.length;
   const hasSelectedAnything = selectedPlantsCount + selectedLandsCount > 0;
+  const allPlantsSelected = plantsList.length > 0 && selectedPlantsCount === plantsList.length;
+  const allLandsSelected = landsList.length > 0 && selectedLandsCount === landsList.length;
 
   // If router is configured, require approvals for any collection that has items
   const needsApprovals = useMemo(() => {
@@ -215,6 +250,26 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     setConfirmStep(true);
   };
 
+  const setPlantSelected = (plantId: number, selected: boolean) => {
+    setSelectedPlantIds((prev) => {
+      if (selected) {
+        if (prev.includes(plantId)) return prev;
+        return [...prev, plantId];
+      }
+      return prev.filter((id) => id !== plantId);
+    });
+  };
+
+  const setLandSelected = (landId: string, selected: boolean) => {
+    setSelectedLandIds((prev) => {
+      if (selected) {
+        if (prev.includes(landId)) return prev;
+        return [...prev, landId];
+      }
+      return prev.filter((id) => id !== landId);
+    });
+  };
+
   const onConfirm = async () => {
     if (!walletClient || !address) return;
     setLoading(true);
@@ -273,9 +328,8 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       onOpenChange(false);
       setConfirmStep(false);
       setAck(false);
-    } catch (e: any) {
-      const msg = (e?.shortMessage || e?.message || "").toString().toLowerCase();
-      if (e?.code === 4001 || e?.cause?.code === 4001 || e?.name === 'UserRejectedRequestError' || msg.includes('user rejected')) {
+    } catch (e) {
+      if (isUserRejectedError(e)) {
         toast('Transfer cancelled', { icon: '✖️' });
         // Exit confirm step to prevent any accidental re-trigger
         setConfirmStep(false);
@@ -331,74 +385,118 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
             <div className="space-y-3 rounded-lg border border-border/60 p-3">
               <p className="text-xs text-muted-foreground">Choose which assets to send.</p>
               {plantsList.length > 0 && (
-                <div className="space-y-1 text-sm">
+                <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span>Plants selected</span>
                     <span className="text-xs text-muted-foreground">{selectedPlantsCount}/{plantsList.length}</span>
                   </div>
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-full justify-between">
-                        <span>{selectedPlantsCount > 0 ? `${selectedPlantsCount} selected` : 'Select plants'}</span>
-                        <ChevronDown className="w-4 h-4" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14 w-full justify-between px-4 text-base font-semibold"
+                      >
+                        <span>{formatSelectedLabel(selectedPlantsCount)}</span>
+                        <ChevronDown className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
-                      {plantsList.map((plant) => (
-                        <DropdownMenuCheckboxItem
-                          key={plant.id}
-                          checked={selectedPlantIds.includes(plant.id)}
-                          onCheckedChange={(checked) => {
-                            const isChecked = checked === true;
-                            setSelectedPlantIds((prev) => {
-                              if (isChecked) {
-                                if (prev.includes(plant.id)) return prev;
-                                return [...prev, plant.id];
-                              }
-                              return prev.filter((id) => id !== plant.id);
-                            });
+                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-1 p-1">
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={allPlantsSelected}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedPlantIds(plantsList.map((plant) => plant.id));
                           }}
                         >
-                          {plant.name || `Plant #${plant.id}`}
-                        </DropdownMenuCheckboxItem>
-                      ))}
+                          Select all
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={selectedPlantsCount === 0}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedPlantIds([]);
+                          }}
+                        >
+                          Clear
+                        </DropdownMenuItem>
+                      </div>
+                      <DropdownMenuSeparator />
+                      {plantsList.map((plant) => {
+                        const checked = selectedPlantIds.includes(plant.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={plant.id}
+                            checked={checked}
+                            onCheckedChange={(nextChecked) => setPlantSelected(plant.id, nextChecked === true)}
+                            onSelect={(event) => event.preventDefault()}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{plant.name || `Plant #${plant.id}`}</span>
+                            {plant.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{plant.id}</span>}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               )}
 
               {landsList.length > 0 && (
-                <div className="space-y-1 text-sm">
+                <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span>Lands selected</span>
                     <span className="text-xs text-muted-foreground">{selectedLandsCount}/{landsList.length}</span>
                   </div>
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-full justify-between">
-                        <span>{selectedLandsCount > 0 ? `${selectedLandsCount} selected` : 'Select lands'}</span>
-                        <ChevronDown className="w-4 h-4" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14 w-full justify-between px-4 text-base font-semibold"
+                      >
+                        <span>{formatSelectedLabel(selectedLandsCount)}</span>
+                        <ChevronDown className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-1 p-1">
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={allLandsSelected}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedLandIds(landsList.map((land) => land.tokenId.toString()));
+                          }}
+                        >
+                          Select all
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="justify-center"
+                          disabled={selectedLandsCount === 0}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setSelectedLandIds([]);
+                          }}
+                        >
+                          Clear
+                        </DropdownMenuItem>
+                      </div>
+                      <DropdownMenuSeparator />
                       {landsList.map((land) => {
                         const id = land.tokenId.toString();
+                        const checked = selectedLandIds.includes(id);
                         return (
                           <DropdownMenuCheckboxItem
                             key={id}
-                            checked={selectedLandIds.includes(id)}
-                            onCheckedChange={(checked) => {
-                              const isChecked = checked === true;
-                              setSelectedLandIds((prev) => {
-                                if (isChecked) {
-                                  if (prev.includes(id)) return prev;
-                                  return [...prev, id];
-                                }
-                                return prev.filter((item) => item !== id);
-                              });
-                            }}
+                            checked={checked}
+                            onCheckedChange={(nextChecked) => setLandSelected(id, nextChecked === true)}
+                            onSelect={(event) => event.preventDefault()}
                           >
-                            {land.name || `Land #${id}`}
+                            <span className="min-w-0 flex-1 truncate">{land.name || `Land #${id}`}</span>
+                            {land.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{id}</span>}
                           </DropdownMenuCheckboxItem>
                         );
                       })}
@@ -454,9 +552,8 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                       await waitForBaseReceipt(hash);
                       setApprovals(s => ({ ...s, plants: true }));
                       toast.success('Plants approved');
-                    } catch (e: any) {
-                      const msg = (e?.shortMessage || e?.message || "").toString().toLowerCase();
-                      if (e?.code === 4001 || e?.cause?.code === 4001 || e?.name === 'UserRejectedRequestError' || msg.includes('user rejected')) {
+                    } catch (e) {
+                      if (isUserRejectedError(e)) {
                         toast('Approval cancelled', { icon: '✖️' });
                       } else {
                         toast.error('Approval failed');
@@ -490,9 +587,8 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                       await waitForBaseReceipt(hash);
                       setApprovals(s => ({ ...s, lands: true }));
                       toast.success('Lands approved');
-                    } catch (e: any) {
-                      const msg = (e?.shortMessage || e?.message || "").toString().toLowerCase();
-                      if (e?.code === 4001 || e?.cause?.code === 4001 || e?.name === 'UserRejectedRequestError' || msg.includes('user rejected')) {
+                    } catch (e) {
+                      if (isUserRejectedError(e)) {
                         toast('Approval cancelled', { icon: '✖️' });
                       } else {
                         toast.error('Approval failed');
