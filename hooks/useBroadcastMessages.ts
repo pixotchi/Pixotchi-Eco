@@ -72,7 +72,9 @@ export function useBroadcastMessages() {
     
     // Listen for tutorial completion event if needed
     const handleTutorialComplete = () => {
-      console.log('[Broadcast] Tutorial completed, will fetch messages on next poll');
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[Broadcast] Tutorial completed, will fetch messages on next poll');
+      }
       setTutorialCompleted(true);
     };
     
@@ -104,7 +106,9 @@ export function useBroadcastMessages() {
     // Prevent excessive polling - minimum 10 seconds between fetches
     const now = Date.now();
     if (now - lastFetchRef.current < 10000) {
-      console.log(`[Broadcast] Skipping fetch - only ${((now - lastFetchRef.current) / 1000).toFixed(1)}s since last fetch`);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`[Broadcast] Skipping fetch - only ${((now - lastFetchRef.current) / 1000).toFixed(1)}s since last fetch`);
+      }
       return;
     }
     lastFetchRef.current = now;
@@ -182,7 +186,9 @@ export function useBroadcastMessages() {
       });
     } catch (error) {
       // Silent fail - tracking shouldn't break UX
-      console.debug('Failed to track impression:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Failed to track impression:', error);
+      }
     }
   }, []);
 
@@ -202,7 +208,9 @@ export function useBroadcastMessages() {
     // Cleanup on unmount
     return () => {
       mountedRef.current = false;
-      console.log('[Broadcast] Cleaning up polling system');
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[Broadcast] Cleaning up polling system');
+      }
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
@@ -216,7 +224,9 @@ export function useBroadcastMessages() {
     if (!mountedRef.current) return;
     
     if (address !== undefined || (((authSurface === 'privy' || authSurface === 'privysolana') && ready && authenticated) && user?.id)) {
-      console.log('[Broadcast] Wallet address changed, fetching messages');
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[Broadcast] Wallet address changed, fetching messages');
+      }
       fetchMessages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

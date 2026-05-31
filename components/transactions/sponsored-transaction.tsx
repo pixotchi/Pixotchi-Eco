@@ -51,7 +51,6 @@ export default function SponsoredTransaction({
   );
 
   const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Sponsored transaction successful');
     onSuccess?.(tx);
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
     // Gamification: track daily activity (non-blocking)
@@ -71,7 +70,9 @@ export default function SponsoredTransaction({
   // This fixes OnchainKit race condition where onError can fire after successful tx
   const handleOnError = useCallback((error: any) => {
     if (successHandledRef.current) {
-      console.log('Ignoring post-success error callback from OnchainKit:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Ignoring post-success error callback from OnchainKit:', error);
+      }
       return;
     }
     onError?.(error);

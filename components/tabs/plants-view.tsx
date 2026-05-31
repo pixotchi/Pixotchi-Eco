@@ -247,7 +247,6 @@ export default function PlantsView() {
   }, [isVisible, address, fetchData]);
 
   const onPurchaseSuccess = useCallback(() => {
-    console.log("Purchase successful, refetching data...");
     toast.success("Purchase successful! Updating plant data...");
     fetchData(); // Refetch all data
     // Manually trigger a balance refresh across the app

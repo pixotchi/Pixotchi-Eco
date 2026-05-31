@@ -66,7 +66,6 @@ export function PlantNameTransaction({
   );
 
   const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Plant name change transaction successful:', tx);
     onSuccess?.(tx);
   }, [onSuccess]);
 

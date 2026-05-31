@@ -5,6 +5,14 @@ import { resolvePrimaryName } from './ens-resolver';
 import { ADDRESS_TRUNCATION } from './constants';
 import { withPrefix } from './redis';
 
+type RedisScanResponse =
+  | [cursor: string | number, keys: string[]]
+  | { cursor?: string | number; keys?: string[] };
+
+type RedisScanClient = {
+  scan: (cursor: number, options: { match: string; count: number }) => Promise<RedisScanResponse>;
+};
+
 const CHAT_MESSAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
 const SPAM_DETECTION_TTL = 30; // 30 seconds for duplicate message detection
@@ -15,21 +23,38 @@ const MAX_MESSAGE_LENGTH = 200;
 const MIN_MESSAGE_LENGTH = 1;
 const CHAT_MESSAGE_INDEX_KEY = 'chat:messages:index';
 
+function hasScanClient(client: unknown): client is RedisScanClient {
+  return typeof client === 'object'
+    && client !== null
+    && typeof (client as { scan?: unknown }).scan === 'function';
+}
+
+function normalizeScanCursor(cursor: string | number | undefined): number {
+  const value = typeof cursor === 'string' ? parseInt(cursor, 10) : Number(cursor ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
 async function scanRawKeys(pattern: string, count: number = 1000): Promise<string[]> {
   if (!redis) return [];
 
   try {
+    const scanClient: unknown = redis;
+    if (!hasScanClient(scanClient)) {
+      const keys = await redis.keys(pattern);
+      return keys.map(String);
+    }
+
     let cursor = 0;
     const results: string[] = [];
 
     do {
-      const resp: any = await (redis as any).scan(cursor, { match: pattern, count });
+      const resp = await scanClient.scan(cursor, { match: pattern, count });
       if (Array.isArray(resp)) {
-        cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
-        results.push(...((resp[1] || []) as string[]));
+        cursor = normalizeScanCursor(resp[0]);
+        results.push(...resp[1].map(String));
       } else if (resp && typeof resp === 'object' && 'cursor' in resp) {
-        cursor = Number(resp.cursor) || 0;
-        results.push(...((resp.keys || []) as string[]));
+        cursor = normalizeScanCursor(resp.cursor);
+        results.push(...(resp.keys || []).map(String));
       } else {
         break;
       }
@@ -39,7 +64,7 @@ async function scanRawKeys(pattern: string, count: number = 1000): Promise<strin
   } catch {
     try {
       const keys = await redis.keys(pattern);
-      return keys as string[];
+      return keys.map(String);
     } catch {
       return [];
     }
@@ -181,9 +206,6 @@ export async function storeMessage(address: string, message: string): Promise<Ch
   pipeline.zremrangebyscore(CHAT_MESSAGE_INDEX_KEY, '-inf', timestamp - (CHAT_MESSAGE_TTL * 1000));
   await pipeline.exec();
 
-  // Skip stats update to avoid potential hanging
-  console.log('📊 Skipping stats update to avoid hanging');
-
   return chatMessage;
 }
 
@@ -213,10 +235,6 @@ export async function checkRateLimit(address: string): Promise<boolean> {
   if (!rateLimitData) return true;
 
   try {
-    // Debug logging
-    console.log('Rate limit data type:', typeof rateLimitData);
-    console.log('Rate limit data value:', rateLimitData);
-
     let parsedData: ChatRateLimit;
 
     if (typeof rateLimitData === 'object' && rateLimitData !== null) {

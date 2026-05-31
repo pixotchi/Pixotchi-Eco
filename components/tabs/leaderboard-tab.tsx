@@ -1599,8 +1599,6 @@ export default function LeaderboardTab() {
 
       {/* Revive dialog */}
       <Dialog open={reviveDialogOpen} onOpenChange={setReviveDialogOpen}>
-        {/* ... existing revive dialog content ... */}
-        {/* WE DO NOT EDIT REVIVE DIALOG HERE, JUST MATCHING CONTEXT IS HARD SO I WILL APPEND AT END OF FILE */}
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Revive your plant</DialogTitle>

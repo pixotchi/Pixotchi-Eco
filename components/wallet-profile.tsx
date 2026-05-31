@@ -78,9 +78,9 @@ const EthModeToggleRow = () => {
         style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
         className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isEthMode ? 'bg-value' : 'bg-muted'
           }`}
-        aria-pressed={isEthMode}
         role="switch"
-        aria-label={`Toggle ETH mode ${isEthMode ? 'off' : 'on'}`}
+        aria-checked={isEthMode}
+        aria-label="ETH Mode"
       >
         <span
           style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}

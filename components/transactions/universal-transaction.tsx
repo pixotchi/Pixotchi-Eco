@@ -47,7 +47,6 @@ export default function UniversalTransaction({
   );
 
   const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Universal transaction successful:', tx);
     onSuccess?.(tx);
     // Notify status bar to refresh balances
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
@@ -60,7 +59,9 @@ export default function UniversalTransaction({
   // This fixes OnchainKit race condition where onError can fire after successful tx
   const handleOnError = useCallback((error: any) => {
     if (successHandledRef.current) {
-      console.log('Ignoring post-success error callback from OnchainKit:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Ignoring post-success error callback from OnchainKit:', error);
+      }
       return;
     }
     onError?.(error);
