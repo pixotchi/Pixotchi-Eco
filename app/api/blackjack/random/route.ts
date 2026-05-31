@@ -5,7 +5,7 @@ import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { redis,redisCompareAndSetJSON,redisDel,redisGetJSON } from '@/lib/redis';
 import { blackjackAbi } from '@/public/abi/blackjack-abi';
 import { NextRequest,NextResponse } from 'next/server';
-import { encodePacked,keccak256,type Hex } from 'viem';
+import { encodePacked,isAddress,keccak256,type Hex } from 'viem';
 import { privateKeyToAccount,signMessage } from 'viem/accounts';
 
 /**
@@ -44,6 +44,11 @@ const PHASE_PLAYER_TURN = 2;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 type BlackjackActionName = 'deal' | 'hit' | 'stand' | 'double' | 'split' | 'surrender';
+const BLACKJACK_ACTIONS = new Set<BlackjackActionName>(['deal', 'hit', 'stand', 'double', 'split', 'surrender']);
+
+function isBlackjackActionName(value: unknown): value is BlackjackActionName {
+    return typeof value === 'string' && BLACKJACK_ACTIONS.has(value as BlackjackActionName);
+}
 
 function getActionLockKey(landId: string, nonce: bigint): string {
     return `${ACTION_LOCK_KEY_PREFIX}${landId}:${nonce.toString()}`;
@@ -244,12 +249,13 @@ function generateRandomSeed(): Hex {
 /**
  * Rate limit check
  */
-function checkRateLimit(address: string): boolean {
+function checkRateLimit(key: string): boolean {
     const now = Date.now();
-    const recent = recentRequests.get(address.toLowerCase());
+    const normalizedKey = key.toLowerCase();
+    const recent = recentRequests.get(normalizedKey);
 
     if (!recent || (now - recent.timestamp) > RATE_LIMIT_WINDOW_MS) {
-        recentRequests.set(address.toLowerCase(), { count: 1, timestamp: now });
+        recentRequests.set(normalizedKey, { count: 1, timestamp: now });
         return true;
     }
 
@@ -259,6 +265,13 @@ function checkRateLimit(address: string): boolean {
 
     recent.count++;
     return true;
+}
+
+function getClientRateLimitKey(request: NextRequest): string | null {
+    const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+    const realIp = request.headers.get('x-real-ip')?.trim();
+    const ip = forwardedFor || realIp;
+    return ip ? `ip:${ip}` : null;
 }
 
 /**
@@ -301,20 +314,33 @@ export async function POST(request: NextRequest) {
         }
 
         // Parse request
-        const body = await request.json();
-        const { landId, action, playerAddress, handIndex, bettingToken } = body;
+        let body: unknown;
+        try {
+            body = await request.json();
+        } catch {
+            return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+        }
+
+        if (!body || typeof body !== 'object') {
+            return NextResponse.json({ error: 'Request body must be an object' }, { status: 400 });
+        }
+
+        const { landId, action, playerAddress, handIndex, bettingToken } = body as Record<string, unknown>;
 
         // Validate inputs
-        if (!landId || typeof landId !== 'string') {
-            return NextResponse.json({ error: 'landId is required' }, { status: 400 });
+        if (typeof landId !== 'string' || !/^\d+$/.test(landId)) {
+            return NextResponse.json({ error: 'landId must be a decimal string' }, { status: 400 });
         }
-        if (!action || !['deal', 'hit', 'stand', 'double', 'split', 'surrender'].includes(action)) {
+        if (!isBlackjackActionName(action)) {
             return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }
-        if (handIndex !== undefined && (!Number.isInteger(handIndex) || handIndex < 0 || handIndex > 1)) {
+        if (typeof playerAddress !== 'string' || !isAddress(playerAddress)) {
+            return NextResponse.json({ error: 'playerAddress is required' }, { status: 400 });
+        }
+        if (handIndex !== undefined && (typeof handIndex !== 'number' || !Number.isInteger(handIndex) || handIndex < 0 || handIndex > 1)) {
             return NextResponse.json({ error: 'Invalid handIndex' }, { status: 400 });
         }
-        if (action === 'deal' && (typeof bettingToken !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(bettingToken))) {
+        if (action === 'deal' && (typeof bettingToken !== 'string' || !isAddress(bettingToken))) {
             return NextResponse.json({ error: 'Invalid bettingToken' }, { status: 400 });
         }
 
@@ -332,9 +358,10 @@ export async function POST(request: NextRequest) {
 
         const handIndexNum = typeof handIndex === 'number' ? handIndex : 0;
 
-        // Rate limiting by player address (if provided)
-        if (playerAddress) {
-            if (!checkRateLimit(playerAddress)) {
+        // Rate limiting by player address and the forwarded client IP when available.
+        const rateLimitKeys = [playerAddress, getClientRateLimitKey(request)].filter((key): key is string => Boolean(key));
+        for (const key of rateLimitKeys) {
+            if (!checkRateLimit(key)) {
                 return NextResponse.json(
                     { error: 'Rate limit exceeded. Please wait before making more requests.' },
                     { status: 429 }
@@ -368,7 +395,7 @@ export async function POST(request: NextRequest) {
 
         let effectiveBettingToken = '';
         if (action === 'deal') {
-            effectiveBettingToken = bettingToken;
+            effectiveBettingToken = bettingToken as string;
         } else {
             try {
                 effectiveBettingToken = await publicClient.readContract({

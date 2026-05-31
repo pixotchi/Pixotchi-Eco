@@ -83,7 +83,7 @@
     "@wagmi/connectors": {
       "@base-org/account": "2.5.6"
     },
-    "axios": "1.15.0",
+    "axios": "1.16.1",
     "pino": "10.3.1",
     "thread-stream": "3.1.0",
     "viem": "2.51.3"
