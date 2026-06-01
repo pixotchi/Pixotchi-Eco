@@ -34,6 +34,10 @@ const DEFAULT_FRAME_ANCESTORS = [
   'https://*.farcaster.xyz',
   'https://warpcast.com',
   'https://*.warpcast.com',
+  'https://base.app',
+  'https://*.base.app',
+  'https://*.base.org',
+  'https://*.coinbase.com',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ];
