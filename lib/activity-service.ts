@@ -677,9 +677,11 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
 }
 
 export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
+  const normalizedAddress = address.toLowerCase();
+
   const [plantsResult, landsResult] = await Promise.allSettled([
-    getPlantsByOwner(address),
-    getLandsByOwner(address),
+    getPlantsByOwner(normalizedAddress),
+    getLandsByOwner(normalizedAddress),
   ]);
 
   if (plantsResult.status === 'rejected' && landsResult.status === 'rejected') {
@@ -701,7 +703,7 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
       fetchGraphQLData(GET_MY_ACTIVITY_QUERY, {
         plantIds,
         landIds,
-        playerAddress: address
+        playerAddress: normalizedAddress
       }),
       fetchOptionalMyBarracksActivity(landIds),
     ]);
