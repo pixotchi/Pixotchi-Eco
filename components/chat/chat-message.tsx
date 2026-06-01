@@ -37,38 +37,6 @@ function formatRelativeShort(date: Date) {
   return `${years}y ago`;
 }
 
-function formatToolLabel(toolName: string): string {
-  return toolName
-    .replace(/^get_/, '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function renderAIToolFooter(message: ChatMessage | AIChatMessage) {
-  if (!('toolCalls' in message) || !message.toolCalls?.length) {
-    return null;
-  }
-
-  const successfulTools = message.toolCalls.filter((trace) => trace.status === 'ok');
-  if (!successfulTools.length) {
-    return null;
-  }
-
-  const source = successfulTools.find((trace) => trace.source)?.source;
-  const fetchedAt = successfulTools
-    .map((trace) => trace.freshness?.fetchedAt)
-    .find(Boolean);
-  const toolLabels = Array.from(new Set(successfulTools.map((trace) => formatToolLabel(trace.toolName)))).slice(0, 3);
-
-  return (
-    <div className="mt-2 border-t border-blue-300/40 pt-2 text-[11px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">
-      <span>Sources: {toolLabels.join(', ')}</span>
-      {source && <span> - {source}</span>}
-      {fetchedAt && <span> - {formatRelativeShort(new Date(fetchedAt))}</span>}
-    </div>
-  );
-}
-
 interface ChatMessageProps {
   message: ChatMessage | AIChatMessage;
   isAIMode?: boolean;
@@ -110,6 +78,9 @@ export default function ChatMessageComponent({
   const bgColor = isAIMessage ? 'bg-blue-100 dark:bg-blue-900/30' :
                   isOwnPublicMessage || isUserAIMessage ? 'bg-primary text-primary-foreground' :
                   'bg-muted';
+  const bubbleSize = isAIMessage
+    ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
+    : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
   const canOpenProfile = !isAIMessage && !isUserAIMessage && !isOwnPublicMessage;
 
   const displayNameNode = (
@@ -137,7 +108,8 @@ export default function ChatMessageComponent({
       <div className={cn("flex", alignment)}>
         <div
           className={cn(
-            "rounded-lg px-3 py-2 max-w-[85%] sm:max-w-[75%] min-w-0 [overflow-wrap:anywhere]",
+            "rounded-lg min-w-0 [overflow-wrap:anywhere]",
+            bubbleSize,
             bgColor
           )}
           role="article"
@@ -160,17 +132,33 @@ export default function ChatMessageComponent({
             </span>
           </div>
           
-          <div className="text-sm leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <div
+            className={cn(
+              "text-sm leading-relaxed break-words [overflow-wrap:anywhere]",
+              !isAIMessage && "whitespace-pre-wrap"
+            )}
+          >
             {isAIMessage ? (
               <MessageResponse
-                className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-a:break-all prose-code:break-all [overflow-wrap:anywhere]"
+                className={cn(
+                  "max-w-none text-sm leading-6 text-current [overflow-wrap:anywhere]",
+                  "[&_*]:max-w-full",
+                  "[&>p]:my-1.5 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0",
+                  "[&_h1]:mb-2 [&_h1]:mt-3 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:leading-6",
+                  "[&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-bold [&_h2]:leading-6",
+                  "[&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:leading-5",
+                  "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5",
+                  "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5",
+                  "[&_li]:pl-0 [&_li]:marker:text-current [&_li>p]:my-0",
+                  "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-current/30 [&_blockquote]:pl-3",
+                  "[&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:p-2",
+                  "[&_a]:break-words [&_code]:break-words [&_strong]:font-bold"
+                )}
               >
                 {message.message}
               </MessageResponse>
             ) : message.message}
           </div>
-          {isAIMessage && renderAIToolFooter(message)}
-          
         </div>
       </div>
 
