@@ -70,7 +70,7 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
           disabled={inputDisabled}
           className="flex-1"
           maxLength={isAIMode ? 300 : 200}
-          aria-label={isAIMode ? "Ask Neural Seed AI a question" : "Type a chat message"}
+          aria-label={isAIMode ? "Ask Neural Seed a question" : "Type a chat message"}
           aria-describedby="chat-character-count"
           aria-invalid={message.length > (isAIMode ? 300 : 200)}
         />
@@ -78,7 +78,7 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
           onClick={showStopButton ? cancelActiveSend : handleSend}
           disabled={!showStopButton && (inputDisabled || !message.trim())}
           size="icon"
-          aria-label={showStopButton ? "Stop Neural Seed AI response" : (activeSending ? "Sending message..." : (isAIMode ? "Send question to Neural Seed AI" : "Send chat message"))}
+          aria-label={showStopButton ? "Stop Neural Seed response" : (activeSending ? "Sending message..." : (isAIMode ? "Send question to Neural Seed" : "Send chat message"))}
           aria-describedby="chat-character-count"
         >
           {showStopButton ? (

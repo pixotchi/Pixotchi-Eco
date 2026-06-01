@@ -78,7 +78,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
               <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="xl:hidden" />
             )}
             <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="hidden xl:block" />
-            <span className="xl:hidden">{mode === 'ai' ? 'Neural Seed AI' : 'Chat'}</span>
+            <span className="xl:hidden">{mode === 'ai' ? 'Neural Seed' : 'Chat'}</span>
             <span className="hidden xl:inline">Chat</span>
           </div>
           <div className="xl:hidden">
@@ -94,10 +94,10 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
         </DialogTitle>
         <DialogDescription>
           <span className="xl:hidden">
-            Chat with the community or get help from Neural Seed AI assistant.
+            Chat with the community or get help from Neural Seed agent.
           </span>
           <span className="hidden xl:inline">
-            Chat with the community or get help from Neural Seed AI assistant.
+            Chat with the community or get help from Neural Seed agent.
           </span>
         </DialogDescription>
       </DialogHeader>
@@ -108,7 +108,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
 
       <div className="hidden min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden pt-3 xl:grid">
         <DesktopChatPane mode="public" title="Public" icon="/icons/chat.svg" />
-        <DesktopChatPane mode="ai" title="Neural Seed AI" icon="/icons/neuralseed.png" />
+        <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" />
       </div>
 
       <DialogFooter className="border-t border-border pt-3 xl:hidden">

@@ -69,7 +69,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
             )}
           </div>
           <h3 className="font-semibold text-foreground mb-1">
-            {isAssistantMode ? 'Ask Neural Seed AI!' : 'Welcome to the chat!'}
+            {isAssistantMode ? 'Ask Neural Seed!' : 'Welcome to the chat!'}
           </h3>
           <p className="text-sm text-muted-foreground">
             {isAssistantMode 

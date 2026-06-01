@@ -24,7 +24,7 @@ Pixotchi is a P2E onchain game. Grow a playful onchain garden on Base. Mint and 
 - **Mobile‑first**: Designed for phones; works great inside Farcaster.
 - **Wallet‑friendly**: Supports EOAs, Privy embedded wallets, and Coinbase smart accounts.
 - **Notifications**: Get reminders when your plants need attention.
-- **AI integrated**: Neural Seed assistant powered by OpenAI, Anthropic, or Google AI.
+- **AI integrated**: Neural Seed agent powered by OpenAI, Anthropic, or Google AI.
 - **Agent mode**: Executes approved actions via delegated permissions.
 
 ## Why open source?
