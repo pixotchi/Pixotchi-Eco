@@ -197,12 +197,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const confirmedMiniAppAddress = isMiniApp && confirmedMiniAppSession.confirmed
     ? confirmedMiniAppSession.address
     : null;
+  const verifiedMiniAppSessionAddress =
+    isMiniApp &&
+    publicChatSession?.authenticated &&
+    publicChatSession.provider === 'farcaster' &&
+    publicChatSession.method === 'farcaster-miniapp'
+      ? publicChatSession.address
+      : null;
 
   const publicChatAddress = isMiniApp
-    ? (confirmedMiniAppAddress ?? publicChatSession?.address ?? null)
+    ? (confirmedMiniAppAddress ?? verifiedMiniAppSessionAddress)
     : (publicChatSession?.address ?? null);
   const publicChatAuthenticated = isMiniApp
-    ? Boolean(confirmedMiniAppAddress)
+    ? Boolean(confirmedMiniAppAddress || verifiedMiniAppSessionAddress)
     : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
   const aiTransport = useMemo(

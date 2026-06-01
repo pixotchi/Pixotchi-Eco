@@ -108,6 +108,7 @@ function syncConfirmedMiniAppSession(
 export async function getCurrentPublicChatSession(): Promise<PublicChatSession | null> {
   const now = Date.now();
   if (publicChatSessionCache && publicChatSessionCache.expiresAt > now) {
+    syncConfirmedMiniAppSession(publicChatSessionCache.session, 'restored');
     return publicChatSessionCache.session;
   }
 
