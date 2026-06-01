@@ -350,15 +350,10 @@ export default function App() {
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
   const isLocalTestSession = localTestAuthAvailable && state.surface === "test";
   const isInviteValidated = userValidated || isLocalTestSession;
-  const readyBlocker =
-    isConnected &&
-    INVITE_CONFIG.SYSTEM_ENABLED &&
-    !isLocalTestSession &&
-    (checkingValidation || !userValidated);
 
   useTabPrefetching(activeTab, isConnected);
 
-  useFarcaster({ readyBlocker });
+  useFarcaster();
   useAutoConnect();
 
   useEffect(() => {
