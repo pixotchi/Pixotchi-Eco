@@ -13,7 +13,7 @@ import { type Address } from 'viem';
 const WSOL = '0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82' as Address;
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   try {

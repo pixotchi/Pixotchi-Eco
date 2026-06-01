@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, createErrorResponse } from '@/lib/auth-utils';
 import { SERVER_ENV, CLIENT_ENV } from '@/lib/env-config';
 import { redis } from '@/lib/redis';
 import { PLANT_CARE_THROTTLE_SECONDS, getPlantCareUserThrottleKey } from '@/lib/notifications/constants';
@@ -23,9 +23,8 @@ export const maxDuration = 30; // Should be fast - just calling Neynar API
  * - POST /api/admin/notifications/trigger?fid=123&dry=1 - Dry run for specific user
  */
 export async function POST(request: NextRequest) {
-    if (!validateAdminKey(request)) {
-        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-    }
+    const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
     try {
         if (SERVER_ENV.NOTIFICATION_PROVIDER !== 'neynar') {

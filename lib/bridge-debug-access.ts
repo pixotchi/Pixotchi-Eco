@@ -1,34 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey } from './auth-utils';
+import { requireAdmin } from './auth-utils';
+import { enforceRateLimit, getRequestIp } from './request-rate-limit';
 
-function isProductionDeployment(): boolean {
-  const vercelEnv = process.env.VERCEL_ENV;
-  if (vercelEnv) {
-    return vercelEnv === 'production';
-  }
-  return process.env.NODE_ENV === 'production';
+function isLocalhostRequest(request: NextRequest): boolean {
+  const hostname = request.nextUrl.hostname.toLowerCase();
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
 }
 
-export function requireBridgeDebugAccess(request: NextRequest): NextResponse | null {
-  if (process.env.BRIDGE_DEBUG_PUBLIC_ENABLED === 'true') {
+export async function requireBridgeDebugAccess(request: NextRequest): Promise<NextResponse | null> {
+  const rateLimitResponse = await enforceRateLimit(request, {
+    scope: 'api:bridge-debug',
+    rules: [
+      {
+        kind: 'ip',
+        identifier: getRequestIp(request),
+        limit: 30,
+        windowSeconds: 60,
+      },
+    ],
+  });
+
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
+  if (isLocalhostRequest(request)) {
     return null;
   }
 
-  if (!isProductionDeployment()) {
-    return null;
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Bridge diagnostics are restricted outside localhost',
+        code: 'BRIDGE_DEBUG_AUTH_REQUIRED',
+        timestamp: new Date().toISOString(),
+      },
+      { status: adminDenied.status },
+    );
   }
 
-  if (validateAdminKey(request)) {
-    return null;
-  }
-
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'Bridge diagnostics are restricted in production',
-      code: 'BRIDGE_DEBUG_AUTH_REQUIRED',
-      timestamp: new Date().toISOString(),
-    },
-    { status: 401 },
-  );
+  return null;
 }

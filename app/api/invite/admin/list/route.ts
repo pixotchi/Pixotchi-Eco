@@ -1,4 +1,4 @@
-import { createErrorResponse,logAdminAction,validateAdminKey } from '@/lib/auth-utils';
+import { createErrorResponse,logAdminAction,requireAdmin } from '@/lib/auth-utils';
 import { redis,redisScanKeys } from '@/lib/redis';
 import { InviteCode } from '@/lib/types';
 import { NextRequest,NextResponse } from 'next/server';
@@ -6,10 +6,10 @@ import { NextRequest,NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   try {
     // Validate admin authentication using headers
-    if (!validateAdminKey(request)) {
+    const adminDenied = await requireAdmin(request);
+    if (adminDenied) {
       await logAdminAction('admin_list_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
-      const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-      return NextResponse.json(error.body, { status: error.status });
+      return adminDenied;
     }
 
     if (!redis) {

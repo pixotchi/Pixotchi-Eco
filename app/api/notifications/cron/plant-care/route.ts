@@ -186,8 +186,9 @@ async function publishToFids(fids: number[], title: string, body: string) {
 async function resolveFidAddress(fid: number): Promise<string | null> {
   try {
     const cached = await (redis as UntypedValue)?.get?.(`fidmap:${fid}`);
-    if (cached) {
-      return String(cached).toLowerCase();
+    const cachedAddress = normalizeWalletAddress(cached);
+    if (cachedAddress) {
+      return cachedAddress;
     }
 
     const response = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`, {
@@ -200,7 +201,7 @@ async function resolveFidAddress(fid: number): Promise<string | null> {
     const payload = await response.json();
     const address = normalizeWalletAddress(payload?.result?.address?.address);
     if (address) {
-      await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, address);
+      await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, address, { ex: 7 * 24 * 60 * 60 });
     }
     return address;
   } catch {

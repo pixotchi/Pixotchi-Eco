@@ -16,7 +16,7 @@ import { parseAbiItem, type Address } from 'viem';
 const BRIDGE_CONTRACT = '0x3eff766C76a1be2Ce1aCF2B69c78bCae257D5188' as Address;
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   const searchParams = request.nextUrl.searchParams;

@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, createErrorResponse, logAdminAction } from '@/lib/auth-utils';
+import { requireAdmin, createErrorResponse, logAdminAction } from '@/lib/auth-utils';
 import { getAllAIConversations, getAIUsageStats, deleteAIConversation, deleteAllAIConversations } from '@/lib/ai-service';
 
 export async function GET(request: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(
-      createErrorResponse('Unauthorized access', 401, 'UNAUTHORIZED').body,
-      { status: 401 }
-    );
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -54,12 +50,8 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(
-      createErrorResponse('Unauthorized access', 401, 'UNAUTHORIZED').body,
-      { status: 401 }
-    );
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     const { searchParams } = new URL(request.url);

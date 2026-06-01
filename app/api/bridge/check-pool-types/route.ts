@@ -31,7 +31,7 @@ const POOL_ABI = [
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   try {

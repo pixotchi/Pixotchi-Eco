@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis, redisScanKeys } from '@/lib/redis';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
-import { validateAdminKey, logAdminAction, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, logAdminAction, createErrorResponse } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate admin authentication using headers
-    if (!validateAdminKey(request)) {
+    const adminDenied = await requireAdmin(request);
+    if (adminDenied) {
       await logAdminAction('admin_cleanup_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
-      const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-      return NextResponse.json(error.body, { status: error.status });
+      return adminDenied;
     }
 
     const body = await request.json();

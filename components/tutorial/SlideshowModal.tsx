@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useSlideshow } from "./SlideshowProvider";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
 import type { SyntheticEvent } from "react";
 
@@ -110,6 +110,7 @@ export default function SlideshowModal() {
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
+        <DialogTitle className="sr-only">Pixotchi tutorial: {slide.title}</DialogTitle>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border bg-card/80 px-4 py-3 backdrop-blur-sm">
           <div className="flex items-center gap-2">

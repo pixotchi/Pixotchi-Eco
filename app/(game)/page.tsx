@@ -33,7 +33,9 @@ import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { requestBalanceRefresh } from "@/lib/app-events";
 import type { AuthSurface } from "@/lib/auth-surface";
 import { CLIENT_ENV } from "@/lib/env-config";
+import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
 import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
+import { isSolanaAuthAvailable } from "@/lib/solana-auth-availability";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -277,7 +279,7 @@ function LoginAuthActions({
         {privyReady ? 'Continue with Privy' : 'Loading Privy…'}
       </Button>
       <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
-      {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
+      {isSolanaAuthAvailable() && (
         <>
           <div className="flex items-center gap-2 my-2">
             <div className="flex-1 h-px bg-border" />
@@ -459,10 +461,12 @@ export default function App() {
 
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 5000);
+        const authHeaders = await getMiniAppQuickAuthHeaders({ expectedAddress: address });
+        if (!authHeaders.Authorization || !mounted) return;
 
         await fetch('/api/notifications/map-fid', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ fid, address }),
           signal: controller.signal,
         });
@@ -718,6 +722,7 @@ export default function App() {
                           : "text-muted-foreground border-transparent hover:bg-background/80"
                       }`}
                       role="tab"
+                      id={`tab-desktop-${tab.id}`}
                       aria-selected={activeTab === tab.id}
                       aria-controls={`tabpanel-${tab.id}`}
                       aria-label={`Switch to ${tab.label} tab`}
@@ -739,7 +744,7 @@ export default function App() {
                 className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-4 pb-16 safe-area-inset xl:p-5 xl:pb-5 xl:safe-area-bottom"
                 role="tabpanel"
                 id={`tabpanel-${activeTab}`}
-                aria-labelledby={`tab-${activeTab}`}
+                aria-labelledby={isDesktopHeader ? `tab-desktop-${activeTab}` : `tab-mobile-${activeTab}`}
                 aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
               >
                 <ErrorBoundary
@@ -780,9 +785,9 @@ export default function App() {
                       className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${activeTab === tab.id
                         ? "bg-primary/10 text-primary border border-primary/20"
                         : "text-muted-foreground border border-transparent"
-                        }`}
+                      }`}
                       role="tab"
-                      id={`tab-${tab.id}`}
+                      id={`tab-mobile-${tab.id}`}
                       aria-selected={activeTab === tab.id}
                       aria-controls={`tabpanel-${tab.id}`}
                       aria-label={`Switch to ${tab.label} tab`}

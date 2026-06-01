@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, createErrorResponse } from '@/lib/auth-utils';
 import { getCampaignProgress, getCampaignResults, listCampaigns } from '@/lib/notifications/storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     const url = new URL(request.url);

@@ -1,6 +1,15 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { redis } from './redis';
 import { timingSafeEqual } from 'crypto';
+
+function getRequestIp(request: NextRequest): string {
+  return (
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip')?.trim() ||
+    request.headers.get('cf-connecting-ip')?.trim() ||
+    'unknown'
+  );
+}
 
 // Admin authentication utility
 export function validateAdminKey(request: NextRequest): boolean {
@@ -75,6 +84,34 @@ export async function trackAdminFailedAttempt(ip: string): Promise<void> {
   } catch (error) {
     console.error('Failed to track admin attempt:', error);
   }
+}
+
+export async function requireAdmin(request: NextRequest): Promise<NextResponse | null> {
+  const ip = getRequestIp(request);
+  const withinRateLimit = await checkAdminRateLimit(ip);
+
+  if (!withinRateLimit) {
+    return NextResponse.json(
+      createErrorResponse('Too many admin authentication attempts', 429, 'ADMIN_RATE_LIMITED').body,
+      {
+        status: 429,
+        headers: {
+          'Retry-After': '900',
+          'Cache-Control': 'private, no-store',
+        },
+      },
+    );
+  }
+
+  if (!validateAdminKey(request)) {
+    await trackAdminFailedAttempt(ip);
+    return NextResponse.json(
+      createErrorResponse('Unauthorized', 401, 'ADMIN_AUTH_REQUIRED').body,
+      { status: 401, headers: { 'Cache-Control': 'private, no-store' } },
+    );
+  }
+
+  return null;
 }
 
 // Audit logging for admin actions

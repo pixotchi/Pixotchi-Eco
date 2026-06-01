@@ -21,7 +21,7 @@ import Image from "next/image";
 import { useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { encodePacked,hexToBytes,keccak256,toHex } from "viem";
-import { useAccount,usePublicClient } from "wagmi";
+import { useAccount,usePublicClient,useSignMessage } from "wagmi";
 
 type ArcadeDialogProps = {
   open: boolean;
@@ -73,6 +73,10 @@ const TRANSACTION_FAILURE_STATUSES = new Set([
   "userRejected",
   "buildError",
 ]);
+
+function buildCommitStateMessage(address: string, plantId: number, block: number): string {
+  return `Pixotchi spin commit state\nAddress: ${address.toLowerCase()}\nPlant ID: ${plantId}\nBlock: ${block}`;
+}
 
 function createCommitment(secret: Uint8Array, plantId: number, address: string): `0x${string}` {
   const encoded = encodePacked(
@@ -136,6 +140,7 @@ const GameSelector = ({
 
 export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
   const { address } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const publicClient = usePublicClient();
   const baseLogClient = useMemo(() => getBaseLogClient(), []);
   const { isSponsored } = usePaymaster();
@@ -241,16 +246,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       if (!address || Number.isNaN(block) || block <= 0) return;
       setLastSeenCommitBlock((prev) => (prev !== null ? Math.max(prev, block) : block));
       try {
+        const message = buildCommitStateMessage(address, plantId, block);
+        const signature = await signMessageAsync({ message });
         await fetch("/api/spin/commit-state", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ address, plantId, block }),
+          body: JSON.stringify({ address, plantId, block, message, signature }),
         });
       } catch (error) {
         console.warn("Failed to persist spin commit block", error);
       }
     },
-    [address, plantId]
+    [address, plantId, signMessageAsync]
   );
 
   // Generate a deterministic-ish default seed on open

@@ -18,7 +18,7 @@ const TWIN = '0x71256e3d36435b0cc7ac41a43ee123d2aab43275' as Address;
 const PIXOTCHI = '0xeb4e16c804AE9275a655AbBc20cD0658A91F9235' as Address;
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   try {

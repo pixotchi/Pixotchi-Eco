@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, logAdminAction } from '@/lib/auth-utils';
+import { requireAdmin, logAdminAction } from '@/lib/auth-utils';
 import { cleanupOrphanedDismissals, nukeAllBroadcastData } from '@/lib/broadcast-service';
 
 /**
@@ -7,9 +7,8 @@ import { cleanupOrphanedDismissals, nukeAllBroadcastData } from '@/lib/broadcast
  */
 export async function POST(req: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     const result = await cleanupOrphanedDismissals();
@@ -45,9 +44,8 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     const { searchParams } = new URL(req.url);

@@ -2,9 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 import { redis, redisSetJSON } from '@/lib/redis';
 import { logger } from '@/lib/logger';
+import { nanoid } from 'nanoid';
+import { isAddress } from 'viem';
 
 const FEEDBACK_IP_LIMIT = 5;
 const FEEDBACK_WINDOW_SECONDS = 900;
+const FARCASTER_DETAILS_MAX_BYTES = 2048;
+
+function cleanOptionalString(value: UntypedValue, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= maxLength ? trimmed : null;
+}
+
+function sanitizeFarcasterDetails(value: UntypedValue): Record<string, UntypedValue> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const serialized = JSON.stringify(value);
+  if (serialized.length > FARCASTER_DETAILS_MAX_BYTES) return null;
+  const input = value as Record<string, UntypedValue>;
+  return {
+    ...(Number.isSafeInteger(Number(input.fid)) ? { fid: Number(input.fid) } : {}),
+    ...(cleanOptionalString(input.username, 64) ? { username: cleanOptionalString(input.username, 64) } : {}),
+    ...(cleanOptionalString(input.displayName, 80) ? { displayName: cleanOptionalString(input.displayName, 80) } : {}),
+    ...(cleanOptionalString(input.pfpUrl, 256) ? { pfpUrl: cleanOptionalString(input.pfpUrl, 256) } : {}),
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,7 +57,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validation
-    if (!address || typeof address !== 'string') {
+    if (!address || typeof address !== 'string' || !isAddress(address)) {
       return NextResponse.json(
         { error: 'Invalid address' },
         { status: 400 }
@@ -65,19 +87,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Store feedback in Redis
-    const feedbackId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const normalizedAddress = address.toLowerCase();
+    const feedbackId = `${Date.now()}-${nanoid(10)}`;
     const feedbackKey = `pixotchi:feedback:${feedbackId}`;
+    const sanitizedFarcasterDetails = sanitizeFarcasterDetails(farcasterDetails);
     
     const feedbackData = {
       id: feedbackId,
-      address: address.toLowerCase(),
+      address: normalizedAddress,
       message: trimmedMessage,
       createdAt: Date.now(),
       status: 'new',
-      walletType: walletType || 'UntypedValue',
+      walletType: cleanOptionalString(walletType, 32) || 'unknown',
       isSmartWallet: Boolean(isSmartWallet),
       isMiniApp: Boolean(isMiniApp),
-      farcasterDetails: farcasterDetails || null,
+      farcasterDetails: sanitizedFarcasterDetails,
     };
 
     await redisSetJSON(feedbackKey, feedbackData, 86400 * 90);
@@ -90,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     logger.info(`Feedback submitted`, {
       feedbackId,
-      address: address.toLowerCase(),
+      address: normalizedAddress,
       messageLength: trimmedMessage.length,
       walletType,
       isSmartWallet,

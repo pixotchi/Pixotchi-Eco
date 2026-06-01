@@ -4,6 +4,7 @@ import { BLACKJACK_DISABLED_MESSAGE } from '@/lib/casino-policy';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { redis,redisCompareAndSetJSON,redisDel,redisGetJSON } from '@/lib/redis';
 import { blackjackAbi } from '@/public/abi/blackjack-abi';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { NextRequest,NextResponse } from 'next/server';
 import { encodePacked,isAddress,keccak256,type Hex } from 'viem';
 import { privateKeyToAccount,signMessage } from 'viem/accounts';
@@ -26,6 +27,8 @@ const SIGNER_PRIVATE_KEY = process.env.BLACKJACK_RANDOMNESS_SIGNER_KEY;
 const recentRequests = new Map<string, { count: number; timestamp: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // Max 30 requests per minute per address
+const RANDOMNESS_LIFETIME_SECONDS = 60;
+const ACTION_LOCK_TTL_SECONDS = RANDOMNESS_LIFETIME_SECONDS + 45;
 
 interface CachedRandomness {
     randomSeed: Hex;
@@ -35,6 +38,7 @@ interface CachedRandomness {
     actionNum: number;
     handIndex: number;
     bettingToken: string;
+    playerAddress: string;
 }
 
 const ACTION_LOCK_KEY_PREFIX = 'blackjack:action-lock:';
@@ -65,20 +69,33 @@ function isCachedRandomness(value: UntypedValue): value is CachedRandomness {
         typeof candidate.signerAddress === 'string' &&
         typeof candidate.actionNum === 'number' &&
         typeof candidate.handIndex === 'number' &&
-        typeof candidate.bettingToken === 'string'
+        typeof candidate.bettingToken === 'string' &&
+        typeof candidate.playerAddress === 'string'
     );
+}
+
+function isExpiredActionLock(lock: CachedRandomness): boolean {
+    return Date.now() - lock.timestamp > ACTION_LOCK_TTL_SECONDS * 1000;
 }
 
 async function readActionLock(lockKey: string): Promise<{ data: CachedRandomness | null; source: 'redis' | 'memory' | 'none' }> {
     if (redis) {
         const redisLock = await redisGetJSON<CachedRandomness>(lockKey);
         if (isCachedRandomness(redisLock)) {
+            if (isExpiredActionLock(redisLock)) {
+                await redisDel(lockKey);
+                return { data: null, source: 'none' };
+            }
             return { data: redisLock, source: 'redis' };
         }
     }
 
     const memoryLock = nonceRandomnessCache.get(lockKey);
     if (isCachedRandomness(memoryLock)) {
+        if (isExpiredActionLock(memoryLock)) {
+            nonceRandomnessCache.delete(lockKey);
+            return { data: null, source: 'none' };
+        }
         return { data: memoryLock, source: 'memory' };
     }
 
@@ -88,7 +105,7 @@ async function readActionLock(lockKey: string): Promise<{ data: CachedRandomness
 async function createActionLockIfAbsent(lockKey: string, payload: CachedRandomness): Promise<{ created: boolean; data: CachedRandomness; source: 'redis' | 'memory' }> {
     if (redis) {
         const serialized = JSON.stringify(payload);
-        const created = await redisCompareAndSetJSON(lockKey, null, serialized);
+        const created = await redisCompareAndSetJSON(lockKey, null, serialized, ACTION_LOCK_TTL_SECONDS);
         if (created) {
             return { created: true, data: payload, source: 'redis' };
         }
@@ -122,12 +139,14 @@ function isLockMismatch(
     cached: CachedRandomness,
     actionNum: number,
     handIndexNum: number,
-    bettingToken: string
+    bettingToken: string,
+    playerAddress: string
 ): boolean {
     return (
         cached.actionNum !== actionNum ||
         cached.handIndex !== handIndexNum ||
-        cached.bettingToken.toLowerCase() !== bettingToken.toLowerCase()
+        cached.bettingToken.toLowerCase() !== bettingToken.toLowerCase() ||
+        cached.playerAddress.toLowerCase() !== playerAddress.toLowerCase()
     );
 }
 
@@ -181,6 +200,19 @@ async function validateActionAgainstOnchainState(
     if (action === 'deal') {
         if (phase !== PHASE_NONE) {
             return { allowed: false, reason: 'Game already in progress' };
+        }
+        if (!playerAddress) {
+            return { allowed: false, reason: 'playerAddress is required for deal' };
+        }
+        const landOwner = await publicClient.readContract({
+            address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+            abi: landAbi,
+            functionName: 'ownerOf',
+            args: [landIdBigInt],
+        }) as string;
+
+        if (landOwner.toLowerCase() !== playerAddress.toLowerCase()) {
+            return { allowed: false, reason: 'Only the land owner can start Blackjack on this land' };
         }
         if (!bettingToken) {
             return { allowed: false, reason: 'Betting token is required for deal' };
@@ -284,6 +316,11 @@ function cleanupRateLimits() {
             recentRequests.delete(address);
         }
     }
+    for (const [lockKey, data] of nonceRandomnessCache.entries()) {
+        if (isExpiredActionLock(data)) {
+            nonceRandomnessCache.delete(lockKey);
+        }
+    }
 }
 
 export async function POST(request: NextRequest) {
@@ -337,6 +374,7 @@ export async function POST(request: NextRequest) {
         if (typeof playerAddress !== 'string' || !isAddress(playerAddress)) {
             return NextResponse.json({ error: 'playerAddress is required' }, { status: 400 });
         }
+        const normalizedPlayerAddress = playerAddress.toLowerCase();
         if (handIndex !== undefined && (typeof handIndex !== 'number' || !Number.isInteger(handIndex) || handIndex < 0 || handIndex > 1)) {
             return NextResponse.json({ error: 'Invalid handIndex' }, { status: 400 });
         }
@@ -359,7 +397,7 @@ export async function POST(request: NextRequest) {
         const handIndexNum = typeof handIndex === 'number' ? handIndex : 0;
 
         // Rate limiting by player address and the forwarded client IP when available.
-        const rateLimitKeys = [playerAddress, getClientRateLimitKey(request)].filter((key): key is string => Boolean(key));
+        const rateLimitKeys = [normalizedPlayerAddress, getClientRateLimitKey(request)].filter((key): key is string => Boolean(key));
         for (const key of rateLimitKeys) {
             if (!checkRateLimit(key)) {
                 return NextResponse.json(
@@ -419,7 +457,7 @@ export async function POST(request: NextRequest) {
             landIdBigInt,
             action as BlackjackActionName,
             handIndexNum,
-            playerAddress,
+            normalizedPlayerAddress,
             effectiveBettingToken
         );
         if (!requestedActionValidation.allowed) {
@@ -439,7 +477,7 @@ export async function POST(request: NextRequest) {
         let effectiveCachedData = cachedData;
         let effectiveCachedSource = cachedSource;
 
-        if (effectiveCachedData && isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken)) {
+        if (effectiveCachedData && isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress)) {
             const lockedActionName = actionNameFromNum(effectiveCachedData.actionNum);
             if (!lockedActionName) {
                 await deleteActionLock(lockKey);
@@ -451,7 +489,7 @@ export async function POST(request: NextRequest) {
                     landIdBigInt,
                     lockedActionName,
                     effectiveCachedData.handIndex,
-                    playerAddress,
+                    normalizedPlayerAddress,
                     effectiveCachedData.bettingToken
                 );
 
@@ -472,7 +510,7 @@ export async function POST(request: NextRequest) {
 
         if (effectiveCachedData) {
             // STRICT ACTION LOCKING: Check if user is trying to switch action
-            if (isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken)) {
+            if (isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress)) {
                 console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${effectiveCachedData.actionNum} requested=${actionNum}`);
                 return NextResponse.json(
                     { error: 'Action Locked: You cannot change your decision for this turn.' },
@@ -521,13 +559,14 @@ export async function POST(request: NextRequest) {
             signerAddress: account.address,
             actionNum,   // Store locked action
             handIndex: handIndexNum,
-            bettingToken: effectiveBettingToken
+            bettingToken: effectiveBettingToken,
+            playerAddress: normalizedPlayerAddress
         };
         const lockResult = await createActionLockIfAbsent(lockKey, proposedLock);
 
         if (!lockResult.created) {
             // Another request won the race. Enforce action lock against stored decision.
-            if (isLockMismatch(lockResult.data, actionNum, handIndexNum, effectiveBettingToken)) {
+            if (isLockMismatch(lockResult.data, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress)) {
                 console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${lockResult.data.actionNum} requested=${actionNum}`);
                 return NextResponse.json(
                     { error: 'Action Locked: You cannot change your decision for this turn.' },

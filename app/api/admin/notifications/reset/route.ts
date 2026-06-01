@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, createErrorResponse } from '@/lib/auth-utils';
 import { SERVER_ENV } from '@/lib/env-config';
 import {
   clearBaseApiLock,
@@ -78,9 +78,8 @@ async function clearBaseCampaigns(): Promise<number> {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!validateAdminKey(req)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     const url = new URL(req.url);

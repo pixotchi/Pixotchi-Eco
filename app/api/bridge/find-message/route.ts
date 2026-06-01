@@ -19,7 +19,7 @@ const OUTGOING_MESSAGE_DISCRIMINATOR = [150, 255, 197, 226, 200, 215, 31, 29];
 const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   const searchParams = request.nextUrl.searchParams;

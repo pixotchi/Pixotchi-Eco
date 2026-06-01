@@ -1,4 +1,4 @@
-import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
+import { createErrorResponse,requireAdmin } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
 import { NextRequest,NextResponse } from 'next/server';
 
@@ -112,9 +112,8 @@ async function getKeyInfo(key: string): Promise<KeyInfo> {
  * - limit: Max keys to return (default: 100, max: 500)
  */
 export async function GET(request: NextRequest) {
-    if (!validateAdminKey(request)) {
-        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-    }
+    const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
     if (!redis) {
         return NextResponse.json({ success: false, error: 'Redis not available' }, { status: 500 });
@@ -184,9 +183,8 @@ export async function GET(request: NextRequest) {
  * - confirm: Must be 'true' for pattern deletion
  */
 export async function DELETE(request: NextRequest) {
-    if (!validateAdminKey(request)) {
-        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-    }
+    const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
     if (!redis) {
         return NextResponse.json({ success: false, error: 'Redis not available' }, { status: 500 });

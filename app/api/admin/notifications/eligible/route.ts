@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { differenceInSeconds } from 'date-fns';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, createErrorResponse } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
 import { SERVER_ENV } from '@/lib/env-config';
 import { getPlantsByOwner } from '@/lib/contracts';
@@ -88,8 +88,9 @@ async function fetchEnabledFids(): Promise<number[]> {
 async function resolveFidAddress(fid: number): Promise<string | null> {
   try {
     const cached = await (redis as UntypedValue)?.get?.(`fidmap:${fid}`);
-    if (cached) {
-      return String(cached).toLowerCase();
+    const cachedAddress = normalizeWalletAddress(cached);
+    if (cachedAddress) {
+      return cachedAddress;
     }
 
     const response = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`, {
@@ -102,7 +103,7 @@ async function resolveFidAddress(fid: number): Promise<string | null> {
     const payload = await response.json();
     const address = normalizeWalletAddress(payload?.result?.address?.address);
     if (address) {
-      await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, address);
+      await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, address, { ex: 7 * 24 * 60 * 60 });
     }
     return address;
   } catch {
@@ -285,9 +286,8 @@ async function handleNeynarEligible(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     if (SERVER_ENV.NOTIFICATION_PROVIDER === 'base') {

@@ -9,7 +9,7 @@
  * Returns gas estimates for batch sizes from 1 to maxBatch
  */
 
-import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
+import { requireAdmin } from '@/lib/auth-utils';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { LAND_CONTRACT_ADDRESS,getLandBuildingsBatch,getLandsByOwner } from '@/lib/contracts';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
@@ -43,10 +43,8 @@ const KNOWN_LIMITS = {
 };
 
 export async function GET(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-    return NextResponse.json(error.body, { status: error.status });
-  }
+  const adminDenied = await requireAdmin(request);
+    if (adminDenied) return adminDenied;
 
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');

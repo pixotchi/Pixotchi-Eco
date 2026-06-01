@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Attribution } from 'ox/erc8021';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin } from '@/lib/auth-utils';
 import { CLIENT_ENV } from '@/lib/env-config';
 
 /**
@@ -12,10 +12,8 @@ import { CLIENT_ENV } from '@/lib/env-config';
  * Useful for automated verification and monitoring.
  */
 export async function GET(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-    return NextResponse.json(error.body, { status: error.status });
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   const builderCode = CLIENT_ENV.BUILDER_CODE;
   const isConfigured = Boolean(builderCode && builderCode.trim() !== '');
@@ -66,4 +64,3 @@ export async function GET(request: NextRequest) {
   
   return NextResponse.json(response);
 }
-

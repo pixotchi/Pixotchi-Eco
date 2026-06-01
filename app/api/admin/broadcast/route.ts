@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, logAdminAction } from '@/lib/auth-utils';
+import { requireAdmin, logAdminAction } from '@/lib/auth-utils';
 import {
   createBroadcast,
   getActiveBroadcasts,
@@ -13,9 +13,8 @@ import {
  */
 export async function GET(req: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     const [messages, stats] = await Promise.all([
@@ -44,9 +43,8 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     const body = await req.json();
@@ -117,9 +115,8 @@ export async function POST(req: NextRequest) {
  */
 export async function PUT(req: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     const body = await req.json();
@@ -169,9 +166,8 @@ export async function PUT(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   // Validate admin access
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     const { searchParams } = new URL(req.url);

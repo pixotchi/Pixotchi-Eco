@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, logAdminAction } from '@/lib/auth-utils';
+import { requireAdmin, logAdminAction } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
 
 /**
@@ -37,9 +37,8 @@ async function scanKeysRaw(pattern: string, maxKeys: number = 10000): Promise<st
  * Returns stats + list of all wallet claims from Redis.
  */
 export async function GET(req: NextRequest) {
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   try {
     // Scan for all wallet_claims keys (raw — no prefix, matching how claim route stores them)
@@ -115,9 +114,8 @@ export async function GET(req: NextRequest) {
  * - ?reset=all&confirm=true — Delete ALL claim records (bulk reset)
  */
 export async function DELETE(req: NextRequest) {
-  if (!validateAdminKey(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(req);
+  if (adminDenied) return adminDenied;
 
   const { searchParams } = new URL(req.url);
   const address = searchParams.get('address');

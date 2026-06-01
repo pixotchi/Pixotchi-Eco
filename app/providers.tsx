@@ -46,6 +46,7 @@ import {
 import {
   clearConfirmedMiniAppSession,
 } from "@/lib/confirmed-miniapp-session";
+import { getPrivySolanaConnectors, hasUsableSolanaConnectors } from "@/lib/solana-auth-availability";
 
 const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
 const DESKTOP_EVM_WALLET_LIST = [
@@ -123,26 +124,6 @@ const getSolanaRpcConfig = () => {
     };
   } catch (error) {
     console.warn('[Providers] Failed to load Solana RPC clients for Privy:', error);
-    return undefined;
-  }
-};
-
-// Get Solana connectors for Privy
-// Using dynamic import to avoid build issues when Solana is not enabled
-const getSolanaConnectors = () => {
-  if (!isSolanaEnabled()) return undefined;
-
-  try {
-    // Import Solana wallet connectors from Privy
-    const privySolana = require('@privy-io/react-auth/solana');
-    if (privySolana?.toSolanaWalletConnectors) {
-      return privySolana.toSolanaWalletConnectors({
-        shouldAutoConnect: true
-      });
-    }
-    return undefined;
-  } catch (error) {
-    console.warn('[Providers] Failed to load Solana connectors:', error);
     return undefined;
   }
 };
@@ -327,14 +308,14 @@ export function Providers(props: { children: ReactNode }) {
         ? MOBILE_SOLANA_WALLET_LIST
         : DESKTOP_SOLANA_WALLET_LIST
     ) as UntypedValue;
+    const solanaConnectors = solanaEnabled ? getPrivySolanaConnectors() : undefined;
 
     // Solana-only mode: only show Solana wallets
     if (isSolanaMode && solanaEnabled) {
-      const solanaConnectors = getSolanaConnectors();
       const solanaRpcs = getSolanaRpcConfig();
 
       // Safety check: connectors must be present for Solana mode
-      if (solanaConnectors) {
+      if (hasUsableSolanaConnectors(solanaConnectors)) {
         return {
           embeddedWallets: {
             ethereum: { createOnLogin: 'off' as const },
@@ -367,7 +348,13 @@ export function Providers(props: { children: ReactNode }) {
       walletChainType: 'ethereum-only' as const,
       // Explicit wallets keep Privy usable on mobile, while detected wallets + QR cover desktop.
       walletList: evmWalletList,
-      externalWallets: undefined,
+      externalWallets: solanaConnectors
+        ? {
+          solana: {
+            connectors: solanaConnectors,
+          },
+        }
+        : undefined,
       solana: undefined,
     };
   }, [authSurface, isMobilePrivyBrowser]);

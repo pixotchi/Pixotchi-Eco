@@ -60,7 +60,7 @@ const ERC20_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   const searchParams = request.nextUrl.searchParams;
