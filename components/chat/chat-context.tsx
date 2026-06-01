@@ -642,16 +642,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const currentSurface = !isMiniApp
       ? sessionStorageManager.getAuthSurface()
       : null;
-    const bootstrapKey = [
-      isMiniApp ? 'miniapp' : currentSurface ?? 'UntypedValue',
-      chatAddress?.toLowerCase() ?? 'none',
-      solanaAddress ?? 'none',
-      authenticated ? '1' : '0',
-      privyReady ? '1' : '0',
-      identityToken ? '1' : '0',
-      publicChatSessionVersion.toString(),
-      publicChatRetryVersion.toString(),
-    ].join(':');
+    const bootstrapKey = isMiniApp
+      ? [
+        'miniapp',
+        publicChatSessionVersion.toString(),
+        publicChatRetryVersion.toString(),
+      ].join(':')
+      : [
+        currentSurface ?? 'UntypedValue',
+        chatAddress?.toLowerCase() ?? 'none',
+        solanaAddress ?? 'none',
+        authenticated ? '1' : '0',
+        privyReady ? '1' : '0',
+        identityToken ? '1' : '0',
+        publicChatSessionVersion.toString(),
+        publicChatRetryVersion.toString(),
+      ].join(':');
 
     if (bootstrapKeyRef.current === bootstrapKey) {
       return;
@@ -668,22 +674,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         try {
           let nextSession = await getCurrentPublicChatSession();
-          const normalizedChatAddress = chatAddress?.toLowerCase() ?? null;
 
           if (nextSession && nextSession.provider !== 'farcaster') {
             await clearPublicChatSession().catch((error) => {
               console.warn('[chat] Failed to clear stale non-Farcaster Mini App chat session:', error);
-            });
-            nextSession = null;
-          }
-
-          if (
-            nextSession &&
-            normalizedChatAddress &&
-            nextSession.address.toLowerCase() !== normalizedChatAddress
-          ) {
-            await clearPublicChatSession().catch((error) => {
-              console.warn('[chat] Failed to clear mismatched Mini App chat session:', error);
             });
             nextSession = null;
           }
