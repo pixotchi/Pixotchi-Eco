@@ -8,6 +8,7 @@ import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { sdk } from "@farcaster/miniapp-sdk";
 import { WagmiProvider as CoreWagmiProvider } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebBaseConfig } from "@/lib/wagmi-web-base-config";
@@ -437,6 +438,42 @@ function RouteAwareChatProvider({ children }: { children: ReactNode }) {
   return <ChatProvider>{children}</ChatProvider>;
 }
 
+function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
+  const readySignalledRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || readySignalledRef.current) {
+      return;
+    }
+
+    if (!hostEnvironment.initialized) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await sdk.actions.ready();
+        if (!cancelled) {
+          readySignalledRef.current = true;
+        }
+      } catch (error) {
+        if (hostEnvironment.isMiniApp) {
+          console.warn('[Providers] Failed to signal sdk.actions.ready():', error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hostEnvironment.initialized,
+    hostEnvironment.isMiniApp,
+  ]);
+}
+
 function ProvidersContent({
   authSurface,
   children,
@@ -451,6 +488,8 @@ function ProvidersContent({
     typeof window === 'undefined',
   );
   const didBootstrapSanitizeRef = useRef(typeof window === 'undefined');
+
+  useMiniAppReadySignal(hostEnvironment);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
