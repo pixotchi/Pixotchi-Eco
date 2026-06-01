@@ -28,7 +28,7 @@
     "@farcaster/miniapp-sdk": "0.3.0",
     "@farcaster/miniapp-wagmi-connector": "2.0.0",
     "@farcaster/quick-auth": "0.0.8",
-    "@privy-io/node": "0.19.0",
+    "@privy-io/node": "0.20.0",
     "@privy-io/react-auth": "3.28.0",
     "@privy-io/wagmi": "4.0.10",
     "@radix-ui/react-dialog": "1.1.15",
