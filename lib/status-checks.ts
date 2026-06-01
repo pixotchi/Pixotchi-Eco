@@ -27,7 +27,7 @@ const APP_HEALTH_PATH = '/api/health';
 const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
 const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
 const BASE_STATUS_URL = process.env.STATUS_BASE_STATUS_URL || 'https://status.base.org/api/v2/summary.json';
-const STATUS_CACHE_KEY = 'status:checks:snapshot:v1';
+const STATUS_CACHE_KEY = `status:checks:snapshot:${SERVER_ENV.NOTIFICATION_PROVIDER}:v1`;
 const DEFAULT_STATUS_CACHE_TTL_SECONDS = Number(process.env.STATUS_SNAPSHOT_TTL_SECONDS || 300);
 
 let inFlightSnapshot: Promise<StatusSnapshot> | null = null;
@@ -494,16 +494,26 @@ function rememberSnapshot(snapshot: StatusSnapshot) {
   memorySnapshotExpiresAt = Date.now() + (getStatusCacheTtlSeconds() * 1000);
 }
 
+function snapshotMatchesCurrentNotificationProvider(snapshot: StatusSnapshot): boolean {
+  const notifications = snapshot.services.find((service) => service.id === 'notifications');
+  return notifications?.label === `Notifications (${getNotificationProviderLabel(SERVER_ENV.NOTIFICATION_PROVIDER)})`;
+}
+
 export async function getCachedStatusSnapshot(forceRefresh: boolean = false): Promise<StatusSnapshot> {
   const now = Date.now();
 
-  if (!forceRefresh && memorySnapshot && memorySnapshotExpiresAt > now) {
+  if (
+    !forceRefresh &&
+    memorySnapshot &&
+    memorySnapshotExpiresAt > now &&
+    snapshotMatchesCurrentNotificationProvider(memorySnapshot)
+  ) {
     return memorySnapshot;
   }
 
   if (!forceRefresh) {
     const cached = await redisGetJSON<StatusSnapshot>(STATUS_CACHE_KEY);
-    if (cached) {
+    if (cached && snapshotMatchesCurrentNotificationProvider(cached)) {
       rememberSnapshot(cached);
       return cached;
     }
