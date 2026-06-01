@@ -6,6 +6,7 @@ import { Card,CardContent } from "@/components/ui/card";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { Textarea } from "@/components/ui/textarea";
+import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
 import { useFrameContext } from "@/lib/frame-context";
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { openExternalUrl } from "@/lib/open-external";
@@ -157,10 +158,13 @@ export default function AboutTab() {
 
     setGenerating(true);
     try {
+      const authHeaders = await getMiniAppQuickAuthHeaders();
       const response = await fetch('/api/invite/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
       });
 
       const data = await response.json();

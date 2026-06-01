@@ -4,7 +4,23 @@ import { tool } from 'ai';
 import { decodeEventLog, formatUnits, getAddress, isAddress, parseAbiItem, parseUnits, type Hex } from 'viem';
 import { z } from 'zod';
 import {
+  barracksGetConfigV2,
+  barracksGetEligibleAttackableLandIds,
   barracksGetLandStateV2,
+  barracksPreviewRaidV2,
+  BATCH_ROUTER_ADDRESS,
+  blackjackGetConfig,
+  blackjackGetGameSnapshot,
+  blackjackGetGameToken,
+  blackjackGetStats,
+  blackjackGetTokenConfig,
+  blackjackIsAvailable,
+  casinoGetActiveBetV2,
+  casinoGetBuildingConfig,
+  casinoGetConfig,
+  casinoGetStats,
+  casinoGetSupportedTokens,
+  casinoGetTokenConfig,
   CREATOR_TOKEN_ADDRESS,
   CRYPTICPOET_TOKEN_ADDRESS,
   getAliveTokenIds,
@@ -23,6 +39,7 @@ import {
   getShopItems,
   getStakeComposite,
   getStrainInfo,
+  getStakeAllowance,
   getTokenBalance,
   getTokenBalanceForToken,
   JESSE_TOKEN_ADDRESS,
@@ -31,6 +48,8 @@ import {
   PIXOTCHI_NFT_ADDRESS,
   PIXOTCHI_TOKEN_ADDRESS,
   quoteFenceV2,
+  STAKE_CONTRACT_ADDRESS,
+  UNISWAP_ROUTER_ADDRESS,
   USDC_ADDRESS,
   WETH_ADDRESS,
   ZERO_ADDRESS,
@@ -44,12 +63,21 @@ import { getSwapQuoteForUserPair } from './swap/engine';
 import { getSwapToken, isUserSwapTokenId, USER_SWAP_TOKEN_IDS } from './swap/constants';
 import type { UserSwapTokenId } from './swap/types';
 import { GAME_ACTION_TOPICS, getGameActionGuide } from './ai-action-guide';
+import { fetchIndexerGraphQL } from './indexer-client';
 import { PLANT_STRAINS_BY_ID, TOWN_BUILDING_NAMES, VILLAGE_BUILDING_NAMES } from './constants';
+import { CLIENT_ENV } from './env-config';
+import { redis } from './redis';
+import { getCachedStatusSnapshot } from './status-checks';
+import { getBridgeConfig, getPixotchiSolanaConfig, isSolanaEnabled, validateSolanaConfig } from './solana-constants';
+import { getTwinAddressInfo, isTwinSetup } from './solana-twin';
 import { getFenceStatus } from './utils';
+import { VERIFY_CLAIM_LEAF_BONUS_LABEL, VERIFY_CLAIM_SEED_BONUS_AMOUNT, VERIFY_CLAIM_SEED_BONUS_LABEL } from './verify-claim-config';
+import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import type { PixotchiReadClient } from './contracts';
-import type { ActivityEvent, BarracksLandStateV2, BuildingData, Land, NormalizedOnchainActivity, Plant } from './types';
+import type { ActivityEvent, BarracksLandStateV2, BarracksRaidPreviewV2, BuildingData, Land, NormalizedOnchainActivity, Plant } from './types';
 
 type ReadOnlyToolContext = {
+  sourceAddress?: string | null;
   userAddress: string;
 };
 
@@ -79,6 +107,12 @@ const ADDRESS_INPUT = z
   .regex(/^0x[a-fA-F0-9]{40}$/)
   .optional()
   .describe('Optional public wallet address. Omit this to use the authenticated user.');
+const SOLANA_ADDRESS_INPUT = z
+  .string()
+  .trim()
+  .regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
+  .optional()
+  .describe('Optional public Solana wallet address. Omit this to use the authenticated Solana source wallet when available.');
 
 const USER_SWAP_TOKEN_ENUM = z.enum(USER_SWAP_TOKEN_IDS);
 const GAME_ACTION_TOPIC_ENUM = z.enum(GAME_ACTION_TOPICS);
@@ -90,14 +124,92 @@ const TOWN_BUILDING_LABELS: Record<number, string> = {
 };
 
 const MAX_BUILDING_AGGREGATE_LANDS = 100;
+const AI_LAND_PRODUCTION_AUDIT_MAX_LANDS = Number.parseInt(process.env.AI_LAND_PRODUCTION_AUDIT_MAX_LANDS || '', 10) || 250;
+const AI_MARKETPLACE_ORDER_SCAN_LIMIT = Number.parseInt(process.env.AI_MARKETPLACE_ORDER_SCAN_LIMIT || '', 10) || 250;
+const AI_CASINO_STATUS_MAX_LANDS = Number.parseInt(process.env.AI_CASINO_STATUS_MAX_LANDS || '', 10) || 40;
+const PLANT_ATTACK_ATTACKER_COOLDOWN_SECONDS = 30 * 60;
+const PLANT_ATTACK_TARGET_COOLDOWN_SECONDS = 60 * 60;
+const AI_COMBAT_ACTIVITY_MAX_HOURS = Number.parseInt(process.env.AI_COMBAT_ACTIVITY_MAX_HOURS || '', 10) || 31 * 24;
 const AI_WALLET_ACTIVITY_BLOCK_RANGE = Number.parseInt(process.env.AI_WALLET_ACTIVITY_BLOCK_RANGE || '', 10) || 150_000;
 const AI_WALLET_ACTIVITY_LOG_LIMIT = Number.parseInt(process.env.AI_WALLET_ACTIVITY_LOG_LIMIT || '', 10) || 60;
 const AI_WALLET_ACTIVITY_LOG_CHUNK_CONCURRENCY = Math.max(
   1,
   Number.parseInt(process.env.AI_WALLET_ACTIVITY_LOG_CHUNK_CONCURRENCY || '', 10) || 4,
 );
+function buildCombatActivityQuery(direction: 'all' | 'incoming' | 'outgoing') {
+  const plantWhere = direction === 'incoming'
+    ? 'attacker_not_in: $plantIds, OR: [{ winner_in: $plantIds }, { loser_in: $plantIds }]'
+    : direction === 'outgoing'
+      ? 'attacker_in: $plantIds'
+      : 'OR: [{ attacker_in: $plantIds }, { winner_in: $plantIds }, { loser_in: $plantIds }]';
+  const landWhere = direction === 'incoming'
+    ? 'defenderLandId_in: $landIds'
+    : direction === 'outgoing'
+      ? 'attackerLandId_in: $landIds'
+      : 'OR: [{ attackerLandId_in: $landIds }, { defenderLandId_in: $landIds }]';
+
+  return `
+    query GetCombatActivity($plantIds: [BigInt!], $landIds: [BigInt!], $fromTimestamp: BigInt!, $toTimestamp: BigInt!, $limit: Int!) {
+    attacks(
+      orderBy: "timestamp",
+      orderDirection: "desc",
+      limit: $limit,
+      where: {
+        timestamp_gte: $fromTimestamp,
+        timestamp_lte: $toTimestamp,
+        ${plantWhere}
+      }
+    ) {
+      items {
+        __typename
+        id
+        timestamp
+        attacker
+        winner
+        loser
+        attackerName
+        winnerName
+        loserName
+        scoresWon
+      }
+    }
+    barracksRaidEvents(
+      orderBy: "timestamp",
+      orderDirection: "desc",
+      limit: $limit,
+      where: {
+        timestamp_gte: $fromTimestamp,
+        timestamp_lte: $toTimestamp,
+        ${landWhere}
+      }
+    ) {
+      items {
+        __typename
+        id
+        timestamp
+        raidId
+        attackerLandId
+        defenderLandId
+        attackerWon
+        blockHeight
+      }
+    }
+  }`;
+}
 const ERC20_TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
 const ERC721_TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)');
+const ERC20_ALLOWANCE_ABI = [
+  {
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    name: 'allowance',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
 const TX_HASH_INPUT = z.string().trim().regex(/^0x[a-fA-F0-9]{64}$/).describe('Base transaction hash.');
 
 type KnownBalanceToken = {
@@ -164,8 +276,14 @@ const TOKEN_SYMBOL_BY_ADDRESS: Record<string, string> = {
   [CREATOR_TOKEN_ADDRESS.toLowerCase()]: 'PIXOTCHI',
   [JESSE_TOKEN_ADDRESS.toLowerCase()]: 'JESSE',
   [CRYPTICPOET_TOKEN_ADDRESS.toLowerCase()]: 'CRYPTICPOET',
+  [getBridgeConfig().base.wrappedSOL.toLowerCase()]: 'wSOL',
   [WETH_ADDRESS.toLowerCase()]: 'WETH',
   [USDC_ADDRESS.toLowerCase()]: 'USDC',
+};
+
+const TOKEN_DECIMALS_BY_ADDRESS: Record<string, number> = {
+  [getBridgeConfig().base.wrappedSOL.toLowerCase()]: 9,
+  [USDC_ADDRESS.toLowerCase()]: 6,
 };
 
 function compactTokenAmount(amount: string): string {
@@ -197,6 +315,34 @@ export function getAIPriceTokenSymbol(tokenAddress: string | undefined): string 
     : tokenAddress.toLowerCase();
 
   return TOKEN_SYMBOL_BY_ADDRESS[normalized] || shortenTokenAddress(tokenAddress);
+}
+
+function getKnownTokenDecimals(tokenAddress: string | undefined, fallback = 18): number {
+  if (!tokenAddress || !isAddress(tokenAddress)) {
+    return fallback;
+  }
+
+  return TOKEN_DECIMALS_BY_ADDRESS[getAddress(tokenAddress).toLowerCase()] ?? fallback;
+}
+
+function formatKnownTokenAmount(
+  rawAmount: bigint | number | string | undefined,
+  tokenAddress: string | undefined,
+  fallbackDecimals = 18,
+): string {
+  return compactTokenAmount(formatToken(rawAmount, getKnownTokenDecimals(tokenAddress, fallbackDecimals)));
+}
+
+function safeJsonParse(value: UntypedValue): UntypedValue {
+  if (!value || typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 function isSeedToken(tokenAddress: string | undefined): boolean {
@@ -364,6 +510,7 @@ function normalizePlant(plant: Plant) {
     .filter((item) => Boolean(item.effectIsOngoingActive))
     .map((item) => ({
       effectUntil: Number(item.effectUntil || 0),
+      effectUntilIso: Number(item.effectUntil || 0) > 0 ? new Date(Number(item.effectUntil) * 1000).toISOString() : null,
       id: String(item.id),
       name: item.name,
     }));
@@ -375,6 +522,7 @@ function normalizePlant(plant: Plant) {
       active: fence.hasActiveFence,
       daysRemaining: fence.daysRemaining,
       expiresAt: fence.expiresAt,
+      expiresAtIso: fence.expiresAt > 0 ? new Date(fence.expiresAt * 1000).toISOString() : null,
       type: fence.type,
     },
     id: plant.id,
@@ -393,6 +541,76 @@ function normalizePlant(plant: Plant) {
     strainName: PLANT_STRAINS_BY_ID[plant.strain]?.name || `Strain ${plant.strain}`,
     timeUntilStarvingHours: plant.timeUntilStarving / 3600,
     timeUntilStarvingSeconds: plant.timeUntilStarving,
+  };
+}
+
+function summarizePlants(plants: ReturnType<typeof normalizePlant>[]) {
+  const urgentPlants = plants.filter((plant) =>
+    plant.status >= 2 || plant.timeUntilStarvingHours < 10
+  );
+  const protectedPlants = plants
+    .filter((plant) => plant.fence.active)
+    .sort((a, b) => (a.fence.expiresAt || 0) - (b.fence.expiresAt || 0));
+  const topRewards = [...plants]
+    .sort((a, b) => b.rewardsEth - a.rewardsEth)
+    .slice(0, 10)
+    .map((plant) => ({
+      fence: plant.fence,
+      id: plant.id,
+      level: plant.level,
+      name: plant.name,
+      rewardsEth: plant.rewardsEth,
+      scorePts: plant.scorePts,
+      statusLabel: plant.statusLabel,
+      strainName: plant.strainName,
+    }));
+
+  return {
+    healthyPlants: plants.filter((plant) => plant.status <= 1).length,
+    protectedCount: protectedPlants.length,
+    protectedPlants: protectedPlants.slice(0, 10).map((plant) => ({
+      fence: plant.fence,
+      id: plant.id,
+      level: plant.level,
+      name: plant.name,
+      statusLabel: plant.statusLabel,
+      strainName: plant.strainName,
+    })),
+    topRewards,
+    totalPlants: plants.length,
+    totalPts: plants.reduce((sum, plant) => sum + plant.scorePts, 0),
+    totalRewardsEth: plants.reduce((sum, plant) => sum + plant.rewardsEth, 0),
+    totalStars: plants.reduce((sum, plant) => sum + plant.stars, 0),
+    urgentCareCount: urgentPlants.length,
+  };
+}
+
+function cooldownDetails(lastTimestamp: string | number | undefined, cooldownSeconds: number) {
+  const now = Math.floor(Date.now() / 1000);
+  const last = Number(lastTimestamp || 0);
+  const availableAt = last > 0 ? last + cooldownSeconds : 0;
+  const remainingSeconds = Math.max(0, availableAt - now);
+
+  return {
+    available: remainingSeconds === 0,
+    availableAt: availableAt > 0 ? availableAt : null,
+    availableAtIso: availableAt > 0 ? new Date(availableAt * 1000).toISOString() : null,
+    cooldownSeconds,
+    remainingSeconds,
+  };
+}
+
+function summarizeAttackPlant(plant: ReturnType<typeof normalizePlant>) {
+  return {
+    fence: plant.fence,
+    id: plant.id,
+    level: plant.level,
+    name: plant.name,
+    owner: plant.owner,
+    scorePts: plant.scorePts,
+    status: plant.status,
+    statusLabel: plant.statusLabel,
+    strainName: plant.strainName,
   };
 }
 
@@ -523,6 +741,116 @@ function normalizeBarracks(state: BarracksLandStateV2 | null) {
   };
 }
 
+function normalizeBarracksForRaid(state: BarracksLandStateV2 | null) {
+  const normalized = normalizeBarracks(state);
+  const now = Math.floor(Date.now() / 1000);
+  const totalSwordsmen = state ? Number(state.totalSwordsmanTroops) : 0;
+  const totalPhalanx = state ? Number(state.totalPhalanxTroops) : 0;
+
+  return {
+    ...normalized,
+    attackReady: Boolean(state?.isBuilt) && Number(state?.attackCooldownEndsAt || 0) <= now && (totalSwordsmen + totalPhalanx) > 0,
+    totalTroops: totalSwordsmen + totalPhalanx,
+  };
+}
+
+function summarizeRaidPreview(preview: BarracksRaidPreviewV2 | null) {
+  if (!preview) {
+    return null;
+  }
+
+  return {
+    attackerCooldownEndsAt: preview.attackerCooldownEndsAt.toString(),
+    attackerPhalanxLost: preview.attackerPhalanxLost.toString(),
+    attackerPower: preview.attackerPower.toString(),
+    attackerSwordsmenLost: preview.attackerSwordsmenLost.toString(),
+    attackerWon: preview.attackerWon,
+    defenderCooldownEndsAt: preview.defenderCooldownEndsAt.toString(),
+    defenderPhalanxLost: preview.defenderPhalanxLost.toString(),
+    defenderPower: preview.defenderPower.toString(),
+    defenderSwordsmenLost: preview.defenderSwordsmenLost.toString(),
+    estimatedLifetimeLootSeconds: preview.estimatedLifetimeLoot.toString(),
+    estimatedLifetimeLootHours: Number(preview.estimatedLifetimeLoot) / 3600,
+    estimatedPointsLoot: formatPts(preview.estimatedPointsLoot),
+    phalanxRequested: preview.phalanxRequested.toString(),
+    statusCode: preview.statusCode,
+    swordsmenRequested: preview.swordsmenRequested.toString(),
+    survivingAttackerPhalanx: preview.survivingAttackerPhalanx.toString(),
+    survivingAttackerSwordsmen: preview.survivingAttackerSwordsmen.toString(),
+  };
+}
+
+function normalizeProductionBuilding(building: UntypedValue, kind: 'town' | 'village') {
+  const normalized = normalizeBuilding(building, kind);
+  return {
+    ...normalized,
+    unclaimedLifetimeHours: normalized.accumulatedLifetimeSeconds / 3600,
+  };
+}
+
+function getLandBuildingProductionTotals(results: Array<{ landId: bigint; townBuildings?: UntypedValue[]; villageBuildings?: UntypedValue[] }>) {
+  const perLand = results.map((entry) => {
+    const buildings = [
+      ...(entry.villageBuildings || []).map((building) => normalizeProductionBuilding(building, 'village')),
+      ...(entry.townBuildings || []).map((building) => normalizeProductionBuilding(building, 'town')),
+    ].filter((building) => building.level > 0);
+    const totals = buildings.reduce(
+      (totals, building) => {
+        totals.unclaimedLifetimeSeconds += building.accumulatedLifetimeSeconds;
+        totals.unclaimedPts += building.accumulatedPoints;
+        totals.productionLifetimePerDaySeconds += building.productionLifetimePerDaySeconds;
+        totals.productionPtsPerDay += building.productionPtsPerDay;
+        return totals;
+      },
+      {
+        productionLifetimePerDaySeconds: 0,
+        productionPtsPerDay: 0,
+        unclaimedLifetimeSeconds: 0,
+        unclaimedPts: 0,
+      },
+    );
+
+    return {
+      buildingCount: buildings.length,
+      buildings,
+      landId: entry.landId.toString(),
+      productionLifetimePerDayHours: totals.productionLifetimePerDaySeconds / 3600,
+      productionLifetimePerDaySeconds: totals.productionLifetimePerDaySeconds,
+      productionPtsPerDay: totals.productionPtsPerDay,
+      unclaimedLifetimeHours: totals.unclaimedLifetimeSeconds / 3600,
+      unclaimedLifetimeSeconds: totals.unclaimedLifetimeSeconds,
+      unclaimedPts: totals.unclaimedPts,
+    };
+  });
+  const totals = perLand.reduce(
+    (totals, land) => {
+      totals.productionLifetimePerDaySeconds += land.productionLifetimePerDaySeconds;
+      totals.productionPtsPerDay += land.productionPtsPerDay;
+      totals.unclaimedLifetimeSeconds += land.unclaimedLifetimeSeconds;
+      totals.unclaimedPts += land.unclaimedPts;
+      return totals;
+    },
+    {
+      productionLifetimePerDaySeconds: 0,
+      productionPtsPerDay: 0,
+      unclaimedLifetimeSeconds: 0,
+      unclaimedPts: 0,
+    },
+  );
+
+  return {
+    perLand,
+    totals: {
+      productionLifetimePerDayHours: totals.productionLifetimePerDaySeconds / 3600,
+      productionLifetimePerDaySeconds: totals.productionLifetimePerDaySeconds,
+      productionPtsPerDay: totals.productionPtsPerDay,
+      unclaimedLifetimeHours: totals.unclaimedLifetimeSeconds / 3600,
+      unclaimedLifetimeSeconds: totals.unclaimedLifetimeSeconds,
+      unclaimedPts: totals.unclaimedPts,
+    },
+  };
+}
+
 function normalizeLand(land: Land, details?: {
   barracks?: BarracksLandStateV2 | null;
   quests?: UntypedValue[];
@@ -580,6 +908,172 @@ async function readLandsForInput(
     return getLandsByIds(ids, { readClient });
   }
   return getLandsByOwner(address, readClient);
+}
+
+type MarketplaceOrder = {
+  amount: bigint;
+  amountAsk: bigint;
+  id: bigint;
+  isActive: boolean;
+  sellToken: number;
+  seller: `0x${string}`;
+};
+
+function normalizeMarketplaceOrder(order: UntypedValue): MarketplaceOrder {
+  return {
+    amount: BigInt(order?.amount ?? order?.[3] ?? 0),
+    amountAsk: BigInt(order?.amountAsk ?? order?.[5] ?? 0),
+    id: BigInt(order?.id ?? order?.[0] ?? 0),
+    isActive: Boolean(order?.isActive ?? order?.[4] ?? false),
+    sellToken: Number(order?.sellToken ?? order?.[2] ?? 0),
+    seller: getAddress(String(order?.seller ?? order?.[1] ?? ZERO_ADDRESS)),
+  };
+}
+
+function marketplacePriceLeafPerSeed(order: MarketplaceOrder): number {
+  const amount = Number(formatUnits(order.amount, 18));
+  const amountAsk = Number(formatUnits(order.amountAsk, 18));
+  if (order.sellToken === 1) {
+    return amountAsk === 0 ? 0 : amount / amountAsk;
+  }
+  return amount === 0 ? 0 : amountAsk / amount;
+}
+
+function compactMarketplaceOrder(order: MarketplaceOrder) {
+  const offeredSymbol = order.sellToken === 1 ? 'LEAF' : 'SEED';
+  const wantedSymbol = order.sellToken === 1 ? 'SEED' : 'LEAF';
+  return {
+    amountDisplay: `${compactTokenAmount(formatToken(order.amount))} ${offeredSymbol}`,
+    amountWantedDisplay: `${compactTokenAmount(formatToken(order.amountAsk))} ${wantedSymbol}`,
+    id: order.id.toString(),
+    isActive: order.isActive,
+    priceLeafPerSeed: marketplacePriceLeafPerSeed(order),
+    seller: order.seller,
+    side: order.sellToken === 1 ? 'ask' : 'bid',
+    offeredToken: offeredSymbol,
+    wantedToken: wantedSymbol,
+  };
+}
+
+function summarizeOrderBook(orders: MarketplaceOrder[], limit: number) {
+  const activeOrders = orders.filter((order) => order.isActive);
+  const asks = activeOrders
+    .filter((order) => order.sellToken === 1)
+    .sort((a, b) => marketplacePriceLeafPerSeed(a) - marketplacePriceLeafPerSeed(b));
+  const bids = activeOrders
+    .filter((order) => order.sellToken === 0)
+    .sort((a, b) => marketplacePriceLeafPerSeed(b) - marketplacePriceLeafPerSeed(a));
+  const totalLeafOffered = asks.reduce((sum, order) => sum + order.amount, BigInt(0));
+  const totalSeedOffered = bids.reduce((sum, order) => sum + order.amount, BigInt(0));
+
+  return {
+    activeOrderCount: activeOrders.length,
+    asks: asks.slice(0, limit).map(compactMarketplaceOrder),
+    bestAskLeafPerSeed: asks[0] ? marketplacePriceLeafPerSeed(asks[0]) : null,
+    bestBidLeafPerSeed: bids[0] ? marketplacePriceLeafPerSeed(bids[0]) : null,
+    bids: bids.slice(0, limit).map(compactMarketplaceOrder),
+    spreadLeafPerSeed: asks[0] && bids[0] ? marketplacePriceLeafPerSeed(asks[0]) - marketplacePriceLeafPerSeed(bids[0]) : null,
+    totalLeafOfferedDisplay: `${compactTokenAmount(formatToken(totalLeafOffered))} LEAF`,
+    totalSeedOfferedDisplay: `${compactTokenAmount(formatToken(totalSeedOffered))} SEED`,
+  };
+}
+
+function normalizeCasinoActiveBet(activeBet: UntypedValue) {
+  if (!activeBet) {
+    return null;
+  }
+
+  const token = String(activeBet.bettingToken || PIXOTCHI_TOKEN_ADDRESS);
+  return {
+    bettingToken: token,
+    bettingTokenSymbol: getAIPriceTokenSymbol(token),
+    canReveal: Boolean(activeBet.canReveal),
+    isActive: Boolean(activeBet.isActive),
+    isExpired: Boolean(activeBet.isExpired),
+    numBets: String(activeBet.numBets ?? '0'),
+    player: activeBet.player,
+    revealBlock: String(activeBet.revealBlock ?? '0'),
+    totalBetDisplay: `${formatKnownTokenAmount(activeBet.totalBetAmount, token)} ${getAIPriceTokenSymbol(token)}`,
+  };
+}
+
+function normalizeCasinoStats(stats: UntypedValue, tokenAddress?: string) {
+  if (!stats) {
+    return null;
+  }
+
+  const symbol = getAIPriceTokenSymbol(tokenAddress);
+  return {
+    gamesPlayed: String(stats.gamesPlayed ?? '0'),
+    totalWageredDisplay: `${formatKnownTokenAmount(stats.totalWagered, tokenAddress)} ${symbol}`,
+    totalWonDisplay: `${formatKnownTokenAmount(stats.totalWon, tokenAddress)} ${symbol}`,
+  };
+}
+
+function normalizeBlackjackSnapshot(snapshot: UntypedValue, tokenAddress?: string) {
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    actionHandIndex: Number(snapshot.actionHandIndex ?? 0),
+    activeHandCount: Number(snapshot.activeHandCount ?? 0),
+    availableActions: {
+      canDouble: Boolean(snapshot.canDouble),
+      canHit: Boolean(snapshot.canHit),
+      canSplit: Boolean(snapshot.canSplit),
+      canStand: Boolean(snapshot.canStand),
+      canSurrender: Boolean(snapshot.canSurrender),
+    },
+    betDisplay: `${formatKnownTokenAmount(snapshot.betAmount, tokenAddress)} ${getAIPriceTokenSymbol(tokenAddress)}`,
+    dealerValue: Number(snapshot.dealerValue ?? 0),
+    hand1Value: Number(snapshot.hand1Value ?? 0),
+    hand2Value: Number(snapshot.hand2Value ?? 0),
+    hasSplit: Boolean(snapshot.hasSplit),
+    isActive: Boolean(snapshot.isActive),
+    phase: Number(snapshot.phase ?? 0),
+    player: snapshot.player,
+  };
+}
+
+function buildMissionTaskRows(mission: UntypedValue) {
+  const rows = [
+    { done: Boolean(mission?.s1?.makeSwap), id: 's1_make_swap', label: 'Make a SEED swap', section: 'General', where: 'Swap' },
+    { done: Boolean(mission?.s1?.stakeSeed), id: 's1_stake_seed', label: 'Stake SEED', section: 'General', where: 'Staking' },
+    { done: Boolean(mission?.s1?.claimStake), id: 's1_claim_stake', label: 'Claim stake rewards', section: 'General', where: 'Staking' },
+    { done: Boolean(mission?.s1?.placeOrder), id: 's1_place_order', label: 'Place a SEED/LEAF order', section: 'General', where: 'Land Marketplace' },
+    { done: Boolean(mission?.s2?.followPlayer), id: 's2_follow_player', label: 'Follow a player', section: 'Social', where: 'Profile/Social' },
+    { done: Boolean(mission?.s2?.chatMessage), id: 's2_chat_message', label: 'Send a public chat message', section: 'Social', where: 'Public Chat' },
+    { done: Boolean(mission?.s2?.visitProfile), id: 's2_visit_profile', label: 'Visit a profile', section: 'Social', where: 'Profile/Social' },
+    { done: Boolean(mission?.s3?.applyResources), id: 's3_apply_resources', label: 'Apply resources to a plant', section: 'Land', where: 'Land/Warehouse' },
+    { done: Boolean(mission?.s3?.sendQuest), id: 's3_send_quest', label: 'Send a farmer on a quest', section: 'Land', where: 'Land Quests' },
+    { done: Boolean(mission?.s3?.claimProduction), id: 's3_claim_production', label: 'Claim production from a building', section: 'Land', where: 'Land Buildings' },
+    { done: Boolean(mission?.s3?.playCasinoGame), id: 's3_play_casino_game', label: 'Play a casino game', section: 'Land', where: 'Casino/Blackjack' },
+    { done: Boolean(mission?.s4?.buy10), id: 's4_buy10_elements', label: `Buy at least 10 elements (${Number(mission?.s4?.buyElementsCount || 0)}/10)`, section: 'Plant', where: 'Plant Shop' },
+    { done: Boolean(mission?.s4?.buyShield), id: 's4_buy_shield', label: 'Buy a shield/fence', section: 'Plant', where: 'Plant Shop/Fence' },
+    { done: Boolean(mission?.s4?.collectStar), id: 's4_collect_star', label: 'Collect a star by killing a plant', section: 'Plant', where: 'Ranking/Attack' },
+    { done: Boolean(mission?.s4?.playArcade), id: 's4_play_arcade', label: 'Play an arcade game', section: 'Plant', where: 'Arcade' },
+  ];
+
+  return {
+    completed: rows.filter((row) => row.done),
+    incomplete: rows.filter((row) => !row.done),
+    rows,
+  };
+}
+
+async function readErc20Allowance(
+  readClient: PixotchiReadClient,
+  tokenAddress: `0x${string}`,
+  owner: `0x${string}`,
+  spender: `0x${string}`,
+): Promise<bigint> {
+  return readClient.readContract({
+    address: tokenAddress,
+    abi: ERC20_ALLOWANCE_ABI,
+    functionName: 'allowance',
+    args: [owner, spender],
+  }) as Promise<bigint>;
 }
 
 function sameAddress(a: string | undefined, b: string | undefined): boolean {
@@ -726,6 +1220,153 @@ function sortActivitiesDescending(activities: NormalizedOnchainActivity[]): Norm
     if (blockA !== blockB) return blockB - blockA;
     return String(b.txHash || '').localeCompare(String(a.txHash || ''));
   });
+}
+
+function timestampMetadata(timestamp: string | number | undefined) {
+  const seconds = Number(timestamp || 0);
+  return {
+    timestamp: seconds > 0 ? String(seconds) : undefined,
+    timestampIso: seconds > 0 ? new Date(seconds * 1000).toISOString() : undefined,
+  };
+}
+
+function formatPtsNumber(raw: UntypedValue): number {
+  try {
+    if (typeof raw === 'bigint') return Number(formatUnits(raw, 12));
+    if (typeof raw === 'number') return raw / 1e12;
+    if (typeof raw === 'string' && raw.trim()) return Number(formatUnits(BigInt(raw), 12));
+  } catch {
+    return Number(raw || 0);
+  }
+  return 0;
+}
+
+function normalizePlantCombatEvent(event: UntypedValue, ownedPlantIds: Set<string>) {
+  const attackerId = String(event.attacker ?? '');
+  const winnerId = String(event.winner ?? '');
+  const loserId = String(event.loser ?? '');
+  const attackerIsMine = ownedPlantIds.has(attackerId);
+  const winnerIsMine = ownedPlantIds.has(winnerId);
+  const loserIsMine = ownedPlantIds.has(loserId);
+  const targetId = winnerId === attackerId ? loserId : winnerId;
+  const targetName = winnerId === attackerId ? event.loserName : event.winnerName;
+  const direction = attackerIsMine ? 'outgoing' : (winnerIsMine || loserIsMine ? 'incoming' : 'related');
+  const outcomeForUser = direction === 'outgoing'
+    ? (winnerIsMine ? 'attack_won' : 'attack_lost')
+    : direction === 'incoming'
+      ? (winnerIsMine ? 'defended_successfully' : 'defense_lost')
+      : 'unknown';
+
+  return {
+    ...timestampMetadata(event.timestamp),
+    attacker: {
+      id: attackerId,
+      mine: attackerIsMine,
+      name: event.attackerName || `Plant #${attackerId}`,
+    },
+    direction,
+    id: String(event.id || ''),
+    kind: 'plant_attack',
+    outcomeForUser,
+    scoresWonPts: formatPtsNumber(event.scoresWon),
+    source: 'Ponder indexer plant Attack events',
+    system: 'plants',
+    target: {
+      id: targetId,
+      mine: ownedPlantIds.has(targetId),
+      name: targetName || `Plant #${targetId}`,
+    },
+    winner: {
+      id: winnerId,
+      mine: winnerIsMine,
+      name: event.winnerName || `Plant #${winnerId}`,
+    },
+    loser: {
+      id: loserId,
+      mine: loserIsMine,
+      name: event.loserName || `Plant #${loserId}`,
+    },
+  };
+}
+
+function normalizeLandCombatEvent(event: UntypedValue, ownedLandIds: Set<string>) {
+  const attackerLandId = String(event.attackerLandId ?? '');
+  const defenderLandId = String(event.defenderLandId ?? '');
+  const attackerIsMine = ownedLandIds.has(attackerLandId);
+  const defenderIsMine = ownedLandIds.has(defenderLandId);
+  const direction = attackerIsMine ? 'outgoing' : (defenderIsMine ? 'incoming' : 'related');
+  const attackerWon = Boolean(event.attackerWon);
+  const outcomeForUser = direction === 'outgoing'
+    ? (attackerWon ? 'raid_won' : 'raid_lost')
+    : direction === 'incoming'
+      ? (attackerWon ? 'defense_lost' : 'defended_successfully')
+      : 'unknown';
+
+  return {
+    ...timestampMetadata(event.timestamp),
+    attackerLandId,
+    attackerWon,
+    blockNumber: event.blockHeight ? String(event.blockHeight) : undefined,
+    defenderLandId,
+    direction,
+    id: String(event.id || ''),
+    kind: 'land_raid',
+    outcomeForUser,
+    raidId: String(event.raidId || ''),
+    source: 'Ponder indexer BarracksRaidEvent events',
+    system: 'lands_barracks',
+  };
+}
+
+function countBy<T extends Record<string, UntypedValue>>(
+  items: T[],
+  getKey: (item: T) => { id: string; label?: string } | undefined,
+) {
+  const counts = new Map<string, { count: number; label?: string }>();
+  for (const item of items) {
+    const key = getKey(item);
+    if (!key?.id) continue;
+    const current = counts.get(key.id);
+    counts.set(key.id, {
+      count: (current?.count || 0) + 1,
+      label: current?.label || key.label,
+    });
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([id, value]) => ({ count: value.count, id, label: value.label }));
+}
+
+function summarizeCombatActivity(events: UntypedValue[]) {
+  const plantAttacks = events.filter((event) => event.kind === 'plant_attack');
+  const landRaids = events.filter((event) => event.kind === 'land_raid');
+  const incomingPlantAttacks = plantAttacks.filter((event) => event.direction === 'incoming');
+  const outgoingPlantAttacks = plantAttacks.filter((event) => event.direction === 'outgoing');
+  const incomingLandRaids = landRaids.filter((event) => event.direction === 'incoming');
+  const outgoingLandRaids = landRaids.filter((event) => event.direction === 'outgoing');
+
+  return {
+    incomingLandRaids: incomingLandRaids.length,
+    incomingPlantAttacks: incomingPlantAttacks.length,
+    landDefenseLosses: incomingLandRaids.filter((event) => event.outcomeForUser === 'defense_lost').length,
+    landDefenseWins: incomingLandRaids.filter((event) => event.outcomeForUser === 'defended_successfully').length,
+    outgoingLandRaids: outgoingLandRaids.length,
+    outgoingPlantAttacks: outgoingPlantAttacks.length,
+    plantAttackLosses: outgoingPlantAttacks.filter((event) => event.outcomeForUser === 'attack_lost').length,
+    plantAttackWins: outgoingPlantAttacks.filter((event) => event.outcomeForUser === 'attack_won').length,
+    plantDefenseLosses: incomingPlantAttacks.filter((event) => event.outcomeForUser === 'defense_lost').length,
+    plantDefenseWins: incomingPlantAttacks.filter((event) => event.outcomeForUser === 'defended_successfully').length,
+    topIncomingLandAttackers: countBy(incomingLandRaids, (event) => {
+      const id = String(event.attackerLandId || '');
+      return id ? { id, label: `Land #${id}` } : undefined;
+    }),
+    topIncomingPlantAttackers: countBy(incomingPlantAttacks, (event) => {
+      const attacker = event.attacker as UntypedValue;
+      return attacker?.id ? { id: String(attacker.id), label: String(attacker.name || `Plant #${attacker.id}`) } : undefined;
+    }),
+    total: events.length,
+  };
 }
 
 async function getTransferLogsForContract(
@@ -959,12 +1600,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               storedPts: formatPts(land.accumulatedPlantPoints),
             })),
             plantSummary: {
-              healthyPlants: normalizedPlants.filter((plant) => plant.status <= 1).length,
-              totalPlants: normalizedPlants.length,
-              totalRewardsEth: normalizedPlants.reduce((sum, plant) => sum + plant.rewardsEth, 0),
-              totalStars: normalizedPlants.reduce((sum, plant) => sum + plant.stars, 0),
-              totalPts: normalizedPlants.reduce((sum, plant) => sum + plant.scorePts, 0),
-              urgentCareCount: urgentPlants.length,
+              ...summarizePlants(normalizedPlants),
             },
             plants: normalizedPlants.slice(0, plantLimit),
             truncated: {
@@ -1051,6 +1687,92 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               indexed: indexedEvents.length > limit,
               onchain: Boolean(rpcActivity?.truncated),
             },
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_combat_activity: tool({
+      description: 'Read time-ranged Pixotchi combat history for a wallet, split between plant attacks and land Barracks raids. Use for "who attacked me", "who raided my land", "attacks in the last 4 hours/month", incoming/outgoing combat analysis, and distinguishing plant vs land combat systems. For month or broad history prompts, use limit 100.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        direction: z.enum(['all', 'incoming', 'outgoing']).default('all'),
+        includeLandRaids: z.boolean().default(true),
+        includePlantAttacks: z.boolean().default(true),
+        limit: z.number().int().min(1).max(100).default(100),
+        timeframeHours: z.number().int().min(1).max(AI_COMBAT_ACTIVITY_MAX_HOURS).default(24),
+      }),
+      execute: async ({ address, direction, includeLandRaids, includePlantAttacks, limit, timeframeHours }) => withToolResult(
+        'get_combat_activity',
+        'Ponder indexer time-ranged plant Attack and land BarracksRaidEvent history',
+        {
+          cache: 'Indexer-backed public combat events; current wallet ownership maps events to the player.',
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Plant attacks and land raids are separate combat systems with different mechanics.',
+            'Time-ranged history is based on indexed events and current owned plant/land IDs.',
+            'Assets transferred away before the query may not be attributable to the current wallet.',
+            `Maximum timeframe is ${AI_COMBAT_ACTIVITY_MAX_HOURS} hours unless configured higher.`,
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const now = Math.floor(Date.now() / 1000);
+          const cappedHours = Math.min(Math.max(1, timeframeHours), AI_COMBAT_ACTIVITY_MAX_HOURS);
+          const fromTimestamp = now - cappedHours * 60 * 60;
+          const [plants, lands] = await Promise.all([
+            includePlantAttacks ? readPlantsForAddress(target, readClient) : Promise.resolve([]),
+            includeLandRaids ? getLandsByOwner(target, readClient) : Promise.resolve([]),
+          ]);
+          const ownedPlantIds = new Set(plants.map((plant) => String(plant.id)));
+          const ownedLandIds = new Set(lands.map((land) => land.tokenId.toString()));
+
+          const data = await fetchIndexerGraphQL<UntypedValue>(buildCombatActivityQuery(direction), {
+            fromTimestamp: String(fromTimestamp),
+            landIds: includeLandRaids ? [...ownedLandIds] : [],
+            limit,
+            plantIds: includePlantAttacks ? [...ownedPlantIds] : [],
+            toTimestamp: String(now),
+          }, { revalidate: 3 });
+          const plantEvents = includePlantAttacks
+            ? (data.attacks?.items || []).map((event: UntypedValue) => normalizePlantCombatEvent(event, ownedPlantIds))
+            : [];
+          const landEvents = includeLandRaids
+            ? (data.barracksRaidEvents?.items || []).map((event: UntypedValue) => normalizeLandCombatEvent(event, ownedLandIds))
+            : [];
+          const combined = [...plantEvents, ...landEvents]
+            .filter((event) => direction === 'all' || event.direction === direction)
+            .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+          const truncated = combined.length > limit || plantEvents.length >= limit || landEvents.length >= limit;
+          const summary = summarizeCombatActivity(combined);
+
+          return {
+            address: target,
+            combined: combined.slice(0, limit),
+            direction,
+            fromTimestamp: String(fromTimestamp),
+            fromTimestampIso: new Date(fromTimestamp * 1000).toISOString(),
+            includedSystems: {
+              landRaids: includeLandRaids,
+              plantAttacks: includePlantAttacks,
+            },
+            landIdsChecked: ownedLandIds.size,
+            limit,
+            plantIdsChecked: ownedPlantIds.size,
+            summary: {
+              ...summary,
+              complete: !truncated,
+              totalDisplay: truncated ? `at least ${summary.total}` : String(summary.total),
+            },
+            timeframeHours: cappedHours,
+            toTimestamp: String(now),
+            toTimestampIso: new Date(now * 1000).toISOString(),
+            truncated,
+            truncationNote: truncated
+              ? 'Result reached the configured event limit. Treat counts as lower bounds and ask for a narrower time window for exact detail.'
+              : null,
           };
         },
         readClient,
@@ -1412,6 +2134,990 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_attack_targets: tool({
+      description: 'Read current plant attack eligibility using the same Ranking UI guardrails: owned attackers, public leaderboard targets, attacker/target cooldowns, target fences, ownership, alive/dead state, and level rules. Use for "who can I attack right now" or eligible plant target questions.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        limit: z.number().int().min(1).max(20).default(10),
+        scanLimit: z.number().int().min(20).max(500).default(200),
+      }),
+      execute: async ({ address, limit, scanLimit }) => withToolResult(
+        'get_attack_targets',
+        `Base contract reads for owned Pixotchi plants and public plant leaderboard via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Read-only eligibility mirrors current app UI guardrails and does not guarantee transaction success.',
+            'Targets are scanned from the current plant leaderboard up to scanLimit; use the Ranking tab for the final live attack button.',
+            'The AI cannot execute attacks or choose a transaction for the player.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const [ownedPlants, allPlantIds] = await Promise.all([
+            readPlantsForAddress(target, readClient),
+            getAliveTokenIds(readClient),
+          ]);
+          const leaderboardPlants = await getPlantsInfoExtended(allPlantIds, readClient);
+          const owned = ownedPlants.map(normalizePlant);
+          const ownedIds = new Set(owned.map((plant) => plant.id));
+          const ranked = leaderboardPlants
+            .map(normalizePlant)
+            .sort((a, b) => b.scorePts - a.scorePts)
+            .map((plant, index) => ({
+              ...plant,
+              rank: index + 1,
+            }));
+          const scanned = ranked.slice(0, scanLimit);
+          const readyAttackers = owned.filter((plant) =>
+            plant.status !== 4 && cooldownDetails(plant.lastAttackUsed, PLANT_ATTACK_ATTACKER_COOLDOWN_SECONDS).available
+          );
+          const blockedSummary = {
+            deadTargets: 0,
+            noLowerLevelReadyAttacker: 0,
+            ownPlants: 0,
+            protectedByFence: 0,
+            targetCooldown: 0,
+          };
+          const targets: UntypedValue[] = [];
+
+          for (const candidate of scanned) {
+            const isOwn = ownedIds.has(candidate.id) || sameAddress(candidate.owner, target);
+            const targetCooldown = cooldownDetails(candidate.lastAttacked, PLANT_ATTACK_TARGET_COOLDOWN_SECONDS);
+
+            if (isOwn) {
+              blockedSummary.ownPlants += 1;
+              continue;
+            }
+            if (candidate.status === 4) {
+              blockedSummary.deadTargets += 1;
+              continue;
+            }
+            if (candidate.fence.active) {
+              blockedSummary.protectedByFence += 1;
+              continue;
+            }
+            if (!targetCooldown.available) {
+              blockedSummary.targetCooldown += 1;
+              continue;
+            }
+
+            const eligibleAttackers = readyAttackers.filter((attacker) =>
+              attacker.id !== candidate.id && attacker.level < candidate.level
+            );
+
+            if (eligibleAttackers.length === 0) {
+              blockedSummary.noLowerLevelReadyAttacker += 1;
+              continue;
+            }
+
+            targets.push({
+              eligibleAttackers: eligibleAttackers.slice(0, 5).map((attacker) => ({
+                ...summarizeAttackPlant(attacker),
+                attackerCooldown: cooldownDetails(attacker.lastAttackUsed, PLANT_ATTACK_ATTACKER_COOLDOWN_SECONDS),
+              })),
+              rank: candidate.rank,
+              target: summarizeAttackPlant(candidate),
+              targetCooldown,
+            });
+          }
+
+          return {
+            address: target,
+            blockedSummary,
+            eligibleTargetCount: targets.length,
+            ownedPlantCount: owned.length,
+            readyAttackerCount: readyAttackers.length,
+            readyAttackers: readyAttackers.slice(0, 10).map((attacker) => ({
+              ...summarizeAttackPlant(attacker),
+              attackerCooldown: cooldownDetails(attacker.lastAttackUsed, PLANT_ATTACK_ATTACKER_COOLDOWN_SECONDS),
+            })),
+            rules: [
+              'Attacker must be alive.',
+              'Target must be alive.',
+              'Attacker level must be lower than target level.',
+              'Each attacker can attack once every 30 minutes.',
+              'A target can be attacked again after 60 minutes.',
+              'Targets with an active fence/shield cannot be attacked.',
+              'You cannot attack your own plant.',
+            ],
+            scannedLeaderboardCount: scanned.length,
+            targetCooldownSeconds: PLANT_ATTACK_TARGET_COOLDOWN_SECONDS,
+            targets: targets.slice(0, limit),
+            totalLeaderboardPlants: ranked.length,
+            truncated: targets.length > limit || ranked.length > scanned.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_land_raid_targets: tool({
+      description: 'Read land Barracks raid eligibility for owned lands: built Barracks, troops, cooldowns, eligible defender land IDs, and optional read-only raid previews. Use for land raids, Barracks targets, troop readiness, or "who can I raid".',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        attackerLandIds: z.array(z.number().int().min(0)).max(20).optional(),
+        includePreviews: z.boolean().default(true),
+        limit: z.number().int().min(1).max(30).default(10),
+        phalanxToSend: z.number().int().min(0).max(100000).optional(),
+        previewTargetLimit: z.number().int().min(0).max(10).default(3),
+        swordsmenToSend: z.number().int().min(0).max(100000).optional(),
+      }),
+      execute: async ({ address, attackerLandIds, includePreviews, limit, phalanxToSend, previewTargetLimit, swordsmenToSend }) => withToolResult(
+        'get_land_raid_targets',
+        `Base contract reads for Land Barracks V2 via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Read-only eligibility mirrors the Barracks UI and does not guarantee transaction success.',
+            'Raid previews are informational only; Neural Seed never executes raids or builds transaction payloads.',
+            'If no troop count is supplied, previews use a tiny sample troop count only to test mechanics, not a recommendation.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const allLands = await getLandsByOwner(target, readClient);
+          const requestedIds = attackerLandIds?.length ? new Set(attackerLandIds.map(String)) : null;
+          const selectedLands = allLands
+            .filter((land) => !requestedIds || requestedIds.has(land.tokenId.toString()))
+            .slice(0, Math.max(limit, attackerLandIds?.length || 0, 20));
+          const [config, states] = await Promise.all([
+            barracksGetConfigV2(),
+            Promise.all(selectedLands.map((land) => barracksGetLandStateV2(land.tokenId, readClient))),
+          ]);
+          const readyAttackers: UntypedValue[] = [];
+          const blocked = {
+            attackCooldown: 0,
+            noBarracks: 0,
+            noTroops: 0,
+          };
+
+          for (const [index, land] of selectedLands.entries()) {
+            const state = states[index];
+            const raidState = normalizeBarracksForRaid(state);
+            if (!state?.isBuilt) {
+              blocked.noBarracks += 1;
+              continue;
+            }
+            if ((Number(state.totalSwordsmanTroops) + Number(state.totalPhalanxTroops)) <= 0) {
+              blocked.noTroops += 1;
+              continue;
+            }
+            if (!raidState.attackReady) {
+              blocked.attackCooldown += 1;
+              continue;
+            }
+            readyAttackers.push({
+              coordinates: {
+                x: Number(land.coordinateX),
+                y: Number(land.coordinateY),
+              },
+              id: land.tokenId.toString(),
+              name: land.name || `Land #${land.tokenId.toString()}`,
+              raidState,
+              storedLifetimeHours: toNumber(land.accumulatedPlantLifetime) / 3600,
+              storedPts: formatPts(land.accumulatedPlantPoints),
+            });
+          }
+
+          const attackerResults = await Promise.all(readyAttackers.slice(0, limit).map(async (attacker) => {
+            const attackerId = BigInt(String(attacker.id));
+            const state = states[selectedLands.findIndex((land) => land.tokenId.toString() === attacker.id)];
+            const eligibleIds = await barracksGetEligibleAttackableLandIds(attackerId);
+            const targetIds = eligibleIds.slice(0, limit);
+            const targetLands = targetIds.length
+              ? await getLandsByIds(targetIds, { readClient })
+              : [];
+            const previewSwordsmen = swordsmenToSend === undefined
+              ? (state && state.totalSwordsmanTroops > BigInt(0) ? BigInt(1) : BigInt(0))
+              : BigInt(swordsmenToSend);
+            const previewPhalanx = phalanxToSend === undefined
+              ? (previewSwordsmen > BigInt(0) ? BigInt(0) : (state && state.totalPhalanxTroops > BigInt(0) ? BigInt(1) : BigInt(0)))
+              : BigInt(phalanxToSend);
+            const previewTargets = includePreviews && (previewSwordsmen + previewPhalanx) > BigInt(0)
+              ? targetLands.slice(0, previewTargetLimit)
+              : [];
+            const previews = await Promise.all(previewTargets.map(async (defender) => ({
+              defenderLandId: defender.tokenId.toString(),
+              preview: summarizeRaidPreview(await barracksPreviewRaidV2(attackerId, defender.tokenId, previewSwordsmen, previewPhalanx)),
+            })));
+
+            return {
+              attacker,
+              eligibleTargetCount: eligibleIds.length,
+              previewTroopsUsed: includePreviews
+                ? {
+                  phalanx: previewPhalanx.toString(),
+                  sampleOnlyWhenNotUserProvided: phalanxToSend === undefined && swordsmenToSend === undefined,
+                  swordsmen: previewSwordsmen.toString(),
+                }
+                : null,
+              previews,
+              targets: targetLands.slice(0, limit).map((land) => ({
+                coordinates: {
+                  x: Number(land.coordinateX),
+                  y: Number(land.coordinateY),
+                },
+                id: land.tokenId.toString(),
+                name: land.name || `Land #${land.tokenId.toString()}`,
+                owner: land.owner,
+                storedLifetimeHours: toNumber(land.accumulatedPlantLifetime) / 3600,
+                storedPts: formatPts(land.accumulatedPlantPoints),
+              })),
+              truncated: eligibleIds.length > limit,
+            };
+          }));
+
+          return {
+            address: target,
+            barracksConfig: config
+              ? {
+                attackCooldownSeconds: config.attackCooldown.toString(),
+                buildCost: formatKnownTokenAmount(config.buildCost, config.buildToken),
+                buildToken: getAIPriceTokenSymbol(config.buildToken),
+                defenseCooldownSeconds: config.defenseCooldown.toString(),
+                enabled: config.enabled,
+                initialized: config.initialized,
+                lootPercentageBps: config.lootPercentageBps,
+                phalanx: {
+                  maxTroopsPerLand: config.phalanx.maxTroopsPerLand.toString(),
+                  trainingCost: formatKnownTokenAmount(config.phalanx.trainingCost, config.phalanx.trainingToken),
+                  trainingToken: getAIPriceTokenSymbol(config.phalanx.trainingToken),
+                  trainingTimePerTroopSeconds: config.phalanx.trainingTimePerTroop.toString(),
+                },
+                swordsman: {
+                  maxTroopsPerLand: config.swordsman.maxTroopsPerLand.toString(),
+                  trainingCost: formatKnownTokenAmount(config.swordsman.trainingCost, config.swordsman.trainingToken),
+                  trainingToken: getAIPriceTokenSymbol(config.swordsman.trainingToken),
+                  trainingTimePerTroopSeconds: config.swordsman.trainingTimePerTroop.toString(),
+                },
+              }
+              : null,
+            blocked,
+            checkedLandCount: selectedLands.length,
+            ownedLandCount: allLands.length,
+            readyAttackerCount: readyAttackers.length,
+            results: attackerResults,
+            rules: [
+              'The attacking land must own a built Barracks.',
+              'The attacking land must have stationed or ready troops.',
+              'The attacking land must be past its attack cooldown.',
+              'Defender eligibility comes from the Barracks contract, not from leaderboard guesses.',
+            ],
+            truncated: readyAttackers.length > limit || selectedLands.length < allLands.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_land_production_audit: tool({
+      description: 'Audit a wallet across many lands for Warehouse resources, unclaimed building production, daily PTS/TOD production, top claimable buildings, and land resource opportunities. Use for "total rewards across lands/plants", "what should I claim/apply", and large land-owner analysis.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        includePerBuilding: z.boolean().default(true),
+        landIds: z.array(z.number().int().min(0)).max(100).optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      execute: async ({ address, includePerBuilding, landIds, limit }) => withToolResult(
+        'get_land_production_audit',
+        `Base contract reads for Land warehouse and building production via ${aiRpcSource}`,
+        {
+          confidence: 'high',
+          includeBlock: true,
+          limitations: [
+            `Audits at most ${AI_LAND_PRODUCTION_AUDIT_MAX_LANDS} lands per request to keep AI usable for large wallets.`,
+            'Production changes over time; refresh the Land UI before signing any claim/apply transaction.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const allLands = await readLandsForInput(target, landIds, readClient);
+          const auditedLands = allLands.slice(0, AI_LAND_PRODUCTION_AUDIT_MAX_LANDS);
+          const buildingResults = await getLandBuildingsBatch(auditedLands.map((land) => land.tokenId), { readClient });
+          const buildingTotals = getLandBuildingProductionTotals(buildingResults);
+          const landsById = new Map(auditedLands.map((land) => [land.tokenId.toString(), land]));
+          const enriched = buildingTotals.perLand.map((entry) => {
+            const land = landsById.get(entry.landId);
+            const buildings = entry.buildings
+              .sort((a, b) => (b.accumulatedPoints - a.accumulatedPoints) || (b.accumulatedLifetimeSeconds - a.accumulatedLifetimeSeconds));
+            return {
+              buildingCount: entry.buildingCount,
+              coordinates: land
+                ? {
+                  x: Number(land.coordinateX),
+                  y: Number(land.coordinateY),
+                }
+                : null,
+              id: entry.landId,
+              name: land?.name || `Land #${entry.landId}`,
+              productionLifetimePerDayHours: entry.productionLifetimePerDayHours,
+              productionPtsPerDay: entry.productionPtsPerDay,
+              storedLifetimeHours: land ? toNumber(land.accumulatedPlantLifetime) / 3600 : 0,
+              storedPts: land ? formatPts(land.accumulatedPlantPoints) : '0',
+              topUnclaimedBuildings: includePerBuilding ? buildings.slice(0, 5) : undefined,
+              unclaimedLifetimeHours: entry.unclaimedLifetimeHours,
+              unclaimedPts: entry.unclaimedPts,
+            };
+          });
+          const topClaimable = [...enriched]
+            .filter((land) => land.unclaimedPts > 0 || land.unclaimedLifetimeHours > 0)
+            .sort((a, b) => (b.unclaimedPts - a.unclaimedPts) || (b.unclaimedLifetimeHours - a.unclaimedLifetimeHours))
+            .slice(0, limit);
+          const topProducers = [...enriched]
+            .filter((land) => land.productionPtsPerDay > 0 || land.productionLifetimePerDayHours > 0)
+            .sort((a, b) => (b.productionPtsPerDay - a.productionPtsPerDay) || (b.productionLifetimePerDayHours - a.productionLifetimePerDayHours))
+            .slice(0, limit);
+
+          return {
+            address: target,
+            auditedLandCount: auditedLands.length,
+            buildingMix: summarizeBuildings(buildingResults),
+            landFilterApplied: Boolean(landIds?.length),
+            ownedLandCount: landIds?.length ? undefined : allLands.length,
+            topClaimable,
+            topProducers,
+            totals: {
+              buildingProduction: buildingTotals.totals,
+              warehouseLifetimeHours: auditedLands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantLifetime), 0) / 3600,
+              warehouseLifetimeSeconds: auditedLands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantLifetime), 0),
+              warehousePts: auditedLands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantPoints, 12), 0),
+            },
+            truncated: allLands.length > auditedLands.length || enriched.length > limit,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_casino_status: tool({
+      description: 'Read Casino/Roulette and Blackjack status for owned or selected lands: feature flags, supported betting tokens, bet limits, active roulette bets, blackjack snapshots, and casino-built lands. Use for casino, roulette, blackjack, stuck game, or wager availability questions.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        includeBlackjack: z.boolean().default(true),
+        includeRoulette: z.boolean().default(true),
+        landIds: z.array(z.number().int().min(0)).max(20).optional(),
+        limit: z.number().int().min(1).max(20).default(10),
+      }),
+      execute: async ({ address, includeBlackjack, includeRoulette, landIds, limit }) => withToolResult(
+        'get_casino_status',
+        `Base contract reads for Land Casino and Blackjack modules via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            `Scans at most ${AI_CASINO_STATUS_MAX_LANDS} lands unless specific land IDs are supplied.`,
+            'Roulette/Blackjack reads are current onchain snapshots; the game UI must refresh again before any transaction.',
+            'Neural Seed cannot place bets, reveal games, hit/stand, or build transaction payloads.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const allLands = await readLandsForInput(target, landIds, readClient);
+          const scanLimit = landIds?.length ? allLands.length : Math.min(allLands.length, AI_CASINO_STATUS_MAX_LANDS);
+          const scannedLands = allLands.slice(0, scanLimit);
+          const buildingResults = await getLandBuildingsBatch(scannedLands.map((land) => land.tokenId), { readClient });
+          const buildingMap = new Map(buildingResults.map((entry) => [entry.landId.toString(), entry]));
+          const casinoLands = scannedLands.filter((land) => {
+            const townBuildings = buildingMap.get(land.tokenId.toString())?.townBuildings || [];
+            return townBuildings.some((building) => Number(building?.id ?? building?.[0] ?? 0) === 6 && Number(building?.level ?? building?.[1] ?? 0) > 0);
+          });
+          const [
+            casinoBuildingConfig,
+            casinoConfig,
+            casinoSupportedTokens,
+            blackjackConfig,
+          ] = await Promise.all([
+            casinoGetBuildingConfig(),
+            includeRoulette ? casinoGetConfig() : Promise.resolve(null),
+            includeRoulette ? casinoGetSupportedTokens() : Promise.resolve([]),
+            includeBlackjack ? blackjackGetConfig() : Promise.resolve(null),
+          ]);
+          const supportedTokenConfigs = await Promise.all((casinoSupportedTokens || []).slice(0, 8).map(async (token) => ({
+            casino: includeRoulette ? await casinoGetTokenConfig(token) : null,
+            blackjack: includeBlackjack ? await blackjackGetTokenConfig(token) : null,
+            token,
+          })));
+          const lands = await Promise.all(casinoLands.slice(0, limit).map(async (land) => {
+            const [activeBet, rouletteStats, blackjackAvailable, blackjackToken, blackjackSnapshot, blackjackStats] = await Promise.all([
+              includeRoulette ? casinoGetActiveBetV2(land.tokenId) : Promise.resolve(null),
+              includeRoulette ? casinoGetStats(land.tokenId) : Promise.resolve(null),
+              includeBlackjack ? blackjackIsAvailable(land.tokenId) : Promise.resolve(null),
+              includeBlackjack ? blackjackGetGameToken(land.tokenId) : Promise.resolve(null),
+              includeBlackjack ? blackjackGetGameSnapshot(land.tokenId) : Promise.resolve(null),
+              includeBlackjack ? blackjackGetStats(land.tokenId) : Promise.resolve(null),
+            ]);
+            const blackjackBetToken = blackjackToken || blackjackConfig?.bettingToken;
+            return {
+              blackjack: includeBlackjack
+                ? {
+                  availability: blackjackAvailable,
+                  gameToken: blackjackBetToken,
+                  gameTokenSymbol: getAIPriceTokenSymbol(blackjackBetToken || undefined),
+                  snapshot: normalizeBlackjackSnapshot(blackjackSnapshot, blackjackBetToken || undefined),
+                  stats: normalizeCasinoStats(blackjackStats, blackjackBetToken || undefined),
+                }
+                : null,
+              coordinates: {
+                x: Number(land.coordinateX),
+                y: Number(land.coordinateY),
+              },
+              id: land.tokenId.toString(),
+              name: land.name || `Land #${land.tokenId.toString()}`,
+              roulette: includeRoulette
+                ? {
+                  activeBet: normalizeCasinoActiveBet(activeBet),
+                  stats: normalizeCasinoStats(rouletteStats, activeBet?.bettingToken || casinoConfig?.bettingToken),
+                }
+                : null,
+            };
+          }));
+
+          return {
+            address: target,
+            configs: {
+              blackjack: blackjackConfig
+                ? {
+                  bettingToken: blackjackConfig.bettingToken,
+                  bettingTokenSymbol: getAIPriceTokenSymbol(blackjackConfig.bettingToken),
+                  enabled: blackjackConfig.enabled,
+                  maxBetDisplay: `${formatKnownTokenAmount(blackjackConfig.maxBet, blackjackConfig.bettingToken)} ${getAIPriceTokenSymbol(blackjackConfig.bettingToken)}`,
+                  minBetDisplay: `${formatKnownTokenAmount(blackjackConfig.minBet, blackjackConfig.bettingToken)} ${getAIPriceTokenSymbol(blackjackConfig.bettingToken)}`,
+                  requiredLevel: blackjackConfig.requiredLevel,
+                }
+                : null,
+              casinoBuilding: casinoBuildingConfig
+                ? {
+                  buildingCostDisplay: `${formatKnownTokenAmount(casinoBuildingConfig.buildingCost, casinoBuildingConfig.buildingToken)} ${getAIPriceTokenSymbol(casinoBuildingConfig.buildingToken)}`,
+                  buildingToken: casinoBuildingConfig.buildingToken,
+                }
+                : null,
+              roulette: casinoConfig
+                ? {
+                  bettingToken: casinoConfig.bettingToken,
+                  bettingTokenSymbol: getAIPriceTokenSymbol(casinoConfig.bettingToken),
+                  enabled: casinoConfig.enabled,
+                  maxBetDisplay: `${formatKnownTokenAmount(casinoConfig.maxBet, casinoConfig.bettingToken)} ${getAIPriceTokenSymbol(casinoConfig.bettingToken)}`,
+                  maxBetsPerGame: casinoConfig.maxBetsPerGame.toString(),
+                  minBetDisplay: `${formatKnownTokenAmount(casinoConfig.minBet, casinoConfig.bettingToken)} ${getAIPriceTokenSymbol(casinoConfig.bettingToken)}`,
+                }
+                : null,
+              supportedTokens: supportedTokenConfigs.map(({ blackjack, casino, token }) => ({
+                blackjack: blackjack
+                  ? {
+                    enabled: blackjack.enabled,
+                    maxBetDisplay: `${formatKnownTokenAmount(blackjack.maxBet, token)} ${getAIPriceTokenSymbol(token)}`,
+                    minBetDisplay: `${formatKnownTokenAmount(blackjack.minBet, token)} ${getAIPriceTokenSymbol(token)}`,
+                    requiredLevel: blackjack.requiredLevel,
+                    supported: blackjack.supported,
+                  }
+                  : null,
+                roulette: casino
+                  ? {
+                    enabled: casino.enabled,
+                    maxBetDisplay: `${formatKnownTokenAmount(casino.maxBet, token)} ${getAIPriceTokenSymbol(token)}`,
+                    maxBetsPerGame: casino.maxBetsPerGame.toString(),
+                    minBetDisplay: `${formatKnownTokenAmount(casino.minBet, token)} ${getAIPriceTokenSymbol(token)}`,
+                    supported: casino.supported,
+                  }
+                  : null,
+                token,
+                tokenSymbol: getAIPriceTokenSymbol(token),
+              })),
+            },
+            featureFlags: {
+              blackjackEnabledInApp: CLIENT_ENV.BLACKJACK_ENABLED,
+              casinoEnabledInApp: CLIENT_ENV.CASINO_ENABLED,
+            },
+            landFilterApplied: Boolean(landIds?.length),
+            lands,
+            ownedLandCount: landIds?.length ? undefined : allLands.length,
+            scannedLandCount: scannedLands.length,
+            totalCasinoLandsInScan: casinoLands.length,
+            truncated: allLands.length > scannedLands.length || casinoLands.length > lands.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_marketplace_orders: tool({
+      description: 'Read the SEED/LEAF land marketplace order book and the wallet’s own public orders. Use for SEED/LEAF order book, best bid/ask, open order, or marketplace task questions. Read-only; never places or cancels orders.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        includeInactive: z.boolean().default(false),
+        includeMyOrders: z.boolean().default(true),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      execute: async ({ address, includeInactive, includeMyOrders, limit }) => withToolResult(
+        'get_marketplace_orders',
+        `Base contract reads for Land marketplace order book via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            `Active order scan is capped to ${AI_MARKETPLACE_ORDER_SCAN_LIMIT} orders before compaction.`,
+            'The marketplace UI must refresh the book and balances before signing create/take/cancel transactions.',
+            'Neural Seed cannot place, take, cancel, approve, or build marketplace transactions.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const [activeRaw, inactiveRaw, myRaw, activeFlag, ownedLands] = await Promise.all([
+            readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<UntypedValue[]>,
+            includeInactive
+              ? readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetInactiveOrders', args: [] }) as Promise<UntypedValue[]>
+              : Promise.resolve([]),
+            includeMyOrders
+              ? readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetUserOrders', args: [target] }) as Promise<UntypedValue[]>
+              : Promise.resolve([]),
+            readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>,
+            getLandsByOwner(target, readClient).catch(() => []),
+          ]);
+          const activeOrders = (activeRaw || []).slice(0, AI_MARKETPLACE_ORDER_SCAN_LIMIT).map(normalizeMarketplaceOrder);
+          const inactiveOrders = (inactiveRaw || []).slice(0, Math.min(limit, AI_MARKETPLACE_ORDER_SCAN_LIMIT)).map(normalizeMarketplaceOrder);
+          const myOrders = (myRaw || []).slice(0, AI_MARKETPLACE_ORDER_SCAN_LIMIT).map(normalizeMarketplaceOrder);
+          const book = summarizeOrderBook(activeOrders, limit);
+
+          return {
+            active: Boolean(activeFlag),
+            address: target,
+            orderBook: book,
+            inactiveOrders: includeInactive ? inactiveOrders.slice(0, limit).map(compactMarketplaceOrder) : undefined,
+            myOrders: includeMyOrders
+              ? {
+                active: myOrders.filter((order) => order.isActive).slice(0, limit).map(compactMarketplaceOrder),
+                inactive: myOrders.filter((order) => !order.isActive).slice(0, limit).map(compactMarketplaceOrder),
+                total: myOrders.length,
+              }
+              : undefined,
+            rules: [
+              'Order book price is shown as LEAF per SEED, matching the marketplace UI.',
+              'sellToken=1 orders offer LEAF for SEED (asks).',
+              'sellToken=0 orders offer SEED for LEAF (bids).',
+              'Marketplace actions require an owned land in the UI.',
+            ],
+            userCanUseMarketplaceUi: ownedLands.length > 0,
+            userOwnedLandCount: ownedLands.length,
+            truncated: (activeRaw || []).length > activeOrders.length || myOrders.length > limit,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_claim_eligibility: tool({
+      description: 'Read public/authenticated claim availability for Base Verify free plant and wallet airdrop cards. Use for "can I claim", "airdrop", "verify", "free plant", or why a claim card is not showing. Never signs or claims.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+      }),
+      execute: async ({ address }) => withToolResult(
+        'get_claim_eligibility',
+        'Redis-backed public airdrop status and Base Verify claim status, plus Base balance checks for public bonus availability',
+        {
+          cache: 'Current Redis claim state; bonus funding check is live when configured.',
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Only returns the requested wallet’s claim status; it never lists other eligible wallets or admin airdrop data.',
+            'The AI cannot verify social accounts, sign messages, submit claims, or expose claim/admin internals.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const lower = target.toLowerCase();
+          const [airdropRaw, verifyRaw] = await Promise.all([
+            redis?.get(`airdrop:eligible:${lower}`),
+            redis?.get(`wallet_claims:${lower}`),
+          ]);
+          const airdrop = safeJsonParse(airdropRaw);
+          const verifyClaim = safeJsonParse(verifyRaw);
+          const seedBonusEnabled = CLIENT_ENV.VERIFY_CLAIM_SEED_BONUS_ENABLED;
+          const agentAddress = process.env.VERIFY_CLAIM_AGENT_ADDRESS || '';
+          let seedBonusAvailable = false;
+
+          if (seedBonusEnabled && agentAddress && isAddress(agentAddress)) {
+            try {
+              const seedBalance = await getTokenBalanceForToken(getAddress(agentAddress), PIXOTCHI_TOKEN_ADDRESS, readClient);
+              seedBonusAvailable = seedBalance >= parseUnits(VERIFY_CLAIM_SEED_BONUS_AMOUNT, 18);
+            } catch {
+              seedBonusAvailable = false;
+            }
+          }
+
+          return {
+            address: target,
+            airdrop: airdrop
+              ? {
+                claimed: Boolean(airdrop.claimed),
+                claimedAt: airdrop.claimedAt || null,
+                eligible: true,
+                leaf: String(airdrop.leaf || '0'),
+                pixotchi: String(airdrop.pixotchi || '0'),
+                seed: String(airdrop.seed || '0'),
+                txHash: typeof airdrop.txHash === 'string' ? airdrop.txHash : null,
+              }
+              : {
+                claimed: false,
+                eligible: false,
+                leaf: '0',
+                pixotchi: '0',
+                seed: '0',
+                txHash: null,
+              },
+            ui: {
+              airdropWhere: 'Wallet Profile shows the Airdrop card when NEXT_PUBLIC_SHOW_AIRDROP is enabled and the wallet is eligible.',
+              verifyWhere: 'Mint shows the Base Verify free-plant card when verify claims are enabled.',
+            },
+            verifyFreePlant: {
+              bonuses: {
+                leaf: CLIENT_ENV.VERIFY_CLAIM_LEAF_BONUS_ENABLED ? VERIFY_CLAIM_LEAF_BONUS_LABEL : null,
+                seed: seedBonusAvailable ? VERIFY_CLAIM_SEED_BONUS_LABEL : null,
+              },
+              claimed: Boolean(verifyClaim),
+              claimData: verifyClaim
+                ? {
+                  status: verifyClaim.status,
+                  strainId: verifyClaim.strainId,
+                  timestamp: verifyClaim.timestamp,
+                  tokenId: verifyClaim.tokenId,
+                }
+                : null,
+              enabled: CLIENT_ENV.VERIFY_CLAIM_ENABLED,
+            },
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_app_status: tool({
+      description: 'Read app/module health and public feature flags: app, RPC, indexer, database, notifications, Base status, casino, blackjack, barracks, swaps, verify, Solana bridge, and status staleness. Use when users ask if something is down or disabled.',
+      inputSchema: z.object({
+        forceRefresh: z.boolean().default(false),
+      }),
+      execute: async ({ forceRefresh }) => withToolResult(
+        'get_app_status',
+        'Pixotchi status checks, public app feature flags, and Solana bridge config validation',
+        {
+          cache: forceRefresh ? 'Forced refresh requested' : 'Cached status snapshot when available',
+          confidence: 'medium',
+          includeBlock: false,
+          limitations: ['Status checks are operational diagnostics, not a guarantee that a future transaction will succeed.'],
+        },
+        async () => {
+          const status = await getCachedStatusSnapshot(forceRefresh);
+          const solanaValidation = validateSolanaConfig();
+          return {
+            featureFlags: {
+              barracksEnabled: CLIENT_ENV.BARRACKS_ENABLED,
+              barracksPreviewEnabled: CLIENT_ENV.BARRACKS_PREVIEW_ENABLED,
+              barracksV2Enabled: CLIENT_ENV.BARRACKS_V2_ENABLED,
+              blackjackEnabled: CLIENT_ENV.BLACKJACK_ENABLED,
+              casinoEnabled: CLIENT_ENV.CASINO_ENABLED,
+              gamificationDisabled: CLIENT_ENV.GAMIFICATION_DISABLED,
+              paymasterEnabled: CLIENT_ENV.PAYMASTER_ENABLED,
+              solanaEnabled: isSolanaEnabled(),
+              swapDisabled: CLIENT_ENV.SWAP_MODULE_DISABLED,
+              swapDisabledMessage: CLIENT_ENV.SWAP_MODULE_DISABLED ? CLIENT_ENV.SWAP_MODULE_DISABLED_MESSAGE : null,
+              verifyClaimEnabled: CLIENT_ENV.VERIFY_CLAIM_ENABLED,
+            },
+            overall: status.overall,
+            services: status.services.map((service) => ({
+              details: service.details,
+              id: service.id,
+              label: service.label,
+              latencyMs: service.latencyMs,
+              status: service.status,
+            })),
+            solanaBridgeConfig: {
+              enabled: isSolanaEnabled(),
+              missingPublicConfig: solanaValidation.missing,
+              validPublicConfig: solanaValidation.valid,
+            },
+            statusGeneratedAt: status.generatedAt,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_daily_task_plan: tool({
+      description: 'Read today’s Rocks/Farmer Tasks progress and combine it with live wallet state to suggest the most practical next incomplete tasks. Use for "what should I do next", "finish my daily", "Rocks", or onboarding task guidance.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        suggestionLimit: z.number().int().min(1).max(10).default(5),
+      }),
+      execute: async ({ address, suggestionLimit }) => withToolResult(
+        'get_daily_task_plan',
+        `Redis gamification state plus Base wallet/land/plant reads via ${aiRpcSource}`,
+        {
+          cache: 'Mission progress is Redis-backed; readiness is live onchain where possible.',
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Mission completion can depend on proof indexing after transactions.',
+            'Readiness suggestions are not transaction guarantees; use the visible Tasks and action panels before signing.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const [mission, missionScore, streak, plants, lands, seedBalance, leafBalance, stake] = await Promise.all([
+            getMissionDay(target),
+            getMissionScore(target),
+            getStreak(target),
+            readPlantsForAddress(target, readClient),
+            getLandsByOwner(target, readClient),
+            getTokenBalance(target, readClient),
+            getLeafBalance(target, readClient),
+            getStakeComposite(target, readClient).catch(() => null),
+          ]);
+          const taskRows = buildMissionTaskRows(mission);
+          const productionScanLands = lands.slice(0, Math.min(lands.length, 75));
+          const buildingResults = productionScanLands.length
+            ? await getLandBuildingsBatch(productionScanLands.map((land) => land.tokenId), { readClient })
+            : [];
+          const buildingTotals = getLandBuildingProductionTotals(buildingResults).totals;
+          const casinoLandsInScan = buildingResults.filter((entry) =>
+            (entry.townBuildings || []).some((building) => Number(building?.id ?? building?.[0] ?? 0) === 6 && Number(building?.level ?? building?.[1] ?? 0) > 0)
+          ).length;
+          const hasPlant = plants.length > 0;
+          const hasLand = lands.length > 0;
+          const hasSeed = seedBalance > BigInt(0);
+          const hasLeaf = leafBalance > BigInt(0);
+          const claimableStakeLeaf = stake?.stake?.rewards || BigInt(0);
+          const warehousePts = lands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantPoints, 12), 0);
+          const warehouseLifetimeHours = lands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantLifetime), 0) / 3600;
+          const readiness: Record<string, { ready: boolean; reason: string; suggestedPanel: string }> = {
+            s1_claim_stake: {
+              ready: claimableStakeLeaf > BigInt(0),
+              reason: claimableStakeLeaf > BigInt(0) ? `You have ${formatToken(claimableStakeLeaf)} LEAF claimable from staking.` : 'No claimable staking rewards were found.',
+              suggestedPanel: 'Staking',
+            },
+            s1_make_swap: {
+              ready: hasSeed || hasLeaf,
+              reason: hasSeed || hasLeaf ? 'You have game tokens that can be used in the Swap panel.' : 'No SEED/LEAF balance was found for a simple in-game swap.',
+              suggestedPanel: 'Swap',
+            },
+            s1_place_order: {
+              ready: hasLand && (hasSeed || hasLeaf),
+              reason: hasLand && (hasSeed || hasLeaf) ? 'You own land and have SEED/LEAF, so the marketplace panel can create an order.' : 'Marketplace orders require an owned land plus SEED or LEAF.',
+              suggestedPanel: 'Land Marketplace',
+            },
+            s1_stake_seed: {
+              ready: hasSeed,
+              reason: hasSeed ? `You have ${formatToken(seedBalance)} SEED available.` : 'No SEED balance was found for staking.',
+              suggestedPanel: 'Staking',
+            },
+            s2_chat_message: { ready: true, reason: 'Public chat is a UI action.', suggestedPanel: 'Public Chat' },
+            s2_follow_player: { ready: true, reason: 'Follow a visible player from profile/social surfaces.', suggestedPanel: 'Profile/Social' },
+            s2_visit_profile: { ready: true, reason: 'Visit any visible player profile.', suggestedPanel: 'Profile/Social' },
+            s3_apply_resources: {
+              ready: hasPlant && (warehousePts > 0 || warehouseLifetimeHours > 0),
+              reason: hasPlant && (warehousePts > 0 || warehouseLifetimeHours > 0)
+                ? `Warehouse has about ${warehousePts.toFixed(2)} PTS and ${warehouseLifetimeHours.toFixed(2)} TOD hours available across lands.`
+                : 'Applying resources requires a plant and Warehouse resources.',
+              suggestedPanel: 'Land/Warehouse',
+            },
+            s3_claim_production: {
+              ready: buildingTotals.unclaimedPts > 0 || buildingTotals.unclaimedLifetimeHours > 0,
+              reason: buildingTotals.unclaimedPts > 0 || buildingTotals.unclaimedLifetimeHours > 0
+                ? `Scanned buildings have about ${buildingTotals.unclaimedPts.toFixed(2)} PTS and ${buildingTotals.unclaimedLifetimeHours.toFixed(2)} TOD hours unclaimed.`
+                : 'No unclaimed building production was found in the scanned lands.',
+              suggestedPanel: 'Land Buildings',
+            },
+            s3_play_casino_game: {
+              ready: CLIENT_ENV.CASINO_ENABLED && casinoLandsInScan > 0,
+              reason: CLIENT_ENV.CASINO_ENABLED && casinoLandsInScan > 0 ? `${casinoLandsInScan} casino land(s) found in the scan.` : 'No built casino was found in the scanned lands, or casino is disabled.',
+              suggestedPanel: 'Casino/Blackjack',
+            },
+            s3_send_quest: { ready: hasLand, reason: hasLand ? 'You own land for quest slots.' : 'Quest tasks require an owned land.', suggestedPanel: 'Land Quests' },
+            s4_buy10_elements: { ready: hasPlant && hasSeed, reason: hasPlant && hasSeed ? 'You have plants and SEED for plant shop elements.' : 'Buying elements requires a plant and SEED.', suggestedPanel: 'Plant Shop' },
+            s4_buy_shield: { ready: hasPlant && hasSeed, reason: hasPlant && hasSeed ? 'You have plants and SEED for a shield/fence purchase.' : 'Buying a shield/fence requires a plant and SEED.', suggestedPanel: 'Plant Shop/Fence' },
+            s4_collect_star: { ready: hasPlant, reason: hasPlant ? 'Use Ranking/Attack to find eligible star opportunities.' : 'Collecting a star requires an attack-capable plant.', suggestedPanel: 'Ranking/Attack' },
+            s4_play_arcade: { ready: hasPlant, reason: hasPlant ? 'Arcade games are available from plant actions.' : 'Arcade tasks require a plant.', suggestedPanel: 'Arcade' },
+          };
+          const incompleteWithReadiness = taskRows.incomplete.map((task) => ({
+            ...task,
+            ...(readiness[task.id] || { ready: false, reason: 'No readiness data available.', suggestedPanel: task.where }),
+          }));
+
+          return {
+            address: target,
+            mission,
+            missionScore,
+            readinessContext: {
+              casinoLandsInScan,
+              claimableStakeLeaf: formatToken(claimableStakeLeaf),
+              landCount: lands.length,
+              plantCount: plants.length,
+              scannedProductionLandCount: productionScanLands.length,
+              seedBalance: formatToken(seedBalance),
+              warehouseLifetimeHours,
+              warehousePts,
+            },
+            suggestedNext: incompleteWithReadiness
+              .sort((a, b) => Number(b.ready) - Number(a.ready))
+              .slice(0, suggestionLimit),
+            taskCounts: {
+              completed: taskRows.completed.length,
+              incomplete: taskRows.incomplete.length,
+              total: taskRows.rows.length,
+            },
+            tasks: taskRows.rows,
+            streak,
+            truncated: lands.length > productionScanLands.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_known_allowances: tool({
+      description: 'Read current ERC-20 allowances for known Pixotchi tokens and known Pixotchi spenders only. Use for approval troubleshooting, "why can’t I stake/swap/place order", or checking stale approvals. Never builds revoke/approve calldata.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        includeZeroAllowances: z.boolean().default(false),
+      }),
+      execute: async ({ address, includeZeroAllowances }) => withToolResult(
+        'get_known_allowances',
+        `Base ERC-20 allowance reads for known Pixotchi tokens and spenders via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Known tokens/spenders only; arbitrary user-supplied contracts are intentionally unsupported.',
+            'Allowance can change at any time. The UI must refresh before any approve/revoke action.',
+            'Neural Seed never builds approval or revoke transactions.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const bridgeConfig = getBridgeConfig();
+          const tokenList = [
+            { address: PIXOTCHI_TOKEN_ADDRESS, decimals: 18, id: 'seed', symbol: 'SEED' },
+            { address: LEAF_CONTRACT_ADDRESS, decimals: 18, id: 'leaf', symbol: 'LEAF' },
+            { address: CREATOR_TOKEN_ADDRESS, decimals: 18, id: 'pixotchi', symbol: 'PIXOTCHI' },
+            { address: JESSE_TOKEN_ADDRESS, decimals: 18, id: 'jesse', symbol: 'JESSE' },
+            { address: USDC_ADDRESS, decimals: 6, id: 'usdc', symbol: 'USDC' },
+            { address: WETH_ADDRESS, decimals: 18, id: 'weth', symbol: 'WETH' },
+            { address: getAddress(bridgeConfig.base.wrappedSOL), decimals: 9, id: 'wsol', symbol: 'wSOL' },
+          ];
+          const spenderList = [
+            { address: PIXOTCHI_NFT_ADDRESS, id: 'plants_contract', label: 'Plant contract', useCases: ['plant mint', 'shop items', 'garden items', 'fence/shield', 'revive'] },
+            { address: LAND_CONTRACT_ADDRESS, id: 'land_contract', label: 'Land contract', useCases: ['land mint', 'buildings', 'warehouse', 'marketplace', 'barracks', 'casino'] },
+            { address: STAKE_CONTRACT_ADDRESS, id: 'staking_contract', label: 'Staking contract', useCases: ['stake SEED'] },
+            { address: UNISWAP_ROUTER_ADDRESS, id: 'baseswap_router', label: 'BaseSwap router', useCases: ['swap'] },
+            ...(BATCH_ROUTER_ADDRESS && isAddress(BATCH_ROUTER_ADDRESS)
+              ? [{ address: BATCH_ROUTER_ADDRESS, id: 'batch_router', label: 'Batch transfer router', useCases: ['bulk NFT transfers'] }]
+              : []),
+          ];
+          const reads = await Promise.allSettled(tokenList.flatMap((token) => spenderList.map(async (spender) => {
+            const raw = token.id === 'seed' && spender.id === 'staking_contract'
+              ? await getStakeAllowance(target)
+              : await readErc20Allowance(readClient, token.address as `0x${string}`, target, spender.address as `0x${string}`);
+            return {
+              allowanceDisplay: `${compactTokenAmount(formatToken(raw, token.decimals))} ${token.symbol}`,
+              allowanceRaw: raw.toString(),
+              spender: spender.label,
+              spenderAddress: spender.address,
+              spenderId: spender.id,
+              token: token.symbol,
+              tokenAddress: token.address,
+              tokenId: token.id,
+              useCases: spender.useCases,
+            };
+          })));
+          const allowances = reads
+            .filter((result): result is PromiseFulfilledResult<UntypedValue> => result.status === 'fulfilled')
+            .map((result) => result.value)
+            .filter((entry) => includeZeroAllowances || BigInt(entry.allowanceRaw || '0') > BigInt(0));
+          const errors = reads
+            .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+            .map((result) => errorMessage(result.reason));
+
+          return {
+            address: target,
+            allowances,
+            errors: errors.slice(0, 5),
+            includeZeroAllowances,
+            knownOnly: true,
+            spenderCount: spenderList.length,
+            tokenCount: tokenList.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_bridge_status: tool({
+      description: 'Read public Solana bridge/Twin status: enabled config, predicted Twin address, Twin deployment, wSOL/SEED balances, and adapter setup. Use for Solana bridge onboarding or "is my twin ready" questions. Never builds bridge transactions or uses debug endpoints.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        includeTwinBalances: z.boolean().default(true),
+        solanaAddress: SOLANA_ADDRESS_INPUT,
+      }),
+      execute: async ({ address, includeTwinBalances, solanaAddress }) => withToolResult(
+        'get_bridge_status',
+        `Public Solana bridge config and Base Twin reads via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Bridge status is read-only. The AI cannot prepare bridge transactions, retry relays, sign Solana messages, or call bridge debug/admin endpoints.',
+            'Solana wallet details are only checked when the authenticated session or prompt provides a Solana public address.',
+          ],
+        },
+        async () => {
+          const baseTarget = address ? getTargetAddress(address, context.userAddress) : getTargetAddress(undefined, context.userAddress);
+          const sourceSolana = solanaAddress || context.sourceAddress || null;
+          const bridgeConfig = getBridgeConfig();
+          const pixotchiConfig = getPixotchiSolanaConfig();
+          const validation = validateSolanaConfig();
+          let twin: UntypedValue = null;
+
+          if (sourceSolana && SOLANA_ADDRESS_INPUT.safeParse(sourceSolana).success) {
+            const info = await getTwinAddressInfo(sourceSolana);
+            const setup = await isTwinSetup(info.twinAddress, pixotchiConfig.twinAdapter);
+            twin = {
+              baseExplorerUrl: `https://basescan.org/address/${info.twinAddress}`,
+              isDeployed: info.isDeployed,
+              isSetup: setup,
+              seedBalance: includeTwinBalances ? `${formatToken(info.seedBalance)} SEED` : undefined,
+              solanaAddress: sourceSolana,
+              solanaExplorerUrl: `${bridgeConfig.solana.blockExplorer}/address/${sourceSolana}`,
+              twinAddress: info.twinAddress,
+              wsolBalance: includeTwinBalances ? `${formatUnits(info.wsolBalance, 9)} wSOL` : undefined,
+            };
+          }
+
+          return {
+            baseAddress: baseTarget,
+            bridge: {
+              baseBridge: bridgeConfig.base.bridge,
+              baseChainId: bridgeConfig.base.chainId,
+              baseWrappedSOL: bridgeConfig.base.wrappedSOL,
+              enabled: isSolanaEnabled(),
+              estimatedBridgeTimeMs: 30000,
+              missingPublicConfig: validation.missing,
+              solanaBridgeProgram: bridgeConfig.solana.bridgeProgram,
+              solanaExplorer: bridgeConfig.solana.blockExplorer,
+              twinAdapter: pixotchiConfig.twinAdapter || null,
+              validPublicConfig: validation.valid,
+            },
+            twin,
+            ui: {
+              setupWhere: 'Use the visible Solana bridge/setup controls in Mint, plant item actions, or bridge-enabled transaction buttons.',
+              txStatusWhere: 'For a Base transaction hash, ask Neural Seed to run transaction status; for a Solana signature, use the Solana explorer link shown by the UI.',
+            },
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_missions: tool({
       description: 'Read the authenticated user mission day, mission score, and streak data from gamification storage.',
       inputSchema: z.object({}),
@@ -1463,12 +3169,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               totalStoredPts: lands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantPoints, 12), 0),
             },
             plantSummary: {
-              healthyPlants: normalizedPlants.filter((plant) => plant.status <= 1).length,
-              totalPlants: normalizedPlants.length,
-              totalRewardsEth: normalizedPlants.reduce((sum, plant) => sum + plant.rewardsEth, 0),
-              totalStars: normalizedPlants.reduce((sum, plant) => sum + plant.stars, 0),
-              totalPts: normalizedPlants.reduce((sum, plant) => sum + plant.scorePts, 0),
-              urgentCareCount: urgentPlants.length,
+              ...summarizePlants(normalizedPlants),
             },
             urgentPlants: urgentPlants.slice(0, 10),
           };
@@ -1496,11 +3197,13 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           const normalized = plants
             .slice(0, limit)
             .map(normalizePlant);
+          const allNormalized = plants.map(normalizePlant);
 
           return {
             address: plantIds?.length ? undefined : target,
             count: normalized.length,
             plants: normalized,
+            summary: summarizePlants(allNormalized),
             totalOwned: plantIds?.length ? undefined : plants.length,
             truncated: plants.length > normalized.length,
           };

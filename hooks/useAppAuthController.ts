@@ -26,9 +26,6 @@ import {
   type BaseChatSessionRefreshRequest,
 } from "@/lib/base-chat-session-refresh";
 import { clearConfirmedMiniAppSession } from "@/lib/confirmed-miniapp-session";
-import {
-  clearMiniAppBypassCookies,
-} from "@/lib/miniapp-bypass";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import {
   AuthConnectionState,
@@ -258,7 +255,6 @@ export function useAppAuthController() {
         console.warn("Failed to clear public chat session before surface switch:", error);
       });
       clearConfirmedMiniAppSession("surface-switch");
-      clearMiniAppBypassCookies();
 
       if (authenticated && logout) {
         await logout().catch((error) => {

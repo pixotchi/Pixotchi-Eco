@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 import { formatInviteUrl } from '@/lib/invite-utils';
 import { InviteStats } from '@/lib/types';
 import { useMutation,useQuery,useQueryClient } from '@tanstack/react-query';
@@ -61,10 +62,13 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      const authHeaders = await getMiniAppQuickAuthHeaders();
       const response = await fetch('/api/invite/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
       });
       return response.json();
     },

@@ -7,9 +7,11 @@ import {
   validateMessage,
 } from '@/lib/chat-service';
 import {
+  ChatAuthError,
   createChatAuthRequiredResponse,
+  createChatAuthErrorResponse,
   createChatUnavailableResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+  getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
 import { markMissionTask, trackDailyActivity } from '@/lib/gamification-service';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
@@ -20,7 +22,7 @@ const CHAT_SEND_ADDRESS_LIMIT_PER_MINUTE = 20;
 
 export async function POST(request: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request);
+    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
@@ -153,6 +155,10 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
     console.error('Error sending chat message:', error);
     return createChatUnavailableResponse('Failed to send message.');
   }

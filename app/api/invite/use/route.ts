@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ChatAuthError,
   createChatAuthRequiredResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+  createChatAuthErrorResponse,
+  getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
 import { markCodeAsUsed, markUserAsValidated } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
@@ -16,10 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
-    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
-      fallbackAddress,
-    });
+    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({
@@ -57,6 +56,10 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
     console.error('Error in invite code usage:', error);
     const errorResponse = createErrorResponse('Internal server error', 500, 'INTERNAL_ERROR');
     return NextResponse.json(errorResponse.body, { status: errorResponse.status });

@@ -3,10 +3,6 @@ import type { NextRequest } from 'next/server';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 
 const CHAT_SESSION_COOKIE = 'pixotchi_chat_session';
-const MINIAPP_BYPASS_COOKIE = 'pixotchi_miniapp';
-const MINIAPP_BYPASS_ADDRESS_COOKIE = 'pixotchi_miniapp_address';
-const MINIAPP_BYPASS_HEADER = 'x-pixotchi-miniapp';
-const MINIAPP_BYPASS_ADDRESS_HEADER = 'x-pixotchi-address';
 const EDGE_SESSION_REQUIRED_API_PATHS = new Set([
   '/api/chat/messages',
   '/api/chat/send',
@@ -64,26 +60,12 @@ function isEdgeSameOriginOnlyApiPath(pathname: string): boolean {
   return EDGE_SAME_ORIGIN_ONLY_API_PATHS.has(pathname);
 }
 
-function hasChatAuthArtifacts(request: NextRequest): boolean {
-  return Boolean(
-    request.cookies.get(CHAT_SESSION_COOKIE)?.value ||
-    (
-      request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value === '1' &&
-      request.cookies.get(MINIAPP_BYPASS_ADDRESS_COOKIE)?.value
-    ) ||
-    (
-      request.headers.get(MINIAPP_BYPASS_HEADER) === '1' &&
-      request.headers.get(MINIAPP_BYPASS_ADDRESS_HEADER)
-    ),
-  );
+function hasBearerAuth(request: NextRequest): boolean {
+  return /^Bearer\s+\S+/i.test(request.headers.get('authorization') ?? '');
 }
 
-function isMiniAppChatRequest(request: NextRequest, pathname: string): boolean {
-  if (!pathname.startsWith('/api/chat/')) {
-    return false;
-  }
-
-  return request.headers.get(MINIAPP_BYPASS_HEADER) === '1';
+function hasChatAuthArtifacts(request: NextRequest): boolean {
+  return Boolean(request.cookies.get(CHAT_SESSION_COOKIE)?.value || hasBearerAuth(request));
 }
 
 function isCrossSiteBrowserRequest(request: NextRequest): boolean {
@@ -119,7 +101,7 @@ export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   if (isEdgeSessionRequiredApiPath(pathname) || isEdgeSameOriginOnlyApiPath(pathname)) {
-    if (isCrossSiteBrowserRequest(request) && !isMiniAppChatRequest(request, pathname)) {
+    if (isCrossSiteBrowserRequest(request)) {
       return NextResponse.json(
         { error: 'Cross-site browser access is not allowed for this endpoint.' },
         {
@@ -187,7 +169,7 @@ export async function proxy(request: NextRequest) {
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         response.headers.set(
           'Access-Control-Allow-Headers',
-          'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp, x-pixotchi-miniapp, x-pixotchi-address',
+          'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp',
         );
         response.headers.set('Access-Control-Max-Age', '86400');
         response.headers.append('Vary', 'Origin');

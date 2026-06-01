@@ -13,6 +13,7 @@ import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -55,11 +56,16 @@ export default function SponsoredTransaction({
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
     // Gamification: track daily activity (non-blocking)
     if (address) {
-      fetch('/api/gamification/streak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address })
-      }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
+      void (async () => {
+        const authHeaders = await getMiniAppQuickAuthHeaders();
+        await fetch('/api/gamification/streak', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
+        });
+      })().catch(err => console.warn('Streak tracking failed (non-critical):', err));
     }
   }, [address, onSuccess]);
 

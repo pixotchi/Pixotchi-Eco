@@ -30,6 +30,18 @@ const REQUIRED_TOPICS = [
   'support',
 ] as const;
 
+const REQUIRED_READ_TOOLS = [
+  'get_app_status',
+  'get_bridge_status',
+  'get_casino_status',
+  'get_claim_eligibility',
+  'get_daily_task_plan',
+  'get_known_allowances',
+  'get_land_production_audit',
+  'get_land_raid_targets',
+  'get_marketplace_orders',
+] as const;
+
 function loadEnvFile(fileName: string) {
   const path = resolve(process.cwd(), fileName);
   if (!existsSync(path)) return;
@@ -133,6 +145,14 @@ async function main() {
 
   const testAddress = process.env.AI_READONLY_TEST_ADDRESS || DEFAULT_TEST_ADDRESS;
   const tools = toolsImport.createReadOnlyAITools({ userAddress: testAddress });
+  for (const toolName of REQUIRED_READ_TOOLS) {
+    assert(tools[toolName], `Missing read-only AI tool: ${toolName}.`);
+  }
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.barracks_raids.liveDataSources.includes('get_land_raid_targets'), 'Barracks topic is not routed to land raid target tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.warehouse.liveDataSources.includes('get_land_production_audit'), 'Warehouse topic is not routed to production audit tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.marketplace.liveDataSources.includes('get_marketplace_orders'), 'Marketplace topic is not routed to marketplace orders tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.casino.liveDataSources.includes('get_casino_status'), 'Casino topic is not routed to casino status tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.verify_airdrop.liveDataSources.includes('get_claim_eligibility'), 'Verify/airdrop topic is not routed to claim eligibility tool.');
 
   const guideResult = await (tools.get_game_action_guide as UntypedValue).execute({
     includeSafetyNotes: true,
@@ -188,6 +208,40 @@ async function main() {
   const txJson = JSON.stringify(txData);
   assert(!/"input"\s*:/.test(txJson), 'Transaction status exposed an input field.');
   assert(!/"calldata"\s*:/.test(txJson), 'Transaction status exposed a calldata field.');
+
+  const productionResult = await (tools.get_land_production_audit as UntypedValue).execute({
+    address: testAddress,
+    includePerBuilding: false,
+    limit: 3,
+  });
+  const productionData = getToolData(productionResult, 'get_land_production_audit');
+  assert(typeof productionData.auditedLandCount === 'number', 'Production audit missing audited land count.');
+  assert(productionData.totals?.buildingProduction, 'Production audit missing building production totals.');
+
+  const raidResult = await (tools.get_land_raid_targets as UntypedValue).execute({
+    address: testAddress,
+    includePreviews: false,
+    limit: 3,
+    previewTargetLimit: 0,
+  });
+  const raidData = getToolData(raidResult, 'get_land_raid_targets');
+  assert(typeof raidData.readyAttackerCount === 'number', 'Land raid target tool missing ready attacker count.');
+  assert(Array.isArray(raidData.results), 'Land raid target tool missing results array.');
+
+  const claimResult = await (tools.get_claim_eligibility as UntypedValue).execute({
+    address: testAddress,
+  });
+  const claimData = getToolData(claimResult, 'get_claim_eligibility');
+  assert(typeof claimData.airdrop?.eligible === 'boolean', 'Claim eligibility missing airdrop eligibility flag.');
+  assert(typeof claimData.verifyFreePlant?.enabled === 'boolean', 'Claim eligibility missing verify enabled flag.');
+
+  const bridgeResult = await (tools.get_bridge_status as UntypedValue).execute({
+    address: testAddress,
+    includeTwinBalances: false,
+  });
+  const bridgeData = getToolData(bridgeResult, 'get_bridge_status');
+  assert(bridgeData.bridge?.baseChainId === 8453, 'Bridge status did not report Base mainnet.');
+  assert(!JSON.stringify(bridgeData).includes('/api/bridge/debug'), 'Bridge status exposed a debug bridge endpoint.');
 
   console.log(JSON.stringify({
     activityCount: activityData.combined.length,

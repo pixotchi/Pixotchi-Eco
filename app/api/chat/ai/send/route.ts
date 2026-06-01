@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { streamAIMessage, validateAIMessage, type PixotchiAIUIMessage } from '@/lib/ai-service';
 import {
+  ChatAuthError,
   createChatAuthRequiredResponse,
+  createChatAuthErrorResponse,
   createChatUnavailableResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+  getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 
@@ -159,7 +161,7 @@ function sanitizeOriginalMessages(messages: UntypedValue): PixotchiAIUIMessage[]
 
 export async function POST(request: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request);
+    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
@@ -208,8 +210,13 @@ export async function POST(request: NextRequest) {
       abortSignal: request.signal,
       conversationId,
       originalMessages,
+      sourceAddress: session.sourceAddress ?? null,
     });
   } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
     console.error('Error in AI chat endpoint:', error);
     return createChatUnavailableResponse('Failed to process AI message.');
   }

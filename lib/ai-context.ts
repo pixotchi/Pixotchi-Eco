@@ -24,10 +24,22 @@ Live-data rules:
 - If any plant is dry, dying, dead, or under 10 hours of TOD, prioritize care guidance.
 
 Tool routing:
-- Broad onboarding or "what should I do": use player overview, live prices, balances/assets if useful, and the action guide.
+- Broad onboarding or "what should I do": use player overview, daily task plan when personalized, live prices, balances/assets if useful, and the action guide.
 - Balances, assets, wallet state: use wallet token balance and wallet game asset tools.
+- Daily tasks, Rocks, streaks, or "what next today": use daily task plan.
 - Last mint, last transaction, history, or "what happened": use wallet game activity.
+- Total land rewards, Warehouse resources, claimable production, or applying resources: use land production audit.
+- Who attacked/raided me, combat history, or time-ranged attacks: use combat activity. Distinguish plant attacks from land Barracks raids.
+- If combat or activity results are truncated, describe counts as lower bounds such as "at least N" and suggest narrowing the time window for exact detail.
 - A provided transaction hash: use transaction status.
+- Plant attack target eligibility or "who can I attack": use attack targets; do not infer targets from leaderboard rank alone.
+- Land raid/Barracks target eligibility or troop readiness: use land raid targets; do not infer defender lands from rankings alone.
+- Casino, roulette, blackjack, active games, or stuck wager state: use casino status.
+- Marketplace order book, best bid/ask, or SEED/LEAF order tasks: use marketplace orders.
+- Airdrop, Base Verify, free plant, or claim-card questions: use claim eligibility.
+- Approval/allowance troubleshooting: use known allowances.
+- App disabled/down/status questions: use app status.
+- Solana bridge or Twin setup questions: use bridge status, and transaction status when a Base tx hash is supplied.
 - How-to/action questions: use the action guide and direct the user to the app UI.
 
 Capability index:
@@ -42,7 +54,13 @@ export function generateConversationTitle(firstMessage: string): string {
   if (cleaned.includes('last') || cleaned.includes('history') || cleaned.includes('transaction') || cleaned.includes('tx')) return 'Wallet Activity';
   if (cleaned.includes('balance') || cleaned.includes('wallet')) return 'Wallet Help';
   if (cleaned.includes('swap') || cleaned.includes('token')) return 'Token Swapping';
+  if (cleaned.includes('allowance') || cleaned.includes('approval') || cleaned.includes('approve')) return 'Approvals Help';
   if (cleaned.includes('barracks') || cleaned.includes('swordsman') || cleaned.includes('phalanx') || cleaned.includes('raid')) return 'Land Raids';
+  if (cleaned.includes('casino') || cleaned.includes('roulette') || cleaned.includes('blackjack')) return 'Casino Help';
+  if (cleaned.includes('market') || cleaned.includes('order book') || cleaned.includes('bid') || cleaned.includes('ask')) return 'Marketplace Help';
+  if (cleaned.includes('airdrop') || cleaned.includes('verify') || cleaned.includes('claim')) return 'Claims Help';
+  if (cleaned.includes('status') || cleaned.includes('down') || cleaned.includes('disabled')) return 'App Status';
+  if (cleaned.includes('task') || cleaned.includes('rocks') || cleaned.includes('daily')) return 'Daily Tasks';
   if (cleaned.includes('land') || cleaned.includes('building')) return 'Land Management';
   if (cleaned.includes('item') || cleaned.includes('shop')) return 'Items & Shop';
   if (cleaned.includes('attack')) return 'Combat & Attacks';

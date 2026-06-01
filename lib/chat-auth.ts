@@ -8,7 +8,6 @@ import { getBaseReadClient } from '@/lib/base-rpc';
 import { getPrivyChatAuthConfigStatus } from '@/lib/env-config';
 import { getTwinAddress } from '@/lib/solana-twin';
 import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
-import { MINIAPP_BYPASS_ADDRESS_COOKIE, MINIAPP_BYPASS_COOKIE } from '@/lib/miniapp-bypass';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 export type ChatSessionProvider = 'privy' | 'farcaster' | 'base';
@@ -79,6 +78,7 @@ interface FarcasterChatAuthPayload {
 const CHAT_SESSION_COOKIE_NAME = 'pixotchi_chat_session';
 const CHAT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const BASE_AUTH_NONCE_TTL_SECONDS = 60 * 10;
+const FARCASTER_AUTH_ADDRESS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 const BASE_NONCE_CONSUME_SCRIPT = `
 if redis.call("EXISTS", KEYS[1]) == 1 then
   redis.call("DEL", KEYS[1])
@@ -113,13 +113,37 @@ function getBaseNonceKey(nonce: string): string {
   return `chat:auth:base:nonce:${nonce}`;
 }
 
+function getFarcasterAuthAddressKey(fid: number): string {
+  return `chat:auth:farcaster:primary-address:${fid}`;
+}
+
 function normalizeAddress(address: string): string {
   return address.toLowerCase();
 }
 
-async function resolveFarcasterAddressFromFid(fid: number): Promise<string | null> {
+function isFarcasterInvalidTokenError(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('name' in error)) {
+    return false;
+  }
+
+  const name = (error as { name?: unknown }).name;
+  if (typeof name !== 'string') {
+    return false;
+  }
+
+  return (
+    name === 'InvalidToken' ||
+    name.startsWith('JWT') ||
+    name.startsWith('JWS') ||
+    name.startsWith('JOSE') ||
+    name === 'JWKSNoMatchingKey' ||
+    name === 'JWKSTimeout'
+  );
+}
+
+async function resolveFarcasterAuthAddressFromFid(fid: number): Promise<string | null> {
   try {
-    const cached = await (redis as UntypedValue)?.get?.(`fidmap:${fid}`);
+    const cached = await redisGetJSON<string>(getFarcasterAuthAddressKey(fid));
     if (typeof cached === 'string' && isValidEthereumAddressFormat(cached)) {
       return normalizeAddress(cached);
     }
@@ -144,7 +168,11 @@ async function resolveFarcasterAddressFromFid(fid: number): Promise<string | nul
     }
 
     const normalizedAddress = normalizeAddress(address);
-    await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, normalizedAddress);
+    await redisSetJSON(
+      getFarcasterAuthAddressKey(fid),
+      normalizedAddress,
+      FARCASTER_AUTH_ADDRESS_CACHE_TTL_SECONDS,
+    );
     return normalizedAddress;
   } catch {
     return null;
@@ -460,6 +488,20 @@ export function createChatUnavailableResponse(message: string = 'Chat authentica
   );
 }
 
+export function createChatAuthErrorResponse(error: ChatAuthError): NextResponse {
+  if (error.status === 503) {
+    return createChatUnavailableResponse(error.message);
+  }
+
+  return NextResponse.json(
+    { error: error.message },
+    {
+      headers: buildPrivateNoStoreHeaders(),
+      status: error.status,
+    },
+  );
+}
+
 export async function issueBaseAuthNonce(): Promise<string> {
   if (!redis) {
     throw new ChatAuthError('Redis is required for Base authentication.', 503);
@@ -528,49 +570,23 @@ export async function getChatSessionFromRequest(request: NextRequest): Promise<{
   };
 }
 
-function getMiniAppBypassAddressFromRequest(
-  request: NextRequest,
-  fallbackAddress?: string | null,
-): string | null {
-  const miniAppMarker =
-    request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value === '1' ||
-    request.headers.get('x-pixotchi-miniapp') === '1';
-
-  if (!miniAppMarker) {
+export function getFarcasterQuickAuthTokenFromRequest(request: NextRequest): string | null {
+  const authorization = request.headers.get('authorization');
+  if (!authorization) {
     return null;
   }
 
-  const url = new URL(request.url);
-  const candidates = [
-    request.headers.get('x-pixotchi-address'),
-    request.cookies.get(MINIAPP_BYPASS_ADDRESS_COOKIE)?.value ?? null,
-    url.searchParams.get('address'),
-    fallbackAddress ?? null,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-
-    const decoded = decodeURIComponent(candidate).trim();
-    if (!isValidEthereumAddressFormat(decoded)) {
-      continue;
-    }
-
-    return normalizeAddress(decoded);
-  }
-
-  return null;
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1]?.trim();
+  return token || null;
 }
 
-export async function getChatSessionOrMiniAppBypassFromRequest(
+export async function getChatSessionOrQuickAuthFromRequest(
   request: NextRequest,
-  options?: {
-    fallbackAddress?: string | null;
-  },
 ): Promise<{
   session: ChatSessionRecord | null;
   sessionId: string | null;
-  viaMiniAppBypass: boolean;
+  viaQuickAuth: boolean;
 }> {
   const { session, sessionId } = await getChatSessionFromRequest(request);
 
@@ -578,29 +594,32 @@ export async function getChatSessionOrMiniAppBypassFromRequest(
     return {
       session,
       sessionId,
-      viaMiniAppBypass: false,
+      viaQuickAuth: false,
     };
   }
 
-  const bypassAddress = getMiniAppBypassAddressFromRequest(request, options?.fallbackAddress);
-  if (!bypassAddress) {
+  const token = getFarcasterQuickAuthTokenFromRequest(request);
+  if (!token) {
     return {
       session: null,
       sessionId,
-      viaMiniAppBypass: false,
+      viaQuickAuth: false,
     };
   }
 
+  const identity = await verifyFarcasterChatIdentity(request, { token });
+
   return {
     session: {
-      address: bypassAddress,
+      address: identity.address,
       createdAt: Date.now(),
-      id: 'miniapp-bypass',
-      method: 'farcaster-miniapp',
-      provider: 'farcaster',
+      id: 'farcaster-quick-auth',
+      method: identity.method,
+      provider: identity.provider,
+      ...(identity.fid ? { fid: identity.fid } : {}),
     },
     sessionId,
-    viaMiniAppBypass: true,
+    viaQuickAuth: true,
   };
 }
 
@@ -781,15 +800,26 @@ export async function verifyFarcasterChatIdentity(
   request: NextRequest,
   payload: FarcasterChatAuthPayload,
 ): Promise<ChatIdentity> {
-  if (!payload.token) {
-    throw new ChatAuthError('Farcaster Quick Auth token is required.', 400);
+  const token = payload.token?.trim();
+  if (!token) {
+    throw new ChatAuthError('Farcaster Quick Auth token is required.', 401);
   }
 
   const quickAuthClient = createFarcasterQuickAuthClient();
-  const verified = await quickAuthClient.verifyJwt({
-    domain: getExpectedDomain(request),
-    token: payload.token,
-  }) as { sub?: UntypedValue };
+  let verified: { sub?: UntypedValue };
+
+  try {
+    verified = await quickAuthClient.verifyJwt({
+      domain: getExpectedDomain(request),
+      token,
+    }) as { sub?: UntypedValue };
+  } catch (error) {
+    if (isFarcasterInvalidTokenError(error)) {
+      throw new ChatAuthError('Invalid Farcaster Quick Auth token.', 401);
+    }
+
+    throw error;
+  }
 
   const fid = typeof verified.sub === 'number'
     ? verified.sub
@@ -799,9 +829,14 @@ export async function verifyFarcasterChatIdentity(
     throw new ChatAuthError('Farcaster Quick Auth token is missing a valid fid.', 401);
   }
 
-  const normalizedAddress = await resolveFarcasterAddressFromFid(fid);
+  const normalizedAddress = await resolveFarcasterAuthAddressFromFid(fid);
   if (!normalizedAddress) {
     throw new ChatAuthError('Farcaster Quick Auth address could not be resolved.', 401);
+  }
+
+  const expectedAddress = payload.expectedAddress ? normalizeAddress(payload.expectedAddress) : null;
+  if (expectedAddress && normalizedAddress !== expectedAddress) {
+    throw new ChatAuthError('Farcaster Quick Auth address does not match the connected wallet.', 401);
   }
 
   return {

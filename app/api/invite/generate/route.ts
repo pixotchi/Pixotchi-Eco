@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ChatAuthError,
   createChatAuthRequiredResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+  createChatAuthErrorResponse,
+  getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
 import { generateInviteCode } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
@@ -15,11 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
-    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
-      fallbackAddress,
-    });
+    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({
@@ -42,6 +40,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
   } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
     console.error('Error in invite generation:', error);
     const errorResponse = createErrorResponse('Internal server error', 500, 'INTERNAL_ERROR');
     return NextResponse.json(errorResponse.body, { status: errorResponse.status });

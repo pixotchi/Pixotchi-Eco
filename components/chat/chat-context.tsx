@@ -31,6 +31,7 @@ import {
   clearConfirmedMiniAppSession,
   useConfirmedMiniAppSession,
 } from '@/lib/confirmed-miniapp-session';
+import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 import { SecureSessionState } from '@/lib/auth-surface';
 import { sessionStorageManager } from '@/lib/session-storage-manager';
 import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
@@ -204,16 +205,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     ? Boolean(confirmedMiniAppAddress)
     : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
-  const getMiniAppBypassHeaders = useCallback((): HeadersInit => {
-    if (!isMiniApp || !confirmedMiniAppAddress) {
-      return {};
-    }
-
-    return {
-      'x-pixotchi-address': confirmedMiniAppAddress,
-      'x-pixotchi-miniapp': '1',
-    };
-  }, [confirmedMiniAppAddress, isMiniApp]);
   const aiTransport = useMemo(
     () => new DefaultChatTransport<AIUIMessage>({
       api: '/api/chat/ai/send',
@@ -516,9 +507,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        const authHeaders = await getMiniAppQuickAuthHeaders();
         const response = await fetch('/api/chat/messages?limit=50', {
           cache: 'no-store',
-          headers: getMiniAppBypassHeaders(),
+          headers: authHeaders,
         });
         if (response.status === 401) {
           await handleChatAuthFailure();
@@ -549,9 +541,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           params.append('conversationId', conversationId);
         }
 
+        const authHeaders = await getMiniAppQuickAuthHeaders();
         const response = await fetch(`/api/chat/ai/messages?${params}`, {
           cache: 'no-store',
-          headers: getMiniAppBypassHeaders(),
+          headers: authHeaders,
         });
         if (response.status === 401) {
           await handleChatAuthFailure();
@@ -582,7 +575,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [conversationId, getMiniAppBypassHeaders, handleChatAuthFailure, publicChatAuthenticated, setAIChatMessages, updatePublicMessages, writeModeMessages]);
+  }, [conversationId, handleChatAuthFailure, publicChatAuthenticated, setAIChatMessages, updatePublicMessages, writeModeMessages]);
 
   const setMode = useCallback((next: ChatMode) => {
     if (mode) {
@@ -617,9 +610,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      const authHeaders = await getMiniAppQuickAuthHeaders();
       const response = await fetch('/api/chat/messages?limit=50', {
         cache: 'no-store',
-        headers: getMiniAppBypassHeaders(),
+        headers: authHeaders,
       });
       if (response.status === 401) {
         await handleChatAuthFailure();
@@ -635,7 +629,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(err);
     }
-  }, [getMiniAppBypassHeaders, handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
+  }, [handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
 
   useEffect(() => {
     const currentSurface = !isMiniApp
@@ -976,13 +970,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setAiTypingModes((previous) => ({ ...previous, [targetMode]: true }));
 
       try {
+        const authHeaders = await getMiniAppQuickAuthHeaders();
         await sendAIChatMessage(
           { text: messageText },
           {
             body: {
               conversationId,
             },
-            headers: getMiniAppBypassHeaders() as Record<string, string>,
+            headers: authHeaders,
           },
         );
       } catch (err: UntypedValue) {
@@ -1032,11 +1027,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     writeModeMessages(targetMode, nextOptimisticMessages);
 
     try {
+      const authHeaders = await getMiniAppQuickAuthHeaders();
       const response = await fetch(endpoint, {
           body: JSON.stringify({ message: messageText }),
           headers: {
             'Content-Type': 'application/json',
-            ...getMiniAppBypassHeaders(),
+            ...authHeaders,
           },
           method: 'POST',
           signal,

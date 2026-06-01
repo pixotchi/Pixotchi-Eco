@@ -44,12 +44,7 @@ import {
 } from "@/lib/auth-surface";
 import {
   clearConfirmedMiniAppSession,
-  useConfirmedMiniAppSession,
 } from "@/lib/confirmed-miniapp-session";
-import {
-  clearMiniAppBypassCookies,
-  setMiniAppBypassCookies,
-} from "@/lib/miniapp-bypass";
 
 const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
 const DESKTOP_EVM_WALLET_LIST = [
@@ -452,7 +447,6 @@ function ProvidersContent({
   surfaceInitialized: boolean;
 }) {
   const hostEnvironment = useHostEnvironment();
-  const confirmedMiniAppSession = useConfirmedMiniAppSession();
   const [hostEnvironmentReady, setHostEnvironmentReady] = useState(
     typeof window === 'undefined',
   );
@@ -484,7 +478,6 @@ function ProvidersContent({
     }
 
     if (!didBootstrapSanitizeRef.current) {
-      clearMiniAppBypassCookies();
       clearConfirmedMiniAppSession('host-bootstrap');
       didBootstrapSanitizeRef.current = true;
       setHostEnvironmentReady(true);
@@ -492,34 +485,11 @@ function ProvidersContent({
     }
 
     if (!hostEnvironment.isMiniApp) {
-      clearMiniAppBypassCookies();
       clearConfirmedMiniAppSession('host-downgrade');
     }
   }, [
     hostEnvironment.initialized,
     hostEnvironment.isMiniApp,
-  ]);
-
-  useEffect(() => {
-    if (!hostEnvironmentReady) {
-      return;
-    }
-
-    if (
-      hostEnvironment.isMiniApp &&
-      confirmedMiniAppSession.confirmed &&
-      confirmedMiniAppSession.address
-    ) {
-      setMiniAppBypassCookies(confirmedMiniAppSession.address);
-      return;
-    }
-
-    clearMiniAppBypassCookies();
-  }, [
-    confirmedMiniAppSession.address,
-    confirmedMiniAppSession.confirmed,
-    hostEnvironment.isMiniApp,
-    hostEnvironmentReady,
   ]);
 
   if (!surfaceInitialized || !hostEnvironment.initialized || !hostEnvironmentReady) {

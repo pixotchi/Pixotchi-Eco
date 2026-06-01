@@ -19,7 +19,6 @@ import { clearAppCaches } from "@/lib/cache-utils";
 import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { useFrameContext } from "@/lib/frame-context";
-import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { openExternalUrl } from "@/lib/open-external";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
@@ -434,8 +433,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         console.warn('Failed to clear public chat session:', chatSessionError);
       }
 
-      clearMiniAppBypassCookies();
-
       // Clear URL query parameters and redirect to root
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
@@ -482,8 +479,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     } catch (chatSessionError) {
       console.warn('Failed to clear public chat session before closing mini app:', chatSessionError);
     }
-
-    clearMiniAppBypassCookies();
 
     await clearAppCaches({
       onlyPrefixes: AUTH_CACHE_PREFIXES,

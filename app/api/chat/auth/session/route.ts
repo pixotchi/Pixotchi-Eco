@@ -4,9 +4,11 @@ import {
   clearChatSessionCookie,
   clearChatSessionForRequest,
   createChatAuthRequiredResponse,
+  createChatAuthErrorResponse,
   createChatSessionResponse,
   createChatUnavailableResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrQuickAuthFromRequest,
+  getFarcasterQuickAuthTokenFromRequest,
   setChatSessionCookie,
   verifyBaseChatIdentity,
   verifyFarcasterChatIdentity,
@@ -75,7 +77,19 @@ export async function GET(request: NextRequest) {
     return ipRateLimitResponse;
   }
 
-  const { session, sessionId } = await getChatSessionFromRequest(request);
+  let authResult: Awaited<ReturnType<typeof getChatSessionOrQuickAuthFromRequest>>;
+  try {
+    authResult = await getChatSessionOrQuickAuthFromRequest(request);
+  } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
+    console.error('[chat-auth] Failed to read chat session:', error);
+    return createChatUnavailableResponse();
+  }
+
+  const { session, sessionId, viaQuickAuth } = authResult;
 
   if (session) {
     const addressRateLimitResponse = await enforceRateLimit(request, {
@@ -114,7 +128,11 @@ export async function GET(request: NextRequest) {
     },
   );
 
-  setChatSessionCookie(response, session.id);
+  if (viaQuickAuth && sessionId) {
+    clearChatSessionCookie(response);
+  } else if (!viaQuickAuth) {
+    setChatSessionCookie(response, session.id);
+  }
   return response;
 }
 
@@ -161,9 +179,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (provider === 'farcaster') {
+      const bearerToken = getFarcasterQuickAuthTokenFromRequest(request);
       const identity = await verifyFarcasterChatIdentity(request, {
         expectedAddress: getStringField(body, 'expectedAddress') ?? null,
-        token: getStringField(body, 'token') ?? '',
+        token: bearerToken ?? getStringField(body, 'token') ?? '',
       });
       return createChatSessionResponse(request, identity);
     }

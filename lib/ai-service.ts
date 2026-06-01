@@ -64,12 +64,14 @@ type StoreAIMessageOptions = {
 
 type SendAIMessageOptions = {
   abortSignal?: AbortSignal;
+  sourceAddress?: string | null;
 };
 
 type StreamAIMessageOptions = {
   abortSignal?: AbortSignal;
   conversationId?: string | null;
   originalMessages?: PixotchiAIUIMessage[];
+  sourceAddress?: string | null;
 };
 
 type AIUsageTrackingOptions = {
@@ -255,13 +257,24 @@ function getModelRequestSettings() {
 
 const TOOL_PROMPT_PRIORITY = [
   'get_player_overview',
+  'get_daily_task_plan',
   'get_wallet_token_balances',
   'get_wallet_game_assets',
+  'get_land_production_audit',
   'get_wallet_game_activity',
+  'get_combat_activity',
   'get_transaction_status',
   'get_plants',
+  'get_attack_targets',
+  'get_land_raid_targets',
   'get_game_prices',
   'get_lands',
+  'get_casino_status',
+  'get_marketplace_orders',
+  'get_claim_eligibility',
+  'get_known_allowances',
+  'get_bridge_status',
+  'get_app_status',
   'get_game_action_guide',
   'get_staking',
   'get_swap_quote',
@@ -397,6 +410,33 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'get_combat_activity') {
+    return {
+      direction: data?.direction,
+      fromTimestampIso: data?.fromTimestampIso,
+      includedSystems: data?.includedSystems,
+      landIdsChecked: data?.landIdsChecked,
+      plantIdsChecked: data?.plantIdsChecked,
+      summary: data?.summary,
+      timeframeHours: data?.timeframeHours,
+      toTimestampIso: data?.toTimestampIso,
+      truncationNote: data?.truncationNote,
+      recentEvents: (data?.combined || []).slice(0, 12).map((event: UntypedValue) => ({
+        attacker: event.attacker,
+        attackerLandId: event.attackerLandId,
+        attackerWon: event.attackerWon,
+        defenderLandId: event.defenderLandId,
+        direction: event.direction,
+        kind: event.kind,
+        outcomeForUser: event.outcomeForUser,
+        scoresWonPts: event.scoresWonPts,
+        target: event.target,
+        timestampIso: event.timestampIso,
+      })),
+      truncated: data?.truncated,
+    };
+  }
+
   if (toolName === 'get_transaction_status') {
     return {
       blockNumber: data?.blockNumber,
@@ -428,8 +468,173 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
         strainName: plant.strainName,
         timeUntilStarvingHours: plant.timeUntilStarvingHours,
       })),
+      summary: data?.summary,
       totalOwned: data?.totalOwned,
       truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_attack_targets') {
+    return {
+      blockedSummary: data?.blockedSummary,
+      eligibleTargetCount: data?.eligibleTargetCount,
+      ownedPlantCount: data?.ownedPlantCount,
+      readyAttackerCount: data?.readyAttackerCount,
+      rules: data?.rules,
+      scannedLeaderboardCount: data?.scannedLeaderboardCount,
+      targets: (data?.targets || []).slice(0, 10),
+      totalLeaderboardPlants: data?.totalLeaderboardPlants,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_land_raid_targets') {
+    return {
+      barracksConfig: data?.barracksConfig,
+      blocked: data?.blocked,
+      checkedLandCount: data?.checkedLandCount,
+      ownedLandCount: data?.ownedLandCount,
+      readyAttackerCount: data?.readyAttackerCount,
+      results: (data?.results || []).slice(0, 6).map((entry: UntypedValue) => ({
+        attacker: entry.attacker,
+        eligibleTargetCount: entry.eligibleTargetCount,
+        previewTroopsUsed: entry.previewTroopsUsed,
+        previews: (entry.previews || []).slice(0, 3),
+        targets: (entry.targets || []).slice(0, 6),
+        truncated: entry.truncated,
+      })),
+      rules: data?.rules,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_land_production_audit') {
+    return {
+      auditedLandCount: data?.auditedLandCount,
+      buildingMix: data?.buildingMix
+        ? {
+          accumulatedLifetimeHours: data.buildingMix.accumulatedLifetimeHours,
+          accumulatedPts: data.buildingMix.accumulatedPts,
+          builtBuildings: (data.buildingMix.builtBuildings || []).slice(0, 12),
+          productionLifetimePerDayHours: data.buildingMix.productionLifetimePerDayHours,
+          productionPtsPerDay: data.buildingMix.productionPtsPerDay,
+        }
+        : null,
+      ownedLandCount: data?.ownedLandCount,
+      topClaimable: (data?.topClaimable || []).slice(0, 8).map((land: UntypedValue) => ({
+        id: land.id,
+        name: land.name,
+        storedLifetimeHours: land.storedLifetimeHours,
+        storedPts: land.storedPts,
+        topUnclaimedBuildings: (land.topUnclaimedBuildings || []).slice(0, 3),
+        unclaimedLifetimeHours: land.unclaimedLifetimeHours,
+        unclaimedPts: land.unclaimedPts,
+      })),
+      topProducers: (data?.topProducers || []).slice(0, 8).map((land: UntypedValue) => ({
+        id: land.id,
+        name: land.name,
+        productionLifetimePerDayHours: land.productionLifetimePerDayHours,
+        productionPtsPerDay: land.productionPtsPerDay,
+      })),
+      totals: data?.totals,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_casino_status') {
+    return {
+      configs: data?.configs,
+      featureFlags: data?.featureFlags,
+      lands: (data?.lands || []).slice(0, 8).map((land: UntypedValue) => ({
+        blackjack: land.blackjack,
+        id: land.id,
+        name: land.name,
+        roulette: land.roulette,
+      })),
+      ownedLandCount: data?.ownedLandCount,
+      scannedLandCount: data?.scannedLandCount,
+      totalCasinoLandsInScan: data?.totalCasinoLandsInScan,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_marketplace_orders') {
+    return {
+      active: data?.active,
+      inactiveOrders: (data?.inactiveOrders || []).slice(0, 6),
+      myOrders: data?.myOrders
+        ? {
+          active: (data.myOrders.active || []).slice(0, 6),
+          inactive: (data.myOrders.inactive || []).slice(0, 4),
+          total: data.myOrders.total,
+        }
+        : undefined,
+      orderBook: {
+        ...data?.orderBook,
+        asks: (data?.orderBook?.asks || []).slice(0, 8),
+        bids: (data?.orderBook?.bids || []).slice(0, 8),
+      },
+      rules: data?.rules,
+      userCanUseMarketplaceUi: data?.userCanUseMarketplaceUi,
+      userOwnedLandCount: data?.userOwnedLandCount,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_claim_eligibility') {
+    return {
+      airdrop: data?.airdrop,
+      ui: data?.ui,
+      verifyFreePlant: data?.verifyFreePlant,
+    };
+  }
+
+  if (toolName === 'get_app_status') {
+    return {
+      featureFlags: data?.featureFlags,
+      overall: data?.overall,
+      services: (data?.services || []).slice(0, 12),
+      solanaBridgeConfig: data?.solanaBridgeConfig,
+      statusGeneratedAt: data?.statusGeneratedAt,
+    };
+  }
+
+  if (toolName === 'get_daily_task_plan') {
+    return {
+      mission: data?.mission,
+      missionScore: data?.missionScore,
+      readinessContext: data?.readinessContext,
+      suggestedNext: (data?.suggestedNext || []).slice(0, 6),
+      taskCounts: data?.taskCounts,
+      streak: data?.streak,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_known_allowances') {
+    return {
+      allowances: (data?.allowances || []).slice(0, 18).map((entry: UntypedValue) => ({
+        allowanceDisplay: entry.allowanceDisplay,
+        spender: entry.spender,
+        spenderId: entry.spenderId,
+        token: entry.token,
+        tokenId: entry.tokenId,
+        useCases: entry.useCases,
+      })),
+      errors: data?.errors,
+      includeZeroAllowances: data?.includeZeroAllowances,
+      knownOnly: data?.knownOnly,
+      spenderCount: data?.spenderCount,
+      tokenCount: data?.tokenCount,
+    };
+  }
+
+  if (toolName === 'get_bridge_status') {
+    return {
+      baseAddress: data?.baseAddress,
+      bridge: data?.bridge,
+      twin: data?.twin,
+      ui: data?.ui,
     };
   }
 
@@ -1372,7 +1577,7 @@ export async function streamAIMessage(
   });
 
   const responseMessageId = nanoid();
-  const tools = createReadOnlyAITools({ userAddress: address });
+  const tools = createReadOnlyAITools({ sourceAddress: options.sourceAddress, userAddress: address });
   let finishReason: string | undefined;
   let finalFinishReason: string | undefined;
   let outputTokens = 0;
@@ -1672,7 +1877,7 @@ export async function sendAIMessage(address: string, message: string, options: S
       model: modelConfig.model,
     });
 
-    const tools = createReadOnlyAITools({ userAddress: address });
+    const tools = createReadOnlyAITools({ sourceAddress: options.sourceAddress, userAddress: address });
     let generationMessages = buildPlainModelMessages(historyMessages, message);
     let generationTools: UntypedValue = tools;
     let preflightOutputTokens = 0;

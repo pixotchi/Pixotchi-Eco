@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ChatAuthError,
   createChatAuthRequiredResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+  createChatAuthErrorResponse,
+  getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
 import { getStreak, trackDailyActivity } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
@@ -38,11 +40,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
-    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
-      fallbackAddress,
-    });
+    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     const gamificationPolicy = getGamificationPolicy();
     if (!gamificationPolicy.enabled) {
@@ -64,6 +62,10 @@ export async function POST(request: NextRequest) {
     const streak = await trackDailyActivity(address);
     return NextResponse.json({ success: true, streak });
   } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
     console.error('Error tracking activity:', error);
     return NextResponse.json({ error: 'Failed to track activity' }, { status: 500 });
   }

@@ -13,7 +13,8 @@
     "ai:smoke:real-tools": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-smoke-real-tools.ts",
     "ai:smoke:budget": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-budget-smoke.ts",
     "ai:smoke:knowledge": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-knowledge-smoke.ts",
-    "ai:smoke": "npm run ai:smoke:gemini && npm run ai:smoke:real-tools && npm run ai:smoke:budget && npm run ai:smoke:knowledge"
+    "ai:smoke:new-tools": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-new-read-tools-smoke.ts",
+    "ai:smoke": "npm run ai:smoke:gemini && npm run ai:smoke:real-tools && npm run ai:smoke:budget && npm run ai:smoke:knowledge && npm run ai:smoke:new-tools"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.81",
@@ -71,7 +72,7 @@
     "streamdown": "2.5.0",
     "tailwind-merge": "3.6.0",
     "thread-stream": "4.2.0",
-    "viem": "2.51.3",
+    "viem": "2.52.0",
     "wagmi": "2.19.5",
     "zod": "4.4.3"
   },
@@ -100,6 +101,6 @@
     "axios": "1.16.1",
     "pino": "10.3.1",
     "thread-stream": "4.2.0",
-    "viem": "2.51.3"
+    "viem": "2.52.0"
   }
 }

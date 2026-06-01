@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useChat } from '@/components/chat/chat-context';
+import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 
 interface InviteCodeInputProps {
   onValidated: (code: string) => void;
@@ -15,14 +16,17 @@ interface InviteCodeInputProps {
   autoSubmit?: boolean;
 }
 
-const markCodeAsUsed = async (inviteCode: string, userAddress: string): Promise<{ success: boolean; error?: string }> => {
+const markCodeAsUsed = async (inviteCode: string): Promise<{ success: boolean; error?: string }> => {
   try {
+    const authHeaders = await getMiniAppQuickAuthHeaders();
     const response = await fetch('/api/invite/use', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
       body: JSON.stringify({
         code: inviteCode,
-        address: userAddress
       }),
     });
 
@@ -130,7 +134,7 @@ export default function InviteCodeInput({
         
         // Mark code as used if wallet is connected
         if (address) {
-          const useResult = await markCodeAsUsed(code, address);
+          const useResult = await markCodeAsUsed(code);
           if (!useResult.success) {
             setIsValid(false);
             setErrorMessage(useResult.error || 'Failed to activate invite code. Please try again.');
