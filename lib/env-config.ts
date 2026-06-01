@@ -62,7 +62,7 @@ export const CLIENT_ENV = {
   SPLASH_IMAGE: process.env.NEXT_PUBLIC_SPLASH_IMAGE,
   SPLASH_BACKGROUND_COLOR: process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR || '#a7c7e7',
 
-  // OnchainKit configuration (requires client access)
+  // CDP/paymaster configuration (requires client access)
   CDP_CLIENT_API_KEY: process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY,
   CDP_PAYMASTER_URL: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
   ONCHAINKIT_PROJECT_NAME: process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME ?? 'minikit',

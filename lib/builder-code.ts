@@ -111,7 +111,7 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
 }
 
 /**
- * Transform OnchainKit calls into raw serializable calls (`to`, `data`, `value`).
+ * Transform structured wallet calls into raw serializable calls (`to`, `data`, `value`).
  * 
  * Builder attribution is appended directly into calldata to ensure coverage
  * for wallet flows that do not propagate ERC-5792 `dataSuffix` capability.
@@ -121,7 +121,7 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
  * (to, data, value) which is critical for Privy embedded wallets. ABIs contain
  * function objects that cannot be structured-cloned for postMessage communication.
  * 
- * @param calls - Array of transaction calls (OnchainKit format)
+ * @param calls - Array of transaction calls
  * @returns Transformed raw calls with suffix appended when configured
  */
 export function transformCallsWithBuilderCode<T extends {

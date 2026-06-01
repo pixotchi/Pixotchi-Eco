@@ -662,7 +662,7 @@
   z-index: var(--z-tooltip);
 }
 
-/* OnchainKit toast containers */
+/* Legacy wallet toast containers */
 .ock-transaction-toast,
 .ock-toast-container {
   z-index: var(--z-toast);
@@ -670,7 +670,7 @@
   margin-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
 }
 
-/* OnchainKit modal and popup overlays */
+/* Legacy wallet modal and popup overlays */
 .ock-modal,
 .ock-modal-overlay,
 .ock-popup,
