@@ -57,6 +57,10 @@ function getRequestedChatAuthAddress(body: UntypedValue, provider: UntypedValue)
     return payload.expectedAddress;
   }
 
+  if (provider === 'farcaster' && typeof payload.expectedAddress === 'string') {
+    return payload.expectedAddress;
+  }
+
   return null;
 }
 

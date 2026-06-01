@@ -64,6 +64,12 @@ async function main() {
     url: `https://mini.pixotchi.tech/api/chat/send?address=${attackerAddress}`,
   }));
 
+  await assertNoSession('forged connected wallet header must not authenticate without Quick Auth', mockRequest({
+    headers: {
+      'x-pixotchi-connected-wallet': attackerAddress,
+    },
+  }));
+
   await assert.rejects(
     () => getChatSessionOrQuickAuthFromRequest(mockRequest({
       headers: {
@@ -79,6 +85,14 @@ async function main() {
   assert(
     authSource.includes('chat:auth:farcaster:primary-address'),
     'chat auth must use a trusted Farcaster auth address cache namespace',
+  );
+  assert(
+    authSource.includes('chat:auth:farcaster:verified-ethereum-addresses'),
+    'chat auth must cache only Farcaster-verified Ethereum addresses for connected wallet binding',
+  );
+  assert(
+    authSource.includes('Farcaster connected wallet address is required.'),
+    'Farcaster Quick Auth sessions must require an explicit connected wallet address',
   );
   assert(!authSource.includes('x-pixotchi-address'), 'chat auth must not trust Mini App address headers');
   assert(!authSource.includes('x-pixotchi-miniapp'), 'chat auth must not trust Mini App marker headers');

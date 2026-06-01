@@ -23,6 +23,7 @@ import {
   createFarcasterPublicChatSession,
   createPrivyPublicChatSession,
   getCurrentPublicChatSession,
+  getCurrentPublicChatSessionForAddress,
   PUBLIC_CHAT_SESSION_EVENT,
   type PublicChatSession,
 } from '@/lib/chat-auth-client';
@@ -194,22 +195,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const previousChatAddressRef = useRef<string | null>(null);
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
   const publicChatSessionRef = useRef<PublicChatSession | null>(null);
+  const normalizedChatAddress = chatAddress?.toLowerCase() ?? null;
   const confirmedMiniAppAddress = isMiniApp && confirmedMiniAppSession.confirmed
-    ? confirmedMiniAppSession.address
+    ? confirmedMiniAppSession.address?.toLowerCase() ?? null
     : null;
   const verifiedMiniAppSessionAddress =
     isMiniApp &&
     publicChatSession?.authenticated &&
     publicChatSession.provider === 'farcaster' &&
     publicChatSession.method === 'farcaster-miniapp'
-      ? publicChatSession.address
+      ? publicChatSession.address?.toLowerCase() ?? null
+      : null;
+  const matchingConfirmedMiniAppAddress =
+    confirmedMiniAppAddress &&
+    (!normalizedChatAddress || confirmedMiniAppAddress === normalizedChatAddress)
+      ? confirmedMiniAppAddress
+      : null;
+  const matchingVerifiedMiniAppSessionAddress =
+    verifiedMiniAppSessionAddress &&
+    (!normalizedChatAddress || verifiedMiniAppSessionAddress === normalizedChatAddress)
+      ? verifiedMiniAppSessionAddress
       : null;
 
   const publicChatAddress = isMiniApp
-    ? (confirmedMiniAppAddress ?? verifiedMiniAppSessionAddress)
+    ? (matchingConfirmedMiniAppAddress ?? matchingVerifiedMiniAppSessionAddress)
     : (publicChatSession?.address ?? null);
   const publicChatAuthenticated = isMiniApp
-    ? Boolean(confirmedMiniAppAddress || verifiedMiniAppSessionAddress)
+    ? Boolean(matchingConfirmedMiniAppAddress || matchingVerifiedMiniAppSessionAddress)
     : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
   const aiTransport = useMemo(
@@ -514,7 +526,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const authHeaders = await getMiniAppQuickAuthHeaders();
+        const authHeaders = await getMiniAppQuickAuthHeaders({
+          expectedAddress: publicChatAddress ?? chatAddress,
+        });
         const response = await fetch('/api/chat/messages?limit=50', {
           cache: 'no-store',
           headers: authHeaders,
@@ -548,7 +562,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           params.append('conversationId', conversationId);
         }
 
-        const authHeaders = await getMiniAppQuickAuthHeaders();
+        const authHeaders = await getMiniAppQuickAuthHeaders({
+          expectedAddress: publicChatAddress ?? chatAddress,
+        });
         const response = await fetch(`/api/chat/ai/messages?${params}`, {
           cache: 'no-store',
           headers: authHeaders,
@@ -582,7 +598,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [conversationId, handleChatAuthFailure, publicChatAuthenticated, setAIChatMessages, updatePublicMessages, writeModeMessages]);
+  }, [
+    chatAddress,
+    conversationId,
+    handleChatAuthFailure,
+    publicChatAddress,
+    publicChatAuthenticated,
+    setAIChatMessages,
+    updatePublicMessages,
+    writeModeMessages,
+  ]);
 
   const setMode = useCallback((next: ChatMode) => {
     if (mode) {
@@ -617,7 +642,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const authHeaders = await getMiniAppQuickAuthHeaders();
+      const authHeaders = await getMiniAppQuickAuthHeaders({
+        expectedAddress: publicChatAddress ?? chatAddress,
+      });
       const response = await fetch('/api/chat/messages?limit=50', {
         cache: 'no-store',
         headers: authHeaders,
@@ -636,7 +663,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(err);
     }
-  }, [handleChatAuthFailure, publicChatAuthenticated, updatePublicMessages]);
+  }, [chatAddress, handleChatAuthFailure, publicChatAddress, publicChatAuthenticated, updatePublicMessages]);
 
   useEffect(() => {
     const currentSurface = !isMiniApp
@@ -645,6 +672,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const bootstrapKey = isMiniApp
       ? [
         'miniapp',
+        chatAddress?.toLowerCase() ?? 'no-wallet',
         publicChatSessionVersion.toString(),
         publicChatRetryVersion.toString(),
       ].join(':')
@@ -666,6 +694,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (isMiniApp) {
       bootstrapKeyRef.current = bootstrapKey;
 
+      if (!chatAddress) {
+        setPublicChatSession(null);
+        setPublicChatState('booting');
+        setPublicChatLoading(false);
+        return;
+      }
+
       let cancelled = false;
 
       const bootstrapMiniAppChat = async () => {
@@ -673,18 +708,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setPublicChatLoading(true);
 
         try {
-          let nextSession = await getCurrentPublicChatSession();
+          let nextSession = await getCurrentPublicChatSessionForAddress(chatAddress);
 
-          if (nextSession && nextSession.provider !== 'farcaster') {
+          const nextSessionMatchesWallet =
+            nextSession?.address?.toLowerCase() === chatAddress.toLowerCase();
+
+          if (
+            nextSession &&
+            (nextSession.provider !== 'farcaster' || !nextSessionMatchesWallet)
+          ) {
             await clearPublicChatSession().catch((error) => {
-              console.warn('[chat] Failed to clear stale non-Farcaster Mini App chat session:', error);
+              console.warn('[chat] Failed to clear stale Mini App chat session:', error);
             });
             nextSession = null;
           }
 
           if (!nextSession) {
             const { token } = await sdk.quickAuth.getToken();
-            nextSession = await createFarcasterPublicChatSession({ token });
+            nextSession = await createFarcasterPublicChatSession({
+              expectedAddress: chatAddress,
+              token,
+            });
           }
 
           if (!cancelled) {
@@ -971,7 +1015,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setAiTypingModes((previous) => ({ ...previous, [targetMode]: true }));
 
       try {
-        const authHeaders = await getMiniAppQuickAuthHeaders();
+        const authHeaders = await getMiniAppQuickAuthHeaders({
+          expectedAddress: publicChatAddress ?? chatAddress,
+        });
         await sendAIChatMessage(
           { text: messageText },
           {
@@ -1028,7 +1074,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     writeModeMessages(targetMode, nextOptimisticMessages);
 
     try {
-      const authHeaders = await getMiniAppQuickAuthHeaders();
+      const authHeaders = await getMiniAppQuickAuthHeaders({
+        expectedAddress: publicChatAddress ?? chatAddress,
+      });
       const response = await fetch(endpoint, {
           body: JSON.stringify({ message: messageText }),
           headers: {

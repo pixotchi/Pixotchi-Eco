@@ -5,6 +5,7 @@ import {
   clearConfirmedMiniAppSession,
   confirmMiniAppSession,
 } from '@/lib/confirmed-miniapp-session';
+import { FARCASTER_CONNECTED_WALLET_HEADER } from '@/lib/farcaster-miniapp-auth-headers';
 import { getHostEnvironmentSnapshot } from '@/lib/host-environment';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 
@@ -47,6 +48,10 @@ type BaseChatSessionRequest = {
 
 let publicChatSessionCache: PublicChatSessionCacheEntry | null = null;
 let inFlightPublicChatSessionRequest: Promise<PublicChatSession | null> | null = null;
+
+function normalizeAddress(address: string | null | undefined): string | null {
+  return address?.trim().toLowerCase() || null;
+}
 
 function setPublicChatSessionCache(session: PublicChatSession | null) {
   publicChatSessionCache = {
@@ -106,10 +111,24 @@ function syncConfirmedMiniAppSession(
 }
 
 export async function getCurrentPublicChatSession(): Promise<PublicChatSession | null> {
+  return getCurrentPublicChatSessionForAddress();
+}
+
+export async function getCurrentPublicChatSessionForAddress(
+  expectedAddress?: string | null,
+): Promise<PublicChatSession | null> {
   const now = Date.now();
+  const normalizedExpectedAddress = normalizeAddress(expectedAddress);
   if (publicChatSessionCache && publicChatSessionCache.expiresAt > now) {
-    syncConfirmedMiniAppSession(publicChatSessionCache.session, 'restored');
-    return publicChatSessionCache.session;
+    if (
+      normalizedExpectedAddress &&
+      publicChatSessionCache.session?.address?.toLowerCase() !== normalizedExpectedAddress
+    ) {
+      setPublicChatSessionCache(null);
+    } else {
+      syncConfirmedMiniAppSession(publicChatSessionCache.session, 'restored');
+      return publicChatSessionCache.session;
+    }
   }
 
   if (inFlightPublicChatSessionRequest) {
@@ -117,7 +136,7 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
   }
 
   inFlightPublicChatSessionRequest = (async () => {
-    const miniAppHeaders = await getMiniAppQuickAuthHeaders();
+    const miniAppHeaders = await getMiniAppQuickAuthHeaders({ expectedAddress });
     const response = await fetch('/api/chat/auth/session', {
       cache: 'no-store',
       credentials: 'same-origin',
@@ -131,6 +150,18 @@ export async function getCurrentPublicChatSession(): Promise<PublicChatSession |
     }
 
     const session = await parseSessionResponse(response);
+    if (
+      normalizedExpectedAddress &&
+      session.address?.toLowerCase() !== normalizedExpectedAddress
+    ) {
+      await clearPublicChatSession().catch(() => {
+        // Ignore cleanup failures when discarding a stale session response.
+      });
+      setPublicChatSessionCache(null);
+      clearConfirmedMiniAppSession('chat-session-wallet-mismatch');
+      return null;
+    }
+
     setPublicChatSessionCache(session);
     syncConfirmedMiniAppSession(session, 'restored');
     return session;
@@ -167,8 +198,13 @@ export async function createPrivyPublicChatSession(payload: Omit<PrivyChatSessio
 
 export async function createFarcasterPublicChatSession(payload: Omit<FarcasterChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
   const authHeaders = payload.token
-    ? { Authorization: `Bearer ${payload.token}` }
-    : await getMiniAppQuickAuthHeaders();
+    ? {
+        Authorization: `Bearer ${payload.token}`,
+        ...(payload.expectedAddress
+          ? { [FARCASTER_CONNECTED_WALLET_HEADER]: payload.expectedAddress.toLowerCase() }
+          : {}),
+      }
+    : await getMiniAppQuickAuthHeaders({ expectedAddress: payload.expectedAddress });
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,

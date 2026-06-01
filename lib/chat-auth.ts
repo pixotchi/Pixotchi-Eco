@@ -6,6 +6,7 @@ import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick
 import { InvalidAuthTokenError, PrivyClient } from '@privy-io/node';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { getPrivyChatAuthConfigStatus } from '@/lib/env-config';
+import { FARCASTER_CONNECTED_WALLET_HEADER } from '@/lib/farcaster-miniapp-auth-headers';
 import { getTwinAddress } from '@/lib/solana-twin';
 import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
@@ -79,6 +80,7 @@ const CHAT_SESSION_COOKIE_NAME = 'pixotchi_chat_session';
 const CHAT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const BASE_AUTH_NONCE_TTL_SECONDS = 60 * 10;
 const FARCASTER_AUTH_ADDRESS_CACHE_TTL_SECONDS = 60 * 60 * 24;
+const FARCASTER_VERIFIED_ADDRESSES_CACHE_TTL_SECONDS = 60 * 10;
 const BASE_NONCE_CONSUME_SCRIPT = `
 if redis.call("EXISTS", KEYS[1]) == 1 then
   redis.call("DEL", KEYS[1])
@@ -117,8 +119,91 @@ function getFarcasterAuthAddressKey(fid: number): string {
   return `chat:auth:farcaster:primary-address:${fid}`;
 }
 
+function getFarcasterVerifiedEthereumAddressesKey(fid: number): string {
+  return `chat:auth:farcaster:verified-ethereum-addresses:${fid}`;
+}
+
 function normalizeAddress(address: string): string {
-  return address.toLowerCase();
+  return address.trim().toLowerCase();
+}
+
+function normalizeExpectedEthereumAddress(
+  address: string | null | undefined,
+  label: string = 'connected wallet address',
+): string | null {
+  const trimmed = address?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!isValidEthereumAddressFormat(trimmed)) {
+    throw new ChatAuthError(`Invalid ${label}.`, 400);
+  }
+
+  return normalizeAddress(trimmed);
+}
+
+function getFarcasterConnectedWalletAddressFromRequest(request: NextRequest): string | null {
+  return normalizeExpectedEthereumAddress(
+    request.headers.get(FARCASTER_CONNECTED_WALLET_HEADER),
+    'Farcaster connected wallet address',
+  );
+}
+
+function addEthereumAddressCandidate(addresses: Set<string>, value: UntypedValue): void {
+  if (typeof value !== 'string' || !isValidEthereumAddressFormat(value)) {
+    return;
+  }
+
+  addresses.add(normalizeAddress(value));
+}
+
+function addEthereumAddressCandidates(addresses: Set<string>, value: UntypedValue): void {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => {
+      addEthereumAddressCandidates(addresses, entry);
+    });
+    return;
+  }
+
+  if (!value || typeof value !== 'object') {
+    addEthereumAddressCandidate(addresses, value);
+    return;
+  }
+
+  const record = value as Record<string, UntypedValue>;
+  addEthereumAddressCandidate(addresses, record.address);
+  addEthereumAddressCandidate(addresses, record.eth_address);
+  addEthereumAddressCandidate(addresses, record.ethAddress);
+  addEthereumAddressCandidate(addresses, record.custodyAddress);
+  addEthereumAddressCandidate(addresses, record.custody_address);
+}
+
+function extractFarcasterEthereumAddresses(
+  payload: UntypedValue,
+  primaryAddress: string | null,
+): string[] {
+  const addresses = new Set<string>();
+
+  if (primaryAddress) {
+    addresses.add(primaryAddress);
+  }
+
+  const result = payload?.result;
+  const user = result?.user;
+  const extras = result?.extras;
+  const verifiedAddresses = user?.verifiedAddresses ?? user?.verified_addresses;
+
+  addEthereumAddressCandidates(addresses, extras?.ethWallets);
+  addEthereumAddressCandidates(addresses, extras?.walletLabels);
+  addEthereumAddressCandidates(addresses, extras?.custodyAddress);
+  addEthereumAddressCandidates(addresses, user?.custodyAddress);
+  addEthereumAddressCandidates(addresses, user?.custody_address);
+  addEthereumAddressCandidates(addresses, verifiedAddresses?.eth_addresses);
+  addEthereumAddressCandidates(addresses, verifiedAddresses?.ethAddresses);
+  addEthereumAddressCandidates(addresses, verifiedAddresses?.ethereum);
+
+  return Array.from(addresses);
 }
 
 function isFarcasterInvalidTokenError(error: unknown): boolean {
@@ -176,6 +261,56 @@ async function resolveFarcasterAuthAddressFromFid(fid: number): Promise<string |
     return normalizedAddress;
   } catch {
     return null;
+  }
+}
+
+async function resolveFarcasterVerifiedEthereumAddressesFromFid(
+  fid: number,
+  primaryAddress: string | null,
+): Promise<string[]> {
+  try {
+    const cached = await redisGetJSON<string[]>(getFarcasterVerifiedEthereumAddressesKey(fid));
+    if (Array.isArray(cached)) {
+      const addresses = new Set<string>();
+      cached.forEach((address) => {
+        if (typeof address === 'string' && isValidEthereumAddressFormat(address)) {
+          addresses.add(normalizeAddress(address));
+        }
+      });
+      if (primaryAddress) {
+        addresses.add(primaryAddress);
+      }
+      if (addresses.size > 0) {
+        return Array.from(addresses);
+      }
+    }
+  } catch {
+    // Ignore cache lookup failures and fall back to the Farcaster API.
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.farcaster.xyz/v2/user?fid=${fid}`,
+      { cache: 'no-store' },
+    );
+
+    if (!response.ok) {
+      return primaryAddress ? [primaryAddress] : [];
+    }
+
+    const payload = await response.json();
+    const addresses = extractFarcasterEthereumAddresses(payload, primaryAddress);
+    if (addresses.length > 0) {
+      await redisSetJSON(
+        getFarcasterVerifiedEthereumAddressesKey(fid),
+        addresses,
+        FARCASTER_VERIFIED_ADDRESSES_CACHE_TTL_SECONDS,
+      );
+    }
+
+    return addresses;
+  } catch {
+    return primaryAddress ? [primaryAddress] : [];
   }
 }
 
@@ -588,9 +723,40 @@ export async function getChatSessionOrQuickAuthFromRequest(
   sessionId: string | null;
   viaQuickAuth: boolean;
 }> {
+  const expectedFarcasterAddress = getFarcasterConnectedWalletAddressFromRequest(request);
   const { session, sessionId } = await getChatSessionFromRequest(request);
 
   if (session) {
+    if (
+      expectedFarcasterAddress &&
+      session.address &&
+      normalizeAddress(session.address) !== expectedFarcasterAddress
+    ) {
+      const token = getFarcasterQuickAuthTokenFromRequest(request);
+      if (token) {
+        const identity = await verifyFarcasterChatIdentity(request, {
+          expectedAddress: expectedFarcasterAddress,
+          token,
+        });
+
+        return {
+          session: {
+            address: identity.address,
+            createdAt: Date.now(),
+            id: 'farcaster-quick-auth',
+            method: identity.method,
+            provider: identity.provider,
+            ...(identity.fid ? { fid: identity.fid } : {}),
+            ...(identity.sourceAddress ? { sourceAddress: identity.sourceAddress } : {}),
+          },
+          sessionId,
+          viaQuickAuth: true,
+        };
+      }
+
+      throw new ChatAuthError('Chat session does not match the connected wallet.', 401);
+    }
+
     return {
       session,
       sessionId,
@@ -607,7 +773,10 @@ export async function getChatSessionOrQuickAuthFromRequest(
     };
   }
 
-  const identity = await verifyFarcasterChatIdentity(request, { token });
+  const identity = await verifyFarcasterChatIdentity(request, {
+    expectedAddress: expectedFarcasterAddress,
+    token,
+  });
 
   return {
     session: {
@@ -617,6 +786,7 @@ export async function getChatSessionOrQuickAuthFromRequest(
       method: identity.method,
       provider: identity.provider,
       ...(identity.fid ? { fid: identity.fid } : {}),
+      ...(identity.sourceAddress ? { sourceAddress: identity.sourceAddress } : {}),
     },
     sessionId,
     viaQuickAuth: true,
@@ -829,21 +999,27 @@ export async function verifyFarcasterChatIdentity(
     throw new ChatAuthError('Farcaster Quick Auth token is missing a valid fid.', 401);
   }
 
-  const normalizedAddress = await resolveFarcasterAuthAddressFromFid(fid);
-  if (!normalizedAddress) {
-    throw new ChatAuthError('Farcaster Quick Auth address could not be resolved.', 401);
+  const primaryAddress = await resolveFarcasterAuthAddressFromFid(fid);
+  const expectedAddress = normalizeExpectedEthereumAddress(
+    payload.expectedAddress,
+    'Farcaster connected wallet address',
+  );
+
+  if (!expectedAddress) {
+    throw new ChatAuthError('Farcaster connected wallet address is required.', 401);
   }
 
-  const expectedAddress = payload.expectedAddress ? normalizeAddress(payload.expectedAddress) : null;
-  if (expectedAddress && normalizedAddress !== expectedAddress) {
-    throw new ChatAuthError('Farcaster Quick Auth address does not match the connected wallet.', 401);
+  const verifiedAddresses = await resolveFarcasterVerifiedEthereumAddressesFromFid(fid, primaryAddress);
+  if (!verifiedAddresses.includes(expectedAddress)) {
+    throw new ChatAuthError('Farcaster connected wallet is not verified for this account.', 401);
   }
 
   return {
-    address: normalizedAddress,
+    address: expectedAddress,
     ...(Number.isFinite(fid) ? { fid } : {}),
     method: 'farcaster-miniapp',
     provider: 'farcaster',
+    ...(primaryAddress && primaryAddress !== expectedAddress ? { sourceAddress: primaryAddress } : {}),
   };
 }
 
