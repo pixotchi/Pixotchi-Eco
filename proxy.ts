@@ -30,7 +30,9 @@ const DEFAULT_FRAME_ANCESTORS = [
   "'self'",
   'https://mini.pixotchi.tech',
   'https://beta.mini.pixotchi.tech',
+  'https://farcaster.xyz',
   'https://*.farcaster.xyz',
+  'https://warpcast.com',
   'https://*.warpcast.com',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
@@ -196,7 +198,7 @@ export async function proxy(request: NextRequest) {
     form-action 'self';
     frame-ancestors ${frameAncestors};
     child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org;
-    frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://*.farcaster.xyz https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.tradingview-widget.com;
+    frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.tradingview-widget.com;
     connect-src 'self' https://auth.privy.io https://*.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://cca-lite.coinbase.com https://*.base.org https: wss:;
     worker-src 'self';
     manifest-src 'self';
