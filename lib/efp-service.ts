@@ -7,7 +7,7 @@ export interface EthFollowEnsData {
   name: string;
   address: string;
   avatar?: string;
-  records?: Record<string, unknown>;
+  records?: Record<string, UntypedValue>;
   updated_at?: string;
 }
 

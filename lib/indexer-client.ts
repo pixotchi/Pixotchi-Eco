@@ -36,7 +36,7 @@ function buildIndexerHeaders(): HeadersInit {
 
 export async function fetchIndexerGraphQL<T>(
   query: string,
-  variables?: Record<string, unknown>,
+  variables?: Record<string, UntypedValue>,
   options: IndexerFetchOptions = {},
 ): Promise<T> {
   const body = JSON.stringify({ query, variables });

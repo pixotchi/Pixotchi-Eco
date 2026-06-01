@@ -6,7 +6,7 @@
  * Uses multicall for efficient batch fetching and short-term caching (5 minutes).
  */
 
-import { getReadClient, STAKE_CONTRACT_ADDRESS } from './contracts';
+import { getReadClient, STAKE_CONTRACT_ADDRESS, type PixotchiReadClient } from './contracts';
 import stakeAbi from '@/public/abi/stakeabi.json';
 import { redis } from './redis';
 import { resolvePrimaryNames } from './ens-resolver';
@@ -34,9 +34,9 @@ async function resolveENSBatch(addresses: string[]): Promise<Map<string, string 
 /**
  * Get all stakers from the staking contract's stakersArray using multicall
  */
-async function getAllStakersFromContract(): Promise<Array<{ address: string; staked: bigint }>> {
-  const readClient = getReadClient();
-  
+async function getAllStakersFromContract(
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<Array<{ address: string; staked: bigint }>> {
   try {
     console.log('📡 Fetching stakers using optimized multicall...');
     const startTime = Date.now();
@@ -51,7 +51,7 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
       try {
         const address = await readClient.readContract({
           address: STAKE_CONTRACT_ADDRESS,
-          abi: stakeAbi as any,
+          abi: stakeAbi as UntypedValue,
           functionName: 'stakersArray',
           args: [BigInt(mid)],
         }) as `0x${string}`;
@@ -81,7 +81,7 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
       const batchSize = Math.min(BATCH_SIZE, totalStakers - i);
       const contracts = Array.from({ length: batchSize }, (_, idx) => ({
         address: STAKE_CONTRACT_ADDRESS,
-        abi: stakeAbi as any,
+        abi: stakeAbi as UntypedValue,
         functionName: 'stakersArray' as const,
         args: [BigInt(i + idx)],
       }));
@@ -106,7 +106,7 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
       const batch = allAddresses.slice(i, i + BATCH_SIZE);
       const contracts = batch.map(addr => ({
         address: STAKE_CONTRACT_ADDRESS,
-        abi: stakeAbi as any,
+        abi: stakeAbi as UntypedValue,
         functionName: 'stakers' as const,
         args: [addr],
       }));
@@ -116,7 +116,7 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
       for (let j = 0; j < results.length; j++) {
         const result = results[j];
         if (result.status === 'success' && result.result) {
-          const stakerInfo = result.result as any;
+          const stakerInfo = result.result as UntypedValue;
           // Index 2 is amountStaked: [timeOfLastUpdate, conditionIdOflastUpdate, amountStaked, unclaimedRewards]
           const amountStaked = BigInt(stakerInfo?.[2] || 0);
           
@@ -146,7 +146,9 @@ async function getAllStakersFromContract(): Promise<Array<{ address: string; sta
 /**
  * Get the stake leaderboard - uses 5-minute cache for performance
  */
-export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
+export async function getStakeLeaderboard(
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<StakeLeaderboardEntry[]> {
   // Try cache first
   if (redis) {
     try {
@@ -154,7 +156,7 @@ export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
       if (cached && typeof cached === 'string') {
         console.log('⚡ Returning cached stake leaderboard (< 5 min old)');
         const parsed = JSON.parse(cached);
-        return parsed.map((entry: any) => ({
+        return parsed.map((entry: UntypedValue) => ({
           ...entry,
           stakedAmount: BigInt(entry.stakedAmount)
         }));
@@ -168,7 +170,7 @@ export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
   console.log('🔨 Building fresh stake leaderboard from contract...');
   
   try {
-    const allStakers = await getAllStakersFromContract();
+    const allStakers = await getAllStakersFromContract(readClient);
     
     if (allStakers.length === 0) {
       console.log('⚠️ No stakers found in contract');
@@ -216,4 +218,3 @@ export async function getStakeLeaderboard(): Promise<StakeLeaderboardEntry[]> {
     return [];
   }
 }
-

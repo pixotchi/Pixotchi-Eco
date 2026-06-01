@@ -163,7 +163,7 @@ export function useAppAuthController() {
 
     return (
       user.linkedAccounts?.some(
-        (account: any) => account.type === "wallet" && account.chainType === "solana",
+        (account: UntypedValue) => account.type === "wallet" && account.chainType === "solana",
       ) ?? false
     );
   }, [authenticated, user]);
@@ -301,7 +301,7 @@ export function useAppAuthController() {
     ],
   );
 
-  const getErrorMessage = useCallback((error: unknown, fallback: string) => {
+  const getErrorMessage = useCallback((error: UntypedValue, fallback: string) => {
     if (error instanceof Error && error.message.trim()) {
       return error.message;
     }
@@ -312,8 +312,8 @@ export function useAppAuthController() {
 
     if (error && typeof error === "object") {
       const candidate =
-        (error as { message?: unknown }).message ??
-        (error as { error?: { message?: unknown } }).error?.message;
+        (error as { message?: UntypedValue }).message ??
+        (error as { error?: { message?: UntypedValue } }).error?.message;
 
       if (typeof candidate === "string" && candidate.trim()) {
         return candidate;
@@ -323,22 +323,22 @@ export function useAppAuthController() {
     return fallback;
   }, []);
 
-  const getErrorCode = useCallback((error: unknown): number | null => {
+  const getErrorCode = useCallback((error: UntypedValue): number | null => {
     if (!error || typeof error !== "object") {
       return null;
     }
 
-    const direct = (error as { code?: unknown }).code;
+    const direct = (error as { code?: UntypedValue }).code;
     if (typeof direct === "number") {
       return direct;
     }
 
-    const nested = (error as { error?: { code?: unknown } }).error?.code;
+    const nested = (error as { error?: { code?: UntypedValue } }).error?.code;
     return typeof nested === "number" ? nested : null;
   }, []);
 
   const isUnsupportedBaseMethodError = useCallback(
-    (error: unknown): boolean => {
+    (error: UntypedValue): boolean => {
       const code = getErrorCode(error);
       if (code === 4100 || code === 4200 || code === -32004) {
         return true;
@@ -356,23 +356,23 @@ export function useAppAuthController() {
   );
 
   const isInvalidBaseSiweMessageError = useCallback(
-    (error: unknown): boolean => getErrorMessage(error, "").toLowerCase().includes("invalid siwe message"),
+    (error: UntypedValue): boolean => getErrorMessage(error, "").toLowerCase().includes("invalid siwe message"),
     [getErrorMessage],
   );
 
   const shouldUseLegacyBaseFallback = useCallback(
-    (error: unknown): boolean =>
+    (error: UntypedValue): boolean =>
       isUnsupportedBaseMethodError(error) || isInvalidBaseSiweMessageError(error),
     [isInvalidBaseSiweMessageError, isUnsupportedBaseMethodError],
   );
 
   const isAlreadyConnectedError = useCallback(
-    (error: unknown): boolean =>
+    (error: UntypedValue): boolean =>
       getErrorMessage(error, "").toLowerCase().includes("connector already connected"),
     [getErrorMessage],
   );
 
-  const getPrimaryAccountAddress = useCallback((accounts: unknown): string | null => {
+  const getPrimaryAccountAddress = useCallback((accounts: UntypedValue): string | null => {
     if (!Array.isArray(accounts) || accounts.length === 0) {
       return null;
     }
@@ -385,7 +385,7 @@ export function useAppAuthController() {
     if (
       primaryAccount &&
       typeof primaryAccount === "object" &&
-      typeof (primaryAccount as { address?: unknown }).address === "string"
+      typeof (primaryAccount as { address?: UntypedValue }).address === "string"
     ) {
       return (primaryAccount as { address: string }).address;
     }
@@ -393,7 +393,7 @@ export function useAppAuthController() {
     return null;
   }, []);
 
-  const summarizeBaseAccounts = useCallback((accounts: unknown) => {
+  const summarizeBaseAccounts = useCallback((accounts: UntypedValue) => {
     if (!Array.isArray(accounts)) {
       return {
         isArray: false,
@@ -410,14 +410,14 @@ export function useAppAuthController() {
         return { kind: typeof account };
       }
 
-      const capabilities = (account as { capabilities?: Record<string, unknown> }).capabilities;
+      const capabilities = (account as { capabilities?: Record<string, UntypedValue> }).capabilities;
       const siweCapability = capabilities?.signInWithEthereum as
-        | { message?: unknown; signature?: unknown }
+        | { message?: UntypedValue; signature?: UntypedValue }
         | undefined;
 
       return {
         address:
-          typeof (account as { address?: unknown }).address === "string"
+          typeof (account as { address?: UntypedValue }).address === "string"
             ? (account as { address: string }).address
             : null,
         capabilityKeys: capabilities ? Object.keys(capabilities) : [],
@@ -430,7 +430,7 @@ export function useAppAuthController() {
   }, []);
 
   const logBaseClientDiagnostic = useCallback(
-    async (stage: string, details: Record<string, unknown>) => {
+    async (stage: string, details: Record<string, UntypedValue>) => {
       try {
         await fetch("/api/chat/auth/base/debug", {
           body: JSON.stringify({
@@ -485,8 +485,8 @@ export function useAppAuthController() {
       provider: {
         request: (request: {
           method: string;
-          params: unknown[];
-        }) => Promise<unknown>;
+          params: UntypedValue[];
+        }) => Promise<UntypedValue>;
       };
       uri?: string;
     }) => {
@@ -520,7 +520,7 @@ export function useAppAuthController() {
   );
 
   const completeBaseAuthentication = useCallback(
-    async (baseConnector: any) => {
+    async (baseConnector: UntypedValue) => {
       const nonce = await requestBasePublicChatNonce();
       const domain = typeof window !== "undefined" ? window.location.host : undefined;
       const uri = typeof window !== "undefined" ? window.location.origin : undefined;
@@ -536,15 +536,15 @@ export function useAppAuthController() {
       };
 
       const extractBasePayload = (
-        authResult: unknown,
+        authResult: UntypedValue,
         fallbackAddress?: string | null,
       ): {
         address: string;
         message: string;
         signature: `0x${string}`;
       } | null => {
-        const primaryAccount = Array.isArray((authResult as any)?.accounts)
-          ? (authResult as any).accounts[0]
+        const primaryAccount = Array.isArray((authResult as UntypedValue)?.accounts)
+          ? (authResult as UntypedValue).accounts[0]
           : null;
         const capabilityAddress =
           typeof primaryAccount === "string"
@@ -560,8 +560,8 @@ export function useAppAuthController() {
         if (
           siweCapability &&
           typeof siweCapability === "object" &&
-          typeof (siweCapability as { message?: unknown }).message === "string" &&
-          typeof (siweCapability as { signature?: unknown }).signature !== "string"
+          typeof (siweCapability as { message?: UntypedValue }).message === "string" &&
+          typeof (siweCapability as { signature?: UntypedValue }).signature !== "string"
         ) {
           throw new Error((siweCapability as { message: string }).message);
         }
@@ -586,7 +586,7 @@ export function useAppAuthController() {
         message: string;
         signature: `0x${string}`;
       } | null = null;
-      let withCapabilitiesError: unknown = null;
+      let withCapabilitiesError: UntypedValue = null;
 
       try {
         const connectResult = await connectAsync({
@@ -595,7 +595,7 @@ export function useAppAuthController() {
           },
           connector: baseConnector,
           withCapabilities: true,
-        } as any);
+        } as UntypedValue);
 
         payload = extractBasePayload(connectResult, normalizedAddress);
         if (!payload) {
@@ -603,10 +603,10 @@ export function useAppAuthController() {
             connectorId: baseConnector?.id ?? null,
             connectorName: baseConnector?.name ?? null,
             normalizedAddress,
-            resultAccountSummary: summarizeBaseAccounts((connectResult as any)?.accounts),
+            resultAccountSummary: summarizeBaseAccounts((connectResult as UntypedValue)?.accounts),
             resultKeys:
               connectResult && typeof connectResult === "object"
-                ? Object.keys(connectResult as Record<string, unknown>)
+                ? Object.keys(connectResult as Record<string, UntypedValue>)
                 : [],
           });
         }
@@ -678,7 +678,7 @@ export function useAppAuthController() {
         }
 
         if (!payload) {
-          let walletConnectError: unknown = null;
+          let walletConnectError: UntypedValue = null;
 
           try {
             const authResult = await provider.request({
@@ -699,10 +699,10 @@ export function useAppAuthController() {
                 connectorId: baseConnector?.id ?? null,
                 connectorName: baseConnector?.name ?? null,
                 normalizedAddress: baseAddress,
-                resultAccountSummary: summarizeBaseAccounts((authResult as any)?.accounts),
+                resultAccountSummary: summarizeBaseAccounts((authResult as UntypedValue)?.accounts),
                 resultKeys:
                   authResult && typeof authResult === "object"
-                    ? Object.keys(authResult as Record<string, unknown>)
+                    ? Object.keys(authResult as Record<string, UntypedValue>)
                     : [],
               });
             }
@@ -776,7 +776,7 @@ export function useAppAuthController() {
   );
 
   const completeLegacyBaseAuthentication = useCallback(
-    async (legacyConnector: any) => {
+    async (legacyConnector: UntypedValue) => {
       const nonce = await requestBasePublicChatNonce();
       const domain = typeof window !== "undefined" ? window.location.host : undefined;
       const uri = typeof window !== "undefined" ? window.location.origin : undefined;
@@ -788,9 +788,9 @@ export function useAppAuthController() {
           const result = await connectAsync({
             chainId: 8453,
             connector: legacyConnector,
-          } as any);
+          } as UntypedValue);
           baseAddress =
-            getPrimaryAccountAddress((result as any)?.accounts)?.toLowerCase() ?? null;
+            getPrimaryAccountAddress((result as UntypedValue)?.accounts)?.toLowerCase() ?? null;
         } catch (error) {
           if (!isAlreadyConnectedError(error)) {
             throw error;
@@ -873,10 +873,10 @@ export function useAppAuthController() {
       }
 
       const base =
-        (connectors || []).find((connector: any) => connector.id === "baseAccount") ||
+        (connectors || []).find((connector: UntypedValue) => connector.id === "baseAccount") ||
         (connectors || [])[0];
       const legacyBase = (connectors || []).find(
-        (connector: any) => connector.id === "coinbaseWalletSDK",
+        (connector: UntypedValue) => connector.id === "coinbaseWalletSDK",
       );
 
       if (!base) {
@@ -891,7 +891,7 @@ export function useAppAuthController() {
 
       try {
         try {
-          await completeBaseAuthentication(base as any);
+          await completeBaseAuthentication(base as UntypedValue);
         } catch (error) {
           if (legacyBase && shouldUseLegacyBaseFallback(error)) {
             void logBaseClientDiagnostic("legacy-fallback-selected", {
@@ -902,7 +902,7 @@ export function useAppAuthController() {
               normalizedAddress,
               reason: options.reason,
             });
-            await completeLegacyBaseAuthentication(legacyBase as any);
+            await completeLegacyBaseAuthentication(legacyBase as UntypedValue);
           } else {
             throw error;
           }
@@ -1399,7 +1399,7 @@ export function useAppAuthController() {
         const storedAuto = sessionStorageManager.getAutologin();
         if (state.surface === "test" && isLocalTestAuthAllowed()) {
           const testConnector = (connectors || []).find(
-            (connector: any) => connector?.id === "localTest" || connector?.type === "localTest",
+            (connector: UntypedValue) => connector?.id === "localTest" || connector?.type === "localTest",
           );
 
           if (!testConnector) {
@@ -1407,7 +1407,7 @@ export function useAppAuthController() {
           }
 
           ensureLocalTestWallet();
-          await connectAsync({ connector: testConnector as any });
+          await connectAsync({ connector: testConnector as UntypedValue });
           if (storedAuto === "test") {
             await sessionStorageManager.removeAutologin();
           }
@@ -1438,10 +1438,10 @@ export function useAppAuthController() {
           }
 
           const base =
-            (connectors || []).find((connector: any) => connector.id === "baseAccount") ||
+            (connectors || []).find((connector: UntypedValue) => connector.id === "baseAccount") ||
             (connectors || [])[0];
           const legacyBase = (connectors || []).find(
-            (connector: any) => connector.id === "coinbaseWalletSDK",
+            (connector: UntypedValue) => connector.id === "coinbaseWalletSDK",
           );
 
           if (!base) {
@@ -1460,7 +1460,7 @@ export function useAppAuthController() {
             }
 
             try {
-              await completeBaseAuthentication(base as any);
+              await completeBaseAuthentication(base as UntypedValue);
             } catch (error) {
               if (legacyBase && shouldUseLegacyBaseFallback(error)) {
                 void logBaseClientDiagnostic("legacy-fallback-selected", {
@@ -1470,7 +1470,7 @@ export function useAppAuthController() {
                   message: getErrorMessage(error, "Base auth failed."),
                   normalizedAddress,
                 });
-                await completeLegacyBaseAuthentication(legacyBase as any);
+                await completeLegacyBaseAuthentication(legacyBase as UntypedValue);
               } else {
                 throw error;
               }
@@ -1566,14 +1566,14 @@ export function useAppAuthController() {
     dispatch({ type: "set-mini-connect-retrying", value: true });
     try {
       const farcasterConnector =
-        (connectors || []).find((connector: any) => {
+        (connectors || []).find((connector: UntypedValue) => {
           const id = (connector?.id ?? "").toString().toLowerCase();
           const name = (connector?.name ?? "").toString().toLowerCase();
           return id.includes("farcaster") || name.includes("farcaster");
         }) || (connectors || [])[0];
 
       if (farcasterConnector) {
-        connect({ connector: farcasterConnector as any });
+        connect({ connector: farcasterConnector as UntypedValue });
       } else {
         window.location.reload();
       }

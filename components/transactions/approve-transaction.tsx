@@ -20,8 +20,8 @@ const PIXOTCHI_TOKEN_ABI = [
 interface ApproveTransactionProps {
   spenderAddress: `0x${string}`;
   tokenAddress?: `0x${string}`; // Optional: defaults to SEED token
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

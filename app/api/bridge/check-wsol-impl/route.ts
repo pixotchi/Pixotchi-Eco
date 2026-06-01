@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No code at wSOL address' });
     }
 
-    const results: any = {
+    const results: UntypedValue = {
       proxy: {
         address: WSOL,
         codeLength: (proxyCode.length - 2) / 2,

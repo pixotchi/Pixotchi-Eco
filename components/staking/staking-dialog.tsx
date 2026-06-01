@@ -444,12 +444,12 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    calls={[buildStakeCall(amount)]}
                    buttonText="Stake"
                    disabled={disableStakeBtn}
-                   onSuccess={(tx: any) => {
+                   onSuccess={(tx: UntypedValue) => {
                      setAmount("");
                      refresh();
                      window.dispatchEvent(new Event('balances:refresh'));
                      try {
-                       const payload: Record<string, unknown> = { address, taskId: 's1_stake_seed' };
+                       const payload: Record<string, UntypedValue> = { address, taskId: 's1_stake_seed' };
                        const txHash = extractTransactionHash(tx);
                        if (txHash) {
                          payload.proof = { txHash };
@@ -481,11 +481,11 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               calls={[buildClaimRewardsCall()]}
               buttonText="Claim Rewards"
               buttonClassName="bg-green-600 hover:bg-green-700 text-white"
-              onSuccess={(tx: any) => {
+              onSuccess={(tx: UntypedValue) => {
                 refresh();
                 window.dispatchEvent(new Event('balances:refresh'));
                 try {
-                  const payload: Record<string, unknown> = { address, taskId: 's1_claim_stake' };
+                  const payload: Record<string, UntypedValue> = { address, taskId: 's1_claim_stake' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };

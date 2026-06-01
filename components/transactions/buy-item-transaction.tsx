@@ -30,8 +30,8 @@ const PIXOTCHI_NFT_ABI = [
 interface BuyShopItemTransactionProps {
   plantId: number;
   itemId: string;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
@@ -69,8 +69,8 @@ export function BuyShopItemTransaction({
 interface BuyGardenItemTransactionProps {
   plantId: number;
   itemId: string;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

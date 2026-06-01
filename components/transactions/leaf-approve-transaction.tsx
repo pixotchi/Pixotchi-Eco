@@ -18,8 +18,8 @@ const LEAF_TOKEN_ABI = [
 ] as const;
 
 interface LeafApproveTransactionProps {
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

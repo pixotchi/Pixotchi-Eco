@@ -22,26 +22,26 @@ interface TransferAssetsDialogProps {
 }
 
 type WalletErrorLike = {
-  code?: unknown;
-  cause?: { code?: unknown } | null;
-  name?: unknown;
-  shortMessage?: unknown;
-  message?: unknown;
+  code?: UntypedValue;
+  cause?: { code?: UntypedValue } | null;
+  name?: UntypedValue;
+  shortMessage?: UntypedValue;
+  message?: UntypedValue;
 };
 
-const getWalletErrorDetails = (error: unknown): WalletErrorLike => {
+const getWalletErrorDetails = (error: UntypedValue): WalletErrorLike => {
   if (!error || typeof error !== "object") return {};
   return error as WalletErrorLike;
 };
 
-const getWalletErrorMessage = (error: unknown) => {
+const getWalletErrorMessage = (error: UntypedValue) => {
   if (typeof error === "string") return error;
   const details = getWalletErrorDetails(error);
   const message = details.shortMessage ?? details.message;
   return typeof message === "string" ? message : "";
 };
 
-const isUserRejectedError = (error: unknown) => {
+const isUserRejectedError = (error: UntypedValue) => {
   const details = getWalletErrorDetails(error);
   const message = getWalletErrorMessage(error).toLowerCase();
   return (

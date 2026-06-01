@@ -10,7 +10,7 @@ const appUrl = process.env.NEXT_PUBLIC_URL || "";
 type SendFrameNotificationResult =
   | {
       state: "error";
-      error: unknown;
+      error: UntypedValue;
     }
   | { state: "no_token" }
   | { state: "rate_limit" }

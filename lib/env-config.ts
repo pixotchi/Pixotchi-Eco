@@ -3,7 +3,7 @@
 
 // Ensure TS knows about `process` in all environments for lint/type checks
 // (Next.js will still inline NEXT_PUBLIC_* at build time)
-declare const process: any;
+declare const process: UntypedValue;
 
 import { validateBaseRpcEndpointDiversity } from './base-rpc-policy';
 import {
@@ -51,9 +51,6 @@ export const CLIENT_ENV = {
   VERIFY_CLAIM_LEAF_BONUS_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true',
   // When enabled, each free plant claim also sends SEED tokens (first-come-first-served)
   VERIFY_CLAIM_SEED_BONUS_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true',
-  // Agent tab in chat - allows AI to mint plants on behalf of user
-  // When false, the Agent tab is completely hidden and agent code is not loaded
-  AGENT_ENABLED: process.env.NEXT_PUBLIC_AGENT_ENABLED !== 'false', // Defaults to true
   SWAP_MODULE_DISABLED: process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED === 'true',
   SWAP_MODULE_DISABLED_MESSAGE:
     process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED_MESSAGE ||

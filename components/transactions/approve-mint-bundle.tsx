@@ -40,9 +40,9 @@ export default function ApproveMintBundle({
 }: {
   strain: number;
   tokenAddress?: `0x${string}`; // Optional: defaults to SEED token
-  onSuccess?: (tx: any) => void;
-  onTransactionComplete?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onTransactionComplete?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

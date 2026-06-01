@@ -14,8 +14,8 @@ import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/bui
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
@@ -42,11 +42,11 @@ export default function UniversalTransaction({
   // Normalize to raw serializable calls for embedded-wallet compatibility.
   // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
+    transformCallsWithBuilderCode(calls as UntypedValue[]) as TransactionCall[],
     [calls]
   );
 
-  const handleOnSuccess = useCallback((tx: any) => {
+  const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
     // Notify status bar to refresh balances
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
@@ -57,7 +57,7 @@ export default function UniversalTransaction({
 
   // Wrap onError to ignore errors after success has been handled
   // This fixes OnchainKit race condition where onError can fire after successful tx
-  const handleOnError = useCallback((error: any) => {
+  const handleOnError = useCallback((error: UntypedValue) => {
     if (successHandledRef.current) {
       if (process.env.NODE_ENV === 'development') {
         console.debug('Ignoring post-success error callback from OnchainKit:', error);

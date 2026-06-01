@@ -58,13 +58,13 @@ interface BoxGameTransactionProps {
   plantId: number;
   seed: number;
   withStar: boolean;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   showToast?: boolean;
-  onStatusUpdate?: (status: any) => void;
+  onStatusUpdate?: (status: UntypedValue) => void;
 }
 
 export default function BoxGameTransaction({
@@ -88,7 +88,7 @@ export default function BoxGameTransaction({
     args: [BigInt(plantId), BigInt(seed)],
   }];
 
-  const handleSuccess = (tx: any) => {
+  const handleSuccess = (tx: UntypedValue) => {
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {
@@ -106,25 +106,25 @@ export default function BoxGameTransaction({
 
   return (
     <SponsoredTransaction
-      calls={calls as any}
+      calls={calls as UntypedValue}
       onSuccess={handleSuccess}
       onError={onError}
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
       showToast={showToast}
-      onStatusUpdate={(status: any) => {
+      onStatusUpdate={(status: UntypedValue) => {
         try { onStatusUpdate?.(status); } catch {}
         if (status?.statusName === 'success') {
           try {
-            const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
-            const abi = (PixotchiNFT as any).abi || PixotchiNFT;
+            const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
+            const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
             let shown = false;
             for (const r of receipts) {
               const logs = r?.logs || [];
               for (const log of logs) {
                 try {
-                  const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as any });
+                  const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
                   if (decoded.eventName === 'Played' || decoded.eventName === 'PlayedV2') {
                     const rawPoints = Number(decoded.args.points ?? decoded.args.pointsAdjustment ?? 0);
                     const rawTime = Number(decoded.args.timeExtension ?? decoded.args.timeAdjustment ?? 0);

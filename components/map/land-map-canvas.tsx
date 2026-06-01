@@ -62,7 +62,7 @@ export function LandMapCanvas({
   // Load sprites on mount
   useEffect(() => {
     const loadSprites = async () => {
-      const loadedSprites: any = {};
+      const loadedSprites: UntypedValue = {};
 
       // Load helper
       const loadImage = (src: string): Promise<HTMLImageElement> => {

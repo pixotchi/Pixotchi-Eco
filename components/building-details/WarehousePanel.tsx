@@ -178,13 +178,13 @@ export default function WarehousePanel({
           buttonText="Apply"
           buttonClassName="h-9 px-3 text-sm"
           disabled={!selectedPlantId || !applyPts || ptsTooHigh || ptsParsedScaled === null || ptsParsedScaled <= BigInt(0)}
-          onSuccess={(tx: any) => {
+          onSuccess={(tx: UntypedValue) => {
             toast.success('PTS applied');
             setApplyPts('');
             onApplySuccess();
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
             try {
-              const payload: Record<string, unknown> = { address, taskId: 's3_apply_resources' };
+              const payload: Record<string, UntypedValue> = { address, taskId: 's3_apply_resources' };
               const txHash = extractTransactionHash(tx);
               if (txHash) {
                 payload.proof = { txHash };
@@ -225,13 +225,13 @@ export default function WarehousePanel({
           buttonText="Apply"
           buttonClassName="h-9 px-3 text-sm"
           disabled={!selectedPlantId || !applyTodMinutes || minutesTooHigh || !Number.isFinite(minutesParsed) || minutesParsed <= 0}
-          onSuccess={(tx: any) => {
+          onSuccess={(tx: UntypedValue) => {
             toast.success('TOD applied');
             setApplyTodMinutes('');
             onApplySuccess();
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
             try {
-              const payload: Record<string, unknown> = { address, taskId: 's3_apply_resources' };
+              const payload: Record<string, UntypedValue> = { address, taskId: 's3_apply_resources' };
               const txHash = extractTransactionHash(tx);
               if (txHash) {
                 payload.proof = { txHash };

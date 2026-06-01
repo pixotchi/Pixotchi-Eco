@@ -685,10 +685,10 @@ export default function ItemDetailsPanel({
               isFenceItem ? (
                 <SponsoredTransaction
                   calls={fenceV2Calls}
-                  onSuccess={(tx: any) => {
+                  onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();
                     try {
-                      const payload: Record<string, unknown> = { address, taskId: 's4_buy_shield' };
+                      const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
                       if (txHash) {
                         payload.proof = { txHash };
@@ -705,10 +705,10 @@ export default function ItemDetailsPanel({
                 <BuyShopItemTransaction
                   plantId={selectedPlant.id}
                   itemId={selectedItem.id}
-                  onSuccess={(tx: any) => {
+                  onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();
                     try {
-                      const payload: Record<string, unknown> = { address, taskId: 's4_buy_shield' };
+                      const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
                       if (txHash) {
                         payload.proof = { txHash };
@@ -726,12 +726,12 @@ export default function ItemDetailsPanel({
               <BuyGardenItemTransaction
                 plantId={selectedPlant.id}
                 itemId={selectedItem.id}
-                onSuccess={(tx: any) => {
+                onSuccess={(tx: UntypedValue) => {
                   onPurchaseSuccess();
                   try {
-                    const post = async (currentTx: any, attempt = 0) => {
+                    const post = async (currentTx: UntypedValue, attempt = 0) => {
                       try {
-                        const payload: Record<string, unknown> = { address, taskId: 's4_buy10_elements' };
+                        const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy10_elements' };
                         const txHash = extractTransactionHash(currentTx);
                         if (txHash) {
                           payload.proof = { txHash };

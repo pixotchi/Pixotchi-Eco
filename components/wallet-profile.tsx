@@ -148,7 +148,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   // Farcaster / Mini App state (evaluate before export gating)
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const isFrameContextResolved = fc !== null;
-  const fcContext = (fc?.context as any) ?? null;
+  const fcContext = (fc?.context as UntypedValue) ?? null;
   const isInFrame = isMiniApp; // alias for clarity
   const isPrivySurface = authSurface === "privy" || authSurface === "privysolana";
 
@@ -279,7 +279,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       await performExport();
       toast.success("Export window opened. Follow the instructions to copy your key.");
       setExportDialogOpen(false);
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
       console.error("Embedded wallet export failed", error);
       const rawMessage = (error?.message || "").toString();
       const needsReauth = /access token/i.test(rawMessage) || /mfa/i.test(rawMessage);
@@ -305,7 +305,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   useEffect(() => {
     const loc = fcContext?.location;
     if (loc && typeof loc === 'object') {
-      const ref = (loc as any).referrerDomain || (loc as any).referrer || null;
+      const ref = (loc as UntypedValue).referrerDomain || (loc as UntypedValue).referrer || null;
       setReferrerDomain(ref ?? null);
     } else {
       setReferrerDomain(null);
@@ -344,9 +344,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     if (isSolana) {
       const solWallet = solanaPrivyWallets?.[0];
       const solName =
-        (solWallet as any)?.name ||
-        (solWallet as any)?.standardWallet?.name ||
-        (solWallet as any)?.walletClientType;
+        (solWallet as UntypedValue)?.name ||
+        (solWallet as UntypedValue)?.standardWallet?.name ||
+        (solWallet as UntypedValue)?.walletClientType;
       return solName || "Solana Wallet";
     }
     if (!connector) return "Unknown";

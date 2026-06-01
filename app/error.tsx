@@ -38,7 +38,7 @@ export default function Error({
           />
           <h1 id="error-title" className="text-lg font-semibold mb-2">Something went wrong!</h1>
           <p className="text-muted-foreground mb-4">
-            We've encountered an unexpected error. Don't worry, your plants are safe!
+            We&apos;ve encountered an unexpected error. Don&apos;t worry, your plants are safe!
           </p>
           <div className="space-y-3">
             <Button

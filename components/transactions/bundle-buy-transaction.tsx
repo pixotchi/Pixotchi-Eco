@@ -36,8 +36,8 @@ interface BundleBuyTransactionProps {
   plant: Plant;
   itemType: 'shop' | 'garden';
   quantity: number;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   disabled?: boolean;
 }
 
@@ -82,12 +82,12 @@ export default function BundleBuyTransaction({
   return (
     <SmartWalletTransaction
       calls={generateBundleCalls()}
-      onSuccess={(tx: any) => {
+      onSuccess={(tx: UntypedValue) => {
         try {
           if (address && itemType === 'garden') {
-            const post = async (currentTx: any, attempt = 0) => {
+            const post = async (currentTx: UntypedValue, attempt = 0) => {
               try {
-                const payload: Record<string, unknown> = {
+                const payload: Record<string, UntypedValue> = {
                   address,
                   taskId: 's4_buy10_elements',
                   count: quantity,

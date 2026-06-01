@@ -48,7 +48,7 @@ export interface SolanaBridgeButtonProps {
   /** Called when transaction succeeds */
   onSuccess?: (signature: string) => void;
   /** Called when transaction fails */
-  onError?: (error: any) => void;
+  onError?: (error: UntypedValue) => void;
   /** Called whenever a fresh quote is fetched (wSOL amount/error). Only fires for actions that require quotes. */
   onQuote?: (quote: { wsolAmount: bigint; error?: string } | null) => void;
 }

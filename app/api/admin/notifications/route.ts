@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     const [eligibleSet, globalRecentRaw, globalSentCountRaw] = await Promise.all([
       redis?.smembers?.('notif:eligible:fids'),
-      (redis as any)?.lrange?.('notif:global:log', 0, 20),
+      (redis as UntypedValue)?.lrange?.('notif:global:log', 0, 20),
       redis?.get?.('notif:global:sentCount'),
     ]);
 

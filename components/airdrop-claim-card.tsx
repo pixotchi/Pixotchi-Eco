@@ -71,7 +71,7 @@ export function AirdropClaimCard() {
             let signature: string;
             try {
                 signature = await signMessageAsync({ message });
-            } catch (signError: any) {
+            } catch (signError: UntypedValue) {
                 // User rejected the signature
                 if (signError?.name === 'UserRejectedRequestError' || signError?.code === 4001) {
                     toast.error('Signature rejected. Please sign to claim your airdrop.');
@@ -101,7 +101,7 @@ export function AirdropClaimCard() {
             } else {
                 toast.error(data.error || 'Claim failed');
             }
-        } catch (err: any) {
+        } catch (err: UntypedValue) {
             console.error('[AIRDROP] Claim error:', err);
             toast.error(err?.message || 'Failed to claim airdrop');
         } finally {

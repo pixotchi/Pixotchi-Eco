@@ -219,10 +219,10 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
                         hideStatus
                         disabled={isRewardsDepleted}
-                        onSuccess={(tx: any) => {
+                        onSuccess={(tx: UntypedValue) => {
                           handleSuccess({ slotIndex: idx, awaitInProgress: true });
                           try {
-                            const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
+                            const payload: Record<string, UntypedValue> = { address, taskId: 's3_send_quest' };
                             const txHash = extractTransactionHash(tx);
                             if (txHash) {
                               payload.proof = { txHash };

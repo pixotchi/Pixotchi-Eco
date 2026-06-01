@@ -312,8 +312,8 @@ export function Providers(props: { children: ReactNode }) {
       return () => mql.removeEventListener('change', apply);
     } catch {
       // Safari fallback
-      mql.addListener?.(apply as any);
-      return () => mql.removeListener?.(apply as any);
+      mql.addListener?.(apply as UntypedValue);
+      return () => mql.removeListener?.(apply as UntypedValue);
     }
   }, []);
 
@@ -325,12 +325,12 @@ export function Providers(props: { children: ReactNode }) {
       isMobilePrivyBrowser
         ? MOBILE_EVM_WALLET_LIST
         : DESKTOP_EVM_WALLET_LIST
-    ) as any;
+    ) as UntypedValue;
     const solanaWalletList = (
       isMobilePrivyBrowser
         ? MOBILE_SOLANA_WALLET_LIST
         : DESKTOP_SOLANA_WALLET_LIST
-    ) as any;
+    ) as UntypedValue;
 
     // Solana-only mode: only show Solana wallets
     if (isSolanaMode && solanaEnabled) {

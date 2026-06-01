@@ -9,8 +9,8 @@ interface BuildingSpeedUpTransactionProps {
   building: BuildingData;
   landId: bigint;
   buildingType: 'village' | 'town';
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

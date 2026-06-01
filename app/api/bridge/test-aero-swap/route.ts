@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const publicClient = getBaseReadClient();
     const amountBn = BigInt(amount);
 
-    const results: any = {
+    const results: UntypedValue = {
       input: { amount: formatUnits(amountBn, 9) + ' wSOL', raw: amount },
       tests: {},
     };
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         success: true, 
         note: '✅ Would succeed IF adapter has balance' 
       };
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.routerTransferFromAdapter = { 
         success: false, 
         error: e.shortMessage || e.message,
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
         usdcOut: formatUnits(amounts[1], 6),
         wethOut: formatUnits(amounts[2], 18),
       };
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.getAmountsOut = { 
         success: false, 
         error: e.shortMessage || e.message,
@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
         data: swapData,
       });
       results.tests.swapSimulation = { success: true, note: 'Swap would succeed' };
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       const errorMsg = e.shortMessage || e.message || '';
       results.tests.swapSimulation = { 
         success: false, 

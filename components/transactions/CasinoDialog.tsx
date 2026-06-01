@@ -304,7 +304,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const betAmounts = useMemo(() => placedBets.map(b => parseUnits(b.amount, tokenDecimals)), [placedBets, tokenDecimals]);
 
     // Handle place bets completion
-    const handlePlaceBetsComplete = useCallback((result?: {}) => {
+    const handlePlaceBetsComplete = useCallback((result?: object) => {
         if (result === undefined) {
             // Transaction failed
             setError('Failed to place bets');

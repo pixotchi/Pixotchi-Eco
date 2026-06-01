@@ -29,7 +29,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
         }
         const data = (await response.json()) as StatusSnapshot;
         setSnapshot(data);
-      } catch (err: any) {
+      } catch (err: UntypedValue) {
         setError(err?.message || "Unable to refresh status");
       }
     });

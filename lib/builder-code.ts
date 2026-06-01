@@ -127,9 +127,9 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
 export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
   to?: `0x${string}`;
-  abi?: any;
+  abi?: UntypedValue;
   functionName?: string;
-  args?: any[];
+  args?: UntypedValue[];
   data?: `0x${string}`;
   value?: bigint;
 }>(calls: T[]): T[] {

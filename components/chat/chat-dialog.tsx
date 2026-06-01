@@ -8,11 +8,7 @@ import ChatInput from './chat-input';
 import AITypingIndicator from './ai-typing-indicator';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import Image from 'next/image';
-import AgentPermissionsPanel from './AgentPermissionsPanel';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { useFrameContext } from '@/lib/frame-context';
 import { useTransactions } from 'ethereum-identity-kit';
-import { CLIENT_ENV } from '@/lib/env-config';
 import { createPortal } from 'react-dom';
 import type { ChatMode } from '@/lib/types';
 
@@ -61,15 +57,6 @@ function DesktopChatPane({
 
 function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
   const { mode, setMode, isAITyping } = useChat();
-  const { isSmartWallet } = useSmartWallet();
-  const fc = useFrameContext();
-  const isInMiniApp = Boolean(fc?.isInMiniApp);
-
-  // Agent tab is only shown if:
-  // 1. AGENT_ENABLED env is not false (defaults to true)
-  // 2. User has a smart wallet
-  // 3. User is not in a MiniApp
-  const isAgentAvailable = CLIENT_ENV.AGENT_ENABLED && isSmartWallet && !isInMiniApp;
 
   return (
     <DialogContent
@@ -91,7 +78,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
               <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="xl:hidden" />
             )}
             <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="hidden xl:block" />
-            <span className="xl:hidden">{mode === 'ai' ? 'Assistant' : mode === 'agent' ? 'Agent' : 'Chat'}</span>
+            <span className="xl:hidden">{mode === 'ai' ? 'Neural Seed AI' : 'Chat'}</span>
             <span className="hidden xl:inline">Chat</span>
           </div>
           <div className="xl:hidden">
@@ -101,30 +88,18 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
               options={[
                 { value: 'public', label: 'Public' },
                 { value: 'ai', label: 'AI' },
-                ...(isAgentAvailable ? [{ value: 'agent', label: 'Agent' }] : []),
               ]}
             />
           </div>
         </DialogTitle>
         <DialogDescription>
           <span className="xl:hidden">
-            {mode === 'agent'
-              ? (isInMiniApp
-                ? 'Agent is not available in Mini App.'
-                : (!isSmartWallet
-                  ? 'Agent requires a smart wallet.'
-                  : 'Neural Seed Agent can mint plants using your spend permission.'))
-              : 'Chat with the community or get help from Neural Seed AI assistant.'}
+            Chat with the community or get help from Neural Seed AI assistant.
           </span>
           <span className="hidden xl:inline">
             Chat with the community or get help from Neural Seed AI assistant.
           </span>
         </DialogDescription>
-        {mode === 'agent' && isSmartWallet && !isInMiniApp && (
-          <div className="mt-2 xl:hidden">
-            <AgentPermissionsPanel />
-          </div>
-        )}
       </DialogHeader>
 
       <div className="flex-grow overflow-hidden xl:hidden">
@@ -133,7 +108,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
 
       <div className="hidden min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden pt-3 xl:grid">
         <DesktopChatPane mode="public" title="Public" icon="/icons/chat.svg" />
-        <DesktopChatPane mode="ai" title="AI Assistant" icon="/icons/neuralseed.png" />
+        <DesktopChatPane mode="ai" title="Neural Seed AI" icon="/icons/neuralseed.png" />
       </div>
 
       <DialogFooter className="border-t border-border pt-3 xl:hidden">

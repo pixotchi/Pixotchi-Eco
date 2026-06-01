@@ -8,8 +8,8 @@ import { LAND_CONTRACT_ADDRESS } from "@/lib/contracts";
 interface BuildingClaimTransactionProps {
   landId: bigint;
   buildingId: number;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

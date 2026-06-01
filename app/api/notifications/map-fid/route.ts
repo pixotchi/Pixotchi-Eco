@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (!redis) return NextResponse.json({ success: false, error: 'Redis unavailable' }, { status: 500 });
     await redis.set(`fidmap:${fid}`, address.toLowerCase());
     return NextResponse.json({ success: true });
-  } catch (e: any) {
+  } catch (e: UntypedValue) {
     return NextResponse.json({ success: false, error: e?.message || 'failed' }, { status: 500 });
   }
 }

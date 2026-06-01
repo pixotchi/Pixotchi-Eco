@@ -30,7 +30,7 @@ async function scanAndDelete(pattern: string): Promise<number> {
   let cursor = 0;
 
   do {
-    const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
+    const resp: UntypedValue = await (redis as UntypedValue).scan(cursor, { match: pattern, count: 100 });
     if (!Array.isArray(resp)) {
       break;
     }

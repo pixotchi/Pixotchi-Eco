@@ -262,7 +262,7 @@ export default function PlantsView() {
         No Plants Yet!
       </h3>
       <p className="text-muted-foreground">
-        Head over to the 'Mint' tab to grow your first plant.
+        Head over to the &apos;Mint&apos; tab to grow your first plant.
       </p>
     </div>
   );
@@ -524,7 +524,7 @@ export default function PlantsView() {
                 <DialogTitle>Claim ETH Rewards?</DialogTitle>
               </DialogHeader>
               <div className="space-y-3 text-sm text-muted-foreground">
-                <p>Claiming rewards will burn your current points and reset this plant's level to 0.</p>
+                <p>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
                 <div className="flex items-center gap-2 font-medium text-foreground">
                   <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
                   <span>{formatEth(selectedPlant.rewards)} ETH</span>

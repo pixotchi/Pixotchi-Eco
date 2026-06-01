@@ -6,8 +6,8 @@ import { landAbi as LAND_ABI } from '@/public/abi/pixotchi-v3-abi';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 interface LandMintTransactionProps {
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

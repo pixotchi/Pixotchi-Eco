@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { address, plantId, block } = await req.json().catch(() => ({}) as Record<string, unknown>);
+  const { address, plantId, block } = await req.json().catch(() => ({}) as Record<string, UntypedValue>);
 
   if (typeof address !== "string" || typeof plantId !== "number" || typeof block !== "number") {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });

@@ -250,10 +250,10 @@ export default function LeaderboardTab() {
     if (!hash) return;
     try {
       const receipt = await getBaseTransactionReceipt(hash as `0x${string}`);
-      const abi = (PixotchiNFT as any).abi || PixotchiNFT;
+      const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
       for (const log of receipt.logs) {
         try {
-          const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as any });
+          const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
           if (decoded.eventName === 'Attack') {
             const attacker = Number(decoded.args.attacker);
             const winner = Number(decoded.args.winner);
@@ -271,12 +271,12 @@ export default function LeaderboardTab() {
     }
   }, []);
 
-  const showAttackOutcomeFromLogs = (logs: any[]) => {
+  const showAttackOutcomeFromLogs = (logs: UntypedValue[]) => {
     try {
-      const abi = (PixotchiNFT as any).abi || PixotchiNFT;
+      const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
       for (const log of logs) {
         try {
-          const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as any });
+          const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
           if (decoded.eventName === 'Attack') {
             const attacker = Number(decoded.args.attacker);
             const winner = Number(decoded.args.winner);
@@ -336,9 +336,9 @@ export default function LeaderboardTab() {
             .sort((a, b) => Number(b.experiencePoints - a.experiencePoints))
             .map((l, idx) => ({
               rank: idx + 1,
-              landId: Number((l as any).landId ?? 0),
-              name: (l as any).name || `Land #${Number((l as any).landId ?? 0)}`,
-              exp: Number((l as any).experiencePoints ?? 0) / 1e18,
+              landId: Number((l as UntypedValue).landId ?? 0),
+              name: (l as UntypedValue).name || `Land #${Number((l as UntypedValue).landId ?? 0)}`,
+              exp: Number((l as UntypedValue).experiencePoints ?? 0) / 1e18,
             }));
           landDataCacheRef.current = { data: sortedLands, timestamp: now };
           setLandRows(sortedLands);
@@ -384,7 +384,7 @@ export default function LeaderboardTab() {
       const stakeResponse = await fetch('/api/leaderboard/stake');
       if (stakeResponse.ok) {
         const stakeData = await stakeResponse.json();
-        const sortedStakes = stakeData.leaderboard.map((entry: any) => ({
+        const sortedStakes = stakeData.leaderboard.map((entry: UntypedValue) => ({
           rank: entry.rank,
           address: entry.address,
           stakedAmount: BigInt(entry.stakedAmount),
@@ -455,7 +455,7 @@ export default function LeaderboardTab() {
         return;
       }
       const entries = Array.isArray(payload.leaderboard) ? payload.leaderboard : [];
-      const mapped: RocksLeaderboardEntry[] = entries.map((entry: any, index: number) => ({
+      const mapped: RocksLeaderboardEntry[] = entries.map((entry: UntypedValue, index: number) => ({
         rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
         address: entry.address,
         rocks: Number(entry.rocks) || 0,
@@ -1291,7 +1291,7 @@ export default function LeaderboardTab() {
                 value={filterMode}
                 onValueChange={(v) => {
                   setCurrentPage(1);
-                  setFilterMode(v as any);
+                  setFilterMode(v as UntypedValue);
                   // Auto-uncheck "My Plants" when switching to attackable or dead
                   if (v === 'attackable' || v === 'dead') {
                     setShowOnlyMyPlants(false);
@@ -1408,7 +1408,7 @@ export default function LeaderboardTab() {
                       checked={selectedAttackerId === p.id}
                       onChange={() => setSelectedAttackerId(p.id)}
                     />
-                    <PlantImage selectedPlant={p as any} width={28} height={28} />
+                    <PlantImage selectedPlant={p as UntypedValue} width={28} height={28} />
                     <div className="text-sm">
                       <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
                       <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
@@ -1466,7 +1466,7 @@ export default function LeaderboardTab() {
                       buttonClassName="w-full"
                       showToast={true}
                       disabled={isSubmitting || !eligible}
-                      onStatusUpdate={(status: any) => {
+                      onStatusUpdate={(status: UntypedValue) => {
                         if (status.statusName === 'pending') {
                           setIsSubmitting(true);
                           try {
@@ -1542,7 +1542,7 @@ export default function LeaderboardTab() {
                       checked={selectedKillerId === p.id}
                       onChange={() => setSelectedKillerId(p.id)}
                     />
-                    <PlantImage selectedPlant={p as any} width={28} height={28} />
+                    <PlantImage selectedPlant={p as UntypedValue} width={28} height={28} />
                     <div className="text-sm">
                       <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
                       <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
@@ -1565,7 +1565,7 @@ export default function LeaderboardTab() {
                   buttonText="Confirm Kill"
                   buttonClassName="w-full"
                   showToast={true}
-                  onStatusUpdate={(status: any) => {
+                  onStatusUpdate={(status: UntypedValue) => {
                     if (status.statusName === 'pending') {
                       toast.loading('Submitting kill...', { id: 'kill-tx' });
                     }
@@ -1626,7 +1626,7 @@ export default function LeaderboardTab() {
                       buttonClassName="w-full"
                       showToast={true}
                       disabled={!targetPlant || !hasEnough}
-                      onStatusUpdate={(status: any) => {
+                      onStatusUpdate={(status: UntypedValue) => {
                         if (status.statusName === 'pending') {
                           toast.loading('Submitting revive...', { id: 'revive-tx' });
                         }

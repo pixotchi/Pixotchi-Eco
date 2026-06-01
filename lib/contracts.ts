@@ -34,12 +34,12 @@ export const CREATOR_TOKEN_ADDRESS = getAddress('0xa2ef17bb7eea1143196678337069d
 export const CRYPTICPOET_TOKEN_ADDRESS = getAddress('0x787b7B7117848C1F9Fc79A8Fa543202c231C1Edb');
 // Known token addresses for reference
 export const JESSE_TOKEN_ADDRESS = getAddress('0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59');
-export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as unknown as `0x${string}`;
+export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress(CLIENT_ENV.BATCH_ROUTER_ADDRESS) : undefined as UntypedValue as `0x${string}`;
 export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
 export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
 export const FENCE_V2_EXTENSION_ADDRESS = PIXOTCHI_NFT_ADDRESS;
 
-const isFenceItemName = (name: unknown): boolean => {
+const isFenceItemName = (name: UntypedValue): boolean => {
   if (typeof name !== 'string') return false;
   const lower = name.toLowerCase();
   return lower.includes('fence') || lower.includes('shield');
@@ -47,7 +47,7 @@ const isFenceItemName = (name: unknown): boolean => {
 
 // Derive Fence V2 state from extensions (since Fence V2 writes to the same storage)
 // This eliminates the need for a separate RPC call to fenceV2GetPurchaseStats
-const deriveFenceV2StateFromExtensions = (extensions: any[]): FenceV2State | null => {
+const deriveFenceV2StateFromExtensions = (extensions: UntypedValue[]): FenceV2State | null => {
   if (!Array.isArray(extensions)) return null;
 
   const nowSec = Math.floor(Date.now() / 1000);
@@ -730,7 +730,9 @@ export const KILL_COOLDOWN_ABI = [
   },
 ] as const;
 
-export const getReadClient = () => getBaseReadClient();
+export type PixotchiReadClient = ReturnType<typeof getBaseReadClient>;
+
+export const getReadClient = (): PixotchiReadClient => getBaseReadClient();
 
 const waitForBaseTransactionSuccess = async (
   hash: `0x${string}`,
@@ -1066,7 +1068,7 @@ export const isStakeApproved = async (ownerAddress: string): Promise<boolean> =>
 };
 
 // Build approve call for UniversalTransaction
-export const buildApproveStakeCall = (): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
+export const buildApproveStakeCall = (): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
   return {
     address: PIXOTCHI_TOKEN_ADDRESS,
@@ -1076,7 +1078,7 @@ export const buildApproveStakeCall = (): { address: `0x${string}`; abi: any; fun
   } as const;
 };
 
-export const buildStakeCall = (amount: string): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
+export const buildStakeCall = (amount: string): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
   const amountWei = parseUnits(amount || '0', 18);
   return {
     address: STAKE_CONTRACT_ADDRESS,
@@ -1086,7 +1088,7 @@ export const buildStakeCall = (amount: string): { address: `0x${string}`; abi: a
   } as const;
 };
 
-export const buildUnstakeCall = (amount: string): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
+export const buildUnstakeCall = (amount: string): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
   const amountWei = parseUnits(amount || '0', 18);
   return {
     address: STAKE_CONTRACT_ADDRESS,
@@ -1096,7 +1098,7 @@ export const buildUnstakeCall = (amount: string): { address: `0x${string}`; abi:
   } as const;
 };
 
-export const buildClaimRewardsCall = (): { address: `0x${string}`; abi: any; functionName: string; args: any[] } => {
+export const buildClaimRewardsCall = (): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
   return {
     address: STAKE_CONTRACT_ADDRESS,
     abi: stakingAbi,
@@ -1115,7 +1117,7 @@ export const getStakeInfo = async (address: string): Promise<{ staked: bigint; r
         functionName: 'getStakeInfo',
         args: [address as `0x${string}`],
       });
-      return info as any;
+      return info as UntypedValue;
     });
     // Normalize possible return shapes
     if (Array.isArray(result)) {
@@ -1136,7 +1138,8 @@ export const getStakeInfo = async (address: string): Promise<{ staked: bigint; r
 
 // Optimized composite fetch for staking-specific data only (no balance duplication)
 export const getStakeComposite = async (
-  ownerAddress: string
+  ownerAddress: string,
+  readClient: PixotchiReadClient = getReadClient(),
 ): Promise<{
   stake: { staked: bigint; rewards: bigint } | null;
   approved: boolean;
@@ -1144,7 +1147,6 @@ export const getStakeComposite = async (
   timeUnit: bigint | null;
   totalStaked: bigint | null;
 }> => {
-  const readClient = getReadClient();
   try {
     const [stakeRes, allowanceRes, rewardRatioRes, timeUnitRes, totalStakedRes] = await retryWithBackoff(async () => {
       const results = await readClient.multicall({
@@ -1182,11 +1184,11 @@ export const getStakeComposite = async (
         ],
         allowFailure: true,
       });
-      return results as any[];
+      return results as UntypedValue[];
     });
 
     let stake: { staked: bigint; rewards: bigint } | null = null;
-    const sr = stakeRes?.result as any;
+    const sr = stakeRes?.result as UntypedValue;
     if (Array.isArray(sr)) {
       stake = { staked: sr[0] as bigint, rewards: sr[1] as bigint };
     } else if (sr && typeof sr === 'object') {
@@ -1197,7 +1199,7 @@ export const getStakeComposite = async (
     const approved = allowance > BigInt(0);
 
     let rewardRatio: { numerator: bigint; denominator: bigint } | null = null;
-    const rr = rewardRatioRes?.result as any;
+    const rr = rewardRatioRes?.result as UntypedValue;
     const numerator = rr?.numerator ?? rr?.[0];
     const denominator = rr?.denominator ?? rr?.[1];
     if (typeof numerator !== 'undefined' && typeof denominator !== 'undefined') {
@@ -1212,7 +1214,7 @@ export const getStakeComposite = async (
     }
 
     let timeUnit: bigint | null = null;
-    const timeUnitResult = timeUnitRes?.result as any;
+    const timeUnitResult = timeUnitRes?.result as UntypedValue;
     if (typeof timeUnitResult !== 'undefined' && timeUnitResult !== null) {
       try {
         timeUnit = BigInt(timeUnitResult);
@@ -1222,7 +1224,7 @@ export const getStakeComposite = async (
     }
 
     let totalStaked: bigint | null = null;
-    const totalStakedRaw = totalStakedRes?.result as any;
+    const totalStakedRaw = totalStakedRes?.result as UntypedValue;
     if (typeof totalStakedRaw !== 'undefined' && totalStakedRaw !== null) {
       try {
         totalStaked = BigInt(totalStakedRaw);
@@ -1239,21 +1241,22 @@ export const getStakeComposite = async (
 };
 
 // Plant fetching (following main app's exact pattern)
-export const getPlantsByOwner = async (address: string): Promise<Plant[]> => {
-  const readClient = getReadClient();
-
+export const getPlantsByOwner = async (
+  address: string,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<Plant[]> => {
   return retryWithBackoff(async () => {
     const plants = await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getPlantsByOwnerExtended',
       args: [address as `0x${string}`],
-    }) as any[];
+    }) as UntypedValue[];
 
     // Fence V2 writes to the same extensions storage, so derive it from extensions
     // No need for separate RPC call to fenceV2GetPurchaseStats
 
-    return plants.map((plant: any) => {
+    return plants.map((plant: UntypedValue) => {
       const plantId = Number(plant.id);
       const extensions = plant.extensions || [];
       // Derive Fence V2 state directly from extensions (same storage)
@@ -1311,9 +1314,9 @@ export const getLandSupply = async (): Promise<{ totalSupply: number; maxSupply:
   });
 };
 
-export const getLandMintPrice = async (): Promise<bigint> => {
-  const readClient = getReadClient();
-
+export const getLandMintPrice = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<bigint> => {
   return retryWithBackoff(async () => {
     const price = await readClient.readContract({
       address: LAND_CONTRACT_ADDRESS,
@@ -1358,12 +1361,13 @@ export const getLandMintStatus = async (address: `0x${string}`): Promise<{ canMi
   });
 };
 
-export const getLandsByOwner = async (address: string): Promise<Land[]> => {
+export const getLandsByOwner = async (
+  address: string,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<Land[]> => {
   try {
-    const client = getReadClient();
-
     // Use the existing Land contract functions from the ABI
-    const lands = await client.readContract({
+    const lands = await readClient.readContract({
       address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'landGetByOwner',
@@ -1393,12 +1397,11 @@ export const getLandById = async (landId: bigint): Promise<Land> => {
 
 export const getLandsByIds = async (
   landIds: bigint[],
-  options: { chunkSize?: number } = {},
+  options: { chunkSize?: number; readClient?: PixotchiReadClient } = {},
 ): Promise<Land[]> => {
   if (landIds.length === 0) return [];
 
-  const { chunkSize = 25 } = options;
-  const readClient = getReadClient();
+  const { chunkSize = 25, readClient = getReadClient() } = options;
   const lands: Land[] = [];
 
   for (let i = 0; i < landIds.length; i += chunkSize) {
@@ -1538,9 +1541,11 @@ export const transferAllAssets = async (
 
 // Token balance (returns raw bigint for precision)
 // Get token balance for any ERC20 token
-export const getTokenBalanceForToken = async (address: string, tokenAddress: `0x${string}`): Promise<bigint> => {
-  const readClient = getReadClient();
-
+export const getTokenBalanceForToken = async (
+  address: string,
+  tokenAddress: `0x${string}`,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<bigint> => {
   return retryWithBackoff(async () => {
     const balance = await readClient.readContract({
       address: tokenAddress,
@@ -1553,13 +1558,16 @@ export const getTokenBalanceForToken = async (address: string, tokenAddress: `0x
   });
 };
 
-export const getTokenBalance = async (address: string): Promise<bigint> => {
-  return getTokenBalanceForToken(address, PIXOTCHI_TOKEN_ADDRESS);
+export const getTokenBalance = async (
+  address: string,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<bigint> => {
+  return getTokenBalanceForToken(address, PIXOTCHI_TOKEN_ADDRESS, readClient);
 };
 
-export const getRevivePrice = async (): Promise<bigint> => {
-  const readClient = getReadClient();
-
+export const getRevivePrice = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<bigint> => {
   return retryWithBackoff(async () => {
     return await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
@@ -1722,9 +1730,10 @@ export const checkLeafTokenApproval = async (address: string): Promise<bigint> =
 };
 
 // Get payment info for a specific strain
-export const getStrainPaymentInfo = async (strainId: number): Promise<{ token: `0x${string}`; price: bigint }> => {
-  const readClient = getReadClient();
-
+export const getStrainPaymentInfo = async (
+  strainId: number,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<{ token: `0x${string}`; price: bigint }> => {
   return retryWithBackoff(async () => {
     const result = await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
@@ -1741,26 +1750,26 @@ export const getStrainPaymentInfo = async (strainId: number): Promise<{ token: `
 };
 
 // Get strain information (following main app pattern)
-export const getStrainInfo = async (): Promise<Strain[]> => {
-  const readClient = getReadClient();
-
+export const getStrainInfo = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<Strain[]> => {
   return retryWithBackoff(async () => {
     const strains = await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getAllStrainInfo',
       args: [],
-    }) as any[];
+    }) as UntypedValue[];
 
     // Fetch payment info for each strain in parallel
     const strainsWithPaymentInfo = await Promise.all(
-      strains.map(async (strain: any) => {
+      strains.map(async (strain: UntypedValue) => {
         const strainId = Number(strain.id);
         let paymentToken: `0x${string}` | undefined;
         let paymentPrice: bigint | undefined;
 
         try {
-          const paymentInfo = await getStrainPaymentInfo(strainId);
+          const paymentInfo = await getStrainPaymentInfo(strainId, readClient);
           paymentToken = paymentInfo.token;
           paymentPrice = paymentInfo.price;
         } catch (error) {
@@ -1789,18 +1798,18 @@ export const getStrainInfo = async (): Promise<Strain[]> => {
 };
 
 // Get shop items
-export const getShopItems = async (): Promise<ShopItem[]> => {
-  const readClient = getReadClient();
-
+export const getShopItems = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<ShopItem[]> => {
   return retryWithBackoff(async () => {
     const items = await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'shopGetAllItems',
       args: [],
-    }) as any[];
+    }) as UntypedValue[];
 
-    return items.map((item: any) => ({
+    return items.map((item: UntypedValue) => ({
       id: String(item.id),
       name: item.name || '',
       price: Number(item.price) / 1e18, // Convert from wei
@@ -1890,7 +1899,7 @@ export const getAllShopItems = async (): Promise<ShopItem[]> => {
       })
     );
 
-    return (items as any[]).map((item: any) => ({
+    return (items as UntypedValue[]).map((item: UntypedValue) => ({
       id: String(item.id),
       name: item.name || '',
       price: item.price || BigInt(0),
@@ -1903,9 +1912,9 @@ export const getAllShopItems = async (): Promise<ShopItem[]> => {
 };
 
 // Get all garden items
-export const getAllGardenItems = async (): Promise<GardenItem[]> => {
-  const readClient = getReadClient();
-
+export const getAllGardenItems = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<GardenItem[]> => {
   try {
     const items = await retryWithBackoff(() =>
       readClient.readContract({
@@ -1915,7 +1924,7 @@ export const getAllGardenItems = async (): Promise<GardenItem[]> => {
       })
     );
 
-    return (items as any[]).map((item: any) => ({
+    return (items as UntypedValue[]).map((item: UntypedValue) => ({
       id: String(item.id),
       name: item.name || '',
       price: item.price || BigInt(0),
@@ -1975,7 +1984,7 @@ export const getSwapQuote = async (ethAmount: string): Promise<{ quote: string; 
     }
 
     return { quote: formatUnits(amountsOut[1], 18) };
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     // Log error details for debugging (only in development)
     if (process.env.NODE_ENV === 'development') {
       console.error('Error fetching swap quote:', error);
@@ -2031,7 +2040,7 @@ export const getEthQuoteForSeedAmount = async (seedAmount: bigint): Promise<{
       ethAmountWithBuffer: ethWithBuffer,
       seedAmount,
     };
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     if (process.env.NODE_ENV === 'development') {
       console.error('[getEthQuoteForSeedAmount] Error:', error);
     }
@@ -2090,7 +2099,7 @@ export type FenceV2Config = {
   maxDurationDays: number;
 };
 
-const normalizeFenceV2Config = (result: any): FenceV2Config => {
+const normalizeFenceV2Config = (result: UntypedValue): FenceV2Config => {
   const priceRaw = result?.pricePerDay ?? result?.[0] ?? 0;
   const hasExplicitMin =
     typeof result?.minDurationDays !== 'undefined' ||
@@ -2109,8 +2118,9 @@ const normalizeFenceV2Config = (result: any): FenceV2Config => {
   };
 };
 
-export const getFenceV2Config = async (): Promise<FenceV2Config | null> => {
-  const readClient = getReadClient();
+export const getFenceV2Config = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<FenceV2Config | null> => {
   try {
     const raw = await retryWithBackoff(async () => {
       return readClient.readContract({
@@ -2126,9 +2136,11 @@ export const getFenceV2Config = async (): Promise<FenceV2Config | null> => {
   }
 };
 
-export const quoteFenceV2 = async (days: number): Promise<bigint> => {
+export const quoteFenceV2 = async (
+  days: number,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<bigint> => {
   if (!Number.isFinite(days) || days <= 0) return BigInt(0);
-  const readClient = getReadClient();
   try {
     const quote = await retryWithBackoff(async () => {
       return readClient.readContract({
@@ -2183,9 +2195,10 @@ export const setFenceV2PricePerDay = async (walletClient: WalletClient, pricePer
 };
 
 // LEAF token balance (returns raw bigint for precision)
-export const getLeafBalance = async (address: string): Promise<bigint> => {
-  const readClient = getReadClient();
-
+export const getLeafBalance = async (
+  address: string,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<bigint> => {
   return retryWithBackoff(async () => {
     const balance = await readClient.readContract({
       address: LEAF_CONTRACT_ADDRESS,
@@ -2199,7 +2212,7 @@ export const getLeafBalance = async (address: string): Promise<bigint> => {
 };
 
 // Building Management Functions
-export const getVillageBuildingsByLandId = async (landId: bigint): Promise<any[]> => {
+export const getVillageBuildingsByLandId = async (landId: bigint): Promise<UntypedValue[]> => {
   const readClient = getReadClient();
 
   return retryWithBackoff(async () => {
@@ -2210,11 +2223,11 @@ export const getVillageBuildingsByLandId = async (landId: bigint): Promise<any[]
       args: [landId],
     });
 
-    return buildings as any[];
+    return buildings as UntypedValue[];
   });
 };
 
-export const getTownBuildingsByLandId = async (landId: bigint): Promise<any[]> => {
+export const getTownBuildingsByLandId = async (landId: bigint): Promise<UntypedValue[]> => {
   const readClient = getReadClient();
 
   return retryWithBackoff(async () => {
@@ -2225,11 +2238,11 @@ export const getTownBuildingsByLandId = async (landId: bigint): Promise<any[]> =
       args: [landId],
     });
 
-    return buildings as any[];
+    return buildings as UntypedValue[];
   });
 };
 
-const normalizeBarracksConfig = (value: any): BarracksConfig => ({
+const normalizeBarracksConfig = (value: UntypedValue): BarracksConfig => ({
   initialized: Boolean(value?.initialized ?? value?.[0] ?? false),
   enabled: Boolean(value?.enabled ?? value?.[1] ?? false),
   buildToken: String(value?.buildToken ?? value?.[2] ?? ZERO_ADDRESS),
@@ -2252,7 +2265,7 @@ const normalizeBarracksConfig = (value: any): BarracksConfig => ({
   maxTroopsPerLand: BigInt(value?.maxTroopsPerLand ?? value?.[19] ?? 0),
 });
 
-const normalizeBarracksTroopConfigV2 = (value: any) => ({
+const normalizeBarracksTroopConfigV2 = (value: UntypedValue) => ({
   trainingToken: String(value?.trainingToken ?? value?.[0] ?? ZERO_ADDRESS),
   trainingCost: BigInt(value?.trainingCost ?? value?.[1] ?? 0),
   trainingReceiver: String(value?.trainingReceiver ?? value?.[2] ?? ZERO_ADDRESS),
@@ -2264,7 +2277,7 @@ const normalizeBarracksTroopConfigV2 = (value: any) => ({
   maxTroopsPerLand: BigInt(value?.maxTroopsPerLand ?? value?.[8] ?? 0),
 });
 
-const normalizeBarracksConfigV2 = (value: any): BarracksConfigV2 => ({
+const normalizeBarracksConfigV2 = (value: UntypedValue): BarracksConfigV2 => ({
   initialized: Boolean(value?.initialized ?? value?.[0] ?? false),
   enabled: Boolean(value?.enabled ?? value?.[1] ?? false),
   buildToken: String(value?.buildToken ?? value?.[2] ?? ZERO_ADDRESS),
@@ -2280,7 +2293,7 @@ const normalizeBarracksConfigV2 = (value: any): BarracksConfigV2 => ({
   phalanx: normalizeBarracksTroopConfigV2(value?.phalanx ?? value?.[12]),
 });
 
-const normalizeBarracksLandState = (value: any): BarracksLandState => ({
+const normalizeBarracksLandState = (value: UntypedValue): BarracksLandState => ({
   isBuilt: Boolean(value?.isBuilt ?? value?.[0] ?? false),
   stationedTroops: BigInt(value?.stationedTroops ?? value?.[1] ?? 0),
   trainingQueueAmount: BigInt(value?.trainingQueueAmount ?? value?.[2] ?? 0),
@@ -2295,7 +2308,7 @@ const normalizeBarracksLandState = (value: any): BarracksLandState => ({
   totalTroops: BigInt(value?.totalTroops ?? value?.[11] ?? 0),
 });
 
-const normalizeBarracksLandStateV2 = (value: any): BarracksLandStateV2 => ({
+const normalizeBarracksLandStateV2 = (value: UntypedValue): BarracksLandStateV2 => ({
   isBuilt: Boolean(value?.isBuilt ?? value?.[0] ?? false),
   stationedSwordsmanTroops: BigInt(value?.stationedSwordsmanTroops ?? value?.[1] ?? 0),
   stationedPhalanxTroops: BigInt(value?.stationedPhalanxTroops ?? value?.[2] ?? 0),
@@ -2314,7 +2327,7 @@ const normalizeBarracksLandStateV2 = (value: any): BarracksLandStateV2 => ({
   totalPhalanxTroops: BigInt(value?.totalPhalanxTroops ?? value?.[15] ?? 0),
 });
 
-const normalizeBarracksRaidReport = (value: any): BarracksRaidReport => ({
+const normalizeBarracksRaidReport = (value: UntypedValue): BarracksRaidReport => ({
   raidId: BigInt(value?.raidId ?? value?.[0] ?? 0),
   timestamp: BigInt(value?.timestamp ?? value?.[1] ?? 0),
   attackerLandId: BigInt(value?.attackerLandId ?? value?.[2] ?? 0),
@@ -2335,7 +2348,7 @@ const normalizeBarracksRaidReport = (value: any): BarracksRaidReport => ({
   lifetimeStolen: BigInt(value?.lifetimeStolen ?? value?.[17] ?? 0),
 });
 
-const normalizeBarracksRaidReportV2 = (value: any): BarracksRaidReportV2 => ({
+const normalizeBarracksRaidReportV2 = (value: UntypedValue): BarracksRaidReportV2 => ({
   raidId: BigInt(value?.raidId ?? value?.[0] ?? 0),
   timestamp: BigInt(value?.timestamp ?? value?.[1] ?? 0),
   attackerLandId: BigInt(value?.attackerLandId ?? value?.[2] ?? 0),
@@ -2363,7 +2376,7 @@ const normalizeBarracksRaidReportV2 = (value: any): BarracksRaidReportV2 => ({
   lifetimeStolen: BigInt(value?.lifetimeStolen ?? value?.[24] ?? 0),
 });
 
-const normalizeBarracksRaidPreview = (value: any): BarracksRaidPreview => ({
+const normalizeBarracksRaidPreview = (value: UntypedValue): BarracksRaidPreview => ({
   statusCode: Number(value?.statusCode ?? value?.[0] ?? 0),
   attackerWon: Boolean(value?.attackerWon ?? value?.[1] ?? false),
   troopsRequested: BigInt(value?.troopsRequested ?? value?.[2] ?? 0),
@@ -2385,7 +2398,7 @@ const normalizeBarracksRaidPreview = (value: any): BarracksRaidPreview => ({
   defenderCooldownEndsAt: BigInt(value?.defenderCooldownEndsAt ?? value?.[18] ?? 0),
 });
 
-const normalizeBarracksRaidPreviewV2 = (value: any): BarracksRaidPreviewV2 => ({
+const normalizeBarracksRaidPreviewV2 = (value: UntypedValue): BarracksRaidPreviewV2 => ({
   statusCode: Number(value?.statusCode ?? value?.[0] ?? 0),
   attackerWon: Boolean(value?.attackerWon ?? value?.[1] ?? false),
   swordsmenRequested: BigInt(value?.swordsmenRequested ?? value?.[2] ?? 0),
@@ -2466,8 +2479,10 @@ export const barracksGetLandState = async (landId: bigint): Promise<BarracksLand
   }
 };
 
-export const barracksGetLandStateV2 = async (landId: bigint): Promise<BarracksLandStateV2 | null> => {
-  const readClient = getReadClient();
+export const barracksGetLandStateV2 = async (
+  landId: bigint,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<BarracksLandStateV2 | null> => {
   try {
     const result = await retryWithBackoff(async () => {
       return readClient.readContract({
@@ -2711,18 +2726,17 @@ export const buildBarracksAdminAddTroopsToAllBuiltCallV2 = (
 
 export interface LandBuildingsBatchResult {
   landId: bigint;
-  villageBuildings: any[];
-  townBuildings: any[];
+  villageBuildings: UntypedValue[];
+  townBuildings: UntypedValue[];
 }
 
 export const getLandBuildingsBatch = async (
   landIds: bigint[],
-  options: { chunkSize?: number } = {},
+  options: { chunkSize?: number; readClient?: PixotchiReadClient } = {},
 ): Promise<LandBuildingsBatchResult[]> => {
   if (landIds.length === 0) return [];
 
-  const { chunkSize = 15 } = options;
-  const readClient = getReadClient();
+  const { chunkSize = 15, readClient = getReadClient() } = options;
   const results: LandBuildingsBatchResult[] = [];
 
   for (let i = 0; i < landIds.length; i += chunkSize) {
@@ -2755,10 +2769,10 @@ export const getLandBuildingsBatch = async (
       const townEntry = chunkResults[index * 2 + 1];
 
       const villageBuildings = Array.isArray(villageEntry?.result)
-        ? (villageEntry.result as any[])
+        ? (villageEntry.result as UntypedValue[])
         : [];
       const townBuildings = Array.isArray(townEntry?.result)
-        ? (townEntry.result as any[])
+        ? (townEntry.result as UntypedValue[])
         : [];
 
       results.push({
@@ -2781,8 +2795,10 @@ export type QuestSlot = {
   coolDownBlock: bigint;
 };
 
-export const getQuestSlotsByLandId = async (landId: bigint): Promise<QuestSlot[]> => {
-  const readClient = getReadClient();
+export const getQuestSlotsByLandId = async (
+  landId: bigint,
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<QuestSlot[]> => {
   return retryWithBackoff(async () => {
     const slots = await readClient.readContract({
       address: LAND_CONTRACT_ADDRESS,
@@ -2791,7 +2807,7 @@ export const getQuestSlotsByLandId = async (landId: bigint): Promise<QuestSlot[]
       args: [landId],
     });
     // Ensure array of normalized objects
-    return (slots as any[]).map((s: any) => ({
+    return (slots as UntypedValue[]).map((s: UntypedValue) => ({
       difficulty: Number(s.difficulty ?? s[0] ?? 0),
       startBlock: BigInt(s.startBlock ?? s[1] ?? 0),
       endBlock: BigInt(s.endBlock ?? s[2] ?? 0),
@@ -2880,9 +2896,9 @@ export const claimVillageProduction = async (walletClient: WalletClient, landId:
 };
 
 // Leaderboard functions
-export const getAliveTokenIds = async (): Promise<number[]> => {
-  const readClient = getReadClient();
-
+export const getAliveTokenIds = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<number[]> => {
   return retryWithBackoff(async () => {
     const tokenIds = await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
@@ -2894,21 +2910,22 @@ export const getAliveTokenIds = async (): Promise<number[]> => {
   });
 };
 
-export const getPlantsInfoExtended = async (tokenIds: number[]): Promise<Plant[]> => {
-  const readClient = getReadClient();
-
+export const getPlantsInfoExtended = async (
+  tokenIds: number[],
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<Plant[]> => {
   return retryWithBackoff(async () => {
     const plants = await readClient.readContract({
       address: PIXOTCHI_NFT_ADDRESS,
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getPlantsInfoExtended',
       args: [tokenIds.map(id => BigInt(id))],
-    }) as any[];
+    }) as UntypedValue[];
 
     // Fence V2 writes to the same extensions storage, so derive it from extensions
     // No need for separate RPC call to fenceV2GetPurchaseStats
 
-    return plants.map((plant: any) => {
+    return plants.map((plant: UntypedValue) => {
       const plantId = Number(plant.id);
       const extensions = plant.extensions || [];
       // Derive Fence V2 state directly from extensions (same storage)
@@ -2957,8 +2974,9 @@ export const getLandOwner = async (landId: number): Promise<string> => {
 // Fetch Lands leaderboard across full supply range
 export type LandLeaderboardEntry = { landId: number; experiencePoints: bigint; name: string; owner: string };
 
-export const getLandLeaderboard = async (): Promise<LandLeaderboardEntry[]> => {
-  const readClient = getReadClient();
+export const getLandLeaderboard = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<LandLeaderboardEntry[]> => {
   return retryWithBackoff(async () => {
     // Determine total supply to cover full range
     const totalSupply = await readClient.readContract({
@@ -2972,9 +2990,9 @@ export const getLandLeaderboard = async (): Promise<LandLeaderboardEntry[]> => {
       abi: landAbi,
       functionName: 'getLeaderboard',
       args: [BigInt(0), totalSupply],
-    }) as any[];
+    }) as UntypedValue[];
 
-    return (leaderboard || []).map((entry: any) => ({
+    return (leaderboard || []).map((entry: UntypedValue) => ({
       landId: Number(entry.landId ?? entry[0] ?? 0),
       experiencePoints: BigInt(entry.experiencePoints ?? entry[1] ?? 0),
       name: String(entry.name ?? entry[2] ?? ''),
@@ -3012,7 +3030,7 @@ export const routerBatchTransfer = async (
     encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721Multi',
-      args: [tokens as unknown as `0x${string}`[], to, tokenIdsPerToken],
+      args: [tokens as UntypedValue as `0x${string}`[], to, tokenIdsPerToken],
     });
   } else if (hasPlants) {
     encodedData = encodeFunctionData({
@@ -3437,7 +3455,7 @@ export const getCasinoLevel = async (landId: bigint): Promise<number> => {
         functionName: 'townGetBuildingsByLandId',
         args: [landId],
       });
-    }) as unknown as Array<{ id: number; level: number }>;
+    }) as UntypedValue as Array<{ id: number; level: number }>;
 
     // Casino is building ID 6
     const casino = result.find(b => b.id === 6);
@@ -3783,7 +3801,7 @@ export const blackjackGetGameSnapshot = async (landId: bigint): Promise<Blackjac
         functionName: 'blackjackGetGameSnapshot',
         args: [landId],
       });
-    }, 1, 250) as any;
+    }, 1, 250) as UntypedValue;
 
     // Support both tuple-object and flat array decoding shapes.
     const snapshot = Array.isArray(raw)

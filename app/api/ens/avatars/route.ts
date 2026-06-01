@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 
 const ENS_AVATAR_API_BASE = 'https://api.ethfollow.xyz/api/v1/users';
 
-function normalizeAvatarUrl(value: unknown): string | null {
+function normalizeAvatarUrl(value: UntypedValue): string | null {
   if (typeof value !== 'string') {
     return null;
   }
@@ -56,7 +56,7 @@ async function fetchAvatar(address: string): Promise<string | null> {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const addresses: unknown = body?.addresses;
+    const addresses: UntypedValue = body?.addresses;
 
     if (!Array.isArray(addresses) || addresses.length === 0) {
       return NextResponse.json(

@@ -124,7 +124,7 @@ export default function CasinoTransaction({
             // Call onComplete to signal success (no result data for placeBets)
             onComplete?.({});
         } else if (mode === "reveal") {
-            const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
+            const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
 
             // Track gamification mission
             if (address) {
@@ -158,11 +158,11 @@ export default function CasinoTransaction({
                         const decoded = decodeEventLog({
                             abi: casinoAbi,
                             data: log.data as `0x${string}`,
-                            topics: log.topics as any,
+                            topics: log.topics as UntypedValue,
                         });
 
                         if (decoded.eventName === "RouletteSpinResult") {
-                            const args = decoded.args as any;
+                            const args = decoded.args as UntypedValue;
                             const winningNumber = Number(args.winningNumber);
                             const won = Boolean(args.won);
                             const payout = formatUnits(args.payout ?? BigInt(0), tokenDecimals);
@@ -209,11 +209,11 @@ export default function CasinoTransaction({
 
     return (
         <SponsoredTransaction
-            calls={calls as any}
+            calls={calls as UntypedValue}
             buttonText={buttonText ?? defaultText}
             buttonClassName={buttonClassName}
             disabled={finalDisabled}
-            onStatusUpdate={handleStatus as any}
+            onStatusUpdate={handleStatus as UntypedValue}
             onButtonClick={handleButtonClick}
         />
     );

@@ -16,8 +16,8 @@ const PIXOTCHI_NFT_ABI = [
 
 interface MintTransactionProps {
   strain: number;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

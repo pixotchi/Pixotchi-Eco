@@ -23,10 +23,10 @@ const MAX_MESSAGE_LENGTH = 200;
 const MIN_MESSAGE_LENGTH = 1;
 const CHAT_MESSAGE_INDEX_KEY = 'chat:messages:index';
 
-function hasScanClient(client: unknown): client is RedisScanClient {
+function hasScanClient(client: UntypedValue): client is RedisScanClient {
   return typeof client === 'object'
     && client !== null
-    && typeof (client as { scan?: unknown }).scan === 'function';
+    && typeof (client as { scan?: UntypedValue }).scan === 'function';
 }
 
 function normalizeScanCursor(cursor: string | number | undefined): number {
@@ -38,7 +38,7 @@ async function scanRawKeys(pattern: string, count: number = 1000): Promise<strin
   if (!redis) return [];
 
   try {
-    const scanClient: unknown = redis;
+    const scanClient: UntypedValue = redis;
     if (!hasScanClient(scanClient)) {
       const keys = await redis.keys(pattern);
       return keys.map(String);

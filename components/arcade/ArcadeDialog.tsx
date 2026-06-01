@@ -344,7 +344,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         toBlock: currentBlock,
       } as const;
 
-      const isRangeTooLargeError = (err: unknown) => {
+      const isRangeTooLargeError = (err: UntypedValue) => {
         if (!err) return false;
         const maybe = err as { shortMessage?: string; message?: string } | undefined;
         const msg = (maybe?.shortMessage ?? maybe?.message ?? "").toLowerCase();
@@ -421,7 +421,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       }
 
       const commitBlock = lastCommit.blockNumber ?? BigInt("0");
-      const commitArgs = (lastCommit as unknown as { args?: { player?: string; commitHash?: `0x${string}` } }).args;
+      const commitArgs = (lastCommit as UntypedValue as { args?: { player?: string; commitHash?: `0x${string}` } }).args;
       const commitData: PendingCommit = {
         player: (commitArgs?.player ?? address) as string,
         commitment: (commitArgs?.commitHash ?? "0x") as `0x${string}`,
@@ -916,7 +916,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     buttonText={withStar ? "Play (Use Star)" : "Play"}
                     buttonClassName="w-full"
                     disabled={disabled || (withStar && (plant?.stars ?? 0) <= 0)}
-                    onStatusUpdate={onStatus as any}
+                    onStatusUpdate={onStatus as UntypedValue}
                     showToast
                   />
                 </div>
@@ -1029,7 +1029,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         disabled={!(commitmentHex && canCommit)}
                         buttonClassName="w-full"
                         buttonText={spinStarCost > 0 ? `Spin! (${spinStarCost}★)` : "Spin!"}
-                        onStatusUpdate={handleSpinStatus("commit") as any}
+                        onStatusUpdate={handleSpinStatus("commit") as UntypedValue}
                         onButtonClick={() => {
                           if (!(commitmentHex && canCommit)) return;
                           setResultDetails(null);
@@ -1047,7 +1047,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         disabled={!canReveal}
                         buttonClassName="w-full"
                         buttonText="Stop Spin!"
-                        onStatusUpdate={handleSpinStatus("reveal") as any}
+                        onStatusUpdate={handleSpinStatus("reveal") as UntypedValue}
                         onComplete={(result) => {
                           handleRevealSuccess();
                           finishWheelSpin(result?.rewardIndex);

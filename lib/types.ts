@@ -35,7 +35,7 @@ export type Extension = {
 export type ShopItemOwned = {
   id: string;
   name: string;
-  effectUntil: any;
+  effectUntil: UntypedValue;
   effectIsOngoingActive: boolean;
 };
 
@@ -43,8 +43,8 @@ export type ShopItemOwned = {
 export type ShopItem = {
   id: string;
   name: string;
-  price: any;
-  effectTime: any;
+  price: UntypedValue;
+  effectTime: UntypedValue;
   description?: string;
   category?: string;
   imageUrl?: string;
@@ -53,7 +53,7 @@ export type ShopItem = {
 export type GardenItem = {
   id: string;
   name: string;
-  price: any;
+  price: UntypedValue;
   points: number;
   timeExtension: number;
   description?: string;
@@ -435,6 +435,35 @@ export type InviteGenerationResult = {
 // Types for Ponder Indexer
 export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent;
 
+export type GameKnowledgeTopic = {
+  aliases: string[];
+  canRead: string[];
+  cannotDo: string[];
+  deferralText: string;
+  id: string;
+  liveDataSources: string[];
+  purpose: string;
+  stalenessRules: string[];
+  title: string;
+  userFlows: string[];
+  where: string;
+};
+
+export type NormalizedOnchainActivity = {
+  amountDisplay?: string;
+  assetType: 'plant' | 'land' | 'token' | 'native' | 'game' | 'unknown';
+  blockNumber?: string;
+  confidence: 'high' | 'medium' | 'low';
+  counterparty?: string;
+  direction?: 'in' | 'out' | 'self' | 'unknown';
+  kind: string;
+  source: string;
+  timestamp?: string;
+  token?: string;
+  tokenId?: string;
+  txHash?: string;
+};
+
 export type AttackEvent = {
   __typename: "Attack";
   id: string;
@@ -703,18 +732,37 @@ export type AdminChatMessage = ChatMessage & {
 };
 
 // AI Chat Types
-export type ChatMode = 'public' | 'ai' | 'agent';
+export type ChatMode = 'public' | 'ai';
+
+export type AIToolCallTrace = {
+  error?: string;
+  freshness?: {
+    blockNumber?: string;
+    cache?: string;
+    fetchedAt?: string;
+  };
+  input?: UntypedValue;
+  source?: string;
+  status: 'ok' | 'error' | 'unknown';
+  toolName: string;
+};
 
 export type AIChatMessage = {
   id: string;
   conversationId: string;
   address: string;
+  continuations?: number;
+  finishReason?: string;
   message: string;
   timestamp: number;
   type: 'user' | 'assistant';
   model: string;
+  outputTokens?: number;
+  provider?: string;
+  recoveredFromLength?: boolean;
   tokensUsed?: number;
   displayName: string;
+  toolCalls?: AIToolCallTrace[];
 };
 
 export type AIConversation = {
@@ -728,7 +776,7 @@ export type AIConversation = {
   totalTokens: number;
 };
 
-export type AIProvider = 'openai' | 'claude' | 'google';
+export type AIProvider = 'openai' | 'claude' | 'google' | 'gateway';
 
 export type AIUsageStats = {
   totalConversations: number;
@@ -736,6 +784,10 @@ export type AIUsageStats = {
   totalTokens: number;
   dailyUsage: number;
   costEstimate: number;
+  continuationCount?: number;
+  lengthFinishCount?: number;
+  recoveredFromLengthCount?: number;
+  reasoningTokens?: number;
 };
 
 export type AICostMetrics = {
@@ -748,9 +800,9 @@ export type AICostMetrics = {
 // Transaction types - consolidated from multiple transaction component files
 export interface TransactionCall {
   address: `0x${string}`;
-  abi: any;
+  abi: UntypedValue;
   functionName: string;
-  args: any[];
+  args: UntypedValue[];
   value?: bigint;
 }
 

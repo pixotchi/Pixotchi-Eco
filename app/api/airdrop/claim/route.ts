@@ -36,7 +36,7 @@ function getClient() {
 }
 
 // Agent smart account cache
-let agentSmartAccount: any = null;
+let agentSmartAccount: UntypedValue = null;
 
 const CLAIM_LOCK_PREFIX = 'airdrop:lock:';
 
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Not eligible for airdrop' }, { status: 400 });
         }
 
-        let eligibility: any;
+        let eligibility: UntypedValue;
         try {
             eligibility = typeof eligibilityRaw === 'string' ? JSON.parse(eligibilityRaw) : eligibilityRaw;
         } catch {
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
                 pixotchi: eligibility.pixotchi,
             });
 
-        } catch (err: any) {
+        } catch (err: UntypedValue) {
             console.error('[AIRDROP_CLAIM] Claim error:', err);
             return NextResponse.json({ error: err.message || 'Claim failed' }, { status: 500 });
         } finally {
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
             await redis?.del(lockKey);
         }
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_CLAIM] Outer error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

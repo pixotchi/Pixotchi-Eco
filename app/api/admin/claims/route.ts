@@ -15,7 +15,7 @@ async function scanKeysRaw(pattern: string, maxKeys: number = 10000): Promise<st
   const results: string[] = [];
   let cursor = '0';
   do {
-    const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 1000 });
+    const resp: UntypedValue = await (redis as UntypedValue).scan(cursor, { match: pattern, count: 1000 });
     if (Array.isArray(resp)) {
       cursor = String(resp[0]);
       const batch: string[] = (resp[1] || []) as string[];
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     // Batch fetch all values
     const values = await redis?.mget(...keys);
-    const claims: any[] = [];
+    const claims: UntypedValue[] = [];
     let complete = 0;
     let partial = 0;
     let failed = 0;
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
       stats: { total: claims.length, complete, partial, failed, leafBonusSent, seedBonusSent },
       claims,
     });
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('[ADMIN_CLAIMS] GET error:', error);
     return NextResponse.json({ error: error.message || 'Failed to fetch claims' }, { status: 500 });
   }
@@ -209,7 +209,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Missing query parameter. Use ?address=0x... or ?reset=all&confirm=true' }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('[ADMIN_CLAIMS] DELETE error:', error);
     return NextResponse.json({ error: error.message || 'Delete operation failed' }, { status: 500 });
   }

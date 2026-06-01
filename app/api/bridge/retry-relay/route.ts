@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
 interface OutgoingMessageData {
   nonce: bigint;
   sender: string;
-  message: { __kind: 'Call' | 'Transfer'; fields: any[] };
+  message: { __kind: 'Call' | 'Transfer'; fields: UntypedValue[] };
 }
 
 function decodeOutgoingMessage(data: Buffer): OutgoingMessageData {
@@ -192,7 +192,7 @@ function decodeOutgoingMessage(data: Buffer): OutgoingMessageData {
   return { nonce, sender, message };
 }
 
-function decodeTransfer(data: Buffer, offset: number): any {
+function decodeTransfer(data: Buffer, offset: number): UntypedValue {
   const to = data.subarray(offset, offset + 20);
   offset += 20;
   const localToken = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
@@ -208,7 +208,7 @@ function decodeTransfer(data: Buffer, offset: number): any {
   return { to: `0x${Buffer.from(to).toString('hex')}`, localToken, remoteToken: `0x${Buffer.from(remoteToken).toString('hex')}`, amount, call };
 }
 
-function decodeCall(data: Buffer, offset: number): any {
+function decodeCall(data: Buffer, offset: number): UntypedValue {
   const ty = data[offset];
   offset += 1;
   const to = data.subarray(offset, offset + 20);

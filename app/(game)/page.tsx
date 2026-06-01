@@ -66,7 +66,7 @@ function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => v
 
 // Factory function to create dynamic imports with error handling
 const createDynamicTab = (
-  importFn: () => Promise<any>,
+  importFn: () => Promise<UntypedValue>,
   tabName: string
 ) => {
   return dynamic(
@@ -166,7 +166,7 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 
     // Use requestIdleCallback for non-blocking prefetching, avoid duplicates
     if ('requestIdleCallback' in window) {
-      const idleCallbackId = (window as any).requestIdleCallback?.(() => {
+      const idleCallbackId = (window as UntypedValue).requestIdleCallback?.(() => {
         tabsToPrefetch.forEach((tab) => {
           const key = String(tab);
           if (key === activeTab) return;
@@ -187,7 +187,7 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
       // Cleanup function to clear pending prefetches on unmount
       return () => {
         if (idleCallbackId && typeof idleCallbackId === 'number') {
-          (window as any).cancelIdleCallback?.(idleCallbackId);
+          (window as UntypedValue).cancelIdleCallback?.(idleCallbackId);
         }
         prefetchingTabsRef.clear();
         prefetchPromisesRef.clear();
@@ -411,14 +411,14 @@ export default function App() {
 
   // Broadcast messages system
   const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
-  const [currentBroadcast, setCurrentBroadcast] = useState<any>(null);
+  const [currentBroadcast, setCurrentBroadcast] = useState<UntypedValue>(null);
 
   // Keyboard and viewport awareness
   const keyboardState = useKeyboardAware();
   useViewportInsets();
   const isKeyboardNavigation = useKeyboardNavigation();
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
-  const miniAppContext = (fc?.context as any) ?? null;
+  const miniAppContext = (fc?.context as UntypedValue) ?? null;
   const miniAppAdded = Boolean(miniAppContext?.client?.added);
 
   // Start tutorial only after wallet connect (and invite gate passed)
@@ -459,7 +459,7 @@ export default function App() {
 
     (async () => {
       try {
-        const fid = typeof fc?.context === 'object' ? (fc?.context as any)?.user?.fid : undefined;
+        const fid = typeof fc?.context === 'object' ? (fc?.context as UntypedValue)?.user?.fid : undefined;
         if (!fid || !address || !mounted) return;
 
         const controller = new AbortController();

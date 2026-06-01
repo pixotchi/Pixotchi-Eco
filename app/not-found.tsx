@@ -23,7 +23,7 @@ export default function NotFound() {
           <div className="space-y-3">
             <p className="text-xs uppercase tracking-[0.35em] text-primary/70">Lost in the garden</p>
             <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">
-              You're wandering off the map!
+              You&apos;re wandering off the map!
             </h1>
             <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
               The path you tried to follow doesn&apos;t exist. Let&apos;s head back to the farm so you can keep
@@ -38,4 +38,3 @@ export default function NotFound() {
     </div>
   );
 }
-

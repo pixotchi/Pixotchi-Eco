@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     const publicClient = getBaseReadClient();
     const wsolAmountBn = BigInt(wsolAmount);
 
-    const results: any = {
+    const results: UntypedValue = {
       input: { wsolAmount: formatUnits(wsolAmountBn, 9) + ' SOL', raw: wsolAmount },
       steps: {},
     };

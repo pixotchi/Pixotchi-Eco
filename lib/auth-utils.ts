@@ -81,7 +81,7 @@ export async function trackAdminFailedAttempt(ip: string): Promise<void> {
 export async function logAdminAction(
   action: string,
   adminKey: string,
-  details: Record<string, any> = {},
+  details: Record<string, UntypedValue> = {},
   success: boolean = true
 ): Promise<void> {
   try {
@@ -96,7 +96,7 @@ export async function logAdminAction(
       details,
       success,
       timestamp: new Date().toISOString(),
-      ip: 'unknown', // Could be enhanced later if needed
+      ip: 'UntypedValue', // Could be enhanced later if needed
     };
 
     // Store audit log with expiration (keep for 30 days)
@@ -118,7 +118,7 @@ export function createErrorResponse(
   message: string, 
   status: number, 
   code?: string
-): { body: any; status: number } {
+): { body: UntypedValue; status: number } {
   return {
     body: {
       success: false,

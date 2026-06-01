@@ -71,13 +71,13 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
               buildingId={building.id}
               buttonText="Collect"
               buttonClassName="h-9 px-3 text-sm"
-              onSuccess={(tx: any) => { 
+              onSuccess={(tx: UntypedValue) => { 
                 toast.success('Collected to Warehouse'); 
                 onClaimSuccess(); 
                 window.dispatchEvent(new Event('balances:refresh'));
                 window.dispatchEvent(new Event('buildings:refresh'));
                 try {
-                  const payload: Record<string, unknown> = { address, taskId: 's3_claim_production' };
+                  const payload: Record<string, UntypedValue> = { address, taskId: 's3_claim_production' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };

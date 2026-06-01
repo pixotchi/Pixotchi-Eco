@@ -18,7 +18,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { extractTransactionHash, normalizeTransactionReceipt } from "@/lib/transaction-utils";
 import { cn } from "@/lib/utils";
 
-type TransactionReceiptLike = any;
+type TransactionReceiptLike = UntypedValue;
 
 type StatusName =
   | "idle"
@@ -38,7 +38,7 @@ type StatusName =
 export type LifecycleStatus = {
   statusName: StatusName;
   statusData: {
-    error?: unknown;
+    error?: UntypedValue;
     transactionHash?: Hex;
     transactionId?: string;
     transactionReceipts: TransactionReceiptLike[];
@@ -54,10 +54,10 @@ type RawTransactionCall = {
 
 type TransactionProps = {
   calls: RawTransactionCall[];
-  onError?: (error: unknown) => void;
+  onError?: (error: UntypedValue) => void;
   onStatus?: (status: LifecycleStatus) => void;
   isSponsored?: boolean;
-  capabilities?: Record<string, unknown>;
+  capabilities?: Record<string, UntypedValue>;
   resetAfter?: number;
   children: React.ReactNode;
 };
@@ -233,7 +233,7 @@ function CloseSvg({ className = TEXT_DEFAULT }: { className?: string }) {
   );
 }
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(error: UntypedValue): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -242,8 +242,8 @@ function getErrorMessage(error: unknown): string {
   }
   if (error && typeof error === "object") {
     const message =
-      (error as { shortMessage?: unknown; message?: unknown }).shortMessage
-      ?? (error as { message?: unknown }).message;
+      (error as { shortMessage?: UntypedValue; message?: UntypedValue }).shortMessage
+      ?? (error as { message?: UntypedValue }).message;
     if (typeof message === "string" && message.trim() !== "") {
       return message;
     }
@@ -251,10 +251,10 @@ function getErrorMessage(error: unknown): string {
   return "Transaction failed.";
 }
 
-function getErrorStatusName(error: unknown): StatusName {
+function getErrorStatusName(error: UntypedValue): StatusName {
   const message = getErrorMessage(error).toLowerCase();
   const code =
-    typeof (error as { code?: unknown })?.code === "number"
+    typeof (error as { code?: UntypedValue })?.code === "number"
       ? Number((error as { code?: number }).code)
       : null;
 
@@ -302,12 +302,12 @@ function getSendCallsSupportKey({
   connectorId?: string | null;
 }) {
   if (!accountAddress) return null;
-  return `${connectorId || "unknown"}:${chainId || "unknown"}:${accountAddress.toLowerCase()}`;
+  return `${connectorId || "UntypedValue"}:${chainId || "UntypedValue"}:${accountAddress.toLowerCase()}`;
 }
 
-function isUnsupportedSendCallsError(error: unknown) {
+function isUnsupportedSendCallsError(error: UntypedValue) {
   const code =
-    typeof (error as { code?: unknown })?.code === "number"
+    typeof (error as { code?: UntypedValue })?.code === "number"
       ? Number((error as { code?: number }).code)
       : null;
   const message = getErrorMessage(error).toLowerCase();
@@ -560,8 +560,8 @@ export function Transaction({
       connectorId: connector?.id ?? null,
     });
     const canBatch =
-      typeof (walletClient as any).sendCalls === "function"
-      && typeof (walletClient as any).waitForCallsStatus === "function";
+      typeof (walletClient as UntypedValue).sendCalls === "function"
+      && typeof (walletClient as UntypedValue).waitForCallsStatus === "function";
     const shouldUseBatchedExecution =
       canBatch
       && !(
@@ -633,7 +633,7 @@ export function Transaction({
     try {
       if (shouldUseBatchedExecution) {
         try {
-          const batch = await (walletClient as any).sendCalls({
+          const batch = await (walletClient as UntypedValue).sendCalls({
             account: walletClient.account,
             ...(Object.keys(mergedCapabilities).length > 0 ? { capabilities: mergedCapabilities } : {}),
             chain,
@@ -659,7 +659,7 @@ export function Transaction({
             statusName: "transactionPending",
           });
 
-          const result = await (walletClient as any).waitForCallsStatus({
+          const result = await (walletClient as UntypedValue).waitForCallsStatus({
             id: batch.id,
             throwOnFailure: false,
             timeout: 120_000,

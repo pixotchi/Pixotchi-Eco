@@ -11,7 +11,7 @@ export async function GET() {
         'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
       },
     });
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     return NextResponse.json({
       error: 'Failed to run status checks',
       message: error?.message || 'Unexpected error',

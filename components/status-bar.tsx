@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-// Use native <img> for small icons to reduce overhead
+import Image from "next/image";
 import StakingDialog from "@/components/staking/staking-dialog";
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
@@ -87,29 +87,29 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className="flex items-center gap-1.5 min-w-0" aria-label={`SOL balance: ${solText} SOL`}>
-                <img src="/icons/solana.svg" alt="" width={16} height={16} aria-hidden="true" />
+                <Image src="/icons/solana.svg" alt="" width={16} height={16} aria-hidden="true" />
                 <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{solText}</span>
               </div>
             )}
             {showEthBalance && (
               <div className="flex items-center gap-1.5 min-w-0" aria-label={ethAriaLabel}>
-                <img src="/icons/ethlogo.svg" alt="" width={16} height={16} aria-hidden="true" />
+                <Image src="/icons/ethlogo.svg" alt="" width={16} height={16} aria-hidden="true" />
                 <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ethText}</span>
               </div>
             )}
             <div className="flex items-center gap-1.5 min-w-0" aria-label={seedAriaLabel}>
-              <img src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
+              <Image src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{seedText}</span>
             </div>
             {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
             {!isSolana && (
               <div className="flex items-center gap-1.5 min-w-0" aria-label={leafAriaLabel}>
-                <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
+                <Image src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
                 <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
               </div>
             )}
             <div className="flex items-center gap-1.5 min-w-0" aria-label={pixotchiAriaLabel}>
-              <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
+              <Image src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
               <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{pixotchiText}</span>
             </div>
           </div>

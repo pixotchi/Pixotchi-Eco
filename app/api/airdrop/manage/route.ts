@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
             validationErrors: errors.length > 0 ? errors : undefined,
         });
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_MANAGE] POST Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
@@ -203,7 +203,7 @@ export async function GET(req: NextRequest) {
 
         // Get metadata
         const metaRaw = await redis.get('airdrop:meta');
-        let meta: any = null;
+        let meta: UntypedValue = null;
         if (metaRaw) {
             try {
                 meta = typeof metaRaw === 'string' ? JSON.parse(metaRaw) : metaRaw;
@@ -235,7 +235,7 @@ export async function GET(req: NextRequest) {
                 const dataRaw = values[index];
                 if (!dataRaw) continue;
 
-                let data: any;
+                let data: UntypedValue;
                 try {
                     data = typeof dataRaw === 'string' ? JSON.parse(dataRaw) : dataRaw;
                 } catch {
@@ -331,7 +331,7 @@ export async function GET(req: NextRequest) {
             recipients,
         });
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_MANAGE] GET Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
@@ -370,7 +370,7 @@ export async function DELETE(req: NextRequest) {
             deletedCount,
         });
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_MANAGE] DELETE Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

@@ -8,7 +8,7 @@ export type SmartWalletType =
   | 'other-smart'
   | 'eip7702-delegated'
   | 'eoa'
-  | 'unknown';
+  | 'UntypedValue';
 
 export interface SmartWalletDetection {
   isSmartWallet: boolean;
@@ -35,7 +35,7 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
 
   const [detection, setDetection] = useState<SmartWalletDetection>({
     isSmartWallet: false,
-    walletType: 'unknown',
+    walletType: 'UntypedValue',
     capabilities: null,
     detectionMethods: [],
     isContract: false,
@@ -71,7 +71,7 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     if (!address || !isConnected) {
       return {
         isSmartWallet: false,
-        walletType: 'unknown',
+        walletType: 'UntypedValue',
         capabilities: null,
         detectionMethods: [],
         isContract: false,
@@ -139,7 +139,7 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
       console.error('❌ Smart wallet detection failed:', error);
       return {
         isSmartWallet: false,
-        walletType: 'unknown',
+        walletType: 'UntypedValue',
         capabilities: null,
         detectionMethods: ['error'],
         isContract: false,
@@ -163,7 +163,7 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
       if (mountedRef.current) {
         setDetection({
           isSmartWallet: false,
-          walletType: 'unknown',
+          walletType: 'UntypedValue',
           capabilities: null,
           detectionMethods: [],
           isContract: false,

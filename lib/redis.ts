@@ -7,7 +7,7 @@ import { logger } from "./logger";
 const isServer = typeof window === 'undefined';
 
 // Access environment safely without requiring Node types
-const env: Record<string, string | undefined> = (globalThis as any)?.process?.env || {};
+const env: Record<string, string | undefined> = (globalThis as UntypedValue)?.process?.env || {};
 
 // Check for environment variables (support multiple provider envs)
 const hasUpstashVars = isServer && !!(env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN);
@@ -30,7 +30,7 @@ if (isServer && !hasUpstashVars && !hasKVVars && !hasKVDoubleVars && !hasCustomV
 export const redis = (() => {
   if (!isServer) return null;
   try {
-    let instance: Redis | null = null as any;
+    let instance: Redis | null = null as UntypedValue;
     if (hasUpstashVars) {
       instance = Redis.fromEnv();
     } else if (hasKVVars) {
@@ -81,7 +81,7 @@ export async function redisGetJSON<T>(key: string): Promise<T | null> {
       } catch {
         // Some providers may already return objects
         logger.warn('Failed to parse JSON value; returning raw', { key });
-        return raw as unknown as T;
+        return raw as UntypedValue as T;
       }
     }
     return raw as T;
@@ -125,7 +125,7 @@ export async function redisKeys(pattern: string): Promise<string[]> {
     // If consumer passes a fully-qualified key, keep as-is; otherwise prefix
     const pat = pattern.startsWith(KEY_PREFIX) ? pattern : withPrefix(pattern);
     const keys = await redis.keys(pat);
-    return keys as unknown as string[];
+    return keys as UntypedValue as string[];
   } catch (error) {
     logger.error('redisKeys failed', error, { pattern });
     return [];
@@ -139,8 +139,7 @@ async function scanKeysInternal(pattern: string, count: number = 1000): Promise<
     const results: string[] = [];
 
     do {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resp: any = await (redis as any).scan(cursor, { match: pattern, count });
+      const resp: UntypedValue = await (redis as UntypedValue).scan(cursor, { match: pattern, count });
       if (Array.isArray(resp)) {
         cursor = String(resp[0]);
         const batch: string[] = (resp[1] || []) as string[];
@@ -158,7 +157,7 @@ async function scanKeysInternal(pattern: string, count: number = 1000): Promise<
     logger.error('scanKeysInternal failed', error, { pattern, count });
     try {
       const keys = await redis.keys(pattern);
-      return keys as unknown as string[];
+      return keys as UntypedValue as string[];
     } catch (fallbackError) {
       logger.error('scanKeysInternal fallback failed', fallbackError, { pattern, count });
       return [];
@@ -181,7 +180,7 @@ export async function redisIncrBy(key: string, amount: number = 1): Promise<numb
   if (!redis) return null;
   try {
     const val = await redis.incrby(withPrefix(key), amount);
-    return val as unknown as number;
+    return val as UntypedValue as number;
   } catch (error) {
     logger.error('redisIncrBy failed', error, { key, amount });
     return null;
@@ -219,8 +218,8 @@ export async function redisTTL(key: string): Promise<number | null> {
 export async function redisPersist(key: string): Promise<boolean> {
   if (!redis) return false;
   try {
-    if (typeof (redis as any).persist === 'function') {
-      await (redis as any).persist(withPrefix(key));
+    if (typeof (redis as UntypedValue).persist === 'function') {
+      await (redis as UntypedValue).persist(withPrefix(key));
     } else {
       const ttl = await redisTTL(key);
       if (ttl && ttl > 0) {
@@ -263,14 +262,14 @@ export async function redisCompareAndSetJSON(key: string, expected: string | nul
   const fullKey = withPrefix(key);
   const sentinel = '__nil__';
   try {
-    const evalFn = (redis as any)?.eval;
+    const evalFn = (redis as UntypedValue)?.eval;
     if (typeof evalFn === 'function') {
       const result = await evalFn.call(redis, REDIS_CAS_SCRIPT, [fullKey], [expected ?? sentinel, value]);
       return Number(result) === 1;
     }
 
     if (expected == null) {
-      const exists = await (redis as any)?.exists?.(fullKey);
+      const exists = await (redis as UntypedValue)?.exists?.(fullKey);
       if (Number(exists) === 0) {
         await redis.set(fullKey, value);
         return true;

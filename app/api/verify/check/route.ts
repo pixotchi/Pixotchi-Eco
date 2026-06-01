@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Verification check failed upstream' }, { status: 500 });
     }
 
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('Check verification error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

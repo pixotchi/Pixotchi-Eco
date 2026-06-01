@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   if (isConfigured) {
     try {
       dataSuffix = Attribution.toDataSuffix({ codes: [builderCode] });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       error = e?.message || 'Failed to generate dataSuffix';
     }
   }

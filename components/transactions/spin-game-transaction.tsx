@@ -102,7 +102,7 @@ export default function SpinGameTransaction({
         id: "spin-leaf-commit",
       });
       } else if (mode === "reveal") {
-        const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
+        const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
         if (address) {
         const txHash = extractTransactionHash(receipts[0]);
         if (txHash) {
@@ -189,11 +189,11 @@ export default function SpinGameTransaction({
 
   return (
     <SponsoredTransaction
-      calls={calls as any}
+      calls={calls as UntypedValue}
       buttonText={buttonText ?? defaultText}
       buttonClassName={buttonClassName}
       disabled={finalDisabled}
-      onStatusUpdate={handleStatus as any}
+      onStatusUpdate={handleStatus as UntypedValue}
       onButtonClick={onButtonClick}
     />
   );

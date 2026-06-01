@@ -23,13 +23,13 @@ const PIXOTCHI_NFT_ABI = [
 interface KillTransactionProps {
   deadId: number; // target dead plant id
   tokenId: number; // your alive plant id
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   showToast?: boolean;
-  onStatusUpdate?: (status: any) => void;
+  onStatusUpdate?: (status: UntypedValue) => void;
 }
 
 export default function KillTransaction({
@@ -53,7 +53,7 @@ export default function KillTransaction({
     },
   ];
 
-  const handleSuccess = (tx: any) => {
+  const handleSuccess = (tx: UntypedValue) => {
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {

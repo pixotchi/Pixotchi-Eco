@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
             neynarResponse: result,
             duration,
         });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
         console.error('[trigger] Error:', e);
         return NextResponse.json(createErrorResponse(e?.message || 'Trigger failed', 500).body, { status: 500 });
     }

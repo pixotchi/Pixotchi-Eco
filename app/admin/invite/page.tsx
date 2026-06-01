@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
 import { CLIENT_ENV } from '@/lib/env-config';
-import { AdminChatMessage,AIChatMessage,AIConversation,AIUsageStats,ChatStats } from '@/lib/types';
+import { AdminChatMessage,AIChatMessage,AIConversation,AIUsageStats,AIToolCallTrace,ChatStats } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import {
 AlertTriangle,
@@ -47,6 +47,7 @@ Users,
 UserX,
 X as XIcon
 } from 'lucide-react';
+import Image from 'next/image';
 import { useCallback,useEffect,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 
@@ -78,6 +79,47 @@ interface AdminStats {
 
 type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback' | 'airdrop' | 'claims';
 
+function getToolStatusClass(status: AIToolCallTrace['status']) {
+  if (status === 'ok') {
+    return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200';
+  }
+
+  if (status === 'error') {
+    return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
+  }
+
+  return 'bg-muted text-muted-foreground';
+}
+
+function formatToolFreshness(trace: AIToolCallTrace) {
+  const parts: string[] = [];
+
+  if (trace.freshness?.blockNumber) {
+    parts.push(`block ${trace.freshness.blockNumber}`);
+  }
+
+  if (trace.freshness?.cache) {
+    parts.push(`cache: ${trace.freshness.cache}`);
+  }
+
+  if (trace.freshness?.fetchedAt) {
+    const fetchedAt = new Date(trace.freshness.fetchedAt);
+    if (!Number.isNaN(fetchedAt.getTime())) {
+      parts.push(`fetched ${formatDistanceToNow(fetchedAt, { addSuffix: true })}`);
+    }
+  }
+
+  return parts.join(' · ') || 'No freshness metadata';
+}
+
+function formatToolInput(input: UntypedValue) {
+  try {
+    return JSON.stringify(input, null, 2);
+  } catch {
+    return '[unserializable input]';
+  }
+}
+
 interface ConfirmDialogState {
   open: boolean;
   title: string;
@@ -92,49 +134,49 @@ interface ConfirmDialogState {
 interface PlantNotificationStats {
   sentCount: number;
   lastPerFid: Record<string, string>;
-  recent: any[];
-  lastRun?: any;
+  recent: UntypedValue[];
+  lastRun?: UntypedValue;
   totalRuns?: number;
 }
 
 interface GlobalNotificationStats {
   sentCount: number;
   lastPerFid: Record<string, string>;
-  recent: any[];
+  recent: UntypedValue[];
 }
 
 interface FenceStats {
   warn: {
     sentCount: number;
     lastPerFid: Record<string, string>;
-    recent: any[];
+    recent: UntypedValue[];
   };
   expire: {
     sentCount: number;
     lastPerFid: Record<string, string>;
-    recent: any[];
+    recent: UntypedValue[];
   };
-  lastRun: any;
-  runs: any[];
+  lastRun: UntypedValue;
+  runs: UntypedValue[];
 }
 
 interface AdminStatsResponse {
   success: boolean;
   provider?: 'neynar' | 'base';
   stats: {
-    plantTOD: PlantNotificationStats & { thresholdHours: number; runs?: any[] };
+    plantTOD: PlantNotificationStats & { thresholdHours: number; runs?: UntypedValue[] };
     legacy?: { plant1hSentCount?: number };
     global?: GlobalNotificationStats;
     eligibleFids: string[];
     eligibleFidsCount?: number;
-    audience?: any;
-    campaigns?: { recent: any[] };
+    audience?: UntypedValue;
+    campaigns?: { recent: UntypedValue[] };
   };
   endpoints?: Record<string, string>;
 }
 
-const getErrorName = (error: unknown): string => error instanceof Error ? error.name : '';
-const getErrorMessage = (error: unknown): string | undefined => error instanceof Error ? error.message : undefined;
+const getErrorName = (error: UntypedValue): string => error instanceof Error ? error.name : '';
+const getErrorMessage = (error: UntypedValue): string | undefined => error instanceof Error ? error.message : undefined;
 
 // Loading spinner component for consistency
 const LoadingSpinner = ({ text }: { text?: string }) => (
@@ -186,7 +228,7 @@ export default function AdminInviteDashboard() {
 
   // Broadcast state
   const [broadcastMessages, setBroadcastMessages] = useState<BroadcastMessage[]>([]);
-  const [broadcastStats, setBroadcastStats] = useState<any>(null);
+  const [broadcastStats, setBroadcastStats] = useState<UntypedValue>(null);
   const [broadcastLoading, setBroadcastLoading] = useState(false);
   const [broadcastContent, setBroadcastContent] = useState('');
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -216,12 +258,12 @@ export default function AdminInviteDashboard() {
   ];
 
   // Airdrop state
-  const [airdropData, setAirdropData] = useState<{ meta: any; recipients: any[] } | null>(null);
+  const [airdropData, setAirdropData] = useState<{ meta: UntypedValue; recipients: UntypedValue[] } | null>(null);
   const [airdropLoading, setAirdropLoading] = useState(false);
   const [airdropCsv, setAirdropCsv] = useState('');
 
   // Claims state
-  const [claimsData, setClaimsData] = useState<{ stats: any; claims: any[] } | null>(null);
+  const [claimsData, setClaimsData] = useState<{ stats: UntypedValue; claims: UntypedValue[] } | null>(null);
   const [claimsLoading, setClaimsLoading] = useState(false);
 
   // Cleanup: abort pending requests on unmount
@@ -383,7 +425,7 @@ export default function AdminInviteDashboard() {
     }
     setBroadcastLoading(true);
     try {
-      const payload: any = {
+      const payload: UntypedValue = {
         content: broadcastContent,
         priority: broadcastPriority,
         type: broadcastType,
@@ -915,7 +957,7 @@ export default function AdminInviteDashboard() {
   );
 
   // Feedback management
-  const [feedbackList, setFeedbackList] = useState<any[]>([]);
+  const [feedbackList, setFeedbackList] = useState<UntypedValue[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
 
   const fetchFeedback = useCallback(async () => {
@@ -1107,7 +1149,7 @@ export default function AdminInviteDashboard() {
       logHealthy?: boolean;
       probeHealthy?: boolean;
     }>;
-    summary: any;
+    summary: UntypedValue;
   } | null>(null);
   const [rpcLoading, setRpcLoading] = useState(false);
   const fetchRpcStatus = useCallback(async () => {
@@ -1129,27 +1171,27 @@ export default function AdminInviteDashboard() {
   const [, setNotifFenceStats] = useState<FenceStats | null>(null);
   const [, setNotifFenceV2Stats] = useState<FenceStats | null>(null);
   const [eligibleFids, setEligibleFids] = useState<string[]>([]);
-  const [notifDebugResult, setNotifDebugResult] = useState<any>(null);
+  const [notifDebugResult, setNotifDebugResult] = useState<UntypedValue>(null);
   const [notifLoading, setNotifLoading] = useState(false);
-  const [baseAudience, setBaseAudience] = useState<any>(null);
-  const [baseCampaigns, setBaseCampaigns] = useState<any[]>([]);
+  const [baseAudience, setBaseAudience] = useState<UntypedValue>(null);
+  const [baseCampaigns, setBaseCampaigns] = useState<UntypedValue[]>([]);
   const [baseSyncLoading, setBaseSyncLoading] = useState(false);
-  const [baseSyncResult, setBaseSyncResult] = useState<any>(null);
+  const [baseSyncResult, setBaseSyncResult] = useState<UntypedValue>(null);
 
   // Eligible plants management
-  const [eligiblePlants, setEligiblePlants] = useState<any>(null);
+  const [eligiblePlants, setEligiblePlants] = useState<UntypedValue>(null);
   const [eligibleLoading, setEligibleLoading] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [notifFidFilter, setNotifFidFilter] = useState('');
-  const [triggerResult, setTriggerResult] = useState<any>(null);
+  const [triggerResult, setTriggerResult] = useState<UntypedValue>(null);
   const [baseAddressFilter, setBaseAddressFilter] = useState('');
   const [baseCampaignTitle, setBaseCampaignTitle] = useState('');
   const [baseCampaignMessage, setBaseCampaignMessage] = useState('');
   const [baseCampaignTargetPath, setBaseCampaignTargetPath] = useState('/');
   const [baseCampaignAudienceMode, setBaseCampaignAudienceMode] = useState<'all' | 'selected'>('all');
   const [baseCampaignAddressInput, setBaseCampaignAddressInput] = useState('');
-  const [baseCampaignPreview, setBaseCampaignPreview] = useState<any>(null);
-  const [baseCampaignResult, setBaseCampaignResult] = useState<any>(null);
+  const [baseCampaignPreview, setBaseCampaignPreview] = useState<UntypedValue>(null);
+  const [baseCampaignResult, setBaseCampaignResult] = useState<UntypedValue>(null);
   const [baseCampaignLoading, setBaseCampaignLoading] = useState(false);
 
   // Send notifications confirmation dialog
@@ -1157,7 +1199,7 @@ export default function AdminInviteDashboard() {
   const [sendNotifProgress, setSendNotifProgress] = useState<{ sent: number; total: number; errors: string[] } | null>(null);
 
   // Notification Redis keys management
-  const [notifKeys, setNotifKeys] = useState<any>(null);
+  const [notifKeys, setNotifKeys] = useState<UntypedValue>(null);
   const [notifKeysLoading, setNotifKeysLoading] = useState(false);
   const [notifKeysExpanded, setNotifKeysExpanded] = useState<Record<string, boolean>>({});
 
@@ -1418,9 +1460,9 @@ export default function AdminInviteDashboard() {
   // Get list of eligible FIDs that would receive notifications (not throttled)
   const getEligibleFidsToNotify = (): number[] => {
     if (!eligiblePlants?.eligible) return [];
-    return (eligiblePlants.eligible as any[])
-      .filter((user: any) => !user.userThrottled)
-      .map((user: any) => user.fid);
+    return (eligiblePlants.eligible as UntypedValue[])
+      .filter((user: UntypedValue) => !user.userThrottled)
+      .map((user: UntypedValue) => user.fid);
   };
 
   // Send notifications to all eligible FIDs one by one
@@ -2033,7 +2075,7 @@ export default function AdminInviteDashboard() {
                         <button
                           key={option.value}
                           type="button"
-                          onClick={() => setBroadcastType(option.value as any)}
+                          onClick={() => setBroadcastType(option.value as UntypedValue)}
                           className={`p-3 rounded-lg border-2 transition-all ${broadcastType === option.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
@@ -2057,7 +2099,7 @@ export default function AdminInviteDashboard() {
                         <button
                           key={option.value}
                           type="button"
-                          onClick={() => setBroadcastPriority(option.value as any)}
+                          onClick={() => setBroadcastPriority(option.value as UntypedValue)}
                           className={`w-full p-3 rounded-lg border-2 transition-all text-left ${broadcastPriority === option.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
@@ -2724,6 +2766,49 @@ export default function AdminInviteDashboard() {
                             </span>
                           </div>
                           <p className="text-sm whitespace-pre-wrap text-foreground">{message.message}</p>
+                          {message.type === 'assistant' && message.toolCalls?.length ? (
+                            <div className="mt-3 rounded-md border border-blue-200/70 dark:border-blue-800/70 bg-background/80 p-2">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                                <Code className="w-3.5 h-3.5" />
+                                Tool calls ({message.toolCalls.length})
+                              </div>
+                              <div className="space-y-2">
+                                {message.toolCalls.map((toolCall, index) => (
+                                  <div
+                                    key={`${message.id}-${toolCall.toolName}-${index}`}
+                                    className="rounded border bg-muted/30 p-2"
+                                  >
+                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                      <span className="font-mono font-semibold text-foreground">
+                                        {toolCall.toolName}
+                                      </span>
+                                      <span className={`rounded px-1.5 py-0.5 font-medium ${getToolStatusClass(toolCall.status)}`}>
+                                        {toolCall.status}
+                                      </span>
+                                      {toolCall.source && (
+                                        <span className="text-muted-foreground">
+                                          {toolCall.source}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="mt-1 text-[11px] text-muted-foreground">
+                                      {formatToolFreshness(toolCall)}
+                                    </div>
+                                    {toolCall.error && (
+                                      <div className="mt-1 text-[11px] text-destructive">
+                                        {toolCall.error}
+                                      </div>
+                                    )}
+                                    {toolCall.input !== undefined && (
+                                      <pre className="mt-2 max-h-28 overflow-auto rounded bg-background p-2 text-[11px] text-muted-foreground">
+                                        {formatToolInput(toolCall.input)}
+                                      </pre>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -2843,7 +2928,7 @@ export default function AdminInviteDashboard() {
                         <div className="mr-2 min-w-0">
                           <div className="font-mono text-xs truncate" title={e.url}>{e.url}</div>
                           <div className="text-[11px] text-muted-foreground">
-                            {e.vendor || 'unknown'}{typeof e.rank === 'number' ? ` • rank ${e.rank}` : ''}
+                            {e.vendor || 'UntypedValue'}{typeof e.rank === 'number' ? ` • rank ${e.rank}` : ''}
                           </div>
                         </div>
                         <div className="flex items-center gap-3 text-xs">
@@ -2938,7 +3023,7 @@ export default function AdminInviteDashboard() {
                       {(notifStats?.recent || []).length === 0 ? (
                         <div className="border rounded p-2">No history yet.</div>
                       ) : (
-                        (notifStats?.recent || []).map((run: any, idx: number) => (
+                        (notifStats?.recent || []).map((run: UntypedValue, idx: number) => (
                           <pre key={idx} className="border p-2 rounded whitespace-pre-wrap">{JSON.stringify(run, null, 2)}</pre>
                         ))
                       )}
@@ -2992,7 +3077,7 @@ export default function AdminInviteDashboard() {
                         {(baseAudience?.history || []).length === 0 ? (
                           <div className="border rounded p-2 text-sm text-muted-foreground">No snapshot history yet.</div>
                         ) : (
-                          (baseAudience?.history || []).map((entry: any) => (
+                          (baseAudience?.history || []).map((entry: UntypedValue) => (
                             <div key={entry.id} className="border rounded p-2 text-xs">
                               <div className="font-mono break-all">{entry.id}</div>
                               <div className="text-muted-foreground">
@@ -3047,7 +3132,7 @@ export default function AdminInviteDashboard() {
                           {(eligiblePlants.eligible || []).length === 0 ? (
                             <div className="text-center py-4 text-muted-foreground">No Base wallets with eligible plants found.</div>
                           ) : (
-                            (eligiblePlants.eligible || []).map((user: any) => (
+                            (eligiblePlants.eligible || []).map((user: UntypedValue) => (
                               <div key={user.address} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="font-mono text-xs break-all">{user.address}</div>
@@ -3058,7 +3143,7 @@ export default function AdminInviteDashboard() {
                                   )}
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                  {(user.plants || []).map((plant: any) => (
+                                  {(user.plants || []).map((plant: UntypedValue) => (
                                     <div
                                       key={plant.id}
                                       className={`p-2 rounded text-xs ${plant.throttled ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300' : 'bg-green-100 dark:bg-green-900/30 border border-green-300'}`}
@@ -3168,7 +3253,7 @@ export default function AdminInviteDashboard() {
                         {baseCampaigns.length === 0 ? (
                           <div className="border rounded p-2 text-sm text-muted-foreground">No campaigns yet.</div>
                         ) : (
-                          baseCampaigns.map((campaign: any) => (
+                          baseCampaigns.map((campaign: UntypedValue) => (
                             <div key={campaign.id} className="border rounded p-3 text-xs space-y-1">
                               <div className="flex items-center justify-between gap-3">
                                 <div className="font-semibold">{campaign.title}</div>
@@ -3197,7 +3282,7 @@ export default function AdminInviteDashboard() {
                     <div className="text-sm">
                       <div className="font-semibold mb-1">Known eligible FIDs</div>
                       <div className="flex flex-wrap gap-1 max-h-[140px] overflow-y-auto">
-                        {eligibleFids.slice(0, 200).map((fid: any) => (
+                        {eligibleFids.slice(0, 200).map((fid: UntypedValue) => (
                           <span key={fid} className="text-xs bg-muted px-2 py-0.5 rounded">{fid}</span>
                         ))}
                       </div>
@@ -3263,7 +3348,7 @@ export default function AdminInviteDashboard() {
                         {(eligiblePlants.eligible || []).length === 0 ? (
                           <div className="text-center py-4 text-muted-foreground">No users with eligible plants found.</div>
                         ) : (
-                          (eligiblePlants.eligible || []).map((user: any) => (
+                          (eligiblePlants.eligible || []).map((user: UntypedValue) => (
                             <div key={user.fid} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
                               <div className="flex items-center justify-between">
                                 <div className="font-mono text-sm flex items-center gap-2">
@@ -3277,7 +3362,7 @@ export default function AdminInviteDashboard() {
                                 <div className="text-xs text-muted-foreground truncate max-w-[200px]">{user.address}</div>
                               </div>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                {(user.plants || []).map((plant: any) => (
+                                {(user.plants || []).map((plant: UntypedValue) => (
                                   <div
                                     key={plant.id}
                                     className={`p-2 rounded text-xs ${plant.throttled ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300' : 'bg-green-100 dark:bg-green-900/30 border border-green-300'}`}
@@ -3361,7 +3446,7 @@ export default function AdminInviteDashboard() {
                     </div>
 
                     {/* Grouped Keys */}
-                    {Object.entries(notifKeys.grouped || {}).map(([prefix, keys]: [string, any]) => (
+                    {Object.entries((notifKeys.grouped || {}) as Record<string, UntypedValue[]>).map(([prefix, keys]) => (
                       <div key={prefix} className="border rounded-lg overflow-hidden">
                         <button
                           className="w-full px-3 py-2 bg-muted/50 hover:bg-muted flex items-center justify-between text-sm font-medium"
@@ -3372,7 +3457,7 @@ export default function AdminInviteDashboard() {
                         </button>
                         {notifKeysExpanded[prefix] && (
                           <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
-                            {keys.map((keyInfo: any) => (
+                            {keys.map((keyInfo: UntypedValue) => (
                               <div key={keyInfo.key} className="p-2 text-xs hover:bg-muted/30 flex items-start gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="font-mono text-[10px] truncate" title={keyInfo.key}>{keyInfo.key}</div>
@@ -3516,10 +3601,13 @@ export default function AdminInviteDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <img
+                  <Image
                     key={`twitter-${ogRefreshKey}`}
                     src={`/api/og/mint?platform=twitter&address=${encodeURIComponent(ogAddress)}&strain=${ogSelectedStrain}&v=${ogRefreshKey}`}
                     alt="Twitter OG Preview"
+                    width={1200}
+                    height={630}
+                    unoptimized
                     className="w-full border border-border rounded-lg"
                   />
                   <div className="flex gap-2">
@@ -3562,10 +3650,13 @@ export default function AdminInviteDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <img
+                  <Image
                     key={`farcaster-${ogRefreshKey}`}
                     src={`/api/og/mint?platform=farcaster&address=${encodeURIComponent(ogAddress)}&strain=${ogSelectedStrain}&v=${ogRefreshKey}`}
                     alt="Farcaster OG Preview"
+                    width={1200}
+                    height={800}
+                    unoptimized
                     className="w-full border border-border rounded-lg"
                   />
                   <div className="flex gap-2">
@@ -3664,7 +3755,7 @@ export default function AdminInviteDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                    {feedbackList.map((feedback: any) => (
+                    {feedbackList.map((feedback: UntypedValue) => (
                       <div
                         key={feedback.id}
                         className="border rounded-lg p-4 space-y-3 hover:bg-muted/50 transition-colors"
@@ -3968,7 +4059,7 @@ export default function AdminInviteDashboard() {
                         <div>PIXOTCHI</div>
                         <div>Status</div>
                       </div>
-                      {airdropData.recipients.map((r: any) => (
+                      {airdropData.recipients.map((r: UntypedValue) => (
                         <div key={r.address} className="grid grid-cols-6 gap-2 text-sm py-2 border-b border-border/50 hover:bg-muted/50">
                           <div className="col-span-2 font-mono text-xs truncate" title={r.address}>
                             {r.address.slice(0, 8)}...{r.address.slice(-6)}
@@ -4127,7 +4218,7 @@ export default function AdminInviteDashboard() {
                       <div>Bonuses</div>
                       <div>Actions</div>
                     </div>
-                    {claimsData.claims.map((claim: any) => (
+                    {claimsData.claims.map((claim: UntypedValue) => (
                       <div key={claim.address} className="grid grid-cols-[1fr_80px_70px_90px_100px_80px] gap-2 items-center text-sm px-3 py-2 rounded hover:bg-muted/50">
                         <div className="font-mono text-xs truncate" title={claim.address}>
                           {claim.address?.slice(0, 8)}...{claim.address?.slice(-6)}
@@ -4171,7 +4262,7 @@ export default function AdminInviteDashboard() {
                                       // Remove from local state
                                       setClaimsData(prev => prev ? {
                                         ...prev,
-                                        claims: prev.claims.filter((c: any) => c.address !== claim.address),
+                                        claims: prev.claims.filter((c: UntypedValue) => c.address !== claim.address),
                                         stats: {
                                           ...prev.stats,
                                           total: prev.stats.total - 1,
@@ -4226,7 +4317,7 @@ export default function AdminInviteDashboard() {
 
           <div className="flex-1 overflow-y-auto max-h-[300px] border rounded p-2 space-y-1">
             {getEligibleFidsToNotify().map((fid) => {
-              const user = eligiblePlants?.eligible?.find((u: any) => u.fid === fid);
+              const user = eligiblePlants?.eligible?.find((u: UntypedValue) => u.fid === fid);
               return (
                 <div key={fid} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded">
                   <div className="font-mono">FID: <span className="font-semibold">{fid}</span></div>

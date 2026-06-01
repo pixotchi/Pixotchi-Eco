@@ -14,12 +14,12 @@ export async function GET(request: NextRequest) {
     // Get IP for rate limiting
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
                request.headers.get('x-real-ip') || 
-               'unknown';
+               'UntypedValue';
 
     // Check rate limit before validating key
     const rateLimitOk = await checkAdminRateLimit(ip);
     if (!rateLimitOk) {
-      await logAdminAction('admin_stats_ratelimited', 'unknown', { ip }, false);
+      await logAdminAction('admin_stats_ratelimited', 'UntypedValue', { ip }, false);
       const error = createErrorResponse('Too many authentication attempts. Please try again in 15 minutes.', 429, 'RATE_LIMITED');
       return NextResponse.json(error.body, { status: error.status });
     }
@@ -207,7 +207,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error getting admin stats:', error);
-    await logAdminAction('admin_stats_failed', 'unknown', { reason: 'internal_error' }, false);
+    await logAdminAction('admin_stats_failed', 'UntypedValue', { reason: 'internal_error' }, false);
     const errorResponse = createErrorResponse('Internal server error', 500);
     return NextResponse.json(errorResponse.body, { status: errorResponse.status });
   }

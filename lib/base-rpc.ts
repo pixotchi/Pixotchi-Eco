@@ -619,9 +619,9 @@ const ensureProbeMetrics = async () => {
 
 class BaseRpcInvocationError extends Error {
   attemptedUrls: string[];
-  lastError: unknown;
+  lastError: UntypedValue;
 
-  constructor(message: string, attemptedUrls: string[], lastError: unknown) {
+  constructor(message: string, attemptedUrls: string[], lastError: UntypedValue) {
     super(message);
     this.name = 'BaseRpcInvocationError';
     this.attemptedUrls = attemptedUrls;
@@ -633,7 +633,7 @@ const invokeEndpoint = async (
   policy: BaseRpcPolicy,
   url: string,
   method: string,
-  params: unknown[],
+  params: UntypedValue[],
 ) => {
   const started = Date.now();
 
@@ -663,14 +663,14 @@ type BaseRpcInvokeFn = (
   policy: BaseRpcPolicy,
   url: string,
   method: string,
-  params: unknown[],
-) => Promise<unknown>;
+  params: UntypedValue[],
+) => Promise<UntypedValue>;
 
 const executeSingleWaveWithInvoker = async (
   policy: BaseRpcPolicy,
   wave: BaseRpcExecutionWave,
   method: string,
-  params: unknown[],
+  params: UntypedValue[],
   attemptedUrls: string[],
   {
     invoke = invokeEndpoint,
@@ -731,7 +731,7 @@ const executeSingleWave = async (
   policy: BaseRpcPolicy,
   wave: BaseRpcExecutionWave,
   method: string,
-  params: unknown[],
+  params: UntypedValue[],
   attemptedUrls: string[],
 ) =>
   executeSingleWaveWithInvoker(policy, wave, method, params, attemptedUrls);
@@ -739,7 +739,7 @@ const executeSingleWave = async (
 const executePolicyRequest = async (
   policy: BaseRpcPolicy,
   method: string,
-  params: unknown[] = [],
+  params: UntypedValue[] = [],
   inputUrls?: readonly string[],
 ) => {
   if (!inputUrls) {
@@ -754,7 +754,7 @@ const executePolicyRequest = async (
     hedgeDelayMs: POLICY_CONFIG[policy].hedgeDelayMs,
   });
 
-  let lastError: unknown = new Error('Base RPC request failed before execution');
+  let lastError: UntypedValue = new Error('Base RPC request failed before execution');
   let previousWaveSignature: string | null = null;
 
   for (const wave of executionPlan) {
@@ -796,7 +796,7 @@ const createBaseTransport = (
             return (await executePolicyRequest(
               policy,
               method,
-              (params ?? []) as unknown[],
+              (params ?? []) as UntypedValue[],
               inputUrls,
             )) as never;
           } catch (error) {
@@ -839,7 +839,7 @@ let browserBaseReadClient: ReturnType<typeof createBaseClient> | null = null;
 let browserBaseReceiptClient: ReturnType<typeof createBaseClient> | null = null;
 let browserBaseLogClient: ReturnType<typeof createBaseClient> | null = null;
 
-const getRetryableFlag = (error: unknown): boolean => {
+const getRetryableFlag = (error: UntypedValue): boolean => {
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
@@ -859,7 +859,7 @@ export class BaseRpcError extends Error {
   retryable: boolean;
   endpointsTried: string[];
 
-  constructor(operation: string, error: unknown) {
+  constructor(operation: string, error: UntypedValue) {
     const invocationError =
       error instanceof BaseRpcInvocationError ? error : null;
     const rootError = invocationError?.lastError ?? error;
@@ -879,7 +879,7 @@ export class BaseRpcError extends Error {
         : listBaseRpcEndpoints();
 
     if (rootError instanceof Error) {
-      (this as Error & { cause?: unknown }).cause = rootError;
+      (this as Error & { cause?: UntypedValue }).cause = rootError;
     }
   }
 }

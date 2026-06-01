@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   try {
     const publicClient = getBaseReadClient();
 
-    const results: any = {
+    const results: UntypedValue = {
       tests: [],
     };
 
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
         decimals: seedDecimals,
         isProxy: seedCodeSize < 500 ? '⚠️ Possibly a proxy (small code)' : 'Likely not a proxy',
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.push({ name: 'SEED Token Check', error: e.message });
     }
 
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
         caller: 'Adapter',
         result: '✅ Would succeed (if SEED payment handled)',
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.push({
         name: 'Pixotchi mintFor Simulation',
         caller: 'Adapter',
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
         codeSize: wethCode ? (wethCode.length - 2) / 2 : 0,
         note: 'WETH uses OpenZeppelin-style errors',
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.push({ name: 'WETH Token Check', error: e.message });
     }
 
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
         exists: routerCode && routerCode !== '0x',
         codeSize: routerCode ? (routerCode.length - 2) / 2 : 0,
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.push({ name: 'BaseSwap Router Check', error: e.message });
     }
 
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
           result: wethReserve > BigInt(0) ? '✅ Pair exists with liquidity' : '⚠️ Low/no liquidity',
         });
       }
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.push({ name: 'WETH/SEED Pair on BaseSwap', error: e.message });
     }
 
@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
         output: formatUnits(amounts[1], 18) + ' SEED',
         result: '✅ Quote works',
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.push({
         name: 'BaseSwap getAmountsOut (WETH → SEED)',
         result: '❌ FAILED',
@@ -191,12 +191,12 @@ export async function GET(request: NextRequest) {
         allowance: adapterWethAllowance.toString(),
         isApproved: adapterWethAllowance > BigInt(0) ? '✅ Approved' : '❌ NOT Approved!',
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.tests.push({ name: 'Adapter WETH Approval to BaseSwap', error: e.message });
     }
 
     // Summary
-    const issues = results.tests.filter((t: any) => 
+    const issues = results.tests.filter((t: UntypedValue) => 
       t.result?.includes('FAILED') || 
       t.result?.includes('NOT') ||
       t.issue

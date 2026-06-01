@@ -54,8 +54,8 @@ interface SwapFencePurchaseBundleProps {
     days: number;
     ethAmount: bigint; // ETH amount with buffer already applied
     minSeedOut: bigint; // Minimum SEED to receive (fence quote, acts as slippage protection)
-    onSuccess?: (tx: any) => void;
-    onError?: (error: any) => void;
+    onSuccess?: (tx: UntypedValue) => void;
+    onError?: (error: UntypedValue) => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
@@ -130,12 +130,12 @@ export default function SwapFencePurchaseBundle({
     const isValid = calls.length === 3;
     const defaultButtonText = `Buy ${days} Day${days === 1 ? '' : 's'} Fence with ETH`;
 
-    const handleSuccess = (tx: any) => {
+    const handleSuccess = (tx: UntypedValue) => {
         // Track gamification for fence purchases
         if (address) {
-            const post = async (currentTx: any, attempt = 0) => {
+            const post = async (currentTx: UntypedValue, attempt = 0) => {
                 try {
-                    const payload: Record<string, unknown> = {
+                    const payload: Record<string, UntypedValue> = {
                         address,
                         taskId: 's4_buy_shield',
                     };

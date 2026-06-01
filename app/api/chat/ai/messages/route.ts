@@ -3,6 +3,7 @@ import {
   getAIConversationForAddress,
   getAIConversationMessages,
   getOrCreateConversation,
+  stripAIMessageDebugMetadata,
 } from '@/lib/ai-service';
 import {
   createChatAuthRequiredResponse,
@@ -94,12 +95,13 @@ export async function GET(request: NextRequest) {
     }
 
     const messages = await getAIConversationMessages(finalConversationId, limit);
+    const publicMessages = messages.map(stripAIMessageDebugMetadata);
 
     return NextResponse.json(
       {
-        messages,
+        messages: publicMessages,
         conversationId: finalConversationId,
-        count: messages.length,
+        count: publicMessages.length,
         timestamp: Date.now(),
       },
       {

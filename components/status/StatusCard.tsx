@@ -8,7 +8,7 @@ const iconMap: Record<StatusLevel, React.ReactNode> = {
   operational: <CheckCircle2 className="h-5 w-5 text-green-500" aria-hidden />,
   degraded: <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden />,
   outage: <WifiOff className="h-5 w-5 text-red-500" aria-hidden />,
-  unknown: <Info className="h-5 w-5 text-muted-foreground" aria-hidden />,
+  UntypedValue: <Info className="h-5 w-5 text-muted-foreground" aria-hidden />,
 };
 
 interface StatusCardProps {

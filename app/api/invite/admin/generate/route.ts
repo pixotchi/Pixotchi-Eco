@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error generating admin invite codes:', error);
-    await logAdminAction('admin_generate_failed', 'unknown', { reason: 'internal_error' }, false);
+    await logAdminAction('admin_generate_failed', 'UntypedValue', { reason: 'internal_error' }, false);
     const errorResponse = createErrorResponse('Failed to generate admin codes', 500, 'GENERATION_FAILED');
     return NextResponse.json(errorResponse.body, { status: errorResponse.status });
   }

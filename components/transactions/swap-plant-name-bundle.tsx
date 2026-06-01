@@ -52,8 +52,8 @@ interface SwapPlantNameBundleProps {
     newName: string;
     ethAmount: bigint; // ETH amount with buffer already applied
     minSeedOut: bigint; // Minimum SEED to receive (350 SEED for name change)
-    onSuccess?: (tx: any) => void;
-    onError?: (error: any) => void;
+    onSuccess?: (tx: UntypedValue) => void;
+    onError?: (error: UntypedValue) => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;

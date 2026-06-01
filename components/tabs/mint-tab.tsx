@@ -44,9 +44,9 @@ import { BaseExpandedLoadingPageLoader } from '../ui/loading';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
-const solLog = (...args: any[]) => { if (SOLANA_DEBUG) console.log(...args); };
-const solWarn = (...args: any[]) => { if (SOLANA_DEBUG) console.warn(...args); };
-const solError = (...args: any[]) => { if (SOLANA_DEBUG) console.error(...args); };
+const solLog = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.log(...args); };
+const solWarn = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.warn(...args); };
+const solError = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.error(...args); };
 
 const PLANT_MINT_DESCRIPTION = 'Choose a strain and mint your Plant onchain. Each Plant starts with 24 hours of lifetime, and its PTS define your share of ETH rewards.';
 const LAND_MINT_DESCRIPTION = 'Mint a Land to produce PTS and TOD passively by staking SEED instead of spending it, helping grow your Plant and ETH rewards over the long term.';
@@ -105,11 +105,11 @@ export default function MintTab() {
   const isConnected = !!evmAddress || isSolana;
   const farcasterUser =
     typeof frameContext?.context === 'object'
-      ? (frameContext.context as any)?.user
+      ? (frameContext.context as UntypedValue)?.user
       : undefined;
   const farcasterClient =
     typeof frameContext?.context === 'object'
-      ? (frameContext.context as any)?.client
+      ? (frameContext.context as UntypedValue)?.client
       : undefined;
 
   // Resolve basename/ENS for share functionality
@@ -485,13 +485,13 @@ export default function MintTab() {
       solLog('[SolanaMint] Checking linked accounts:', user.linkedAccounts.map(a => ({
         type: a.type,
         address: 'address' in a ? a.address : undefined,
-        chainType: 'chainType' in a ? (a as any).chainType : undefined,
+        chainType: 'chainType' in a ? (a as UntypedValue).chainType : undefined,
       })));
 
       for (const account of user.linkedAccounts) {
-        if (account.type === 'wallet' && 'chainType' in account && (account as any).chainType === 'solana') {
-          solLog('[SolanaMint] Found Solana wallet in linked accounts:', (account as any).address);
-          return account as any;
+        if (account.type === 'wallet' && 'chainType' in account && (account as UntypedValue).chainType === 'solana') {
+          solLog('[SolanaMint] Found Solana wallet in linked accounts:', (account as UntypedValue).address);
+          return account as UntypedValue;
         }
       }
     }

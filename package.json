@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.7.53",
+  "version": "1.7.55",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,12 +8,18 @@
     "start": "next start",
     "lint": "node ./scripts/run-eslint-chunked.mjs && npm run lint:base-rpc",
     "lint:base-rpc": "node ./scripts/check-base-rpc-hardening.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ai:smoke:gemini": "node smoke/ai-smoke-gemini.mjs",
+    "ai:smoke:real-tools": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-smoke-real-tools.ts",
+    "ai:smoke:budget": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-budget-smoke.ts",
+    "ai:smoke:knowledge": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-knowledge-smoke.ts",
+    "ai:smoke": "npm run ai:smoke:gemini && npm run ai:smoke:real-tools && npm run ai:smoke:budget && npm run ai:smoke:knowledge"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.81",
     "@ai-sdk/google": "3.0.80",
     "@ai-sdk/openai": "3.0.67",
+    "@ai-sdk/react": "3.0.195",
     "@base-org/account": "2.5.6",
     "@base-org/account-ui": "1.0.1",
     "@coinbase/cdp-sdk": "1.51.0",
@@ -27,13 +33,19 @@
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-dropdown-menu": "2.1.16",
     "@radix-ui/react-progress": "1.1.8",
+    "@radix-ui/react-separator": "1.1.8",
     "@radix-ui/react-slot": "1.2.4",
+    "@radix-ui/react-tooltip": "^1.2.8",
     "@solana-program/memo": "0.11.1",
     "@solana-program/system": "0.12.2",
     "@solana-program/token": "0.13.0",
     "@solana/kit": "6.9.0",
     "@solana/spl-token": "0.4.14",
     "@solana/web3.js": "1.98.4",
+    "@streamdown/cjk": "1.0.3",
+    "@streamdown/code": "1.1.1",
+    "@streamdown/math": "1.0.2",
+    "@streamdown/mermaid": "1.0.2",
     "@tanstack/react-query": "5.100.14",
     "@upstash/redis": "1.38.0",
     "@vercel/analytics": "2.0.1",
@@ -56,6 +68,7 @@
     "react-dom": "19.2.6",
     "react-hot-toast": "2.6.0",
     "siwe": "3.0.0",
+    "streamdown": "2.5.0",
     "tailwind-merge": "3.6.0",
     "thread-stream": "4.2.0",
     "viem": "2.51.3",
@@ -77,6 +90,7 @@
     "prettier": "3.8.3",
     "tailwindcss": "4.3.0",
     "tailwindcss-animate": "1.0.7",
+    "tsx": "4.22.4",
     "typescript": "6.0.3"
   },
   "overrides": {

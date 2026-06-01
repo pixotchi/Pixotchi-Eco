@@ -67,8 +67,8 @@ interface SwapBuyItemBundleProps {
     quantity: number;
     ethAmount: bigint; // ETH amount with buffer already applied
     minSeedOut: bigint; // Minimum SEED to receive (total cost, acts as slippage protection)
-    onSuccess?: (tx: any) => void;
-    onError?: (error: any) => void;
+    onSuccess?: (tx: UntypedValue) => void;
+    onError?: (error: UntypedValue) => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
@@ -113,7 +113,7 @@ export default function SwapBuyItemBundle({
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10);
         const functionName = itemType === 'shop' ? 'shopBuyItem' : 'buyAccessory';
 
-        const callList: any[] = [
+        const callList: UntypedValue[] = [
             // Call 1: Swap ETH → SEED
             {
                 address: UNISWAP_ROUTER_ADDRESS as `0x${string}`,
@@ -156,12 +156,12 @@ export default function SwapBuyItemBundle({
         ? `Buy ${item.name} with ETH`
         : `Buy ${quantity}x ${item.name} with ETH`;
 
-    const handleSuccess = (tx: any) => {
+    const handleSuccess = (tx: UntypedValue) => {
         // Track gamification for garden items
         if (address && itemType === 'garden') {
-            const post = async (currentTx: any, attempt = 0) => {
+            const post = async (currentTx: UntypedValue, attempt = 0) => {
                 try {
-                    const payload: Record<string, unknown> = {
+                    const payload: Record<string, UntypedValue> = {
                         address,
                         taskId: 's4_buy10_elements',
                         count: quantity,

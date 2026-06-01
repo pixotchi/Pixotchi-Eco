@@ -9,5 +9,5 @@ export const queryKeys = {
     ["mint", mintType, address?.toLowerCase() ?? "anonymous"] as const,
 } as const;
 
-export type QueryKey = readonly unknown[];
+export type QueryKey = readonly UntypedValue[];
 

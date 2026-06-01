@@ -25,6 +25,7 @@ const TimeAgo = React.memo(({ timestamp }: { timestamp: string }) => {
 
   return <span className="text-xs text-muted-foreground">{timeAgo}</span>;
 });
+TimeAgo.displayName = 'TimeAgo';
 
 const EventIcon = React.memo(({
   type,
@@ -33,7 +34,7 @@ const EventIcon = React.memo(({
   gardenItemMap
 }: {
   type: ActivityEvent['__typename'],
-  event?: any,
+  event?: UntypedValue,
   shopItemMap?: { [key: string]: string },
   gardenItemMap?: { [key: string]: string }
 }) => {
@@ -149,6 +150,7 @@ const EventIcon = React.memo(({
     />
   );
 });
+EventIcon.displayName = 'EventIcon';
 
 const YouBadge = () => (
   <span className="ml-1 text-xs font-semibold text-blue-500">(You)</span>
@@ -380,12 +382,12 @@ export const LandMintedEventRenderer = ({ event }: { event: LandMintedEvent, use
 };
 
 export const LandNameChangedEventRenderer = ({ event }: { event: LandNameChangedEvent }) => (
-  <EventWrapper event={event}>
-    <p className="text-sm">
-      Land #{event.tokenId} was renamed to "<span className="font-semibold">{event.name}</span>".
-    </p>
-  </EventWrapper>
-);
+    <EventWrapper event={event}>
+      <p className="text-sm">
+      Land #{event.tokenId} was renamed to &quot;<span className="font-semibold">{event.name}</span>&quot;.
+      </p>
+    </EventWrapper>
+  );
 
 export const VillageUpgradeEventRenderer = ({ event }: { event: VillageUpgradedWithLeafEvent, userAddress?: string | null }) => {
   const buildingName = getBuildingName(event.buildingId, false);

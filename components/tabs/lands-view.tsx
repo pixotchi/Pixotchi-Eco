@@ -54,6 +54,11 @@ export default function LandsView() {
       </div>
     );
   }
+
+  return <LandsViewContent />;
+}
+
+function LandsViewContent() {
   const { address } = useAccount();
   useSmartWallet();
   const [lands, setLands] = useState<Land[]>([]);
@@ -484,7 +489,7 @@ export default function LandsView() {
           No Lands Yet!
         </h3>
         <p className="text-muted-foreground">
-          Head over to the 'Mint' tab to get your first plot of land.
+          Head over to the &apos;Mint&apos; tab to get your first plot of land.
         </p>
       </div>
     );

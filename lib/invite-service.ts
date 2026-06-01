@@ -415,7 +415,7 @@ async function getInviteCode(code: string): Promise<InviteCode | null> {
     }
 
     // Handle both string and object data from Redis
-    let parsed: any;
+    let parsed: UntypedValue;
     if (typeof data === 'string') {
       parsed = JSON.parse(data);
     } else {
@@ -445,7 +445,7 @@ async function getUserInviteData(address: string): Promise<UserInviteData | null
     }
 
     // Handle Redis returning either string or already-parsed object
-    let parsed: any;
+    let parsed: UntypedValue;
     if (typeof data === 'string') {
       parsed = JSON.parse(data);
     } else {

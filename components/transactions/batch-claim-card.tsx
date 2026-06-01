@@ -103,7 +103,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
       results.forEach(result => {
         // Check village buildings (0: Solar, 3: Soil, 5: Bee)
         // Note: building IDs in result are from contract, so we iterate what we got
-        result.villageBuildings.forEach((b: any) => {
+        result.villageBuildings.forEach((b: UntypedValue) => {
           const id = Number(b.id);
           const points = BigInt(b.accumulatedPoints || 0);
           const lifetime = BigInt(b.accumulatedLifetime || 0);
@@ -315,7 +315,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
                 // Trigger claim production task for gamification
                 try {
-                  const payload: Record<string, unknown> = { address, taskId: 's3_claim_production' };
+                  const payload: Record<string, UntypedValue> = { address, taskId: 's3_claim_production' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };

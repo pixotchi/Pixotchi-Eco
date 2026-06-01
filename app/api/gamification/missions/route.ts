@@ -85,7 +85,7 @@ async function getTransactionReceiptWithRetry(
     try {
       const receipt = await getBaseTransactionReceipt(txHash);
       if (receipt) return receipt;
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
       // Check if it's a "not found" or "indexing in progress" error
       const isTimingError =
         error?.shortMessage?.includes('could not be found') ||

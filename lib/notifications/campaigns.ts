@@ -132,7 +132,7 @@ export async function previewBaseCampaign(input: BaseCampaignInput) {
 export async function sendBaseCampaign(input: BaseCampaignInput): Promise<{
   campaign: NotificationCampaignMeta;
   preview: BaseCampaignResolution;
-  result: Record<string, unknown>;
+  result: Record<string, UntypedValue>;
 }> {
   if (SERVER_ENV.NOTIFICATION_PROVIDER !== 'base') {
     throw new Error('Base campaigns are only available when the Base provider is active.');

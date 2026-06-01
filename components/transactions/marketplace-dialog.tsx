@@ -84,10 +84,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
         // Use landOverviewByOwner to get tokenIds efficiently
         const lands = await client.readContract({
           address: LAND_CONTRACT_ADDRESS,
-          abi: landAbi as any,
+          abi: landAbi as UntypedValue,
           functionName: 'landOverviewByOwner',
           args: [address as `0x${string}`]
-        }) as any[];
+        }) as UntypedValue[];
         // lands is array of struct { tokenId, ... }
         if (Array.isArray(lands)) {
           setUserLandIds(lands.map(l => BigInt(l.tokenId)));
@@ -113,9 +113,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
       setLoading(true);
       const client = getReadClient();
       const [active, mine, activeFlag] = await Promise.all([
-        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<any[]>,
-        address ? client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceGetUserOrders', args: [address as `0x${string}`] }) as Promise<any[]> : Promise.resolve([]),
-        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as any, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>
+        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<UntypedValue[]>,
+        address ? client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetUserOrders', args: [address as `0x${string}`] }) as Promise<UntypedValue[]> : Promise.resolve([]),
+        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>
       ]);
       setActiveOrders((active || []).map(mapOrder));
       setUserOrders((mine || []).map(mapOrder));
@@ -177,7 +177,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     return () => window.removeEventListener('balances:refresh', refreshHandler as EventListener);
   }, [open, address, fetchBalances, fetchOrders, refreshBalancesAndAllowances]);
 
-  const mapOrder = (o: any): OrderView => ({
+  const mapOrder = (o: UntypedValue): OrderView => ({
     id: BigInt(o.id),
     seller: o.seller,
     sellToken: Number(o.sellToken),
@@ -314,15 +314,15 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     const sellToken = sellSide === 'LEAF' ? 1 : 0;
     return {
       address: LAND_CONTRACT_ADDRESS as `0x${string}`,
-      abi: landAbi as any,
+      abi: landAbi as UntypedValue,
       functionName: 'marketPlaceCreateOrder',
-      args: [transactionLandId, BigInt(sellToken), amountWei, amountAskWei] as any[],
+      args: [transactionLandId, BigInt(sellToken), amountWei, amountAskWei] as UntypedValue[],
     };
   };
 
   // After successful create order, mark mission progress
-  const onOrderSuccess = (tx: any) => {
-    const payload: Record<string, unknown> = { address, taskId: 's1_place_order' };
+  const onOrderSuccess = (tx: UntypedValue) => {
+    const payload: Record<string, UntypedValue> = { address, taskId: 's1_place_order' };
     const txHash = extractTransactionHash(tx);
     if (txHash) {
       payload.proof = { txHash };
@@ -452,7 +452,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 <div className="flex gap-2">
                   {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                     <SponsoredTransaction
-                      calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                      calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve SEED"
                       buttonClassName="h-9 px-4"
                       hideStatus
@@ -470,7 +470,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   )}
                   {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                     <SponsoredTransaction
-                      calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                      calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve LEAF"
                       buttonClassName="h-9 px-4"
                       hideStatus
@@ -488,7 +488,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   )}
                 </div>
                 <SponsoredTransaction
-                  calls={buildCreateOrderCall() ? [buildCreateOrderCall() as any] : []}
+                  calls={buildCreateOrderCall() ? [buildCreateOrderCall() as UntypedValue] : []}
                   buttonText={`Create Order`}
                   buttonClassName="w-full h-10"
                   disabled={!isMarketplaceActive || !buildCreateOrderCall() || (sellSide === 'SEED' ? seedBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) : leafBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)))}
@@ -574,7 +574,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 <div className="flex gap-2">
                   {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                     <SponsoredTransaction
-                      calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                      calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve SEED"
                       buttonClassName="h-9 px-4"
                       hideStatus
@@ -592,7 +592,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   )}
                   {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
                     <SponsoredTransaction
-                      calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as any, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
+                      calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve LEAF"
                       buttonClassName="h-9 px-4"
                       hideStatus
@@ -610,7 +610,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   )}
                 </div>
                 <SponsoredTransaction
-                  calls={buildCreateOrderCall() ? [buildCreateOrderCall() as any] : []}
+                  calls={buildCreateOrderCall() ? [buildCreateOrderCall() as UntypedValue] : []}
                   buttonText={`Create Order`}
                   buttonClassName="w-full h-10"
                   disabled={!isMarketplaceActive || !buildCreateOrderCall() || (sellSide === 'SEED' ? seedBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) : leafBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)))}
@@ -688,7 +688,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <SponsoredTransaction
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
-                                    abi: ERC20_APPROVE_ABI as any,
+                                    abi: ERC20_APPROVE_ABI as UntypedValue,
                                     functionName: 'approve',
                                     args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')]
                                   }]}
@@ -704,7 +704,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 />
                               ) : (
                                 <SponsoredTransaction
-                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as any, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as any[] }] : []}
+                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                                   buttonText="Take"
                                   buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
                                   disabled={loadingBalances || !hasSufficientForOrder(o) || !!isMyOrder || !transactionLandId}
@@ -782,7 +782,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           </div>
                           {showUserOrders && address && o.seller.toLowerCase() === address.toLowerCase() && o.isActive && (
                             <SponsoredTransaction
-                              calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as any, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as any[] }] : []}
+                              calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                               buttonText="Cancel"
                               buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
                               disabled={!isOrderActive(o.id)}
@@ -797,7 +797,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <SponsoredTransaction
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
-                                    abi: ERC20_APPROVE_ABI as any,
+                                    abi: ERC20_APPROVE_ABI as UntypedValue,
                                     functionName: 'approve',
                                     args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')]
                                   }]}
@@ -814,7 +814,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 />
                               ) : (
                                 <SponsoredTransaction
-                                  calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as any, functionName: 'marketPlaceTakeOrder', args: [landId, o.id] as any[] }]}
+                                  calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [landId, o.id] as UntypedValue[] }]}
                                   buttonText="Take"
                                   buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
                                   disabled={loadingBalances || !hasSufficientForOrder(o) || !isOrderActive(o.id)}

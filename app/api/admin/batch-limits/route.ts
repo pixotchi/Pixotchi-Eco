@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     
     const claimableItems: ClaimableItem[] = [];
     buildingResults.forEach(result => {
-      result.villageBuildings.forEach((b: any) => {
+      result.villageBuildings.forEach((b: UntypedValue) => {
         const id = Number(b.id);
         const points = BigInt(b.accumulatedPoints || 0);
         const lifetime = BigInt(b.accumulatedLifetime || 0);
@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
           fitsInTxLimit,
           recommendedMax: Math.min(recommendedMax, 100), // Cap at 100 for safety
         });
-      } catch (error: any) {
+      } catch (error: UntypedValue) {
         results.push({
           batchSize,
           gasEstimate: 'FAILED',
@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
           : `Split into ${Math.ceil(claimableItems.length / finalRecommendation)} batches of ${finalRecommendation}`,
       },
     });
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     return NextResponse.json({
       error: 'Failed to analyze batch limits',
       details: error.message,

@@ -154,7 +154,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         throw new Error(data.error || 'Verification failed');
       }
 
-    } catch (err: any) {
+    } catch (err: UntypedValue) {
       console.error('Verify error:', err);
       setError(err.message || 'Failed to verify');
       setStep('idle');
@@ -199,7 +199,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       } else {
         throw new Error(data.error || 'Claim failed');
       }
-    } catch (err: any) {
+    } catch (err: UntypedValue) {
       console.error('Claim error:', err);
       setError(err.message || 'Failed to claim');
       setStep('verifying'); // Go back to verified state so they can retry claim

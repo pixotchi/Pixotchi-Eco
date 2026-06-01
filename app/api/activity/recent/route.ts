@@ -14,7 +14,7 @@ export async function GET() {
         },
       },
     );
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('[ActivityAPI] Failed to load recent activity', error);
     return NextResponse.json(
       {

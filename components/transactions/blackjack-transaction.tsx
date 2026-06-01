@@ -145,7 +145,7 @@ export default function BlackjackTransaction({
 
     const [phase, setPhase] = useState<Phase>("idle");
     const [error, setError] = useState<string | null>(null);
-    const [calls, setCalls] = useState<any[]>([]);
+    const [calls, setCalls] = useState<UntypedValue[]>([]);
 
     // Normalize to raw serializable calls for embedded-wallet compatibility.
     // Builder attribution is appended by transform helper + wallet_sendCalls capability.
@@ -236,7 +236,7 @@ export default function BlackjackTransaction({
             setCalls([call]);
             setPhase("ready");
 
-        } catch (err: any) {
+        } catch (err: UntypedValue) {
             console.error("[Blackjack] Failed:", err);
             const msg = err instanceof Error ? err.message : "Failed to prepare transaction";
 
@@ -271,12 +271,12 @@ export default function BlackjackTransaction({
             successHandledRef.current = true;
             setPhase("complete");
 
-            const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
+            const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
 
             // Parse events
             // OnchainKit can surface duplicate receipts for the same hash; dedupe first.
-            const receiptsByHash = new Map<string, any>();
-            const newReceipts: any[] = [];
+            const receiptsByHash = new Map<string, UntypedValue>();
+            const newReceipts: UntypedValue[] = [];
             for (const receipt of receipts) {
                 const txHash = receipt?.transactionHash;
                 if (!txHash) {
@@ -298,7 +298,7 @@ export default function BlackjackTransaction({
                 if (r?.transactionHash) processedTxHashes.current.add(r.transactionHash);
             });
 
-            let resultData: any = {
+            let resultData: UntypedValue = {
                 success: true,
                 actionTaken: mode === "action" ? action : undefined,
             };
@@ -327,7 +327,7 @@ export default function BlackjackTransaction({
                             try {
                                 const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackDealt' });
                                 if (decoded.args) {
-                                    const args = decoded.args as any;
+                                    const args = decoded.args as UntypedValue;
                                     resultData = { ...resultData, cards: [args.playerCard1, args.playerCard2], handValue: args.playerHandValue, dealerUpCard: args.dealerUpCard };
                                 }
                             } catch { }
@@ -337,7 +337,7 @@ export default function BlackjackTransaction({
                             try {
                                 const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackHit' });
                                 if (decoded.args) {
-                                    const args = decoded.args as any;
+                                    const args = decoded.args as UntypedValue;
                                     resultData = {
                                         ...resultData,
                                         cards: [Number(args.newCard)],
@@ -353,7 +353,7 @@ export default function BlackjackTransaction({
                             try {
                                 const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackSplit' });
                                 if (decoded.args) {
-                                    const args = decoded.args as any;
+                                    const args = decoded.args as UntypedValue;
                                     resultData = {
                                         ...resultData,
                                         splitHand1Card: Number(args.hand1Card),
@@ -367,7 +367,7 @@ export default function BlackjackTransaction({
                         try {
                             const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackGameComplete' });
                             if (decoded.args) {
-                                const args = decoded.args as any;
+                                const args = decoded.args as UntypedValue;
                                 gameCompleteData = {
                                     result: args.result as BlackjackResult,
                                     playerCards: Array.isArray(args.playerCards) ? args.playerCards.map(Number) : [],
@@ -392,7 +392,7 @@ export default function BlackjackTransaction({
                                 }
                                 seenBlackjackResultLogs.add(resultLogKey);
 
-                                const args = decoded.args as any;
+                                const args = decoded.args as UntypedValue;
                                 handResultEvents.push({
                                     result: args.result as BlackjackResult,
                                     playerFinalValue: Number(args.playerFinalValue),
@@ -406,7 +406,7 @@ export default function BlackjackTransaction({
                         try {
                             const decoded = decodeEventLog({ abi: blackjackAbi, data: log.data, topics: log.topics, eventName: 'BlackjackDealerHit' });
                             if (decoded.args) {
-                                const args = decoded.args as any;
+                                const args = decoded.args as UntypedValue;
                                 if (!resultData.dealerHits) resultData.dealerHits = [];
                                 resultData.dealerHits.push({
                                     card: Number(args.newCard),

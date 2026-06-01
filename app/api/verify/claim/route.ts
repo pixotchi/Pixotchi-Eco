@@ -25,7 +25,7 @@ function getClient() {
 }
 
 // Cache for agent smart account
-let agentSmartAccount: any = null;
+let agentSmartAccount: UntypedValue = null;
 
 const CLAIM_LOCK_PREFIX = 'claim_lock:';
 
@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
           } else {
             throw new Error('Transfer UserOp status not complete');
           }
-        } catch (e: any) {
+        } catch (e: UntypedValue) {
           console.warn(`[CLAIM] Transfer attempt ${attempt} failed:`, e?.message || e);
           transferError = e;
           if (attempt < 3) {
@@ -308,7 +308,7 @@ export async function POST(req: NextRequest) {
             leafTransferTxHash = leafReceipt.transactionHash;
             console.log(`[CLAIM] LEAF bonus sent, tx: ${leafTransferTxHash}`);
           }
-        } catch (e: any) {
+        } catch (e: UntypedValue) {
           console.error('[CLAIM] LEAF bonus transfer failed:', e?.message || e);
           // Non-blocking: plant claim is still successful
         }
@@ -362,7 +362,7 @@ export async function POST(req: NextRequest) {
           } else {
             console.log(`[CLAIM] SEED bonus skipped — insufficient balance (${seedBalance})`);
           }
-        } catch (e: any) {
+        } catch (e: UntypedValue) {
           console.error('[CLAIM] SEED bonus transfer failed:', e?.message || e);
           // Non-blocking: plant claim is still successful
         }
@@ -427,7 +427,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-    } catch (err: any) {
+    } catch (err: UntypedValue) {
       console.error('[CLAIM] Claim error:', err);
       return NextResponse.json({ error: err.message || 'Claim failed' }, { status: 500 });
     } finally {
@@ -435,7 +435,7 @@ export async function POST(req: NextRequest) {
       await redis?.del(lockKey);
     }
 
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('[CLAIM] Outer error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

@@ -157,10 +157,10 @@ const deriveInitialPlayerActions = (cards: number[]) => {
 const areCardsPrefix = (prefix: number[], full: number[]): boolean =>
     prefix.length <= full.length && prefix.every((card, idx) => full[idx] === card);
 
-const isValidCardId = (value: unknown): value is number =>
+const isValidCardId = (value: UntypedValue): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < 52;
 
-const hasTrustedActionState = (snapshot: any): boolean => {
+const hasTrustedActionState = (snapshot: UntypedValue): boolean => {
     if (!snapshot || snapshot.phase !== BlackjackPhase.PLAYER_TURN) return false;
 
     const actionHandIndex = Number(snapshot.actionHandIndex ?? 0);
@@ -665,7 +665,7 @@ export default function BlackjackDialog({
 
     // Handle deal complete (combined bet + deal)
     // Handle deal complete (combined bet + deal)
-    const handleDealComplete = useCallback(async (result?: any) => {
+    const handleDealComplete = useCallback(async (result?: UntypedValue) => {
         try {
             if (!result) {
                 setError('Transaction failed. Please try again.');
@@ -737,7 +737,7 @@ export default function BlackjackDialog({
                 await syncActionButtonsWithRetries();
                 refetchBalance();
             } else {
-                // Fallback for unknown state or error
+                // Fallback for UntypedValue state or error
                 await refreshGameState();
                 refetchBalance();
             }
@@ -747,7 +747,7 @@ export default function BlackjackDialog({
     }, [invalidatePendingRefreshes, refetchBalance, refreshGameState, syncActionButtonsWithRetries, gameState.betAmountInput, address, tokenDecimals]);
 
     // Handle action complete (immediate result with server randomness)
-    const handleActionComplete = useCallback(async (result?: any) => {
+    const handleActionComplete = useCallback(async (result?: UntypedValue) => {
         setTxInProgress(null);
         if (!result) {
             // Transaction failed, refresh state anyway

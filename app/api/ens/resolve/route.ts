@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const addresses: unknown = body?.addresses;
+    const addresses: UntypedValue = body?.addresses;
 
     if (!Array.isArray(addresses) || addresses.length === 0) {
       return NextResponse.json(

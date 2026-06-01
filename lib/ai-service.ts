@@ -1,14 +1,25 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
-import { generateText } from 'ai';
+import {
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  gateway,
+  generateText,
+  stepCountIs,
+  streamText,
+  type FinishReason,
+  type GatewayModelId,
+  type UIMessage,
+} from 'ai';
 import { nanoid } from 'nanoid';
 import { getCurrentAIProvider,getCurrentModelConfig,validateAIConfig } from './ai-config';
-import { buildAIPrompt,generateConversationTitle } from './ai-context';
+import { generateConversationTitle, READ_ONLY_AGENT_SYSTEM_PROMPT } from './ai-context';
+import { createReadOnlyAITools } from './ai-read-tools';
+import { classifyAIUserMessage } from './ai-safety';
 import { formatDisplayName } from './chat-service';
 import { redis,redisScanKeysRaw } from './redis';
-import { AIChatMessage,AIConversation,AIUsageStats } from './types';
-import { formatStatsForAI,getUserGameStats } from './user-stats-service';
+import { AIChatMessage,AIConversation,AIUsageStats,AIToolCallTrace } from './types';
 
 const AI_MESSAGE_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const AI_RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
@@ -18,6 +29,128 @@ const AI_USAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 const AI_RATE_LIMIT_WINDOW = 10; // 10 seconds between AI messages
 const MAX_AI_MESSAGE_LENGTH = 300;
 const MIN_AI_MESSAGE_LENGTH = 2;
+const MAX_AI_MESSAGES_PER_DAY = parseInt(process.env.AI_MAX_MESSAGES_PER_DAY || '', 10) || 100;
+const MAX_AI_TOKENS_PER_DAY = parsePositiveInteger(process.env.AI_MAX_TOKENS_PER_DAY, 1_000_000);
+const AI_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '', 10) || 45_000;
+const AI_STEP_TIMEOUT_MS = parseInt(process.env.AI_STEP_TIMEOUT_MS || '', 10) || 25_000;
+const AI_TEMPERATURE = Number.isFinite(Number(process.env.AI_TEMPERATURE))
+  ? Number(process.env.AI_TEMPERATURE)
+  : 0.2;
+const AI_PLANNING_MAX_OUTPUT_TOKENS = parsePositiveInteger(process.env.AI_PLANNING_MAX_OUTPUT_TOKENS, 1_024);
+const AI_CONTINUATION_MAX_OUTPUT_TOKENS = parsePositiveInteger(process.env.AI_CONTINUATION_MAX_OUTPUT_TOKENS, 2_048);
+const AI_SOFT_BUDGET_RATIO = parseNumberInRange(process.env.AI_SOFT_BUDGET_RATIO, 0.75, 0.1, 0.95);
+const AI_SOFT_BUDGET_MAX_OUTPUT_TOKENS = parsePositiveInteger(process.env.AI_SOFT_BUDGET_MAX_OUTPUT_TOKENS, 1_024);
+const AI_AUTO_CONTINUE_ON_LENGTH = parseBoolean(process.env.AI_AUTO_CONTINUE_ON_LENGTH, true);
+const AI_TOOL_CONTEXT_MAX_CHARS = parsePositiveInteger(process.env.AI_TOOL_CONTEXT_MAX_CHARS, 12_000);
+const AI_TOOL_CONTEXT_MAX_CHARS_PER_TOOL = parsePositiveInteger(process.env.AI_TOOL_CONTEXT_MAX_CHARS_PER_TOOL, 2_800);
+const AI_GOOGLE_THINKING_LEVEL = normalizeGoogleThinkingLevel(process.env.AI_GOOGLE_THINKING_LEVEL);
+const AI_GOOGLE_THINKING_BUDGET = parseNonNegativeInteger(process.env.AI_GOOGLE_THINKING_BUDGET, 0);
+const TRACE_SECRET_KEY_PATTERN = /(api|auth|bearer|cookie|jwt|key|mnemonic|password|private|secret|session|signature|token)/i;
+const TOOL_TRACE_MAX_DEPTH = 4;
+const TOOL_TRACE_MAX_ARRAY_ITEMS = 10;
+const TOOL_TRACE_MAX_OBJECT_KEYS = 20;
+const TOOL_TRACE_MAX_STRING_LENGTH = 220;
+const TRUNCATED_RESPONSE_NOTICE = 'I hit my response limit; ask me to continue for more detail.';
+
+type StoreAIMessageOptions = {
+  continuations?: number;
+  finishReason?: string;
+  messageId?: string;
+  outputTokens?: number;
+  provider?: string;
+  recoveredFromLength?: boolean;
+  toolCalls?: AIToolCallTrace[];
+};
+
+type SendAIMessageOptions = {
+  abortSignal?: AbortSignal;
+};
+
+type StreamAIMessageOptions = {
+  abortSignal?: AbortSignal;
+  conversationId?: string | null;
+  originalMessages?: PixotchiAIUIMessage[];
+};
+
+type AIUsageTrackingOptions = {
+  continuations?: number;
+  finishReason?: string;
+  inputTokens?: number;
+  lengthFinishes?: number;
+  model?: string;
+  outputTokens?: number;
+  provider?: string;
+  reasoningTokens?: number;
+  recoveredFromLength?: boolean;
+};
+
+type AIRequestBudget = {
+  autoContinueOnLength: boolean;
+  continuationMaxOutputTokens: number;
+  hardStopReason?: string;
+  maxOutputTokens: number;
+  mode: 'normal' | 'soft' | 'blocked';
+  planningMaxOutputTokens: number;
+  remainingTokens: number;
+  responseInstruction: string;
+  usage: {
+    messages: number;
+    tokens: number;
+  };
+};
+
+export type PixotchiAIMessageMetadata = {
+  continuations?: number;
+  conversationId?: string;
+  finishReason?: string;
+  model?: string;
+  persistedMessageId?: string;
+  provider?: string;
+  recoveredFromLength?: boolean;
+  tokensUsed?: number;
+  toolCalls?: AIToolCallTrace[];
+};
+
+export type PixotchiAIUIMessage = UIMessage<PixotchiAIMessageMetadata>;
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseNonNegativeInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parseNumberInRange(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (/^(1|true|yes|on)$/i.test(value)) {
+    return true;
+  }
+
+  if (/^(0|false|no|off)$/i.test(value)) {
+    return false;
+  }
+
+  return fallback;
+}
+
+function normalizeGoogleThinkingLevel(value: string | undefined): 'minimal' | 'low' | 'medium' | 'high' {
+  if (value === 'low' || value === 'medium' || value === 'high') {
+    return value;
+  }
+
+  return 'minimal';
+}
 
 // Provider instances
 const openai = createOpenAI({
@@ -33,7 +166,7 @@ const google = createGoogleGenerativeAI({
 });
 
 // Helper to get the SDK model instance
-function getSDKModel() {
+export function getSDKModel() {
   const providerName = getCurrentAIProvider();
   const config = getCurrentModelConfig();
 
@@ -45,8 +178,475 @@ function getSDKModel() {
     return anthropic(config.model);
   } else if (providerName === 'google') {
     return google(config.model);
+  } else if (providerName === 'gateway') {
+    return gateway(config.model as GatewayModelId);
   }
   throw new Error(`Unknown provider: ${providerName}`);
+}
+
+export function getAIProviderOptions(address?: string) {
+  const config = getCurrentModelConfig();
+  const googleOptions = getGoogleProviderOptions(config.model, config.provider);
+
+  if (config.provider === 'gateway') {
+    return {
+      gateway: {
+        ...(config.fallbackModels.length ? { models: [config.model, ...config.fallbackModels] } : {}),
+        ...(address ? { user: address.toLowerCase() } : {}),
+        tags: ['pixotchi', 'neural-seed'],
+        zeroDataRetention: true,
+      },
+      ...(googleOptions ? { google: googleOptions } : {}),
+    };
+  }
+
+  if (config.provider === 'google' && googleOptions) {
+    return { google: googleOptions };
+  }
+
+  return undefined;
+}
+
+function getGoogleProviderOptions(model: string, provider: string): UntypedValue | undefined {
+  const gatewayMayUseGoogle = provider === 'gateway';
+  const directGoogle = provider === 'google';
+  const configuredGoogleModel = /^google\/gemini-/i.test(model) || /^gemini-/i.test(model);
+
+  if (!directGoogle && !gatewayMayUseGoogle && !configuredGoogleModel) {
+    return undefined;
+  }
+
+  const models = [
+    model,
+    ...getCurrentModelConfig().fallbackModels,
+  ];
+  const hasGemini3 = models.some((entry) => /(?:^|\/)gemini-3/i.test(entry));
+  const hasGemini25 = models.some((entry) => /(?:^|\/)gemini-2\.5/i.test(entry));
+
+  if (hasGemini3) {
+    return {
+      thinkingConfig: {
+        thinkingLevel: AI_GOOGLE_THINKING_LEVEL,
+      },
+    };
+  }
+
+  if (hasGemini25) {
+    return {
+      thinkingConfig: {
+        thinkingBudget: AI_GOOGLE_THINKING_BUDGET,
+      },
+    };
+  }
+
+  return undefined;
+}
+
+function isDirectGoogleGemini3Model(): boolean {
+  const config = getCurrentModelConfig();
+  return config.provider === 'google' && /^gemini-3/i.test(config.model);
+}
+
+function getModelRequestSettings() {
+  return isDirectGoogleGemini3Model()
+    ? {}
+    : { temperature: AI_TEMPERATURE };
+}
+
+const TOOL_PROMPT_PRIORITY = [
+  'get_player_overview',
+  'get_wallet_token_balances',
+  'get_wallet_game_assets',
+  'get_wallet_game_activity',
+  'get_transaction_status',
+  'get_plants',
+  'get_game_prices',
+  'get_lands',
+  'get_game_action_guide',
+  'get_staking',
+  'get_swap_quote',
+  'get_missions',
+  'get_leaderboards',
+  'get_activity',
+];
+
+function getToolPriority(toolName: string): number {
+  const index = TOOL_PROMPT_PRIORITY.indexOf(toolName);
+  return index === -1 ? TOOL_PROMPT_PRIORITY.length : index;
+}
+
+function capString(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function compactToolPromptValue(toolName: string, output: UntypedValue): UntypedValue {
+  const data = output?.data;
+
+  if (output?.status === 'error') {
+    return {
+      error: output.error,
+      freshness: output.freshness,
+      status: output.status,
+    };
+  }
+
+  if (toolName === 'get_game_prices') {
+    return {
+      fence: data?.fence,
+      gardenItems: (data?.gardenItems || []).slice(0, 8).map((item: UntypedValue) => ({
+        id: item.id,
+        name: item.name,
+        points: item.points,
+        priceDisplay: item.priceDisplay,
+        timeExtensionSeconds: item.timeExtensionSeconds,
+      })),
+      landMintPrice: data?.landMintPrice?.priceDisplay,
+      revivePrice: data?.revivePrice?.priceDisplay,
+      shopItems: (data?.shopItems || []).slice(0, 8).map((item: UntypedValue) => ({
+        effectTimeSeconds: item.effectTimeSeconds,
+        id: item.id,
+        name: item.name,
+        priceDisplay: item.priceDisplay,
+      })),
+      strains: (data?.strains || []).map((strain: UntypedValue) => ({
+        active: strain.active,
+        id: strain.id,
+        isMintable: strain.isMintable,
+        name: strain.name,
+        priceDisplay: strain.priceDisplay,
+        remainingSupply: strain.remainingSupply,
+      })),
+    };
+  }
+
+  if (toolName === 'get_player_overview') {
+    return {
+      balances: data?.balances,
+      landSummary: data?.landSummary,
+      plantSummary: data?.plantSummary,
+      urgentPlants: (data?.urgentPlants || []).slice(0, 6),
+    };
+  }
+
+  if (toolName === 'get_wallet_token_balances') {
+    return {
+      address: data?.address,
+      knownTokensOnly: data?.knownTokensOnly,
+      tokens: (data?.tokens || []).map((token: UntypedValue) => ({
+        address: token.address,
+        amountDisplay: token.amountDisplay,
+        id: token.id,
+        symbol: token.symbol,
+      })),
+    };
+  }
+
+  if (toolName === 'get_wallet_game_assets') {
+    return {
+      address: data?.address,
+      landSummary: data?.landSummary,
+      lands: (data?.lands || []).slice(0, 8).map((land: UntypedValue) => ({
+        coordinates: land.coordinates,
+        id: land.id,
+        name: land.name,
+        storedLifetimeHours: land.storedLifetimeHours,
+        storedPts: land.storedPts,
+      })),
+      plantSummary: data?.plantSummary,
+      plants: (data?.plants || []).slice(0, 8).map((plant: UntypedValue) => ({
+        fence: plant.fence,
+        id: plant.id,
+        level: plant.level,
+        name: plant.name,
+        rewardsEth: plant.rewardsEth,
+        scorePts: plant.scorePts,
+        stars: plant.stars,
+        statusLabel: plant.statusLabel,
+        strainName: plant.strainName,
+        timeUntilStarvingHours: plant.timeUntilStarvingHours,
+      })),
+      truncated: data?.truncated,
+      urgentPlants: (data?.urgentPlants || []).slice(0, 6),
+    };
+  }
+
+  if (toolName === 'get_wallet_game_activity') {
+    const compactActivity = (entry: UntypedValue) => ({
+      amountDisplay: entry.amountDisplay,
+      assetType: entry.assetType,
+      blockNumber: entry.blockNumber,
+      confidence: entry.confidence,
+      counterparty: entry.counterparty,
+      direction: entry.direction,
+      kind: entry.kind,
+      source: entry.source,
+      timestamp: entry.timestamp,
+      token: entry.token,
+      tokenId: entry.tokenId,
+      txHash: entry.txHash,
+    });
+    return {
+      address: data?.address,
+      combined: (data?.combined || []).slice(0, 12).map(compactActivity),
+      errors: data?.errors,
+      indexedRecentEvents: (data?.indexedRecentEvents || []).slice(0, 8).map(compactActivity),
+      onchainTransfers: (data?.onchainTransfers || []).slice(0, 8).map(compactActivity),
+      rpcFallback: data?.rpcFallback,
+      rpcBlockRange: data?.rpcBlockRange,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_transaction_status') {
+    return {
+      blockNumber: data?.blockNumber,
+      found: data?.found,
+      from: data?.from,
+      gasUsed: data?.gasUsed,
+      knownPixotchiEvents: (data?.knownPixotchiEvents || []).slice(0, 12),
+      pixotchiLogCount: data?.pixotchiLogCount,
+      status: data?.status,
+      timestamp: data?.timestamp,
+      to: data?.to,
+      txHash: data?.txHash,
+      valueEth: data?.valueEth,
+    };
+  }
+
+  if (toolName === 'get_plants') {
+    return {
+      count: data?.count,
+      plants: (data?.plants || []).slice(0, 12).map((plant: UntypedValue) => ({
+        fence: plant.fence,
+        id: plant.id,
+        level: plant.level,
+        name: plant.name,
+        rewardsEth: plant.rewardsEth,
+        scorePts: plant.scorePts,
+        stars: plant.stars,
+        statusLabel: plant.statusLabel,
+        strainName: plant.strainName,
+        timeUntilStarvingHours: plant.timeUntilStarvingHours,
+      })),
+      totalOwned: data?.totalOwned,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_lands') {
+    return {
+      buildingProductionTotals: data?.buildingProductionTotals,
+      count: data?.count,
+      lands: (data?.lands || []).slice(0, 6).map((land: UntypedValue) => ({
+        barracks: land.barracks,
+        buildings: land.buildings,
+        id: land.id,
+        name: land.name,
+        quests: (land.quests || []).slice(0, 4),
+        storedLifetimeHours: land.storedLifetimeHours,
+        storedPts: land.storedPts,
+      })),
+      totalOwned: data?.totalOwned,
+      truncated: data?.truncated,
+      warehouseTotals: data?.warehouseTotals,
+    };
+  }
+
+  if (toolName === 'get_game_action_guide') {
+    return {
+      actions: (data?.actions || []).slice(0, 12).map((action: UntypedValue) => ({
+        canRead: action.canRead,
+        cannotDo: action.cannotDo,
+        deferralText: action.deferralText,
+        id: action.id,
+        liveDataSources: action.liveDataSources,
+        stalenessRules: action.stalenessRules,
+        title: action.title,
+        userFlows: action.userFlows || action.userFlow,
+        where: action.where,
+      })),
+      readOnlyPhase: data?.readOnlyPhase,
+    };
+  }
+
+  return sanitizeToolTraceValue(data ?? output);
+}
+
+function compactJson(value: UntypedValue, maxLength: number): string {
+  return capString(JSON.stringify(value), maxLength);
+}
+
+function extractAIToolOutputSummaries(result: UntypedValue): UntypedValue[] {
+  const rawToolResults: UntypedValue[] = [
+    ...((result.steps || []).flatMap((step: UntypedValue) => step.toolResults || [])),
+    ...(result.toolResults || []),
+  ];
+
+  return rawToolResults.map((toolResult) => {
+    const output = toolResult.output ?? toolResult.result;
+    const toolName = String(toolResult.toolName || 'unknown_tool');
+    const compactOutput = compactToolPromptValue(toolName, output);
+    return {
+      input: sanitizeToolTraceValue(toolResult.input ?? toolResult.args),
+      output: compactJson(compactOutput, AI_TOOL_CONTEXT_MAX_CHARS_PER_TOOL),
+      toolName,
+    };
+  }).sort((a, b) => getToolPriority(a.toolName) - getToolPriority(b.toolName));
+}
+
+function buildToolContextText(result: UntypedValue): string {
+  const summaries = extractAIToolOutputSummaries(result);
+  return compactJson(summaries, AI_TOOL_CONTEXT_MAX_CHARS);
+}
+
+function isRecord(value: UntypedValue): value is Record<string, UntypedValue> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function truncateTraceString(value: string): string {
+  return value.length > TOOL_TRACE_MAX_STRING_LENGTH
+    ? `${value.slice(0, TOOL_TRACE_MAX_STRING_LENGTH)}...`
+    : value;
+}
+
+function sanitizeToolTraceValue(value: UntypedValue, depth = 0): UntypedValue {
+  if (depth > TOOL_TRACE_MAX_DEPTH) {
+    return '[truncated]';
+  }
+
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return truncateTraceString(value);
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, TOOL_TRACE_MAX_ARRAY_ITEMS)
+      .map((entry) => sanitizeToolTraceValue(entry, depth + 1));
+  }
+
+  if (isRecord(value)) {
+    const entries = Object.entries(value).slice(0, TOOL_TRACE_MAX_OBJECT_KEYS);
+    const output: Record<string, UntypedValue> = {};
+
+    for (const [key, nested] of entries) {
+      output[key] = TRACE_SECRET_KEY_PATTERN.test(key)
+        ? '[redacted]'
+        : sanitizeToolTraceValue(nested, depth + 1);
+    }
+
+    return output;
+  }
+
+  return undefined;
+}
+
+function normalizeToolFreshness(output: UntypedValue): AIToolCallTrace['freshness'] | undefined {
+  const freshness = output?.freshness;
+  if (!isRecord(freshness)) {
+    return undefined;
+  }
+
+  return {
+    blockNumber: freshness.blockNumber === undefined ? undefined : String(freshness.blockNumber),
+    cache: typeof freshness.cache === 'string' ? freshness.cache : undefined,
+    fetchedAt: typeof freshness.fetchedAt === 'string' ? freshness.fetchedAt : undefined,
+  };
+}
+
+function normalizeToolTrace(toolResult: UntypedValue): AIToolCallTrace | null {
+  const toolName = typeof toolResult?.toolName === 'string' ? toolResult.toolName : undefined;
+  if (!toolName) {
+    return null;
+  }
+
+  const output = toolResult.output ?? toolResult.result;
+  const status = output?.status === 'ok' || output?.status === 'error'
+    ? output.status
+    : (toolResult.error ? 'error' : 'unknown');
+  const input = sanitizeToolTraceValue(toolResult.input ?? toolResult.args);
+  const trace: AIToolCallTrace = {
+    status,
+    toolName,
+  };
+
+  if (typeof output?.source === 'string') {
+    trace.source = output.source;
+  }
+
+  const freshness = normalizeToolFreshness(output);
+  if (freshness) {
+    trace.freshness = freshness;
+  }
+
+  if (input !== undefined) {
+    trace.input = input;
+  }
+
+  if (output?.error || toolResult.error) {
+    trace.error = truncateTraceString(String(output?.error || toolResult.error));
+  }
+
+  return trace;
+}
+
+export function extractAIToolTraces(result: UntypedValue): AIToolCallTrace[] {
+  const rawToolResults: UntypedValue[] = [
+    ...((result.steps || []).flatMap((step: UntypedValue) => step.toolResults || [])),
+    ...(result.toolResults || []),
+  ];
+  const seen = new Set<string>();
+  const traces: AIToolCallTrace[] = [];
+
+  for (const toolResult of rawToolResults) {
+    const trace = normalizeToolTrace(toolResult);
+    if (!trace) {
+      continue;
+    }
+
+    const dedupeKey = JSON.stringify({
+      fetchedAt: trace.freshness?.fetchedAt,
+      input: trace.input,
+      status: trace.status,
+      toolName: trace.toolName,
+    });
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    traces.push(trace);
+  }
+
+  return traces;
+}
+
+function isAbortError(error: UntypedValue): boolean {
+  return error?.name === 'AbortError' || /abort/i.test(String(error?.message || ''));
+}
+
+export function stripAIMessageDebugMetadata(message: AIChatMessage): AIChatMessage {
+  if (!message.toolCalls?.length) {
+    return message;
+  }
+
+  const publicMessage: AIChatMessage = {
+    ...message,
+    toolCalls: message.toolCalls.map((trace) => ({
+      freshness: trace.freshness,
+      source: trace.source,
+      status: trace.status,
+      toolName: trace.toolName,
+    })),
+  };
+  return publicMessage;
 }
 
 // Validate AI message content
@@ -114,6 +714,87 @@ export async function updateAIRateLimit(address: string): Promise<void> {
   } catch (error) {
     console.warn('Failed to update rate limit:', error);
   }
+}
+
+async function getTodayUserAIUsage(address: string): Promise<{ messages: number; tokens: number }> {
+  if (!redis) return { messages: 0, tokens: 0 };
+
+  const today = new Date().toISOString().split('T')[0];
+  const usageKey = `ai:usage:${address.toLowerCase()}:${today}`;
+
+  try {
+    const currentUsage = await redis.get(usageKey);
+    if (!currentUsage) return { messages: 0, tokens: 0 };
+    const usage = typeof currentUsage === 'object' ? currentUsage : JSON.parse(currentUsage as string);
+
+    return {
+      messages: Number(usage.messages || 0),
+      tokens: Number(usage.tokens || 0),
+    };
+  } catch (error) {
+    console.warn('Failed to read AI usage budget:', error);
+    return { messages: 0, tokens: 0 };
+  }
+}
+
+export async function resolveAIRequestBudget(
+  address: string,
+  modelConfig: ReturnType<typeof getCurrentModelConfig>,
+): Promise<AIRequestBudget> {
+  const usage = await getTodayUserAIUsage(address);
+  const remainingTokens = Math.max(MAX_AI_TOKENS_PER_DAY - usage.tokens, 0);
+  const messageCapReached = MAX_AI_MESSAGES_PER_DAY > 0 && usage.messages >= MAX_AI_MESSAGES_PER_DAY;
+  const tokenCapReached = usage.tokens >= MAX_AI_TOKENS_PER_DAY;
+
+  if (messageCapReached || tokenCapReached) {
+    return {
+      autoContinueOnLength: false,
+      continuationMaxOutputTokens: 0,
+      hardStopReason: messageCapReached
+        ? `Daily AI message limit reached (${MAX_AI_MESSAGES_PER_DAY}/day).`
+        : 'Daily AI token limit reached.',
+      maxOutputTokens: 0,
+      mode: 'blocked',
+      planningMaxOutputTokens: 0,
+      remainingTokens,
+      responseInstruction: '',
+      usage,
+    };
+  }
+
+  const softLimit = Math.floor(MAX_AI_TOKENS_PER_DAY * AI_SOFT_BUDGET_RATIO);
+  const mode: AIRequestBudget['mode'] = usage.tokens >= softLimit ? 'soft' : 'normal';
+  const answerCap = mode === 'soft'
+    ? Math.min(modelConfig.maxTokens, AI_SOFT_BUDGET_MAX_OUTPUT_TOKENS)
+    : modelConfig.maxTokens;
+  const maxOutputTokens = Math.max(128, Math.min(answerCap, Math.max(128, remainingTokens)));
+  const planningMaxOutputTokens = mode === 'soft'
+    ? Math.min(AI_PLANNING_MAX_OUTPUT_TOKENS, 512)
+    : AI_PLANNING_MAX_OUTPUT_TOKENS;
+  const continuationMaxOutputTokens = mode === 'soft'
+    ? Math.min(AI_CONTINUATION_MAX_OUTPUT_TOKENS, 768)
+    : AI_CONTINUATION_MAX_OUTPUT_TOKENS;
+
+  return {
+    autoContinueOnLength: AI_AUTO_CONTINUE_ON_LENGTH,
+    continuationMaxOutputTokens,
+    maxOutputTokens,
+    mode,
+    planningMaxOutputTokens,
+    remainingTokens,
+    responseInstruction: mode === 'soft'
+      ? 'Budget mode: answer in 120 words or fewer. Lead with the single safest next step, then one or two compact supporting bullets. Do not use tables.'
+      : 'Answer style: lead with the direct recommendation first, then details. Use compact bullets. Do not use long tables unless the user explicitly asks for one.',
+    usage,
+  };
+}
+
+function buildBudgetFallbackMessage(reason?: string): string {
+  return [
+    reason || 'Daily AI budget is used for now.',
+    '',
+    'Here is the shortest useful next step: open **Farm** first and check whether any plant is dry, dying, dead, or under 10 hours of TOD. If you do not own a plant yet, open **Mint**, review the live price labels in the UI, and mint from there. I stay read-only, so the app UI must build and confirm every transaction.',
+  ].join('\n');
 }
 
 // Get or create conversation for user
@@ -184,13 +865,14 @@ export async function storeAIMessage(
   message: string,
   type: 'user' | 'assistant',
   conversationId: string,
-  tokensUsed: number = 0
+  tokensUsed: number = 0,
+  options: StoreAIMessageOptions = {},
 ): Promise<AIChatMessage> {
   if (!redis) {
     throw new Error('Redis client not available');
   }
 
-  const messageId = nanoid();
+  const messageId = options.messageId || nanoid();
   const timestamp = Date.now();
   const lowerAddress = address.toLowerCase();
 
@@ -198,13 +880,22 @@ export async function storeAIMessage(
     id: messageId,
     conversationId,
     address: lowerAddress,
+    continuations: options.continuations,
     message: message.trim(),
     timestamp,
     type,
     model: getCurrentModelConfig().model,
     tokensUsed,
+    finishReason: options.finishReason,
+    outputTokens: options.outputTokens,
+    provider: options.provider || getCurrentAIProvider(),
+    recoveredFromLength: options.recoveredFromLength,
     displayName: type === 'assistant' ? 'Neural Seed' : formatDisplayName(address)
   };
+
+  if (type === 'assistant' && options.toolCalls?.length) {
+    aiMessage.toolCalls = options.toolCalls;
+  }
 
   const messageKey = `ai:messages:${conversationId}:${timestamp}:${messageId}`;
   const conversationKey = `ai:conversations:${lowerAddress}:${conversationId}`;
@@ -330,107 +1021,818 @@ export async function getAIConversationForAddress(
   }
 }
 
-// Send message to AI and get response
-export async function sendAIMessage(address: string, message: string): Promise<{
-  userMessage: AIChatMessage;
-  aiResponse: AIChatMessage;
-}> {
-  // Validate configuration
+async function resolveConversationId(
+  address: string,
+  firstMessage?: string,
+  requestedConversationId?: string | null,
+): Promise<string> {
+  if (requestedConversationId) {
+    const existing = await getAIConversationForAddress(address, requestedConversationId);
+    if (existing) {
+      return requestedConversationId;
+    }
+  }
+
+  return getOrCreateConversation(address, firstMessage);
+}
+
+function buildPlainModelMessages(historyMessages: AIChatMessage[], currentMessage: string): UntypedValue[] {
+  return [
+    ...historyMessages
+      .filter((msg) => msg.message.trim())
+      .map((msg) => ({
+        content: msg.message,
+        role: msg.type === 'user' ? 'user' : 'assistant',
+      })),
+    {
+      content: currentMessage,
+      role: 'user',
+    },
+  ];
+}
+
+async function buildGemini3SingleRoundToolContext(options: {
+  abortSignal?: AbortSignal;
+  address: string;
+  currentMessage: string;
+  historyMessages: AIChatMessage[];
+  modelConfig: ReturnType<typeof getCurrentModelConfig>;
+  requestBudget: AIRequestBudget;
+  tools: UntypedValue;
+}) {
+  const planningResult = await generateText({
+    abortSignal: options.abortSignal,
+    maxOutputTokens: Math.min(options.modelConfig.maxTokens, options.requestBudget.planningMaxOutputTokens),
+    messages: buildPlainModelMessages(options.historyMessages, options.currentMessage),
+    model: getSDKModel(),
+    providerOptions: getAIProviderOptions(options.address),
+    stopWhen: stepCountIs(1),
+    system: `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\n${options.requestBudget.responseInstruction}\n\nFor this tool-planning pass, call every needed read-only tool in a single round. Do not make sequential follow-up tool calls. Do not answer the user unless no tool is needed.`,
+    timeout: {
+      stepMs: AI_STEP_TIMEOUT_MS,
+      totalMs: AI_REQUEST_TIMEOUT_MS,
+    },
+    tools: options.tools,
+  });
+
+  const usage = planningResult.totalUsage || planningResult.usage;
+  const toolContextText = buildToolContextText(planningResult);
+  const toolCalls = extractAIToolTraces(planningResult);
+
+  return {
+    finishReason: planningResult.finishReason,
+    messages: [
+      ...buildPlainModelMessages(options.historyMessages, options.currentMessage),
+      {
+        content: [
+          'Compact sanitized read-only Pixotchi tool results for the current request:',
+          toolContextText,
+          `${options.requestBudget.responseInstruction} Quote priceDisplay exactly. Stay read-only and concise.`,
+        ].join('\n\n'),
+        role: 'user',
+      },
+    ],
+    outputTokens: getOutputTokenCount(usage),
+    reasoningTokens: getReasoningTokenCount(usage),
+    tokensUsed: getTokenCount(usage),
+    toolContextText,
+    toolCalls,
+  };
+}
+
+function getTokenCount(usage: UntypedValue): number {
+  return Number(usage?.totalTokens ?? 0) ||
+    ((Number(usage?.inputTokens || 0) || 0) + (Number(usage?.outputTokens || 0) || 0));
+}
+
+function getOutputTokenCount(usage: UntypedValue): number {
+  return Number(usage?.outputTokens || 0) || 0;
+}
+
+function getReasoningTokenCount(usage: UntypedValue): number {
+  return Number(usage?.reasoningTokens || usage?.outputTokenDetails?.reasoningTokens || usage?.raw?.thoughtsTokenCount || 0) || 0;
+}
+
+function applyFinishReasonNotice(text: string, finishReason: string | undefined): string {
+  if (finishReason !== 'length') {
+    return text;
+  }
+
+  if (text.includes(TRUNCATED_RESPONSE_NOTICE)) {
+    return text;
+  }
+
+  return `${text.trim()}\n\n${TRUNCATED_RESPONSE_NOTICE}`;
+}
+
+function buildResponseSystemPrompt(requestBudget: AIRequestBudget): string {
+  return `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\n${requestBudget.responseInstruction}`;
+}
+
+function getShortestUsefulNextStep(): string {
+  return 'Here is the shortest useful next step: open **Farm** and care for urgent plants first. If you do not own a plant, open **Mint**, review the live price labels in the UI, and mint from there. I stay read-only; every transaction must be built and confirmed by the app UI.';
+}
+
+function buildContinuationMessages(options: {
+  currentMessage: string;
+  historyMessages: AIChatMessage[];
+  partialResponse: string;
+  toolContextText: string;
+}): UntypedValue[] {
+  return [
+    ...buildPlainModelMessages(options.historyMessages, options.currentMessage),
+    {
+      content: [
+        'Compact sanitized read-only Pixotchi tool results already used for this answer:',
+        options.toolContextText || '[]',
+      ].join('\n\n'),
+      role: 'user',
+    },
+    {
+      content: options.partialResponse,
+      role: 'assistant',
+    },
+    {
+      content: [
+        'Continue the previous answer from exactly where it stopped.',
+        'Do not repeat earlier sentences.',
+        'Do not call tools.',
+        'End with the single safest next in-app step for the player.',
+      ].join(' '),
+      role: 'user',
+    },
+  ];
+}
+
+async function generateLengthContinuation(options: {
+  abortSignal?: AbortSignal;
+  address: string;
+  currentMessage: string;
+  historyMessages: AIChatMessage[];
+  partialResponse: string;
+  requestBudget: AIRequestBudget;
+  toolContextText: string;
+}) {
+  const result = await generateText({
+    abortSignal: options.abortSignal,
+    maxOutputTokens: options.requestBudget.continuationMaxOutputTokens,
+    messages: buildContinuationMessages({
+      currentMessage: options.currentMessage,
+      historyMessages: options.historyMessages,
+      partialResponse: options.partialResponse,
+      toolContextText: options.toolContextText,
+    }),
+    model: getSDKModel(),
+    providerOptions: getAIProviderOptions(options.address),
+    stopWhen: stepCountIs(1),
+    system: buildResponseSystemPrompt(options.requestBudget),
+    timeout: {
+      stepMs: AI_STEP_TIMEOUT_MS,
+      totalMs: AI_REQUEST_TIMEOUT_MS,
+    },
+    ...getModelRequestSettings(),
+  });
+  const usage = result.totalUsage || result.usage;
+
+  return {
+    finishReason: result.finishReason,
+    outputTokens: getOutputTokenCount(usage),
+    reasoningTokens: getReasoningTokenCount(usage),
+    text: result.text,
+    tokensUsed: getTokenCount(usage),
+  };
+}
+
+function getTextFromUIMessage(message: PixotchiAIUIMessage): string {
+  return message.parts
+    .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join('');
+}
+
+function buildAIMessageMetadata(options: {
+  continuations?: number;
+  conversationId: string;
+  finishReason?: string;
+  messageId: string;
+  model: string;
+  provider: string;
+  recoveredFromLength?: boolean;
+  tokensUsed?: number;
+  toolCalls?: AIToolCallTrace[];
+}): PixotchiAIMessageMetadata {
+  return {
+    continuations: options.continuations,
+    conversationId: options.conversationId,
+    finishReason: options.finishReason,
+    model: options.model,
+    persistedMessageId: options.messageId,
+    provider: options.provider,
+    recoveredFromLength: options.recoveredFromLength,
+    tokensUsed: options.tokensUsed,
+    toolCalls: options.toolCalls?.length ? options.toolCalls : undefined,
+  };
+}
+
+function createStaticAIMessageResponse(
+  aiResponse: AIChatMessage,
+  options: {
+    finishReason?: string;
+    originalMessages?: PixotchiAIUIMessage[];
+    provider: string;
+  },
+): Response {
+  const metadata = buildAIMessageMetadata({
+    continuations: aiResponse.continuations,
+    conversationId: aiResponse.conversationId,
+    finishReason: options.finishReason || aiResponse.finishReason || 'stop',
+    messageId: aiResponse.id,
+    model: aiResponse.model,
+    provider: options.provider,
+    recoveredFromLength: aiResponse.recoveredFromLength,
+    tokensUsed: aiResponse.tokensUsed,
+    toolCalls: aiResponse.toolCalls,
+  });
+  const textPartId = `text-${aiResponse.id}`;
+  const stream = createUIMessageStream<PixotchiAIUIMessage>({
+    originalMessages: options.originalMessages,
+    execute: ({ writer }) => {
+      writer.write({
+        messageId: aiResponse.id,
+        messageMetadata: metadata,
+        type: 'start',
+      });
+      writer.write({ id: textPartId, type: 'text-start' });
+      writer.write({ delta: aiResponse.message, id: textPartId, type: 'text-delta' });
+      writer.write({ id: textPartId, type: 'text-end' });
+      writer.write({
+        finishReason: (options.finishReason || aiResponse.finishReason || 'stop') as FinishReason,
+        messageMetadata: metadata,
+        type: 'finish',
+      });
+    },
+  });
+
+  return createUIMessageStreamResponse({
+    headers: {
+      'Cache-Control': 'private, no-store',
+    },
+    stream,
+  });
+}
+
+function normalizeAIProviderError(error: UntypedValue): string {
+  const statusCode = Number(error?.statusCode || error?.status || 0);
+  const message = String(error?.message || '');
+
+  if (statusCode === 401 || statusCode === 403 || /auth|api key|credential/i.test(message)) {
+    return 'AI is not configured correctly right now. Please try again later.';
+  }
+
+  if (statusCode === 429 || /rate limit|quota/i.test(message)) {
+    return 'AI is temporarily rate limited. Please try again in a little while.';
+  }
+
+  if (/timeout|timed out/i.test(message)) {
+    return 'AI took too long to answer. Please try a shorter question.';
+  }
+
+  return 'Sorry, I encountered an error while processing your request. Please try again later.';
+}
+
+export async function streamAIMessage(
+  address: string,
+  message: string,
+  options: StreamAIMessageOptions = {},
+): Promise<Response> {
+  const conversationId = await resolveConversationId(address, message, options.conversationId);
+  const historyMessages = await getAIConversationMessages(conversationId, 10);
+  await storeAIMessage(address, message, 'user', conversationId);
+
+  const provider = getCurrentAIProvider();
+  const modelConfig = getCurrentModelConfig();
+
+  const safety = classifyAIUserMessage(message);
+  if (!safety.allowed) {
+    console.warn('AI request blocked by safety gate:', {
+      address: address.slice(0, 6) + '...',
+      reason: safety.reason,
+    });
+
+    const aiResponse = await storeAIMessage(
+      address,
+      safety.response,
+      'assistant',
+      conversationId,
+      0,
+      {
+        finishReason: 'stop',
+        provider,
+      },
+    );
+
+    return createStaticAIMessageResponse(aiResponse, {
+      finishReason: 'stop',
+      originalMessages: options.originalMessages,
+      provider,
+    });
+  }
+
+  const requestBudget = await resolveAIRequestBudget(address, modelConfig);
+  if (requestBudget.mode === 'blocked') {
+    const aiResponse = await storeAIMessage(
+      address,
+      buildBudgetFallbackMessage(requestBudget.hardStopReason),
+      'assistant',
+      conversationId,
+      0,
+      {
+        finishReason: 'stop',
+        provider,
+      },
+    );
+
+    return createStaticAIMessageResponse(aiResponse, {
+      finishReason: 'stop',
+      originalMessages: options.originalMessages,
+      provider,
+    });
+  }
+
   const configValidation = validateAIConfig();
   if (!configValidation.valid) {
     throw new Error(`AI configuration error: ${configValidation.errors.join(', ')}`);
   }
 
-  const conversationId = await getOrCreateConversation(address, message);
+  console.log('AI stream prompt info:', {
+    hasHistory: historyMessages.length > 0,
+    messageLength: message.length,
+    model: modelConfig.model,
+    provider,
+  });
+
+  const responseMessageId = nanoid();
+  const tools = createReadOnlyAITools({ userAddress: address });
+  let finishReason: string | undefined;
+  let finalFinishReason: string | undefined;
+  let outputTokens = 0;
+  let reasoningTokens = 0;
+  let tokensUsed = 0;
+  let toolCalls: AIToolCallTrace[] = [];
+  let generationMessages = buildPlainModelMessages(historyMessages, message);
+  let generationTools: UntypedValue = tools;
+  let preflightOutputTokens = 0;
+  let preflightReasoningTokens = 0;
+  let preflightTokensUsed = 0;
+  let preflightToolContextText = '';
+  let preflightToolCalls: AIToolCallTrace[] = [];
+  let continuations = 0;
+  let recoveredFromLength = false;
+  let toolContextText = '';
+
+  if (isDirectGoogleGemini3Model()) {
+    const planning = await buildGemini3SingleRoundToolContext({
+      abortSignal: options.abortSignal,
+      address,
+      currentMessage: message,
+      historyMessages,
+      modelConfig,
+      requestBudget,
+      tools,
+    });
+
+    generationMessages = planning.messages;
+    generationTools = undefined;
+    preflightOutputTokens = planning.outputTokens;
+    preflightReasoningTokens = planning.reasoningTokens || 0;
+    preflightTokensUsed = planning.tokensUsed;
+    preflightToolContextText = planning.toolContextText;
+    preflightToolCalls = planning.toolCalls;
+  }
+
+  const result = streamText({
+    abortSignal: options.abortSignal,
+    maxOutputTokens: requestBudget.maxOutputTokens,
+    messages: generationMessages,
+    model: getSDKModel(),
+    onFinish: (event) => {
+      const usage = event.totalUsage || event.usage;
+      finishReason = event.finishReason;
+      finalFinishReason = event.finishReason;
+      tokensUsed = preflightTokensUsed + getTokenCount(usage);
+      outputTokens = preflightOutputTokens + getOutputTokenCount(usage);
+      reasoningTokens = preflightReasoningTokens + getReasoningTokenCount(usage);
+      toolCalls = preflightToolCalls.length ? preflightToolCalls : extractAIToolTraces(event);
+      toolContextText = preflightToolContextText || buildToolContextText(event);
+
+      if (event.finishReason === 'length') {
+        console.warn('[AI_LENGTH_FINISH]', {
+          address: address.slice(0, 6) + '...',
+          autoContinueOnLength: requestBudget.autoContinueOnLength,
+          budgetMode: requestBudget.mode,
+          maxOutputTokens: requestBudget.maxOutputTokens,
+          model: modelConfig.model,
+          outputTokens,
+          provider,
+        });
+      }
+    },
+    providerOptions: getAIProviderOptions(address),
+    stopWhen: stepCountIs(8),
+    system: buildResponseSystemPrompt(requestBudget),
+    timeout: {
+      stepMs: AI_STEP_TIMEOUT_MS,
+      totalMs: AI_REQUEST_TIMEOUT_MS,
+    },
+    ...(generationTools ? { tools: generationTools } : {}),
+    ...getModelRequestSettings(),
+  });
+
+  const stream = createUIMessageStream<PixotchiAIUIMessage>({
+    originalMessages: options.originalMessages,
+    execute: async ({ writer }) => {
+      let streamedResponseText = '';
+      writer.write({
+        messageId: responseMessageId,
+        messageMetadata: buildAIMessageMetadata({
+          conversationId,
+          messageId: responseMessageId,
+          model: modelConfig.model,
+          provider,
+        }),
+        type: 'start',
+      });
+
+      for await (const chunk of result.toUIMessageStream<PixotchiAIUIMessage>({
+        sendFinish: false,
+        sendReasoning: false,
+        sendStart: false,
+      })) {
+        if (chunk.type === 'text-delta' && typeof chunk.delta === 'string') {
+          streamedResponseText += chunk.delta;
+        }
+        writer.write(chunk);
+      }
+
+      if (finishReason === 'length' && streamedResponseText.trim()) {
+        if (requestBudget.autoContinueOnLength && requestBudget.continuationMaxOutputTokens > 0) {
+          try {
+            const continuation = await generateLengthContinuation({
+              abortSignal: options.abortSignal,
+              address,
+              currentMessage: message,
+              historyMessages,
+              partialResponse: streamedResponseText,
+              requestBudget,
+              toolContextText,
+            });
+            continuations = 1;
+            tokensUsed += continuation.tokensUsed;
+            outputTokens += continuation.outputTokens;
+            reasoningTokens += continuation.reasoningTokens;
+            finalFinishReason = continuation.finishReason;
+            recoveredFromLength = continuation.finishReason !== 'length' && continuation.text.trim().length > 0;
+
+            if (continuation.text.trim()) {
+              const continuationPartId = `continuation-${responseMessageId}`;
+              writer.write({ id: continuationPartId, type: 'text-start' });
+              writer.write({ delta: `\n\n${continuation.text.trim()}`, id: continuationPartId, type: 'text-delta' });
+              writer.write({ id: continuationPartId, type: 'text-end' });
+            }
+
+            if (continuation.finishReason === 'length') {
+              const fallbackPartId = `length-fallback-${responseMessageId}`;
+              writer.write({ id: fallbackPartId, type: 'text-start' });
+              writer.write({ delta: `\n\n${getShortestUsefulNextStep()}`, id: fallbackPartId, type: 'text-delta' });
+              writer.write({ id: fallbackPartId, type: 'text-end' });
+            }
+
+            console.warn('[AI_LENGTH_RECOVERY]', {
+              address: address.slice(0, 6) + '...',
+              finalFinishReason,
+              model: modelConfig.model,
+              recoveredFromLength,
+              provider,
+            });
+          } catch (error) {
+            finalFinishReason = 'length';
+            const fallbackPartId = `length-fallback-${responseMessageId}`;
+            writer.write({ id: fallbackPartId, type: 'text-start' });
+            writer.write({ delta: `\n\n${getShortestUsefulNextStep()}`, id: fallbackPartId, type: 'text-delta' });
+            writer.write({ id: fallbackPartId, type: 'text-end' });
+            console.warn('[AI_LENGTH_RECOVERY_FAILED]', {
+              address: address.slice(0, 6) + '...',
+              error: error instanceof Error ? error.message : String(error),
+              model: modelConfig.model,
+              provider,
+            });
+          }
+        } else {
+          const noticePartId = `length-notice-${responseMessageId}`;
+          writer.write({ id: noticePartId, type: 'text-start' });
+          writer.write({ delta: `\n\n${TRUNCATED_RESPONSE_NOTICE}`, id: noticePartId, type: 'text-delta' });
+          writer.write({ id: noticePartId, type: 'text-end' });
+        }
+      }
+
+      writer.write({
+        finishReason: finalFinishReason as FinishReason | undefined,
+        messageMetadata: buildAIMessageMetadata({
+          continuations,
+          conversationId,
+          finishReason: finalFinishReason,
+          messageId: responseMessageId,
+          model: modelConfig.model,
+          provider,
+          recoveredFromLength,
+          tokensUsed,
+          toolCalls,
+        }),
+        type: 'finish',
+      });
+    },
+    onError: (error) => {
+      console.error('AI stream error:', {
+        address: address.slice(0, 6) + '...',
+        error: error instanceof Error ? error.message : String(error),
+        model: modelConfig.model,
+        provider,
+      });
+      return normalizeAIProviderError(error);
+    },
+    onFinish: async ({ isAborted, responseMessage }) => {
+      if (isAborted) {
+        console.warn('AI stream aborted before completion:', {
+          address: address.slice(0, 6) + '...',
+          model: modelConfig.model,
+          provider,
+        });
+        return;
+      }
+
+      const responseText = getTextFromUIMessage(responseMessage);
+
+      if (!responseText.trim()) {
+        return;
+      }
+
+      await storeAIMessage(
+        address,
+        responseText,
+        'assistant',
+        conversationId,
+        tokensUsed,
+        {
+          continuations,
+          finishReason: finalFinishReason,
+          messageId: responseMessageId,
+          outputTokens,
+          provider,
+          recoveredFromLength,
+          toolCalls,
+        },
+      );
+
+      await trackAIUsage(address, tokensUsed, {
+        continuations,
+        finishReason: finalFinishReason,
+        inputTokens: Math.max(tokensUsed - outputTokens, 0),
+        lengthFinishes: finishReason === 'length' ? 1 : 0,
+        model: modelConfig.model,
+        outputTokens,
+        provider,
+        reasoningTokens,
+        recoveredFromLength,
+      });
+    },
+  });
+
+  return createUIMessageStreamResponse({
+    headers: {
+      'Cache-Control': 'private, no-store',
+    },
+    stream,
+  });
+}
+
+// Send message to AI and get response
+export async function sendAIMessage(address: string, message: string, options: SendAIMessageOptions = {}): Promise<{
+  userMessage: AIChatMessage;
+  aiResponse: AIChatMessage;
+}> {
+  const conversationId = await resolveConversationId(address, message);
 
   // Get conversation history for context
   const historyMessages = await getAIConversationMessages(conversationId, 10);
   // History is now mapped directly to the messages array later
 
-  // Fetch user game stats
-  let userStats: string | undefined;
-  try {
-    console.log('📊 Fetching user stats for AI context...');
-    const stats = await getUserGameStats(address);
-    userStats = formatStatsForAI(stats);
-    console.log('✅ User stats fetched successfully');
-  } catch (error) {
-    console.warn('⚠️ Failed to fetch user stats, continuing without:', error);
-    userStats = undefined;
-  }
-
-  // Build structured prompt with proper system/user separation + user stats
-  // Build structured prompt data
-  const { systemPrompt, knowledgeBase, userContent } = buildAIPrompt(message, undefined, userStats);
-
   // Store user message
   const userMessage = await storeAIMessage(address, message, 'user', conversationId);
 
+  const safety = classifyAIUserMessage(message);
+  if (!safety.allowed) {
+    console.warn('AI request blocked by safety gate:', {
+      address: address.slice(0, 6) + '...',
+      reason: safety.reason,
+    });
+
+    const aiResponse = await storeAIMessage(
+      address,
+      safety.response,
+      'assistant',
+      conversationId,
+    );
+
+    return { userMessage, aiResponse };
+  }
+
+  const modelConfig = getCurrentModelConfig();
+  const requestBudget = await resolveAIRequestBudget(address, modelConfig);
+  if (requestBudget.mode === 'blocked') {
+    const aiResponse = await storeAIMessage(
+      address,
+      buildBudgetFallbackMessage(requestBudget.hardStopReason),
+      'assistant',
+      conversationId,
+    );
+
+    return { userMessage, aiResponse };
+  }
+
   try {
+    const configValidation = validateAIConfig();
+    if (!configValidation.valid) {
+      throw new Error(`AI configuration error: ${configValidation.errors.join(', ')}`);
+    }
+
     console.log('📝 AI Prompt Info:', {
       messageLength: message.length,
       hasHistory: historyMessages.length > 0,
       provider: getCurrentAIProvider(),
-      model: getCurrentModelConfig().model,
+      model: modelConfig.model,
     });
 
-    const model = getSDKModel();
+    const tools = createReadOnlyAITools({ userAddress: address });
+    let generationMessages = buildPlainModelMessages(historyMessages, message);
+    let generationTools: UntypedValue = tools;
+    let preflightOutputTokens = 0;
+    let preflightReasoningTokens = 0;
+    let preflightTokensUsed = 0;
+    let preflightToolContextText = '';
+    let preflightToolCalls: AIToolCallTrace[] = [];
 
-    // Construct Vercel AI SDK v6 Messages Array
-    // We use explicit 'any' for the message construction to avoid strict type issues 
-    // with providerOptions during the migration, but the structure is V6 compliant.
-    const messages: any[] = [
-      // 1. Core System Prompt (Guidelines)
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      // 2. Knowledge Base (Cached)
-      {
-        role: 'system',
-        content: knowledgeBase,
-        providerOptions: {
-          anthropic: { cacheControl: { type: 'ephemeral' } }
-        }
-      },
-      // 3. Conversation History
-      ...historyMessages.map(msg => ({
-        role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.message
-      })),
-      // 4. Current User Content (Request + Stats)
-      {
-        role: 'user',
-        content: userContent
-      }
-    ];
+    if (isDirectGoogleGemini3Model()) {
+      const planning = await buildGemini3SingleRoundToolContext({
+        abortSignal: options.abortSignal,
+        address,
+        currentMessage: message,
+        historyMessages,
+        modelConfig,
+        requestBudget,
+        tools,
+      });
+
+      generationMessages = planning.messages;
+      generationTools = undefined;
+      preflightOutputTokens = planning.outputTokens;
+      preflightReasoningTokens = planning.reasoningTokens || 0;
+      preflightTokensUsed = planning.tokensUsed;
+      preflightToolContextText = planning.toolContextText;
+      preflightToolCalls = planning.toolCalls;
+    }
 
     // Use Vercel AI SDK generateText with messages array
     const result = await generateText({
-      model,
-      messages,
-      // Note: we do NOT use 'system' or 'prompt' top-level properties here anymore, 
-      // everything is in the 'messages' array for full control.
+      abortSignal: options.abortSignal,
+      maxOutputTokens: requestBudget.maxOutputTokens,
+      model: getSDKModel(),
+      messages: generationMessages,
+      providerOptions: getAIProviderOptions(address),
+      stopWhen: stepCountIs(8),
+      system: buildResponseSystemPrompt(requestBudget),
+      timeout: {
+        stepMs: AI_STEP_TIMEOUT_MS,
+        totalMs: AI_REQUEST_TIMEOUT_MS,
+      },
+      ...(generationTools ? { tools: generationTools } : {}),
+      ...getModelRequestSettings(),
     });
 
-    const response = result.text;
-    // AI SDK v5 uses inputTokens and outputTokens instead of promptTokens and completionTokens
-    const tokensUsed = (result.usage.inputTokens || 0) + (result.usage.outputTokens || 0);
+    const usage = result.totalUsage || result.usage;
+    let response = result.text;
+    let finalFinishReason = result.finishReason;
+    let tokensUsed = preflightTokensUsed + getTokenCount(usage);
+    let outputTokens = preflightOutputTokens + getOutputTokenCount(usage);
+    let reasoningTokens = preflightReasoningTokens + getReasoningTokenCount(usage);
+    let continuations = 0;
+    let recoveredFromLength = false;
+    const toolCalls = preflightToolCalls.length ? preflightToolCalls : extractAIToolTraces(result);
+    const toolContextText = preflightToolContextText || buildToolContextText(result);
+
+    if (result.finishReason === 'length') {
+      console.warn('[AI_LENGTH_FINISH]', {
+        address: address.slice(0, 6) + '...',
+        autoContinueOnLength: requestBudget.autoContinueOnLength,
+        budgetMode: requestBudget.mode,
+        maxOutputTokens: requestBudget.maxOutputTokens,
+        model: modelConfig.model,
+        outputTokens,
+        provider: getCurrentAIProvider(),
+      });
+
+      if (requestBudget.autoContinueOnLength && response.trim()) {
+        try {
+          const continuation = await generateLengthContinuation({
+            abortSignal: options.abortSignal,
+            address,
+            currentMessage: message,
+            historyMessages,
+            partialResponse: response,
+            requestBudget,
+            toolContextText,
+          });
+          continuations = 1;
+          tokensUsed += continuation.tokensUsed;
+          outputTokens += continuation.outputTokens;
+          reasoningTokens += continuation.reasoningTokens;
+          finalFinishReason = continuation.finishReason;
+          recoveredFromLength = continuation.finishReason !== 'length' && continuation.text.trim().length > 0;
+          if (continuation.text.trim()) {
+            response = `${response.trim()}\n\n${continuation.text.trim()}`;
+          }
+          if (continuation.finishReason === 'length') {
+            response = `${response.trim()}\n\n${getShortestUsefulNextStep()}`;
+          }
+          console.warn('[AI_LENGTH_RECOVERY]', {
+            address: address.slice(0, 6) + '...',
+            finalFinishReason,
+            model: modelConfig.model,
+            recoveredFromLength,
+            provider: getCurrentAIProvider(),
+          });
+        } catch (error) {
+          finalFinishReason = 'length';
+          response = `${response.trim()}\n\n${getShortestUsefulNextStep()}`;
+          console.warn('[AI_LENGTH_RECOVERY_FAILED]', {
+            address: address.slice(0, 6) + '...',
+            error: error instanceof Error ? error.message : String(error),
+            model: modelConfig.model,
+            provider: getCurrentAIProvider(),
+          });
+        }
+      } else {
+        response = applyFinishReasonNotice(response, result.finishReason);
+      }
+    }
 
     console.log('✅ AI Response Received:', {
       responseLength: response.length,
       tokensUsed,
+      toolCalls,
       responsePreview: response.substring(0, 100) + (response.length > 100 ? '...' : ''),
     });
 
     // Store AI response
-    const aiResponse = await storeAIMessage(address, response, 'assistant', conversationId, tokensUsed);
+    const aiResponse = await storeAIMessage(
+      address,
+      response,
+      'assistant',
+      conversationId,
+      tokensUsed,
+      {
+        continuations,
+        finishReason: finalFinishReason,
+        outputTokens,
+        provider: getCurrentAIProvider(),
+        recoveredFromLength,
+        toolCalls,
+      },
+    );
 
     // Track usage
-    await trackAIUsage(address, tokensUsed);
+    await trackAIUsage(address, tokensUsed, {
+      continuations,
+      finishReason: finalFinishReason,
+      inputTokens: Math.max(tokensUsed - outputTokens, 0),
+      lengthFinishes: result.finishReason === 'length' ? 1 : 0,
+      model: modelConfig.model,
+      outputTokens,
+      provider: getCurrentAIProvider(),
+      reasoningTokens,
+      recoveredFromLength,
+    });
 
     return { userMessage, aiResponse };
   } catch (error) {
+    if (isAbortError(error)) {
+      console.warn('AI request stopped before completion:', {
+        address: address.slice(0, 6) + '...',
+        model: getCurrentModelConfig().model,
+        provider: getCurrentAIProvider(),
+      });
+      throw error;
+    }
+
     console.error('AI Provider Error:', {
       provider: getCurrentAIProvider(),
       model: getCurrentModelConfig().model,
@@ -441,7 +1843,7 @@ export async function sendAIMessage(address: string, message: string): Promise<{
     // Store error response
     const errorResponse = await storeAIMessage(
       address,
-      'Sorry, I encountered an error while processing your request. Please try again later.',
+      normalizeAIProviderError(error),
       'assistant',
       conversationId
     );
@@ -451,7 +1853,11 @@ export async function sendAIMessage(address: string, message: string): Promise<{
 }
 
 // Track AI usage
-export async function trackAIUsage(address: string, tokensUsed: number): Promise<void> {
+export async function trackAIUsage(
+  address: string,
+  tokensUsed: number,
+  options: AIUsageTrackingOptions = {},
+): Promise<void> {
   if (!redis) return;
 
   const today = new Date().toISOString().split('T')[0];
@@ -465,18 +1871,45 @@ export async function trackAIUsage(address: string, tokensUsed: number): Promise
     const currentUsage = await redis.get(usageKey);
     let totalTokens = tokensUsed;
     let totalMessages = 1;
+    let inputTokens = options.inputTokens || 0;
+    let outputTokens = options.outputTokens || 0;
+    let reasoningTokens = options.reasoningTokens || 0;
+    let continuations = options.continuations || 0;
+    let lengthFinishes = options.lengthFinishes || 0;
+    let recoveredFromLengthCount = options.recoveredFromLength ? 1 : 0;
+    let finishReasons: Record<string, number> = {};
 
     if (currentUsage) {
       const usage = typeof currentUsage === 'object' ? currentUsage : JSON.parse(currentUsage as string);
       totalTokens += usage.tokens || 0;
       totalMessages += usage.messages || 0;
+      inputTokens += usage.inputTokens || 0;
+      outputTokens += usage.outputTokens || 0;
+      reasoningTokens += usage.reasoningTokens || 0;
+      continuations += usage.continuations || 0;
+      lengthFinishes += usage.lengthFinishes || 0;
+      recoveredFromLengthCount += usage.recoveredFromLengthCount || 0;
+      finishReasons = usage.finishReasons || {};
+    }
+
+    if (options.finishReason) {
+      finishReasons[options.finishReason] = (finishReasons[options.finishReason] || 0) + 1;
     }
 
     // 2. Update usage
     pipeline.set(usageKey, JSON.stringify({
       date: today,
-      tokens: totalTokens,
+      finishReasons,
+      inputTokens,
       messages: totalMessages,
+      model: options.model,
+      outputTokens,
+      provider: options.provider,
+      reasoningTokens,
+      continuations,
+      lengthFinishes,
+      recoveredFromLengthCount,
+      tokens: totalTokens,
     }), { ex: AI_USAGE_TTL });
 
     // 3. Add to date index (avoids KEYS * scan for usage stats)
@@ -546,6 +1979,10 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
       totalTokens: 0,
       dailyUsage: 0,
       costEstimate: 0,
+      continuationCount: 0,
+      lengthFinishCount: 0,
+      recoveredFromLengthCount: 0,
+      reasoningTokens: 0,
     };
   }
 
@@ -557,6 +1994,10 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
   const today = new Date().toISOString().split('T')[0];
 
   let dailyUsage = 0;
+  let continuationCount = 0;
+  let lengthFinishCount = 0;
+  let recoveredFromLengthCount = 0;
+  let reasoningTokens = 0;
   try {
     // Try using the index
     const dateIndexKey = `ai:usage_index:${today}`;
@@ -581,6 +2022,10 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
           if (data) {
             const usage = typeof data === 'object' ? data : JSON.parse(data as string);
             dailyUsage += usage.tokens || 0;
+            continuationCount += usage.continuations || 0;
+            lengthFinishCount += usage.lengthFinishes || usage.finishReasons?.length || 0;
+            recoveredFromLengthCount += usage.recoveredFromLengthCount || 0;
+            reasoningTokens += usage.reasoningTokens || 0;
           }
         }
       }
@@ -598,6 +2043,10 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
     totalTokens,
     dailyUsage,
     costEstimate,
+    continuationCount,
+    lengthFinishCount,
+    recoveredFromLengthCount,
+    reasoningTokens,
   };
 }
 

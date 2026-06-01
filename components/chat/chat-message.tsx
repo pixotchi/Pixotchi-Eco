@@ -8,25 +8,8 @@ import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Bot, User, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { postMissionProgress } from "@/lib/mission-tracking";
+import { MessageResponse } from "@/components/ai-elements/message";
 import ChatProfileDialog from "./chat-profile-dialog";
-
-// Function to format AI messages with bold syntax **text**
-function formatAIMessage(text: string) {
-  const parts = text.split(/(\*\*.*?\*\*)/g);
-  
-  return parts.map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      // Remove the ** markers and make bold
-      const boldText = part.slice(2, -2);
-      return (
-        <strong key={index} className="font-semibold">
-          {boldText}
-        </strong>
-      );
-    }
-    return part;
-  });
-}
 
 function formatRelativeShort(date: Date) {
   const now = new Date();
@@ -54,6 +37,38 @@ function formatRelativeShort(date: Date) {
   return `${years}y ago`;
 }
 
+function formatToolLabel(toolName: string): string {
+  return toolName
+    .replace(/^get_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function renderAIToolFooter(message: ChatMessage | AIChatMessage) {
+  if (!('toolCalls' in message) || !message.toolCalls?.length) {
+    return null;
+  }
+
+  const successfulTools = message.toolCalls.filter((trace) => trace.status === 'ok');
+  if (!successfulTools.length) {
+    return null;
+  }
+
+  const source = successfulTools.find((trace) => trace.source)?.source;
+  const fetchedAt = successfulTools
+    .map((trace) => trace.freshness?.fetchedAt)
+    .find(Boolean);
+  const toolLabels = Array.from(new Set(successfulTools.map((trace) => formatToolLabel(trace.toolName)))).slice(0, 3);
+
+  return (
+    <div className="mt-2 border-t border-blue-300/40 pt-2 text-[11px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">
+      <span>Sources: {toolLabels.join(', ')}</span>
+      {source && <span> - {source}</span>}
+      {fetchedAt && <span> - {formatRelativeShort(new Date(fetchedAt))}</span>}
+    </div>
+  );
+}
+
 interface ChatMessageProps {
   message: ChatMessage | AIChatMessage;
   isAIMode?: boolean;
@@ -69,8 +84,8 @@ export default function ChatMessageComponent({
 }: ChatMessageProps) {
   const { address } = useAccount();
   
-  const isAIMessage = isAIMode && (('type' in message && message.type === 'assistant') || (message as any).displayName === 'Agent');
-  const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || (message as any).displayName === 'You');
+  const isAIMessage = isAIMode && 'type' in message && message.type === 'assistant';
+  const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || (message as UntypedValue).displayName === 'You');
   const isOwnPublicMessage = !isAIMode && address?.toLowerCase() === message.address.toLowerCase();
   
   const { name } = usePrimaryName(message.address);
@@ -83,7 +98,7 @@ export default function ChatMessageComponent({
   
   let displayName = '';
   if (isAIMessage) {
-    displayName = (message as any).displayName === 'Agent' ? 'Agent' : 'Neural Seed';
+    displayName = 'Neural Seed';
   } else if (isOwnPublicMessage || isUserAIMessage) {
     displayName = 'You';
   } else {
@@ -122,7 +137,7 @@ export default function ChatMessageComponent({
       <div className={cn("flex", alignment)}>
         <div
           className={cn(
-            "rounded-lg px-3 py-2 max-w-[85%] sm:max-w-[75%]",
+            "rounded-lg px-3 py-2 max-w-[85%] sm:max-w-[75%] min-w-0 [overflow-wrap:anywhere]",
             bgColor
           )}
           role="article"
@@ -145,9 +160,16 @@ export default function ChatMessageComponent({
             </span>
           </div>
           
-          <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-            {isAIMessage ? formatAIMessage(message.message) : message.message}
+          <div className="text-sm leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {isAIMessage ? (
+              <MessageResponse
+                className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-a:break-all prose-code:break-all [overflow-wrap:anywhere]"
+              >
+                {message.message}
+              </MessageResponse>
+            ) : message.message}
           </div>
+          {isAIMessage && renderAIToolFooter(message)}
           
         </div>
       </div>

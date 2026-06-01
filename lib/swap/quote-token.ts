@@ -39,10 +39,10 @@ export interface QuoteTokenPayload {
   jti: string;
 }
 
-function isQuoteTokenStep(value: unknown): value is QuoteTokenStep {
+function isQuoteTokenStep(value: UntypedValue): value is QuoteTokenStep {
   if (!value || typeof value !== 'object') return false;
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = value as Record<string, UntypedValue>;
   return (
     (candidate.key === 'step1' || candidate.key === 'step2') &&
     typeof candidate.kind === 'string' &&

@@ -123,8 +123,8 @@ export function ThemeSelector() {
               style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
               className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isSnowEnabled ? 'bg-value' : 'bg-muted'
                 }`}
-              aria-pressed={isSnowEnabled}
               role="switch"
+              aria-checked={isSnowEnabled}
               aria-label="Toggle winter snow effect"
             >
               <span
@@ -143,8 +143,8 @@ export function ThemeSelector() {
             style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
             className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isMusicEnabled ? 'bg-value' : 'bg-muted'
               }`}
-            aria-pressed={isMusicEnabled}
             role="switch"
+            aria-checked={isMusicEnabled}
             aria-label="Toggle ambient music"
           >
             <span

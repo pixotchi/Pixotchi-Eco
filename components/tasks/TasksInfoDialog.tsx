@@ -7,13 +7,14 @@ import Image from "next/image";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onTasksDialogOpen } from "@/lib/app-events";
+import type { GmMissionDay } from "@/lib/gamification-types";
 
 export default function TasksInfoDialog() {
   const { address } = useAccount();
   const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
   const gamificationPolicy = getClientGamificationPolicy();
   const [open, setOpen] = useState(false);
-  const [missionDay, setMissionDay] = useState<any | null>(null);
+  const [missionDay, setMissionDay] = useState<GmMissionDay | null>(null);
   const [missionPts, setMissionPts] = useState<number>(0);
   const [missionTotal, setMissionTotal] = useState<number>(0);
   const [streak, setStreak] = useState<{ current: number; best: number } | null>(null);
@@ -75,7 +76,7 @@ export default function TasksInfoDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Farmer's Tasks</DialogTitle>
+          <DialogTitle>Farmer&apos;s Tasks</DialogTitle>
           <DialogDescription>
             Earn up to 100 Rock per day by completing 4 sections. Daily reset at 00:00 UTC.
           </DialogDescription>
@@ -102,7 +103,7 @@ export default function TasksInfoDialog() {
                 <p className="text-[10px] text-muted-foreground">Best: {streak?.best ?? 0}</p>
               </div>
 
-              {/* Today's Rock */}
+              {/* Today&apos;s Rock */}
               <div className="p-3 rounded-lg bg-muted">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-muted-foreground">Today</span>

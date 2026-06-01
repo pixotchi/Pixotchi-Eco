@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Get all invite code keys using SCAN
     const keys = await redisScanKeys('pixotchi:invite-codes:*');
-    const codes: any[] = [];
+    const codes: UntypedValue[] = [];
 
     // Fetch details for each code
     for (const key of keys) {
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in admin list codes:', error);
-    await logAdminAction('admin_list_failed', 'unknown', { reason: 'internal_error' }, false);
+    await logAdminAction('admin_list_failed', 'UntypedValue', { reason: 'internal_error' }, false);
     const errorResponse = createErrorResponse('Internal server error', 500);
     return NextResponse.json(errorResponse.body, { status: errorResponse.status });
   }

@@ -22,7 +22,7 @@ export type MiniAppClient = {
 
 export type MiniAppContext = {
   user?: { fid: number; username?: string; displayName?: string; pfpUrl?: string };
-  location?: Record<string, unknown>;
+  location?: Record<string, UntypedValue>;
   client?: MiniAppClient;
 };
 
@@ -45,7 +45,7 @@ export type HostEnvironmentState = {
   initialized: boolean;
   isMiniApp: boolean;
   clientFid: number | null;
-  context: MiniAppContext | Record<string, unknown> | null;
+  context: MiniAppContext | Record<string, UntypedValue> | null;
   resolutionSource: HostEnvironmentResolutionSource;
   resolutionStatus: HostEnvironmentResolutionStatus;
 };
@@ -81,7 +81,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Pr
   ]);
 }
 
-function applySafeAreaInsets(context: MiniAppContext | Record<string, unknown> | null) {
+function applySafeAreaInsets(context: MiniAppContext | Record<string, UntypedValue> | null) {
   try {
     if (typeof document === "undefined" || !context || typeof context !== "object") {
       return;
@@ -129,7 +129,7 @@ function getMiniAppContextPromise(): Promise<MiniAppContext | undefined> {
   }
 
   try {
-    const maybeContext: unknown = (sdk as { context?: unknown }).context;
+    const maybeContext: UntypedValue = (sdk as { context?: UntypedValue }).context;
     hostEnvironmentContextPromise =
       typeof (maybeContext as Promise<MiniAppContext | undefined>)?.then === "function"
         ? (maybeContext as Promise<MiniAppContext | undefined>)
@@ -143,7 +143,7 @@ function getMiniAppContextPromise(): Promise<MiniAppContext | undefined> {
 
 function toHostEnvironmentState(
   input: {
-    context: MiniAppContext | Record<string, unknown> | null;
+    context: MiniAppContext | Record<string, UntypedValue> | null;
     isMiniApp: boolean;
     resolutionSource: HostEnvironmentResolutionSource;
     resolutionStatus: HostEnvironmentResolutionStatus;
@@ -264,7 +264,7 @@ export async function ensureHostEnvironmentResolved(): Promise<HostEnvironmentSt
       const nextState = {
         ...DEFAULT_HOST_ENVIRONMENT,
         initialized: true,
-        context: { error: "Failed to initialize" } as Record<string, unknown>,
+        context: { error: "Failed to initialize" } as Record<string, UntypedValue>,
         resolutionSource: "error" as const,
         resolutionStatus: "failed" as const,
       };

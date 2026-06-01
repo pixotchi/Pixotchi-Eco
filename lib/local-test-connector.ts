@@ -23,7 +23,7 @@ function getTestAccount() {
   return privateKeyToAccount(wallet.privateKey);
 }
 
-function normalizeMessageParam(value: unknown): string | { raw: Hex } {
+function normalizeMessageParam(value: UntypedValue): string | { raw: Hex } {
   if (typeof value === "string" && /^0x[0-9a-fA-F]*$/.test(value)) {
     return { raw: value as Hex };
   }
@@ -37,7 +37,7 @@ function assertLocalTestAllowed() {
   }
 }
 
-function parseOptionalBigInt(value: unknown, field: string): bigint | undefined {
+function parseOptionalBigInt(value: UntypedValue, field: string): bigint | undefined {
   if (typeof value === "undefined" || value === null) {
     return undefined;
   }
@@ -57,7 +57,7 @@ function parseOptionalBigInt(value: unknown, field: string): bigint | undefined 
   throw new Error(`Invalid local test transaction ${field}.`);
 }
 
-function parseOptionalNonce(value: unknown): number | undefined {
+function parseOptionalNonce(value: UntypedValue): number | undefined {
   if (typeof value === "undefined" || value === null) {
     return undefined;
   }
@@ -73,7 +73,7 @@ function parseOptionalNonce(value: unknown): number | undefined {
   throw new Error("Invalid local test transaction nonce.");
 }
 
-async function sendLocalTestTransaction(params: unknown): Promise<Hex> {
+async function sendLocalTestTransaction(params: UntypedValue): Promise<Hex> {
   const request = Array.isArray(params) ? params[0] : null;
   if (!request || typeof request !== "object") {
     throw new Error("Local test transaction request is missing.");
@@ -118,7 +118,7 @@ async function sendLocalTestTransaction(params: unknown): Promise<Hex> {
     transport: createResilientTransport(),
   });
 
-  const transactionRequest: Record<string, unknown> = {
+  const transactionRequest: Record<string, UntypedValue> = {
     account,
     chain: base,
     data: transaction.data,
@@ -145,14 +145,14 @@ async function sendLocalTestTransaction(params: unknown): Promise<Hex> {
   if (nonce !== undefined) transactionRequest.nonce = nonce;
   if (value !== undefined) transactionRequest.value = value;
 
-  return walletClient.sendTransaction(transactionRequest as any);
+  return walletClient.sendTransaction(transactionRequest as UntypedValue);
 }
 
 export function localTestConnector() {
   let connected = false;
   let connectedChainId: number = base.id;
 
-  return createConnector<any>((config) => ({
+  return createConnector<UntypedValue>((config) => ({
     id: "localTest",
     name: "Local Test Wallet",
     type: "localTest",
@@ -183,7 +183,7 @@ export function localTestConnector() {
         : [getAddress(account.address)];
 
       return {
-        accounts: accounts as any,
+        accounts: accounts as UntypedValue,
         chainId: connectedChainId,
       };
     },
@@ -243,7 +243,7 @@ export function localTestConnector() {
     },
 
     async getProvider() {
-      const request = async ({ method, params }: { method: string; params?: unknown }) => {
+      const request = async ({ method, params }: { method: string; params?: UntypedValue }) => {
         assertLocalTestAllowed();
         const account = getTestAccount();
         const address = getAddress(account.address);

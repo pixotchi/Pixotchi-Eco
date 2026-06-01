@@ -30,7 +30,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [frameAdded, setFrameAdded] = useState(false);
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
-  const miniAppContext = (fc?.context as any) ?? null;
+  const miniAppContext = (fc?.context as UntypedValue) ?? null;
   const miniAppAdded = Boolean(miniAppContext?.client?.added);
 
   useEffect(() => {

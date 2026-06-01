@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        let parsed: any;
+        let parsed: UntypedValue;
         try {
             parsed = typeof data === 'string' ? JSON.parse(data) : data;
         } catch {
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
             txHash: parsed.txHash || null,
         });
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_STATUS] Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

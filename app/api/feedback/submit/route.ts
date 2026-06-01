@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       message: trimmedMessage,
       createdAt: Date.now(),
       status: 'new',
-      walletType: walletType || 'unknown',
+      walletType: walletType || 'UntypedValue',
       isSmartWallet: Boolean(isSmartWallet),
       isMiniApp: Boolean(isMiniApp),
       farcasterDetails: farcasterDetails || null,

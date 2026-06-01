@@ -53,7 +53,7 @@ export function useBroadcastMessages() {
   const identity = useMemo(() => {
     const fid =
       typeof frameContext?.context === 'object'
-        ? (frameContext.context as any)?.user?.fid
+        ? (frameContext.context as UntypedValue)?.user?.fid
         : undefined;
 
     if (address) return `addr:${address.toLowerCase()}`;

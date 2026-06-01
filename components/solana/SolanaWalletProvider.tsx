@@ -67,7 +67,7 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
       if (
         account.type === 'wallet' &&
         'chainType' in account &&
-        (account as any).chainType === 'solana'
+        (account as UntypedValue).chainType === 'solana'
       ) {
         return account;
       }
@@ -80,7 +80,7 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
   const solanaAddress = useMemo(() => {
     if (!solanaWallet) return null;
     // The address is stored in the account object
-    return (solanaWallet as any).address || null;
+    return (solanaWallet as UntypedValue).address || null;
   }, [solanaWallet]);
   
   // Check if connected - requires authentication, address, and Solana to be enabled

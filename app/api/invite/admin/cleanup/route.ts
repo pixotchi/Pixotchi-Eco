@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in admin cleanup:', error);
-    await logAdminAction('admin_cleanup_failed', 'unknown', { reason: 'internal_error' }, false);
+    await logAdminAction('admin_cleanup_failed', 'UntypedValue', { reason: 'internal_error' }, false);
     const errorResponse = createErrorResponse('Internal server error', 500);
     return NextResponse.json(errorResponse.body, { status: errorResponse.status });
   }

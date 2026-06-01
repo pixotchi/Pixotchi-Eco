@@ -62,7 +62,7 @@ class SessionStorageManager {
 
   private setDurableItem(key: string, value: string): void {
     let stored = false;
-    let lastError: unknown;
+    let lastError: UntypedValue;
 
     try {
       localStorage.setItem(key, value);

@@ -18,7 +18,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
   const activeMode = modeOverride ?? mode;
   const activeMessages = modeOverride ? getMessagesForMode(modeOverride) : messages;
   const activeLoading = modeOverride ? getLoadingForMode(modeOverride) : loading;
-  const isAssistantMode = activeMode === 'ai' || activeMode === 'agent';
+  const isAssistantMode = activeMode === 'ai';
   const containerRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
@@ -69,11 +69,11 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
             )}
           </div>
           <h3 className="font-semibold text-foreground mb-1">
-            {isAssistantMode ? 'Ask the Neural Seed Agent or Assistant!' : 'Welcome to the chat!'}
+            {isAssistantMode ? 'Ask Neural Seed AI!' : 'Welcome to the chat!'}
           </h3>
           <p className="text-sm text-muted-foreground">
             {isAssistantMode 
-              ? 'I can help with minting, game mechanics, your stats, and more.' 
+              ? 'I can read live game data, explain mechanics, and help with your stats.' 
               : 'Be the first to start the conversation!'}
           </p>
         </div>

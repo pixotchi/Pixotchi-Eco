@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('[VERIFY_STATUS] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

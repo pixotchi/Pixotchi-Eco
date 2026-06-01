@@ -68,7 +68,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
       });
       return response.json();
     },
-    onSuccess: async (data: any) => {
+    onSuccess: async (data: UntypedValue) => {
       if (data.success) {
         const newCode = data.code;
         setRecentCodes(prev => [newCode, ...prev.slice(0, 4)]);

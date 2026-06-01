@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         },
       },
     );
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('[ActivityAPI] Failed to load personal activity', { address, error });
     return NextResponse.json(
       {

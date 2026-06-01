@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
   try {
     const publicClient = getBaseReadClient();
 
-    const results: any = {
+    const results: UntypedValue = {
       parameters: {
         twin,
         adapter: ADAPTER,
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
         target: 'Adapter',
         result: '✅ SUCCESS - Call would succeed!',
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.traces.push({
         step: 3,
         name: 'Direct Call Simulation',
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
         target: 'Twin.execute → Adapter',
         result: '✅ SUCCESS',
       });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       results.traces.push({
         step: 4,
         name: 'Via Twin.execute Simulation',

@@ -101,7 +101,7 @@ function BuildingDetailsPanel({
       if (selectedBuilding.level === 0) {
         return (
           <div className="text-center py-8 text-muted-foreground text-sm">
-            Building hasn't been constructed yet. Upgrade to level 1 to start.
+            Building hasn&apos;t been constructed yet. Upgrade to level 1 to start.
           </div>
         )
       }
@@ -125,7 +125,7 @@ function BuildingDetailsPanel({
           if (selectedBuilding.level === 0) {
             return (
               <div className="text-center py-8 text-muted-foreground text-sm">
-                Building hasn't been constructed yet. Upgrade to level 1 to start.
+                Building hasn&apos;t been constructed yet. Upgrade to level 1 to start.
               </div>
             );
           }
@@ -137,7 +137,7 @@ function BuildingDetailsPanel({
           if (selectedBuilding.level === 0) {
             return (
               <div className="text-center py-8 text-muted-foreground text-sm">
-                Building hasn't been constructed yet. Upgrade to level 1 to start.
+                Building hasn&apos;t been constructed yet. Upgrade to level 1 to start.
               </div>
             );
           }

@@ -16,11 +16,11 @@ type LocalTestWallet = {
   version: 1;
 };
 
-function isHexPrivateKey(value: unknown): value is Hex {
+function isHexPrivateKey(value: UntypedValue): value is Hex {
   return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
 }
 
-function normalizeStoredWallet(value: unknown): LocalTestWallet | null {
+function normalizeStoredWallet(value: UntypedValue): LocalTestWallet | null {
   if (!value || typeof value !== "object") {
     return null;
   }

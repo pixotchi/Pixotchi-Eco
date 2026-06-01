@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Simulate the call FROM the twin address
-    let simulationResult: any;
+    let simulationResult: UntypedValue;
     try {
       simulationResult = await publicClient.call({
         account: twin, // Simulate as if Twin is calling
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
           result: simulationResult,
         },
       });
-    } catch (simError: any) {
+    } catch (simError: UntypedValue) {
       // Extract revert reason
       let revertReason = 'Unknown';
       if (simError.cause?.data) {

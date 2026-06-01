@@ -46,7 +46,7 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 type BlackjackActionName = 'deal' | 'hit' | 'stand' | 'double' | 'split' | 'surrender';
 const BLACKJACK_ACTIONS = new Set<BlackjackActionName>(['deal', 'hit', 'stand', 'double', 'split', 'surrender']);
 
-function isBlackjackActionName(value: unknown): value is BlackjackActionName {
+function isBlackjackActionName(value: UntypedValue): value is BlackjackActionName {
     return typeof value === 'string' && BLACKJACK_ACTIONS.has(value as BlackjackActionName);
 }
 
@@ -54,7 +54,7 @@ function getActionLockKey(landId: string, nonce: bigint): string {
     return `${ACTION_LOCK_KEY_PREFIX}${landId}:${nonce.toString()}`;
 }
 
-function isCachedRandomness(value: unknown): value is CachedRandomness {
+function isCachedRandomness(value: UntypedValue): value is CachedRandomness {
     if (!value || typeof value !== 'object') return false;
     const candidate = value as Partial<CachedRandomness>;
     return (
@@ -151,7 +151,7 @@ function actionNameFromNum(actionNum: number): BlackjackActionName | null {
 }
 
 async function validateActionAgainstOnchainState(
-    publicClient: any,
+    publicClient: UntypedValue,
     landIdBigInt: bigint,
     action: BlackjackActionName,
     handIndexNum: number,
@@ -314,7 +314,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Parse request
-        let body: unknown;
+        let body: UntypedValue;
         try {
             body = await request.json();
         } catch {
@@ -325,7 +325,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Request body must be an object' }, { status: 400 });
         }
 
-        const { landId, action, playerAddress, handIndex, bettingToken } = body as Record<string, unknown>;
+        const { landId, action, playerAddress, handIndex, bettingToken } = body as Record<string, UntypedValue>;
 
         // Validate inputs
         if (typeof landId !== 'string' || !/^\d+$/.test(landId)) {

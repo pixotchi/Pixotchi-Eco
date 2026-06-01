@@ -173,7 +173,7 @@ class ErrorBoundary extends Component<Props, State> {
           </CardHeader>
           <CardContent className="space-y-6 text-center">
             <p className="text-muted-foreground">
-              We encountered an unexpected error. Don't worry, your data is safe.
+              We encountered an unexpected error. Don&apos;t worry, your data is safe.
             </p>
 
             {error && (

@@ -50,7 +50,7 @@ export const slides: TutorialSlide[] = [
     art: "ptstod",
     content: (
       <div className="space-y-2 text-sm">
-        <p>Use Farm and Marketplace items to increase your plant's stats:</p>
+        <p>Use Farm and Marketplace items to increase your plant&apos;s stats:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>TOD (Time of Death):</strong> Keeps your plant alive.</li>
           <li><strong>PTS (Points):</strong> Determines your share of future ETH rewards.</li>

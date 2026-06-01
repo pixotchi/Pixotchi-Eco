@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import {
@@ -119,7 +120,7 @@ function isTransientStatus(status: number | undefined): boolean {
 // Turns wallet/viem errors into something a user can actually read.
 // Viem rejection errors include a pile of metadata (chain id, RPC url, version,
 // request args, contract selectors…) that we never want to toast verbatim.
-function humanizeSwapError(error: unknown): string {
+function humanizeSwapError(error: UntypedValue): string {
   if (!(error instanceof Error)) return 'Swap failed.';
 
   const anyErr = error as Error & {
@@ -187,9 +188,11 @@ function TokenSelector({
           aria-haspopup="menu"
           aria-expanded={isOpen}
         >
-          <img
+          <Image
             src={token.image}
             alt=""
+            width={20}
+            height={20}
             aria-hidden="true"
             className="h-5 w-5 shrink-0 overflow-hidden rounded-full object-contain"
           />
@@ -234,9 +237,11 @@ function TokenSelector({
               className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2.5"
             >
               <span className="flex items-center gap-3">
-                <img
+                <Image
                   src={optionToken.image}
                   alt=""
+                  width={20}
+                  height={20}
                   aria-hidden="true"
                   className="h-5 w-5 shrink-0 rounded-full object-contain"
                 />
@@ -710,7 +715,7 @@ export default function PixotchiSwapPanel() {
       const txHash = extractTransactionHash(receipt);
       if (!txHash) return;
 
-      const payload: Record<string, unknown> = {
+      const payload: Record<string, UntypedValue> = {
         address,
         taskId: 's1_make_swap',
         proof: { txHash },

@@ -54,7 +54,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 		setTimeout(() => setIsOpen(false), 800);
 	};
 
-	const handleError = (error: any) => {
+	const handleError = (error: UntypedValue) => {
 		console.error('Land name change failed:', error);
 		toast.error('Failed to change land name. Please try again.');
 		setIsTransactionPending(false);

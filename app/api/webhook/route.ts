@@ -7,14 +7,13 @@ import { SERVER_ENV } from '@/lib/env-config';
 // @ts-ignore: runtime-only import, types may vary across versions
 import { parseWebhookEvent, verifyAppKeyWithNeynar } from '@farcaster/miniapp-node';
 
-async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolean; body: any }> {
+async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolean; body: UntypedValue }> {
   const bodyText = await request.text();
 
   // Attempt official JSON Farcaster Signature verification first
   try {
     // parseWebhookEvent validates header/payload/signature using the provided verifier
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed: any = await (parseWebhookEvent as any)(bodyText, verifyAppKeyWithNeynar);
+    const parsed: UntypedValue = await (parseWebhookEvent as UntypedValue)(bodyText, verifyAppKeyWithNeynar);
     return { valid: true, body: parsed };
   } catch {
     // Fall back to legacy HMAC verification for backward compatibility
@@ -75,7 +74,7 @@ export async function POST(req: NextRequest) {
         }
         break;
       default:
-        // Silently ignore unknown event types in production
+        // Silently ignore UntypedValue event types in production
     }
 
     return NextResponse.json({ message: 'Webhook received' }, { status: 200 });

@@ -88,7 +88,7 @@ export interface SolanaBridgeHook {
   /** Reset state */
   reset: () => void;
   /** Get quote for an action */
-  getQuote: (actionType: BridgeActionType, params?: Record<string, unknown>) => Promise<SolanaQuoteResult | null>;
+  getQuote: (actionType: BridgeActionType, params?: Record<string, UntypedValue>) => Promise<SolanaQuoteResult | null>;
 }
 
 // ============ Price Fetching Helpers ============
@@ -137,7 +137,7 @@ async function getMintPriceInSeed(strain: number): Promise<bigint> {
     address: PIXOTCHI_NFT,
     abi: GET_ALL_STRAIN_INFO_ABI,
     functionName: 'getAllStrainInfo',
-  }) as unknown as Array<{ id: bigint; mintPrice: bigint; name: string }>;
+  }) as UntypedValue as Array<{ id: bigint; mintPrice: bigint; name: string }>;
 
   const strainData = strains.find(s => Number(s.id) === strain);
   if (!strainData) {
@@ -298,7 +298,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
   // Get quote for action
   const getQuote = useCallback(async (
     actionType: BridgeActionType,
-    params?: Record<string, unknown>
+    params?: Record<string, UntypedValue>
   ): Promise<SolanaQuoteResult | null> => {
     try {
       updateState({ status: 'quoting', error: null });

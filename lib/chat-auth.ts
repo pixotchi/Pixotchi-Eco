@@ -119,7 +119,7 @@ function normalizeAddress(address: string): string {
 
 async function resolveFarcasterAddressFromFid(fid: number): Promise<string | null> {
   try {
-    const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
+    const cached = await (redis as UntypedValue)?.get?.(`fidmap:${fid}`);
     if (typeof cached === 'string' && isValidEthereumAddressFormat(cached)) {
       return normalizeAddress(cached);
     }
@@ -144,7 +144,7 @@ async function resolveFarcasterAddressFromFid(fid: number): Promise<string | nul
     }
 
     const normalizedAddress = normalizeAddress(address);
-    await (redis as any)?.set?.(`fidmap:${fid}`, normalizedAddress);
+    await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, normalizedAddress);
     return normalizedAddress;
   } catch {
     return null;
@@ -483,7 +483,7 @@ async function consumeBaseAuthNonce(nonce: string): Promise<boolean> {
   const key = withPrefix(getBaseNonceKey(nonce));
 
   try {
-    const evalFn = (redis as any)?.eval;
+    const evalFn = (redis as UntypedValue)?.eval;
     if (typeof evalFn === 'function') {
       const result = await evalFn.call(redis, BASE_NONCE_CONSUME_SCRIPT, [key], []);
       return Number(result) === 1;
@@ -673,14 +673,14 @@ function getPrivyServerClient(): PrivyClient {
   return privyServerClientCache.client;
 }
 
-function getPrivyWalletAccounts(user: any, chainType: 'ethereum' | 'solana'): Array<{ address: string }> {
+function getPrivyWalletAccounts(user: UntypedValue, chainType: 'ethereum' | 'solana'): Array<{ address: string }> {
   const linkedAccounts = Array.isArray(user?.linkedAccounts)
     ? user.linkedAccounts
     : Array.isArray(user?.linked_accounts)
       ? user.linked_accounts
       : [];
 
-  return linkedAccounts.filter((account: any) => {
+  return linkedAccounts.filter((account: UntypedValue) => {
     const accountChainType =
       typeof account?.chainType === 'string'
         ? account.chainType
@@ -708,7 +708,7 @@ export async function verifyPrivyChatIdentity(
     throw new ChatAuthError('Privy identity or access token is required.', 400);
   }
 
-  let user: any;
+  let user: UntypedValue;
   let userId: string;
 
   try {
@@ -789,7 +789,7 @@ export async function verifyFarcasterChatIdentity(
   const verified = await quickAuthClient.verifyJwt({
     domain: getExpectedDomain(request),
     token: payload.token,
-  }) as { sub?: unknown };
+  }) as { sub?: UntypedValue };
 
   const fid = typeof verified.sub === 'number'
     ? verified.sub

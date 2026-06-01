@@ -3,7 +3,7 @@
 import { requestBaseChatSessionRefresh } from '@/lib/base-chat-session-refresh';
 import { sessionStorageManager } from '@/lib/session-storage-manager';
 
-export type MissionTrackingPayload = Record<string, unknown>;
+export type MissionTrackingPayload = Record<string, UntypedValue>;
 
 async function postMissionRequest(
   payload: MissionTrackingPayload,

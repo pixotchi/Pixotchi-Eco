@@ -1,7 +1,7 @@
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogContext {
-  [key: string]: unknown;
+  [key: string]: UntypedValue;
 }
 
 class Logger {
@@ -45,7 +45,7 @@ class Logger {
     this.log('warn', message, context);
   }
   
-  error(message: string, error?: Error | unknown, context?: LogContext) {
+  error(message: string, error?: Error | UntypedValue, context?: LogContext) {
     if (error instanceof Error) {
       this.log('error', message, { 
         ...context, 

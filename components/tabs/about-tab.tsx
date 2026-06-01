@@ -120,7 +120,7 @@ export default function AboutTab() {
 
       if (data.success) {
         // Get the most recent 5 codes with their status
-        const codes = data.codes.slice(0, 5).map((codeData: any) => ({
+        const codes = data.codes.slice(0, 5).map((codeData: UntypedValue) => ({
           code: codeData.code,
           isUsed: codeData.isUsed,
           createdAt: codeData.createdAt,
@@ -226,10 +226,10 @@ export default function AboutTab() {
     try {
       // Collect wallet profile data
       const isMiniApp = Boolean(frameData?.isInMiniApp);
-      const fcContext = (frameData?.context as any) ?? null;
+      const fcContext = (frameData?.context as UntypedValue) ?? null;
 
       // Extract farcaster details
-      let farcasterDetails: any = null;
+      let farcasterDetails: UntypedValue = null;
       if (isMiniApp && fcContext) {
         farcasterDetails = {
           fid: fcContext.user?.fid,
@@ -472,7 +472,7 @@ export default function AboutTab() {
             <DialogHeader className="mb-6">
             <DialogTitle>Share Your Feedback</DialogTitle>
             <DialogDescription>
-              We'd love to hear your thoughts on Pixotchi Mini!
+              We&apos;d love to hear your thoughts on Pixotchi Mini!
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

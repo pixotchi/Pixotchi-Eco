@@ -24,7 +24,7 @@ async function getThrottleState(key: string): Promise<boolean> {
     return false;
   }
 
-  return Boolean(await (redis as any)?.get?.(key));
+  return Boolean(await (redis as UntypedValue)?.get?.(key));
 }
 
 async function fetchEnabledFids(): Promise<number[]> {
@@ -87,7 +87,7 @@ async function fetchEnabledFids(): Promise<number[]> {
 
 async function resolveFidAddress(fid: number): Promise<string | null> {
   try {
-    const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
+    const cached = await (redis as UntypedValue)?.get?.(`fidmap:${fid}`);
     if (cached) {
       return String(cached).toLowerCase();
     }
@@ -102,7 +102,7 @@ async function resolveFidAddress(fid: number): Promise<string | null> {
     const payload = await response.json();
     const address = normalizeWalletAddress(payload?.result?.address?.address);
     if (address) {
-      await (redis as any)?.set?.(`fidmap:${fid}`, address);
+      await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, address);
     }
     return address;
   } catch {

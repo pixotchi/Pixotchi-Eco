@@ -139,7 +139,7 @@ export function EditPlantName({
     }, 1000);
   };
 
-  const handleError = (error: any) => {
+  const handleError = (error: UntypedValue) => {
     console.error('Name change transaction failed:', error);
     toast.error('Failed to change plant name. Please try again.');
     setIsTransactionPending(false);

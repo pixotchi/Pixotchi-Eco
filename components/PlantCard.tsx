@@ -37,12 +37,12 @@ const PlantCard = React.memo(function PlantCard({
 
   // Memoize expensive computations
   const { hasActiveShopItems, activeShopItems } = React.useMemo(() => {
-    const hasActive = plant.extensions?.some((extension: any) =>
-      extension.shopItemOwned?.some((item: any) => item.effectIsOngoingActive)
+    const hasActive = plant.extensions?.some((extension: UntypedValue) =>
+      extension.shopItemOwned?.some((item: UntypedValue) => item.effectIsOngoingActive)
     );
 
-    const active = plant.extensions?.flatMap((extension: any) =>
-      extension.shopItemOwned?.filter((item: any) => item.effectIsOngoingActive) || []
+    const active = plant.extensions?.flatMap((extension: UntypedValue) =>
+      extension.shopItemOwned?.filter((item: UntypedValue) => item.effectIsOngoingActive) || []
     ) || [];
 
     return { hasActiveShopItems: hasActive, activeShopItems: active };
@@ -120,7 +120,7 @@ const PlantCard = React.memo(function PlantCard({
           {/* Active Shop Items Icons */}
           {showShopItems && activeShopItems.length > 0 && (
             <div className="flex flex-col space-y-1">
-              {activeShopItems.slice(0, 3).map((item: any, index: number) => (
+              {activeShopItems.slice(0, 3).map((item: UntypedValue, index: number) => (
                 <div 
                   key={`${item.id}-${index}`}
                   className="w-6 h-6 rounded-sm bg-muted flex items-center justify-center"

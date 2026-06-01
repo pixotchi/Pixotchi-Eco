@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   try {
     const publicClient = getBaseReadClient();
 
-    const results: any = {
+    const results: UntypedValue = {
       pools: {},
       issues: [],
     };

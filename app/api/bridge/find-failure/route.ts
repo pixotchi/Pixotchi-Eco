@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
     console.log(`Searching for events from block ${fromBlock} to ${currentBlock} in chunks of ${CHUNK_SIZE}`);
 
     // Search in chunks to avoid RPC limits
-    const failedEvents: any[] = [];
-    const successEvents: any[] = [];
+    const failedEvents: UntypedValue[] = [];
+    const successEvents: UntypedValue[] = [];
 
     for (let start = fromBlock; start < currentBlock; start += CHUNK_SIZE) {
       const end = start + CHUNK_SIZE > currentBlock ? currentBlock : start + CHUNK_SIZE;

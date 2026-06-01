@@ -8,6 +8,10 @@ import { fetchIndexerGraphQL } from './indexer-client';
 const ALL_ACTIVITY_CACHE_SECONDS = 3;
 const MY_ACTIVITY_CACHE_SECONDS = 5;
 
+function isMissingIncrementalCacheError(error: unknown): boolean {
+  return error instanceof Error && /incrementalCache missing/i.test(error.message);
+}
+
 // Filter activities to last 24 hours
 function filterLast24Hours(activities: ActivityEvent[]): ActivityEvent[] {
   const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
@@ -594,8 +598,8 @@ const GET_MY_BARRACKS_ACTIVITY_QUERY = `
   }
 `;
 
-async function fetchGraphQLData(query: string, variables?: Record<string, unknown>) {
-  return fetchIndexerGraphQL<any>(query, variables, { revalidate: ALL_ACTIVITY_CACHE_SECONDS });
+async function fetchGraphQLData(query: string, variables?: Record<string, UntypedValue>) {
+  return fetchIndexerGraphQL<UntypedValue>(query, variables, { revalidate: ALL_ACTIVITY_CACHE_SECONDS });
 }
 
 async function fetchOptionalBarracksActivity(): Promise<ActivityEvent[]> {
@@ -768,5 +772,10 @@ export function getCachedMyActivity(address: string): Promise<ActivityEvent[]> {
     },
   );
 
-  return cachedGetter();
+  return cachedGetter().catch((error) => {
+    if (isMissingIncrementalCacheError(error)) {
+      return getMyActivity(normalizedAddress);
+    }
+    throw error;
+  });
 }
