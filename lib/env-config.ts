@@ -5,7 +5,6 @@
 // (Next.js will still inline NEXT_PUBLIC_* at build time)
 declare const process: UntypedValue;
 
-import { validateBaseRpcEndpointDiversity } from './base-rpc-policy';
 import {
 normalizeNotificationProvider,
 type NotificationProvider,
@@ -106,12 +105,6 @@ export const getRpcConfig = () => {
   if (new Set(endpoints).size !== endpoints.length) {
     throw new Error('Base RPC endpoints must be unique.');
   }
-
-  const allowDuplicateVendors = process.env.ALLOW_RPC_VENDOR_DUPLICATES === 'true';
-  validateBaseRpcEndpointDiversity(endpoints, {
-    maxEndpointsPerVendor: allowDuplicateVendors ? Number.POSITIVE_INFINITY : 2,
-    minUniqueVendors: 3,
-  });
 
   return { endpoints };
 };
@@ -219,10 +212,6 @@ if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
   const required: Array<{ key: string; present: boolean }> = [
     { key: 'NEXT_PUBLIC_URL', present: Boolean(process.env.NEXT_PUBLIC_URL) },
     { key: 'NEXT_PUBLIC_RPC_NODE', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_FALLBACK', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_FALLBACK) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_BACKUP_1', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_1) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_BACKUP_2', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_2) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_BACKUP_3', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_3) },
     { key: 'INDEXER_UPSTREAM_URL', present: Boolean(process.env.INDEXER_UPSTREAM_URL || process.env.NEXT_PUBLIC_PONDER_API_URL) },
     { key: 'INDEXER_SHARED_SECRET', present: Boolean(process.env.INDEXER_SHARED_SECRET) },
     { key: 'NEXT_PUBLIC_CDP_CLIENT_API_KEY', present: Boolean(process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY) },
@@ -234,9 +223,5 @@ if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
     // Throwing here will surface during boot in Vercel/Node, preventing a broken prod deploy
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-
-  const { endpoints } = getRpcConfig();
-  if (endpoints.length !== 5) {
-    throw new Error(`Production requires exactly 5 unique Base RPC endpoints. Found ${endpoints.length}.`);
-  }
+  getRpcConfig();
 }

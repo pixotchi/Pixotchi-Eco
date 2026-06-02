@@ -10,9 +10,15 @@ export function extractTransactionHash(receipt: UntypedValue): string | undefine
   // Batched receipts: receipt.hash or nested structure
   return receipt.transactionHash 
     ?? receipt.transaction?.hash
+    ?? receipt.transaction?.transactionHash
     ?? receipt.hash
     ?? receipt.txHash
+    ?? receipt.receipts?.[0]?.transactionHash
+    ?? receipt.receipts?.[0]?.hash
+    ?? receipt.transactions?.[0]?.hash
+    ?? receipt.transactions?.[0]?.transactionHash
     ?? (Array.isArray(receipt) && receipt[0]?.transactionHash)
+    ?? (Array.isArray(receipt) && receipt[0]?.hash)
     ?? undefined;
 }
 
@@ -31,4 +37,3 @@ export function normalizeTransactionReceipt(receipt: UntypedValue): UntypedValue
   
   return receipt;
 }
-

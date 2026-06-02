@@ -2,7 +2,7 @@
 
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { Button } from '@/components/ui/button';
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { CardHand,calculateHandValue,getCardValue } from '@/components/ui/PlayingCard';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
@@ -709,7 +709,7 @@ export default function BlackjackDialog({
         try {
             setWalletTxPending(false);
             if (!result) {
-                setError('Transaction failed. Please try again.');
+                setError('Deal did not confirm. Refresh and check the game before trying again.');
                 return;
             }
 
@@ -735,6 +735,7 @@ export default function BlackjackDialog({
                 setActionButtonsSyncFailed(false);
 
                 refetchBalance();
+                onGameComplete?.();
             } else if (result.cards && result.cards.length > 0) {
                 // Game Started Successfully (Optimistic Update)
                 // This ensures the UI shows cards immediately even if RPC is slow
@@ -777,15 +778,17 @@ export default function BlackjackDialog({
                 // Don't show actions until we have trusted onchain flags.
                 await syncActionButtonsWithRetries();
                 refetchBalance();
+                onGameComplete?.();
             } else {
                 // Fallback for UntypedValue state or error
                 await refreshGameState();
                 refetchBalance();
+                onGameComplete?.();
             }
         } finally {
             setTxInProgress(null);
         }
-    }, [invalidatePendingRefreshes, refetchBalance, refreshGameState, syncActionButtonsWithRetries, gameState.betAmountInput, address, tokenDecimals]);
+    }, [invalidatePendingRefreshes, onGameComplete, refetchBalance, refreshGameState, syncActionButtonsWithRetries, gameState.betAmountInput, address, tokenDecimals]);
 
     // Handle action complete (immediate result with server randomness)
     const handleActionComplete = useCallback(async (result?: UntypedValue) => {
@@ -793,7 +796,7 @@ export default function BlackjackDialog({
         setWalletTxPending(false);
         if (!result) {
             // Transaction failed, refresh state anyway
-            setError('Action was not submitted. Your Blackjack game is still active.');
+            setError('Action did not confirm. Refresh and check the game before trying again.');
             await refreshGameState();
             return;
         }
@@ -856,6 +859,7 @@ export default function BlackjackDialog({
             // Don't call refreshGameState() - it will overwrite our preserved cards
             // with empty data from the cleared contract
             refetchBalance();
+            onGameComplete?.();
             return;
         }
 
@@ -948,7 +952,8 @@ export default function BlackjackDialog({
         // Still trigger a refresh in background to eventually sync fully
         await syncActionButtonsWithRetries();
         refetchBalance();
-    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries]);
+        onGameComplete?.();
+    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries, onGameComplete]);
 
     // Handle approval success
     const handleApproveSuccess = useCallback(async () => {
@@ -1009,6 +1014,16 @@ export default function BlackjackDialog({
             return BigInt(0);
         }
     }, [gameState.betAmountInput, tokenDecimals]);
+    const dealAmountIssue = useMemo(() => {
+        if (!config) return 'Loading limits...';
+        if (!config.enabled) return 'Blackjack disabled';
+        if (betAmountWei <= BigInt(0)) return 'Enter bet amount';
+        if (betAmountWei < config.minBet) return `Min ${formattedMinBet} ${tokenSymbol}`;
+        if (betAmountWei > config.maxBet) return `Max ${formattedMaxBet} ${tokenSymbol}`;
+        if (!balanceData) return 'Loading balance...';
+        if (betAmountWei > currentBalanceWei) return 'Insufficient Balance';
+        return null;
+    }, [balanceData, betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol]);
 
     const currentActionHandIndex = gameState.hasSplit ? gameState.currentHandIndex : 0;
     const currentActionCards =
@@ -1260,6 +1275,9 @@ export default function BlackjackDialog({
                         ♦️ Blackjack
                         <SponsoredBadge show={isSponsored} />
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Blackjack game dialog with active hand state, onchain action controls, and transaction status.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-6 py-4">
@@ -1393,6 +1411,14 @@ export default function BlackjackDialog({
                                 <Button className="w-full" disabled variant="secondary">
                                     Blackjack disabled
                                 </Button>
+                            ) : dealAmountIssue ? (
+                                <Button
+                                    className="w-full"
+                                    disabled
+                                    variant={dealAmountIssue === 'Insufficient Balance' ? 'destructive' : 'secondary'}
+                                >
+                                    {dealAmountIssue}
+                                </Button>
                             ) : !hasApproval && config ? (
                                 <ApproveTransaction
                                     spenderAddress={LAND_CONTRACT_ADDRESS}
@@ -1406,7 +1432,7 @@ export default function BlackjackDialog({
                                     mode="deal"
                                     landId={landId}
                                     betAmount={betAmountWei}
-                                    disabled={!config || betAmountWei <= BigInt(0) || txInProgress !== null}
+                                    disabled={!!dealAmountIssue || txInProgress !== null}
                                     buttonText={txInProgress === 'deal' ? "Dealing..." : "DEAL"}
                                     buttonClassName="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
                                     onButtonClick={handleDealClick}

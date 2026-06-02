@@ -42,6 +42,33 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 
 const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
 const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
+const LAND_SELECTION_STORAGE_KEY = 'pixotchi:selected-land-id';
+const BUILDING_TYPE_STORAGE_KEY = 'pixotchi:selected-building-type';
+const BUILDING_ID_STORAGE_KEY = 'pixotchi:selected-building-id';
+
+function readStoredBigInt(key: string): bigint | null {
+  if (typeof window === 'undefined') return null;
+  const value = window.localStorage.getItem(key);
+  if (!value) return null;
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
+}
+
+function readStoredNumber(key: string): number | null {
+  if (typeof window === 'undefined') return null;
+  const value = window.localStorage.getItem(key);
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readStoredBuildingType(): BuildingType {
+  if (typeof window === 'undefined') return 'village';
+  return window.localStorage.getItem(BUILDING_TYPE_STORAGE_KEY) === 'town' ? 'town' : 'village';
+}
 
 export default function LandsView() {
   // Gate: Solana wallets cannot use Land features
@@ -74,7 +101,7 @@ function LandsViewContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Building management state
-  const [buildingType, setBuildingType] = useState<BuildingType>('village');
+  const [buildingType, setBuildingType] = useState<BuildingType>(() => readStoredBuildingType());
   const [villageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
   const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
@@ -83,7 +110,7 @@ function LandsViewContent() {
   const [buildingsLoading, setBuildingsLoading] = useState(false);
   const [currentBlock, setCurrentBlock] = useState<bigint>(BigInt(0));
   // Remember last selected building id to persist across land switches
-  const lastSelectedBuildingIdRef = useRef<number | null>(null);
+  const lastSelectedBuildingIdRef = useRef<number | null>(readStoredNumber(BUILDING_ID_STORAGE_KEY));
 
   // Request deduplication refs to prevent multiple simultaneous calls
   const fetchDataPendingRef = useRef<string | null>(null);
@@ -164,7 +191,9 @@ function LandsViewContent() {
 
         if (landsData.length > 0) {
           const currentSelectedId = selectedLand?.tokenId;
-          const newSelectedLand = landsData.find(p => p.tokenId === currentSelectedId);
+          const storedSelectedId = readStoredBigInt(LAND_SELECTION_STORAGE_KEY);
+          const preferredSelectedId = currentSelectedId ?? storedSelectedId;
+          const newSelectedLand = landsData.find(p => p.tokenId === preferredSelectedId);
           setSelectedLand(newSelectedLand || landsData[0]);
         } else {
           setSelectedLand(null);
@@ -441,8 +470,18 @@ function LandsViewContent() {
   useEffect(() => {
     if (selectedBuildingId !== null && typeof selectedBuildingId !== 'undefined') {
       lastSelectedBuildingIdRef.current = Number(selectedBuildingId);
+      window.localStorage.setItem(BUILDING_ID_STORAGE_KEY, String(selectedBuildingId));
     }
   }, [selectedBuildingId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BUILDING_TYPE_STORAGE_KEY, buildingType);
+  }, [buildingType]);
+
+  useEffect(() => {
+    if (selectedLandId == null) return;
+    window.localStorage.setItem(LAND_SELECTION_STORAGE_KEY, selectedLandId.toString());
+  }, [selectedLandId]);
 
   // Watch for block updates to track upgrade progress
   // Only watch when we have buildings that are actually upgrading

@@ -294,6 +294,11 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
   const handleSpinComplete = useCallback(async () => {
     await Promise.all([loadCasinoState(), loadSelectedTokenStats()]);
+    for (const delayMs of [1500, 4000]) {
+      window.setTimeout(() => {
+        void Promise.all([loadCasinoState(), loadSelectedTokenStats()]);
+      }, delayMs);
+    }
     if (onSpinComplete) onSpinComplete();
   }, [loadCasinoState, loadSelectedTokenStats, onSpinComplete]);
 

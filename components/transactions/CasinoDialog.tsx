@@ -4,7 +4,7 @@ import { SponsoredBadge } from '@/components/paymaster-toggle';
 import type { LifecycleStatus } from '@/components/transactions/transaction-kit';
 import EuropeanRouletteWheel from '@/components/ui/EuropeanRouletteWheel';
 import { Button } from '@/components/ui/button';
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
@@ -16,6 +16,7 @@ rouletteHasUnsupportedZeroCombo,
 rouletteRevealBlocksRemaining,
 } from '@/lib/casino-hardening-rules.mjs';
 import {
+casinoGetBetDetails,
 casinoGetActiveBetV2,
 casinoGetTokenConfig,
 checkCasinoApproval,
@@ -24,7 +25,7 @@ type CasinoActiveBetV2,
 } from '@/lib/contracts';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
-import { CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
+import { BET_TYPE_NAMES,CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
 import { Loader2,Trash2,X } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
@@ -66,6 +67,29 @@ const ROULETTE_FAILURE_STATUSES = new Set([
     'buildError',
 ]);
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function getRouletteBetLabel(type: CasinoBetType, numbers: number[]): string {
+    const sortedNumbers = [...numbers].sort((a, b) => a - b);
+
+    switch (type) {
+        case CasinoBetType.STRAIGHT:
+            return `${sortedNumbers[0] ?? 0}`;
+        case CasinoBetType.SPLIT:
+            return `Split ${sortedNumbers.join('-')}`;
+        case CasinoBetType.STREET:
+            return `Street ${sortedNumbers[0] ?? ''}-${sortedNumbers[sortedNumbers.length - 1] ?? ''}`;
+        case CasinoBetType.CORNER:
+            return `Corner ${sortedNumbers.join(',')}`;
+        case CasinoBetType.SIX_LINE:
+            return `6-Line ${sortedNumbers[0] ?? ''}-${sortedNumbers[sortedNumbers.length - 1] ?? ''}`;
+        case CasinoBetType.DOZEN:
+            return sortedNumbers[0] === 1 ? '1st 12' : sortedNumbers[0] === 2 ? '2nd 12' : '3rd 12';
+        case CasinoBetType.COLUMN:
+            return sortedNumbers[0] === 1 ? '1st Col' : sortedNumbers[0] === 2 ? '2nd Col' : '3rd Col';
+        default:
+            return BET_TYPE_NAMES[type] ?? 'Bet';
+    }
+}
 
 export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete, selectedToken }: CasinoDialogProps) {
     const { address } = useAccount();
@@ -205,6 +229,29 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 setPendingGame(true);
                 setActiveBet(activeGame);
                 setSpinPhase(activeGame.canReveal || activeGame.isExpired ? 'revealing' : 'waiting');
+                const activeBetCount = Number(activeGame.numBets);
+                if (activeBetCount > 0) {
+                    const details = await Promise.all(
+                        Array.from({ length: activeBetCount }, (_, index) => casinoGetBetDetails(landId, index))
+                    );
+                    const hydratedBets = details.flatMap((detail, index): PlacedBet[] => {
+                        if (!detail) return [];
+                        const type = Number(detail.betType) as CasinoBetType;
+                        const numbers = detail.betNumbers.map(Number);
+                        return [{
+                            id: `active-${landId.toString()}-${index}`,
+                            type,
+                            label: getRouletteBetLabel(type, numbers),
+                            numbers,
+                            amount: formatTokenAmountRounded(detail.betAmount, tokenDecimals),
+                            payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1`,
+                        }];
+                    });
+                    if (hydratedBets.length > 0) {
+                        setPlacedBets(hydratedBets);
+                        setCurrentBetAmount(hydratedBets[0].amount);
+                    }
+                }
             } else if (options?.keepPendingWhenMissing) {
                 setPendingGame(true);
                 setActiveBet(null);
@@ -227,7 +274,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             console.error('Failed to load casino config:', e);
             return null;
         }
-    }, [address, casinoPolicy.playable, landId, selectedToken]);
+    }, [address, casinoPolicy.playable, landId, selectedToken, tokenDecimals]);
 
     useEffect(() => {
         if (open) void refreshCasinoState();
@@ -238,6 +285,16 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
         const intervalId = window.setInterval(() => {
             void refreshCasinoState({ keepPendingWhenMissing: true });
+        }, 4000);
+
+        return () => window.clearInterval(intervalId);
+    }, [activeBet?.isActive, isSpinning, open, pendingGame, refreshCasinoState]);
+
+    useEffect(() => {
+        if (!open || !pendingGame || !activeBet?.isActive || isSpinning) return;
+
+        const intervalId = window.setInterval(() => {
+            void refreshCasinoState();
         }, 4000);
 
         return () => window.clearInterval(intervalId);
@@ -256,8 +313,6 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     useEffect(() => {
         if (!open || pendingGame || !configBettingToken) return;
         setPlacedBets([]);
-        setResult(null);
-        setExpiredResult(null);
         setError(null);
     }, [configBettingToken, configMinBet, configMaxBet, configMaxBetsPerGame, open, pendingGame]);
 
@@ -327,6 +382,9 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         const exists = placedBets.some(b => b.type === type && JSON.stringify([...b.numbers].sort()) === JSON.stringify([...numbers].sort()));
         if (exists) { toast.error('Bet already placed'); return; }
         const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
+        setResult(null);
+        setExpiredResult(null);
+        setError(null);
         setPlacedBets(prev => [...prev, newBet]);
         toast.success(`Added ${label} bet`);
     }, [bettingLocked, canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet]);
@@ -663,6 +721,9 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                         <span className="text-xs font-normal text-white/80 ml-2">(Beta)</span>
                         <SponsoredBadge show={isSponsored} className="ml-auto" />
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Roulette game dialog with betting controls, active spin state, reveal controls, and transaction status.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 relative mt-4">

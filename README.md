@@ -77,7 +77,7 @@ Built on Base and designed to be fast, simple, and fun.
 5. Run locally: `npm run dev`
 6. Verify before shipping: `npm run typecheck` and `npm run lint`
 
-Production deployments fail fast unless the required public URL, five unique Base RPC endpoints, indexer config, CDP client key, and Privy client/server keys are present.
+Production deployments fail fast unless the required public URL, at least one unique Base RPC endpoint, indexer config, CDP client key, and Privy client/server keys are present. RPC endpoints may come from any mix of vendors, including a single vendor.
 
 ## Configuration notes
 - Feature flags control major surfaces: invites, gamification, casino/blackjack, barracks, swap module, Base Verify claims, and Solana support.

@@ -145,6 +145,9 @@ const TERMINAL_STATUSES = new Set<StatusName>([
   "buildError",
 ]);
 const CALLS_STATUS_TIMEOUT_MS = 120_000;
+const DIRECT_RECEIPT_TIMEOUT_MS = 240_000;
+const RECEIPT_TIMEOUT_MESSAGE =
+  "Transaction was not confirmed after several minutes. Refresh and check the game before trying again.";
 
 const PRESSABLE_PRIMARY =
   "cursor-pointer bg-[var(--ock-compat-primary)] hover:bg-[var(--ock-compat-primary-hover)] active:bg-[var(--ock-compat-primary-active)] focus:bg-[var(--ock-compat-primary-active)]";
@@ -329,6 +332,10 @@ function createAtomicBundleUnsupportedError() {
   return new Error(
     "Your wallet does not support atomic bundled transactions. Please use a smart wallet or a wallet that supports wallet_sendCalls for this multi-step action.",
   );
+}
+
+function isReceiptTimeoutError(error: UntypedValue) {
+  return getErrorMessage(error) === RECEIPT_TIMEOUT_MESSAGE;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -631,7 +638,11 @@ export function Transaction({
           statusName: "transactionPending",
         });
 
-        const confirmedReceipt = await waitForBaseReceipt(hash);
+        const confirmedReceipt = await withTimeout(
+          waitForBaseReceipt(hash),
+          DIRECT_RECEIPT_TIMEOUT_MS,
+          RECEIPT_TIMEOUT_MESSAGE,
+        );
         const receipt = normalizeTransactionReceipt(confirmedReceipt);
         const receiptHash = extractTransactionHash(receipt) as Hex | undefined;
 
@@ -694,10 +705,31 @@ export function Transaction({
             "Timed out waiting for wallet transaction status.",
           );
 
-          const receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
+          let receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
             normalizeTransactionReceipt(receipt),
           );
-          const nextTransactionHash = extractTransactionHash(receipts[0]) as Hex | undefined;
+          const statusTransactionHash = extractTransactionHash(result) as Hex | undefined;
+          let nextTransactionHash = (extractTransactionHash(receipts[0]) ?? statusTransactionHash) as Hex | undefined;
+
+          const firstReceiptLogs = Array.isArray(receipts[0]?.logs) ? receipts[0].logs : [];
+          if (nextTransactionHash && firstReceiptLogs.length === 0) {
+            try {
+              const fetchedReceipt = normalizeTransactionReceipt(
+                await withTimeout(
+                  waitForBaseReceipt(nextTransactionHash),
+                  DIRECT_RECEIPT_TIMEOUT_MS,
+                  RECEIPT_TIMEOUT_MESSAGE,
+                ),
+              );
+              receipts = [fetchedReceipt, ...receipts];
+              nextTransactionHash = (extractTransactionHash(fetchedReceipt) ?? nextTransactionHash) as Hex;
+            } catch (receiptError) {
+              if (isReceiptTimeoutError(receiptError)) {
+                throw receiptError;
+              }
+              console.warn("Failed to fetch full transaction receipt from RPC:", receiptError);
+            }
+          }
 
           transactionHashRef.current = nextTransactionHash;
           if (mountedRef.current) {
