@@ -6,7 +6,7 @@ import {
   TransactionButton,
   TransactionStatus,
 } from './transaction-kit';
-import type { LifecycleStatus } from './transaction-kit';
+import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
@@ -22,6 +22,7 @@ interface SponsoredTransactionProps {
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
   onStatusUpdate?: (status: LifecycleStatus) => void;
   hideStatus?: boolean;
@@ -35,8 +36,9 @@ export default function SponsoredTransaction({
   buttonText,
   buttonClassName = "",
   disabled = false,
-  showToast = true
-  , onStatusUpdate,
+  feedbackMode,
+  showToast = true,
+  onStatusUpdate,
   hideStatus = false,
   onButtonClick
 }: SponsoredTransactionProps) {
@@ -98,6 +100,9 @@ export default function SponsoredTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess, onStatusUpdate]);
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "both" : "inline");
+  const showInlineStatus = !hideStatus && (resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both");
+  const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
 
   return (
     <Transaction
@@ -121,11 +126,9 @@ export default function SponsoredTransaction({
           }
         }}
       />
-      {!hideStatus && (
-        <TransactionStatus />
-      )}
+      {showInlineStatus && <TransactionStatus />}
 
-      {showToast && <GlobalTransactionToast />}
+      {showGlobalToast && <GlobalTransactionToast />}
     </Transaction>
   );
 } 

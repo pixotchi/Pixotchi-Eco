@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { StatusChip } from "@/components/ui/premium";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { CLIENT_ENV } from "@/lib/env-config";
@@ -76,7 +77,7 @@ export default function TasksInfoDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)] max-h-[calc(100dvh-1rem)]">
         <DialogHeader>
           <DialogTitle>Farmer&apos;s Tasks</DialogTitle>
           <DialogDescription>
@@ -84,6 +85,7 @@ export default function TasksInfoDialog() {
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="space-y-4 pr-1">
         {effectiveDisabled ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
             <p className="text-sm font-semibold">Temporarily Disabled</p>
@@ -92,7 +94,7 @@ export default function TasksInfoDialog() {
         ) : (
           <>
             {/* Progress Card - Streak & Rocks */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="sticky top-0 z-10 -mx-1 grid grid-cols-2 gap-3 bg-inherit pb-1">
               {/* Streak */}
               <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
                 <div className="flex items-center justify-between mb-1">
@@ -115,9 +117,13 @@ export default function TasksInfoDialog() {
                 <p className="text-[10px] text-muted-foreground">Lifetime: {missionTotal}</p>
               </div>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <StatusChip tone={missionPts >= 100 ? "success" : "warning"}>{missionPts} / 100 today</StatusChip>
+              <StatusChip tone="info">Best streak {streak?.best ?? 0}</StatusChip>
+            </div>
 
             {/* Task Sections */}
-            <div className="space-y-3 text-sm">
+            <div className="space-y-3 pb-2 text-sm">
               <div>
                 <div className="font-medium">Section 1 - General (30 Rocks)</div>
                 <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
@@ -156,6 +162,7 @@ export default function TasksInfoDialog() {
             </div>
           </>
         )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

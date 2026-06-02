@@ -3,6 +3,7 @@
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import type { TransactionFeedbackMode } from './transaction-kit';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -35,6 +36,7 @@ interface BuyShopItemTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
 }
 
 export function BuyShopItemTransaction({
@@ -44,7 +46,8 @@ export function BuyShopItemTransaction({
   onError,
   buttonText = "Buy Item",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  feedbackMode
 }: BuyShopItemTransactionProps) {
 
   const calls = [{
@@ -62,6 +65,7 @@ export function BuyShopItemTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      feedbackMode={feedbackMode}
     />
   );
 }
@@ -74,6 +78,7 @@ interface BuyGardenItemTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
 }
 
 export function BuyGardenItemTransaction({
@@ -83,7 +88,8 @@ export function BuyGardenItemTransaction({
   onError,
   buttonText = "Buy Item",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  feedbackMode
 }: BuyGardenItemTransactionProps) {
 
   const calls = [{
@@ -101,6 +107,7 @@ export function BuyGardenItemTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      feedbackMode={feedbackMode}
     />
   );
 } 

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import { PIXOTCHI_NFT_ADDRESS, SPIN_GAME_ABI } from "@/lib/contracts";
 import { toast } from "react-hot-toast";
-import type { LifecycleStatus } from "./transaction-kit";
+import type { LifecycleStatus, TransactionFeedbackMode } from "./transaction-kit";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -24,6 +24,7 @@ interface SpinGameTransactionProps {
   disabled?: boolean;
   buttonText?: string;
   buttonClassName?: string;
+  feedbackMode?: TransactionFeedbackMode;
   onStatusUpdate?: (status: LifecycleStatus) => void;
   onComplete?: (result?: {
     rewardIndex?: number;
@@ -47,6 +48,7 @@ export default function SpinGameTransaction({
   disabled = false,
   buttonText,
   buttonClassName,
+  feedbackMode,
   onStatusUpdate,
   onComplete,
   onButtonClick,
@@ -193,6 +195,7 @@ export default function SpinGameTransaction({
       buttonText={buttonText ?? defaultText}
       buttonClassName={buttonClassName}
       disabled={finalDisabled}
+      feedbackMode={feedbackMode}
       onStatusUpdate={handleStatus as UntypedValue}
       onButtonClick={onButtonClick}
     />

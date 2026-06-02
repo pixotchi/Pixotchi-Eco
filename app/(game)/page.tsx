@@ -206,6 +206,7 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { useKeyboardAware,useKeyboardNavigation,useViewportInsets } from "@/hooks/useKeyboardAware";
+import { useViewportShellMetrics } from "@/hooks/useViewportShellMetrics";
 
 type LoginAuthActionsProps = {
   className: string;
@@ -348,6 +349,8 @@ export default function App() {
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
   const [isDesktopHeader, setIsDesktopHeader] = useState(false);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const previousActiveTabRef = useRef<Tab>(activeTab);
   const lastDismissedRef = useRef<string | null>(null);
   const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
   const isLocalTestSession = localTestAuthAvailable && state.surface === "test";
@@ -413,6 +416,7 @@ export default function App() {
   // Keyboard and viewport awareness
   const keyboardState = useKeyboardAware();
   useViewportInsets();
+  useViewportShellMetrics();
   const isKeyboardNavigation = useKeyboardNavigation();
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
   const miniAppContext = (fc?.context as UntypedValue) ?? null;
@@ -491,6 +495,15 @@ export default function App() {
       void requestBalanceRefresh();
     }
   }, [isConnected]);
+
+  useEffect(() => {
+    if (previousActiveTabRef.current === activeTab) {
+      return;
+    }
+
+    previousActiveTabRef.current = activeTab;
+    contentScrollRef.current?.scrollTo({ left: 0, top: 0, behavior: "auto" });
+  }, [activeTab]);
 
   // Balance refreshes after transactions are handled via events in balance-context.tsx
   // No need to refresh on every tab change - balances are already in context
@@ -714,13 +727,10 @@ export default function App() {
                   {tabs.map((tab) => (
                     <Button
                       key={tab.id}
-                      variant="ghost"
+                      variant="nav"
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                        activeTab === tab.id
-                          ? "bg-primary/10 text-primary border-primary/20"
-                          : "text-muted-foreground border-transparent hover:bg-background/80"
-                      }`}
+                      data-active={activeTab === tab.id}
+                      className="flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-md px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       role="tab"
                       id={`tab-desktop-${tab.id}`}
                       aria-selected={activeTab === tab.id}
@@ -740,8 +750,14 @@ export default function App() {
 
               {/* Tab Content */}
               <div
+                ref={contentScrollRef}
                 data-viewport-shell="content"
-                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-4 pb-16 safe-area-inset xl:p-5 xl:pb-5 xl:safe-area-bottom"
+                className="app-content-shell flex-1 overflow-y-auto overscroll-contain touch-pan-y xl:safe-area-bottom"
+                style={{
+                  padding: "var(--app-content-gutter)",
+                  paddingBottom:
+                    "max(var(--app-content-gutter), calc(var(--app-bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) + 0.75rem))",
+                }}
                 role="tabpanel"
                 id={`tabpanel-${activeTab}`}
                 aria-labelledby={isDesktopHeader ? `tab-desktop-${activeTab}` : `tab-mobile-${activeTab}`}
@@ -788,12 +804,10 @@ export default function App() {
                   {tabs.map((tab) => (
                     <Button
                       key={tab.id}
-                      variant="ghost"
+                      variant="nav"
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${activeTab === tab.id
-                        ? "bg-primary/10 text-primary border border-primary/20"
-                        : "text-muted-foreground border border-transparent"
-                      }`}
+                      data-active={activeTab === tab.id}
+                      className="flex h-auto w-16 flex-col items-center space-y-0.5 rounded-md px-2 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       role="tab"
                       id={`tab-mobile-${tab.id}`}
                       aria-selected={activeTab === tab.id}

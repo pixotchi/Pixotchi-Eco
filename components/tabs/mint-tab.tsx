@@ -1231,18 +1231,6 @@ export default function MintTab() {
 
     return (
       <>
-        <div className="mb-6">
-          <VerifyClaim
-            strainId={4} // Force Zest strain (ID 4)
-            onClaimSuccess={({ strainId, mintTxHash }) => {
-              incrementForcedFetch();
-              window.dispatchEvent(new Event('balances:refresh'));
-              const claimStrain = PLANT_STRAINS_BY_ID[strainId];
-              openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
-            }}
-          />
-        </div>
-
         <Card>
           <CardHeader>
             <CardTitle>Choose a Strain</CardTitle>
@@ -2147,7 +2135,7 @@ export default function MintTab() {
           <CardContent className="flex flex-col space-y-3">
             <div className="flex justify-between items-start w-full gap-4">
               <div className="space-y-2">
-                <h3 className="text-xl font-pixel font-bold">
+                <h3 className="text-lg font-pixel font-bold leading-tight min-[380px]:text-xl">
                   {showLandOption
                     ? (mintType === 'plant' ? 'Mint a Plant' : 'Mint a Land')
                     : 'Mint a Plant'}
@@ -2209,6 +2197,19 @@ export default function MintTab() {
             <SolanaNotSupported feature="Land minting" />
           ) : (
             mintType === 'plant' ? renderPlantMinting() : renderLandMinting()
+          )}
+          {showLandOption && !isSolana && mintType === 'plant' && (
+            <div className="pt-1">
+              <VerifyClaim
+                strainId={4}
+                onClaimSuccess={({ strainId, mintTxHash }) => {
+                  incrementForcedFetch();
+                  window.dispatchEvent(new Event('balances:refresh'));
+                  const claimStrain = PLANT_STRAINS_BY_ID[strainId];
+                  openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
+                }}
+              />
+            </div>
           )}
         </div>
 

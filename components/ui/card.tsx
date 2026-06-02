@@ -2,24 +2,34 @@ import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  density?: 'compact' | 'regular' | 'spacious';
   hover?: boolean;
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  surface?: 'default' | 'raised' | 'inset' | 'promo' | 'game';
 }
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, hover = false, padding = 'md', children, ...props }, ref) => {
+  ({ className, density = 'regular', hover = false, padding = 'md', surface = 'default', children, ...props }, ref) => {
     const paddingStyles = {
       none: 'p-0',
-      sm: 'p-3',
-      md: 'p-4',
-      lg: 'p-6',
+      sm: density === 'compact' ? 'p-2.5' : 'p-3',
+      md: density === 'compact' ? 'p-3' : density === 'spacious' ? 'p-5' : 'p-4',
+      lg: density === 'compact' ? 'p-4' : density === 'spacious' ? 'p-7' : 'p-6',
+    };
+    const surfaceStyles = {
+      default: 'border-border/80 bg-card text-card-foreground shadow-sm',
+      raised: 'border-border/70 bg-card text-card-foreground shadow-[var(--shadow-raised)]',
+      inset: 'border-border/60 bg-background/45 text-foreground shadow-[var(--shadow-hairline)]',
+      promo: 'border-primary/20 bg-primary/5 text-foreground shadow-sm',
+      game: 'border-primary/25 bg-card/85 text-card-foreground shadow-[var(--shadow-control)]',
     };
 
     return (
       <div
         ref={ref}
         className={cn(
-          'rounded-[var(--radius-panel)] border border-border/80 bg-card text-card-foreground shadow-sm',
+          'rounded-[var(--radius-panel)] border',
+          surfaceStyles[surface],
           hover && 'transition-all duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:shadow-[var(--shadow-raised)]',
           className
         )}

@@ -113,6 +113,8 @@ type TransactionToastProps = {
   position?: "bottom-center" | "bottom-right" | "top-center" | "top-right";
 };
 
+export type TransactionFeedbackMode = "inline" | "toast" | "both" | "none";
+
 type TransactionToastActionProps = {
   className?: string;
 };

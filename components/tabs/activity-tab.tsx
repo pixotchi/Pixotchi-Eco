@@ -9,7 +9,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-client";
 import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Terminal } from "lucide-react";
 import {
   AttackEventRenderer,
   KilledEventRenderer,
@@ -34,6 +34,8 @@ import {
   BlackjackResultEventRenderer,
 } from "@/components/activity";
 import { ToggleGroup } from "@/components/ui/toggle-group";
+import { StatusChip } from "@/components/ui/premium";
+import { cn } from "@/lib/utils";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { useIsSolanaWallet, useTwinAddress } from "@/components/solana";
 import { useFrameContext } from "@/lib/frame-context";
@@ -315,6 +317,63 @@ export default function ActivityTab() {
     }));
   }, []);
 
+  const scrollActivityToTop = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const contentShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
+      contentShell?.scrollTo({
+        top: 0,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+  }, []);
+
+  const renderPaginationControls = useCallback((
+    activePage: number,
+    totalPages: number,
+    setPage: PaginationConfig["setPage"],
+    className?: string
+  ) => (
+    <div
+      className={cn(
+        "sticky bottom-0 z-20 -mx-4 border-t border-border/70 bg-card/95 px-4 py-2 shadow-[0_-14px_28px_-22px_hsl(var(--foreground)/0.55)] backdrop-blur-md",
+        "xl:static xl:mx-0 xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-3 xl:shadow-none xl:backdrop-blur-none",
+        className
+      )}
+    >
+      <div className="mx-auto grid max-w-sm grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/80 p-1 shadow-[var(--shadow-hairline)] xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
+        <Button
+          variant="compactUtility"
+          size="touchCompact"
+          onClick={() => {
+            setPage(prev => Math.max(prev - 1, 1));
+            scrollActivityToTop();
+          }}
+          disabled={activePage === 1}
+          leadingIcon={<ChevronLeft className="h-4 w-4" aria-hidden="true" />}
+          className="justify-center"
+        >
+          Back
+        </Button>
+        <span className="min-w-[5.5rem] text-center text-xs font-semibold tabular-nums text-muted-foreground">
+          {activePage} / {totalPages}
+        </span>
+        <Button
+          variant="compactUtility"
+          size="touchCompact"
+          onClick={() => {
+            setPage(prev => Math.min(prev + 1, totalPages));
+            scrollActivityToTop();
+          }}
+          disabled={activePage === totalPages}
+          trailingIcon={<ChevronRight className="h-4 w-4" aria-hidden="true" />}
+          className="justify-center"
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  ), [scrollActivityToTop]);
+
   useEffect(() => {
     if (selectedTotalPages === 0) {
       if (currentPage !== 1) {
@@ -401,34 +460,12 @@ export default function ActivityTab() {
 
     return (
       <div className="space-y-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0">
-        <div className="space-y-2 divide-y -mx-4 px-4 xl:mx-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:px-0 xl:pr-2">
+        <div className="space-y-2 divide-y divide-border/60 -mx-4 px-4 pb-16 xl:mx-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:px-0 xl:pb-0 xl:pr-2">
           {visibleActivities.map(renderActivity)}
         </div>
 
         {pagination && totalPages > 1 && (
-          <div className="flex justify-center items-center pt-4 xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:pt-3">
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.setPage(prev => Math.max(prev - 1, 1))}
-                disabled={activePage === 1}
-              >
-                Back
-              </Button>
-              <span className="flex items-center px-3 text-sm">
-                Page {activePage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.setPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={activePage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          renderPaginationControls(activePage, totalPages, pagination.setPage)
         )}
       </div>
     );
@@ -436,10 +473,15 @@ export default function ActivityTab() {
 
   return (
     <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
-      <Card className="xl:hidden">
+      <Card className="xl:hidden" density="compact" surface="raised">
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Activity (Last 24h)</CardTitle>
+            <div className="min-w-0">
+              <CardTitle>Activity</CardTitle>
+              <div className="mt-1">
+                <StatusChip tone="info">{selectedActivities.length} events in 24h</StatusChip>
+              </div>
+            </div>
             <ToggleGroup
               value={view}
               onValueChange={(nextValue) => {
@@ -470,11 +512,11 @@ export default function ActivityTab() {
       </Card>
 
       <div className="hidden xl:grid xl:min-h-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:gap-5">
-        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col">
+        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col" surface="raised">
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <CardTitle>All Activity</CardTitle>
-              <span className="text-xs font-medium text-muted-foreground">{activitiesByView.all.length} events</span>
+              <StatusChip tone="info">{activitiesByView.all.length} events</StatusChip>
             </div>
           </CardHeader>
           <CardContent className="xl:min-h-0 xl:flex-1">
@@ -485,11 +527,11 @@ export default function ActivityTab() {
           </CardContent>
         </Card>
 
-        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col">
+        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col" surface="raised">
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <CardTitle>My Activity</CardTitle>
-              <span className="text-xs font-medium text-muted-foreground">{activitiesByView.my.length} events</span>
+              <StatusChip tone={activitiesByView.my.length > 0 ? "success" : "neutral"}>{activitiesByView.my.length} events</StatusChip>
             </div>
           </CardHeader>
           <CardContent className="xl:min-h-0 xl:flex-1">

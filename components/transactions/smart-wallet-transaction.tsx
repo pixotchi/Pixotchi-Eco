@@ -7,7 +7,7 @@ import {
   TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
-import type { LifecycleStatus } from './transaction-kit';
+import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
@@ -20,6 +20,7 @@ interface SmartWalletTransactionProps {
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
 }
 
@@ -30,6 +31,7 @@ export default function SmartWalletTransaction({
   buttonText,
   buttonClassName = "",
   disabled = false,
+  feedbackMode,
   showToast = true
 }: SmartWalletTransactionProps) {
   const { isSponsored } = usePaymaster();
@@ -75,6 +77,9 @@ export default function SmartWalletTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess]);
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "both" : "inline");
+  const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
+  const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
 
   return (
     <Transaction
@@ -91,9 +96,9 @@ export default function SmartWalletTransaction({
         disabled={disabled}
       />
 
-      <TransactionStatus />
+      {showInlineStatus && <TransactionStatus />}
 
-      {showToast && <GlobalTransactionToast />}
+      {showGlobalToast && <GlobalTransactionToast />}
     </Transaction>
   );
 } 

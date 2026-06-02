@@ -12,6 +12,7 @@ import SwapBuyItemBundle from '@/components/transactions/swap-buy-item-bundle';
 import SwapFencePurchaseBundle from '@/components/transactions/swap-fence-purchase-bundle';
 import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { RewardResultPanel } from '@/components/ui/premium';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FenceV2Config } from '@/lib/contracts';
 import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,getTokenBalance,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
@@ -67,6 +68,7 @@ export default function ItemDetailsPanel({
   const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
   const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
   const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
+  const [purchaseResult, setPurchaseResult] = useState<string | null>(null);
 
   // ETH Mode state - store per-unit ETH quote, calculate total by multiplication
   const [ethQuotePerUnit, setEthQuotePerUnit] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
@@ -396,6 +398,8 @@ export default function ItemDetailsPanel({
   // });
 
   const getItemBenefits = () => {
+    if (!selectedItem) return 'Purchase complete.';
+
     if (isFenceItem) {
       return `${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'} protection`;
     }
@@ -423,6 +427,12 @@ export default function ItemDetailsPanel({
         <CardTitle>{headerTitle}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {purchaseResult && (
+          <RewardResultPanel title="Purchase complete">
+            {purchaseResult}
+          </RewardResultPanel>
+        )}
+
         <div className="space-y-2">
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">
@@ -687,6 +697,7 @@ export default function ItemDetailsPanel({
                   calls={fenceV2Calls}
                   onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();
+                    setPurchaseResult(`${selectedItem.name} applied: ${getItemBenefits()}.`);
                     try {
                       const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
@@ -699,6 +710,8 @@ export default function ItemDetailsPanel({
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={fenceButtonText}
                   buttonClassName="w-full"
+                  feedbackMode="inline"
+                  showToast={false}
                   disabled={selectedPlant.status === 4 || fenceV2QuoteLoading || fenceV2BlockedByV1 || hasInsufficientFunds || fenceV2Bounds.todCapBreached || fenceV2InputInvalid}
                 />
               ) : (
@@ -707,6 +720,7 @@ export default function ItemDetailsPanel({
                   itemId={selectedItem.id}
                   onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();
+                    setPurchaseResult(`${selectedItem.name} applied: ${getItemBenefits()}.`);
                     try {
                       const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
@@ -719,6 +733,7 @@ export default function ItemDetailsPanel({
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Buy Item"
                   buttonClassName="w-full"
+                  feedbackMode="inline"
                   disabled={selectedPlant.status === 4 || hasInsufficientFunds}
                 />
               )
@@ -728,6 +743,7 @@ export default function ItemDetailsPanel({
                 itemId={selectedItem.id}
                 onSuccess={(tx: UntypedValue) => {
                   onPurchaseSuccess();
+                  setPurchaseResult(`${selectedItem.name} applied: ${getItemBenefits()}.`);
                   try {
                     const post = async (currentTx: UntypedValue, attempt = 0) => {
                       try {
@@ -751,6 +767,7 @@ export default function ItemDetailsPanel({
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Buy Item"
                 buttonClassName="w-full"
+                feedbackMode="inline"
                 disabled={selectedPlant.status === 4 || hasInsufficientFunds}
               />
             )

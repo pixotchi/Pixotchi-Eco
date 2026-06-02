@@ -62,7 +62,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
     <DialogContent
       size="full"
       surface="soft"
-      className={`h-[82dvh] w-[calc(100vw-2rem)] max-w-md xl:max-w-5xl flex flex-col ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
+      className={`h-dvh w-full max-w-none rounded-none border-0 p-4 sm:h-[82dvh] sm:w-[calc(100vw-2rem)] sm:max-w-md sm:rounded-[var(--radius-dialog)] sm:border sm:p-6 xl:max-w-5xl flex flex-col ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
       aria-hidden={txModalOpen || undefined}
       onInteractOutside={(event) => {
         if (txModalOpen) event.preventDefault();
@@ -113,7 +113,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
         <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" />
       </div>
 
-      <DialogFooter className="border-t border-border pt-3 xl:hidden">
+      <DialogFooter sticky className="border-t border-border pt-3 xl:hidden">
         <div className="w-full space-y-2">
           {isAITyping && <AITypingIndicator />}
           <ChatInput />

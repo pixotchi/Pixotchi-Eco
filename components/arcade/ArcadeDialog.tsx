@@ -6,6 +6,7 @@ import BoxGameTransaction from "@/components/transactions/box-game-transaction";
 import SpinGameTransaction from "@/components/transactions/spin-game-transaction";
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { RewardResultPanel } from "@/components/ui/premium";
 import { getBaseLogClient } from "@/lib/base-rpc";
 import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
 import { usePaymaster } from "@/lib/paymaster-context";
@@ -157,6 +158,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [, setBlockCountdown] = useState(0);
   const [, setBlockSecondsRemaining] = useState(0);
   const [spinRefreshKey, setSpinRefreshKey] = useState(0);
+  const [boxResultDetails, setBoxResultDetails] = useState<{
+    pointsDelta: number;
+    timeAdded: number;
+  } | null>(null);
   const [wheelState, setWheelState] = useState<{
     spinning: boolean;
     revealReady: boolean;
@@ -808,12 +813,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   const onStatus = useCallback((status: LifecycleStatus) => {
     if (status.statusName === "success") {
-      onOpenChange(false);
       try {
         window.dispatchEvent(new Event("balances:refresh"));
       } catch { }
     }
-  }, [onOpenChange]);
+  }, []);
 
   const spinCooldown = spinMeta?.cooldown ?? 0;
   const spinStarCost = spinMeta?.starCost ?? 1;
@@ -840,7 +844,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
         <button
           key={n}
-          onClick={() => setSeed(n)}
+          onClick={() => {
+            setSeed(n);
+            setBoxResultDetails(null);
+          }}
           className={`w-full h-16 sm:h-20 flex items-center justify-center rounded-lg border transition-colors ${seed === n ? "bg-primary/10 border-primary ring-2 ring-primary/30" : "bg-card hover:bg-accent border-border"
             }`}
           aria-label={`Select box ${n}`}
@@ -872,7 +879,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md w-[min(92vw,28rem)]">
+      <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
         <DialogHeader>
           <DialogTitle>Arcade</DialogTitle>
         </DialogHeader>
@@ -923,10 +930,37 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     buttonText={withStar ? "Play (Use Star)" : "Play"}
                     buttonClassName="w-full"
                     disabled={disabled || (withStar && (plant?.stars ?? 0) <= 0)}
-                    onStatusUpdate={onStatus as UntypedValue}
-                    showToast
+                    feedbackMode="inline"
+                    onStatusUpdate={(status: UntypedValue) => {
+                      if (status?.statusName === "transactionPending") {
+                        setBoxResultDetails(null);
+                      }
+                      onStatus(status as LifecycleStatus);
+                    }}
+                    onResult={(result) => setBoxResultDetails(result)}
+                    showToast={false}
                   />
                 </div>
+                {boxResultDetails && (
+                  <RewardResultPanel title="Box result" tone={(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? "success" : "warning"}>
+                    {(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? (
+                      <div className="space-y-1">
+                        {boxResultDetails.pointsDelta !== 0 && (
+                          <div>
+                            PTS: <span className="font-semibold text-foreground">{`+${formatScore(Math.abs(boxResultDetails.pointsDelta))}`}</span>
+                          </div>
+                        )}
+                        {boxResultDetails.timeAdded !== 0 && (
+                          <div>
+                            TOD: <span className="font-semibold text-foreground">{`${boxResultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(boxResultDetails.timeAdded))}`}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span>No reward this time. Pick another box when the cooldown clears.</span>
+                    )}
+                  </RewardResultPanel>
+                )}
               </div>
             )}
 
@@ -1035,6 +1069,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         commitment={commitmentHex ?? undefined}
                         disabled={!(commitmentHex && canCommit)}
                         buttonClassName="w-full"
+                        feedbackMode="inline"
                         buttonText={spinStarCost > 0 ? `Spin! (${spinStarCost}★)` : "Spin!"}
                         onStatusUpdate={handleSpinStatus("commit") as UntypedValue}
                         onButtonClick={() => {
@@ -1053,6 +1088,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         secret={secretHex}
                         disabled={!canReveal}
                         buttonClassName="w-full"
+                        feedbackMode="inline"
                         buttonText="Stop Spin!"
                         onStatusUpdate={handleSpinStatus("reveal") as UntypedValue}
                         onComplete={(result) => {

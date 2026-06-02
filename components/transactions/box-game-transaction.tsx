@@ -10,6 +10,7 @@ import { formatDuration, formatScore } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import type { TransactionFeedbackMode } from './transaction-kit';
 
 const BOX_GAME_ABI = [
   {
@@ -63,8 +64,10 @@ interface BoxGameTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
   onStatusUpdate?: (status: UntypedValue) => void;
+  onResult?: (result: { pointsDelta: number; timeAdded: number }) => void;
 }
 
 export default function BoxGameTransaction({
@@ -76,8 +79,10 @@ export default function BoxGameTransaction({
   buttonText = 'Play',
   buttonClassName,
   disabled = false,
+  feedbackMode,
   showToast = true,
   onStatusUpdate,
+  onResult,
 }: BoxGameTransactionProps) {
   const { address } = useAccount();
   const functionName = withStar ? 'boxGamePlayWithStar' : 'boxGamePlay';
@@ -112,6 +117,7 @@ export default function BoxGameTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      feedbackMode={feedbackMode}
       showToast={showToast}
       onStatusUpdate={(status: UntypedValue) => {
         try { onStatusUpdate?.(status); } catch {}
@@ -128,10 +134,13 @@ export default function BoxGameTransaction({
                   if (decoded.eventName === 'Played' || decoded.eventName === 'PlayedV2') {
                     const rawPoints = Number(decoded.args.points ?? decoded.args.pointsAdjustment ?? 0);
                     const rawTime = Number(decoded.args.timeExtension ?? decoded.args.timeAdjustment ?? 0);
+                    onResult?.({ pointsDelta: rawPoints, timeAdded: rawTime });
                     const ptsText = formatScore(rawPoints);
                     const timeText = rawTime !== 0 ? `${rawTime > 0 ? '+' : '-'}${formatDuration(Math.abs(rawTime))} TOD` : '';
                     const msg = timeText ? `You got +${ptsText} PTS and ${timeText}` : `You got +${ptsText} PTS`;
-                    toast.success(msg, { id: 'box-result' });
+                    if (!onResult) {
+                      toast.success(msg, { id: 'box-result' });
+                    }
                     shown = true;
                     break;
                   }
@@ -139,13 +148,16 @@ export default function BoxGameTransaction({
               }
               if (shown) break;
             }
-            if (!shown) toast.success('Play confirmed!', { id: 'box-result' });
+            if (!shown) {
+              onResult?.({ pointsDelta: 0, timeAdded: 0 });
+              if (!onResult) toast.success('Play confirmed!', { id: 'box-result' });
+            }
           } catch {
-            toast.success('Play confirmed!', { id: 'box-result' });
+            onResult?.({ pointsDelta: 0, timeAdded: 0 });
+            if (!onResult) toast.success('Play confirmed!', { id: 'box-result' });
           }
         }
       }}
     />
   );
 }
-

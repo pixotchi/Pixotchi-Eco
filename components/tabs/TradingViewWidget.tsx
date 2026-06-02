@@ -58,8 +58,8 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
       symbol: symbol,
       theme: isDarkTheme ? 'dark' : 'light',
       timezone: 'Etc/UTC',
-      backgroundColor: isDarkTheme ? '#0F0F0F' : '#FFFFFF',
-      gridColor: isDarkTheme ? 'rgba(242, 242, 242, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+      backgroundColor: isDarkTheme ? '#2d3c53' : '#eef6ff',
+      gridColor: isDarkTheme ? 'rgba(242, 242, 242, 0.08)' : 'rgba(45, 60, 83, 0.08)',
       watchlist: [],
       withdateranges: false,
       compareSymbols: [],
@@ -73,7 +73,7 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
 
   if (!mounted) {
     return (
-      <div className="w-full h-full bg-card border border-border rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-card border border-border rounded-[var(--radius-panel)] flex items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading chart...</p>
       </div>
     );
@@ -81,7 +81,7 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
 
   return (
     <div
-      className="tradingview-widget-container bg-card rounded-lg overflow-hidden w-full h-full flex flex-col"
+      className="tradingview-widget-container bg-card rounded-[var(--radius-panel)] overflow-hidden w-full h-full flex flex-col border border-border/70 shadow-[var(--shadow-hairline)]"
       ref={container}
     >
       <div

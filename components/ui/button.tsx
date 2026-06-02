@@ -24,6 +24,20 @@ const buttonVariants = cva(
           "border border-border/70 bg-background/70 text-foreground shadow-[var(--shadow-hairline)] hover:bg-accent/70",
         special:
           "bg-[image:var(--gradient-special)] text-white shadow-[var(--shadow-control)] hover:brightness-105",
+        transaction:
+          "bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-primary/90",
+        transactionSuccess:
+          "bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] shadow-[var(--shadow-control)] hover:brightness-105",
+        gamePrimary:
+          "border border-primary/25 bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-primary/90",
+        reward:
+          "border border-[hsl(var(--warning)/0.38)] bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-hairline)] hover:bg-[hsl(var(--warning)/0.26)]",
+        promo:
+          "bg-[image:var(--gradient-special)] text-white shadow-[var(--shadow-control)] hover:brightness-105",
+        nav:
+          "border border-transparent text-muted-foreground hover:border-primary/20 hover:bg-primary/10 hover:text-primary data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary",
+        compactUtility:
+          "border border-border/70 bg-background/70 text-foreground shadow-[var(--shadow-hairline)] hover:bg-accent/70",
         gasless:
           "border border-[hsl(var(--success)/0.28)] bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))] hover:bg-[hsl(var(--success)/0.18)]",
         game:
@@ -37,6 +51,7 @@ const buttonVariants = cva(
       },
       size: {
         xs: "h-7 min-h-7 px-2 text-xs",
+        touchCompact: "h-9 min-h-9 px-2.5 text-xs",
         default: "h-11 min-h-11 px-4 py-2",
         md: "h-11 min-h-11 px-4 py-2",
         sm: "h-9 min-h-9 px-3 text-sm",

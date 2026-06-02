@@ -72,6 +72,7 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
 
   return (
     <div
+      data-viewport-shell={!isHeaderPlacement ? "status" : undefined}
       className={isHeaderPlacement ? "shrink-0" : "w-full bg-background xl:flex xl:justify-end xl:bg-transparent"}
       role="region"
       aria-label="Account balance and staking"
@@ -80,7 +81,7 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
         className={
           isHeaderPlacement
             ? "w-fit max-w-full rounded-lg border border-border/70 bg-background/60 px-3 py-1 shadow-none backdrop-blur-md"
-            : "rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:bg-background/60 xl:shadow-none"
+            : "app-status-scroll rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:bg-background/60 xl:shadow-none"
         }
       >
         <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex items-center justify-between gap-3 xl:justify-start"}>
@@ -115,7 +116,7 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
             </div>
           </div>
           <div className={isHeaderPlacement ? "h-5 w-px bg-border/70" : "hidden h-5 w-px bg-border/70 xl:block"} aria-hidden="true" />
-          <div className="shrink-0 flex items-center gap-2">
+          <div data-status-actions className="shrink-0 flex items-center gap-2">
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}
             {showTasksButton && (
@@ -123,8 +124,8 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
                 type="button"
                 onClick={handleTasksClick}
                 variant="warning"
-                size="xs"
-                className="btn-compact"
+                size="touchCompact"
+                className="btn-touch-compact px-2"
                 aria-label="Open tasks"
                 aria-haspopup="dialog"
               >
@@ -137,8 +138,8 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
                 type="button"
                 onClick={() => setStakingOpen(true)}
                 variant="primary"
-                size="xs"
-                className="btn-compact"
+                size="touchCompact"
+                className="btn-touch-compact px-2"
                 aria-label="Open staking dialog"
                 aria-expanded={stakingOpen}
                 aria-haspopup="dialog"

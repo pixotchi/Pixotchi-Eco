@@ -28,6 +28,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { DisabledReason, StatusChip } from '@/components/ui/premium';
 import { ERC20_TOKEN_ABI } from '@/lib/swap/base-swap-abi';
 import {
   BASE_CHAIN_ID,
@@ -1207,6 +1209,41 @@ export default function PixotchiSwapPanel() {
 
   const isQuoteLoading = quoteState.status === 'loading';
   const showQuoteLoadingText = isQuoteLoading || isDeferredLagging;
+  const quoteSummary = currentQuote && currentQuote.strategy !== 'blocked'
+    ? {
+        minReceived: formatTokenAmountRounded(
+          BigInt(currentQuote.minOut),
+          SWAP_TOKEN_MAP[buyToken].decimals,
+          6,
+        ),
+        route: currentQuote.steps.map((step) => step.routeLabel).filter(Boolean).join(' -> '),
+        slippage: `${(currentQuote.marketSlippageBps / 100).toFixed(2)}%`,
+        tax: currentQuote.taxBps > 0 ? `${(currentQuote.taxBps / 100).toFixed(2)}%` : '0%',
+      }
+    : null;
+  const disabledReason = useMemo(() => {
+    if (isExecuting) return null;
+    if (chainId !== BASE_CHAIN_ID) return S.errors.switchToBase;
+    if (!walletClient?.account) return S.errors.walletClientUnavailable;
+    if (!sellAmount.trim()) return `Enter an amount of ${SWAP_TOKEN_MAP[sellToken].displaySymbol} to swap.`;
+    if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    if (isDeferredLagging || isQuoteLoading) return S.quote.loading;
+    if (currentQuote?.strategy === 'blocked') return currentQuote.blockedReason || S.errors.blockedPairFallback;
+    if (!currentQuote) return 'Waiting for a swap quote.';
+    return null;
+  }, [
+    chainId,
+    currentQuote,
+    hasInsufficientBalance,
+    isAmountValid,
+    isDeferredLagging,
+    isExecuting,
+    isQuoteLoading,
+    sellAmount,
+    sellToken,
+    walletClient?.account,
+  ]);
 
   return (
     <div>
@@ -1344,20 +1381,45 @@ export default function PixotchiSwapPanel() {
             </div>
           </div>
 
-          <button
+          {quoteSummary && (
+            <div className="mt-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/55 p-3 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="font-semibold text-foreground">Quote summary</span>
+                <StatusChip tone="info">{quoteSummary.route || 'Direct route'}</StatusChip>
+              </div>
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span>Minimum received</span>
+                  <span className="font-semibold text-foreground">{quoteSummary.minReceived} {SWAP_TOKEN_MAP[buyToken].displaySymbol}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Market slippage</span>
+                  <span className="font-semibold text-foreground">{quoteSummary.slippage}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Token tax</span>
+                  <span className="font-semibold text-foreground">{quoteSummary.tax}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Button
             type="submit"
+            variant="transaction"
+            fullWidth
             className={SWAP_PRIMARY_ACTION_CLASS}
             disabled={actionDisabled}
+            loading={isExecuting}
+            loadingText={S.buttons.swapping}
           >
-            {isExecuting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <span>{S.buttons.swapping}</span>
-              </>
-            ) : (
-              S.buttons.swap
-            )}
-          </button>
+            {S.buttons.swap}
+          </Button>
+          {actionDisabled && disabledReason ? (
+            <DisabledReason className="mt-2">
+              {disabledReason}
+            </DisabledReason>
+          ) : null}
           <div
             id={messageId}
             className={cn(SWAP_STATUS_TEXT_CLASS, 'flex h-7 pt-2')}

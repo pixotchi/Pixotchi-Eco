@@ -11,8 +11,9 @@ import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { DisabledReason } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
@@ -28,7 +29,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { Skull,Sword,Terminal } from "lucide-react";
+import { ChevronLeft,ChevronRight,Skull,Sword,Terminal } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
@@ -683,30 +684,54 @@ export default function LeaderboardTab() {
   const currentRocks = getPageRows(rocksRows, currentPage, ITEMS_PER_PAGE);
   const desktopRocks = getPageRows(rocksRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
+  function scrollLeaderboardToTop() {
+    window.requestAnimationFrame(() => {
+      const contentShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
+      contentShell?.scrollTo({
+        top: 0,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+  }
+
   function renderPagination(totalPageCount: number, className?: string) {
     if (totalPageCount <= 1) return null;
 
     const activePage = getBoundedPage(currentPage, totalPageCount, 1);
 
     return (
-      <div className={cn("flex justify-center items-center pt-4", className)}>
-        <div className="flex space-x-2">
+      <div
+        className={cn(
+          "sticky bottom-0 z-20 -mx-4 border-t border-border/70 bg-card/95 px-4 py-2 shadow-[0_-14px_28px_-22px_hsl(var(--foreground)/0.55)] backdrop-blur-md",
+          "xl:static xl:mx-0 xl:justify-center xl:bg-transparent xl:px-0 xl:py-0 xl:pt-4 xl:shadow-none xl:backdrop-blur-none",
+          className
+        )}
+      >
+        <div className="mx-auto grid max-w-sm grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/80 p-1 shadow-[var(--shadow-hairline)] xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(Math.max(activePage - 1, 1))}
+            variant="compactUtility"
+            size="touchCompact"
+            onClick={() => {
+              setCurrentPage(Math.max(activePage - 1, 1));
+              scrollLeaderboardToTop();
+            }}
             disabled={activePage === 1}
+            leadingIcon={<ChevronLeft className="h-4 w-4" aria-hidden="true" />}
           >
             Back
           </Button>
-          <span className="flex items-center px-3 text-sm">
-            Page {activePage} of {totalPageCount}
+          <span className="min-w-[5.5rem] text-center text-xs font-semibold tabular-nums text-muted-foreground">
+            {activePage} / {totalPageCount}
           </span>
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(Math.min(activePage + 1, totalPageCount))}
+            variant="compactUtility"
+            size="touchCompact"
+            onClick={() => {
+              setCurrentPage(Math.min(activePage + 1, totalPageCount));
+              scrollLeaderboardToTop();
+            }}
             disabled={activePage === totalPageCount}
+            trailingIcon={<ChevronRight className="h-4 w-4" aria-hidden="true" />}
           >
             Next
           </Button>
@@ -765,7 +790,7 @@ export default function LeaderboardTab() {
   ) {
     return (
       <div className={cn("space-y-4", fillDesktop && "xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0")}>
-        <div className="space-y-2 divide-y divide-border -mx-4 px-4 xl:hidden">
+        <div className="space-y-2 divide-y divide-border -mx-4 px-4 pb-16 xl:hidden">
           {mobileRows.map((row) => renderRow(row))}
         </div>
 
@@ -922,21 +947,30 @@ export default function LeaderboardTab() {
             )}
             {canShowAttack && (
               compact ? (
-                <button
+                <Button
                   type="button"
-                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
+                  variant="gamePrimary"
+                  size="touchCompact"
+                  className="btn-touch-compact h-9 w-11 px-0"
+                  onClick={() => {
+                    setTargetPlant(plant);
+                    setSelectedAttackerId(eligibleAttackers(plant)[0]?.id ?? null);
+                    setAttackDialogOpen(true);
+                  }}
                   aria-label="Attack this plant"
                   title="Attack"
                 >
                   <Sword className="w-4 h-4" />
-                </button>
+                </Button>
               ) : (
                 <Button
-                  variant="outline"
+                  variant="gamePrimary"
                   size="icon"
-                  className="rounded-md"
-                  onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
+                  onClick={() => {
+                    setTargetPlant(plant);
+                    setSelectedAttackerId(eligibleAttackers(plant)[0]?.id ?? null);
+                    setAttackDialogOpen(true);
+                  }}
                   aria-label="Attack this plant"
                   title="Attack"
                 >
@@ -946,10 +980,12 @@ export default function LeaderboardTab() {
             )}
             {canShowKill && (
               compact ? (
-                <button
+                <Button
                   type="button"
+                  variant="danger"
+                  size="touchCompact"
                   className={cn(
-                    "btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    "btn-touch-compact h-9 w-11 px-0",
                     !killCooldown.canKill && "opacity-50"
                   )}
                   onClick={() => {
@@ -957,7 +993,7 @@ export default function LeaderboardTab() {
                       setCooldownDialogOpen(true);
                     } else {
                       setTargetPlant(plant);
-                      setSelectedKillerId(null);
+                      setSelectedKillerId(myPlants.find(p => p.status !== 4)?.id ?? null);
                       setKillDialogOpen(true);
                     }
                   }}
@@ -965,18 +1001,18 @@ export default function LeaderboardTab() {
                   title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
                 >
                   <Skull className="w-4 h-4" />
-                </button>
+                </Button>
               ) : (
                 <Button
-                  variant="outline"
+                  variant="danger"
                   size="icon"
-                  className={cn("rounded-md", !killCooldown.canKill && "opacity-50")}
+                  className={cn(!killCooldown.canKill && "opacity-50")}
                   onClick={() => {
                     if (!killCooldown.canKill) {
                       setCooldownDialogOpen(true);
                     } else {
                       setTargetPlant(plant);
-                      setSelectedKillerId(null);
+                      setSelectedKillerId(myPlants.find(p => p.status !== 4)?.id ?? null);
                       setKillDialogOpen(true);
                     }
                   }}
@@ -1387,14 +1423,35 @@ export default function LeaderboardTab() {
 
       {/* Attack dialog */}
       <Dialog open={attackDialogOpen} onOpenChange={setAttackDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select your attacker</DialogTitle>
+        <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="leading-tight">Attack plant</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              Choose one eligible lower-level plant. We will check cooldowns and protection before submitting.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            {/* Brief rules/eligibility panel */}
-            <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
-              <ul className="list-disc pl-5 space-y-1">
+
+          <DialogBody className="mt-4 space-y-4 pr-1">
+            {targetPlant && (
+              <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
+                <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Target
+                  </div>
+                  <div className="truncate text-sm font-semibold">
+                    {targetPlant.name || `Plant #${targetPlant.id}`}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Level {targetPlant.level}</div>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-[var(--radius-panel)] border border-border/70 bg-muted/35 p-3 text-xs leading-relaxed text-muted-foreground">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                Attack rules
+              </div>
+              <ul className="list-disc space-y-1 pl-4">
                 <li>Each plant can attack once every 30 minutes.</li>
                 <li>Target can be attacked again after 60 minutes.</li>
                 <li>Attacker must be alive and a lower level than the target.</li>
@@ -1402,39 +1459,53 @@ export default function LeaderboardTab() {
                 <li>You cannot attack your own plant.</li>
               </ul>
             </div>
-            {targetPlant && (
-              <div className="text-sm text-muted-foreground">
-                Target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span> (Lvl {targetPlant.level})
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Eligible attackers</div>
+                {targetPlant && (
+                  <span className="text-xs text-muted-foreground">
+                    {eligibleAttackers(targetPlant).length} available
+                  </span>
+                )}
               </div>
-            )}
 
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {targetPlant && eligibleAttackers(targetPlant).length === 0 && (
-                <div className="text-sm text-muted-foreground">
-                  No eligible plants to attack with right now. Each plant can attack once every 30 minutes.
-                </div>
-              )}
-              {targetPlant && eligibleAttackers(targetPlant).map((p) => (
-                <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedAttackerId === p.id ? 'bg-accent' : 'bg-card'}`}>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="attacker"
-                      className="accent-primary"
-                      checked={selectedAttackerId === p.id}
-                      onChange={() => setSelectedAttackerId(p.id)}
-                    />
-                    <PlantImage selectedPlant={p as UntypedValue} width={28} height={28} />
-                    <div className="text-sm">
-                      <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
-                      <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
+              <div className="max-h-[min(14rem,34dvh)] space-y-2 overflow-y-auto rounded-[var(--radius-panel)] border border-border/70 bg-background/35 p-2">
+                {targetPlant && eligibleAttackers(targetPlant).length === 0 && (
+                  <DisabledReason>
+                    No eligible plants to attack with right now. Each plant can attack once every 30 minutes.
+                  </DisabledReason>
+                )}
+                {targetPlant && eligibleAttackers(targetPlant).map((p) => (
+                  <label
+                    key={p.id}
+                    className={cn(
+                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-accent/70",
+                      selectedAttackerId === p.id ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card"
+                    )}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="radio"
+                        name="attacker"
+                        className="accent-primary"
+                        checked={selectedAttackerId === p.id}
+                        onChange={() => setSelectedAttackerId(p.id)}
+                      />
+                      <PlantImage selectedPlant={p as UntypedValue} width={30} height={30} />
+                      <div className="min-w-0 text-sm">
+                        <div className="truncate font-medium">{p.name || `Plant #${p.id}`}</div>
+                        <div className="text-xs text-muted-foreground">Level {p.level}</div>
+                      </div>
                     </div>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                ))}
+              </div>
             </div>
+          </DialogBody>
 
-            <div className="pt-2 space-y-2">
+          <DialogFooter className="block flex-none -mx-5 mt-4 border-t border-border bg-inherit px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-mx-6 sm:px-6">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm Attack</span>
                 <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
@@ -1480,10 +1551,11 @@ export default function LeaderboardTab() {
                       onError={() => { }}
                       buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
                       buttonClassName="w-full"
-                      showToast={true}
+                      feedbackMode="inline"
+                      showToast={false}
                       disabled={isSubmitting || !eligible}
                       onStatusUpdate={(status: UntypedValue) => {
-                        if (status.statusName === 'pending') {
+                        if (status.statusName === 'pending' || status.statusName === 'transactionPending') {
                           setIsSubmitting(true);
                           try {
                             const h = status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
@@ -1522,52 +1594,93 @@ export default function LeaderboardTab() {
                 </Button>
               )}
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Kill dialog */}
       <Dialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Collect a star by killing a dead plant</DialogTitle>
+        <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="leading-tight">Collect star</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              Select one living plant to collect a star from the dead target. This action has a wallet cooldown.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
-              Select one of your living plants to perform the kill. Target must be dead.
-              <br /><span className="text-xs">Note: You can only kill once per hour.</span>
-            </div>
-            {!killCooldown.canKill && (
-              <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
-                ⏳ Cooldown active. Close this dialog to see the timer.
-              </div>
-            )}
+
+          <DialogBody className="mt-4 space-y-4 pr-1">
             {targetPlant && (
-              <div className="text-sm text-muted-foreground">
-                Dead target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>
+              <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
+                <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Dead target
+                  </div>
+                  <div className="truncate text-sm font-semibold">
+                    {targetPlant.name || `Plant #${targetPlant.id}`}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Collects 1 star</div>
+                </div>
               </div>
             )}
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {myPlants.filter(p => p.status !== 4).map((p) => (
-                <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedKillerId === p.id ? 'bg-accent' : 'bg-card'}`}>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="killer"
-                      className="accent-primary"
-                      checked={selectedKillerId === p.id}
-                      onChange={() => setSelectedKillerId(p.id)}
-                    />
-                    <PlantImage selectedPlant={p as UntypedValue} width={28} height={28} />
-                    <div className="text-sm">
-                      <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
-                      <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
-                    </div>
-                  </div>
-                </label>
-              ))}
+
+            <div className="rounded-[var(--radius-panel)] border border-border/70 bg-muted/35 p-3 text-xs leading-relaxed text-muted-foreground">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                Kill rules
+              </div>
+              Target must already be dead. You can only kill once per hour.
             </div>
-            <div className="pt-2 space-y-2">
+
+            {!killCooldown.canKill && (
+              <DisabledReason>
+                Cooldown active. Close this dialog to see the timer.
+              </DisabledReason>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Living plants</div>
+                <span className="text-xs text-muted-foreground">
+                  {myPlants.filter(p => p.status !== 4).length} available
+                </span>
+              </div>
+
+              <div className="max-h-[min(14rem,34dvh)] space-y-2 overflow-y-auto rounded-[var(--radius-panel)] border border-border/70 bg-background/35 p-2">
+                {myPlants.filter(p => p.status !== 4).length === 0 && (
+                  <DisabledReason>
+                    You need a living plant to collect a star.
+                  </DisabledReason>
+                )}
+                {myPlants.filter(p => p.status !== 4).map((p) => (
+                  <label
+                    key={p.id}
+                    className={cn(
+                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-accent/70",
+                      selectedKillerId === p.id ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card"
+                    )}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="radio"
+                        name="killer"
+                        className="accent-primary"
+                        checked={selectedKillerId === p.id}
+                        onChange={() => setSelectedKillerId(p.id)}
+                      />
+                      <PlantImage selectedPlant={p as UntypedValue} width={30} height={30} />
+                      <div className="min-w-0 text-sm">
+                        <div className="truncate font-medium">{p.name || `Plant #${p.id}`}</div>
+                        <div className="text-xs text-muted-foreground">Level {p.level}</div>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </DialogBody>
+
+          <DialogFooter className="block flex-none -mx-5 mt-4 border-t border-border bg-inherit px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-mx-6 sm:px-6">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm Kill</span>
                 <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
@@ -1580,9 +1693,10 @@ export default function LeaderboardTab() {
                   tokenId={selectedKillerId}
                   buttonText="Confirm Kill"
                   buttonClassName="w-full"
-                  showToast={true}
+                  feedbackMode="inline"
+                  showToast={false}
                   onStatusUpdate={(status: UntypedValue) => {
-                    if (status.statusName === 'pending') {
+                    if (status.statusName === 'pending' || status.statusName === 'transactionPending') {
                       toast.loading('Submitting kill...', { id: 'kill-tx' });
                     }
                     if (status.statusName === 'success') {
@@ -1609,7 +1723,7 @@ export default function LeaderboardTab() {
                 </Button>
               )}
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

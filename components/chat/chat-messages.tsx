@@ -4,9 +4,10 @@ import React, { useRef, useEffect, useState, useCallback } from "react";
 import ChatMessageComponent from "./chat-message";
 import { useChat } from "./chat-context";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import type { ChatMode } from "@/lib/types";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
 const SCROLL_THRESHOLD = 56;
 
@@ -24,6 +25,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
     publicChatAuthenticated,
     publicChatLoading,
     publicChatState,
+    retryPublicChatSession,
   } = useChat();
   const activeMode = modeOverride ?? mode;
   const activeMessages = modeOverride ? getMessagesForMode(modeOverride) : messages;
@@ -37,7 +39,9 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
       ? 'Restoring your secure chat session...'
       : publicChatState === 'error'
         ? 'We could not verify your chat session. Refresh or reconnect, then try again.'
-        : 'Connect or refresh your secure session to join public chat.';
+        : isAssistantMode
+          ? 'Connect or refresh your secure session to chat with Neural Seed.'
+          : 'Connect or refresh your secure session to join public chat.';
   const containerRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
@@ -85,6 +89,18 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                     {unavailableDetail}
                   </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    loading={publicChatLoading}
+                    loadingText="Refreshing..."
+                    onClick={retryPublicChatSession}
+                  >
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    Refresh session
+                  </Button>
                 </div>
               </div>
             </div>

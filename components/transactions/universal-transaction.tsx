@@ -7,7 +7,7 @@ import {
   TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
-import type { LifecycleStatus } from './transaction-kit';
+import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
@@ -19,6 +19,7 @@ interface UniversalTransactionProps {
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
   forceUnsponsored?: boolean; // Force transaction to be unsponsored (e.g., for swaps)
 }
@@ -30,6 +31,7 @@ export default function UniversalTransaction({
   buttonText,
   buttonClassName = "",
   disabled = false,
+  feedbackMode,
   showToast = true,
   forceUnsponsored = false
 }: UniversalTransactionProps) {
@@ -77,6 +79,9 @@ export default function UniversalTransaction({
       handleOnSuccess(status.statusData.transactionReceipts[0]);
     }
   }, [handleOnSuccess]);
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "both" : "inline");
+  const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
+  const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
 
   return (
     <Transaction
@@ -93,9 +98,9 @@ export default function UniversalTransaction({
         disabled={disabled}
       />
 
-      <TransactionStatus />
+      {showInlineStatus && <TransactionStatus />}
 
-      {showToast && <GlobalTransactionToast />}
+      {showGlobalToast && <GlobalTransactionToast />}
     </Transaction>
   );
 }
