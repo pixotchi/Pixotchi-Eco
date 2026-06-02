@@ -334,7 +334,7 @@ export default function BlackjackDialog({
 
     // Fetch complete game state from contract
     const refreshGameState = useCallback(async (): Promise<boolean> => {
-        if (!open || !address || !blackjackPlayable) {
+        if (!open || !blackjackPlayable) {
             setActionButtonsReady(false);
             return false;
         }
@@ -356,10 +356,12 @@ export default function BlackjackDialog({
             }
 
             const normalizedPlayer = (snapshot.player || '').toLowerCase();
+            const normalizedAddress = address?.toLowerCase() ?? '';
             const isOurGame =
                 normalizedPlayer !== '' &&
                 normalizedPlayer !== ZERO_ADDRESS &&
-                normalizedPlayer === address.toLowerCase();
+                normalizedAddress !== '' &&
+                normalizedPlayer === normalizedAddress;
             const trustedActionState = isOurGame && hasTrustedActionState(snapshot);
             setActionButtonsReady(trustedActionState);
             if (trustedActionState) {
@@ -382,7 +384,7 @@ export default function BlackjackDialog({
                 const prevLikelyOurGame =
                     prevPlayer === '' ||
                     prevPlayer === ZERO_ADDRESS ||
-                    prevPlayer === address.toLowerCase();
+                    (normalizedAddress !== '' && prevPlayer === normalizedAddress);
 
                 // Guard against stale RPC regressions: keep active local game if chain snapshot
                 // momentarily reports empty state.
@@ -1039,6 +1041,11 @@ export default function BlackjackDialog({
         !gameState.isActive ||
         (!!address && blackjackPlayerAddress !== '' && blackjackPlayerAddress !== ZERO_ADDRESS && blackjackPlayerAddress === address.toLowerCase());
     const blackjackGameActiveInAnotherWallet = gameState.isActive && !blackjackGameBelongsToWallet;
+    const blackjackTurnStatusText = walletTxPending
+        ? 'Confirm transaction in wallet...'
+        : txInProgress !== null
+            ? 'Retry the prepared action, or reopen after the lock clears.'
+            : (gameState.hasSplit ? `Playing Hand ${currentActionHandIndex + 1}` : 'Your Turn');
 
     const additionalActionBetWei = gameState.betAmount > BigInt(0) ? gameState.betAmount : BigInt(0);
     const hasBalanceForAdditionalAction = currentBalanceWei >= additionalActionBetWei;
@@ -1428,10 +1435,7 @@ export default function BlackjackDialog({
                         <div className="space-y-4">
                             {/* Status text - changes based on action state */}
                             <p className="text-center text-white/60 text-sm min-h-[20px]">
-                                {txInProgress !== null
-                                    ? 'Confirm transaction in wallet...'
-                                    : (gameState.hasSplit ? `Playing Hand ${getCurrentHandIndex() + 1}` : 'Your Turn')
-                                }
+                                {blackjackTurnStatusText}
                             </p>
                             {txInProgress === null && !actionButtonsReady && (
                                 <p className="text-center text-yellow-300 text-xs">
