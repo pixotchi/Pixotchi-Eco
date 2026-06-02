@@ -14,7 +14,8 @@
     "ai:smoke:budget": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-budget-smoke.ts",
     "ai:smoke:knowledge": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-knowledge-smoke.ts",
     "ai:smoke:new-tools": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-new-read-tools-smoke.ts",
-    "ai:smoke": "npm run ai:smoke:gemini && npm run ai:smoke:real-tools && npm run ai:smoke:budget && npm run ai:smoke:knowledge && npm run ai:smoke:new-tools"
+    "ai:smoke": "npm run ai:smoke:gemini && npm run ai:smoke:real-tools && npm run ai:smoke:budget && npm run ai:smoke:knowledge && npm run ai:smoke:new-tools",
+    "casino:smoke": "node smoke/casino-hardening-smoke.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.81",

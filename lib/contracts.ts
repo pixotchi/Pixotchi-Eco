@@ -4146,8 +4146,17 @@ export const blackjackFetchRandomness = async (
   action: string,
   playerAddress?: string,
   handIndex?: number,
-  bettingToken?: string
-): Promise<{ randomSeed: string; nonce: number; signature: string; expiresAt: number; signerAddress: string }> => {
+  bettingToken?: string,
+  betAmountWei?: string
+): Promise<{
+  randomSeed: string;
+  nonce: number;
+  signature: string;
+  expiresAt: number;
+  signerAddress: string;
+  bettingToken?: string;
+  lockedBetAmountWei?: string | null;
+}> => {
   const response = await fetch('/api/blackjack/random', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4157,6 +4166,7 @@ export const blackjackFetchRandomness = async (
       playerAddress,
       handIndex,
       bettingToken,
+      betAmountWei,
     }),
   });
 

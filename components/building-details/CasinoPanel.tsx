@@ -410,7 +410,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
   return (
     <div className="text-center py-4 space-y-3">
       <div className="text-muted-foreground text-sm">
-        Play Roulette or Blackjack with fair onchain randomness!
+        Roulette uses block reveal; Blackjack uses verified signed randomness.
         <div className="mt-2 text-xs text-primary font-medium bg-primary/10 p-2 rounded border border-primary/20 text-left">
           Active bets expire after 256 blocks (~10 mins). Expired bets are forfeited.
         </div>

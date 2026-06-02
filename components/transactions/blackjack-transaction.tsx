@@ -57,6 +57,7 @@ interface BlackjackTransactionProps {
         }>;
     }) => void;
     onButtonClick?: () => boolean | void | { handIndex?: number } | Promise<boolean | void | { handIndex?: number }>;
+    onPreparedCancel?: (reason: "cancelled" | "expired") => void;
     onError?: (error: string) => void;
     tokenSymbol?: string;
     tokenDecimals?: number;
@@ -67,6 +68,7 @@ const FAILURE_STATUSES = new Set([
     "error", "failed", "reverted", "cancelled", "canceled",
     "rejected", "transactionRejected", "userRejected", "buildError",
 ]);
+const PREPARED_FALLBACK_TIMEOUT_MS = 60_000;
 
 type Phase = "idle" | "fetching" | "ready" | "pending" | "complete" | "error";
 
@@ -132,6 +134,7 @@ export default function BlackjackTransaction({
     onStatusUpdate,
     onComplete,
     onButtonClick,
+    onPreparedCancel,
     onError,
     tokenSymbol = "SEED",
     tokenDecimals = 18,
@@ -146,6 +149,7 @@ export default function BlackjackTransaction({
     const [phase, setPhase] = useState<Phase>("idle");
     const [error, setError] = useState<string | null>(null);
     const [calls, setCalls] = useState<UntypedValue[]>([]);
+    const [preparedExpiresAt, setPreparedExpiresAt] = useState<number | null>(null);
 
     // Normalize to raw serializable calls for embedded-wallet compatibility.
     // Builder attribution is appended by transform helper + wallet_sendCalls capability.
@@ -160,7 +164,29 @@ export default function BlackjackTransaction({
         setPhase("idle");
         setError(null);
         setCalls([]);
+        setPreparedExpiresAt(null);
     }, [mode, landId]);
+
+    const resetPreparedAction = useCallback((reason: "cancelled" | "expired") => {
+        setPhase("idle");
+        setCalls([]);
+        setPreparedExpiresAt(null);
+        setError(reason === "expired" ? "Prepared action expired. Retry the same action to continue." : null);
+        onPreparedCancel?.(reason);
+    }, [onPreparedCancel]);
+
+    useEffect(() => {
+        if (phase !== "ready") return;
+
+        const timeoutMs = preparedExpiresAt
+            ? Math.max((preparedExpiresAt * 1000) - Date.now(), 0)
+            : PREPARED_FALLBACK_TIMEOUT_MS;
+        const timeoutId = window.setTimeout(() => {
+            resetPreparedAction("expired");
+        }, timeoutMs);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [phase, preparedExpiresAt, resetPreparedAction]);
 
     // Fetch randomness and build transaction
     const fetchRandomnessAndBuildCalls = useCallback(async () => {
@@ -200,7 +226,8 @@ export default function BlackjackTransaction({
                 actionName,
                 address,
                 resolvedHandIndex,
-                mode === "deal" ? bettingToken ?? undefined : undefined
+                mode === "deal" ? bettingToken ?? undefined : undefined,
+                mode === "deal" ? betAmount?.toString() : undefined
             );
 
 
@@ -208,10 +235,18 @@ export default function BlackjackTransaction({
             // Build transaction call
             let call;
             if (mode === "deal" && betAmount) {
+                const lockedBetAmount =
+                    typeof result.lockedBetAmountWei === "string"
+                        ? BigInt(result.lockedBetAmountWei)
+                        : null;
+                if (lockedBetAmount === null || lockedBetAmount !== betAmount) {
+                    throw new Error("Prepared Blackjack bet changed. Retry with the same bet amount.");
+                }
+
                 call = bettingToken
                     ? buildBlackjackDealWithRandomForTokenCall(
                         landId,
-                        betAmount,
+                        lockedBetAmount,
                         bettingToken,
                         result.randomSeed,
                         result.nonce,
@@ -219,7 +254,7 @@ export default function BlackjackTransaction({
                     )
                     : buildBlackjackDealWithRandomCall(
                         landId,
-                        betAmount,
+                        lockedBetAmount,
                         result.randomSeed,
                         result.nonce,
                         result.signature
@@ -234,6 +269,7 @@ export default function BlackjackTransaction({
 
 
             setCalls([call]);
+            setPreparedExpiresAt(typeof result.expiresAt === "number" ? result.expiresAt : null);
             setPhase("ready");
 
         } catch (err: UntypedValue) {
@@ -263,6 +299,7 @@ export default function BlackjackTransaction({
         if (FAILURE_STATUSES.has(status.statusName ?? "")) {
             setPhase("idle");
             setCalls([]);
+            setPreparedExpiresAt(null);
             onComplete?.(undefined);
             return;
         }
@@ -291,7 +328,7 @@ export default function BlackjackTransaction({
             newReceipts.push(...receiptsByHash.values());
             if (newReceipts.length === 0) {
                 onComplete?.({ success: true });
-                setTimeout(() => { setPhase("idle"); setCalls([]); }, 500);
+                setTimeout(() => { setPhase("idle"); setCalls([]); setPreparedExpiresAt(null); }, 500);
                 return;
             }
             newReceipts.forEach(r => {
@@ -515,7 +552,7 @@ export default function BlackjackTransaction({
                 }
             }
 
-            setTimeout(() => { setPhase("idle"); setCalls([]); }, 500);
+            setTimeout(() => { setPhase("idle"); setCalls([]); setPreparedExpiresAt(null); }, 500);
             onComplete?.(resultData);
         }
     };
@@ -576,11 +613,22 @@ export default function BlackjackTransaction({
                 capabilities={builderCapabilities}
                 resetAfter={2000}
             >
-                <TransactionButton
-                    text={phase === "ready" ? "Confirm Transaction" : getButtonText()}
-                    className={activeClassName}
-                    disabled={phase !== "ready"}
-                />
+                <div className="space-y-2">
+                    <TransactionButton
+                        text={phase === "ready" ? "Confirm Transaction" : getButtonText()}
+                        className={activeClassName}
+                        disabled={phase !== "ready"}
+                    />
+                    {phase === "ready" && (
+                        <button
+                            type="button"
+                            onClick={() => resetPreparedAction("cancelled")}
+                            className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-xs font-medium text-white/80 hover:bg-black/50"
+                        >
+                            Cancel prepared action
+                        </button>
+                    )}
+                </div>
                 <TransactionStatus />
                 <GlobalTransactionToast />
             </Transaction>

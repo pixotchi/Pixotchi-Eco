@@ -7,6 +7,7 @@ import {
     buildCasinoPlaceBetsWithTokenCall,
     buildCasinoRevealCall,
 } from "@/lib/contracts";
+import { rouletteHasUnsupportedZeroCombo } from "@/lib/casino-hardening-rules.mjs";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
 import { casinoAbi, CasinoBetType } from "@/public/abi/casino-abi";
 import { toast } from "react-hot-toast";
@@ -20,6 +21,8 @@ type CasinoRevealResult = {
     winningNumber?: number;
     won?: boolean;
     payout?: string;
+    expired?: boolean;
+    forfeitedAmount?: string;
     transactionHash?: string;
     receiptIncomplete?: boolean;
 };
@@ -81,6 +84,16 @@ const parseRouletteResultFromReceipts = (
                         transactionHash,
                     };
                 }
+
+                if (decoded.eventName === "RouletteBetExpired") {
+                    const args = decoded.args as UntypedValue;
+
+                    return {
+                        expired: true,
+                        forfeitedAmount: formatUnits(args.forfeitedAmount ?? BigInt(0), tokenDecimals),
+                        transactionHash,
+                    };
+                }
             } catch {
                 // Continue to next log if decode fails
             }
@@ -114,6 +127,9 @@ export default function CasinoTransaction({
     const calls = useMemo(() => {
         if (mode === "placeBets") {
             if (!betTypes?.length || !betNumbersArray?.length || !betAmounts?.length) {
+                return [];
+            }
+            if (betTypes.some((type, index) => rouletteHasUnsupportedZeroCombo(type, betNumbersArray[index] ?? []))) {
                 return [];
             }
             const call = bettingToken
@@ -185,11 +201,12 @@ export default function CasinoTransaction({
                 }
             }
 
-            // Parse RouletteSpinResult event
+            // Parse roulette result or expiration event
             let revealResult = parseRouletteResultFromReceipts(receipts, tokenDecimals);
 
             for (const receipt of receipts) {
                 const logs = receipt?.logs || [];
+                const receiptTransactionHash = extractTransactionHash(receipt);
                 for (const log of logs) {
                     try {
                         const decoded = decodeEventLog({
@@ -208,6 +225,7 @@ export default function CasinoTransaction({
                                 winningNumber,
                                 won,
                                 payout,
+                                transactionHash: receiptTransactionHash,
                             };
 
                             if (won) {
@@ -220,6 +238,22 @@ export default function CasinoTransaction({
                                     id: "casino-result",
                                 });
                             }
+                            break;
+                        }
+
+                        if (decoded.eventName === "RouletteBetExpired") {
+                            const args = decoded.args as UntypedValue;
+                            const forfeitedAmount = formatUnits(args.forfeitedAmount ?? BigInt(0), tokenDecimals);
+
+                            revealResult = {
+                                expired: true,
+                                forfeitedAmount,
+                                transactionHash: receiptTransactionHash,
+                            };
+
+                            toast.error(`Bet expired. ${forfeitedAmount} ${tokenSymbol} forfeited.`, {
+                                id: "casino-result",
+                            });
                             break;
                         }
                     } catch {
