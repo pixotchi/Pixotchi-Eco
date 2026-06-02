@@ -14,16 +14,17 @@ casinoGetActiveBetV2,
 casinoGetTokenConfig,
 checkCasinoApproval,
 LAND_CONTRACT_ADDRESS,
+type CasinoActiveBetV2,
 } from '@/lib/contracts';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
 import { CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
 import { Loader2,Trash2,X } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback,useEffect,useMemo,useState } from 'react';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { formatUnits,parseUnits } from 'viem';
-import { useAccount,useBalance } from 'wagmi';
+import { useAccount,useBalance,useBlockNumber } from 'wagmi';
 import ApproveTransaction from './approve-transaction';
 import CasinoTransaction from './casino-transaction';
 
@@ -46,6 +47,7 @@ interface PlacedBet {
 
 const MAX_TOKEN_APPROVAL = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
 const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
+const ACTIVE_BET_REFRESH_DELAYS_MS = [0, 1500, 4000] as const;
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete, selectedToken }: CasinoDialogProps) {
@@ -65,6 +67,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const [allowanceWei, setAllowanceWei] = useState(BigInt(0));
     const [error, setError] = useState<string | null>(null);
     const [pendingGame, setPendingGame] = useState<boolean>(false);
+    const [activeBet, setActiveBet] = useState<CasinoActiveBetV2 | null>(null);
+    const revealAttemptRef = useRef(false);
 
     const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
     const tokenSymbol = tokenSymbolRaw || 'TOKEN';
@@ -84,6 +88,13 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         address: address,
         token: config?.bettingToken as `0x${string}` | undefined,
         query: { enabled: !!address && !!config?.bettingToken }
+    });
+    const { data: liveBlock } = useBlockNumber({
+        watch: open && pendingGame,
+        query: {
+            enabled: open && pendingGame,
+            refetchInterval: open && pendingGame ? 3000 : false,
+        },
     });
 
     const totalBetAmount = useMemo(() => {
@@ -164,6 +175,23 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const isInsufficientBalance = totalBetAmount > balanceVal;
     const maxBets = config?.maxBetsPerGame || 2;
     const canAddMoreBets = placedBets.length < maxBets;
+    const bettingLocked = pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' || isSpinning;
+    const activeBetRevealBlock = activeBet?.isActive ? activeBet.revealBlock : BigInt(0);
+    const activeBetBelongsToWallet = !activeBet?.player || !address || activeBet.player.toLowerCase() === address.toLowerCase();
+    const canRevealActiveBet = Boolean(
+        activeBet?.isActive &&
+        activeBetBelongsToWallet &&
+        (
+            activeBet.canReveal ||
+            activeBet.isExpired ||
+            (typeof liveBlock === 'bigint' && activeBetRevealBlock > BigInt(0) && liveBlock >= activeBetRevealBlock)
+        )
+    );
+    const revealBlocksRemaining = useMemo(() => {
+        if (!activeBet?.isActive || canRevealActiveBet || typeof liveBlock !== 'bigint') return 0;
+        if (activeBetRevealBlock <= liveBlock) return 0;
+        return Number(activeBetRevealBlock - liveBlock);
+    }, [activeBet?.isActive, activeBetRevealBlock, canRevealActiveBet, liveBlock]);
 
     useEffect(() => {
         if (!open || casinoPolicy.playable) return;
@@ -171,51 +199,65 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         toast.error(casinoPolicy.message || 'Casino is currently unavailable.');
     }, [casinoPolicy.message, casinoPolicy.playable, onOpenChange, open]);
 
+    const refreshCasinoState = useCallback(async () => {
+        if (!casinoPolicy.playable) return null;
+        try {
+            const activeGame = landId ? await casinoGetActiveBetV2(landId) : null;
+            const effectiveToken = activeGame?.isActive ? activeGame.bettingToken : selectedToken;
+
+            if (!effectiveToken) {
+                setConfig(null);
+                setPendingGame(false);
+                setActiveBet(null);
+                setAllowanceWei(BigInt(0));
+                return activeGame;
+            }
+
+            const tokenConfig = await casinoGetTokenConfig(effectiveToken);
+            if (tokenConfig?.supported || activeGame?.isActive) {
+                setConfig({
+                    minBet: tokenConfig?.minBet ?? BigInt(0),
+                    maxBet: tokenConfig?.maxBet ?? BigInt(0),
+                    bettingToken: effectiveToken,
+                    enabled: tokenConfig?.enabled ?? false,
+                    maxBetsPerGame: Number(tokenConfig?.maxBetsPerGame ?? BigInt(2)) || 2,
+                });
+            } else {
+                setConfig(null);
+            }
+
+            if (activeGame?.isActive) {
+                setPendingGame(true);
+                setActiveBet(activeGame);
+                setSpinPhase(activeGame.canReveal || activeGame.isExpired ? 'revealing' : 'waiting');
+            } else {
+                setPendingGame(false);
+                setActiveBet(null);
+                setSpinPhase('idle');
+            }
+
+            if (address) {
+                const approval = await checkCasinoApproval(address, effectiveToken);
+                setAllowanceWei(approval);
+            } else {
+                setAllowanceWei(BigInt(0));
+            }
+
+            return activeGame;
+        } catch (e) {
+            console.error('Failed to load casino config:', e);
+            return null;
+        }
+    }, [address, casinoPolicy.playable, landId, selectedToken]);
+
     useEffect(() => {
-        const loadConfig = async () => {
-            if (!casinoPolicy.playable) return;
-            try {
-                const activeGame = landId ? await casinoGetActiveBetV2(landId) : null;
-                const effectiveToken = activeGame?.isActive ? activeGame.bettingToken : selectedToken;
+        if (open) void refreshCasinoState();
+    }, [open, refreshCasinoState]);
 
-                if (!effectiveToken) {
-                    setConfig(null);
-                    setPendingGame(false);
-                    setAllowanceWei(BigInt(0));
-                    return;
-                }
-
-                const tokenConfig = await casinoGetTokenConfig(effectiveToken);
-                if (tokenConfig?.supported || activeGame?.isActive) {
-                    setConfig({
-                        minBet: tokenConfig?.minBet ?? BigInt(0),
-                        maxBet: tokenConfig?.maxBet ?? BigInt(0),
-                        bettingToken: effectiveToken,
-                        enabled: tokenConfig?.enabled ?? false,
-                        maxBetsPerGame: Number(tokenConfig?.maxBetsPerGame ?? BigInt(2)) || 2,
-                    });
-                } else {
-                    setConfig(null);
-                }
-
-                if (activeGame?.isActive) {
-                    setPendingGame(true);
-                    setSpinPhase('revealing');
-                } else {
-                    setPendingGame(false);
-                    setSpinPhase('idle');
-                }
-
-                if (address) {
-                    const approval = await checkCasinoApproval(address, effectiveToken);
-                    setAllowanceWei(approval);
-                } else {
-                    setAllowanceWei(BigInt(0));
-                }
-            } catch (e) { console.error('Failed to load casino config:', e); }
-        };
-        if (open) loadConfig();
-    }, [open, address, landId, selectedToken, casinoPolicy.playable]);
+    useEffect(() => {
+        if (!pendingGame || !activeBet?.isActive || isSpinning) return;
+        setSpinPhase(canRevealActiveBet ? 'revealing' : 'waiting');
+    }, [activeBet?.isActive, canRevealActiveBet, isSpinning, pendingGame]);
 
     const configBettingToken = config?.bettingToken ?? null;
     const configMinBet = config?.minBet ?? null;
@@ -252,6 +294,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     }, []);
 
     const addBet = useCallback((type: CasinoBetType, label: string, numbers: number[]) => {
+        if (bettingLocked) {
+            toast.error('Finish the current spin before changing bets');
+            return;
+        }
         if (config && !config.enabled && !pendingGame) {
             toast.error('Roulette is currently disabled');
             return;
@@ -289,7 +335,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
         setPlacedBets(prev => [...prev, newBet]);
         toast.success(`Added ${label} bet`);
-    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet]);
+    }, [bettingLocked, canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet]);
 
     const removeBet = useCallback((id: string) => { setPlacedBets(prev => prev.filter(b => b.id !== id)); }, []);
     const clearBets = useCallback(() => { setPlacedBets([]); }, []);
@@ -311,6 +357,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             setIsSpinning(false);
             setSpinPhase('idle');
             setWheelSpinning(false);
+            setActiveBet(null);
             return;
         }
         // Bets placed successfully, transition to waiting/reveal phase
@@ -318,27 +365,23 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         setIsSpinning(false); // Stop the spinning state from placeBets
         setSpinPhase('waiting');
         setPendingGame(true);
-        // After short delay, enable reveal
-        setTimeout(() => {
-            setSpinPhase('revealing');
-        }, 5000);
-    }, []);
+        setActiveBet(null);
+        void refreshCasinoState();
+    }, [refreshCasinoState]);
 
     // Handle reveal completion
-    const handleRevealComplete = useCallback((result?: { winningNumber?: number; won?: boolean; payout?: string }) => {
-        // Only process if we're actually in a reveal phase
-        // This prevents false errors from OnchainKit status callbacks on initial render
-        if (spinPhase !== 'revealing' && !isSpinning) {
-            return; // Ignore callbacks when not actively revealing
-        }
+    const handleRevealComplete = useCallback((result?: { winningNumber?: number; won?: boolean; payout?: string; receiptIncomplete?: boolean; transactionHash?: string }) => {
+        const shouldProcess = revealAttemptRef.current || pendingGame || spinPhase === 'revealing' || isSpinning;
+        if (!shouldProcess) return;
 
+        revealAttemptRef.current = false;
         setIsSpinning(false);
         setSpinPhase('idle');
 
         if (result === undefined) {
-            // Transaction failed - but only show error if we were actually trying
             setError('Reveal failed');
             setWheelSpinning(false);
+            void refreshCasinoState();
             return;
         }
 
@@ -351,30 +394,69 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             });
             setWheelWinningNumber(result.winningNumber);
             refetchBalance();
+            setPendingGame(false);
+            setActiveBet(null);
+            setPlacedBets([]);
+            onSpinComplete?.();
+            return;
         } else {
-            setError('Could not verify result');
             setWheelSpinning(false);
+            setError(result.receiptIncomplete
+                ? 'Spin completed, but the wallet did not return the result. Refreshing game state...'
+                : 'Could not verify result');
         }
 
-        setPendingGame(false);
-        setPlacedBets([]);
-        onSpinComplete?.();
-    }, [onSpinComplete, refetchBalance, spinPhase, isSpinning]);
+        void (async () => {
+            for (const delayMs of ACTIVE_BET_REFRESH_DELAYS_MS) {
+                if (delayMs > 0) await wait(delayMs);
+                const latestActiveBet = await casinoGetActiveBetV2(landId);
+
+                if (!latestActiveBet?.isActive) {
+                    setPendingGame(false);
+                    setActiveBet(null);
+                    setPlacedBets([]);
+                    setSpinPhase('idle');
+                    setError('Spin completed. Check recent activity for the result.');
+                    refetchBalance();
+                    onSpinComplete?.();
+                    return;
+                }
+
+                setPendingGame(true);
+                setActiveBet(latestActiveBet);
+                setSpinPhase(latestActiveBet.canReveal || latestActiveBet.isExpired ? 'revealing' : 'waiting');
+            }
+
+            setError('Reveal was submitted, but the game still appears active. Try revealing again after the next refresh.');
+        })();
+    }, [isSpinning, landId, onSpinComplete, pendingGame, refetchBalance, refreshCasinoState, spinPhase]);
 
     // Handle transaction status updates for UI feedback
     const handleStatusUpdate = useCallback((status: LifecycleStatus) => {
         if (status.statusName === 'transactionPending') {
+            if (pendingGame || spinPhase === 'revealing') {
+                revealAttemptRef.current = true;
+            }
             setError(null);
             setIsSpinning(true);
             setResult(null);
             setWheelWinningNumber(null);
             setWheelSpinning(true);
         }
-    }, []);
+    }, [pendingGame, spinPhase]);
 
     // Button click handler to start spinning immediately
     const handleSpinButtonClick = useCallback(() => {
         setSpinPhase('betting');
+        setError(null);
+        setResult(null);
+        setWheelWinningNumber(null);
+        setWheelSpinning(true);
+    }, []);
+
+    const handleRevealButtonClick = useCallback(() => {
+        revealAttemptRef.current = true;
+        setSpinPhase('revealing');
         setError(null);
         setResult(null);
         setWheelWinningNumber(null);
@@ -496,6 +578,18 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         );
     };
 
+    const revealModeActive = pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing';
+    const revealButtonDisabled = isSpinning || !activeBetBelongsToWallet || (revealModeActive && !canRevealActiveBet);
+    const revealButtonText = isSpinning
+        ? (spinPhase === 'waiting' ? 'Waiting...' : 'Revealing...')
+        : !activeBetBelongsToWallet
+            ? 'Game active in another wallet'
+            : pendingGame && activeBet?.isExpired
+                ? 'Settle expired game'
+                : revealModeActive && !canRevealActiveBet
+                    ? (revealBlocksRemaining > 0 ? `Waiting ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}` : 'Waiting for block...')
+                    : 'Reveal Result';
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -541,7 +635,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-white/10 h-full text-white">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-sm font-semibold">Your Bets ({placedBets.length}/{maxBets})</span>
-                                    {placedBets.length > 0 && <Button variant="ghost" size="sm" onClick={clearBets} className="h-6 text-xs px-2"><Trash2 className="h-3 w-3 mr-1" />Clear</Button>}
+                                    {placedBets.length > 0 && <Button variant="ghost" size="sm" onClick={clearBets} disabled={bettingLocked} className="h-6 text-xs px-2"><Trash2 className="h-3 w-3 mr-1" />Clear</Button>}
                                 </div>
                                 {placedBets.length === 0 ? (
                                     <p className="text-xs text-white/60 text-center py-4">Click on table below to add bets</p>
@@ -551,7 +645,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                             <div key={bet.id} className="inline-flex items-center gap-1 bg-black/60 rounded pl-1.5 pr-1 py-0.5 text-[10px] border border-white/20 shrink-0">
                                                 <span className="font-medium whitespace-nowrap text-white">{bet.label}</span>
                                                 <span className="text-white/70 opacity-80">({bet.amount})</span>
-                                                <button onClick={() => removeBet(bet.id)} className="!w-3 !h-3 !min-w-0 !min-h-0 !p-0 text-red-500 hover:text-red-600 transition-colors opacity-70 hover:opacity-100 flex items-center justify-center shrink-0">
+                                                <button onClick={() => removeBet(bet.id)} disabled={bettingLocked} className="!w-3 !h-3 !min-w-0 !min-h-0 !p-0 text-red-500 hover:text-red-600 transition-colors opacity-70 hover:opacity-100 disabled:opacity-30 flex items-center justify-center shrink-0">
                                                     <X className="!h-3 !w-3" />
                                                 </button>
                                             </div>
@@ -725,11 +819,12 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             <CasinoTransaction
                                 mode="reveal"
                                 landId={landId}
-                                buttonText={isSpinning ? (spinPhase === 'waiting' ? 'Waiting...' : 'Revealing...') : 'Resume (Reveal)'}
+                                buttonText={revealButtonText}
                                 buttonClassName="w-full"
-                                disabled={isSpinning && spinPhase === 'waiting'}
+                                disabled={revealButtonDisabled}
                                 onStatusUpdate={handleStatusUpdate}
                                 onComplete={handleRevealComplete}
+                                onButtonClick={handleRevealButtonClick}
                                 tokenSymbol={tokenSymbol}
                                 tokenDecimals={tokenDecimals}
                             />
@@ -754,6 +849,18 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 tokenDecimals={tokenDecimals}
                                 bettingToken={config?.bettingToken ?? null}
                             />
+                        )}
+                        {pendingGame && !isSpinning && !canRevealActiveBet && activeBetBelongsToWallet && (
+                            <p className="text-xs text-white/70 text-center">
+                                {revealBlocksRemaining > 0
+                                    ? `Reveal unlocks in ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}.`
+                                    : 'Waiting for the reveal block to be indexed.'}
+                            </p>
+                        )}
+                        {pendingGame && !activeBetBelongsToWallet && (
+                            <p className="text-xs text-destructive text-center">
+                                This roulette game was started by another wallet.
+                            </p>
                         )}
                         {error && <p className="text-xs text-destructive text-center">{error}</p>}
                     </div>

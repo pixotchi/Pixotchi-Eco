@@ -144,6 +144,7 @@ const TERMINAL_STATUSES = new Set<StatusName>([
   "userRejected",
   "buildError",
 ]);
+const CALLS_STATUS_TIMEOUT_MS = 120_000;
 
 const PRESSABLE_PRIMARY =
   "cursor-pointer bg-[var(--ock-compat-primary)] hover:bg-[var(--ock-compat-primary-hover)] active:bg-[var(--ock-compat-primary-active)] focus:bg-[var(--ock-compat-primary-active)]";
@@ -328,6 +329,22 @@ function createAtomicBundleUnsupportedError() {
   return new Error(
     "Your wallet does not support atomic bundled transactions. Please use a smart wallet or a wallet that supports wallet_sendCalls for this multi-step action.",
   );
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutRef: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutRef = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutRef !== null) {
+      clearTimeout(timeoutRef);
+    }
+  }) as Promise<T>;
 }
 
 function getStatusLabelData({
@@ -667,11 +684,15 @@ export function Transaction({
             statusName: "transactionPending",
           });
 
-          const result = await (walletClient as UntypedValue).waitForCallsStatus({
-            id: batch.id,
-            throwOnFailure: false,
-            timeout: 120_000,
-          });
+          const result = await withTimeout<UntypedValue>(
+            (walletClient as UntypedValue).waitForCallsStatus({
+              id: batch.id,
+              throwOnFailure: false,
+              timeout: CALLS_STATUS_TIMEOUT_MS,
+            }) as Promise<UntypedValue>,
+            CALLS_STATUS_TIMEOUT_MS + 5_000,
+            "Timed out waiting for wallet transaction status.",
+          );
 
           const receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
             normalizeTransactionReceipt(receipt),

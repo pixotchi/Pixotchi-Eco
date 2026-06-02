@@ -64,7 +64,7 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
           onKeyPress={handleKeyPress}
           placeholder={
             isAIMode
-              ? (sharedChatUnavailable ? "AI chat unavailable" : "Ask Neural Seed about Pixotchi...")
+              ? (sharedChatUnavailable ? "AI chat unavailable" : "Type a message...")
               : (sharedChatUnavailable ? "Public chat unavailable" : "Type a message...")
           }
           disabled={inputDisabled}
