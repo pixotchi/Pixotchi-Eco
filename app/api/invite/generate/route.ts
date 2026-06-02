@@ -9,6 +9,13 @@ import { generateInviteCode } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { createErrorResponse } from '@/lib/auth-utils';
 
+function getGenerationStatus(errorCode?: string): number {
+  if (errorCode === 'USER_NOT_VALIDATED' || errorCode === 'USER_INELIGIBLE') return 403;
+  if (errorCode === 'DAILY_LIMIT_EXCEEDED') return 429;
+  if (errorCode === 'REDIS_UNAVAILABLE') return 503;
+  return 400;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Check if invite system is enabled
@@ -36,7 +43,11 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString(),
     });
     } else {
-      const error = createErrorResponse(result.error || 'Failed to generate invite code', 400, 'GENERATION_FAILED');
+      const error = createErrorResponse(
+        result.error || 'Failed to generate invite code',
+        getGenerationStatus(result.errorCode),
+        result.errorCode || 'GENERATION_FAILED',
+      );
       return NextResponse.json(error.body, { status: error.status });
     }
   } catch (error) {

@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from './redis';
-import { timingSafeEqual } from 'crypto';
+import { redis, redisExpire, redisIncrBy, withPrefix } from './redis';
+import { createHash, timingSafeEqual } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
+
+export type AdminAuditContext = {
+  ip: string;
+  method: string;
+  route: string;
+  userAgent: string;
+};
+
+type AdminRateLimitResult =
+  | { allowed: true }
+  | { allowed: false; code: string; message: string; retryAfter?: string; status: number };
+
+const adminAuditContextStorage = new AsyncLocalStorage<AdminAuditContext>();
 
 function getRequestIp(request: NextRequest): string {
   return (
@@ -9,6 +23,19 @@ function getRequestIp(request: NextRequest): string {
     request.headers.get('cf-connecting-ip')?.trim() ||
     'unknown'
   );
+}
+
+function getAdminAuditContext(request: NextRequest): AdminAuditContext {
+  return {
+    ip: getRequestIp(request),
+    method: request.method,
+    route: request.nextUrl?.pathname || 'unknown',
+    userAgent: request.headers.get('user-agent')?.slice(0, 240) || 'unknown',
+  };
+}
+
+function fingerprintAdminKey(adminKey: string): string {
+  return createHash('sha256').update(adminKey || 'unknown').digest('hex').slice(0, 16);
 }
 
 // Admin authentication utility
@@ -46,27 +73,52 @@ export function validateAdminKey(request: NextRequest): boolean {
 }
 
 // Rate limiting for admin authentication attempts
-export async function checkAdminRateLimit(ip: string): Promise<boolean> {
+export async function checkAdminRateLimit(ip: string): Promise<AdminRateLimitResult> {
   if (!redis) {
-    console.warn('Redis unavailable - allowing admin request (rate limit bypass)');
-    return true; // Allow if Redis is down (could be changed to fail closed for higher security)
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Redis unavailable - blocking admin request in production');
+      return {
+        allowed: false,
+        code: 'ADMIN_RATE_LIMIT_UNAVAILABLE',
+        message: 'Admin rate limit service unavailable',
+        status: 503,
+      };
+    }
+
+    console.warn('Redis unavailable - allowing admin request in non-production only');
+    return { allowed: true };
   }
 
   try {
     const rateLimitKey = `admin:ratelimit:${ip}`;
-    const attempts = await redis.get(rateLimitKey);
+    const attempts = await redis.get(withPrefix(rateLimitKey));
     const attemptsCount = attempts ? parseInt(String(attempts), 10) : 0;
     
     // Allow 10 attempts per 15 minutes
     if (attemptsCount >= 10) {
       console.warn(`Admin rate limit exceeded for IP: ${ip}`);
-      return false;
+      return {
+        allowed: false,
+        code: 'ADMIN_RATE_LIMITED',
+        message: 'Too many admin authentication attempts',
+        retryAfter: '900',
+        status: 429,
+      };
     }
     
-    return true;
+    return { allowed: true };
   } catch (error) {
     console.error('Rate limit check failed:', error);
-    return true; // Allow on error to prevent lockout
+    if (process.env.NODE_ENV === 'production') {
+      return {
+        allowed: false,
+        code: 'ADMIN_RATE_LIMIT_UNAVAILABLE',
+        message: 'Admin rate limit service unavailable',
+        status: 503,
+      };
+    }
+
+    return { allowed: true };
   }
 }
 
@@ -76,27 +128,27 @@ export async function trackAdminFailedAttempt(ip: string): Promise<void> {
   
   try {
     const rateLimitKey = `admin:ratelimit:${ip}`;
-    const current = await redis.get(rateLimitKey);
-    const count = current ? parseInt(String(current), 10) : 0;
-    
-    // Increment and set 15 minute expiration
-    await redis.set(rateLimitKey, String(count + 1), { ex: 900 });
+    const count = await redisIncrBy(rateLimitKey, 1);
+    if (count === 1) {
+      await redisExpire(rateLimitKey, 900);
+    }
   } catch (error) {
     console.error('Failed to track admin attempt:', error);
   }
 }
 
 export async function requireAdmin(request: NextRequest): Promise<NextResponse | null> {
+  adminAuditContextStorage.enterWith(getAdminAuditContext(request));
   const ip = getRequestIp(request);
-  const withinRateLimit = await checkAdminRateLimit(ip);
+  const rateLimit = await checkAdminRateLimit(ip);
 
-  if (!withinRateLimit) {
+  if (!rateLimit.allowed) {
     return NextResponse.json(
-      createErrorResponse('Too many admin authentication attempts', 429, 'ADMIN_RATE_LIMITED').body,
+      createErrorResponse(rateLimit.message, rateLimit.status, rateLimit.code).body,
       {
-        status: 429,
+        status: rateLimit.status,
         headers: {
-          'Retry-After': '900',
+          ...(rateLimit.retryAfter ? { 'Retry-After': rateLimit.retryAfter } : {}),
           'Cache-Control': 'private, no-store',
         },
       },
@@ -119,7 +171,8 @@ export async function logAdminAction(
   action: string,
   adminKey: string,
   details: Record<string, UntypedValue> = {},
-  success: boolean = true
+  success: boolean = true,
+  context?: AdminAuditContext,
 ): Promise<void> {
   try {
     if (!redis) {
@@ -127,13 +180,17 @@ export async function logAdminAction(
       return;
     }
 
+    const auditContext = context || adminAuditContextStorage.getStore();
     const logEntry = {
       action,
-      adminKey: adminKey.substring(0, 8) + '***', // Partially mask the key
+      adminKeyFingerprint: fingerprintAdminKey(adminKey),
       details,
+      ip: auditContext?.ip || 'unknown',
+      method: auditContext?.method || 'unknown',
+      route: auditContext?.route || 'unknown',
       success,
       timestamp: new Date().toISOString(),
-      ip: 'UntypedValue', // Could be enhanced later if needed
+      userAgent: auditContext?.userAgent || 'unknown',
     };
 
     // Store audit log with expiration (keep for 30 days)

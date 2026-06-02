@@ -274,6 +274,7 @@ function getErrorStatusName(error: UntypedValue): StatusName {
     || message.includes("no transaction calls")
     || message.includes("failed to prepare")
     || message.includes("provider unavailable")
+    || message.includes("atomic bundled transactions")
   ) {
     return "buildError";
   }
@@ -320,6 +321,12 @@ function isUnsupportedSendCallsError(error: UntypedValue) {
     || message.includes("not available")
     || message.includes("corresponding handler")
     || message.includes("unsupported method")
+  );
+}
+
+function createAtomicBundleUnsupportedError() {
+  return new Error(
+    "Your wallet does not support atomic bundled transactions. Please use a smart wallet or a wallet that supports wallet_sendCalls for this multi-step action.",
   );
 }
 
@@ -562,13 +569,14 @@ export function Transaction({
     const canBatch =
       typeof (walletClient as UntypedValue).sendCalls === "function"
       && typeof (walletClient as UntypedValue).waitForCallsStatus === "function";
+    const requiresAtomicBundle = normalizedCalls.length > 1;
     const shouldUseBatchedExecution =
       canBatch
       && !(
         sendCallsSupportKey
         && unsupportedSendCallsKeys.has(sendCallsSupportKey)
       )
-      && (normalizedCalls.length > 1 || isSponsored || isSmartWallet);
+      && (requiresAtomicBundle || isSponsored || isSmartWallet);
     const paymasterUrl =
       process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL
       || process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL
@@ -709,9 +717,17 @@ export function Transaction({
           }
 
           clearTransactionArtifacts();
+          if (requiresAtomicBundle) {
+            throw createAtomicBundleUnsupportedError();
+          }
+
           await executeDirectTransactions();
           return;
         }
+      }
+
+      if (requiresAtomicBundle) {
+        throw createAtomicBundleUnsupportedError();
       }
 
       await executeDirectTransactions();

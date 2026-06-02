@@ -29,6 +29,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // Max 30 requests per minute per address
 const RANDOMNESS_LIFETIME_SECONDS = 60;
 const ACTION_LOCK_TTL_SECONDS = RANDOMNESS_LIFETIME_SECONDS + 45;
+const ALLOW_MEMORY_RANDOMNESS_LOCKS = process.env.NODE_ENV !== 'production';
 
 interface CachedRandomness {
     randomSeed: Hex;
@@ -350,6 +351,14 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (!redis && !ALLOW_MEMORY_RANDOMNESS_LOCKS) {
+            console.error('Redis unavailable - blocking Blackjack randomness in production');
+            return NextResponse.json(
+                { error: 'Randomness lock service unavailable. Please try again shortly.' },
+                { status: 503 }
+            );
+        }
+
         // Parse request
         let body: UntypedValue;
         try {
@@ -623,13 +632,21 @@ export async function GET() {
         }, { status: 503 });
     }
 
+    if (!redis && !ALLOW_MEMORY_RANDOMNESS_LOCKS) {
+        return NextResponse.json({
+            status: 'unavailable',
+            message: 'Randomness lock service unavailable',
+            lockStore: 'unavailable',
+        }, { status: 503 });
+    }
+
     try {
         const account = privateKeyToAccount(SIGNER_PRIVATE_KEY as `0x${string}`);
         return NextResponse.json({
             status: 'available',
             signerAddress: account.address,
             cacheSize: nonceRandomnessCache.size, // In-memory fallback cache size
-            lockStore: redis ? 'redis' : 'memory',
+            lockStore: redis ? 'redis' : ALLOW_MEMORY_RANDOMNESS_LOCKS ? 'memory' : 'unavailable',
         });
     } catch {
         return NextResponse.json({

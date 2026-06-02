@@ -8,13 +8,94 @@ isValidCodeFormat,
 normalizeInviteCode,
 validateUserEligibility
 } from './invite-utils';
-import { redis } from './redis';
+import { redis, redisCompareAndSetJSONRaw } from './redis';
 import {
 InviteCode,
 InviteStats,
 InviteValidationResult,
 UserInviteData
 } from './types';
+
+type InviteActionResult = { success: boolean; error?: string; errorCode?: string };
+
+function normalizeAddress(address: string): string {
+  return address.trim().toLowerCase();
+}
+
+function secondsUntilNextUtcDay(): number {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setUTCHours(24, 0, 0, 0);
+  return Math.max(60, Math.ceil((tomorrow.getTime() - now.getTime()) / 1000));
+}
+
+async function getDailyGenerationCount(address: string, today = getTodayDateString()): Promise<number> {
+  if (!redis) return 0;
+  try {
+    const raw = await redis.get(RedisKeys.dailyLimit(address, today));
+    const count = Number(raw || 0);
+    return Number.isFinite(count) && count > 0 ? count : 0;
+  } catch (error) {
+    console.error('Error reading invite daily counter:', error);
+    return 0;
+  }
+}
+
+async function incrementRaw(key: string, amount: number): Promise<number | null> {
+  if (!redis) return null;
+  try {
+    const incrby = (redis as UntypedValue)?.incrby;
+    if (typeof incrby === 'function') {
+      return Number(await incrby.call(redis, key, amount));
+    }
+
+    const current = Number(await redis.get(key) || 0);
+    const next = current + amount;
+    await redis.set(key, String(next));
+    return next;
+  } catch (error) {
+    console.error('Error incrementing invite counter:', error);
+    return null;
+  }
+}
+
+async function expireRaw(key: string, ttlSeconds: number): Promise<void> {
+  if (!redis) return;
+  try {
+    await redis.expire(key, ttlSeconds);
+  } catch (error) {
+    console.error('Error expiring invite counter:', error);
+  }
+}
+
+async function reserveDailyInviteSlot(address: string): Promise<{ success: boolean; count?: number; error?: string; errorCode?: string }> {
+  const today = getTodayDateString();
+  const key = RedisKeys.dailyLimit(address, today);
+  const count = await incrementRaw(key, 1);
+
+  if (count === null) {
+    return { success: false, error: 'Database not available', errorCode: 'REDIS_UNAVAILABLE' };
+  }
+
+  if (count === 1) {
+    await expireRaw(key, secondsUntilNextUtcDay() + 300);
+  }
+
+  if (count > INVITE_CONFIG.DAILY_LIMIT) {
+    await incrementRaw(key, -1);
+    return { success: false, error: 'Daily generation limit reached', errorCode: 'DAILY_LIMIT_EXCEEDED' };
+  }
+
+  return { success: true, count };
+}
+
+async function rollbackDailyInviteSlot(address: string): Promise<void> {
+  try {
+    await incrementRaw(RedisKeys.dailyLimit(address, getTodayDateString()), -1);
+  } catch (error) {
+    console.error('Failed to rollback invite daily counter:', error);
+  }
+}
 
 /**
  * Generate a new invite code for a user
@@ -29,7 +110,7 @@ export async function generateInviteCode(address: string): Promise<{ success: bo
       };
     }
 
-    const normalizedAddress = address.toLowerCase();
+    const normalizedAddress = normalizeAddress(address);
 
     // Check user eligibility
     const eligibilityCheck = validateUserEligibility(normalizedAddress);
@@ -41,32 +122,52 @@ export async function generateInviteCode(address: string): Promise<{ success: bo
       };
     }
 
-    // Check daily limit
-    const canGenerate = await checkDailyLimit(normalizedAddress);
-    if (!canGenerate) {
+    const validated = await isUserValidated(normalizedAddress);
+    if (!validated) {
       return {
         success: false,
-        error: 'Daily generation limit reached',
-        errorCode: 'DAILY_LIMIT_EXCEEDED'
+        error: 'Use a valid invite before generating invite codes.',
+        errorCode: 'USER_NOT_VALIDATED'
       };
     }
 
+    const reserved = await reserveDailyInviteSlot(normalizedAddress);
+    if (!reserved.success) {
+      return reserved;
+    }
+
     // Generate unique code
-    const code = generateSecureCode();
     const now = Date.now();
     const expiresAt = now + (INVITE_CONFIG.EXPIRY_HOURS * 60 * 60 * 1000);
+    let code = '';
+    let stored = false;
 
-    const inviteCode: InviteCode = {
-      code,
-      createdBy: normalizedAddress,
-      createdAt: now,
-      isUsed: false,
-      expiresAt,
-    };
+    for (let attempt = 0; attempt < 5 && !stored; attempt++) {
+      code = generateSecureCode();
+      const inviteCode: InviteCode = {
+        code,
+        createdBy: normalizedAddress,
+        createdAt: now,
+        isUsed: false,
+        expiresAt,
+      };
 
-    // Store the code
-    const codeKey = RedisKeys.inviteCode(code);
-    await redis.set(codeKey, JSON.stringify(inviteCode));
+      stored = await redisCompareAndSetJSONRaw(
+        RedisKeys.inviteCode(code),
+        null,
+        JSON.stringify(inviteCode),
+        INVITE_CONFIG.EXPIRY_HOURS * 60 * 60,
+      );
+    }
+
+    if (!stored) {
+      await rollbackDailyInviteSlot(normalizedAddress);
+      return {
+        success: false,
+        error: 'Failed to generate unique invite code',
+        errorCode: 'GENERATION_FAILED'
+      };
+    }
 
     // Update user data
     let userData = await getUserInviteData(normalizedAddress);
@@ -78,12 +179,8 @@ export async function generateInviteCode(address: string): Promise<{ success: bo
 
     // Update generation counts
     userData.totalCodesGenerated++;
-    if (userData.lastGeneratedDate === today) {
-      userData.dailyGenerated++;
-    } else {
-      userData.dailyGenerated = 1;
-      userData.lastGeneratedDate = today;
-    }
+    userData.dailyGenerated = reserved.count || await getDailyGenerationCount(normalizedAddress, today);
+    userData.lastGeneratedDate = today;
 
     const updateSuccess = await updateUserInviteData(normalizedAddress, userData);
     if (!updateSuccess) {
@@ -150,7 +247,7 @@ export async function validateInviteCode(code: string, userAddress?: string): Pr
     }
 
     // Check self-invitation (only if userAddress is provided)
-    if (userAddress && inviteCode.createdBy.toLowerCase() === userAddress.toLowerCase()) {
+    if (userAddress && inviteCode.createdBy.toLowerCase() === normalizeAddress(userAddress)) {
       return {
         valid: false,
         error: 'Cannot use your own invite code',
@@ -168,10 +265,7 @@ export async function validateInviteCode(code: string, userAddress?: string): Pr
   }
 }
 
-/**
- * Mark an invite code as used
- */
-export async function markCodeAsUsed(code: string, userAddress?: string): Promise<{ success: boolean; error?: string; errorCode?: string }> {
+export async function redeemInviteCode(code: string, userAddress: string): Promise<InviteActionResult & { alreadyUsedByUser?: boolean }> {
   try {
     if (!redis) {
       return {
@@ -181,74 +275,96 @@ export async function markCodeAsUsed(code: string, userAddress?: string): Promis
       };
     }
 
-    const normalizedCode = code.toUpperCase();
-    const inviteCode = await getInviteCode(normalizedCode);
-
-    if (!inviteCode) {
+    const normalizedUserAddress = normalizeAddress(userAddress);
+    const eligibilityCheck = validateUserEligibility(normalizedUserAddress);
+    if (!eligibilityCheck.valid) {
       return {
         success: false,
-        error: 'Invite code not found',
-        errorCode: 'NOT_FOUND'
+        error: eligibilityCheck.error || 'User not eligible',
+        errorCode: 'USER_INELIGIBLE'
       };
     }
 
-    if (inviteCode.isUsed) {
+    const validation = await validateInviteCode(code, normalizedUserAddress);
+    if (!validation.valid || !validation.code) {
       return {
         success: false,
-        error: 'Invite code already used',
-        errorCode: 'ALREADY_USED'
+        error: validation.error || 'Invalid invite code',
+        errorCode: validation.errorCode || 'INVALID_CODE'
       };
     }
 
-    // Update the code
-    inviteCode.isUsed = true;
-    inviteCode.usedAt = Date.now();
-    if (userAddress) {
-      inviteCode.usedBy = userAddress.toLowerCase();
-    }
-
-    // Store updated code
+    const normalizedCode = normalizeInviteCode(code);
     const codeKey = RedisKeys.inviteCode(normalizedCode);
-    await redis.set(codeKey, JSON.stringify(inviteCode));
-
-    // Update creator's stats
-    if (inviteCode.createdBy) {
-      let creatorData = await getUserInviteData(inviteCode.createdBy);
-      if (!creatorData) {
-        creatorData = createDefaultUserData(inviteCode.createdBy);
-      }
-
-      creatorData.totalCodesUsed++;
-      if (userAddress && !creatorData.invitedUsers.includes(userAddress.toLowerCase())) {
-        creatorData.invitedUsers.push(userAddress.toLowerCase());
-      }
-
-      await updateUserInviteData(inviteCode.createdBy, creatorData);
+    const raw = await redis.get(codeKey);
+    if (!raw) {
+      return { success: false, error: 'Invite code not found', errorCode: 'NOT_FOUND' };
     }
 
-    // Update user's data if they used the code
-    if (userAddress) {
-      let userData = await getUserInviteData(userAddress);
-      if (!userData) {
-        userData = createDefaultUserData(userAddress);
+    const current = typeof raw === 'string' ? JSON.parse(raw) as InviteCode : raw as InviteCode;
+    const expectedRaw = typeof raw === 'string' ? raw : JSON.stringify(current);
+
+    if (current.isUsed) {
+      if (current.usedBy?.toLowerCase() === normalizedUserAddress) {
+        await markUserAsValidated(normalizedUserAddress);
+        return { success: true, alreadyUsedByUser: true };
       }
-
-      userData.invitedBy = inviteCode.createdBy;
-      userData.joinedAt = Date.now();
-
-      await updateUserInviteData(userAddress, userData);
+      return { success: false, error: 'Invite code already used', errorCode: 'ALREADY_USED' };
     }
+
+    if (current.createdBy.toLowerCase() === normalizedUserAddress) {
+      return { success: false, error: 'Cannot use your own invite code', errorCode: 'SELF_INVITE' };
+    }
+
+    if (current.expiresAt && isExpired(current.expiresAt)) {
+      return { success: false, error: 'Invite code has expired', errorCode: 'EXPIRED' };
+    }
+
+    const usedAt = Date.now();
+    const nextCode: InviteCode = {
+      ...current,
+      isUsed: true,
+      usedAt,
+      usedBy: normalizedUserAddress,
+    };
+
+    const updated = await redisCompareAndSetJSONRaw(codeKey, expectedRaw, JSON.stringify(nextCode));
+    if (!updated) {
+      const latest = await getInviteCode(normalizedCode);
+      if (latest?.isUsed && latest.usedBy?.toLowerCase() === normalizedUserAddress) {
+        await markUserAsValidated(normalizedUserAddress);
+        return { success: true, alreadyUsedByUser: true };
+      }
+      return { success: false, error: 'Invite code already used', errorCode: 'ALREADY_USED' };
+    }
+
+    await updateInviteUsageStats(nextCode, normalizedUserAddress, usedAt);
+    await markUserAsValidated(normalizedUserAddress);
 
     return { success: true };
-
   } catch (error) {
-    console.error('Error marking code as used:', error);
+    console.error('Error redeeming invite code:', error);
     return {
       success: false,
-      error: 'Failed to mark code as used',
+      error: 'Failed to use invite code',
       errorCode: 'UPDATE_FAILED'
     };
   }
+}
+
+/**
+ * Mark an invite code as used
+ */
+export async function markCodeAsUsed(code: string, userAddress?: string): Promise<{ success: boolean; error?: string; errorCode?: string }> {
+  if (!userAddress) {
+    return {
+      success: false,
+      error: 'Authenticated wallet address is required',
+      errorCode: 'USER_REQUIRED',
+    };
+  }
+
+  return redeemInviteCode(code, userAddress);
 }
 
 /**
@@ -260,17 +376,21 @@ export async function getUserInviteStats(address: string): Promise<InviteStats> 
     const userData = await getUserInviteData(normalizedAddress);
     const today = getTodayDateString();
 
+    const counterGenerated = await getDailyGenerationCount(normalizedAddress, today);
+
     // Handle case where user data doesn't exist yet
     if (!userData) {
+      const dailyRemaining = Math.max(0, INVITE_CONFIG.DAILY_LIMIT - counterGenerated);
       return {
         totalInvites: 0,
         successfulInvites: 0,
-        dailyRemaining: INVITE_CONFIG.DAILY_LIMIT,
-        canGenerateToday: true,
+        dailyRemaining,
+        canGenerateToday: dailyRemaining > 0,
       };
     }
 
-    const dailyGenerated = userData.lastGeneratedDate === today ? userData.dailyGenerated : 0;
+    const dataGenerated = userData.lastGeneratedDate === today ? userData.dailyGenerated : 0;
+    const dailyGenerated = Math.max(counterGenerated, dataGenerated);
     const dailyRemaining = Math.max(0, INVITE_CONFIG.DAILY_LIMIT - dailyGenerated);
 
     return {
@@ -298,6 +418,11 @@ export async function checkDailyLimit(address: string): Promise<boolean> {
     const normalizedAddress = address.toLowerCase();
     const userData = await getUserInviteData(normalizedAddress);
     const today = getTodayDateString();
+    const counterGenerated = await getDailyGenerationCount(normalizedAddress, today);
+
+    if (counterGenerated >= INVITE_CONFIG.DAILY_LIMIT) {
+      return false;
+    }
 
     // If user data doesn't exist yet, they can generate
     if (!userData) {
@@ -309,7 +434,7 @@ export async function checkDailyLimit(address: string): Promise<boolean> {
       return true;
     }
 
-    const canGenerate = userData.dailyGenerated < INVITE_CONFIG.DAILY_LIMIT;
+    const canGenerate = Math.max(counterGenerated, userData.dailyGenerated) < INVITE_CONFIG.DAILY_LIMIT;
     return canGenerate;
   } catch (error) {
     console.error('Error checking daily limit:', error);
@@ -321,50 +446,26 @@ export async function checkDailyLimit(address: string): Promise<boolean> {
  * Check if a user has been validated (can bypass invite gate)
  */
 export async function isUserValidated(address: string): Promise<boolean> {
-  const normalizedAddress = address.toLowerCase();
-
-  console.log('🔍 [API DEBUG] isUserValidated called');
-  console.log('🔍 [API DEBUG] Original address:', address);
-  console.log('🔍 [API DEBUG] Normalized address:', normalizedAddress);
-  console.log('🔍 [API DEBUG] INVITE_CONFIG.SYSTEM_ENABLED:', INVITE_CONFIG.SYSTEM_ENABLED);
+  const normalizedAddress = normalizeAddress(address);
 
   // If invite system is disabled, everyone is validated
   if (!INVITE_CONFIG.SYSTEM_ENABLED) {
-    console.log('🔍 [API DEBUG] System disabled - returning true');
     return true;
   }
 
   if (!redis) {
-    console.error('🔍 [API DEBUG] Redis not available for validation check');
+    console.error('Redis not available for validation check');
     throw new Error('Database temporarily unavailable');
   }
 
-  console.log('🔍 [API DEBUG] Redis available - checking validation');
-
   try {
     const redisKey = RedisKeys.userValidated(normalizedAddress);
-    console.log('🔍 [API DEBUG] Redis key:', redisKey);
-
-    const startTime = Date.now();
     const validated = await redis.get(redisKey);
-    const queryTime = Date.now() - startTime;
-
-    console.log('🔍 [API DEBUG] Redis query completed in', queryTime, 'ms');
-    console.log('🔍 [API DEBUG] Raw Redis response:', validated);
-    console.log('🔍 [API DEBUG] Response type:', typeof validated);
 
     // Handle both boolean true and string 'true' responses
-    const isValidated = validated === true || validated === 'true';
-    console.log('🔍 [API DEBUG] Final validation result:', isValidated);
-
-    return isValidated;
+    return validated === true || validated === 'true';
   } catch (error) {
-    console.error('🔍 [API DEBUG] Error checking user validation:', error);
-    console.error('🔍 [API DEBUG] Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : 'No stack trace',
-      name: error instanceof Error ? error.name : 'Unknown error type'
-    });
+    console.error('Error checking user validation:', error);
     throw error;
   }
 }
@@ -379,13 +480,12 @@ export async function markUserAsValidated(address: string): Promise<boolean> {
       throw new Error('Database temporarily unavailable');
     }
 
-    const normalizedAddress = address.toLowerCase();
+    const normalizedAddress = normalizeAddress(address);
     const redisKey = RedisKeys.userValidated(normalizedAddress);
 
     // Set user as validated (no expiration)
     await redis.set(redisKey, 'true');
 
-    console.log(`User ${normalizedAddress} marked as validated`);
     return true;
 
   } catch (error) {
@@ -475,17 +575,38 @@ async function updateUserInviteData(address: string, data: UserInviteData): Prom
     // Store as JSON string
     await redis.set(userKey, JSON.stringify(data));
 
-    console.log(`✅ Updated user data for ${normalizedAddress}:`, {
-      dailyGenerated: data.dailyGenerated,
-      totalCodesGenerated: data.totalCodesGenerated,
-      lastGeneratedDate: data.lastGeneratedDate
-    });
-
     return true;
   } catch (error) {
     console.error('Error updating user invite data:', error);
     return false;
   }
+}
+
+async function updateInviteUsageStats(inviteCode: InviteCode, userAddress: string, usedAt: number): Promise<void> {
+  // Usage analytics are best-effort; code redemption itself is already committed atomically.
+  if (inviteCode.createdBy) {
+    let creatorData = await getUserInviteData(inviteCode.createdBy);
+    if (!creatorData) {
+      creatorData = createDefaultUserData(inviteCode.createdBy);
+    }
+
+    creatorData.totalCodesUsed++;
+    if (!creatorData.invitedUsers.includes(userAddress)) {
+      creatorData.invitedUsers.push(userAddress);
+    }
+
+    await updateUserInviteData(inviteCode.createdBy, creatorData);
+  }
+
+  let userData = await getUserInviteData(userAddress);
+  if (!userData) {
+    userData = createDefaultUserData(userAddress);
+  }
+
+  userData.invitedBy = inviteCode.createdBy;
+  userData.joinedAt = usedAt;
+
+  await updateUserInviteData(userAddress, userData);
 }
 
 function createDefaultUserData(address: string): UserInviteData {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateInviteCode } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { createErrorResponse } from '@/lib/auth-utils';
+import { getChatSessionOrQuickAuthFromRequest } from '@/lib/chat-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,12 +23,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    // Validate invite code using existing service
-    const result = await validateInviteCode(code);
+    let authenticatedAddress: string | undefined;
+    try {
+      const { session } = await getChatSessionOrQuickAuthFromRequest(request);
+      authenticatedAddress = session?.address;
+    } catch {
+      // Preview validation remains available before auth; redemption is authoritative.
+    }
+
+    const result = await validateInviteCode(code, authenticatedAddress);
 
     return NextResponse.json({
       valid: result.valid,
       message: result.valid ? 'Valid invite code' : (result.error || 'Invalid invite code'),
+      error: result.valid ? undefined : result.error,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -35,4 +44,4 @@ export async function POST(request: NextRequest) {
     const errorResponse = createErrorResponse('Internal server error', 500, 'INTERNAL_ERROR');
     return NextResponse.json(errorResponse.body, { status: errorResponse.status });
   }
-} 
+}

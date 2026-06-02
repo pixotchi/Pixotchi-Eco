@@ -765,7 +765,15 @@ export default function App() {
                       return (
                         <Activity key={tab.id} mode={activityMode}>
                           <div className={activeTab === tab.id ? 'block h-full' : 'hidden'}>
-                            {TabComponent ? <TabComponent /> : null}
+                            <ErrorBoundary
+                              resetKeys={[tab.id, ...(address ? [address] : [])]}
+                              variant="card"
+                              onError={(error, errorInfo) => {
+                                console.error(`Error in ${tab.id} tab:`, { error, errorInfo });
+                              }}
+                            >
+                              {TabComponent ? <TabComponent /> : null}
+                            </ErrorBoundary>
                           </div>
                         </Activity>
                       );

@@ -5,9 +5,16 @@ import {
   createChatAuthErrorResponse,
   getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
-import { markCodeAsUsed, markUserAsValidated } from '@/lib/invite-service';
+import { redeemInviteCode } from '@/lib/invite-service';
 import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { createErrorResponse } from '@/lib/auth-utils';
+
+function getRedeemStatus(errorCode?: string): number {
+  if (errorCode === 'ALREADY_USED' || errorCode === 'SELF_INVITE' || errorCode === 'USER_INELIGIBLE') return 403;
+  if (errorCode === 'EXPIRED' || errorCode === 'NOT_FOUND') return 410;
+  if (errorCode === 'REDIS_UNAVAILABLE') return 503;
+  return 400;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,24 +41,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error.body, { status: error.status });
     }
 
-    // Mark invite code as used
-    const useResult = await markCodeAsUsed(code, session.address);
+    const useResult = await redeemInviteCode(code, session.address);
 
     if (!useResult.success) {
-      const error = createErrorResponse(useResult.error || 'Failed to use invite code', 400, 'USE_FAILED');
+      const error = createErrorResponse(
+        useResult.error || 'Failed to use invite code',
+        getRedeemStatus(useResult.errorCode),
+        useResult.errorCode || 'USE_FAILED',
+      );
       return NextResponse.json(error.body, { status: error.status });
-    }
-
-    // Mark user as validated
-      const validationSuccess = await markUserAsValidated(session.address);
-
-      if (!validationSuccess) {
-        console.error('Failed to mark user as validated after using invite code');
-      // Don't fail the entire request if user validation fails, just log it
     }
 
     return NextResponse.json({
       success: true,
+      alreadyUsedByUser: Boolean(useResult.alreadyUsedByUser),
       message: 'Invite code used successfully',
       timestamp: new Date().toISOString(),
     });

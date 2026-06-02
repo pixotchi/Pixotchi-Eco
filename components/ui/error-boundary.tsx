@@ -60,8 +60,14 @@ class ErrorBoundary extends Component<Props, State> {
     const { resetKeys: prevResetKeys } = prevProps;
 
     // Reset error boundary if resetKeys have changed
-    if (resetKeys && prevResetKeys &&
-        resetKeys.some((key, index) => key !== prevResetKeys[index])) {
+    if (
+      resetKeys &&
+      prevResetKeys &&
+      (
+        resetKeys.length !== prevResetKeys.length ||
+        resetKeys.some((key, index) => key !== prevResetKeys[index])
+      )
+    ) {
       this.handleReset();
     }
   }

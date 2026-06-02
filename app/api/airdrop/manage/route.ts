@@ -217,6 +217,7 @@ export async function POST(req: NextRequest) {
                     leaf: entry.leaf,
                     pixotchi: entry.pixotchi,
                     claimed: false,
+                    status: 'eligible',
                     createdAt: Date.now(),
                 }));
             }
@@ -284,6 +285,7 @@ export async function GET(req: NextRequest) {
             leaf: string;
             pixotchi: string;
             claimed: boolean;
+            status?: string;
             claimedAt?: number;
             txHash?: string;
         }> = [];
@@ -312,6 +314,7 @@ export async function GET(req: NextRequest) {
                     leaf: data.leaf || '0',
                     pixotchi: data.pixotchi || '0',
                     claimed: data.claimed || false,
+                    status: data.status || (data.claimed ? 'claimed' : 'eligible'),
                     claimedAt: data.claimedAt,
                     txHash: data.txHash,
                 });

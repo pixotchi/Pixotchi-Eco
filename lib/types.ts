@@ -422,7 +422,7 @@ export type InviteValidationResult = {
   valid: boolean;
   code?: InviteCode;
   error?: string;
-  errorCode?: 'NOT_FOUND' | 'ALREADY_USED' | 'EXPIRED' | 'INVALID_FORMAT' | 'SELF_INVITE';
+  errorCode?: 'NOT_FOUND' | 'ALREADY_USED' | 'EXPIRED' | 'INVALID_FORMAT' | 'SELF_INVITE' | 'INVALID_CODE';
 };
 
 export type InviteGenerationResult = {

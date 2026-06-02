@@ -3,7 +3,6 @@ import type { Metadata, Viewport } from "next";
 import "./ock-compat.css";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { coinbaseSans, pixelmix } from "./fonts";
 
 export const viewport: Viewport = {
@@ -215,7 +214,6 @@ export default function RootLayout({
       <body className="bg-background">
         {children}
         <Analytics />
-        <SpeedInsights />
       </body>
     </html>
   );

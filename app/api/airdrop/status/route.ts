@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 
+function getAirdropStatus(parsed: UntypedValue): 'eligible' | 'pending' | 'claimed' | 'failed' {
+    if (parsed?.claimed || parsed?.status === 'claimed') return 'claimed';
+    if (parsed?.status === 'pending') return 'pending';
+    if (parsed?.status === 'failed') return 'failed';
+    return 'eligible';
+}
+
 /**
  * GET /api/airdrop/status?address=0x...
  * 
@@ -31,6 +38,7 @@ export async function GET(req: NextRequest) {
                 leaf: '0',
                 pixotchi: '0',
                 claimed: false,
+                status: 'eligible',
             });
         }
 
@@ -41,14 +49,18 @@ export async function GET(req: NextRequest) {
             parsed = data;
         }
 
+        const claimStatus = getAirdropStatus(parsed);
+
         return NextResponse.json({
             eligible: true,
             seed: parsed.seed || '0',
             leaf: parsed.leaf || '0',
             pixotchi: parsed.pixotchi || '0',
-            claimed: parsed.claimed || false,
+            claimed: claimStatus === 'claimed',
+            status: claimStatus,
             claimedAt: parsed.claimedAt || null,
             txHash: parsed.txHash || null,
+            reservationExpiresAt: parsed.reservationExpiresAt || null,
         });
 
     } catch (error: UntypedValue) {

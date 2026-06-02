@@ -79,6 +79,46 @@ interface AdminStats {
 
 type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback' | 'airdrop' | 'claims';
 
+const ADMIN_NAV_GROUPS: Array<{
+  label: string;
+  tabs: Array<{ id: AdminTab; label: string; icon: typeof BarChart3 }>;
+}> = [
+  {
+    label: 'Community',
+    tabs: [
+      { id: 'overview', label: 'Overview', icon: BarChart3 },
+      { id: 'codes', label: 'Codes', icon: Code },
+      { id: 'users', label: 'Users', icon: Users },
+      { id: 'feedback', label: 'Feedback', icon: Plus },
+    ],
+  },
+  {
+    label: 'Game Ops',
+    tabs: [
+      { id: 'broadcast', label: 'Broadcast', icon: Megaphone },
+      { id: 'chat', label: 'Chat', icon: MessageCircle },
+      { id: 'ai-chat', label: 'AI Chat', icon: Bot },
+      { id: 'gamification', label: 'Gamification', icon: TrendingUp },
+    ],
+  },
+  {
+    label: 'System',
+    tabs: [
+      { id: 'cleanup', label: 'Cleanup', icon: Trash2 },
+      { id: 'rpc', label: 'RPC', icon: BarChart3 },
+      { id: 'notifications', label: 'Notifications', icon: Bell },
+      { id: 'og-images', label: 'OG Images', icon: FileText },
+    ],
+  },
+  {
+    label: 'Economy',
+    tabs: [
+      { id: 'airdrop', label: 'Airdrop', icon: Gift },
+      { id: 'claims', label: 'Claims', icon: BadgeCheck },
+    ],
+  },
+];
+
 function getToolStatusClass(status: AIToolCallTrace['status']) {
   if (status === 'ok') {
     return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200';
@@ -1720,37 +1760,31 @@ export default function AdminInviteDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20">
         {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-8 overflow-x-auto pb-2">
-          {[
-            { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'codes', label: 'Codes', icon: Code },
-            { id: 'users', label: 'Users', icon: Users },
-            { id: 'broadcast', label: 'Broadcast', icon: Megaphone },
-            { id: 'chat', label: 'Chat', icon: MessageCircle },
-            { id: 'ai-chat', label: 'AI Chat', icon: Bot },
-            { id: 'cleanup', label: 'Cleanup', icon: Trash2 },
-            { id: 'gamification', label: 'Gamification', icon: TrendingUp },
-            { id: 'rpc', label: 'RPC', icon: BarChart3 },
-            { id: 'notifications', label: 'Notifications', icon: Bell },
-            { id: 'og-images', label: 'OG Images', icon: FileText },
-            { id: 'feedback', label: 'Feedback', icon: Plus },
-            { id: 'airdrop', label: 'Airdrop', icon: Gift },
-            { id: 'claims', label: 'Claims', icon: BadgeCheck },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <Button
-                key={tab.id}
-                variant={activeTab === tab.id ? 'default' : 'ghost'}
-                onClick={() => setActiveTab(tab.id as AdminTab)}
-                className="flex items-center space-x-2"
-              >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-              </Button>
-            );
-          })}
-        </div>
+        <nav className="mb-8 space-y-3" aria-label="Admin dashboard sections">
+          {ADMIN_NAV_GROUPS.map((group) => (
+            <div key={group.label} className="space-y-1.5">
+              <div className="text-xs font-semibold uppercase text-muted-foreground">
+                {group.label}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {group.tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <Button
+                      key={tab.id}
+                      variant={activeTab === tab.id ? 'default' : 'ghost'}
+                      onClick={() => setActiveTab(tab.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{tab.label}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
 
         {/* Overview Tab */}
         {activeTab === 'overview' && stats && (

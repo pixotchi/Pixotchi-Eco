@@ -23,6 +23,7 @@ import { useBalances } from '@/lib/balance-context';
 import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
 import { checkLandMintApproval,checkTokenApproval,getEthQuoteForSeedAmount,getFormattedTokenBalance,getLandBalance,getLandMintPrice,getLandMintStatus,getLandSupply,getStrainInfo,getTokenBalanceForToken,getTokenSymbol,JESSE_TOKEN_ADDRESS,LAND_CONTRACT_ADDRESS,PIXOTCHI_NFT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { CLIENT_ENV } from '@/lib/env-config';
+import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useFrameContext } from '@/lib/frame-context';
 import { usePaymaster } from '@/lib/paymaster-context';
@@ -44,6 +45,7 @@ import { BaseExpandedLoadingPageLoader } from '../ui/loading';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
+const SOLANA_MINT_DEBUG = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_SOLANA_MINT_DEBUG === 'true';
 const solLog = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.log(...args); };
 const solWarn = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.warn(...args); };
 const solError = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.error(...args); };
@@ -106,10 +108,6 @@ export default function MintTab() {
   const farcasterUser =
     typeof frameContext?.context === 'object'
       ? (frameContext.context as UntypedValue)?.user
-      : undefined;
-  const farcasterClient =
-    typeof frameContext?.context === 'object'
-      ? (frameContext.context as UntypedValue)?.client
       : undefined;
 
   // Resolve basename/ENS for share functionality
@@ -176,6 +174,32 @@ export default function MintTab() {
     });
     setShowShareModal(true);
   }, [address, primaryName]);
+
+  const notifyMintSuccess = useCallback(async (strainName: string) => {
+    if (CLIENT_ENV.NOTIFICATION_PROVIDER !== 'neynar') return;
+
+    const fid = Number(farcasterUser?.fid);
+    if (!Number.isSafeInteger(fid) || fid <= 0) return;
+
+    try {
+      const authHeaders = await getMiniAppQuickAuthHeaders({ expectedAddress: evmAddress ?? address });
+      const response = await fetch('/api/notifications/mint-success', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ fid, strainName }),
+      });
+
+      if (!response.ok && process.env.NODE_ENV !== 'production') {
+        const data = await response.json().catch(() => ({}));
+        console.warn('[MintTab] Mint notification skipped:', data);
+      }
+    } catch (error) {
+      console.warn('[MintTab] Mint notification failed:', error);
+    }
+  }, [address, evmAddress, farcasterUser?.fid]);
 
   // Helper function to get token logo path
   const getTokenLogo = (tokenAddress: `0x${string}` | undefined): string => {
@@ -1111,29 +1135,45 @@ export default function MintTab() {
                 </div>
               )}
 
-              {/* Debug info - shows wallet detection status */}
               {isSolana && (
                 <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded mb-2">
-                  <div> Solana Address: {solanaWalletHook.solanaAddress?.slice(0, 8)}...{solanaWalletHook.solanaAddress?.slice(-4) || 'Not found'}</div>
-                  <div> Twin Address: {twinAddress?.slice(0, 8)}...{twinAddress?.slice(-4) || 'Not found'}</div>
-                  <div> Wallet object: {solanaWallet ? '✅ Found' : '❌ Not found'} (from {solanaWallets?.length || 0} Solana wallets)</div>
-                  <div> Setup Status: {needsSetup ? '❌ Needs Setup' : '✅ Ready'} | Twin Deployed: {solanaWalletHook.twinInfo?.isDeployed ? '✅' : '❌'}</div>
-                  <div className="flex gap-2 mt-1">
+                  {SOLANA_MINT_DEBUG ? (
+                    <>
+                      <div>Solana Address: {solanaWalletHook.solanaAddress?.slice(0, 8)}...{solanaWalletHook.solanaAddress?.slice(-4) || 'Not found'}</div>
+                      <div>Twin Address: {twinAddress?.slice(0, 8)}...{twinAddress?.slice(-4) || 'Not found'}</div>
+                      <div>Wallet object: {solanaWallet ? 'Found' : 'Not found'} (from {solanaWallets?.length || 0} Solana wallets)</div>
+                      <div>Setup Status: {needsSetup ? 'Needs Setup' : 'Ready'} | Twin Deployed: {solanaWalletHook.twinInfo?.isDeployed ? 'Yes' : 'No'}</div>
+                    </>
+                  ) : (
+                    <div>
+                      <div className="font-medium text-foreground">
+                        {!solanaWallet
+                          ? 'Solana wallet is not ready'
+                          : needsSetup
+                            ? 'Bridge setup required'
+                            : 'Bridge ready'}
+                      </div>
+                      <div>
+                        {!solanaWallet
+                          ? 'Reconnect your wallet or refresh bridge status before minting.'
+                          : needsSetup
+                            ? 'Set up bridge access once, then continue with your mint.'
+                            : 'Your Solana wallet can mint through the bridge.'}
+                      </div>
+                    </div>
+                  )}
+                  {(!solanaWallet || needsSetup || SOLANA_MINT_DEBUG) && (
                     <button
+                      type="button"
                       onClick={async () => {
                         solLog('[SolanaMint] Manual refresh triggered');
                         await solanaWalletHook.refresh();
                         solLog('[SolanaMint] Manual refresh complete, isTwinSetup:', solanaWalletHook.isTwinSetup);
                       }}
-                      className="text-xs underline text-blue-400 hover:text-blue-300"
+                      className="mt-1 text-xs underline text-blue-400 hover:text-blue-300"
                     >
-                      🔄 Refresh Status
+                      Refresh status
                     </button>
-                  </div>
-                  {!solanaWallet && (
-                    <div className="text-yellow-500 mt-1">
-                      ⚠️ Cannot sign transactions - wallet object not available
-                    </div>
                   )}
                 </div>
               )}
@@ -1454,26 +1494,7 @@ export default function MintTab() {
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
                   openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
-                  if (CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar') {
-                    try {
-                      const fid = farcasterUser?.fid;
-                      const notificationDetails = farcasterClient?.notificationDetails;
-                      if (fid) {
-                        fetch('/api/notify', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            fid,
-                            notification: {
-                              title: 'Mint Completed! 🌱',
-                              body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
-                              notificationDetails,
-                            },
-                          }),
-                        }).catch(() => { });
-                      }
-                    } catch { }
-                  }
+                  void notifyMintSuccess(selectedStrain.name);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Mint Plant"
@@ -1913,26 +1934,7 @@ export default function MintTab() {
                       incrementForcedFetch();
                       window.dispatchEvent(new Event('balances:refresh'));
                       openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
-                      if (CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar') {
-                        try {
-                          const fid = farcasterUser?.fid;
-                          const notificationDetails = farcasterClient?.notificationDetails;
-                          if (fid) {
-                            fetch('/api/notify', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                fid,
-                                notification: {
-                                  title: 'Mint Completed! 🌱',
-                                  body: `You minted ${selectedStrain?.name || 'a plant'} — tap to view your farm`,
-                                  notificationDetails,
-                                },
-                              }),
-                            }).catch(() => { });
-                          }
-                        } catch { }
-                      }
+                      void notifyMintSuccess(selectedStrain.name);
                     }}
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                     buttonText="Mint Plant"
