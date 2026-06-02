@@ -52,6 +52,14 @@ const BLACKJACK_FAILURE_STATUSES = new Set([
     'buildError',
 ]);
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const BLACKJACK_WARNING_BUTTON = "w-full min-h-11 rounded-[var(--radius-control)] bg-[hsl(var(--warning))] px-4 py-2 font-bold text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-control)] transition-colors hover:bg-[hsl(var(--warning)/0.9)]";
+const BLACKJACK_PRIMARY_BUTTON = "bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-[var(--radius-control)] min-w-[90px] transition-colors shadow-[var(--shadow-control)]";
+const BLACKJACK_DANGER_BUTTON = "bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold py-3 px-6 rounded-[var(--radius-control)] min-w-[90px] transition-colors shadow-[var(--shadow-control)]";
+const BLACKJACK_WARNING_ACTION_BUTTON = "bg-[hsl(var(--warning))] hover:bg-[hsl(var(--warning)/0.9)] text-[hsl(var(--warning-foreground))] font-bold py-3 px-6 rounded-[var(--radius-control)] min-w-[90px] transition-colors shadow-[var(--shadow-control)]";
+const BLACKJACK_SPECIAL_BUTTON = "bg-[image:var(--gradient-special)] text-white font-bold py-3 px-6 rounded-[var(--radius-control)] min-w-[90px] transition-colors shadow-[var(--shadow-control)] hover:brightness-105";
+const BLACKJACK_SPECIAL_BUTTON_SM = "bg-[image:var(--gradient-special)] text-white font-bold py-2 px-4 rounded-[var(--radius-control)] text-sm transition-colors hover:brightness-105";
+const BLACKJACK_NEUTRAL_BUTTON = "bg-muted text-muted-foreground hover:bg-muted/80 font-bold py-3 px-6 rounded-[var(--radius-control)] min-w-[90px] transition-colors";
+const BLACKJACK_NEUTRAL_BUTTON_SM = "bg-muted text-muted-foreground hover:bg-muted/80 font-bold py-2 px-4 rounded-[var(--radius-control)] text-sm transition-colors";
 
 /**
  * Simplified UI phase model for server-signed randomness flow
@@ -1425,7 +1433,7 @@ export default function BlackjackDialog({
                                     tokenAddress={config.bettingToken as `0x${string}`}
                                     onSuccess={handleApproveSuccess}
                                     buttonText={`Approve ${tokenSymbol}`}
-                                    buttonClassName="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+                                    buttonClassName={BLACKJACK_WARNING_BUTTON}
                                 />
                             ) : (
                                 <BlackjackTransaction
@@ -1434,7 +1442,7 @@ export default function BlackjackDialog({
                                     betAmount={betAmountWei}
                                     disabled={!!dealAmountIssue || txInProgress !== null}
                                     buttonText={txInProgress === 'deal' ? "Dealing..." : "DEAL"}
-                                    buttonClassName="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+                                    buttonClassName={BLACKJACK_WARNING_BUTTON}
                                     onButtonClick={handleDealClick}
                                     onStatusUpdate={handleBlackjackStatusUpdate}
                                     onComplete={handleDealComplete}
@@ -1491,7 +1499,7 @@ export default function BlackjackDialog({
                                         action={BlackjackAction.HIT}
                                         disabled={false}
                                         buttonText="HIT"
-                                        buttonClassName="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                        buttonClassName={BLACKJACK_PRIMARY_BUTTON}
                                         onButtonClick={() => handleActionClick(BlackjackAction.HIT)}
                                         onStatusUpdate={handleBlackjackStatusUpdate}
                                         onComplete={handleActionComplete}
@@ -1511,7 +1519,7 @@ export default function BlackjackDialog({
                                         action={BlackjackAction.STAND}
                                         disabled={false}
                                         buttonText="STAND"
-                                        buttonClassName="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                        buttonClassName={BLACKJACK_DANGER_BUTTON}
                                         onButtonClick={() => handleActionClick(BlackjackAction.STAND)}
                                         onStatusUpdate={handleBlackjackStatusUpdate}
                                         onComplete={handleActionComplete}
@@ -1531,7 +1539,7 @@ export default function BlackjackDialog({
                                         action={BlackjackAction.DOUBLE}
                                         disabled={disableDoubleForFunding}
                                         buttonText="DOUBLE"
-                                        buttonClassName="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                        buttonClassName={BLACKJACK_WARNING_ACTION_BUTTON}
                                         onButtonClick={() => handleActionClick(BlackjackAction.DOUBLE)}
                                         onStatusUpdate={handleBlackjackStatusUpdate}
                                         onComplete={handleActionComplete}
@@ -1555,7 +1563,7 @@ export default function BlackjackDialog({
                                             action={BlackjackAction.SPLIT}
                                             disabled={disableSplitForFunding}
                                             buttonText="SPLIT"
-                                            buttonClassName="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all"
+                                            buttonClassName={BLACKJACK_SPECIAL_BUTTON_SM}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SPLIT)}
                                             onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
@@ -1574,7 +1582,7 @@ export default function BlackjackDialog({
                                             action={BlackjackAction.SURRENDER}
                                             disabled={false}
                                             buttonText="SURRENDER"
-                                            buttonClassName="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all"
+                                            buttonClassName={BLACKJACK_NEUTRAL_BUTTON_SM}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SURRENDER)}
                                             onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
@@ -1599,7 +1607,7 @@ export default function BlackjackDialog({
                                             action={BlackjackAction.SPLIT}
                                             disabled={disableSplitForFunding}
                                             buttonText="SPLIT"
-                                            buttonClassName="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                            buttonClassName={BLACKJACK_SPECIAL_BUTTON}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SPLIT)}
                                             onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
@@ -1618,7 +1626,7 @@ export default function BlackjackDialog({
                                             action={BlackjackAction.SURRENDER}
                                             disabled={false}
                                             buttonText="SURRENDER"
-                                            buttonClassName="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                            buttonClassName={BLACKJACK_NEUTRAL_BUTTON}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SURRENDER)}
                                             onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
@@ -1638,7 +1646,8 @@ export default function BlackjackDialog({
                     {uiPhase === 'result' && (
                         <Button
                             onClick={handlePlayAgain}
-                            className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+                            variant="warning"
+                            className="w-full font-bold"
                         >
                             PLAY AGAIN
                         </Button>

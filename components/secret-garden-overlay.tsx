@@ -355,7 +355,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[6000]">
+    <div className="fixed inset-0 z-[var(--z-tooltip)]">
       <div
         className={`absolute inset-0 bg-black transition-opacity duration-[1600ms] ease-in ${
           open ? "opacity-100" : "opacity-0"
@@ -463,5 +463,4 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
     portalTarget
   );
 }
-
 

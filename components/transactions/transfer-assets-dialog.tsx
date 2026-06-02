@@ -366,7 +366,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
               autoComplete="off"
             />
             {!isValidRecipient && !resolvingEns && destination.length > 0 && (
-              <p className="text-xs text-red-500">Invalid address or ENS name</p>
+              <p className="text-xs text-destructive">Invalid address or ENS name</p>
             )}
           </div>
 
@@ -401,7 +401,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                         <ChevronDown className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                    <DropdownMenuContent className="z-[var(--z-modal-nested)] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
                       <div className="grid grid-cols-2 gap-1 p-1">
                         <DropdownMenuItem
                           className="justify-center"
@@ -461,7 +461,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                         <ChevronDown className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                    <DropdownMenuContent className="z-[var(--z-modal-nested)] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
                       <div className="grid grid-cols-2 gap-1 p-1">
                         <DropdownMenuItem
                           className="justify-center"
@@ -518,7 +518,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                 </div>
               )}
               {!resolvingEns && ensError && (
-                <span className="text-red-500">{ensError}</span>
+                <span className="text-destructive">{ensError}</span>
               )}
             </div>
           )}

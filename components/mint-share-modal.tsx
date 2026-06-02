@@ -220,7 +220,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
         <DialogHeader>
           <DialogTitle className="text-center">Share your mint</DialogTitle>
           <DialogDescription className="text-center">
-            Celebrate your new plant with friends and become eligible for more rewards!!
+            Celebrate your new plant with friends and become eligible for more rewards.
           </DialogDescription>
         </DialogHeader>
 
@@ -271,7 +271,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
             <div className="space-y-3">
               {isMiniApp ? (
                 <Button
-                  className="w-full"
+                  variant="special"
+                  fullWidth
                   onClick={handleMiniAppShare}
                   disabled={isSharing || isGeneratingUrl || !shareUrl}
                   aria-busy={isSharing || isGeneratingUrl}
@@ -282,7 +283,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 </Button>
               ) : (
                 <Button
-                  className="w-full"
+                  variant="special"
+                  fullWidth
                   onClick={handleTwitterShare}
                   disabled={isGeneratingUrl || !shareUrl}
                   aria-busy={isGeneratingUrl}
@@ -316,7 +318,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
               </div>
             )}
 
-            <Button variant="ghost" className="w-full" onClick={() => handleOpenChange(false)}>
+            <Button variant="ghost" fullWidth onClick={() => handleOpenChange(false)}>
               Not now
             </Button>
           </div>

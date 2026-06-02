@@ -74,16 +74,14 @@ const EthModeToggleRow = () => {
       <button
         type="button"
         onClick={toggleEthMode}
-        style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
-        className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isEthMode ? 'bg-value' : 'bg-muted'
+        className={`relative inline-flex h-7 w-11 items-center rounded-full p-0 transition-colors ${isEthMode ? 'bg-[hsl(var(--success))]' : 'bg-muted'
           }`}
         role="switch"
         aria-checked={isEthMode}
         aria-label="ETH Mode"
       >
         <span
-          style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
-          className={`inline-block transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[14px]' : 'translate-x-[2px]'
+          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[22px]' : 'translate-x-[3px]'
             }`}
         />
       </button>
@@ -331,10 +329,10 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
     if (isBase) {
       // Blue rounded square for Base mainnet (Base logo style)
-      return <div className="w-4 h-4 bg-blue-500 rounded-sm" />;
+      return <div className="w-4 h-4 bg-[hsl(var(--info))] rounded-sm" />;
     }
 
-    const color = isTestnet ? "text-yellow-500" : "text-red-500";
+    const color = isTestnet ? "text-[hsl(var(--warning))]" : "text-destructive";
     return <CheckCircle className={`w-4 h-4 ${color}`} />;
   };
 
@@ -503,7 +501,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   return (
     <React.Fragment>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl w-[min(92vw,32rem)]">
+        <DialogContent size="xl" surface="soft" className="w-[min(94vw,36rem)]">
           <DialogHeader>
             <div className="flex items-center space-x-2">
               {/* Profile Avatar or Wallet icon - with 5-tap debug mode trigger */}
@@ -548,7 +546,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto pr-1">
-            <div className="p-4 space-y-6">
+            <div className="space-y-5 p-1.5">
               {/* MiniKit Context Info - only shown in debug mode */}
               {debugMode && isInFrame && (
                 <div className="flex items-center space-x-2">
@@ -568,7 +566,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <h3 className="text-sm font-medium text-muted-foreground">
                   Account
                 </h3>
-                <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
+                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/80 bg-card/95 p-4 shadow-[var(--shadow-raised)]">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">Provider</span>
                     <span className="text-xs font-semibold">
@@ -593,14 +591,15 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                       ) : name ? (
                         <span className="text-xs font-semibold">{name}</span>
                       ) : (
-                        <button
+                        <Button
                           type="button"
                           onClick={() => openExternalUrl("https://base.org/names")}
-                          className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
-                          style={{ backgroundColor: '#0000FF', color: '#FFFFFF' }}
+                          variant="primary"
+                          size="xs"
+                          className="btn-compact"
                         >
                           Get a Basename!
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -613,14 +612,15 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <span className="text-xs font-mono text-muted-foreground">
                           {formatAddress(address)}
                         </span>
-                        <button
+                        <Button
                           onClick={() => copyToClipboard(address, "Wallet address")}
-                          className="p-0 hover:opacity-70 transition-opacity"
-                          style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
+                          variant="ghost"
+                          size="icon-sm"
+                          className="btn-compact h-7 w-7"
                           aria-label="Copy wallet address"
                         >
                           <Copy className="w-3 h-3 text-muted-foreground" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -650,8 +650,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <Skeleton className="h-4 w-32" />
                       ) : isSolana ? (
                         <div className="flex items-center space-x-1">
-                          <Wallet className="w-3 h-3 text-purple-500" />
-                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
+                          <Wallet className="w-3 h-3 text-violet-700 dark:text-violet-200" />
+                          <span className="text-xs font-semibold text-violet-700 dark:text-violet-200">
                             {getWalletTypeLabel()}
                           </span>
                         </div>
@@ -664,8 +664,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         </div>
                       ) : (
                         <div className="flex items-center space-x-1">
-                          <Wallet className="w-3 h-3 text-blue-500" />
-                          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                          <Wallet className="w-3 h-3 text-[hsl(var(--info))]" />
+                          <span className="text-xs font-semibold text-[hsl(var(--info))]">
                             {getWalletTypeLabel()}
                           </span>
                         </div>
@@ -768,7 +768,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     </h3>
                     <SolanaBridgeBadge />
                   </div>
-                  <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
+                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/80 bg-card/95 p-4 shadow-[var(--shadow-raised)]">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium">Solana Address</span>
                       <div className="flex items-center gap-1">
@@ -833,15 +833,15 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           </>
                         ) : (
                           <>
-                            <XCircle className="w-3 h-3 text-yellow-500" />
-                            <span className="text-xs font-semibold text-yellow-600 dark:text-yellow-400">Setup Required</span>
+                            <XCircle className="w-3 h-3 text-[hsl(var(--warning))]" />
+                            <span className="text-xs font-semibold text-[hsl(var(--warning))]">Setup Required</span>
                           </>
                         )}
                       </div>
                     </div>
                     <div className="pt-2 mt-2 border-t border-border">
                       <div className="flex items-start space-x-2">
-                        <Info className="w-3 h-3 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <Info className="w-3 h-3 text-violet-700 dark:text-violet-200 mt-0.5 flex-shrink-0" />
                         <span className="text-xs text-muted-foreground">
                           Your plants are owned by your Twin address on Base. Some features like Land NFTs are not available with Solana wallets.
                         </span>

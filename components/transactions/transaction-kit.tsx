@@ -150,7 +150,7 @@ const RECEIPT_TIMEOUT_MESSAGE =
   "Transaction was not confirmed after several minutes. Refresh and check the game before trying again.";
 
 const PRESSABLE_PRIMARY =
-  "cursor-pointer bg-[var(--ock-compat-primary)] hover:bg-[var(--ock-compat-primary-hover)] active:bg-[var(--ock-compat-primary-active)] focus:bg-[var(--ock-compat-primary-active)]";
+  "cursor-pointer bg-primary hover:bg-primary/90 active:bg-primary/85 focus:bg-primary/85";
 const PRESSABLE_DISABLED = "opacity-[0.38] pointer-events-none";
 const TEXT_HEADLINE = "ock-compat-font font-semibold";
 const TEXT_LABEL1 = "ock-compat-font text-sm font-semibold";
@@ -172,7 +172,7 @@ function Spinner({ className }: { className?: string }) {
     >
       <div
         className={cn(
-          "animate-spin rounded-full border-2 border-gray-200 border-t-[3px] border-t-gray-400 px-2.5 py-2.5",
+          "h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current",
           className,
         )}
       />
@@ -290,6 +290,51 @@ function getErrorStatusName(error: UntypedValue): StatusName {
   return "error";
 }
 
+function getFriendlyTransactionMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("user rejected") || normalized.includes("rejected the request")) {
+    return "Transaction cancelled. You can try again when ready.";
+  }
+
+  if (normalized.includes("wallet client unavailable") || normalized.includes("wallet not connected")) {
+    return "Connect your wallet, then try again.";
+  }
+
+  if (normalized.includes("insufficient") && normalized.includes("balance")) {
+    return "Not enough balance for this action.";
+  }
+
+  if (normalized.includes("revert")) {
+    return "Transaction reverted. Check the requirements and try again.";
+  }
+
+  if (normalized.includes("timed out") || normalized.includes("not confirmed")) {
+    return RECEIPT_TIMEOUT_MESSAGE;
+  }
+
+  if (!message || message === "Transaction failed.") {
+    return "Transaction failed. Check the details and try again.";
+  }
+
+  return message.length > 96 ? "Transaction failed. Check the details and try again." : message;
+}
+
+function getPendingButtonText(idleText: string) {
+  const normalized = idleText.trim().toLowerCase();
+
+  if (normalized.includes("mint")) return "Minting...";
+  if (normalized.includes("claim")) return "Claiming...";
+  if (normalized.includes("stake")) return "Staking...";
+  if (normalized.includes("buy") || normalized.includes("purchase")) return "Purchasing...";
+  if (normalized.includes("approve")) return "Approving...";
+  if (normalized.includes("transfer")) return "Transferring...";
+  if (normalized.includes("spin")) return "Spinning...";
+  if (normalized.includes("deal")) return "Dealing...";
+
+  return "Processing...";
+}
+
 function getExplorerHref(hash?: string | null, chainUrl?: string | null) {
   if (!hash) return null;
   const explorerBase = chainUrl || base.blockExplorers?.default.url;
@@ -389,7 +434,7 @@ function getStatusLabelData({
   }
 
   if (errorMessage) {
-    label = errorMessage;
+    label = getFriendlyTransactionMessage(errorMessage);
     labelClassName = TEXT_ERROR;
   }
 
@@ -427,7 +472,7 @@ function getToastLabelData({
   }
 
   if (errorMessage) {
-    label = "Something went wrong";
+    label = getFriendlyTransactionMessage(errorMessage);
     labelClassName = TEXT_ERROR;
   }
 
@@ -941,7 +986,12 @@ export function TransactionButton({
       return "Try again";
     }
     if (isExecuting) {
-      return <Spinner />;
+      return (
+        <>
+          <Spinner />
+          <span>{getPendingButtonText(idleText)}</span>
+        </>
+      );
     }
     return idleText;
   }, [errorMessage, idleText, isExecuting, receipt]);
@@ -988,7 +1038,7 @@ export function TransactionButton({
     <button
       className={cn(
         PRESSABLE_PRIMARY,
-        "w-full rounded-xl px-4 py-3 font-medium leading-6",
+        "flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] px-4 py-3 text-sm font-semibold leading-none shadow-[var(--shadow-control)] transition-[background-color,color,box-shadow,opacity,transform] duration-[var(--motion-quick)]",
         isDisabled && PRESSABLE_DISABLED,
         TEXT_HEADLINE,
         TEXT_INVERSE,
@@ -997,6 +1047,7 @@ export function TransactionButton({
       onClick={handleSubmit}
       type="button"
       disabled={isDisabled}
+      aria-live="polite"
       data-testid="ockTransactionButton_Button"
     >
       {buttonContent}
@@ -1150,7 +1201,7 @@ export function TransactionToast({
     <div
       aria-live="polite"
       className={cn(
-        "fixed z-[10000] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-lg p-2 sm:max-w-sm",
+        "fixed z-[var(--z-toast)] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-[var(--radius-panel)] border border-border/70 p-2 sm:max-w-sm",
         BG_SURFACE,
         TEXT_DEFAULT,
         TOAST_SHADOW,
@@ -1161,7 +1212,7 @@ export function TransactionToast({
       role="status"
       data-testid="ockToast"
     >
-      <div className="flex items-center gap-4 p-2">
+      <div className="flex min-w-0 items-center gap-3 p-2">
         {children ?? (
           <>
             <TransactionToastIcon />
@@ -1171,7 +1222,7 @@ export function TransactionToast({
         )}
       </div>
       <button
-        className="p-2"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] p-2 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
         onClick={dismissToast}
         type="button"
         data-testid="ockCloseButton"
@@ -1196,7 +1247,7 @@ export function TransactionToastIcon({ className }: TransactionToastIconProps) {
       return <ErrorSvg />;
     }
     if (isInProgress) {
-      return <Spinner className="px-1.5 py-1.5" />;
+      return <Spinner className="h-4 w-4" />;
     }
     return null;
   }, [errorMessage, isInProgress, receipt]);
@@ -1227,7 +1278,7 @@ export function TransactionToastLabel({
   }
 
   return (
-    <div className={cn(TEXT_LABEL1, "text-nowrap", className)}>
+    <div className={cn(TEXT_LABEL1, "min-w-0 max-w-[16rem]", className)}>
       <p className={labelClassName === TEXT_ERROR ? labelClassName : TEXT_DEFAULT}>
         {label}
       </p>
@@ -1287,7 +1338,7 @@ export function TransactionToastAction({
   }
 
   return (
-    <div className={cn(TEXT_LABEL1, "text-nowrap", className)}>
+    <div className={cn(TEXT_LABEL1, "shrink-0 text-nowrap", className)}>
       {actionElement}
     </div>
   );

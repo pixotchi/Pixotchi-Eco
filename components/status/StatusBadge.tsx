@@ -9,9 +9,9 @@ interface StatusBadgeProps {
 }
 
 const statusMap: Record<StatusLevel, { label: string; className: string }> = {
-  operational: { label: 'Operational', className: 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200' },
-  degraded: { label: 'Degraded', className: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200' },
-  outage: { label: 'Outage', className: 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200' },
+  operational: { label: 'Operational', className: 'bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success-strong))]' },
+  degraded: { label: 'Degraded', className: 'bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning))]' },
+  outage: { label: 'Outage', className: 'bg-destructive/10 text-destructive' },
   UntypedValue: { label: 'Unknown', className: 'bg-muted text-muted-foreground' },
 };
 
@@ -20,7 +20,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium tracking-wide',
+        'inline-flex items-center rounded-full border border-current/10 px-3 py-1 text-xs font-medium',
         config.className,
         className
       )}
@@ -29,4 +29,3 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
     </span>
   );
 }
-

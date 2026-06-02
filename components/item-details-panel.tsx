@@ -626,7 +626,7 @@ export default function ItemDetailsPanel({
                       ? "Insufficient ETH Balance"
                       : `Buy ${activeFenceV2Days} Day${activeFenceV2Days === 1 ? '' : 's'} Fence with ETH`
                   }
-                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
                   disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || fenceV2Bounds.todCapBreached || fenceV2BlockedByV1 || fenceV2InputInvalid}
                 />
               ) : (
@@ -651,7 +651,7 @@ export default function ItemDetailsPanel({
                         ? `Buy ${quantity}x with ETH`
                         : `Buy with ETH`
                   }
-                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
                   disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || (!hasQuantitySelected && itemType === 'garden')}
                 />
               )}

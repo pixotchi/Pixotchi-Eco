@@ -2,7 +2,6 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { base } from "wagmi/chains";
-import { Toaster } from "react-hot-toast";
 import { PaymasterProvider } from "@/lib/paymaster-context";
 import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
@@ -37,6 +36,7 @@ import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper'
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { AppUpdateBanner } from "@/components/app-update-banner";
+import { AppToaster } from "@/components/ui/app-toaster";
 import { usePathname } from "next/navigation";
 import {
   AuthSurface,
@@ -182,7 +182,7 @@ function WagmiRouter({
           paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
         >
           {children}
-          <TransactionModalWrapper className="!z-[1300]" />
+          <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
         </TransactionProvider>
       </CoreWagmiProvider>
     );
@@ -196,7 +196,7 @@ function WagmiRouter({
           paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
         >
           {children}
-          <TransactionModalWrapper className="!z-[1300]" />
+          <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
         </TransactionProvider>
       </CoreWagmiProvider>
     );
@@ -210,7 +210,7 @@ function WagmiRouter({
           paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
         >
           {children}
-          <TransactionModalWrapper className="!z-[1300]" />
+          <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
         </TransactionProvider>
       </CoreWagmiProvider>
     );
@@ -223,7 +223,7 @@ function WagmiRouter({
         paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
       >
         {children}
-        <TransactionModalWrapper className="!z-[1300]" />
+        <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
       </TransactionProvider>
     </PrivyWagmiProvider>
   );
@@ -540,34 +540,7 @@ function ProvidersContent({
                       {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
                       {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
                       {/** added provider wrapper **/}
-                      <Toaster
-                        position="top-center"
-                        toastOptions={{
-                          duration: 4000,
-                          style: {
-                            backgroundColor: "hsl(var(--background))",
-                            color: "hsl(var(--foreground))",
-                            border: "1px solid hsl(var(--border))",
-                            zIndex: 9999,
-                          },
-                          success: {
-                            iconTheme: {
-                              primary: "hsl(var(--primary))",
-                              secondary: "hsl(var(--primary-foreground))",
-                            },
-                          },
-                          error: {
-                            iconTheme: {
-                              primary: "hsl(var(--destructive))",
-                              secondary: "hsl(var(--destructive-foreground))",
-                            },
-                          },
-                        }}
-                        containerStyle={{
-                          top: "max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top))",
-                          zIndex: 9999,
-                        }}
-                      />
+                      <AppToaster />
                       {children}
                       <SlideshowModal />
                     </TutorialBundle>

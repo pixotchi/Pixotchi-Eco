@@ -116,6 +116,9 @@ export function AirdropClaimCard() {
         return null;
     }
 
+    const panelClassName =
+        "rounded-[var(--radius-panel)] border border-[hsl(var(--warning)/0.24)] bg-[hsl(var(--warning)/0.08)] p-4 shadow-[var(--shadow-raised)]";
+
     // Don't render if loading or no address
     if (loading || !address || !status) {
         return null;
@@ -124,16 +127,18 @@ export function AirdropClaimCard() {
     // Not eligible state
     if (!status.eligible) {
         return (
-            <div className="space-y-3 mb-4">
+            <div className="space-y-3">
                 <h3 className="text-sm font-medium text-muted-foreground">
                     Airdrop
                 </h3>
-                <StandardContainer className="p-4 rounded-md border bg-card">
+                <StandardContainer padding="none" className={panelClassName}>
                     <div className="flex items-center gap-3">
-                        <Gift className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-background/70 text-[hsl(var(--warning-foreground))]">
+                            <Gift className="w-4 h-4" />
+                        </span>
                         <div className="flex-1">
-                            <p className="text-sm font-medium text-muted-foreground">No Allocation</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-sm font-semibold text-foreground">No Allocation</p>
+                            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                                 You are not eligible for any airdrop right now. Keep playing and staying active to qualify for future rewards!
                             </p>
                         </div>
@@ -192,21 +197,23 @@ export function AirdropClaimCard() {
     };
 
     return (
-        <div className="space-y-3 mb-4">
+        <div className="space-y-3">
             <h3 className="text-sm font-medium text-muted-foreground">
                 Airdrop
             </h3>
-            <StandardContainer className="p-4 rounded-md border bg-card">
+            <StandardContainer padding="none" className={panelClassName}>
                 {status.claimed ? (
                     // Already claimed state
                     <div className="flex items-center gap-3">
-                        <CheckCircle className="w-5 h-5 text-value flex-shrink-0" />
+                        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-background/70">
+                            <CheckCircle className="w-4 h-4 text-value" />
+                        </span>
                         <div className="flex-1">
                             <p className="text-sm font-medium text-value">
                                 Airdrop Claimed
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                                Thanks for playing and helping Pixotchi grow🌱
+                            <p className="text-xs leading-relaxed text-muted-foreground">
+                                Thanks for playing and helping Pixotchi grow.
                             </p>
                         </div>
                     </div>
@@ -214,9 +221,11 @@ export function AirdropClaimCard() {
                     // Unclaimed state
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">
-                            <Gift className="w-5 h-5 text-primary flex-shrink-0" />
+                            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-background/70 text-primary">
+                                <Gift className="w-4 h-4" />
+                            </span>
                             <div className="flex-1">
-                                <p className="text-sm font-medium">Claimable Tokens</p>
+                                <p className="text-sm font-semibold">Claimable Tokens</p>
                                 <div className="flex flex-wrap gap-2 mt-1">
                                     {tokens.map(t => {
                                         let iconPath = '';
@@ -259,4 +268,3 @@ export function AirdropClaimCard() {
         </div>
     );
 }
-

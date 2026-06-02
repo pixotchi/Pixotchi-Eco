@@ -492,7 +492,8 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         </Button>
         {casinoPolicy.blackjackEnabled && (
           <Button
-            className="h-9 px-3 text-sm bg-green-700 hover:bg-green-800"
+            variant="success"
+            className="h-9 px-3 text-sm"
             onClick={() => handleOpenCasinoGame("blackjack")}
             disabled={blackjackButtonDisabled}
           >

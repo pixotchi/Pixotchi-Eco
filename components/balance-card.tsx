@@ -107,6 +107,11 @@ export default function BalanceCard({ className = "", variant = "default", onRef
   if (!address && !isSolana) return null;
 
   if (variant === "wallet-profile") {
+    const walletRowClassName =
+      "flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-border/50 bg-background/55 px-3 py-2";
+    const walletStackedRowClassName =
+      "space-y-1 rounded-[var(--radius-control)] border border-border/50 bg-background/55 px-3 py-2";
+
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -119,8 +124,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
             onClick={handleRefresh}
             disabled={ethLoading || loading}
             aria-label="Refresh balances"
-            style={{ width: '16px', height: '16px', minWidth: '16px', minHeight: '16px', padding: 0 }}
-            className="p-0"
+            className="btn-compact h-7 w-7 bg-background/60 p-0"
           >
             <RefreshCw
               className={`w-3 h-3 ${ethLoading || loading ? "animate-spin" : ""
@@ -130,12 +134,12 @@ export default function BalanceCard({ className = "", variant = "default", onRef
         </div>
 
         {/* Consolidated container matching Connection card styling */}
-        <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
+        <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/80 bg-card/95 p-4 shadow-[var(--shadow-raised)]">
           {/* Network-specific balances */}
           {isSolana ? (
             <>
               {/* Native SOL */}
-              <div className="flex items-center justify-between">
+              <div className={walletRowClassName}>
                 <span className="text-xs font-medium">Solana</span>
                 <div className="flex items-center space-x-1">
                   {solanaLoading ? (
@@ -152,7 +156,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
               </div>
 
               {/* wSOL on Base (Twin) */}
-              <div className="flex items-center justify-between">
+              <div className={walletRowClassName}>
                 <span className="text-xs font-medium">SOL (Base)</span>
                 <div className="flex items-center space-x-1">
                   {solanaLoading ? (
@@ -171,7 +175,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           ) : (
             <>
               {/* Ethereum */}
-              <div className="flex items-center justify-between">
+              <div className={walletRowClassName}>
                 <span className="text-xs font-medium">Ethereum</span>
                 <div className="flex items-center space-x-1">
                   {ethLoading ? (
@@ -190,7 +194,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           )}
 
           {/* SEED */}
-          <div className="flex flex-col space-y-0.5">
+          <div className={walletStackedRowClassName}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">SEED</span>
               <div className="flex items-center space-x-1">
@@ -214,7 +218,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </div>
 
           {/* LEAF */}
-          <div className="flex flex-col space-y-0.5">
+          <div className={walletStackedRowClassName}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">LEAF</span>
               <div className="flex items-center space-x-1">
@@ -238,7 +242,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </div>
 
           {/* PIXOTCHI */}
-          <div className="flex items-center justify-between">
+          <div className={walletRowClassName}>
             <span className="text-xs font-medium">PIXOTCHI</span>
             <div className="flex items-center space-x-1">
               {loading ? (
@@ -253,10 +257,10 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </div>
 
           {/* Separator before NFTs */}
-          <div className="border-t border-muted my-2" />
+          <div className="my-3 border-t border-border/70" />
 
           {/* Plants NFT Count */}
-          <div className="flex items-center justify-between">
+          <div className={walletRowClassName}>
             <span className="text-xs font-medium">Plants</span>
             <div className="flex items-center space-x-1">
               {nftLoading ? (
@@ -271,7 +275,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </div>
 
           {/* Lands NFT Count */}
-          <div className="flex items-center justify-between">
+          <div className={walletRowClassName}>
             <span className="text-xs font-medium">Lands</span>
             <div className="flex items-center space-x-1">
               {nftLoading ? (

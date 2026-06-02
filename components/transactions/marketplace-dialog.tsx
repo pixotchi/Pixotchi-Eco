@@ -355,7 +355,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             <div className="md:hidden space-y-4">
               <div className="rounded-lg border border-border bg-card overflow-hidden">
                 {/* Asks header and list */}
-                <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-red-500/10 text-red-600">
+                <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-destructive/10 text-destructive">
                   <span>Asks (Sell LEAF)</span>
                   <span className="opacity-70">Price • Size</span>
                 </div>
@@ -372,8 +372,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
-                          <div className="absolute inset-0 bg-red-500/10" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-red-600 font-semibold">{formatCompact(row.price)}</span>
+                          <div className="absolute inset-0 bg-destructive/10" style={{ width: `${row.depth}%` }} />
+                          <span className="relative text-destructive font-semibold">{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} LEAF</span>
                         </button>
                       );
@@ -381,7 +381,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   )}
                 </div>
                 {/* Bids header and list */}
-                <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-green-500/10 text-green-600 border-t border-border">
+                <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))] border-t border-border">
                   <span>Bids (Sell SEED)</span>
                   <span className="opacity-70">Price • Size</span>
                 </div>
@@ -398,8 +398,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
-                          <div className="absolute inset-0 bg-green-500/10" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-green-600 font-semibold">{formatCompact(row.price)}</span>
+                          <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: `${row.depth}%` }} />
+                          <span className="relative text-[hsl(var(--success-strong))] font-semibold">{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} SEED</span>
                         </button>
                       );
@@ -501,9 +501,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             {/* Desktop/tablet: three-column layout */}
             <div className="hidden md:grid md:grid-cols-3 items-start gap-4">
               {/* Asks */}
-              <div className={`rounded-lg border border-border bg-card overflow-hidden ${focusedSide === 'asks' ? 'ring-1 ring-red-500/50' : ''}`}>
+                <div className={`rounded-lg border border-border bg-card overflow-hidden ${focusedSide === 'asks' ? 'ring-1 ring-destructive/50' : ''}`}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
-                  <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-red-500/10 text-red-600">
+                  <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-destructive/10 text-destructive">
                     <span>Asks (Sell LEAF)</span>
                     <span className="opacity-70">Price • Size</span>
                   </div>
@@ -519,8 +519,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
-                          <div className="absolute inset-0 bg-red-500/10" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-red-600 font-semibold">{formatCompact(row.price)}</span>
+                          <div className="absolute inset-0 bg-destructive/10" style={{ width: `${row.depth}%` }} />
+                          <span className="relative text-destructive font-semibold">{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} LEAF</span>
                         </button>
                       );
@@ -620,9 +620,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Bids */}
-              <div className={`rounded-lg border border-border bg-card overflow-hidden ${focusedSide === 'bids' ? 'ring-1 ring-green-500/50' : ''}`}>
+                <div className={`rounded-lg border border-border bg-card overflow-hidden ${focusedSide === 'bids' ? 'ring-1 ring-[hsl(var(--success)/0.5)]' : ''}`}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
-                  <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-green-500/10 text-green-600">
+                  <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]">
                     <span>Bids (Sell SEED)</span>
                     <span className="opacity-70">Price • Size</span>
                   </div>
@@ -638,8 +638,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
-                          <div className="absolute inset-0 bg-green-500/10" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-green-600 font-semibold">{formatCompact(row.price)}</span>
+                          <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: `${row.depth}%` }} />
+                          <span className="relative text-[hsl(var(--success-strong))] font-semibold">{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} SEED</span>
                         </button>
                       );

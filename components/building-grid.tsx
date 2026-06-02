@@ -76,8 +76,8 @@ const BuildingItem = React.memo(({
 
             {/* Max Level Badge */}
             {isMaxLevel && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-sm flex items-center justify-center">
-                <span className="text-xs font-bold text-black">★</span>
+              <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-sm bg-[hsl(var(--warning))]">
+                <span className="text-xs font-bold text-[hsl(var(--warning-foreground))]">★</span>
               </div>
             )}
           </div>

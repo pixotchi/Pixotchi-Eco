@@ -11,6 +11,7 @@ import { BRIDGE_CONFIG } from '@/lib/solana-constants';
 import { formatWsol } from '@/lib/solana-quote';
 import { getBaseExplorerUrl,getSolanaExplorerUrl } from '@/lib/solana-twin';
 import { useCallback,useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 // ============ Types ============
 
@@ -44,14 +45,14 @@ export interface SolanaBridgeTransactionProps {
 function BridgeStatusDisplay({ status }: { status: BridgeStatus }) {
   const statusConfig: Record<BridgeStatus, { text: string; color: string; spinning?: boolean }> = {
     idle: { text: '', color: '' },
-    building: { text: 'Preparing...', color: 'text-yellow-500', spinning: true },
-    quoting: { text: 'Getting quote...', color: 'text-yellow-500', spinning: true },
-    ready: { text: 'Ready to sign', color: 'text-green-500' },
-    signing: { text: 'Sign in wallet...', color: 'text-blue-500', spinning: true },
-    bridging: { text: 'Bridging...', color: 'text-purple-500', spinning: true },
-    confirming: { text: 'Confirming...', color: 'text-purple-500', spinning: true },
-    success: { text: 'Success!', color: 'text-green-500' },
-    error: { text: 'Failed', color: 'text-red-500' },
+    building: { text: 'Preparing...', color: 'text-[hsl(var(--warning))]', spinning: true },
+    quoting: { text: 'Getting quote...', color: 'text-[hsl(var(--warning))]', spinning: true },
+    ready: { text: 'Ready to sign', color: 'text-[hsl(var(--success-strong))]' },
+    signing: { text: 'Sign in wallet...', color: 'text-[hsl(var(--info))]', spinning: true },
+    bridging: { text: 'Bridging...', color: 'text-violet-700 dark:text-violet-200', spinning: true },
+    confirming: { text: 'Confirming...', color: 'text-violet-700 dark:text-violet-200', spinning: true },
+    success: { text: 'Success!', color: 'text-[hsl(var(--success-strong))]' },
+    error: { text: 'Failed', color: 'text-destructive' },
   };
   
   const config = statusConfig[status];
@@ -186,7 +187,7 @@ export function SolanaBridgeTransaction({
       
       {/* Error */}
       {bridge.state.error && (
-        <div className="text-sm text-red-500">
+        <div className="text-sm text-destructive">
           {bridge.state.error}
         </div>
       )}
@@ -197,7 +198,7 @@ export function SolanaBridgeTransaction({
           href={getSolanaExplorerUrl(bridge.state.signature)}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-blue-400 hover:text-blue-300 underline"
+          className="text-sm text-[hsl(var(--info))] underline hover:opacity-80"
         >
           View on Solana Explorer →
         </a>
@@ -218,17 +219,11 @@ export function SolanaBridgeTransaction({
       )}
       
       {/* Action button */}
-      <button
+      <Button
         onClick={handleClick}
         disabled={isDisabled}
-        className={`
-          px-4 py-2 rounded-lg font-medium transition-all
-          ${isDisabled 
-            ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-            : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white'
-          }
-          ${isLoading ? 'animate-pulse' : ''}
-        `}
+        variant={isDisabled ? 'neutral' : 'special'}
+        className={isLoading ? 'animate-pulse' : undefined}
       >
         {isLoading ? (
           <span className="flex items-center justify-center gap-2">
@@ -241,7 +236,7 @@ export function SolanaBridgeTransaction({
         ) : (
           buttonText || getDefaultButtonText()
         )}
-      </button>
+      </Button>
       
       {/* Bridge time estimate */}
       {isLoading && (

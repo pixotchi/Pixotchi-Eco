@@ -837,25 +837,27 @@ export default function LeaderboardTab() {
             )}
             {plant.isDead && (
               <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
-                <Skull className="w-3 h-3 text-red-500" />
+                <Skull className="w-3 h-3 text-destructive" />
               </div>
             )}
           </div>
 
           <div className="flex-1 min-w-0">
             {compact ? (
-              <div className="flex min-w-0 items-baseline gap-2">
-                <h4 className="min-w-0 truncate pr-2 text-sm font-semibold">
+              <div className="min-w-0">
+                <h4 className="truncate text-sm font-semibold">
                   {plant.name || `Plant #${plant.id}`}
                   {isMine && <span className="ml-1 text-xs text-primary font-medium">(You)</span>}
                 </h4>
-                <span className="flex-none text-xs text-muted-foreground">LvL {plant.level}</span>
+                <span className="mt-0.5 block text-[11px] leading-none text-muted-foreground">
+                  LvL {plant.level}
+                </span>
               </div>
             ) : (
               <>
                 <div className="flex items-center space-x-2">
                   <div className="relative min-w-0">
-                    <h4 className="font-semibold text-base truncate pr-6">
+                    <h4 className="truncate pr-2 text-base font-semibold">
                       {plant.name || `Plant #${plant.id}`}
                       {isMine && (
                         <span className="ml-2 text-xs text-primary font-medium">(You)</span>
@@ -865,6 +867,20 @@ export default function LeaderboardTab() {
                 </div>
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
                   <span>LvL {plant.level}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-[520px]:hidden">
+                  <div className="flex items-center gap-1 text-foreground">
+                    <Image src="/icons/pts.svg" alt="Points" width={13} height={13} />
+                    <span className="font-bold">{formatScoreShort(plant.score)}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Image src="/icons/Star.svg" alt="Stars" width={12} height={12} />
+                    <span>{plant.stars}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={12} height={12} />
+                    <span>{formatEthShort(plant.rewards)}</span>
+                  </div>
                 </div>
               </>
             )}
@@ -887,7 +903,7 @@ export default function LeaderboardTab() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-end space-y-1">
+              <div className="hidden flex-col items-end space-y-1 min-[520px]:flex">
                 <div className="flex items-center space-x-1">
                   <Image src="/icons/pts.svg" alt="Points" width={16} height={16} />
                   <span className="text-base font-bold">{formatScoreShort(plant.score)}</span>
@@ -1644,7 +1660,7 @@ export default function LeaderboardTab() {
                       }}
                     />
                     {!hasEnough && (
-                      <div className="text-xs text-red-500">Insufficient SEED balance (requires {formatTokenAmount(revivePrice)} SEED)</div>
+                      <div className="text-xs text-destructive">Insufficient SEED balance (requires {formatTokenAmount(revivePrice)} SEED)</div>
                     )}
                   </>
                 );

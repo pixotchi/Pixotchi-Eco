@@ -398,7 +398,7 @@ function ReportCard({
             Raid #{report.raidId.toString()} • {opponentLabel}
           </div>
         </div>
-        <div className={`text-xs font-semibold ${success ? "text-green-600" : "text-red-600"}`}>
+        <div className={`text-xs font-semibold ${success ? "text-[hsl(var(--success-strong))]" : "text-destructive"}`}>
           {success ? "Won" : "Lost"}
         </div>
       </div>
@@ -1246,7 +1246,7 @@ export default function BarracksPanelV2({
                       </div>
                     </div>
                     {preview.statusCode === RAID_STATUS_OK && (
-                      <div className={`text-xs font-semibold ${preview.attackerWon ? "text-green-600" : "text-red-600"}`}>
+                      <div className={`text-xs font-semibold ${preview.attackerWon ? "text-[hsl(var(--success-strong))]" : "text-destructive"}`}>
                         {preview.attackerWon ? "Won" : "Lost"}
                       </div>
                     )}

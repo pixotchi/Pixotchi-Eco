@@ -86,7 +86,7 @@ const PlantCard = React.memo(function PlantCard({
             {/* Active Shop Item Indicator */}
             {showShopItems && showProtectionIndicator && (
               <div className="absolute top-1 right-1">
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                <div className="w-5 h-5 rounded-full bg-[hsl(var(--info))] flex items-center justify-center shadow-[var(--shadow-hairline)]">
                   <Image src="/icons/Fence.png" alt="Shield" width={12} height={12} />
                 </div>
               </div>

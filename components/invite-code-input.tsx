@@ -169,13 +169,13 @@ export default function InviteCodeInput({
 
   const getStatusIcon = () => {
     if (isValidating) {
-      return <Loader2 className="w-5 h-5 animate-spin text-blue-500" />;
+      return <Loader2 className="w-5 h-5 animate-spin text-[hsl(var(--info))]" />;
     }
     if (isValid === true) {
-      return <CheckCircle className="w-5 h-5 text-green-500" />;
+      return <CheckCircle className="w-5 h-5 text-[hsl(var(--success))]" />;
     }
     if (isValid === false) {
-      return <XCircle className="w-5 h-5 text-red-500" />;
+      return <XCircle className="w-5 h-5 text-destructive" />;
     }
     return null;
   };
@@ -219,7 +219,7 @@ export default function InviteCodeInput({
           </div>
 
           {errorMessage && (
-            <p id={errorId} className="text-sm text-red-600 text-center" role="alert">
+            <p id={errorId} className="text-sm text-destructive text-center" role="alert">
               {errorMessage}
             </p>
           )}
@@ -249,7 +249,7 @@ export default function InviteCodeInput({
           </Button>
 
           {!address && (
-            <p className="text-xs text-orange-600 text-center">
+            <p className="text-xs text-[hsl(var(--warning))] text-center">
               Connect your wallet to automatically mark the code as used
             </p>
           )}

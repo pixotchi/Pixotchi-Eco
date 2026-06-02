@@ -8,6 +8,7 @@
 import React from 'react';
 import { useIsSolanaWallet } from '@/hooks/useSolanaWallet';
 import { isSolanaEnabled } from '@/lib/solana-constants';
+import { Badge } from '@/components/ui/badge';
 
 // ============ Types ============
 
@@ -129,10 +130,10 @@ export function SolanaNotSupported({
   className?: string;
 }) {
   return (
-    <div className={`bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 ${className}`}>
+    <div className={`rounded-[var(--radius-panel)] border border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] p-4 ${className}`}>
       <div className="flex items-start gap-3">
         <svg 
-          className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" 
+          className="w-5 h-5 text-[hsl(var(--warning))] flex-shrink-0 mt-0.5" 
           fill="none" 
           viewBox="0 0 24 24" 
           stroke="currentColor"
@@ -145,8 +146,8 @@ export function SolanaNotSupported({
           />
         </svg>
         <div>
-          <h4 className="text-yellow-500 font-medium">Not Available for Solana Wallets</h4>
-          <p className="text-yellow-500/70 text-sm mt-1">
+          <h4 className="text-[hsl(var(--warning))] font-medium">Not Available for Solana Wallets</h4>
+          <p className="text-sm mt-1 text-[hsl(var(--warning)/0.78)]">
             {feature} is currently not available when connected with a Solana wallet. 
             Please connect with an EVM wallet (MetaMask, Coinbase, etc.) to access this feature.
           </p>
@@ -165,15 +166,9 @@ export function SolanaBridgeBadge({ className = '' }: { className?: string }) {
   if (!isSolana) return null;
   
   return (
-    <span className={`
-      inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
-      bg-gradient-to-r from-purple-500/20 to-pink-500/20 
-      border border-purple-500/30
-      text-purple-300
-      ${className}
-    `}>
+    <Badge variant="special" className={className}>
       Bridge Mode
-    </span>
+    </Badge>
   );
 }
 

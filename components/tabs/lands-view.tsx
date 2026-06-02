@@ -611,13 +611,15 @@ function LandsViewContent() {
                 </div>
 
                 <div className="absolute bottom-3 left-3 z-20">
-                  <button
+                  <Button
                     onClick={() => setIsMapOpen(true)}
-                    className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                    variant="primary"
+                    size="xs"
+                    className="btn-compact"
                     aria-label="Open map"
                   >
                     MAP
-                  </button>
+                  </Button>
                 </div>
 
                 <div

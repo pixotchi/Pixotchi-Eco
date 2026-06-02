@@ -89,7 +89,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 						<Input id="land-name" value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Enter new name..." maxLength={MAX_NAME_LENGTH} className="w-full" />
 						<div className="flex justify-between text-xs text-muted-foreground">
 							<span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
-							{newName.length === MAX_NAME_LENGTH && <span className="text-red-500">Maximum length reached</span>}
+							{newName.length === MAX_NAME_LENGTH && <span className="text-destructive">Maximum length reached</span>}
 						</div>
 					</div>
 
@@ -116,5 +116,4 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 }
 
 export default EditLandName;
-
 

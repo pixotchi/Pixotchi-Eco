@@ -20,9 +20,9 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     data-viewport-debug-dialog-overlay=""
     className={cn(
-      "fixed inset-0 z-[1200] bg-black/60 backdrop-blur-[2px] sm:backdrop-blur-sm",
+      "fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-[2px] sm:backdrop-blur-sm",
       "supports-[backdrop-filter]:bg-black/50 motion-reduce:bg-black/75 motion-reduce:backdrop-blur-none",
-      "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
+      "duration-[var(--motion-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
@@ -32,28 +32,67 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
+type DialogSurface = "default" | "soft" | "game" | "danger";
+type DialogMobileMode = "auto" | "center" | "sheet";
+
+const dialogSizeClassName: Record<DialogSize, string> = {
+  sm: "max-w-sm",
+  md: "max-w-md",
+  lg: "max-w-lg",
+  xl: "max-w-2xl",
+  full: "w-[min(96vw,72rem)] max-w-none",
+};
+
+const dialogSurfaceClassName: Record<DialogSurface, string> = {
+  default: "border-border/80 bg-background text-foreground",
+  soft: "border-border/70 bg-card/95 text-card-foreground backdrop-blur-md",
+  game: "border-white/15 bg-slate-950/90 text-white shadow-[var(--shadow-modal)]",
+  danger: "border-destructive/30 bg-background text-foreground",
+};
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    danger?: boolean;
     frameClassName?: string;
     hideCloseButton?: boolean;
+    mobileMode?: DialogMobileMode;
     overlayClassName?: string;
+    size?: DialogSize;
+    stickyFooter?: boolean;
+    surface?: DialogSurface;
     useSafeAreaInset?: boolean;
   }
->(({ className, children, frameClassName, hideCloseButton, overlayClassName, useSafeAreaInset = true, ...props }, ref) => (
+>(({
+  children,
+  className,
+  danger = false,
+  frameClassName,
+  hideCloseButton,
+  mobileMode = "auto",
+  overlayClassName,
+  size = "md",
+  stickyFooter = false,
+  surface = "default",
+  useSafeAreaInset = true,
+  ...props
+}, ref) => (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       data-viewport-debug-dialog-frame=""
+      data-sticky-footer={stickyFooter ? "true" : undefined}
       className={cn(
-        // Full-viewport centering container (avoids translate issues)
-        "fixed inset-0 z-[1201] flex items-center justify-center",
+        "fixed inset-0 z-[var(--z-modal)] flex justify-center",
+        mobileMode === "sheet" ? "items-end sm:items-center" : "items-center",
         useSafeAreaInset && "safe-area-inset",
-        // Animations disabled on mobile via global .motion-off override; keep classes for desktop
-        "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "duration-[var(--motion-modal)] data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        mobileMode === "sheet"
+          ? "data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:slide-in-from-bottom-4 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
+          : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         frameClassName
       )}
       {...props}
@@ -61,8 +100,13 @@ const DialogContent = React.forwardRef<
       <div
         data-viewport-debug-dialog-surface=""
         className={cn(
-       "relative w-full max-w-md rounded-2xl border border-border bg-background p-6 shadow-[0_32px_64px_-24px_rgba(15,23,42,0.45)]",
-          "max-h-full sm:max-h-[90dvh] flex flex-col overflow-hidden",
+          "relative flex w-full flex-col overflow-hidden border p-5 shadow-[var(--shadow-modal)] sm:p-6",
+          "max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh]",
+          mobileMode === "sheet"
+            ? "rounded-t-[var(--radius-dialog)] rounded-b-none sm:rounded-[var(--radius-dialog)]"
+            : "rounded-[var(--radius-dialog)]",
+          dialogSizeClassName[size],
+          dialogSurfaceClassName[danger ? "danger" : surface],
           className
         )}
       >
@@ -72,7 +116,7 @@ const DialogContent = React.forwardRef<
             aria-label="Close dialog"
             className={cn(
               // Position
-              "absolute top-3 right-3 md:top-4 md:right-4 z-[1]",
+              "absolute top-3 right-3 md:top-4 md:right-4 z-10",
               // Size and alignment
               "inline-flex h-8 w-8 items-center justify-center md:h-9 md:w-9",
               // Visuals: avoid borders, provide hover background only

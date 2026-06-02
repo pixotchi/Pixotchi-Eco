@@ -26,6 +26,42 @@ const themes = [
   { name: "violet", label: "Violet", color: "bg-fuchsia-500" }
 ];
 
+function MenuSwitchRow({
+  label,
+  checked,
+  onClick,
+  ariaLabel,
+}: {
+  label: string;
+  checked: boolean;
+  onClick: () => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex min-h-8 w-full items-center justify-between gap-4 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-accent/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+    >
+      <span className="text-xs font-medium">{label}</span>
+      <span
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+          checked ? "bg-[hsl(var(--success))]" : "bg-muted-foreground/24"
+        }`}
+        aria-hidden="true"
+      >
+        <span
+          className={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+            checked ? "translate-x-[18px]" : "translate-x-0.5"
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
 export function ThemeSelector() {
   const { theme, setTheme } = useTheme();
   const { isEnabled: isSnowEnabled, isFeatureEnabled: isSnowFeatureEnabled, toggleSnow } = useSnow();
@@ -116,43 +152,23 @@ export function ThemeSelector() {
         </div>
         {/* Winter Mode Toggle - only shown when feature is enabled via env */}
         {isSnowFeatureEnabled && (
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-            <span className="text-xs font-medium">Winter Mode</span>
-            <button
+          <div className="mt-2 border-t border-border pt-2">
+            <MenuSwitchRow
+              label="Winter Mode"
+              checked={isSnowEnabled}
               onClick={toggleSnow}
-              style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
-              className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isSnowEnabled ? 'bg-value' : 'bg-muted'
-                }`}
-              role="switch"
-              aria-checked={isSnowEnabled}
-              aria-label="Toggle winter snow effect"
-            >
-              <span
-                style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
-                className={`inline-block transform rounded-full bg-white shadow-sm transition-transform ${isSnowEnabled ? 'translate-x-[14px]' : 'translate-x-[2px]'
-                  }`}
-              />
-            </button>
+              ariaLabel="Toggle winter snow effect"
+            />
           </div>
         )}
         {/* Ambient Music Toggle */}
-        <div className={`flex items-center justify-between mt-3 pt-3 ${isSnowFeatureEnabled ? '' : 'border-t border-border'}`}>
-          <span className="text-xs font-medium">Music</span>
-          <button
+        <div className={`${isSnowFeatureEnabled ? 'mt-1' : 'mt-2 border-t border-border pt-2'}`}>
+          <MenuSwitchRow
+            label="Music"
+            checked={isMusicEnabled}
             onClick={toggleAudio}
-            style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
-            className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isMusicEnabled ? 'bg-value' : 'bg-muted'
-              }`}
-            role="switch"
-            aria-checked={isMusicEnabled}
-            aria-label="Toggle ambient music"
-          >
-            <span
-              style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
-              className={`inline-block transform rounded-full bg-white shadow-sm transition-transform ${isMusicEnabled ? 'translate-x-[14px]' : 'translate-x-[2px]'
-                }`}
-            />
-          </button>
+            ariaLabel="Toggle ambient music"
+          />
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

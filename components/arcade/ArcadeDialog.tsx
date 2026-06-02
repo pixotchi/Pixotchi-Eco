@@ -907,7 +907,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   <div className="text-xs text-muted-foreground">
                     Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
                     {withStar && (plant?.stars ?? 0) <= 0 && (
-                      <span className="ml-2 text-red-500">Not enough stars</span>
+                      <span className="ml-2 text-destructive">Not enough stars</span>
                     )}
                   </div>
 
@@ -1014,7 +1014,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   <div className="text-xs text-muted-foreground">
                     Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
                     {spinStarCost > 0 && (plant?.stars ?? 0) < spinStarCost && !pending && (
-                      <span className="ml-2 text-red-500">Not enough stars to spin</span>
+                      <span className="ml-2 text-destructive">Not enough stars to spin</span>
                     )}
                   </div>
 

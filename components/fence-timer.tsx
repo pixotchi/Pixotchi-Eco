@@ -21,7 +21,7 @@ export default function FenceTimer({
   const baseClasses = `flex items-center rounded-full font-semibold space-x-2`;
   const backgroundClasses = noBackground 
     ? "text-foreground" 
-    : "bg-blue-500/10 text-blue-600 dark:text-blue-400 p-3 border border-blue-500/20 dark:border-blue-400/20 rounded-md";
+    : "rounded-md border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.1)] p-3 text-[hsl(var(--info))]";
 
   return (
     <div className={`${baseClasses} ${backgroundClasses} ${className}`}>

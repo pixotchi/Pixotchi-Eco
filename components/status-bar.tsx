@@ -10,6 +10,7 @@ import { useAccount, useBalance } from "wagmi";
 import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/components/solana";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onStakingDialogOpen, openTasksDialog } from "@/lib/app-events";
+import { Button } from "./ui/button";
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
   const num = parseFloat(formatUnits(amount, decimals));
@@ -118,28 +119,32 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}
             {showTasksButton && (
-              <button
+              <Button
                 type="button"
                 onClick={handleTasksClick}
-                className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                variant="warning"
+                size="xs"
+                className="btn-compact"
                 aria-label="Open tasks"
                 aria-haspopup="dialog"
               >
                 Tasks
-              </button>
+              </Button>
             )}
             {/* Hide staking for Solana wallet users (not supported via bridge) */}
             {!isSolana && (
-              <button
+              <Button
                 type="button"
                 onClick={() => setStakingOpen(true)}
-                className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                variant="primary"
+                size="xs"
+                className="btn-compact"
                 aria-label="Open staking dialog"
                 aria-expanded={stakingOpen}
                 aria-haspopup="dialog"
               >
                 Stake
-              </button>
+              </Button>
             )}
           </div>
         </div>

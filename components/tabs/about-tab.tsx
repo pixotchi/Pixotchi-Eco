@@ -45,6 +45,8 @@ const AboutWorldScene = () => (
           height={sprite.height}
           className={`absolute h-auto select-none object-contain [image-rendering:pixelated] drop-shadow-[0_14px_22px_rgba(15,23,42,0.18)] ${sprite.className}`}
           style={{ animation: sprite.animation }}
+          loading={sprite.src === "/icons/plantGrowth2.gif" ? "eager" : "lazy"}
+          fetchPriority={sprite.src === "/icons/plantGrowth2.gif" ? "high" : "auto"}
           unoptimized={sprite.src.endsWith(".gif")}
         />
       ))}
@@ -293,15 +295,15 @@ export default function AboutTab() {
               {stats && (
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{stats.successfulInvites}</div>
+                    <div className="text-2xl font-bold text-[hsl(var(--info))]">{stats.successfulInvites}</div>
                     <div className="text-xs text-muted-foreground">Friends</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">{stats.dailyRemaining}</div>
+                    <div className="text-2xl font-bold text-[hsl(var(--success-strong))]">{stats.dailyRemaining}</div>
                     <div className="text-xs text-muted-foreground">Remaining</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">{stats.totalInvites}</div>
+                    <div className="text-2xl font-bold text-violet-700 dark:text-violet-200">{stats.totalInvites}</div>
                     <div className="text-xs text-muted-foreground">Generated</div>
                   </div>
                 </div>
@@ -332,13 +334,13 @@ export default function AboutTab() {
                 </Button>
 
                 {stats && !stats.canGenerateToday && (
-                  <p className="text-xs text-orange-600 mt-2">
+                  <p className="text-xs text-[hsl(var(--warning))] mt-2">
                     Daily limit reached. Try again tomorrow!
                   </p>
                 )}
 
                 {!address && (
-                  <p className="text-xs text-orange-600 mt-2">
+                  <p className="text-xs text-[hsl(var(--warning))] mt-2">
                     Connect your wallet to generate codes
                   </p>
                 )}
@@ -359,14 +361,14 @@ export default function AboutTab() {
                           }`}
                       >
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${codeData.isUsed ? 'bg-green-500' : 'bg-blue-500'
+                          <div className={`w-2 h-2 rounded-full ${codeData.isUsed ? 'bg-[hsl(var(--success))]' : 'bg-[hsl(var(--info))]'
                             }`} />
                           <div className={`font-pixel text-sm font-medium ${codeData.isUsed ? 'line-through text-muted-foreground' : ''
                             }`}>
                             {codeData.code}
                           </div>
                           {codeData.isUsed && (
-                            <span className="text-xs bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded-full">
+                            <span className="text-xs bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))] px-1.5 py-0.5 rounded-full">
                               Used
                             </span>
                           )}
@@ -380,7 +382,7 @@ export default function AboutTab() {
                             disabled={codeData.isUsed}
                           >
                             {copiedCode === codeData.code ? (
-                              <Check className="w-3 h-3 text-green-600" />
+                              <Check className="w-3 h-3 text-[hsl(var(--success-strong))]" />
                             ) : (
                               <Copy className="w-3 h-3" />
                             )}

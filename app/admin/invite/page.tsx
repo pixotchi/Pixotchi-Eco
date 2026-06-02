@@ -121,11 +121,11 @@ const ADMIN_NAV_GROUPS: Array<{
 
 function getToolStatusClass(status: AIToolCallTrace['status']) {
   if (status === 'ok') {
-    return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200';
+    return 'bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]';
   }
 
   if (status === 'error') {
-    return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
+    return 'bg-destructive/10 text-destructive';
   }
 
   return 'bg-muted text-muted-foreground';
@@ -1917,7 +1917,7 @@ export default function AdminInviteDashboard() {
                   {stats.recentCodes.map((code) => (
                     <div key={code.code} className="flex items-center justify-between p-3 bg-card rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-green-500/70' : 'bg-yellow-400/70'}`} />
+                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-[hsl(var(--success)/0.7)]' : 'bg-[hsl(var(--warning)/0.7)]'}`} />
                         <span className="font-mono">{code.code}</span>
                       </div>
                       <div className="text-right">
@@ -1990,7 +1990,7 @@ export default function AdminInviteDashboard() {
                         <p className="text-sm text-muted-foreground">Active Messages</p>
                         <p className="text-2xl font-bold">{broadcastStats.totalMessages}</p>
                       </div>
-                      <Megaphone className="w-8 h-8 text-purple-500 opacity-50" />
+                      <Megaphone className="w-8 h-8 text-violet-700 dark:text-violet-200 opacity-50" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2001,7 +2001,7 @@ export default function AdminInviteDashboard() {
                         <p className="text-sm text-muted-foreground">Impressions</p>
                         <p className="text-2xl font-bold">{broadcastStats.totalImpressions}</p>
                       </div>
-                      <Eye className="w-8 h-8 text-blue-500 opacity-50" />
+                      <Eye className="w-8 h-8 text-[hsl(var(--info))] opacity-50" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2012,7 +2012,7 @@ export default function AdminInviteDashboard() {
                         <p className="text-sm text-muted-foreground">Dismissals</p>
                         <p className="text-2xl font-bold">{broadcastStats.totalDismissals}</p>
                       </div>
-                      <XIcon className="w-8 h-8 text-orange-500 opacity-50" />
+                      <XIcon className="w-8 h-8 text-[hsl(var(--warning))] opacity-50" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2127,8 +2127,8 @@ export default function AdminInviteDashboard() {
                     <div className="space-y-2">
                       {[
                         { value: 'low', label: 'Low', color: 'text-gray-600' },
-                        { value: 'normal', label: 'Normal', color: 'text-blue-600' },
-                        { value: 'high', label: 'High', color: 'text-red-600' },
+                        { value: 'normal', label: 'Normal', color: 'text-[hsl(var(--info))]' },
+                        { value: 'high', label: 'High', color: 'text-destructive' },
                       ].map((option) => (
                         <button
                           key={option.value}
@@ -2254,8 +2254,8 @@ export default function AdminInviteDashboard() {
                 </div>
 
                 {!broadcastDismissible && (
-                  <Alert className="bg-orange-500/10 border-orange-500/20">
-                    <AlertTriangle className="w-4 h-4 text-orange-600" />
+                  <Alert className="bg-[hsl(var(--warning)/0.12)] border-[hsl(var(--warning)/0.28)]">
+                    <AlertTriangle className="w-4 h-4 text-[hsl(var(--warning))]" />
                     <AlertDescription className="text-sm">
                       Non-dismissible messages will persist until manually deleted or expired.
                       Use carefully for critical announcements only.
@@ -2302,17 +2302,17 @@ export default function AdminInviteDashboard() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-semibold">{msg.title || 'Untitled Message'}</h3>
-                              <span className={`text-xs px-2 py-0.5 rounded ${msg.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
-                                msg.priority === 'normal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                              <span className={`text-xs px-2 py-0.5 rounded ${msg.priority === 'high' ? 'bg-destructive/10 text-destructive' :
+                                msg.priority === 'normal' ? 'bg-[hsl(var(--info)/0.12)] text-[hsl(var(--info))]' :
                                   'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
                                 }`}>
                                 {msg.priority}
                               </span>
-                              <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                              <span className="text-xs px-2 py-0.5 rounded bg-violet-500/10 text-violet-700 dark:text-violet-200">
                                 {msg.type}
                               </span>
                               {!msg.dismissible && (
-                                <span className="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                                <span className="text-xs px-2 py-0.5 rounded bg-[hsl(var(--warning)/0.14)] text-[hsl(var(--warning))]">
                                   Non-dismissible
                                 </span>
                               )}
@@ -2324,7 +2324,7 @@ export default function AdminInviteDashboard() {
                               <Edit2 className="w-4 h-4" />
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => handleBroadcastDelete(msg.id)}>
-                              <Trash2 className="w-4 h-4 text-red-600" />
+                              <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                           </div>
                         </div>
@@ -2342,14 +2342,14 @@ export default function AdminInviteDashboard() {
                             Created {new Date(msg.createdAt).toLocaleString()}
                           </div>
                           {msg.expiresAt && (
-                            <div className="flex items-center gap-1 text-orange-600">
+                            <div className="flex items-center gap-1 text-[hsl(var(--warning))]">
                               <Clock className="w-3 h-3" />
                               Expires {new Date(msg.expiresAt).toLocaleString()}
                             </div>
                           )}
                         </div>
                         {msg.action && (
-                          <div className="text-xs bg-blue-50 dark:bg-blue-950/30 p-2 rounded border border-blue-200 dark:border-blue-800">
+                          <div className="text-xs bg-[hsl(var(--info)/0.1)] p-2 rounded border border-[hsl(var(--info)/0.22)]">
                             <span className="font-medium">Action:</span> {msg.action.label} → {msg.action.url}
                           </div>
                         )}
@@ -2368,7 +2368,7 @@ export default function AdminInviteDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
+                  <AlertTriangle className="w-5 h-5 mr-2 text-[hsl(var(--warning))]" />
                   Cleanup Operations
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -2775,14 +2775,14 @@ export default function AdminInviteDashboard() {
                         <div
                           key={message.id}
                           className={`p-3 rounded-lg border ${message.type === 'assistant'
-                            ? 'bg-blue-50 dark:bg-blue-950/30 border-l-4 border-blue-500 dark:border-blue-400'
+                            ? 'bg-[hsl(var(--info)/0.1)] border-l-4 border-[hsl(var(--info))]'
                             : 'bg-gray-50 dark:bg-gray-800/30 border-l-4 border-gray-500 dark:border-gray-400'
                             }`}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               {message.type === 'assistant' ? (
-                                <Bot className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                <Bot className="w-4 h-4 text-[hsl(var(--info))]" />
                               ) : (
                                 <Users className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                               )}
@@ -2790,7 +2790,7 @@ export default function AdminInviteDashboard() {
                                 {message.type === 'assistant' ? 'Neural Seed' : 'User'}
                               </span>
                               {message.tokensUsed && (
-                                <span className="text-xs bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-200 px-2 py-1 rounded">
+                                <span className="text-xs bg-[hsl(var(--warning)/0.14)] text-[hsl(var(--warning))] px-2 py-1 rounded">
                                   {message.tokensUsed} tokens
                                 </span>
                               )}
@@ -2801,7 +2801,7 @@ export default function AdminInviteDashboard() {
                           </div>
                           <p className="text-sm whitespace-pre-wrap text-foreground">{message.message}</p>
                           {message.type === 'assistant' && message.toolCalls?.length ? (
-                            <div className="mt-3 rounded-md border border-blue-200/70 dark:border-blue-800/70 bg-background/80 p-2">
+                            <div className="mt-3 rounded-md border border-[hsl(var(--info)/0.22)] bg-background/80 p-2">
                               <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                                 <Code className="w-3.5 h-3.5" />
                                 Tool calls ({message.toolCalls.length})
@@ -2958,7 +2958,7 @@ export default function AdminInviteDashboard() {
                 ) : (
                   <div className="space-y-2">
                     {(rpcStatus?.endpoints || []).map((e) => (
-                      <div key={e.url} className={`flex items-center justify-between p-2 rounded border ${e.ok ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                      <div key={e.url} className={`flex items-center justify-between p-2 rounded border ${e.ok ? 'bg-[hsl(var(--success)/0.08)] border-[hsl(var(--success)/0.22)]' : 'bg-destructive/10 border-destructive/25'}`}>
                         <div className="mr-2 min-w-0">
                           <div className="font-mono text-xs truncate" title={e.url}>{e.url}</div>
                           <div className="text-[11px] text-muted-foreground">
@@ -2966,8 +2966,8 @@ export default function AdminInviteDashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3 text-xs">
-                          <span className={e.ok ? 'text-green-600' : 'text-red-600'}>{e.ok ? 'OK' : 'DOWN'}</span>
-                          {e.coolingDown && <span className="text-amber-600">COOLDOWN</span>}
+                          <span className={e.ok ? 'text-[hsl(var(--success-strong))]' : 'text-destructive'}>{e.ok ? 'OK' : 'DOWN'}</span>
+                          {e.coolingDown && <span className="text-[hsl(var(--warning))]">COOLDOWN</span>}
                           <span className="text-muted-foreground">{e.ms}ms</span>
                           <span className="text-muted-foreground">live {e.successCount}/{e.failureCount}</span>
                           {e.ewmaLatencyMs !== null && <span className="text-muted-foreground">ewma {e.ewmaLatencyMs}ms</span>}
@@ -3155,11 +3155,11 @@ export default function AdminInviteDashboard() {
                           <div>
                             <span className="font-semibold">Summary:</span>{' '}
                             {eligiblePlants.summary?.addressesWithEligiblePlants || 0} wallets with due plants,{' '}
-                            <span className="text-orange-600 font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
+                            <span className="text-[hsl(var(--warning))] font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
                           </div>
                           <div className="text-muted-foreground">
-                            Would notify now: <span className="font-semibold text-green-600">{eligiblePlants.summary?.wouldNotify || 0}</span> •
-                            Throttled wallets: <span className="font-semibold text-yellow-600"> {eligiblePlants.summary?.throttledUsers || 0}</span>
+                            Would notify now: <span className="font-semibold text-[hsl(var(--success-strong))]">{eligiblePlants.summary?.wouldNotify || 0}</span> •
+                            Throttled wallets: <span className="font-semibold text-[hsl(var(--warning))]"> {eligiblePlants.summary?.throttledUsers || 0}</span>
                           </div>
                         </div>
                         <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -3167,11 +3167,11 @@ export default function AdminInviteDashboard() {
                             <div className="text-center py-4 text-muted-foreground">No Base wallets with eligible plants found.</div>
                           ) : (
                             (eligiblePlants.eligible || []).map((user: UntypedValue) => (
-                              <div key={user.address} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
+                              <div key={user.address} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-[hsl(var(--warning)/0.1)]' : ''}`}>
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="font-mono text-xs break-all">{user.address}</div>
                                   {user.userThrottled && (
-                                    <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded">
+                                    <span className="text-xs bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning))] px-1.5 py-0.5 rounded">
                                       THROTTLED
                                     </span>
                                   )}
@@ -3180,13 +3180,13 @@ export default function AdminInviteDashboard() {
                                   {(user.plants || []).map((plant: UntypedValue) => (
                                     <div
                                       key={plant.id}
-                                      className={`p-2 rounded text-xs ${plant.throttled ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300' : 'bg-green-100 dark:bg-green-900/30 border border-green-300'}`}
+                                      className={`p-2 rounded text-xs ${plant.throttled ? 'bg-[hsl(var(--warning)/0.12)] border border-[hsl(var(--warning)/0.32)]' : 'bg-[hsl(var(--success)/0.1)] border border-[hsl(var(--success)/0.28)]'}`}
                                     >
                                       <div className="font-semibold">Plant #{plant.id}</div>
-                                      <div className={`${plant.throttled ? 'text-yellow-600' : 'text-green-600'} font-semibold`}>
+                                      <div className={`${plant.throttled ? 'text-[hsl(var(--warning))]' : 'text-[hsl(var(--success-strong))]'} font-semibold`}>
                                         {plant.hoursLeft}h left
                                       </div>
-                                      <div className={plant.throttled ? 'text-yellow-600' : 'text-green-600'}>
+                                      <div className={plant.throttled ? 'text-[hsl(var(--warning))]' : 'text-[hsl(var(--success-strong))]'}>
                                         {plant.throttled ? '⏸ Notified' : '✓ Would notify'}
                                       </div>
                                     </div>
@@ -3371,11 +3371,11 @@ export default function AdminInviteDashboard() {
                         <div>
                           <span className="font-semibold">Summary:</span>{' '}
                           {eligiblePlants.summary?.fidsWithEligiblePlants || 0} FIDs with due plants,{' '}
-                          <span className="text-orange-600 font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
+                          <span className="text-[hsl(var(--warning))] font-semibold">{eligiblePlants.summary?.totalEligiblePlants || 0} total eligible plants</span>
                         </div>
                         <div className="text-muted-foreground">
-                          Would notify now: <span className="font-semibold text-green-600">{eligiblePlants.summary?.wouldNotify || 0}</span> •
-                          Throttled users: <span className="font-semibold text-yellow-600"> {eligiblePlants.summary?.throttledUsers || 0}</span>
+                          Would notify now: <span className="font-semibold text-[hsl(var(--success-strong))]">{eligiblePlants.summary?.wouldNotify || 0}</span> •
+                          Throttled users: <span className="font-semibold text-[hsl(var(--warning))]"> {eligiblePlants.summary?.throttledUsers || 0}</span>
                         </div>
                       </div>
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -3383,12 +3383,12 @@ export default function AdminInviteDashboard() {
                           <div className="text-center py-4 text-muted-foreground">No users with eligible plants found.</div>
                         ) : (
                           (eligiblePlants.eligible || []).map((user: UntypedValue) => (
-                            <div key={user.fid} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
+                            <div key={user.fid} className={`p-3 border rounded space-y-2 ${user.userThrottled ? 'opacity-60 bg-[hsl(var(--warning)/0.1)]' : ''}`}>
                               <div className="flex items-center justify-between">
                                 <div className="font-mono text-sm flex items-center gap-2">
                                   FID: <span className="font-semibold">{user.fid}</span>
                                   {user.userThrottled && (
-                                    <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded">
+                                    <span className="text-xs bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning))] px-1.5 py-0.5 rounded">
                                       THROTTLED
                                     </span>
                                   )}
@@ -3399,13 +3399,13 @@ export default function AdminInviteDashboard() {
                                 {(user.plants || []).map((plant: UntypedValue) => (
                                   <div
                                     key={plant.id}
-                                    className={`p-2 rounded text-xs ${plant.throttled ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300' : 'bg-green-100 dark:bg-green-900/30 border border-green-300'}`}
+                                    className={`p-2 rounded text-xs ${plant.throttled ? 'bg-[hsl(var(--warning)/0.12)] border border-[hsl(var(--warning)/0.32)]' : 'bg-[hsl(var(--success)/0.1)] border border-[hsl(var(--success)/0.28)]'}`}
                                   >
                                     <div className="font-semibold">Plant #{plant.id}</div>
-                                    <div className={`${plant.throttled ? 'text-yellow-600' : 'text-green-600'} font-semibold`}>
+                                    <div className={`${plant.throttled ? 'text-[hsl(var(--warning))]' : 'text-[hsl(var(--success-strong))]'} font-semibold`}>
                                       {plant.hoursLeft}h left
                                     </div>
-                                    <div className={plant.throttled ? 'text-yellow-600' : 'text-green-600'}>
+                                    <div className={plant.throttled ? 'text-[hsl(var(--warning))]' : 'text-[hsl(var(--success-strong))]'}>
                                       {plant.throttled ? '⏸ Notified' : '✓ Would notify'}
                                     </div>
                                   </div>
@@ -3498,7 +3498,7 @@ export default function AdminInviteDashboard() {
                                   <div className="text-muted-foreground mt-1">
                                     <span className="bg-muted px-1 rounded mr-2">{keyInfo.type}</span>
                                     {keyInfo.ttl && keyInfo.ttl > 0 && <span>TTL: {Math.floor(keyInfo.ttl / 60)}m</span>}
-                                    {keyInfo.ttl === -1 && <span className="text-yellow-600">No expiry</span>}
+                                    {keyInfo.ttl === -1 && <span className="text-[hsl(var(--warning))]">No expiry</span>}
                                   </div>
                                   {keyInfo.value !== null && (
                                     <pre className="mt-1 p-1 bg-muted/50 rounded text-[10px] max-h-20 overflow-auto whitespace-pre-wrap">
@@ -3593,11 +3593,11 @@ export default function AdminInviteDashboard() {
                 </div>
 
                 {ogShortUrl && (
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                    <div className="text-xs font-semibold text-green-900 dark:text-green-100 mb-1">
+                  <div className="p-3 bg-[hsl(var(--success)/0.1)] border border-[hsl(var(--success)/0.28)] rounded-lg">
+                    <div className="text-xs font-semibold text-[hsl(var(--success-strong))] mb-1">
                       Short URL Generated:
                     </div>
-                    <div className="font-mono text-sm text-green-700 dark:text-green-300 break-all">
+                    <div className="font-mono text-sm text-[hsl(var(--success-strong))] break-all">
                       {ogShortUrl}
                     </div>
                     <div className="flex gap-2 mt-2">
@@ -4103,7 +4103,7 @@ export default function AdminInviteDashboard() {
                           <div>{r.pixotchi}</div>
                           <div>
                             {r.claimed ? (
-                              <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                              <span className="text-[hsl(var(--success-strong))] flex items-center gap-1">
                                 <CheckCircle className="w-3 h-3" /> Claimed
                               </span>
                             ) : (
@@ -4211,13 +4211,13 @@ export default function AdminInviteDashboard() {
                 </Card>
                 <Card>
                   <CardContent className="pt-6">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">{claimsData.stats.complete}</div>
+                    <div className="text-2xl font-bold text-[hsl(var(--success-strong))]">{claimsData.stats.complete}</div>
                     <p className="text-xs text-muted-foreground">Complete</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-6">
-                    <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{claimsData.stats.partial + claimsData.stats.failed}</div>
+                    <div className="text-2xl font-bold text-[hsl(var(--warning))]">{claimsData.stats.partial + claimsData.stats.failed}</div>
                     <p className="text-xs text-muted-foreground">Partial / Failed</p>
                   </CardContent>
                 </Card>
@@ -4261,11 +4261,11 @@ export default function AdminInviteDashboard() {
                         <div>{claim.strainId || '—'}</div>
                         <div>
                           {claim.status === 'complete' ? (
-                            <span className="text-green-600 dark:text-green-400 text-xs flex items-center gap-1">
+                            <span className="text-[hsl(var(--success-strong))] text-xs flex items-center gap-1">
                               <CheckCircle className="w-3 h-3" /> OK
                             </span>
                           ) : (
-                            <span className="text-yellow-600 dark:text-yellow-400 text-xs flex items-center gap-1">
+                            <span className="text-[hsl(var(--warning))] text-xs flex items-center gap-1">
                               <AlertTriangle className="w-3 h-3" /> {claim.status}
                             </span>
                           )}

@@ -199,7 +199,7 @@ export function EditPlantName({
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
               {newName.length === MAX_NAME_LENGTH && (
-                <span className="text-red-500">Maximum length reached</span>
+                <span className="text-destructive">Maximum length reached</span>
               )}
             </div>
           </div>
@@ -230,7 +230,7 @@ export function EditPlantName({
                 </div>
 
                 {!canAffordNameChange && ethQuote && (
-                  <p className="text-sm text-red-500">
+                  <p className="text-sm text-destructive">
                     Insufficient ETH. Need {((Number(ethQuote.ethAmountWithBuffer) - Number(ethBalance)) / 1e18).toFixed(6)} more ETH.
                   </p>
                 )}
@@ -256,7 +256,7 @@ export function EditPlantName({
                 </div>
 
                 {!canAffordNameChange && !isLoadingBalance && (
-                  <p className="text-sm text-red-500">
+                  <p className="text-sm text-destructive">
                     Insufficient SEED tokens. You need {NAME_CHANGE_COST - parseFloat(formatUnits(seedBalance, 18))} more.
                   </p>
                 )}
@@ -317,7 +317,7 @@ export function EditPlantName({
                   ? 'Insufficient ETH'
                   : `Change Name with ETH`
               }
-              buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+              buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
               disabled={!isNameValid || isTransactionPending || !canAffordNameChange}
             />
           ) : canSubmit ? (

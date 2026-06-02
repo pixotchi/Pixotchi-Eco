@@ -462,7 +462,7 @@ export default function BuildingInfoDialog({
                     {Object.entries(rouletteInfo.betTypes).map(([betType, payout]) => (
                       <div key={betType} className="flex justify-between items-center">
                         <span className="text-muted-foreground">{betType}:</span>
-                        <span className="font-medium text-green-600">{payout}</span>
+                        <span className="font-medium text-[hsl(var(--success-strong))]">{payout}</span>
                       </div>
                     ))}
                   </div>
@@ -490,7 +490,7 @@ export default function BuildingInfoDialog({
                       {Object.entries(blackjackInfo.payouts).map(([result, payout]) => (
                         <div key={result} className="flex justify-between items-center">
                           <span className="text-muted-foreground">{result}:</span>
-                          <span className="font-medium text-green-600">{payout}</span>
+                          <span className="font-medium text-[hsl(var(--success-strong))]">{payout}</span>
                         </div>
                       ))}
                     </div>

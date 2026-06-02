@@ -153,18 +153,18 @@ const EventIcon = React.memo(({
 EventIcon.displayName = 'EventIcon';
 
 const YouBadge = () => (
-  <span className="ml-1 text-xs font-semibold text-blue-500">(You)</span>
+  <span className="ml-1 text-xs font-semibold text-[hsl(var(--info))]">(You)</span>
 );
 
 const PlantName = ({ name, id, isYou }: { name?: string, id: string, isYou: boolean }) => (
-  <span className={`font-bold ${isYou ? 'text-blue-500' : ''}`}>
+  <span className={`font-bold ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
     {name || `Plant #${id}`}
     {isYou && <YouBadge />}
   </span>
 );
 
 const LandName = ({ landId, isYou }: { landId: string, isYou: boolean }) => (
-  <span className={`font-bold ${isYou ? 'text-blue-500' : ''}`}>
+  <span className={`font-bold ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
     Land #{landId}
     {isYou && <YouBadge />}
   </span>

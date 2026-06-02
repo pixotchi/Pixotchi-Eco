@@ -577,9 +577,9 @@ export default function BlackjackTransaction({
         (mode === "deal" && (!betAmount || betAmount <= BigInt(0))) ||
         (mode === "action" && action === undefined);
 
-    const defaultClassName = "w-full py-2 px-4 rounded-lg font-bold transition-colors";
-    const activeClassName = buttonClassName || `${defaultClassName} bg-yellow-500 hover:bg-yellow-600 text-black`;
-    const disabledClassName = `${defaultClassName} bg-gray-600 text-gray-400 cursor-not-allowed`;
+    const defaultClassName = "w-full min-h-11 rounded-[var(--radius-control)] px-4 py-2 font-bold transition-colors";
+    const activeClassName = buttonClassName || `${defaultClassName} bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning)/0.9)]`;
+    const disabledClassName = `${defaultClassName} bg-muted text-muted-foreground cursor-not-allowed`;
 
     // Phase: idle, error - show prepare button
     if (phase === "idle" || phase === "error" || phase === "fetching") {

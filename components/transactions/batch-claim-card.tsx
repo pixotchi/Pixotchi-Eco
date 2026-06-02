@@ -224,7 +224,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
           <span className="font-semibold">Batch Claim</span>
           <div className="flex items-center gap-2 text-xs">
             {totalClaimedThisSession > 0 && (
-              <span className="text-green-700 dark:text-green-400 font-medium">
+              <span className="text-[hsl(var(--success-strong))] font-medium">
                 ✓ {totalClaimedThisSession} claimed
               </span>
             )}
@@ -252,8 +252,8 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
         {/* Multi-batch info */}
         {hasMultipleBatches && (
-          <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs">
+          <div className="p-2 bg-[hsl(var(--info)/0.1)] border border-[hsl(var(--info)/0.22)] rounded-lg">
+            <div className="flex items-center gap-2 text-[hsl(var(--info))] text-xs">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>
                 Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}.

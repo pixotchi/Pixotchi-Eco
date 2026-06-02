@@ -398,7 +398,7 @@ export default function SolanaBridgeButton({
     <Button
       onClick={handleClick}
       disabled={isDisabled}
-      className={`w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white disabled:opacity-50 ${buttonClassName}`}
+      className={`w-full bg-[image:var(--gradient-solana)] text-white hover:brightness-105 disabled:opacity-55 ${buttonClassName}`}
     >
       {isLoading ? (
         <span className="flex items-center gap-2">

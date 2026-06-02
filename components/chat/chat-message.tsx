@@ -75,7 +75,7 @@ export default function ChatMessageComponent({
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
   
-  const bgColor = isAIMessage ? 'bg-blue-100 dark:bg-blue-900/30' :
+  const bgColor = isAIMessage ? 'bg-[hsl(var(--info)/0.12)] text-foreground' :
                   isOwnPublicMessage || isUserAIMessage ? 'bg-primary text-primary-foreground' :
                   'bg-muted';
   const bubbleSize = isAIMessage
@@ -119,11 +119,11 @@ export default function ChatMessageComponent({
         >
           <div className="flex items-start justify-between gap-2 mb-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              {isAIMessage && <Bot className="w-4 h-4 text-blue-500" />}
+              {isAIMessage && <Bot className="w-4 h-4 text-[hsl(var(--info))]" />}
               {(isUserAIMessage || isOwnPublicMessage) && <User className="w-4 h-4" />}
               {displayNameNode}
               {!isAIMessage && !isUserAIMessage && !isOwnPublicMessage && name && (
-                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(var(--info))] flex-shrink-0" />
               )}
               {profileTrigger}
             </div>

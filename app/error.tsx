@@ -36,7 +36,7 @@ export default function Error({
             priority
             className="mx-auto mb-4 opacity-50"
           />
-          <h1 id="error-title" className="text-lg font-semibold mb-2">Something went wrong!</h1>
+          <h1 id="error-title" className="text-lg font-semibold mb-2">We hit a temporary app error</h1>
           <p className="text-muted-foreground mb-4">
             We&apos;ve encountered an unexpected error. Don&apos;t worry, your plants are safe!
           </p>

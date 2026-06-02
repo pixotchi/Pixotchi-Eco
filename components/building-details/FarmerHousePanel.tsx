@@ -207,9 +207,9 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                           ]}
                           className="bg-muted/50 border-primary/20"
                           getButtonClassName={(val, selected) => (
-                            val === '0' ? (selected ? 'bg-green-600/20 text-green-700' : 'text-green-700') :
-                              val === '1' ? (selected ? 'bg-amber-600/20 text-amber-700' : 'text-amber-700') :
-                                (selected ? 'bg-red-600/20 text-red-700' : 'text-red-700')
+                            val === '0' ? (selected ? 'bg-[hsl(var(--success)/0.18)] text-[hsl(var(--success-strong))]' : 'text-[hsl(var(--success-strong))]') :
+                              val === '1' ? (selected ? 'bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning))]' : 'text-[hsl(var(--warning))]') :
+                                (selected ? 'bg-destructive/15 text-destructive' : 'text-destructive')
                           )}
                         />
                       </div>

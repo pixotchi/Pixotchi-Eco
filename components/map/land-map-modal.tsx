@@ -145,7 +145,10 @@ export function LandMapModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-background/95 border-border flex flex-col gap-0 focus:outline-none">
+      <DialogContent
+        className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-background/95 border-border flex flex-col gap-0 focus:outline-none"
+        hideCloseButton
+      >
         <DialogTitle className="sr-only">World Map</DialogTitle>
         
         {/* Header overlay */}
@@ -164,6 +167,7 @@ export function LandMapModal({
             variant="outline" 
             size="icon" 
             onClick={onClose}
+            aria-label="Close world map"
             className="bg-background/80 backdrop-blur-md pointer-events-auto h-8 w-8 rounded-full"
           >
             <X className="w-4 h-4" />

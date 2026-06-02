@@ -2,6 +2,8 @@
 
 import { usePaymaster } from '@/lib/paymaster-context';
 import { Zap } from 'lucide-react';
+import { Badge } from './ui/badge';
+import { cn } from '@/lib/utils';
 
 interface PaymasterStatusProps {
   className?: string;
@@ -17,16 +19,16 @@ export function PaymasterStatus({
   if (!isPaymasterEnabled) return null;
 
   return (
-    <div className={`flex items-center space-x-2 ${className}`}>
+    <div className={cn("flex items-center gap-2", className)}>
       {showLabel && (
         <span className="text-sm text-muted-foreground">
           Sponsored TX:
         </span>
       )}
-      <div className="flex items-center space-x-1 px-2 py-1 rounded-md bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-medium">
+      <Badge variant="gasless">
         <Zap className="w-3 h-3" />
         <span>{showLabel ? 'Gasless Available' : 'Gasless'}</span>
-      </div>
+      </Badge>
     </div>
   );
 }
@@ -40,9 +42,9 @@ export function SponsoredBadge({ show, className = "" }: SponsoredBadgeProps) {
   if (!show) return null;
 
   return (
-    <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-medium ${className}`}>
+    <Badge variant="gasless" className={className}>
       <Zap className="w-3 h-3" />
       <span>Gasless</span>
-    </div>
+    </Badge>
   );
 }

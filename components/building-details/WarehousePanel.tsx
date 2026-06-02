@@ -157,7 +157,7 @@ export default function WarehousePanel({
             onChange={(e) => setApplyPts(e.target.value)}
             placeholder="Amount"
             inputMode="decimal"
-            className={`h-9 text-sm pr-16 border-border ${ptsTooHigh ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+            className={`h-9 text-sm pr-16 border-border ${ptsTooHigh ? 'border-destructive focus-visible:ring-destructive' : ''}`}
           />
           <button
             type="button"
@@ -168,7 +168,7 @@ export default function WarehousePanel({
           </button>
         </div>
         {ptsTooHigh && (
-          <div className="col-span-2 -mt-1 text-xs text-red-600">Amount exceeds available PTS.</div>
+          <div className="col-span-2 -mt-1 text-xs text-destructive">Amount exceeds available PTS.</div>
         )}
         <WarehouseApplyTransaction
           landId={landId}
@@ -204,7 +204,7 @@ export default function WarehousePanel({
             onChange={(e) => setApplyTodMinutes(e.target.value)}
             placeholder="Minutes"
             inputMode="numeric"
-            className={`h-9 text-sm pr-16 border-border ${minutesTooHigh ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+            className={`h-9 text-sm pr-16 border-border ${minutesTooHigh ? 'border-destructive focus-visible:ring-destructive' : ''}`}
           />
           <button
             type="button"
@@ -215,7 +215,7 @@ export default function WarehousePanel({
           </button>
         </div>
         {minutesTooHigh && (
-          <div className="col-span-2 -mt-1 text-xs text-red-600">Minutes exceed available TOD.</div>
+          <div className="col-span-2 -mt-1 text-xs text-destructive">Minutes exceed available TOD.</div>
         )}
         <WarehouseApplyTransaction
           landId={landId}

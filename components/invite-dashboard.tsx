@@ -178,8 +178,8 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
             <div className="grid grid-cols-2 gap-3">
               <Card>
                 <CardContent className="p-4 text-center">
-                  <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full mx-auto mb-2">
-                    <Users className="w-5 h-5 text-blue-600" />
+                  <div className="flex items-center justify-center w-10 h-10 bg-[hsl(var(--info)/0.12)] rounded-full mx-auto mb-2">
+                    <Users className="w-5 h-5 text-[hsl(var(--info))]" />
                   </div>
                   <div className="text-2xl font-bold">{stats.successfulInvites}</div>
                   <div className="text-xs text-muted-foreground">Friends Invited</div>
@@ -188,8 +188,8 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
 
               <Card>
                 <CardContent className="p-4 text-center">
-                  <div className="flex items-center justify-center w-10 h-10 bg-green-100 rounded-full mx-auto mb-2">
-                    <Calendar className="w-5 h-5 text-green-600" />
+                  <div className="flex items-center justify-center w-10 h-10 bg-[hsl(var(--success)/0.12)] rounded-full mx-auto mb-2">
+                    <Calendar className="w-5 h-5 text-[hsl(var(--success-strong))]" />
                   </div>
                   <div className="text-2xl font-bold">{stats.dailyRemaining}</div>
                   <div className="text-xs text-muted-foreground">Remaining Today</div>
@@ -227,7 +227,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
               </Button>
 
               {stats && !stats.canGenerateToday && (
-                <p className="text-xs text-orange-600 text-center">
+                <p className="text-xs text-[hsl(var(--warning))] text-center">
                   Daily limit reached. Try again tomorrow!
                 </p>
               )}
@@ -256,7 +256,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
                           className="h-8 w-8 p-0"
                         >
                           {copiedCode === code ? (
-                            <Check className="w-3 h-3 text-green-600" />
+                            <Check className="w-3 h-3 text-[hsl(var(--success-strong))]" />
                           ) : (
                             <Copy className="w-3 h-3" />
                           )}

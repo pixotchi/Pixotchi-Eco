@@ -60,7 +60,9 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
 
   return (
     <DialogContent
-      className={`w-[calc(100vw-2rem)] max-w-md xl:max-w-5xl h-[80vh] flex flex-col ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
+      size="full"
+      surface="soft"
+      className={`h-[82dvh] w-[calc(100vw-2rem)] max-w-md xl:max-w-5xl flex flex-col ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
       aria-hidden={txModalOpen || undefined}
       onInteractOutside={(event) => {
         if (txModalOpen) event.preventDefault();
@@ -129,7 +131,7 @@ export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
       {open && txModalOpen && typeof document !== 'undefined'
         ? createPortal(
           <div
-            className="fixed inset-0 z-[2500] bg-black/60 backdrop-blur-sm pointer-events-none"
+            className="fixed inset-0 z-[calc(var(--z-transaction)-1)] bg-black/60 backdrop-blur-sm pointer-events-none"
             aria-hidden="true"
           />,
           document.body

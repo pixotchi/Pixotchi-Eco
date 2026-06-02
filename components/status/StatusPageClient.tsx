@@ -100,7 +100,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
 
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12 pb-24">
         {error && (
-          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          <p className="rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </p>
         )}

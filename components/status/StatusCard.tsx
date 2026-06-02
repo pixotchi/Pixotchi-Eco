@@ -5,9 +5,9 @@ import { AlertTriangle,CheckCircle2,Info,WifiOff } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 
 const iconMap: Record<StatusLevel, React.ReactNode> = {
-  operational: <CheckCircle2 className="h-5 w-5 text-green-500" aria-hidden />,
-  degraded: <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden />,
-  outage: <WifiOff className="h-5 w-5 text-red-500" aria-hidden />,
+  operational: <CheckCircle2 className="h-5 w-5 text-[hsl(var(--success))]" aria-hidden />,
+  degraded: <AlertTriangle className="h-5 w-5 text-[hsl(var(--warning))]" aria-hidden />,
+  outage: <WifiOff className="h-5 w-5 text-destructive" aria-hidden />,
   UntypedValue: <Info className="h-5 w-5 text-muted-foreground" aria-hidden />,
 };
 
@@ -46,4 +46,3 @@ export function StatusCard({ service }: StatusCardProps) {
     </div>
   );
 }
-

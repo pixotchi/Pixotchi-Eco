@@ -412,7 +412,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                 Max
               </Button>
             </div>
-            {helperText && <div className="text-xs text-red-600 dark:text-red-400">{helperText}</div>}
+            {helperText && <div className="text-xs text-destructive">{helperText}</div>}
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               {mode === 'stake' ? (
                 <button onClick={() => setMaxAmount("stake")} className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-sm px-1">Use wallet balance</button>
@@ -480,7 +480,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             <UniversalTransaction
               calls={[buildClaimRewardsCall()]}
               buttonText="Claim Rewards"
-              buttonClassName="bg-green-600 hover:bg-green-700 text-white"
+              buttonClassName="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
               onSuccess={(tx: UntypedValue) => {
                 refresh();
                 window.dispatchEvent(new Event('balances:refresh'));

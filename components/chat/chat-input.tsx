@@ -41,7 +41,7 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
     setMessage('');
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -51,7 +51,7 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
   return (
     <div className="flex flex-col gap-2" role="region" aria-label="Chat input area">
       {sharedChatUnavailable && (
-        <div className="text-xs text-muted-foreground" role="note">
+        <div className="rounded-[var(--radius-control)] border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground" role="note">
           {publicChatLoading
             ? 'Connecting chat...'
             : (isAIMode ? 'AI chat is unavailable, refresh the app.' : 'Public chat is unavailable, refresh the app.')}
@@ -61,7 +61,7 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
         <Input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           placeholder={
             isAIMode
               ? (sharedChatUnavailable ? "AI chat unavailable" : "Type a message...")
