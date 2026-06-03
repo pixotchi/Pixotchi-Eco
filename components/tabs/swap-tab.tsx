@@ -94,9 +94,9 @@ export default function SwapTab() {
   }
 
   return (
-    <div className="space-y-4 xl:grid xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)] xl:items-stretch xl:gap-5 xl:space-y-0">
+    <div className="space-y-4 lg:grid lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:items-stretch lg:gap-5 lg:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)]">
       <Card
-        className={`${isChartView ? 'flex flex-col aspect-square' : ''} xl:hidden`}
+        className={`${isChartView ? 'flex flex-col aspect-square' : ''} lg:hidden`}
         padding={isChartView ? 'none' : 'md'}
       >
         <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
@@ -130,7 +130,7 @@ export default function SwapTab() {
         </CardContent>
       </Card>
 
-      <Card className="hidden xl:block xl:h-full">
+      <Card className="hidden lg:block lg:h-full">
         <CardHeader>
           <CardTitle>Swap</CardTitle>
         </CardHeader>
@@ -145,7 +145,7 @@ export default function SwapTab() {
         </CardContent>
       </Card>
 
-      <Card className="hidden xl:flex xl:h-full xl:min-h-[360px] xl:flex-col" padding="none">
+      <Card className="hidden lg:flex lg:h-full lg:min-h-[360px] lg:flex-col" padding="none">
         <CardHeader className="px-4 pt-4 pb-3">
           <CardTitle>Chart</CardTitle>
         </CardHeader>
@@ -155,11 +155,11 @@ export default function SwapTab() {
       </Card>
 
       {/* Tokenomics Section */}
-      <Card className="xl:col-span-2 xl:h-fit">
+      <Card className="lg:col-span-2 lg:h-fit">
         <CardHeader>
           <CardTitle>Tokenomics</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm xl:hidden">
+        <CardContent className="space-y-4 text-sm lg:hidden">
           <div className="flex items-start space-x-3">
             <Image src="/icons/fire.svg" alt="Burn" width={20} height={20} className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
@@ -185,7 +185,7 @@ export default function SwapTab() {
               <ul className="mt-2 space-y-1 text-xs list-disc pl-5">
                 <li><span className="font-semibold">2% to Player Rewards:</span> Distributed as ETH to players based on ranking.</li>
                 <li><span className="font-semibold">2% to Project Treasury:</span> Funds ongoing development and operational costs.</li>
-                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure higher stablity.</li>
+                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure higher stability.</li>
               </ul>
             </div>
           </div>
@@ -234,7 +234,7 @@ export default function SwapTab() {
           </div>
         </CardContent>
 
-        <CardContent className="hidden text-sm xl:grid xl:grid-cols-3 xl:items-stretch xl:gap-4">
+        <CardContent className="hidden text-sm lg:grid lg:grid-cols-3 lg:items-stretch lg:gap-4">
           <div className="space-y-4 rounded-lg border border-border/60 bg-background/35 p-3">
             <div className="flex items-start space-x-3">
               <Image src="/icons/fire.svg" alt="Burn" width={20} height={20} className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
@@ -279,7 +279,7 @@ export default function SwapTab() {
               <ul className="mt-2 space-y-1 text-xs list-disc pl-5">
                 <li><span className="font-semibold">2% to Player Rewards:</span> Distributed as ETH to players based on ranking.</li>
                 <li><span className="font-semibold">2% to Project Treasury:</span> Funds ongoing development and operational costs.</li>
-                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure higher stablity.</li>
+                <li><span className="font-semibold">1% to Liquidity Pool:</span> Automatically added to the SEED/ETH liquidity pool to ensure higher stability.</li>
               </ul>
             </div>
           </div>
@@ -293,7 +293,7 @@ export default function SwapTab() {
           </div>
 
           {isMiniApp && (
-            <div className="pt-2 xl:col-span-3">
+            <div className="pt-2 lg:col-span-3">
               <Button
                 className="w-full"
                 onClick={async () => {

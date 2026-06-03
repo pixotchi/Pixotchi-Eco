@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-client";
-import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
+import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ChevronLeft, ChevronRight, Terminal } from "lucide-react";
 import {
@@ -34,7 +34,6 @@ import {
   BlackjackResultEventRenderer,
 } from "@/components/activity";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { StatusChip } from "@/components/ui/premium";
 import { cn } from "@/lib/utils";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { useIsSolanaWallet, useTwinAddress } from "@/components/solana";
@@ -121,8 +120,6 @@ export default function ActivityTab() {
     parse: (rawValue) => (rawValue === "all" || rawValue === "my" ? rawValue : null),
     serialize: (value) => (value === "all" ? null : value),
   });
-  const [shopItemMap, setShopItemMap] = useState<ItemMap>({});
-  const [gardenItemMap, setGardenItemMap] = useState<ItemMap>({});
   const [currentPage, setCurrentPage] = useWebQueryState<number>({
     key: "activityPage",
     defaultValue: 1,
@@ -135,6 +132,20 @@ export default function ActivityTab() {
     serialize: (value) => (value <= 1 ? null : value.toString()),
   });
   const { shopItems, gardenItems } = useItemCatalogs();
+  const shopItemMap = useMemo<ItemMap>(() => {
+    const nextMap: ItemMap = {};
+    shopItems.forEach((item) => {
+      nextMap[item.id] = item.name;
+    });
+    return nextMap;
+  }, [shopItems]);
+  const gardenItemMap = useMemo<ItemMap>(() => {
+    const nextMap: ItemMap = {};
+    gardenItems.forEach((item) => {
+      nextMap[item.id] = item.name;
+    });
+    return nextMap;
+  }, [gardenItems]);
 
   // Request deduplication ref to prevent multiple simultaneous calls
   const fetchActivitiesPendingRef = useRef<string | null>(null);
@@ -227,20 +238,6 @@ export default function ActivityTab() {
     activitiesByViewRef.current = activitiesByView;
   }, [activitiesByView]);
 
-  useEffect(() => {
-    const newShopItemMap: ItemMap = {};
-    shopItems.forEach((item: ShopItem) => {
-      newShopItemMap[item.id] = item.name;
-    });
-    setShopItemMap(newShopItemMap);
-
-    const newGardenItemMap: ItemMap = {};
-    gardenItems.forEach((item: GardenItem) => {
-      newGardenItemMap[item.id] = item.name;
-    });
-    setGardenItemMap(newGardenItemMap);
-  }, [shopItems, gardenItems]);
-
   // Note: Removed auto-reset effect that caused race condition when switching to 'my' view
   // The UI now handles missing wallet/address gracefully in renderContent()
 
@@ -319,8 +316,9 @@ export default function ActivityTab() {
 
   const scrollActivityToTop = useCallback(() => {
     window.requestAnimationFrame(() => {
-      const contentShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
-      contentShell?.scrollTo({
+      const feedScroll = document.querySelector<HTMLElement>('[data-activity-feed-scroll]');
+      const fallbackShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
+      (feedScroll ?? fallbackShell)?.scrollTo({
         top: 0,
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       });
@@ -335,12 +333,11 @@ export default function ActivityTab() {
   ) => (
     <div
       className={cn(
-        "sticky bottom-0 z-20 -mx-4 border-t border-border/70 bg-card/95 px-4 py-2 shadow-[0_-14px_28px_-22px_hsl(var(--foreground)/0.55)] backdrop-blur-md",
-        "xl:static xl:mx-0 xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-3 xl:shadow-none xl:backdrop-blur-none",
+        "flex-none border-t border-border/60 bg-card/95 pt-3",
         className
       )}
     >
-      <div className="mx-auto grid max-w-sm grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/80 p-1 shadow-[var(--shadow-hairline)] xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
+      <div className="mx-auto grid max-w-xs grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <Button
           variant="compactUtility"
           size="touchCompact"
@@ -417,17 +414,30 @@ export default function ActivityTab() {
     error: string | null,
     pagination?: PaginationConfig
   ) => {
+    const renderFeedState = (content: ReactNode) => (
+      <div className="flex h-full min-h-0 flex-col">
+        <div
+          data-activity-feed-scroll
+          className="min-h-0 flex-1 overflow-y-auto -mx-4 px-4 pb-3 lg:mx-0 lg:px-0 lg:pr-2"
+        >
+          <div className="flex min-h-full items-center justify-center py-8">
+            {content}
+          </div>
+        </div>
+      </div>
+    );
+
     if (loading && activities.length === 0) {
-      return (
-        <div className="flex items-center justify-center py-8">
+      return renderFeedState(
+        <div className="text-center">
           <BaseExpandedLoadingPageLoader text="Loading activities..." />
         </div>
       );
     }
 
     if (error) {
-      return (
-        <Alert variant="destructive" className="mt-4">
+      return renderFeedState(
+        <Alert variant="destructive" className="w-full">
           <Terminal className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -436,16 +446,16 @@ export default function ActivityTab() {
     }
 
     if (feedView === 'my' && !isWalletConnected) {
-      return (
-        <div className="text-center py-8 text-muted-foreground">
+      return renderFeedState(
+        <div className="text-center text-muted-foreground">
           <p>Connect your wallet to see your activity.</p>
         </div>
       );
     }
 
     if (activities.length === 0) {
-      return (
-        <div className="text-center py-8 text-muted-foreground">
+      return renderFeedState(
+        <div className="text-center text-muted-foreground">
           <p>No recent {feedView === 'my' ? 'personal' : ''} activity found in the last 24 hours.</p>
         </div>
       );
@@ -459,8 +469,8 @@ export default function ActivityTab() {
       : activities;
 
     return (
-      <div className="space-y-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0">
-        <div className="space-y-2 divide-y divide-border/60 -mx-4 px-4 pb-16 xl:mx-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:px-0 xl:pb-0 xl:pr-2">
+      <div className="flex h-full min-h-0 flex-col">
+        <div data-activity-feed-scroll className="min-h-0 flex-1 space-y-2 divide-y divide-border/60 overflow-y-auto -mx-4 px-4 pb-3 lg:mx-0 lg:px-0 lg:pr-2">
           {visibleActivities.map(renderActivity)}
         </div>
 
@@ -472,15 +482,12 @@ export default function ActivityTab() {
   };
 
   return (
-    <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
-      <Card className="xl:hidden" density="compact" surface="raised">
-        <CardHeader>
+    <div className="h-full min-h-0 space-y-4 lg:mx-auto lg:max-w-7xl">
+      <Card className="flex h-full min-h-[26rem] flex-col overflow-hidden lg:hidden" density="compact" surface="raised">
+        <CardHeader className="flex-none">
           <div className="flex justify-between items-center">
             <div className="min-w-0">
-              <CardTitle>Activity</CardTitle>
-              <div className="mt-1">
-                <StatusChip tone="info">{selectedActivities.length} events in 24h</StatusChip>
-              </div>
+              <CardTitle>Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
             <ToggleGroup
               value={view}
@@ -503,7 +510,7 @@ export default function ActivityTab() {
             />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-h-0 flex-1 overflow-hidden">
           {renderFeedContent(view, selectedActivities, selectedLoading, selectedError, {
             page: currentPage,
             setPage: setCurrentPage,
@@ -511,15 +518,14 @@ export default function ActivityTab() {
         </CardContent>
       </Card>
 
-      <div className="hidden xl:grid xl:min-h-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:gap-5">
-        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col" surface="raised">
-          <CardHeader>
+      <div className="hidden lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+        <Card className="lg:flex lg:h-[calc(100dvh-8.25rem)] lg:flex-col xl:h-[calc(100dvh-7rem)]" surface="raised">
+          <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>All Activity</CardTitle>
-              <StatusChip tone="info">{activitiesByView.all.length} events</StatusChip>
+              <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="xl:min-h-0 xl:flex-1">
+          <CardContent className="lg:min-h-0 lg:flex-1 lg:overflow-hidden">
             {renderFeedContent("all", activitiesByView.all, loadingByView.all, errorByView.all, {
               page: desktopPageByView.all,
               setPage: (nextPage) => setDesktopPage("all", nextPage),
@@ -527,14 +533,13 @@ export default function ActivityTab() {
           </CardContent>
         </Card>
 
-        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col" surface="raised">
-          <CardHeader>
+        <Card className="lg:flex lg:h-[calc(100dvh-8.25rem)] lg:flex-col xl:h-[calc(100dvh-7rem)]" surface="raised">
+          <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>My Activity</CardTitle>
-              <StatusChip tone={activitiesByView.my.length > 0 ? "success" : "neutral"}>{activitiesByView.my.length} events</StatusChip>
+              <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="xl:min-h-0 xl:flex-1">
+          <CardContent className="lg:min-h-0 lg:flex-1 lg:overflow-hidden">
             {renderFeedContent("my", activitiesByView.my, loadingByView.my, errorByView.my, {
               page: desktopPageByView.my,
               setPage: (nextPage) => setDesktopPage("my", nextPage),

@@ -348,7 +348,8 @@ export default function App() {
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
-  const [isDesktopHeader, setIsDesktopHeader] = useState(false);
+  const [isDesktopShell, setIsDesktopShell] = useState(false);
+  const [isHeaderStatusPlacement, setIsHeaderStatusPlacement] = useState(false);
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const previousActiveTabRef = useRef<Tab>(activeTab);
   const lastDismissedRef = useRef<string | null>(null);
@@ -368,13 +369,21 @@ export default function App() {
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
 
-    const mediaQuery = window.matchMedia("(min-width: 80rem)");
-    const syncDesktopHeader = () => setIsDesktopHeader(mediaQuery.matches);
+    const desktopQuery = window.matchMedia("(min-width: 80rem)");
+    const compactLandscapeQuery = window.matchMedia("(min-width: 48rem) and (max-height: 700px)");
+    const syncShellMode = () => {
+      setIsDesktopShell(desktopQuery.matches);
+      setIsHeaderStatusPlacement(desktopQuery.matches || compactLandscapeQuery.matches);
+    };
 
-    syncDesktopHeader();
-    mediaQuery.addEventListener("change", syncDesktopHeader);
+    syncShellMode();
+    desktopQuery.addEventListener("change", syncShellMode);
+    compactLandscapeQuery.addEventListener("change", syncShellMode);
 
-    return () => mediaQuery.removeEventListener("change", syncDesktopHeader);
+    return () => {
+      desktopQuery.removeEventListener("change", syncShellMode);
+      compactLandscapeQuery.removeEventListener("change", syncShellMode);
+    };
   }, []);
 
   useEffect(() => {
@@ -598,13 +607,12 @@ export default function App() {
     >
       <div
         data-viewport-shell="inner"
-        className={`w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none ${
-          isConnected ? "max-w-md xl:max-w-none xl:w-full" : "max-w-md md:max-w-none md:w-full"
-        }`}
+        data-connected={isConnected ? "true" : "false"}
+        className="app-shell-inner w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="bg-card/90 backdrop-blur-sm overscroll-none">
-          <header data-viewport-shell="header" className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
+        <div className="bg-card/90 supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 overscroll-none">
+          <header data-viewport-shell="header" className="bg-card/90 supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 border-b border-border/60 px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
                 <Image
@@ -619,7 +627,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center space-x-2">
-                {isConnected && isDesktopHeader && (
+                {isConnected && isHeaderStatusPlacement && (
                   <ErrorBoundary
                     variant="inline"
                     resetKeys={address ? [address] : []}
@@ -669,7 +677,7 @@ export default function App() {
               </div>
             </div>
           </header>
-          {isConnected && !isDesktopHeader && (
+          {isConnected && !isHeaderStatusPlacement && (
             <ErrorBoundary
               variant="inline"
               resetKeys={address ? [address] : []}
@@ -722,7 +730,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border bg-card/80 p-3" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-card/80 p-3" role="navigation" aria-label="Main navigation">
                 <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
@@ -754,13 +762,14 @@ export default function App() {
                 data-viewport-shell="content"
                 className="app-content-shell flex-1 overflow-y-auto overscroll-contain touch-pan-y xl:safe-area-bottom"
                 style={{
-                  padding: "var(--app-content-gutter)",
-                  paddingBottom:
-                    "max(var(--app-content-gutter), calc(var(--app-bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) + 0.75rem))",
+                  paddingTop: "var(--app-content-gutter)",
+                  paddingRight: "var(--app-content-gutter)",
+                  paddingBottom: "var(--app-content-gutter)",
+                  paddingLeft: "var(--app-content-gutter)",
                 }}
                 role="tabpanel"
                 id={`tabpanel-${activeTab}`}
-                aria-labelledby={isDesktopHeader ? `tab-desktop-${activeTab}` : `tab-mobile-${activeTab}`}
+                aria-labelledby={isDesktopShell ? `tab-desktop-${activeTab}` : `tab-mobile-${activeTab}`}
                 aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
               >
                 <ErrorBoundary
@@ -780,7 +789,7 @@ export default function App() {
 
                       return (
                         <Activity key={tab.id} mode={activityMode}>
-                          <div className={activeTab === tab.id ? 'block h-full' : 'hidden'}>
+                          <div className={activeTab === tab.id ? 'block h-full min-h-0 animate-tab-content-in' : 'hidden'}>
                             <ErrorBoundary
                               resetKeys={[tab.id, ...(address ? [address] : [])]}
                               variant="card"
@@ -799,7 +808,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="bg-card/90 supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 border-t border-border/60 px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button

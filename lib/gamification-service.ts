@@ -1,5 +1,5 @@
 import { getTodayDateString } from '@/lib/invite-utils';
-import { redis,redisCompareAndSetJSON,redisGetJSON,redisKeys,redisScanKeys,redisSetJSON,withPrefix } from '@/lib/redis';
+import { redis,redisCompareAndSetJSON,redisGetJSON,redisScanKeys,redisSetJSON,withPrefix } from '@/lib/redis';
 import { isGamificationDisabled } from './gamification-feature';
 import type { GmDay,GmLeaderEntry,GmMissionDay,GmProgressProof,GmStreak,GmTaskId } from './gamification-types';
 
@@ -324,7 +324,7 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
 async function getCombinedMissionLeaderboard(limit: number = 50): Promise<GmLeaderEntry[]> {
   if (!redis) return [];
   const totals = new Map<string, number>();
-  const missionKeys = await redisKeys(`${PX}missions:leaderboard:*`);
+  const missionKeys = await redisScanKeys(`${PX}missions:leaderboard:*`);
   if (!missionKeys.length) return [];
 
   for (const rawKey of missionKeys) {
@@ -406,7 +406,7 @@ async function getMonthlyMissionLeaderboard(yyyymm: string): Promise<GmLeaderEnt
 async function getCombinedMissionScore(address: string): Promise<number> {
   if (!redis || !address) return 0;
   const normalized = address.toLowerCase();
-  const missionKeys = await redisKeys(`${PX}missions:leaderboard:*`);
+  const missionKeys = await redisScanKeys(`${PX}missions:leaderboard:*`);
   if (!missionKeys.length) return 0;
 
   let total = 0;
@@ -441,6 +441,12 @@ export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLe
   const [streakTop, missionTop] = await Promise.all([streakPromise, missionPromise]);
 
   return { streakTop, missionTop };
+}
+
+export async function getMissionLeaderboard(month?: string): Promise<GmLeaderEntry[]> {
+  const d = getTodayDateString();
+  const yyyymm = month && !isCombinedMonth(month) ? month : toMonth(d);
+  return isCombinedMonth(month) ? getCombinedMissionLeaderboard() : getMonthlyMissionLeaderboard(yyyymm);
 }
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {

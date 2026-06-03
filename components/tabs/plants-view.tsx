@@ -322,16 +322,16 @@ export default function PlantsView() {
         <div
           className={
             selectedPlant.status === 4
-              ? "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[980px] xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
-              : "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1100px] xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
+              ? "space-y-4 lg:mx-auto lg:grid lg:w-full lg:max-w-[980px] lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start lg:justify-center lg:gap-5 lg:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)]"
+              : "space-y-4 lg:mx-auto lg:grid lg:w-full lg:max-w-[1100px] lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start lg:justify-center lg:gap-5 lg:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
           }
         >
-          <div className="space-y-4 xl:sticky xl:top-0">
+          <div className="space-y-4 lg:sticky lg:top-0">
           {/* Plant "Screen" Display */}
           <Card>
             <CardContent className="p-4 space-y-3">
               {/* Main image container with stats overlay */}
-              <div className="relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
+              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] bg-muted/50">
 
                 {/* Top Stats Bar - LVL, PTS, STARS */}
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-3 gap-2 text-sm font-bold text-foreground/80 z-20">
@@ -445,8 +445,9 @@ export default function PlantsView() {
 
               {/* Plant Name and Strain */}
               <div className="text-center">
-                <div className="relative inline-block">
-                  <h3 className="text-lg font-bold font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
+                <div className="inline-flex max-w-full items-center justify-center gap-1">
+                  <span className="w-7 shrink-0" aria-hidden="true" />
+                  <h3 className="min-w-0 truncate text-lg font-bold font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
                   <EditPlantName
                     plant={selectedPlant}
                     onNameChanged={(plantId, newName) => {
@@ -458,7 +459,7 @@ export default function PlantsView() {
                       ));
                     }}
                     iconSize={16}
-                    className="absolute top-0 left-full ml-1"
+                    className="h-7 min-h-7 w-7 min-w-7 shrink-0"
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">{getStrainName(selectedPlant.strain)}</p>
@@ -484,7 +485,7 @@ export default function PlantsView() {
                     }}
                     title="Claim ETH rewards"
                   >
-                    <StandardContainer className="flex items-center justify-center space-x-2 bg-primary/10 text-foreground p-2 rounded-md border border-border hover:bg-primary/15 transition-colors">
+                    <StandardContainer className="flex items-center justify-center space-x-2 bg-primary/10 text-foreground p-2 hover:bg-primary/15 transition-colors">
                       <Image src="/icons/ethlogo.svg" alt="ETH" width={18} height={18} />
                       <div>
                         <p className="text-xs font-semibold leading-tight">Rewards</p>
@@ -499,7 +500,7 @@ export default function PlantsView() {
                     onClick={() => setArcadeOpen(true)}
                     title="Arcade games"
                   >
-                    <StandardContainer className="flex items-center justify-center space-x-2 bg-accent/15 text-foreground p-2 rounded-md border border-border hover:bg-accent transition-colors">
+                    <StandardContainer className="flex items-center justify-center space-x-2 bg-accent/15 text-foreground p-2 hover:bg-accent transition-colors">
                       <Image src="/icons/GAME.png" alt="Arcade" width={18} height={18} />
                       <div>
                         <p className="text-xs font-semibold leading-tight">Arcade</p>
@@ -597,16 +598,16 @@ export default function PlantsView() {
 
           </div>
 
-          <div className="min-w-0 xl:w-full">
+          <div className="min-w-0 lg:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <Card className="xl:w-full">
+            <Card className="lg:w-full">
               <CardHeader>
                 <CardTitle className="font-pixel">Revive Plant</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 gap-4">
-                  <StandardContainer className="p-3 rounded-md border bg-destructive/10">
+                  <StandardContainer className="p-3 bg-destructive/10">
                     <div className="flex items-start space-x-2">
                       <Image
                         src="/icons/skull.png"
@@ -647,7 +648,13 @@ export default function PlantsView() {
                       <>
                         <ReviveTransaction
                           plantId={selectedPlant.id}
-                          buttonText="Revive Plant"
+                          buttonText={
+                            reviveDataLoading
+                              ? "Checking Revive Cost"
+                              : seedBalance < revivePrice
+                                ? "Insufficient SEED"
+                                : "Revive Plant"
+                          }
                           buttonClassName="w-full"
                           disabled={reviveDataLoading || seedBalance < revivePrice}
                           onSuccess={() => {
@@ -671,7 +678,7 @@ export default function PlantsView() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="xl:h-fit xl:w-full">
+            <Card className="lg:h-fit lg:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle className="font-pixel">Marketplace</CardTitle>
@@ -686,10 +693,10 @@ export default function PlantsView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(220px,260px)_minmax(280px,340px)] xl:items-start xl:justify-center">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,340px)] lg:items-start lg:justify-center">
                   {/* Regular Wallet Info Message */}
                   {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                    <StandardContainer className="p-3 rounded-md border bg-primary/10 xl:col-span-2">
+                    <StandardContainer className="p-3 bg-primary/10 lg:col-span-2">
                       <div className="flex items-start space-x-2">
                         <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                         <div className="text-sm text-foreground">

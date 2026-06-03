@@ -144,6 +144,7 @@ export default function LeaderboardTab() {
   const [stakeLoading, setStakeLoading] = useState(false);
   const [rocksLoading, setRocksLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stakeError, setStakeError] = useState<string | null>(null);
   const [rocksError, setRocksError] = useState<string | null>(null);
   const [rocksDisabledNotice, setRocksDisabledNotice] = useState<string | null>(
     gamificationDisabled ? gamificationDisabledMessage : null,
@@ -243,6 +244,8 @@ export default function LeaderboardTab() {
 
   // Request deduplication refs to prevent multiple simultaneous calls
   const fetchLeaderboardDataPendingRef = useRef<boolean>(false);
+  const fetchStakeLeaderboardPendingRef = useRef<boolean>(false);
+  const fetchRocksLeaderboardPendingRef = useRef<boolean>(false);
   const fetchMyPlantsPendingRef = useRef<string | null>(null);
   const leaderboardDataLoadedRef = useRef(false);
   const stakeDataLoadedRef = useRef(false);
@@ -361,6 +364,10 @@ export default function LeaderboardTab() {
 
   // Fetch stake leaderboard separately when stake tab is selected
   const fetchStakeLeaderboard = useCallback(async () => {
+    if (fetchStakeLeaderboardPendingRef.current) {
+      return;
+    }
+
     const now = Date.now();
     const cacheAge = now - stakeDataCacheRef.current.timestamp;
 
@@ -372,23 +379,30 @@ export default function LeaderboardTab() {
       console.log(`📊 [Stake] Using cached data (age: ${Math.round(cacheAge / 1000)}s)`);
       setStakeRows(stakeDataCacheRef.current.data);
       stakeDataLoadedRef.current = true;
+      setStakeError(null);
       return;
     }
 
     // Fetch fresh data if cache expired or first load
     // Only show loading spinner if we have no existing data
+    fetchStakeLeaderboardPendingRef.current = true;
     if (!stakeDataLoadedRef.current) {
       setStakeLoading(true);
     }
+    setStakeError(null);
     try {
       console.log(`📊 [Stake] Fetching fresh data from API...`);
       const stakeResponse = await fetch('/api/leaderboard/stake');
+      if (!stakeResponse.ok) {
+        throw new Error(`Failed to fetch stake leaderboard (${stakeResponse.status})`);
+      }
       if (stakeResponse.ok) {
         const stakeData = await stakeResponse.json();
-        const sortedStakes = stakeData.leaderboard.map((entry: UntypedValue) => ({
-          rank: entry.rank,
+        const entries = Array.isArray(stakeData.leaderboard) ? stakeData.leaderboard : [];
+        const sortedStakes = entries.map((entry: UntypedValue, index: number) => ({
+          rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
           address: entry.address,
-          stakedAmount: BigInt(entry.stakedAmount),
+          stakedAmount: BigInt(entry.stakedAmount ?? 0),
           ensName: entry.ensName || undefined
         }));
 
@@ -403,9 +417,11 @@ export default function LeaderboardTab() {
         console.log(`📊 [Stake] Cached fresh data (${sortedStakes.length} stakers)`);
       }
     } catch (error) {
+      setStakeError('Failed to load Stake leaderboard. Please try again.');
       console.error('❌ [Stake] Error fetching stake leaderboard:', error);
     } finally {
       setStakeLoading(false);
+      fetchStakeLeaderboardPendingRef.current = false;
     }
   }, []);
 
@@ -431,11 +447,18 @@ export default function LeaderboardTab() {
 
     if (rocksDataCacheRef.current.data && cacheAge < ROCKS_CACHE_DURATION) {
       setRocksRows(rocksDataCacheRef.current.data);
+      setRocksDisabledNotice(null);
+      setRocksError(null);
+      return;
+    }
+
+    if (fetchRocksLeaderboardPendingRef.current) {
       return;
     }
 
     // Only show loading spinner if we have no existing data
-    if (rocksRows.length === 0) {
+    fetchRocksLeaderboardPendingRef.current = true;
+    if (!rocksDataCacheRef.current.data) {
       setRocksLoading(true);
     }
     setRocksDisabledNotice(null);
@@ -470,8 +493,9 @@ export default function LeaderboardTab() {
       setRocksError('Failed to load Rocks leaderboard. Please try again.');
     } finally {
       setRocksLoading(false);
+      fetchRocksLeaderboardPendingRef.current = false;
     }
-  }, [gamificationDisabled, gamificationDisabledMessage, showRocksBoard, rocksRows.length]);
+  }, [gamificationDisabled, gamificationDisabledMessage, showRocksBoard]);
 
   // Fetch stake data when switching to stake tab
   useEffect(() => {
@@ -686,8 +710,9 @@ export default function LeaderboardTab() {
 
   function scrollLeaderboardToTop() {
     window.requestAnimationFrame(() => {
+      const rankingScroll = document.querySelector<HTMLElement>('[data-ranking-scroll]');
       const contentShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
-      contentShell?.scrollTo({
+      (rankingScroll ?? contentShell)?.scrollTo({
         top: 0,
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       });
@@ -702,12 +727,12 @@ export default function LeaderboardTab() {
     return (
       <div
         className={cn(
-          "sticky bottom-0 z-20 -mx-4 border-t border-border/70 bg-card/95 px-4 py-2 shadow-[0_-14px_28px_-22px_hsl(var(--foreground)/0.55)] backdrop-blur-md",
-          "xl:static xl:mx-0 xl:justify-center xl:bg-transparent xl:px-0 xl:py-0 xl:pt-4 xl:shadow-none xl:backdrop-blur-none",
+          "flex-none border-t border-border/60 bg-card/95 pt-3",
+          "lg:justify-center lg:bg-transparent",
           className
         )}
       >
-        <div className="mx-auto grid max-w-sm grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/80 p-1 shadow-[var(--shadow-hairline)] xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
+        <div className="mx-auto grid max-w-xs grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
           <Button
             variant="compactUtility"
             size="touchCompact"
@@ -748,13 +773,13 @@ export default function LeaderboardTab() {
     const columns = splitDesktopRows(rows);
 
     return (
-      <div className={cn("hidden xl:grid xl:grid-cols-2 xl:gap-4", fillHeight && "xl:min-h-0 xl:flex-1")}>
+      <div className={cn("hidden lg:grid lg:grid-cols-2 lg:gap-4", fillHeight && "lg:min-h-0 lg:flex-1")}>
         {columns.map((column, columnIndex) => (
           <div
             key={columnIndex}
             className={cn(
-              "xl:flex xl:flex-col xl:rounded-md xl:border xl:border-border/70 xl:bg-background/10 xl:px-3 xl:py-2",
-              fillHeight && "xl:min-h-0"
+              "lg:flex lg:flex-col lg:rounded-[var(--radius-panel)] lg:border lg:border-border/60 lg:bg-background/20 lg:px-3 lg:py-2",
+              fillHeight && "lg:min-h-0"
             )}
           >
             <div className="flex h-8 flex-none items-center justify-between border-b border-border/60 text-xs font-semibold text-muted-foreground">
@@ -789,15 +814,30 @@ export default function LeaderboardTab() {
     fillDesktop = false
   ) {
     return (
-      <div className={cn("space-y-4", fillDesktop && "xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0")}>
-        <div className="space-y-2 divide-y divide-border -mx-4 px-4 pb-16 xl:hidden">
+      <div className={cn("flex h-full min-h-0 flex-col", fillDesktop && "lg:flex lg:h-full lg:min-h-0 lg:flex-col")}>
+        <div data-ranking-scroll className="min-h-0 flex-1 space-y-2 divide-y divide-border overflow-y-auto -mx-4 px-4 pb-3 lg:hidden">
           {mobileRows.map((row) => renderRow(row))}
         </div>
 
         {renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
 
-        {renderPagination(mobilePageCount, "xl:hidden")}
-        {renderPagination(desktopPageCount, "hidden xl:flex xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:pt-3")}
+        {renderPagination(mobilePageCount, "lg:hidden")}
+        {renderPagination(desktopPageCount, "hidden lg:flex")}
+      </div>
+    );
+  }
+
+  function renderRankingState(content: React.ReactNode) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div
+          data-ranking-scroll
+          className="min-h-0 flex-1 overflow-y-auto -mx-4 px-4 pb-3 lg:mx-0 lg:px-0 lg:pr-2"
+        >
+          <div className="flex min-h-full items-center justify-center py-8">
+            {content}
+          </div>
+        </div>
       </div>
     );
   }
@@ -818,7 +858,7 @@ export default function LeaderboardTab() {
         key={plant.id}
         className={cn(
           compact ? "py-0.5 transition-all" : "py-3 transition-all",
-          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3",
+          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg lg:mx-0 lg:px-3",
           plant.isDead && "opacity-60"
         )}
       >
@@ -1027,7 +1067,7 @@ export default function LeaderboardTab() {
               compact ? (
                 <button
                   type="button"
-                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-[var(--radius-control)] border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
                   aria-label="Revive your plant"
                   title="Revive"
@@ -1044,7 +1084,7 @@ export default function LeaderboardTab() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-md"
+                  className="rounded-[var(--radius-control)]"
                   onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
                   aria-label="Revive your plant"
                   title="Revive"
@@ -1105,7 +1145,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg lg:mx-0 lg:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1170,7 +1210,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address || `rock-${row.rank}`}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg lg:mx-0 lg:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1207,7 +1247,7 @@ export default function LeaderboardTab() {
           </div>
           <div className="flex items-center space-x-2 text-right">
             <div className="flex items-center space-x-1">
-              <Image src="/icons/Volcanic_Rock.svg" alt="Rocks" width={compact ? 14 : 16} height={compact ? 14 : 16} />
+              <Image src="/icons/Volcanic_Rock.svg" alt="" width={compact ? 16 : 18} height={compact ? 16 : 18} aria-hidden="true" />
               <span className={cn("font-bold", compact ? "text-sm" : "text-base")}>{row.rocks.toLocaleString()}</span>
             </div>
           </div>
@@ -1219,16 +1259,16 @@ export default function LeaderboardTab() {
   const renderContent = () => {
     // Only show full page loader if we have NO plants data and are loading
     if (loading && totalItems === 0) {
-      return (
-        <div className="flex items-center justify-center py-8">
+      return renderRankingState(
+        <div className="text-center">
           <BaseExpandedLoadingPageLoader text="Loading leaderboard..." />
         </div>
       );
     }
 
     if (error) {
-      return (
-        <Alert variant="destructive" className="mt-4">
+      return renderRankingState(
+        <Alert variant="destructive" className="w-full">
           <Terminal className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -1239,8 +1279,8 @@ export default function LeaderboardTab() {
     if (totalItems === 0) {
       // Check if user is in attackable mode and has no plants
       if (filterMode === 'attackable' && address && myPlants.length === 0) {
-        return (
-          <div className="text-center py-8 space-y-2">
+        return renderRankingState(
+          <div className="text-center space-y-2">
             <p className="text-muted-foreground">Mint a plant first to attack other plants with it.</p>
             <p className="text-sm text-muted-foreground">Go to the Mint tab to get started.</p>
           </div>
@@ -1249,8 +1289,8 @@ export default function LeaderboardTab() {
 
       // Check if user is in attackable mode but has plants (just no attackable targets)
       if (filterMode === 'attackable' && address && myPlants.length > 0) {
-        return (
-          <div className="text-center py-8 text-muted-foreground">
+        return renderRankingState(
+          <div className="text-center text-muted-foreground">
             <p>No attackable plants found. All plants are either yours, dead, or protected by fences.</p>
           </div>
         );
@@ -1258,16 +1298,16 @@ export default function LeaderboardTab() {
 
       // Check if user is in dead mode but no dead plants exist
       if (filterMode === 'dead') {
-        return (
-          <div className="text-center py-8 text-muted-foreground">
+        return renderRankingState(
+          <div className="text-center text-muted-foreground">
             <p>No dead plants found. All plants are currently alive!</p>
           </div>
         );
       }
 
       // Default message for 'all' mode or when not connected
-      return (
-        <div className="text-center py-8 text-muted-foreground">
+      return renderRankingState(
+        <div className="text-center text-muted-foreground">
           <p>No plants found in the leaderboard.</p>
         </div>
       );
@@ -1277,15 +1317,15 @@ export default function LeaderboardTab() {
   };
 
   return (
-    <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center gap-3 xl:grid xl:grid-cols-[auto_minmax(0,1fr)_auto]">
+    <div className="h-full min-h-0 space-y-4 lg:mx-auto lg:max-w-7xl">
+      <Card className="flex h-full min-h-[26rem] flex-col overflow-hidden">
+        <CardHeader className="flex-none">
+          <div className="flex justify-between items-center gap-3 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
             </CardTitle>
             {boardType === 'plants' && (
-              <div className="hidden items-center justify-center gap-4 xl:flex">
+              <div className="hidden items-center justify-center gap-4 lg:flex">
                 <ToggleGroup
                   value={filterMode}
                   onValueChange={(v) => {
@@ -1306,7 +1346,7 @@ export default function LeaderboardTab() {
                   ]}
                 />
                 {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <label className="flex min-h-11 items-center gap-2 cursor-pointer rounded-[var(--radius-control)] px-1 text-sm">
                     <input
                       type="checkbox"
                       checked={showOnlyMyPlants}
@@ -1314,14 +1354,14 @@ export default function LeaderboardTab() {
                         setShowOnlyMyPlants(e.target.checked);
                         setCurrentPage(1);
                       }}
-                      className="w-4 h-4 rounded border-border accent-primary"
+                      className="h-5 w-5 rounded border-border accent-primary"
                     />
                     <span className="text-muted-foreground">My Plants</span>
                   </label>
                 )}
               </div>
             )}
-            <div className="xl:col-start-3 xl:justify-self-end">
+            <div className="lg:col-start-3 lg:justify-self-end">
               <ToggleGroup
                 value={boardType}
                 onValueChange={(nextValue) => {
@@ -1338,7 +1378,7 @@ export default function LeaderboardTab() {
             </div>
           </div>
           {boardType === 'plants' && (
-            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap xl:hidden">
+            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap lg:hidden">
               <ToggleGroup
                 value={filterMode}
                 onValueChange={(v) => {
@@ -1356,7 +1396,7 @@ export default function LeaderboardTab() {
                 ]}
               />
               {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <label className="flex min-h-11 items-center gap-2 cursor-pointer rounded-[var(--radius-control)] px-1 text-sm">
                   <input
                     type="checkbox"
                     checked={showOnlyMyPlants}
@@ -1364,7 +1404,7 @@ export default function LeaderboardTab() {
                       setShowOnlyMyPlants(e.target.checked);
                       setCurrentPage(1);
                     }}
-                    className="w-4 h-4 rounded border-border accent-primary"
+                    className="h-5 w-5 rounded border-border accent-primary"
                   />
                   <span className="text-muted-foreground">My Plants</span>
                 </label>
@@ -1372,48 +1412,72 @@ export default function LeaderboardTab() {
             </div>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-h-0 flex-1 overflow-hidden">
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (
             loading && totalLandItems === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
-              </div>
+              renderRankingState(
+                <div className="text-center">
+                  <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
+                </div>
+              )
             ) : totalLandItems === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No lands found.</div>
+              renderRankingState(
+                <div className="text-center text-muted-foreground">No lands found.</div>
+              )
             ) : (
               renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow)
             )
           ) : boardType === 'stake' ? (
             stakeLoading && totalStakeItems === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
-              </div>
+              renderRankingState(
+                <div className="text-center">
+                  <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
+                </div>
+              )
+            ) : stakeError && totalStakeItems === 0 ? (
+              renderRankingState(
+                <Alert variant="destructive" className="w-full">
+                  <Terminal className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{stakeError}</AlertDescription>
+                </Alert>
+              )
             ) : totalStakeItems === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No stakers found.</div>
+              renderRankingState(
+                <div className="text-center text-muted-foreground">No stakers found.</div>
+              )
             ) : (
               renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow)
             )
           ) : rocksDisabledNotice ? (
-            <Alert className="mt-4">
-              <Terminal className="h-4 w-4" />
-              <AlertTitle>Temporarily Disabled</AlertTitle>
-              <AlertDescription>{rocksDisabledNotice}</AlertDescription>
-            </Alert>
+            renderRankingState(
+              <Alert className="w-full">
+                <Terminal className="h-4 w-4" />
+                <AlertTitle>Temporarily Disabled</AlertTitle>
+                <AlertDescription>{rocksDisabledNotice}</AlertDescription>
+              </Alert>
+            )
           ) : (
             rocksLoading && totalRockItems === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
-              </div>
+              renderRankingState(
+                <div className="text-center">
+                  <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
+                </div>
+              )
             ) : rocksError ? (
-              <Alert variant="destructive" className="mt-4">
-                <Terminal className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{rocksError}</AlertDescription>
-              </Alert>
+              renderRankingState(
+                <Alert variant="destructive" className="w-full">
+                  <Terminal className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{rocksError}</AlertDescription>
+                </Alert>
+              )
             ) : totalRockItems === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No rock earners found.</div>
+              renderRankingState(
+                <div className="text-center text-muted-foreground">No rock earners found.</div>
+              )
             ) : (
               renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow)
             )

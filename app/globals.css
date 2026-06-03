@@ -59,24 +59,24 @@
 
 @layer base {
   :root {
-    --background: 212 56% 81%;
+    --background: 212 56% 84%;
     /* #a7c7e7 */
     --foreground: 224 71.4% 4.1%;
-    --card: 212 56% 75%;
+    --card: 212 50% 78%;
     /* Lighter shade of #a7c7e7 for cards */
     --card-foreground: 224 71.4% 4.1%;
-    --popover: 212 56% 75%;
+    --popover: 212 50% 78%;
     --popover-foreground: 224 71.4% 4.1%;
     --primary: 212 86.2% 36.3%;
     /* A stronger blue for primary actions */
     --primary-foreground: 0 0% 98%;
-    --secondary: 212 56% 88%;
+    --secondary: 212 52% 91%;
     /* A lighter secondary tone */
     --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 212 56% 88%;
-    --muted-foreground: 225 8% 35%;
+    --muted: 212 50% 92%;
+    --muted-foreground: 225 12% 28%;
     /* Increased contrast */
-    --accent: 212 56% 92%;
+    --accent: 212 58% 95%;
     --accent-foreground: 220.9 39.3% 11%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
@@ -87,21 +87,21 @@
     --warning-foreground: 32 55% 12%;
     --info: 217 88% 48%;
     --info-foreground: 0 0% 98%;
-    --border: 212 56% 70%;
-    --input: 212 56% 70%;
+    --border: 212 38% 68%;
+    --input: 212 38% 68%;
     --ring: 212 86.2% 36.3%;
-    --radius: 0.5rem;
-    --radius-control: 0.5rem;
-    --radius-panel: 0.5rem;
+    --radius: 1rem;
+    --radius-control: 1rem;
+    --radius-panel: 1rem;
     --radius-dialog: 1rem;
     --shadow-hairline: 0 1px 0 hsl(var(--foreground) / 0.05);
-    --shadow-control: 0 8px 16px -12px hsl(var(--foreground) / 0.35);
-    --shadow-raised: 0 18px 40px -24px hsl(var(--foreground) / 0.5);
-    --shadow-modal: 0 32px 64px -24px hsl(var(--foreground) / 0.45);
-    --motion-quick: 120ms;
-    --motion-standard: 180ms;
-    --motion-modal: 220ms;
-    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --shadow-control: 0 1px 2px hsl(var(--foreground) / 0.08), 0 8px 18px -14px hsl(var(--foreground) / 0.22);
+    --shadow-raised: 0 1px 2px hsl(var(--foreground) / 0.08), 0 18px 42px -28px hsl(var(--foreground) / 0.28);
+    --shadow-modal: 0 4px 18px -12px hsl(var(--foreground) / 0.22), 0 34px 84px -40px hsl(var(--foreground) / 0.34);
+    --motion-quick: 140ms;
+    --motion-standard: 220ms;
+    --motion-modal: 280ms;
+    --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
     --gradient-special: linear-gradient(135deg, hsl(265 72% 52%), hsl(330 76% 54%));
     --gradient-solana: linear-gradient(135deg, hsl(265 76% 52%), hsl(319 72% 54%));
     --gradient-success: linear-gradient(135deg, hsl(145 65% 36%), hsl(165 64% 34%));
@@ -282,7 +282,7 @@
     --card-foreground: 224 71.4% 4.1%;
     --popover: 330 50% 84%;
     --popover-foreground: 224 71.4% 4.1%;
-    --primary: 330 70% 50%;
+    --primary: 330 72% 46%;
     --primary-foreground: 0 0% 98%;
     --secondary: 330 35% 92%;
     --secondary-foreground: 220.9 39.3% 11%;
@@ -301,7 +301,7 @@
     --info-foreground: 0 0% 98%;
     --border: 330 30% 76%;
     --input: 330 30% 76%;
-    --ring: 330 70% 50%;
+    --ring: 330 72% 46%;
     --value: 330 80% 55%;
   }
 
@@ -447,8 +447,8 @@
     letter-spacing: 0;
     /* Limit global transitions to reduce repaint/reflow cost */
     transition-property: color, background-color;
-    transition-timing-function: ease-in-out;
-    transition-duration: 180ms;
+    transition-timing-function: var(--ease-standard);
+    transition-duration: var(--motion-standard);
   }
 
   /* Respect user preference to reduce motion */
@@ -642,14 +642,32 @@
 
   .app-content-shell {
     padding: var(--app-content-gutter);
-    padding-bottom: calc(
-      var(--app-bottom-nav-height) +
-      max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) +
-      0.75rem
-    );
+    padding-bottom: var(--app-content-gutter);
+  }
+
+  .app-shell-inner {
+    max-width: 28rem;
+  }
+
+  .app-shell-inner[data-connected="false"] {
+    max-width: 28rem;
+  }
+
+  @media (min-width: 48rem) {
+    .app-shell-inner[data-connected="true"] {
+      max-width: min(100vw, 56rem);
+    }
+
+    .app-shell-inner[data-connected="false"] {
+      max-width: 100%;
+    }
   }
 
   @media (min-width: 80rem) {
+    .app-shell-inner[data-connected="true"] {
+      max-width: none;
+    }
+
     .app-content-shell {
       padding: 1.25rem;
       padding-bottom: max(1.25rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
@@ -683,8 +701,6 @@
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
-    min-height: 44px;
-    min-width: 44px;
   }
 
   /* Enhanced keyboard focus indicators */
@@ -702,20 +718,39 @@
   .keyboard-navigation button,
   .keyboard-navigation [role="button"],
   .keyboard-navigation .interactive {
-    /* Ensure minimum focusable size for keyboard navigation */
-    min-height: 44px;
-    min-width: 44px;
+    /* Keep keyboard focus behavior consistent without changing visual density. */
+    touch-action: manipulation;
   }
 
-  /* Compact buttons (override global min-size for small inline controls) */
+  /* Compact visuals can still expose a larger invisible tap affordance. */
+  .tap-target-44,
+  .btn-compact,
+  .btn-touch-compact {
+    position: relative;
+    overflow: visible;
+  }
+
+  .tap-target-44::after,
+  .btn-compact::after,
+  .btn-touch-compact::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+    border-radius: inherit;
+  }
+
   .btn-compact {
-    min-height: 28px !important;
-    min-width: 28px !important;
+    min-height: 1.75rem !important;
+    min-width: 1.75rem !important;
   }
 
   .btn-touch-compact {
-    min-height: 36px !important;
-    min-width: 36px !important;
+    min-height: 2rem !important;
+    min-width: 2rem !important;
   }
 
   .app-status-scroll {
@@ -730,6 +765,10 @@
     display: none;
   }
 
+  .base-logo-corner {
+    border-radius: 5%;
+  }
+
   @media (max-height: 700px) and (max-width: 79.99rem) {
     :root {
       --app-content-gutter: 0.625rem;
@@ -737,7 +776,7 @@
 
     [data-viewport-shell="header"] {
       padding-top: max(0.25rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top));
-      padding-bottom: 0.375rem;
+      padding-bottom: 0.25rem;
     }
 
     [data-viewport-shell="status"] {
@@ -757,6 +796,12 @@
       padding-bottom: max(0.125rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
       border-top-left-radius: var(--radius-panel);
       border-top-right-radius: var(--radius-panel);
+    }
+
+    .app-status-scroll {
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
     }
 
     [data-viewport-shell="nav"] [role="tab"] {
@@ -1133,6 +1178,18 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   }
 }
 
+@keyframes tab-content-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes spin-slow {
   from {
     transform: rotate(0deg)
@@ -1185,6 +1242,10 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
 
 @utility animate-fade-in {
   animation: fade-in .3s ease-in-out;
+}
+
+@utility animate-tab-content-in {
+  animation: tab-content-in var(--motion-standard) var(--ease-standard);
 }
 
 @utility animate-base-load {

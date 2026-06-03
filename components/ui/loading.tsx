@@ -6,7 +6,7 @@ export function LoadingSpinner({ size = 'md', className }: { size?: 'sm' | 'md' 
 
 export function LoadingCard() {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div className="rounded-[var(--radius-panel)] border border-border bg-card p-4 shadow-sm">
       <div className="animate-pulse">
         <div className="h-32 bg-muted rounded-lg mb-3"></div>
         <div className="space-y-2">
@@ -20,7 +20,7 @@ export function LoadingCard() {
 
 export function LoadingPlantCard() {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div className="rounded-[var(--radius-panel)] border border-border bg-card p-4 shadow-sm">
       <div className="animate-pulse">
         <div className="flex items-center space-x-3">
           <div className="w-16 h-16 bg-muted rounded-lg"></div>

@@ -203,7 +203,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
   if (loading && claimableItems.length === 0) {
     return (
-      <Card className="rounded-2xl border-dashed">
+      <Card className="border-dashed">
         <CardContent className="py-6 flex justify-center items-center text-muted-foreground gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-sm">Scanning accumulated production...</span>
@@ -218,7 +218,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
   }
 
   return (
-    <Card className="rounded-2xl border-2 border-primary/20">
+    <Card className="border-primary/20">
       <CardContent className="p-4 space-y-3">
         <div className="flex justify-between items-center pb-2 border-b border-border/50">
           <span className="font-semibold">Batch Claim</span>
@@ -252,7 +252,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
         {/* Multi-batch info */}
         {hasMultipleBatches && (
-          <div className="p-2 bg-[hsl(var(--info)/0.1)] border border-[hsl(var(--info)/0.22)] rounded-lg">
+          <div className="rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.1)] p-2">
             <div className="flex items-center gap-2 text-[hsl(var(--info))] text-xs">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>
@@ -265,14 +265,14 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
         {/* Gating Logic */}
         {!isSmartWallet ? (
-          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg space-y-2">
+          <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
             <div className="flex items-center gap-2 text-primary font-bold text-xs">
               <Lock className="w-3 h-3" />
               Smart Wallet Required
             </div>
           </div>
         ) : !hasEnoughTokens ? (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
+          <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
             <div className="flex items-center gap-2 text-value font-bold text-xs">
               <Lock className="w-3 h-3" />
               Insufficient PIXOTCHI Balance

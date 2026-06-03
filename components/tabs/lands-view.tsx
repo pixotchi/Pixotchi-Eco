@@ -512,7 +512,7 @@ function LandsViewContent() {
 
   if (error) {
     return (
-      <Card className="rounded-2xl">
+      <Card>
         <CardContent className="py-4 text-center text-destructive">{error}</CardContent>
       </Card>
     );
@@ -536,9 +536,9 @@ function LandsViewContent() {
 
   return (
     <div className="space-y-4">
-      <div className={`grid grid-cols-1 gap-4 xl:mx-auto xl:w-full ${lands.length > 1
-        ? "xl:max-w-[860px] xl:grid-cols-2 xl:items-start"
-        : "xl:max-w-[420px]"
+      <div className={`grid grid-cols-1 gap-4 lg:mx-auto lg:w-full ${lands.length > 1
+        ? "lg:max-w-[860px] lg:grid-cols-2 lg:items-start"
+        : "lg:max-w-[420px]"
         }`}>
         {/* Batch Claim Card - Only shows if there are claimable rewards */}
         {lands.length > 0 && (
@@ -556,7 +556,7 @@ function LandsViewContent() {
           />
         )}
         {lands.length > 1 && (
-          <Card className="rounded-2xl">
+          <Card>
             <CardHeader><CardTitle>Select Land</CardTitle></CardHeader>
             <CardContent>
               <DropdownMenu>
@@ -588,11 +588,11 @@ function LandsViewContent() {
       </div>
 
       {selectedLand && (
-        <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0">
-          <div className="space-y-4 xl:sticky xl:top-0">
-          <Card className="rounded-2xl">
+        <div className="space-y-4 lg:mx-auto lg:grid lg:w-full lg:max-w-[1368px] lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start lg:justify-center lg:gap-5 lg:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
+          <div className="space-y-4 lg:sticky lg:top-0">
+          <Card>
             <CardContent className="space-y-3">
-              <div className="relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
+              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] bg-muted/50">
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-2 gap-2 text-sm font-bold text-foreground/80 z-20">
                   <div className="flex justify-start">
                     <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
@@ -672,8 +672,9 @@ function LandsViewContent() {
               </div>
 
               <div className="text-center">
-                <div className="relative inline-block">
-                  <h3 className="text-lg font-bold font-pixel">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
+                <div className="inline-flex max-w-full items-center justify-center gap-1">
+                  <span className="w-7 shrink-0" aria-hidden="true" />
+                  <h3 className="min-w-0 truncate text-lg font-bold font-pixel">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
                   <EditLandName
                     land={selectedLand}
                     onNameChanged={(landId, newName) => {
@@ -681,7 +682,7 @@ function LandsViewContent() {
                       // update any cached arrays if present
                     }}
                     iconSize={16}
-                    className="absolute top-0 left-full ml-1"
+                    className="h-7 min-h-7 w-7 min-w-7 shrink-0"
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">Token ID: {selectedLand.tokenId.toString()}</p>
@@ -693,11 +694,11 @@ function LandsViewContent() {
 
           <div className="min-w-0">
           {/* Building Management Section */}
-          <Card className="rounded-2xl xl:h-fit xl:w-full">
+          <Card className="lg:h-fit lg:w-full">
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="font-pixel">Buildings</CardTitle>
-                <div className="xl:hidden">
+                <div className="lg:hidden">
                   <ToggleGroup
                     value={buildingType}
                     onValueChange={(v) => {
@@ -714,7 +715,7 @@ function LandsViewContent() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)] xl:items-start xl:justify-center">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(230px,320px)_minmax(0,1fr)] lg:items-start lg:justify-center xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)]">
                 {/* Building Grid */}
                 <div className="space-y-4">
                   {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
@@ -723,7 +724,7 @@ function LandsViewContent() {
                     </div>
                   ) : (
                     <>
-                      <div className="xl:hidden">
+                      <div className="lg:hidden">
                         <BuildingGrid
                           buildings={buildingType === 'village' ? villageBuildings : townBuildings}
                           buildingType={buildingType}
@@ -735,9 +736,9 @@ function LandsViewContent() {
                         />
                       </div>
 
-                      <div className="hidden xl:block space-y-4">
+                      <div className="hidden lg:block space-y-4">
                         <section
-                          className={`rounded-xl border p-3 transition-colors ${buildingType === 'village' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
+                          className={`rounded-[var(--radius-panel)] border p-3 transition-colors ${buildingType === 'village' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
                             }`}
                         >
                           <div className="mb-3 flex items-center justify-between gap-2">
@@ -758,7 +759,7 @@ function LandsViewContent() {
                         </section>
 
                         <section
-                          className={`rounded-xl border p-3 transition-colors ${buildingType === 'town' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
+                          className={`rounded-[var(--radius-panel)] border p-3 transition-colors ${buildingType === 'town' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
                             }`}
                         >
                           <div className="mb-3 flex items-center justify-between gap-2">

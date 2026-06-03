@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 const ZERO_VALUE = "0px";
+type ShellMode = "mobile" | "mid" | "desktop";
 
 function setRootPx(name: string, value: number) {
   document.documentElement.style.setProperty(name, `${Math.max(0, Math.round(value))}px`);
@@ -32,10 +33,15 @@ export function useViewportShellMetrics() {
       setRootPx("--app-bottom-nav-height", navHeight);
       setRootPx("--app-content-bottom-offset", navHeight + 12);
       const isDesktopShell = window.innerWidth >= 1280;
-      const isCompactMobileShell = window.innerHeight <= 700 && !isDesktopShell;
+      const isMidShell = window.innerWidth >= 768 && !isDesktopShell;
+      const shellMode: ShellMode = isDesktopShell ? "desktop" : isMidShell ? "mid" : "mobile";
+      const isCompactShell = window.innerHeight <= 700 && !isDesktopShell;
+
+      document.documentElement.dataset.appShellMode = shellMode;
+
       setRootValue(
         "--app-content-gutter",
-        isDesktopShell ? "1.25rem" : isCompactMobileShell ? "0.625rem" : "1rem"
+        isDesktopShell ? "1.25rem" : isCompactShell ? "0.625rem" : isMidShell ? "1rem" : "1rem"
       );
     };
 
@@ -62,6 +68,7 @@ export function useViewportShellMetrics() {
       document.documentElement.style.setProperty("--app-bottom-nav-height", ZERO_VALUE);
       document.documentElement.style.setProperty("--app-content-bottom-offset", ZERO_VALUE);
       document.documentElement.style.removeProperty("--app-content-gutter");
+      delete document.documentElement.dataset.appShellMode;
     };
   }, []);
 }

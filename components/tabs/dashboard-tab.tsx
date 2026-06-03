@@ -26,8 +26,8 @@ export default function DashboardTab() {
           value={dashboardView}
           onValueChange={(v) => setDashboardView(v as 'plants' | 'lands')}
           options={[
-            { value: 'plants', label: (<span className="flex items-center gap-1"><Leaf className="w-4 h-4" /> Plants</span>) },
-            { value: 'lands', label: (<span className="flex items-center gap-1"><LandPlot className="w-4 h-4" /> Lands</span>) },
+            { value: 'plants', ariaLabel: 'Plants', label: (<span className="flex items-center gap-1"><Leaf className="w-4 h-4" /> Plants</span>) },
+            { value: 'lands', ariaLabel: 'Lands', label: (<span className="flex items-center gap-1"><LandPlot className="w-4 h-4" /> Lands</span>) },
           ]}
         />
       </div>

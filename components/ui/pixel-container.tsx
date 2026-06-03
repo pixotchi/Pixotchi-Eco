@@ -15,8 +15,8 @@ const paddingMap = {
 
 const StandardContainer = forwardRef<HTMLDivElement, StandardContainerProps>(
   ({ className = '', variant = 'default', padding = 'md', children, ...props }, ref) => {
-    const base = 'rounded-lg border border-border shadow-sm';
-    const surface = variant === 'muted' ? 'bg-muted' : variant === 'transparent' ? 'bg-transparent border-transparent shadow-none' : 'bg-card';
+    const base = 'rounded-[var(--radius-panel)] border border-border/65 shadow-[var(--shadow-hairline)]';
+    const surface = variant === 'muted' ? 'bg-muted/80' : variant === 'transparent' ? 'bg-transparent border-transparent shadow-none' : 'bg-card/95';
     return (
       <div ref={ref} className={cn(base, surface, paddingMap[padding], className)} {...props}>
         {children}

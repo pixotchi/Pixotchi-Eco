@@ -25,7 +25,7 @@ export default function FenceTimer({
 
   return (
     <div className={`${baseClasses} ${backgroundClasses} ${className}`}>
-      <Image src="/icons/Shield.svg" alt="Fence Protection" width={16} height={16} className="w-4 h-4" />
+      <Image src="/icons/Shield.svg" alt="Fence Protection" width={16} height={16} />
       <div className="flex flex-col leading-none">
         {label && <span className="text-xs font-medium text-foreground/70 dark:text-foreground/60">{label}</span>}
         <span>{timeRemaining}</span>

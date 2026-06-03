@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] text-sm font-semibold leading-none ring-offset-background transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-55",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] text-sm font-semibold leading-none ring-offset-background transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px active:scale-[0.985] disabled:pointer-events-none disabled:translate-y-0 disabled:scale-100 disabled:opacity-55",
   {
     variants: {
       variant: {
@@ -50,14 +50,14 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        xs: "h-7 min-h-7 px-2 text-xs",
-        touchCompact: "h-9 min-h-9 px-2.5 text-xs",
+        xs: "tap-target-44 h-7 min-h-7 px-2 py-1 text-xs",
+        touchCompact: "tap-target-44 h-8 min-h-8 px-2.5 py-1 text-xs",
         default: "h-11 min-h-11 px-4 py-2",
         md: "h-11 min-h-11 px-4 py-2",
         sm: "h-9 min-h-9 px-3 text-sm",
         lg: "h-12 min-h-12 px-6 text-base",
         icon: "h-11 min-h-11 w-11 min-w-11",
-        "icon-sm": "h-9 min-h-9 w-9 min-w-9",
+        "icon-sm": "tap-target-44 h-8 min-h-8 w-8 min-w-8",
       },
       fullWidth: {
         true: "w-full",

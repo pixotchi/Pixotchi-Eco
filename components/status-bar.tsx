@@ -63,6 +63,9 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
   const leafAriaLabel = loading ? "Leaf balance loading" : `Leaf balance: ${leafValue} LEAF`;
   const pixotchiAriaLabel = loading ? "PIXOTCHI balance loading" : `PIXOTCHI balance: ${pixotchiValue}`;
   const ethAriaLabel = ethLoading ? "ETH balance loading" : `ETH balance: ${ethValue} ETH`;
+  const balanceItemClassName = "flex items-center gap-1.5 min-w-0";
+  const balanceTextClassName = "text-[15px] font-bold leading-none tabular-nums truncate";
+  const balanceIconClassName = "h-[18px] w-[18px] shrink-0";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
@@ -80,39 +83,39 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
       <div
         className={
           isHeaderPlacement
-            ? "w-fit max-w-full rounded-lg border border-border/70 bg-background/60 px-3 py-1 shadow-none backdrop-blur-md"
-            : "app-status-scroll rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:bg-background/60 xl:shadow-none"
+            ? "w-fit max-w-full rounded-lg border border-border/60 bg-background/55 px-3 py-1 shadow-none backdrop-blur-xl backdrop-saturate-150"
+            : "app-status-scroll rounded-b-2xl border border-border/60 bg-card/90 px-4 py-1.5 shadow-[var(--shadow-hairline)] backdrop-blur-xl backdrop-saturate-150 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:bg-background/55 xl:shadow-none"
         }
       >
         <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex items-center justify-between gap-3 xl:justify-start"}>
           <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex items-center gap-2 min-w-0 xl:gap-3"} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label={`SOL balance: ${solText} SOL`}>
-                <Image src="/icons/solana.svg" alt="" width={16} height={16} aria-hidden="true" />
-                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{solText}</span>
+              <div className={balanceItemClassName} aria-label={`SOL balance: ${solText} SOL`}>
+                <Image src="/icons/solana.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                <span className={balanceTextClassName} aria-hidden="true">{solText}</span>
               </div>
             )}
             {showEthBalance && (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label={ethAriaLabel}>
-                <Image src="/icons/ethlogo.svg" alt="" width={16} height={16} aria-hidden="true" />
-                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ethText}</span>
+              <div className={balanceItemClassName} aria-label={ethAriaLabel}>
+                <Image src="/icons/ethlogo.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                <span className={balanceTextClassName} aria-hidden="true">{ethText}</span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 min-w-0" aria-label={seedAriaLabel}>
-              <Image src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
-              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{seedText}</span>
+            <div className={balanceItemClassName} aria-label={seedAriaLabel}>
+              <Image src="/PixotchiKit/COIN.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+              <span className={balanceTextClassName} aria-hidden="true">{seedText}</span>
             </div>
             {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
             {!isSolana && (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label={leafAriaLabel}>
-                <Image src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
-                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
+              <div className={balanceItemClassName} aria-label={leafAriaLabel}>
+                <Image src="/icons/leaf.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                <span className={balanceTextClassName} aria-hidden="true">{leafText}</span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 min-w-0" aria-label={pixotchiAriaLabel}>
-              <Image src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
-              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{pixotchiText}</span>
+            <div className={balanceItemClassName} aria-label={pixotchiAriaLabel}>
+              <Image src="/icons/cc.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+              <span className={balanceTextClassName} aria-hidden="true">{pixotchiText}</span>
             </div>
           </div>
           <div className={isHeaderPlacement ? "h-5 w-px bg-border/70" : "hidden h-5 w-px bg-border/70 xl:block"} aria-hidden="true" />

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getLeaderboards } from '@/lib/gamification-service';
+import { getMissionLeaderboard } from '@/lib/gamification-service';
 import { resolvePrimaryNames } from '@/lib/ens-resolver';
 import { getGamificationPolicy } from '@/lib/gamification-feature';
 
@@ -23,7 +23,7 @@ export async function GET() {
       );
     }
 
-    const { missionTop } = await getLeaderboards();
+    const missionTop = await getMissionLeaderboard();
     const addresses = missionTop.map((entry) => entry.address?.toLowerCase?.()).filter(Boolean) as string[];
     const nameMap = addresses.length > 0 ? await resolvePrimaryNames(addresses) : new Map<string, string | null>();
 

@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
 Dialog,
+DialogBody,
 DialogContent,
 DialogDescription,
 DialogFooter,
@@ -545,8 +546,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-1">
-            <div className="space-y-5 p-1.5">
+          <DialogBody className="pr-1">
+            <div className="space-y-4 p-1.5">
               {/* MiniKit Context Info - only shown in debug mode */}
               {debugMode && isInFrame && (
                 <div className="flex items-center space-x-2">
@@ -566,7 +567,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <h3 className="text-sm font-medium text-muted-foreground">
                   Account
                 </h3>
-                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/80 bg-card/95 p-4 shadow-[var(--shadow-raised)]">
+                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/65 bg-card/90 p-3 shadow-[var(--shadow-hairline)]">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">Provider</span>
                     <span className="text-xs font-semibold">
@@ -616,7 +617,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           onClick={() => copyToClipboard(address, "Wallet address")}
                           variant="ghost"
                           size="icon-sm"
-                          className="btn-compact h-7 w-7"
+                          className="btn-compact !h-7 !min-h-7 !w-7 !min-w-7"
                           aria-label="Copy wallet address"
                         >
                           <Copy className="w-3 h-3 text-muted-foreground" />
@@ -768,7 +769,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     </h3>
                     <SolanaBridgeBadge />
                   </div>
-                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/80 bg-card/95 p-4 shadow-[var(--shadow-raised)]">
+                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/65 bg-card/90 p-3 shadow-[var(--shadow-hairline)]">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium">Solana Address</span>
                       <div className="flex items-center gap-1">
@@ -781,8 +782,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             </span>
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
+                              size="icon-sm"
+                              className="btn-compact !h-7 !min-h-7 !w-7 !min-w-7"
                               onClick={() => copyToClipboard(solanaAddress, "Solana address")}
                               aria-label="Copy Solana address"
                               title="Copy Solana address"
@@ -807,8 +808,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             </span>
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
+                              size="icon-sm"
+                              className="btn-compact !h-7 !min-h-7 !w-7 !min-w-7"
                               onClick={() => copyToClipboard(twinAddress, "Twin address")}
                               aria-label="Copy twin address"
                               title="Copy twin address"
@@ -855,63 +856,59 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
               {/* Balances (consolidated) */}
               <BalanceCard variant="wallet-profile" />
-
-              {/* Actions */}
-              <div className="pt-4 border-t border-border">
-                <div className="grid gap-2 mb-3">
-                  {canExportEmbeddedWallet && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleOpenExportDialog}
-                      className="w-full"
-                    >
-                      <Key className="w-4 h-4 mr-2" />
-                      {exportWalletLabel}
-                    </Button>
-                  )}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => { setTransferOpen(true); onOpenChange(false); }}
-                    className="w-full"
-                  >
-                    Transfer Assets
-                  </Button>
-                </div>
-                {!isFrameContextResolved ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled
-                    className="w-full"
-                  >
-                    Loading session controls…
-                  </Button>
-                ) : isMiniApp ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleCloseMiniApp}
-                    className="w-full"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Close Mini App
-                  </Button>
-                ) : (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDisconnect}
-                    className="w-full"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Disconnect Wallet
-                  </Button>
-                )}
-              </div>
             </div>
-          </div>
+          </DialogBody>
+          <DialogFooter sticky className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:space-x-0">
+            {canExportEmbeddedWallet && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenExportDialog}
+                className="w-full sm:col-span-2"
+              >
+                <Key className="w-4 h-4 mr-2" />
+                {exportWalletLabel}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setTransferOpen(true); onOpenChange(false); }}
+              className="w-full"
+            >
+              Transfer Assets
+            </Button>
+            {!isFrameContextResolved ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled
+                className="w-full"
+              >
+                Loading session controls...
+              </Button>
+            ) : isMiniApp ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleCloseMiniApp}
+                className="w-full"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Close Mini App
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDisconnect}
+                className="w-full"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Disconnect Wallet
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />

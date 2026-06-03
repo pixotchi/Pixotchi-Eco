@@ -102,15 +102,15 @@ const SWAP_CARD_CLASS =
   'my-0.5 box-border flex h-[148px] w-full flex-col items-start rounded-lg bg-secondary p-4';
 const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-between text-sm text-muted-foreground`;
 const SWAP_TOKEN_TRIGGER_CLASS =
-  'flex w-fit shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 shadow-[0px_8px_12px_0px_rgba(91,97,110,0.12)] hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'flex w-fit shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-background px-3 py-1 shadow-[0px_8px_12px_0px_rgba(91,97,110,0.12)] hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_AMOUNT_INPUT_CLASS =
   `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground`;
 const SWAP_MAX_BUTTON_CLASS =
-  `${OCK_COMPAT_FONT} flex cursor-pointer items-center justify-center px-2 py-1 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-[0.38]`;
+  `${OCK_COMPAT_FONT} flex min-h-8 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-2 py-1 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
-  'relative z-10 mx-auto -my-4 flex h-10 w-16 items-center justify-center rounded-xl border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'relative z-10 mx-auto -my-4 flex h-10 w-16 items-center justify-center rounded-[var(--radius-control)] border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_PRIMARY_ACTION_CLASS =
-  `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
+  `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
 const SWAP_BALANCE_ROW_CLASS = 'mt-4 flex h-7 w-full items-center justify-between';
 
@@ -1244,6 +1244,30 @@ export default function PixotchiSwapPanel() {
     sellToken,
     walletClient?.account,
   ]);
+  const actionButtonLabel = useMemo(() => {
+    if (!actionDisabled || isExecuting) return S.buttons.swap;
+    if (chainId !== BASE_CHAIN_ID) return 'Switch to Base';
+    if (!walletClient?.account) return 'Connect Wallet';
+    if (!sellAmount.trim()) return 'Enter Amount';
+    if (!isAmountValid) return 'Enter Valid Amount';
+    if (hasInsufficientBalance) return `Insufficient ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`;
+    if (isDeferredLagging || isQuoteLoading) return 'Fetching Quote...';
+    if (currentQuote?.strategy === 'blocked') return 'Pair Unavailable';
+    if (!currentQuote) return 'Waiting for Quote';
+    return S.buttons.swap;
+  }, [
+    actionDisabled,
+    chainId,
+    currentQuote,
+    hasInsufficientBalance,
+    isAmountValid,
+    isDeferredLagging,
+    isExecuting,
+    isQuoteLoading,
+    sellAmount,
+    sellToken,
+    walletClient?.account,
+  ]);
 
   return (
     <div>
@@ -1413,7 +1437,7 @@ export default function PixotchiSwapPanel() {
             loading={isExecuting}
             loadingText={S.buttons.swapping}
           >
-            {S.buttons.swap}
+            {actionButtonLabel}
           </Button>
           {actionDisabled && disabledReason ? (
             <DisabledReason className="mt-2">

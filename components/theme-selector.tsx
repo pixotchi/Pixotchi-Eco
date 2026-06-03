@@ -40,20 +40,20 @@ function MenuSwitchRow({
   return (
     <button
       onClick={onClick}
-      className="flex min-h-8 w-full items-center justify-between gap-4 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-accent/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="flex min-h-11 w-full items-center justify-between gap-4 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
     >
       <span className="text-xs font-medium">{label}</span>
       <span
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors ${
           checked ? "bg-[hsl(var(--success))]" : "bg-muted-foreground/24"
         }`}
         aria-hidden="true"
       >
         <span
-          className={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+          className={`inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform ${
             checked ? "translate-x-[18px]" : "translate-x-0.5"
           }`}
         />
@@ -113,7 +113,7 @@ export function ThemeSelector() {
 
   if (!mounted) {
     // Render a placeholder to prevent layout shift
-    return <Button variant="outline" size="icon" disabled className="h-9 w-9" aria-label="Loading theme selector" />;
+    return <Button variant="outline" size="icon" disabled aria-label="Loading theme selector" />;
   }
 
   const currentTheme = themes.find((t) => t.name === theme) ?? themes[0];
@@ -127,7 +127,7 @@ export function ThemeSelector() {
           title={`Change theme: ${currentTheme.label}`}
           aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
         >
-          <div className={`h-4 w-4 rounded-sm ${currentTheme.color}`} />
+          <div className={`base-logo-corner h-4 w-4 ${currentTheme.color}`} />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -140,13 +140,13 @@ export function ThemeSelector() {
               size="icon"
               title={themeOption.label}
               onClick={() => handleThemeChange(themeOption.name)}
-              className={`h-8 w-8 ${theme === themeOption.name ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
+              className={`${theme === themeOption.name ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
                 }`}
               role="radio"
               aria-checked={theme === themeOption.name}
               aria-label={`Select ${themeOption.label} theme`}
             >
-              <div className={`h-4 w-4 rounded-sm ${themeOption.color}`} />
+              <div className={`base-logo-corner h-4 w-4 ${themeOption.color}`} />
             </Button>
           ))}
         </div>

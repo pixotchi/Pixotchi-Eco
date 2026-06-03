@@ -35,7 +35,7 @@ export function MetricCard({
   supportingText?: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-[var(--radius-panel)] border border-border/70 bg-card/85 p-3 shadow-[var(--shadow-hairline)]", className)}>
+    <div className={cn("rounded-[var(--radius-panel)] border border-border/60 bg-card/90 p-3 shadow-[var(--shadow-hairline)]", className)}>
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         {icon}
         <span className="truncate">{label}</span>

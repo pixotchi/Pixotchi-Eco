@@ -48,15 +48,18 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
     }
   };
 
+  if (sharedChatUnavailable) {
+    return (
+      <div className="rounded-[var(--radius-control)] border border-border/60 bg-muted/35 px-3 py-2 text-xs text-muted-foreground" role="note">
+        {publicChatLoading
+          ? 'Restoring chat session...'
+          : 'Refresh the chat session above to continue.'}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2" role="region" aria-label="Chat input area">
-      {sharedChatUnavailable && (
-        <div className="rounded-[var(--radius-control)] border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground" role="note">
-          {publicChatLoading
-            ? 'Connecting chat...'
-            : (isAIMode ? 'AI chat is unavailable, refresh the app.' : 'Public chat is unavailable, refresh the app.')}
-        </div>
-      )}
       <div className="flex items-center gap-2">
         <Input
           value={message}

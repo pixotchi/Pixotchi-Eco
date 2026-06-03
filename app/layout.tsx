@@ -1,5 +1,6 @@
 import "ethereum-identity-kit/css";
 import type { Metadata, Viewport } from "next";
+import type { CSSProperties } from "react";
 import "./ock-compat.css";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";
@@ -164,6 +165,12 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={`${coinbaseSans.variable} ${pixelmix.variable}`}
+      style={{
+        "--radius": "1rem",
+        "--radius-control": "1rem",
+        "--radius-panel": "1rem",
+        "--radius-dialog": "1rem",
+      } as CSSProperties}
     >
       <head>
         <meta

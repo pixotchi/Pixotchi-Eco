@@ -1338,8 +1338,8 @@ export default function MintTab() {
 
         {/* StatusBar replaces BalanceCard globally under header */}
 
-        <div className="flex flex-col space-y-2 xl:space-y-3 xl:rounded-lg xl:border xl:border-border xl:bg-card xl:p-4 xl:shadow-sm">
-          <h3 className="hidden text-base font-semibold leading-none xl:block">Mint Plant</h3>
+        <div className="flex flex-col space-y-2 lg:space-y-3 lg:rounded-lg lg:border lg:border-border/65 lg:bg-card/95 lg:p-4 lg:shadow-[var(--shadow-hairline)]">
+          <h3 className="hidden text-base font-semibold leading-none lg:block">Mint Plant</h3>
           {/* ETH Mode: Show SwapMintBundle for atomic ETH->SEED->Mint transaction (SEED strains only) */}
           {isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && isSeedPaymentStrain(selectedStrain) && (
             <div className="flex flex-col space-y-2">
@@ -1457,8 +1457,8 @@ export default function MintTab() {
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">
-                  <span className="xl:hidden">Mint Plant</span>
-                  <span className="hidden xl:inline">Confirm Mint</span>
+                  <span className="lg:hidden">Mint Plant</span>
+                  <span className="hidden lg:inline">Confirm Mint</span>
                 </span>
                 <SponsoredBadge show={isSponsored && isSmartWallet} />
               </div>
@@ -1488,6 +1488,14 @@ export default function MintTab() {
         </div>
       </>
     );
+  };
+
+  const getLandMintButtonText = (needsApproval: boolean) => {
+    if (!landMintStatus) return 'Checking Mint Status';
+    if (!landMintStatus.canMint) return landMintStatus.reason;
+    if (seedBalanceRaw < landMintPrice) return 'Insufficient Balance';
+    if (needsApproval) return 'Approve SEED First';
+    return 'Mint Land';
   };
 
   const renderLandMinting = () => (
@@ -1531,8 +1539,8 @@ export default function MintTab() {
         </Card>
       )}
       {/* StatusBar replaces BalanceCard globally under header */}
-      <div className="flex flex-col space-y-2 xl:space-y-3 xl:rounded-lg xl:border xl:border-border xl:bg-card xl:p-4 xl:shadow-sm">
-        <h3 className="hidden text-base font-semibold leading-none xl:block">Mint Land</h3>
+      <div className="flex flex-col space-y-2 lg:space-y-3 lg:rounded-lg lg:border lg:border-border/65 lg:bg-card/95 lg:p-4 lg:shadow-[var(--shadow-hairline)]">
+        <h3 className="hidden text-base font-semibold leading-none lg:block">Mint Land</h3>
         {/* ETH Mode: Show SwapLandMintBundle for atomic ETH->SEED->Mint Land transaction */}
         {isSmartWallet && isEthMode && landEthQuote && !landEthQuoteLoading && landMintStatus?.canMint && (
           <div className="flex flex-col space-y-2">
@@ -1603,8 +1611,8 @@ export default function MintTab() {
               <span className="text-sm font-medium">
                 {landMintAllowance < landMintPrice ? 'Step 2: Mint Land' : (
                   <>
-                    <span className="xl:hidden">Mint Land</span>
-                    <span className="hidden xl:inline">Confirm Mint</span>
+                    <span className="lg:hidden">Mint Land</span>
+                    <span className="hidden lg:inline">Confirm Mint</span>
                   </>
                 )}
               </span>
@@ -1624,7 +1632,7 @@ export default function MintTab() {
                     window.dispatchEvent(new Event('balances:refresh'));
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                  buttonText={`Mint Land`}
+                  buttonText={getLandMintButtonText(landMintAllowance < landMintPrice)}
                   buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                   disabled={!landMintStatus?.canMint || (landMintAllowance < landMintPrice) || seedBalanceRaw < landMintPrice}
                   showToast={false}
@@ -1672,7 +1680,7 @@ export default function MintTab() {
       : formatNumber(selectedStrain?.mintPrice || 0);
 
     return (
-      <Card padding="sm" className="xl:min-h-[520px]">
+      <Card padding="sm" className="lg:min-h-[520px]">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -1681,7 +1689,7 @@ export default function MintTab() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
+        <CardContent className="grid gap-4 lg:grid-cols-[minmax(220px,0.86fr)_minmax(0,1fr)] xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
           <div className="flex min-h-[372px] flex-col justify-between rounded-lg border border-border/70 bg-background/35 p-4">
             <div className="flex flex-1 items-center justify-center">
               <div className="relative flex h-48 w-48 items-center justify-center rounded-lg border border-border/60 bg-card/55 2xl:h-56 2xl:w-56">
@@ -1726,7 +1734,7 @@ export default function MintTab() {
                       type="button"
                       onClick={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
                       disabled={isSoldOut || isBaseOnly}
-                      className={`btn-compact flex min-h-[58px] items-center justify-between rounded-md border px-3 py-2 text-left transition-colors ${isSelected
+                      className={`btn-compact flex min-h-[58px] items-center justify-between rounded-[var(--radius-panel)] border px-3 py-2 text-left transition-colors ${isSelected
                         ? 'border-primary bg-primary/10'
                         : 'border-border bg-card/70 hover:bg-accent'
                         } ${isSoldOut || isBaseOnly ? 'opacity-50' : ''}`}
@@ -2087,7 +2095,7 @@ export default function MintTab() {
                         window.dispatchEvent(new Event('balances:refresh'));
                       }}
                       onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                      buttonText="Mint Land"
+                      buttonText={getLandMintButtonText(needsLandApproval)}
                       buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                       disabled={!landMintStatus?.canMint || needsLandApproval || hasInsufficientLandBalance}
                       showToast={false}
@@ -2130,8 +2138,8 @@ export default function MintTab() {
     const showLandOption = !isSolana;
 
     return (
-      <div className="space-y-4 xl:space-y-3">
-        <Card className={showLandOption ? 'xl:hidden' : undefined}>
+      <div className="space-y-4 lg:space-y-3">
+        <Card className={showLandOption ? 'lg:hidden' : undefined}>
           <CardContent className="flex flex-col space-y-3">
             <div className="flex justify-between items-start w-full gap-4">
               <div className="space-y-2">
@@ -2152,7 +2160,7 @@ export default function MintTab() {
                 )}
               </div>
               {showLandOption ? (
-                <div className="xl:hidden">
+                <div className="lg:hidden">
                   <ToggleGroup
                     value={mintType}
                     onValueChange={(v) => setMintType(v as 'plant' | 'land')}
@@ -2173,7 +2181,7 @@ export default function MintTab() {
         </Card>
 
         {showLandOption && !isSolana && (
-          <div className="hidden xl:grid xl:grid-cols-[minmax(0,1.58fr)_minmax(340px,0.86fr)] xl:items-start xl:gap-3 2xl:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.8fr)]">
+          <div className="hidden lg:grid lg:grid-cols-[minmax(0,1.48fr)_minmax(300px,0.9fr)] lg:items-start lg:gap-3 xl:grid-cols-[minmax(0,1.58fr)_minmax(340px,0.86fr)] 2xl:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.8fr)]">
             {renderDesktopPlantMinting()}
 
             <aside className="min-w-0 space-y-3">
@@ -2191,7 +2199,7 @@ export default function MintTab() {
           </div>
         )}
 
-        <div className={showLandOption ? "space-y-4 xl:hidden" : "space-y-4"}>
+        <div className={showLandOption ? "space-y-4 lg:hidden" : "space-y-4"}>
           {/* Show land not supported for Solana users if they somehow got to land view */}
           {mintType === 'land' && isSolana ? (
             <SolanaNotSupported feature="Land minting" />
@@ -2222,5 +2230,5 @@ export default function MintTab() {
     );
   };
 
-  return <div className="xl:mx-auto xl:max-w-7xl 2xl:max-w-[1360px]">{renderContent()}</div>;
+  return <div className="lg:mx-auto lg:max-w-7xl 2xl:max-w-[1360px]">{renderContent()}</div>;
 } 

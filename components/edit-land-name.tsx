@@ -69,8 +69,8 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 			<DialogTrigger asChild>
 				<Button
 					variant="ghost"
-					size="sm"
-					className={`p-1 h-auto hover:bg-muted ${className}`}
+					size="icon-sm"
+					className={`hover:bg-muted ${className}`}
 					title="Change land name"
 				>
 					<Image src="/icons/pencil.svg" alt="Edit" width={iconSize} height={iconSize} className="text-muted-foreground hover:text-foreground" />
@@ -116,4 +116,3 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 }
 
 export default EditLandName;
-

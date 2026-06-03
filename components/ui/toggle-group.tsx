@@ -9,6 +9,7 @@ export type ToggleValue = string | number;
 export interface ToggleOption {
   value: ToggleValue;
   label: React.ReactNode;
+  ariaLabel?: string;
 }
 
 export interface ToggleGroupProps {
@@ -24,9 +25,9 @@ export interface ToggleGroupProps {
 }
 
 const sizeClassNames = {
-  sm: "h-7 px-2 text-xs",
-  default: "h-8 px-3 text-xs sm:text-sm",
-  lg: "h-9 px-4 text-sm",
+  sm: "h-auto min-h-11 px-3 py-2 text-xs",
+  default: "h-auto min-h-11 px-4 py-2 text-xs sm:text-sm",
+  lg: "h-auto min-h-12 px-4 py-2 text-sm",
 } as const;
 
 export function ToggleGroup({
@@ -84,7 +85,7 @@ export function ToggleGroup({
 
   return (
     <div
-      className={cn("inline-flex items-center p-0.5 rounded-md border border-border bg-card shadow-sm", className)}
+      className={cn("inline-flex items-center rounded-[var(--radius-control)] border border-border/65 bg-card/95 p-0.5 shadow-[var(--shadow-hairline)]", className)}
       role="radiogroup"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
@@ -98,7 +99,7 @@ export function ToggleGroup({
           variant={value === opt.value ? "secondary" : "ghost"}
           role="radio"
           aria-checked={value === opt.value}
-          aria-label={typeof opt.label === "string" ? opt.label : String(opt.value)}
+          aria-label={opt.ariaLabel ?? (typeof opt.label === "string" ? opt.label : String(opt.value))}
           tabIndex={value === opt.value ? 0 : index === selectedIndex ? 0 : -1}
           onClick={() => selectOption(index)}
           onKeyDown={(event) => handleKeyDown(event, index)}
@@ -107,7 +108,7 @@ export function ToggleGroup({
           }}
           className={cn(
             sizeClassNames[size],
-            "flex items-center gap-1 rounded-md",
+            "flex items-center gap-1 rounded-[var(--radius-control)]",
             getButtonClassName?.(opt.value, value === opt.value)
           )}
         >

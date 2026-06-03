@@ -34,7 +34,7 @@ const ABOUT_SCENE_SPRITES = [
 ] as const;
 
 const AboutWorldScene = () => (
-  <div className="hidden xl:flex xl:min-h-[390px] xl:items-center xl:justify-center" aria-hidden="true">
+  <div className="hidden lg:flex lg:min-h-[390px] lg:items-center lg:justify-center" aria-hidden="true">
     <div className="relative aspect-square w-full max-w-[440px]">
       {ABOUT_SCENE_SPRITES.map((sprite) => (
         <Image
@@ -45,8 +45,12 @@ const AboutWorldScene = () => (
           height={sprite.height}
           className={`absolute h-auto select-none object-contain [image-rendering:pixelated] drop-shadow-[0_14px_22px_rgba(15,23,42,0.18)] ${sprite.className}`}
           style={{ animation: sprite.animation }}
-          loading={sprite.src === "/icons/plantGrowth2.gif" ? "eager" : "lazy"}
-          fetchPriority={sprite.src === "/icons/plantGrowth2.gif" ? "high" : "auto"}
+          loading="eager"
+          fetchPriority={
+            sprite.src === "/icons/plantGrowth4.gif" || sprite.src === "/icons/plantGrowth.gif"
+              ? "high"
+              : "auto"
+          }
           unoptimized={sprite.src.endsWith(".gif")}
         />
       ))}
@@ -279,7 +283,7 @@ export default function AboutTab() {
 
 
   return (
-    <div className="space-y-8 xl:mx-auto xl:max-w-5xl">
+    <div className="space-y-8 lg:mx-auto lg:max-w-5xl">
 
       {/* Invite Section - Only show if system is enabled */}
       {INVITE_CONFIG.SYSTEM_ENABLED && (
@@ -413,9 +417,9 @@ export default function AboutTab() {
         </div>
       )}
 
-      <div className="space-y-8 xl:grid xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch xl:gap-5 xl:space-y-0">
+      <div className="space-y-8 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-stretch lg:gap-5 lg:space-y-0">
       {/* Description */}
-      <Card className="xl:h-fit">
+      <Card className="lg:h-fit">
         <CardContent>
           <p className="text-muted-foreground mb-4">
             <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
@@ -424,12 +428,12 @@ export default function AboutTab() {
             Every player follows a different strategy. Some invest in Lands for long-term, passive growth, while others push their plants aggressively using the marketplace to climb rankings faster at a higher cost.
           </p>
 
-          <div className="space-y-3 xl:flex xl:flex-wrap xl:gap-2 xl:space-y-0">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:contents">
+          <div className="space-y-3 lg:flex lg:flex-wrap lg:gap-2 lg:space-y-0">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:contents">
               <Button
                 variant="secondary"
                 onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
-                className="w-full xl:w-auto"
+                className="w-full lg:w-auto"
               >
                 <Book className="w-4 h-4 mr-2" />
                 Documentation
@@ -437,23 +441,23 @@ export default function AboutTab() {
               <Button
                 variant="secondary"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
-                className="w-full xl:w-auto"
+                className="w-full lg:w-auto"
               >
                 Status
               </Button>
             </div>
             {enabled && (
-              <div className="grid grid-cols-2 gap-2 xl:contents">
+              <div className="grid grid-cols-2 gap-2 lg:contents">
                 <Button
                   onClick={() => start({ reset: true })}
-                  className="bg-value text-white hover:opacity-90 xl:w-auto"
+                  className="bg-value text-white hover:opacity-90 lg:w-auto"
                 >
                   Tutorial
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowFeedbackDialog(true)}
-                  className="xl:w-auto"
+                  className="lg:w-auto"
                 >
                   Feedback
                 </Button>
@@ -463,7 +467,7 @@ export default function AboutTab() {
               <Button
                 variant="outline"
                 onClick={() => setShowFeedbackDialog(true)}
-                className="xl:w-auto"
+                className="lg:w-auto"
               >
                 Feedback
               </Button>
@@ -524,15 +528,15 @@ export default function AboutTab() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4 xl:flex xl:h-full xl:flex-col xl:justify-between xl:gap-4 xl:space-y-0 xl:rounded-lg xl:border xl:border-border xl:bg-card xl:p-4 xl:shadow-sm">
+      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-4 lg:space-y-0 lg:rounded-lg lg:border lg:border-border/65 lg:bg-card/95 lg:p-4 lg:shadow-[var(--shadow-hairline)]">
         {/* Version Number */}
-        <div className="text-center xl:order-2 xl:border-t xl:border-border/60 xl:pt-4">
+        <div className="text-center lg:order-2 lg:border-t lg:border-border/60 lg:pt-4">
           <span className="text-xs text-muted-foreground/60 font-mono">
             v{packageJson.version}
           </span>
         </div>
 
-        <div className="text-center xl:order-1 xl:flex xl:flex-1 xl:flex-col xl:justify-center">
+        <div className="text-center lg:order-1 lg:flex lg:flex-1 lg:flex-col lg:justify-center">
           <h3 className="text-sm font-semibold mb-2">Join our Community</h3>
           <div className="flex justify-center space-x-4">
             <button

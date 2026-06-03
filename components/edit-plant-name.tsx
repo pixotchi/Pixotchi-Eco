@@ -159,8 +159,8 @@ export function EditPlantName({
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          size="sm"
-          className={`p-1 h-auto hover:bg-muted ${className}`}
+          size="icon-sm"
+          className={`hover:bg-muted ${className}`}
           title="Change plant name"
         >
           <Image

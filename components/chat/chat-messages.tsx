@@ -38,7 +38,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
     publicChatLoading || publicChatState === 'booting'
       ? 'Restoring your secure chat session...'
       : publicChatState === 'error'
-        ? 'We could not verify your chat session. Refresh or reconnect, then try again.'
+        ? 'We could not verify your chat session. Refresh, then try again.'
         : isAssistantMode
           ? 'Connect or refresh your secure session to chat with Neural Seed.'
           : 'Connect or refresh your secure session to join public chat.';
@@ -91,7 +91,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="warning"
                     size="sm"
                     className="mt-3"
                     loading={publicChatLoading}
