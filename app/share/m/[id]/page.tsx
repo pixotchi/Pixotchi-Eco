@@ -1,5 +1,6 @@
 import { redisGetJSON } from "@/lib/redis";
 import type { MintShareData } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -140,12 +141,9 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
             Join me in Pixotchi Mini, plant your own SEED, and climb the leaderboard to earn ETH rewards.
           </p>
         </div>
-        <a
-          href={BASE_URL}
-          className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          Play Pixotchi Mini
-        </a>
+        <Button asChild size="lg" className="px-8">
+          <a href={BASE_URL}>Play Pixotchi Mini</a>
+        </Button>
       </div>
     </main>
   );

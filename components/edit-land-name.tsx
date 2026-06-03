@@ -72,6 +72,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 					size="icon-sm"
 					className={`hover:bg-muted ${className}`}
 					title="Change land name"
+					aria-label="Change land name"
 				>
 					<Image src="/icons/pencil.svg" alt="Edit" width={iconSize} height={iconSize} className="text-muted-foreground hover:text-foreground" />
 				</Button>

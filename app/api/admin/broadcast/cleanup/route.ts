@@ -54,9 +54,9 @@ export async function DELETE(req: NextRequest) {
     // Safety check - require explicit confirmation
     if (confirm !== 'true') {
       return NextResponse.json(
-        { 
+        {
           error: 'Confirmation required',
-          message: 'Add ?confirm=true to the request to proceed with data deletion' 
+          message: 'Add ?confirm=true to the request to proceed with data deletion'
         },
         { status: 400 }
       );

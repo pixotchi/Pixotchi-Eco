@@ -5,7 +5,8 @@ import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BoxGameTransaction from "@/components/transactions/box-game-transaction";
 import SpinGameTransaction from "@/components/transactions/spin-game-transaction";
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { RewardResultPanel } from "@/components/ui/premium";
 import { getBaseLogClient } from "@/lib/base-rpc";
 import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
@@ -109,16 +110,18 @@ const GameSelector = ({
         icon: "/icons/spinleaf.svg",
       },
     ].map((game) => (
-      <button
+      <Button
         key={game.id}
         type="button"
+        variant="outline"
         onClick={() => onSelect(game.id)}
         className={cn(
-          "relative aspect-square rounded-xl border transition-all flex flex-col items-center justify-center gap-3 bg-card/70",
+          "relative flex h-auto min-h-0 aspect-square flex-col items-center justify-center gap-3 rounded-[var(--radius-panel)] bg-card/70 p-0 transition-all",
           selected === game.id
-            ? "border-primary shadow-[0_0_0_2px_rgba(var(--primary-rgb),0.15)]"
-            : "border-border hover:border-primary/40 hover:shadow-[0_4px_16px_-10px_rgba(0,0,0,.45)]",
+            ? "border-primary shadow-[0_0_0_2px_hsl(var(--primary)/0.16)]"
+            : "border-border hover:border-primary/40 hover:shadow-[var(--shadow-control)]",
         )}
+        aria-pressed={selected === game.id}
       >
         <div className="flex flex-col items-center gap-2 px-4 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -134,7 +137,7 @@ const GameSelector = ({
             Selected
           </span>
         )}
-      </button>
+      </Button>
     ))}
   </div>
 );
@@ -842,18 +845,21 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const BoxGrid = () => (
     <div className="grid grid-cols-3 gap-2">
       {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
-        <button
+        <Button
           key={n}
+          type="button"
+          variant="outline"
           onClick={() => {
             setSeed(n);
             setBoxResultDetails(null);
           }}
-          className={`w-full h-16 sm:h-20 flex items-center justify-center rounded-lg border transition-colors ${seed === n ? "bg-primary/10 border-primary ring-2 ring-primary/30" : "bg-card hover:bg-accent border-border"
+          className={`h-16 min-h-16 w-full rounded-[var(--radius-control)] p-0 sm:h-20 sm:min-h-20 ${seed === n ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-border bg-card hover:bg-accent"
             }`}
           aria-label={`Select box ${n}`}
+          aria-pressed={seed === n}
         >
           <Image src="/icons/box.png" alt={`Box ${n}`} width={32} height={32} className="w-8 h-8 object-contain" />
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -868,6 +874,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         <DialogContent className="max-w-md w-[min(92vw,28rem)]">
           <DialogHeader>
             <DialogTitle>Arcade</DialogTitle>
+            <DialogDescription>
+              Arcade games are not available for Solana bridge wallets.
+            </DialogDescription>
           </DialogHeader>
           <div className="py-6">
             <SolanaNotSupported feature="Arcade games" />
@@ -882,6 +891,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
         <DialogHeader>
           <DialogTitle>Arcade</DialogTitle>
+          <DialogDescription>
+            Choose a Pixotchi arcade game, select your wager mode, and confirm the play.
+          </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto pr-1">
           <div className="space-y-4 mt-4">
@@ -897,12 +909,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     <div className="font-medium text-foreground">
                       {withStar ? 'Playing with Stars' : 'Playing without Stars'}
                     </div>
-                    <button
-                      className="px-2 py-1 rounded-md border hover:bg-accent"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      className="px-3 text-xs"
                       onClick={() => setWithStar((v: boolean) => !v)}
                     >
                       {withStar ? 'Play without Stars' : 'Play with Stars'}
-                    </button>
+                    </Button>
                   </div>
 
                   <div className="text-xs text-muted-foreground">
@@ -1111,12 +1126,14 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
                     {/* Reset button for users stuck with lost secrets */}
                     {pending && !secretHex && (
-                      <button
+                      <Button
+                        type="button"
+                        variant="link"
                         onClick={handleForceReset}
-                        className="w-full text-xs text-muted-foreground underline hover:text-foreground mt-2"
+                        className="mt-2 h-auto min-h-0 w-full px-0 py-1 text-xs text-muted-foreground hover:text-foreground"
                       >
                         Stuck? Reset and start new spin
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>

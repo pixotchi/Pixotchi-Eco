@@ -9,7 +9,7 @@ interface QuantitySelectorProps {
   onQuantityChange: (quantity: number) => void;
   max?: number;
   min?: number;
-  size?: 'sm' | 'default';
+  size?: 'xs' | 'sm' | 'default';
 }
 
 export default function QuantitySelector({
@@ -31,14 +31,15 @@ export default function QuantitySelector({
     }
   };
 
-  const buttonSize = size === 'sm'
-    ? '!h-7 !min-h-7 !w-7 !min-w-7 btn-compact tap-target-44 p-0'
-    : '!h-8 !min-h-8 !w-8 !min-w-8 btn-touch-compact tap-target-44 p-0';
-  const iconSize = size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5';
-  const textSize = size === 'sm' ? 'text-xs' : 'text-sm';
+  const buttonSize = size === 'xs'
+    ? '!h-8 !min-h-8 !w-8 !min-w-8 p-0'
+    : '!h-11 !min-h-11 !w-11 !min-w-11 p-0';
+  const iconSize = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const textSize = size === 'xs' ? 'text-[11px]' : size === 'sm' ? 'text-xs' : 'text-sm';
+  const gapSize = size === 'xs' ? 'gap-1' : 'gap-1.5';
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className={`flex items-center ${gapSize}`}>
       <Button
         variant="outline"
         size="icon-sm"

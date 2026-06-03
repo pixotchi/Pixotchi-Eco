@@ -28,7 +28,7 @@ import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '
 import { BET_TYPE_NAMES,CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
 import { Loader2,Trash2,X } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { formatUnits,parseUnits } from 'viem';
 import { useAccount,useBalance,useBlockNumber } from 'wagmi';
@@ -55,6 +55,13 @@ interface PlacedBet {
 const MAX_TOKEN_APPROVAL = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
 const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
 const ACTIVE_BET_REFRESH_DELAYS_MS = [0, 1500, 4000] as const;
+const ROULETTE_NUMBER_BUTTON_CLASS =
+    "flex h-12 w-full items-center justify-center rounded-sm border border-white/10 text-xs font-bold text-white transition-all md:h-14 md:text-sm";
+const ROULETTE_COLUMN_BUTTON_CLASS =
+    "flex h-full w-full items-center justify-center rounded-r-sm border border-white/20 bg-black/40 text-xs font-bold text-white hover:bg-black/60";
+const ROULETTE_OUTSIDE_BUTTON_CLASS =
+    "flex h-11 min-h-11 items-center justify-center rounded-sm border border-white/20 bg-black/40 px-1 text-xs font-bold text-white hover:bg-black/60";
+const ROULETTE_SELECTED_AREA_CLASS = "ring-2 inset-1 ring-primary bg-primary/40";
 const ROULETTE_FAILURE_STATUSES = new Set([
     'error',
     'failed',
@@ -95,6 +102,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
     const casinoPolicy = getClientCasinoPolicy();
+    const betAmountInputId = useId();
 
     const [placedBets, setPlacedBets] = useState<PlacedBet[]>([]);
     const [currentBetAmount, setCurrentBetAmount] = useState('10');
@@ -633,8 +641,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             <div key={num} className="relative w-full h-full">
                 {/* Main number button - Fill container */}
                 <button
+                    type="button"
                     onClick={() => addBet(CasinoBetType.STRAIGHT, `${num}`, [num])}
-                    className={`w-full h-10 md:h-14 flex items-center justify-center rounded-sm text-[10px] md:text-sm font-bold text-white transition-all border border-white/10 
+                    aria-label={`Bet straight on ${num}`}
+                    className={`${ROULETTE_NUMBER_BUTTON_CLASS}
                         ${hasBet(CasinoBetType.STRAIGHT, [num]) ? 'ring-2 ring-amber-400 z-10' : 'hover:brightness-110'}
                         ${isRed ? 'bg-red-600' : 'bg-gray-900'}`}
                 >
@@ -643,38 +653,46 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
                 {/* Street bet hitbox - Top Edge Center */}
                 {isTop && (
-                    <div
-                        className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 cursor-pointer z-20 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet street ${streetNums[0]} to ${streetNums[2]}`}
+                        className="absolute top-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, `Street ${streetNums[0]}-${streetNums[2]}`, streetNums); }}
                     >
                         <div className={`w-6 h-2 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.STREET, streetNums) ? 'bg-purple-500 ring-1 ring-white' : 'hover:bg-purple-400/70'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Horizontal split hitbox - Bottom Edge Center */}
                 {!isBottom && (
-                    <div
-                        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-6 cursor-pointer z-20 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet split ${numBelow} and ${num}`}
+                        className="absolute bottom-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SPLIT, `Split ${numBelow}-${num}`, [numBelow, num]); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SPLIT, [numBelow, num]) ? 'bg-amber-400 ring-1 ring-white' : 'hover:bg-white/60'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Vertical split hitbox - Right Edge Center */}
                 {!isLastCol && (
-                    <div
-                        className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-8 cursor-pointer z-20 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet split ${num} and ${numRight}`}
+                        className="absolute right-0 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SPLIT, `Split ${num}-${numRight}`, [num, numRight]); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SPLIT, [num, numRight]) ? 'bg-amber-400 ring-1 ring-white' : 'hover:bg-white/60'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Corner hitbox - Bottom Right Corner */}
                 {!isBottom && !isLastCol && (
-                    <div
-                        className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-6 h-6 cursor-pointer z-30 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet corner ${[numBelow, num, numBelow + 3, numRight].join(', ')}`}
+                        className="absolute bottom-0 right-0 z-30 flex h-11 w-11 translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => {
                             e.stopPropagation();
                             const cornerSet = [numBelow, num, numBelow + 3, numRight];
@@ -682,17 +700,19 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                         }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.CORNER, [numBelow, num, numBelow + 3, numRight]) ? 'bg-blue-400 ring-1 ring-white' : 'hover:bg-blue-400/70'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Six-line hitbox - Top Right Corner */}
                 {isTop && !isLastCol && (
-                    <div
-                        className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 cursor-pointer z-30 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet six line ${streetNums[0]} to ${streetNums[2] + 3}`}
+                        className="absolute right-0 top-0 z-30 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SIX_LINE, `6-Line ${streetNums[0]}-${streetNums[2] + 3}`, sixLineNums); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SIX_LINE, sixLineNums) ? 'bg-orange-400 ring-1 ring-white' : 'hover:bg-orange-400/70'}`} />
-                    </div>
+                    </button>
                 )}
             </div>
         );
@@ -713,10 +733,13 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     return (
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent
-                className="max-w-4xl max-h-[90vh] overflow-y-auto p-3 md:p-6 w-[95vw] md:w-full rounded-xl bg-cover bg-center bg-no-repeat bg-[url('/icons/casino.png')]"
+                mobileMode="sheet"
+                surface="game"
+                size="full"
+                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-cover bg-center bg-no-repeat p-3 sm:p-4 md:p-6"
             >
                 <DialogHeader>
-                    <DialogTitle className="font-pixel text-xl flex items-center gap-2 text-white">
+                    <DialogTitle className="flex items-center gap-2 text-xl font-semibold text-white">
                         Roulette
                         <span className="text-xs font-normal text-white/80 ml-2">(Beta)</span>
                         <SponsoredBadge show={isSponsored} className="ml-auto" />
@@ -758,19 +781,19 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-white/10 h-full text-white">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-sm font-semibold">Your Bets ({placedBets.length}/{maxBets})</span>
-                                    {placedBets.length > 0 && <Button variant="ghost" size="sm" onClick={clearBets} disabled={bettingLocked} className="h-6 text-xs px-2"><Trash2 className="h-3 w-3 mr-1" />Clear</Button>}
+                                    {placedBets.length > 0 && <Button variant="ghost" size="default" onClick={clearBets} disabled={bettingLocked} className="px-3 text-xs"><Trash2 className="h-4 w-4" />Clear</Button>}
                                 </div>
                                 {placedBets.length === 0 ? (
                                     <p className="text-xs text-white/60 text-center py-4">Click on table below to add bets</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-1">
                                         {placedBets.map(bet => (
-                                            <div key={bet.id} className="inline-flex items-center gap-1 bg-black/60 rounded pl-1.5 pr-1 py-0.5 text-[10px] border border-white/20 shrink-0">
+                                            <div key={bet.id} className="inline-flex shrink-0 items-center gap-2 rounded border border-white/20 bg-black/60 py-1 pl-2 pr-1 text-xs">
                                                 <span className="font-medium whitespace-nowrap text-white">{bet.label}</span>
                                                 <span className="text-white/70 opacity-80">({bet.amount})</span>
-                                                <button onClick={() => removeBet(bet.id)} disabled={bettingLocked} className="!w-3 !h-3 !min-w-0 !min-h-0 !p-0 text-red-500 hover:text-red-600 transition-colors opacity-70 hover:opacity-100 disabled:opacity-30 flex items-center justify-center shrink-0">
-                                                    <X className="!h-3 !w-3" />
-                                                </button>
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeBet(bet.id)} disabled={bettingLocked} aria-label={`Remove ${bet.label} bet`} className="shrink-0 rounded-full p-0 text-red-400 opacity-80 hover:text-red-300 hover:opacity-100 disabled:opacity-30">
+                                                    <X className="h-4 w-4" />
+                                                </Button>
                                             </div>
                                         ))}
                                     </div>
@@ -788,7 +811,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 <div className={`mt-3 text-center p-2 rounded-lg text-sm border font-medium ${result.won ? 'bg-green-600/90 text-white border-green-400' : 'bg-black/60 text-white/90 border-white/20'}`}>
                                     {result.won ? (
                                         <span className="inline-flex items-center gap-1 font-bold">
-                                            <span>🎉 Payout</span>
+                                            <span>Payout</span>
                                             <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
                                             <span>{parseFloat(result.payout).toFixed(2)} {tokenSymbol}!</span>
                                         </span>
@@ -811,13 +834,14 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
                     {/* Bet Amount */}
                     <div className="flex flex-wrap items-center gap-2">
-                        <label className="text-xs text-white font-medium">Bet:</label>
+                        <label htmlFor={betAmountInputId} className="text-xs font-medium text-white">Bet:</label>
                         <Input
+                            id={betAmountInputId}
                             type="text"
                             inputMode="decimal"
                             value={currentBetAmount}
                             onChange={(e) => setCurrentBetAmount(e.target.value)}
-                            className="h-7 min-w-[5.5rem] w-auto flex-none px-2 text-xs tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50"
+                            className="h-11 min-h-11 min-w-[5.5rem] w-auto flex-none px-3 text-sm tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50"
                             min={formattedMinBet}
                             step="any"
                             disabled={bettingLocked}
@@ -828,7 +852,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             {tokenSymbol}
                         </span>
                         {config && (
-                            <span className="text-[11px] text-white/60">
+                            <span className="text-xs text-white/60">
                                 Min: {formattedMinBet} | Max: {formattedMaxBet} {tokenSymbol}
                             </span>
                         )}
@@ -842,15 +866,17 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     </div>
 
                     {/* BETTING TABLE - Fully Responsive Fit */}
-                    <div className="select-none w-full overflow-x-auto pb-4">
-                        <div className="min-w-[320px] md:min-w-0 mx-auto max-w-[800px]">
+                    <div className="w-full select-none overflow-x-auto overscroll-x-contain pb-4 [scrollbar-width:thin]" aria-label="Roulette betting table">
+                        <div className="mx-auto min-w-[520px] max-w-[820px] md:min-w-0">
                             {/* Numbers Grid */}
-                            <div className="grid grid-cols-[30px_repeat(12,1fr)_30px] md:grid-cols-[48px_repeat(12,1fr)_48px] gap-[1px] md:gap-[2px] w-full bg-border p-[1px] rounded-lg">
+                            <div className="grid w-full grid-cols-[44px_repeat(12,minmax(32px,1fr))_44px] gap-[2px] rounded-lg bg-border p-[1px] md:grid-cols-[48px_repeat(12,1fr)_48px]">
                                 {/* Zero - Spans 3 rows */}
                                 <div className="row-span-3 h-full relative">
                                     <button
+                                        type="button"
                                         onClick={() => addBet(CasinoBetType.STRAIGHT, '0', [0])}
-                                        className={`w-full h-full flex items-center justify-center rounded-l-md text-xs md:text-sm font-bold text-white bg-green-600 border border-white/10
+                                        aria-label="Bet straight on 0"
+                                        className={`flex h-full w-full items-center justify-center rounded-l-md border border-white/10 bg-green-600 text-xs font-bold text-white md:text-sm
                                             ${hasBet(CasinoBetType.STRAIGHT, [0]) ? 'ring-2 inset-2 ring-amber-400 z-10' : 'hover:brightness-110'}`}
                                     ><span className="-rotate-90">0</span></button>
 
@@ -860,9 +886,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 {[...Array(12)].map((_, i) => renderNumberCell((i * 3) + 3, 0, i))}
 
                                 {/* 2to1 Column 3 */}
-                                <button onClick={() => addBet(CasinoBetType.COLUMN, '3rd Col', [3])}
-                                    className={`w-full h-full flex items-center justify-center rounded-r-sm text-[8px] md:text-[10px] font-bold border border-white/20 bg-black/40 text-white
-                                        ${hasBet(CasinoBetType.COLUMN, [3]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>
+                                <button type="button" onClick={() => addBet(CasinoBetType.COLUMN, '3rd Col', [3])}
+                                    aria-label="Bet third column"
+                                    className={`${ROULETTE_COLUMN_BUTTON_CLASS}
+                                        ${hasBet(CasinoBetType.COLUMN, [3]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>
                                     <span className="-rotate-90">2:1</span>
                                 </button>
 
@@ -870,9 +897,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 {[...Array(12)].map((_, i) => renderNumberCell((i * 3) + 2, 1, i))}
 
                                 {/* 2to1 Column 2 */}
-                                <button onClick={() => addBet(CasinoBetType.COLUMN, '2nd Col', [2])}
-                                    className={`w-full h-full flex items-center justify-center rounded-r-sm text-[8px] md:text-[10px] font-bold border border-white/20 bg-black/40 text-white
-                                        ${hasBet(CasinoBetType.COLUMN, [2]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>
+                                <button type="button" onClick={() => addBet(CasinoBetType.COLUMN, '2nd Col', [2])}
+                                    aria-label="Bet second column"
+                                    className={`${ROULETTE_COLUMN_BUTTON_CLASS}
+                                        ${hasBet(CasinoBetType.COLUMN, [2]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>
                                     <span className="-rotate-90">2:1</span>
                                 </button>
 
@@ -880,38 +908,39 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 {[...Array(12)].map((_, i) => renderNumberCell((i * 3) + 1, 2, i))}
 
                                 {/* 2to1 Column 1 */}
-                                <button onClick={() => addBet(CasinoBetType.COLUMN, '1st Col', [1])}
-                                    className={`w-full h-full flex items-center justify-center rounded-r-sm text-[8px] md:text-[10px] font-bold border border-white/20 bg-black/40 text-white
-                                        ${hasBet(CasinoBetType.COLUMN, [1]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>
+                                <button type="button" onClick={() => addBet(CasinoBetType.COLUMN, '1st Col', [1])}
+                                    aria-label="Bet first column"
+                                    className={`${ROULETTE_COLUMN_BUTTON_CLASS}
+                                        ${hasBet(CasinoBetType.COLUMN, [1]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>
                                     <span className="-rotate-90">2:1</span>
                                 </button>
                             </div>
 
                             {/* Dozens */}
-                            <div className="grid grid-cols-[30px_repeat(3,1fr)_30px] md:grid-cols-[48px_repeat(3,1fr)_48px] gap-[1px] md:gap-[2px] mt-[1px] md:mt-[2px] w-full">
+                            <div className="mt-[2px] grid w-full grid-cols-[44px_repeat(3,1fr)_44px] gap-[2px] md:grid-cols-[48px_repeat(3,1fr)_48px]">
                                 <div />
-                                <button onClick={() => addBet(CasinoBetType.DOZEN, '1st 12', [1])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[9px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.DOZEN, [1]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>1st 12</button>
-                                <button onClick={() => addBet(CasinoBetType.DOZEN, '2nd 12', [2])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[9px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.DOZEN, [2]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>2nd 12</button>
-                                <button onClick={() => addBet(CasinoBetType.DOZEN, '3rd 12', [3])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[9px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.DOZEN, [3]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>3rd 12</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.DOZEN, '1st 12', [1])} aria-label="Bet first twelve" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.DOZEN, [1]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>1st 12</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.DOZEN, '2nd 12', [2])} aria-label="Bet second twelve" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.DOZEN, [2]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>2nd 12</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.DOZEN, '3rd 12', [3])} aria-label="Bet third twelve" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.DOZEN, [3]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>3rd 12</button>
                                 <div />
                             </div>
 
                             {/* Outside Bets */}
-                            <div className="grid grid-cols-[30px_repeat(6,1fr)_30px] md:grid-cols-[48px_repeat(6,1fr)_48px] gap-[1px] md:gap-[2px] mt-[1px] md:mt-[2px] w-full">
+                            <div className="mt-[2px] grid w-full grid-cols-[44px_repeat(6,1fr)_44px] gap-[2px] md:grid-cols-[48px_repeat(6,1fr)_48px]">
                                 <div />
-                                <button onClick={() => addBet(CasinoBetType.LOW, '1-18', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.LOW, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>1-18</button>
-                                <button onClick={() => addBet(CasinoBetType.EVEN, 'EVEN', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.EVEN, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>EVEN</button>
-                                <button onClick={() => addBet(CasinoBetType.RED, 'RED', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold text-white bg-red-600 border border-white/10 ${hasBet(CasinoBetType.RED, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>RED</button>
-                                <button onClick={() => addBet(CasinoBetType.BLACK, 'BLACK', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold text-white bg-gray-900 border border-white/10 ${hasBet(CasinoBetType.BLACK, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>BLACK</button>
-                                <button onClick={() => addBet(CasinoBetType.ODD, 'ODD', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.ODD, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>ODD</button>
-                                <button onClick={() => addBet(CasinoBetType.HIGH, '19-36', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.HIGH, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>19-36</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.LOW, '1-18', [])} aria-label="Bet one to eighteen" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.LOW, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>1-18</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.EVEN, 'EVEN', [])} aria-label="Bet even numbers" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.EVEN, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>EVEN</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.RED, 'RED', [])} aria-label="Bet red numbers" className={`flex h-11 min-h-11 items-center justify-center rounded-sm border border-white/10 bg-red-600 px-1 text-xs font-bold text-white ${hasBet(CasinoBetType.RED, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>RED</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.BLACK, 'BLACK', [])} aria-label="Bet black numbers" className={`flex h-11 min-h-11 items-center justify-center rounded-sm border border-white/10 bg-gray-900 px-1 text-xs font-bold text-white ${hasBet(CasinoBetType.BLACK, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>BLACK</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.ODD, 'ODD', [])} aria-label="Bet odd numbers" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.ODD, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>ODD</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.HIGH, '19-36', [])} aria-label="Bet nineteen to thirty-six" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.HIGH, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>19-36</button>
                                 <div />
                             </div>
                         </div>
                     </div>
 
                     {/* Bet Legend */}
-                    <div className="flex flex-wrap gap-2 text-[9px] text-white/80 justify-center font-medium bg-black/20 p-1 rounded-full">
+                    <div className="flex flex-wrap justify-center gap-2 rounded-[var(--radius-control)] bg-black/20 p-2 text-xs font-medium text-white/80">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" />Street</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-400" />Trio</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/60" />Split</span>

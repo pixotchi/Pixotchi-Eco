@@ -2,7 +2,7 @@
 
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import { Button } from "@/components/ui/button";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ERC20_APPROVE_ABI,getLeafAllowanceForLand,getLeafBalance,getReadClient,getSeedAllowanceForLand,getTokenBalance,LAND_CONTRACT_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
@@ -332,28 +332,33 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(96vw,64rem)] max-w-5xl">
+      <DialogContent surface="soft" className="w-[min(96vw,64rem)] max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Marketplace (Experimental)</DialogTitle>
+          <DialogDescription>
+            Review live SEED and LEAF orders, select a price level, and create a marketplace order.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto pr-1">
           <div className="space-y-4 pb-4">
             {/* Top bar with mid price and quick actions */}
-            <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-4 shadow-[var(--shadow-hairline)] sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-xs text-muted-foreground">Mid (LEAF / SEED)</div>
-                <div className="text-xl sm:text-2xl font-semibold">{mid ? fmt(mid, 6) : '—'}</div>
+                <div className="max-w-full truncate text-xl font-semibold tabular-nums sm:text-2xl" title={mid ? fmt(mid, 6) : undefined}>
+                  {mid ? formatCompact(mid) : '—'}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <Button variant="outline" className="h-9 px-4" onClick={useBestBid}>Use Best Bid</Button>
-                <Button variant="outline" className="h-9 px-4" onClick={useBestAsk}>Use Best Ask</Button>
+                <Button variant="outline" size="compact" onClick={useBestBid}>Use Best Bid</Button>
+                <Button variant="outline" size="compact" onClick={useBestAsk}>Use Best Ask</Button>
               </div>
             </div>
 
             {/* Mobile: keep orders (asks+bids) together, then trade panel */}
             <div className="md:hidden space-y-4">
-              <div className="rounded-lg border border-border bg-card overflow-hidden">
+              <div className="overflow-hidden rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)]">
                 {/* Asks header and list */}
                 <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-destructive/10 text-destructive">
                   <span>Asks (Sell LEAF)</span>
@@ -368,12 +373,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`m-ask-${idx}`}
-                          className={`relative w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/30 ${isSelected ? 'bg-muted/40' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
                           <div className="absolute inset-0 bg-destructive/10" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-destructive font-semibold">{formatCompact(row.price)}</span>
+                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-destructive'}`}>{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} LEAF</span>
                         </button>
                       );
@@ -394,12 +399,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`m-bid-${idx}`}
-                          className={`relative w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/30 ${isSelected ? 'bg-muted/40' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
                           <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-[hsl(var(--success-strong))] font-semibold">{formatCompact(row.price)}</span>
+                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-[hsl(var(--success-strong))]'}`}>{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} SEED</span>
                         </button>
                       );
@@ -409,10 +414,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel (mobile below orders) */}
-              <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+              <div className="space-y-4 rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-4 shadow-[var(--shadow-hairline)]">
                 <div className="flex items-center gap-2 text-sm">
-                  <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} className="h-9 px-4" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
-                  <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} className="h-9 px-4" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
+                  <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
+                  <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -446,7 +451,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Tip: Tap an order to pre-fill the price.</span>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" className="h-8 px-2 text-xs" onClick={() => setAmount('')}>Clear</Button>
+                    <Button variant="ghost" size="compact" onClick={() => setAmount('')}>Clear</Button>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -454,7 +459,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     <SponsoredTransaction
                       calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve SEED"
-                      buttonClassName="h-9 px-4"
+                      buttonClassName="h-10 min-h-10 px-4"
                       hideStatus
                       onSuccess={() => {
                         toast.success('SEED approved');
@@ -472,7 +477,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     <SponsoredTransaction
                       calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve LEAF"
-                      buttonClassName="h-9 px-4"
+                      buttonClassName="h-10 min-h-10 px-4"
                       hideStatus
                       onSuccess={() => {
                         toast.success('LEAF approved');
@@ -490,7 +495,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 <SponsoredTransaction
                   calls={buildCreateOrderCall() ? [buildCreateOrderCall() as UntypedValue] : []}
                   buttonText={`Create Order`}
-                  buttonClassName="w-full h-10"
+                  buttonClassName="mx-auto h-10 min-h-10 w-auto px-5 py-0 text-sm"
                   disabled={!isMarketplaceActive || !buildCreateOrderCall() || (sellSide === 'SEED' ? seedBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) : leafBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)))}
                   hideStatus
                   onSuccess={(tx) => { toast.success('Order created'); setAmount(''); setPrice(''); refresh(); onOrderSuccess(tx); }}
@@ -501,7 +506,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             {/* Desktop/tablet: three-column layout */}
             <div className="hidden md:grid md:grid-cols-3 items-start gap-4">
               {/* Asks */}
-                <div className={`rounded-lg border border-border bg-card overflow-hidden ${focusedSide === 'asks' ? 'ring-1 ring-destructive/50' : ''}`}>
+                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)] ${focusedSide === 'asks' ? 'ring-1 ring-destructive/50' : ''}`}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-destructive/10 text-destructive">
                     <span>Asks (Sell LEAF)</span>
@@ -515,12 +520,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`ask-${idx}`}
-                          className={`relative w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/30 ${isSelected ? 'bg-muted/40' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
                           <div className="absolute inset-0 bg-destructive/10" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-destructive font-semibold">{formatCompact(row.price)}</span>
+                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-destructive'}`}>{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} LEAF</span>
                         </button>
                       );
@@ -530,10 +535,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel */}
-              <div className="rounded-lg border border-border bg-card p-4 space-y-4 min-h-[18rem] md:max-h-[22rem] md:overflow-y-auto">
+              <div className="min-h-[18rem] space-y-4 rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-4 shadow-[var(--shadow-hairline)] md:max-h-[22rem] md:overflow-y-auto">
                 <div className="flex items-center gap-2 text-sm">
-                  <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} className="h-9 px-4" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
-                  <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} className="h-9 px-4" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
+                  <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
+                  <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -567,7 +572,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Tip: Click an order row to pre-fill the price.</span>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" className="h-8 px-2 text-xs" onClick={() => setAmount('')}>Clear</Button>
+                    <Button variant="ghost" size="compact" onClick={() => setAmount('')}>Clear</Button>
                   </div>
                 </div>
                 {/* Allowance helpers */}
@@ -576,7 +581,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     <SponsoredTransaction
                       calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve SEED"
-                      buttonClassName="h-9 px-4"
+                      buttonClassName="h-10 min-h-10 px-4"
                       hideStatus
                       onSuccess={() => {
                         toast.success('SEED approved');
@@ -594,7 +599,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     <SponsoredTransaction
                       calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
                       buttonText="Approve LEAF"
-                      buttonClassName="h-9 px-4"
+                      buttonClassName="h-10 min-h-10 px-4"
                       hideStatus
                       onSuccess={() => {
                         toast.success('LEAF approved');
@@ -612,7 +617,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 <SponsoredTransaction
                   calls={buildCreateOrderCall() ? [buildCreateOrderCall() as UntypedValue] : []}
                   buttonText={`Create Order`}
-                  buttonClassName="w-full h-10"
+                  buttonClassName="mx-auto h-10 min-h-10 w-auto px-5 py-0 text-sm"
                   disabled={!isMarketplaceActive || !buildCreateOrderCall() || (sellSide === 'SEED' ? seedBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) : leafBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)))}
                   hideStatus
                   onSuccess={(tx) => { toast.success('Order created'); setAmount(''); setPrice(''); refresh(); onOrderSuccess(tx); }}
@@ -620,7 +625,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Bids */}
-                <div className={`rounded-lg border border-border bg-card overflow-hidden ${focusedSide === 'bids' ? 'ring-1 ring-[hsl(var(--success)/0.5)]' : ''}`}>
+                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)] ${focusedSide === 'bids' ? 'ring-1 ring-[hsl(var(--success)/0.5)]' : ''}`}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]">
                     <span>Bids (Sell SEED)</span>
@@ -634,12 +639,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`bid-${idx}`}
-                          className={`relative w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/30 ${isSelected ? 'bg-muted/40' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
                           <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: `${row.depth}%` }} />
-                          <span className="relative text-[hsl(var(--success-strong))] font-semibold">{formatCompact(row.price)}</span>
+                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-[hsl(var(--success-strong))]'}`}>{formatCompact(row.price)}</span>
                           <span className="relative">{formatCompact(row.size)} SEED</span>
                         </button>
                       );
@@ -651,12 +656,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
             {/* Price level details (individual orders with Take buttons) */}
             {selectedLevel !== null && selectedSide && (
-              <div className="rounded-lg border border-border bg-card">
+              <div className="rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)]">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-border">
                   <div className="text-sm font-medium">
                     Orders @ {fmt(selectedLevel, 6)} LEAF/SEED • {selectedSide === 'asks' ? 'Sell LEAF' : 'Sell SEED'}
                   </div>
-                  <button className="text-xs text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-sm px-1" onClick={() => { setSelectedLevel(null); setSelectedSide(null); }}>Clear</button>
+                  <Button variant="ghost" size="compact" className="text-muted-foreground" onClick={() => { setSelectedLevel(null); setSelectedSide(null); }}>Clear</Button>
                 </div>
                 <div className="max-h-56 overflow-y-auto">
                   {(() => {
@@ -693,7 +698,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                     args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')]
                                   }]}
                                   buttonText={`Approve ${payTokenIsLeaf ? 'LEAF' : 'SEED'}`}
-                                  buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
+                                  buttonClassName="h-9 min-h-9 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
                                   hideStatus
                                   onSuccess={() => {
                                     toast.success(`${payTokenIsLeaf ? 'LEAF' : 'SEED'} approved`);
@@ -706,7 +711,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <SponsoredTransaction
                                   calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                                   buttonText="Take"
-                                  buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
+                                  buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
                                   disabled={loadingBalances || !hasSufficientForOrder(o) || !!isMyOrder || !transactionLandId}
                                   hideStatus
                                   onSuccess={() => { toast.success('Order filled'); refresh(); }}
@@ -739,12 +744,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     </label>
                   )}
                   <div className="flex items-center gap-1 text-xs">
-                    <Button variant={showUserOrders ? 'default' : 'outline'} className="h-8 px-3" onClick={() => setShowUserOrders(true)}>Mine</Button>
-                    <Button variant={!showUserOrders ? 'default' : 'outline'} className="h-8 px-3" onClick={() => setShowUserOrders(false)}>All</Button>
+                    <Button variant={showUserOrders ? 'default' : 'outline'} size="compact" onClick={() => setShowUserOrders(true)}>Mine</Button>
+                    <Button variant={!showUserOrders ? 'default' : 'outline'} size="compact" onClick={() => setShowUserOrders(false)}>All</Button>
                   </div>
                 </div>
               </div>
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-card">
+              <div className="max-h-56 overflow-y-auto rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)]">
                 {(() => {
                   const ordersToShow = showUserOrders
                     ? (showHistory ? userOrders : userOrders.filter(o => o.isActive))
@@ -784,7 +789,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                             <SponsoredTransaction
                               calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                               buttonText="Cancel"
-                              buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
+                              buttonClassName="h-9 min-h-9 w-auto min-w-[64px] shrink-0 px-2.5 py-0 text-xs"
                               disabled={!isOrderActive(o.id)}
                               hideStatus
                               onSuccess={() => { toast.success('Order canceled'); fetchOrders(); refresh(); }}
@@ -802,7 +807,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                     args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')]
                                   }]}
                                   buttonText={`Approve ${payTokenIsLeaf ? 'LEAF' : 'SEED'}`}
-                                  buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
+                                  buttonClassName="h-9 min-h-9 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
                                   hideStatus
                                   onSuccess={() => {
                                     toast.success(`${payTokenIsLeaf ? 'LEAF' : 'SEED'} approved`);
@@ -816,7 +821,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <SponsoredTransaction
                                   calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [landId, o.id] as UntypedValue[] }]}
                                   buttonText="Take"
-                                  buttonClassName="h-8 px-3 text-xs min-w-[80px] shrink-0"
+                                  buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
                                   disabled={loadingBalances || !hasSufficientForOrder(o) || !isOrderActive(o.id)}
                                   hideStatus
                                   onSuccess={() => { toast.success('Order filled'); fetchOrders(); refresh(); }}

@@ -99,20 +99,20 @@ const QUOTE_MAX_RETRIES = 2;
 const QUOTE_IDLE_REFRESH_MS = 5_000;
 const OCK_COMPAT_FONT = 'ock-compat-font';
 const SWAP_CARD_CLASS =
-  'my-0.5 box-border flex h-[148px] w-full flex-col items-start rounded-lg bg-secondary p-4';
+  'my-0.5 box-border flex min-h-[158px] w-full flex-col items-start rounded-lg bg-secondary p-4';
 const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-between text-sm text-muted-foreground`;
 const SWAP_TOKEN_TRIGGER_CLASS =
-  'flex w-fit shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-background px-3 py-1 shadow-[0px_8px_12px_0px_rgba(91,97,110,0.12)] hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'flex min-h-11 w-fit shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-background px-3 py-2 shadow-[0px_8px_12px_0px_rgba(91,97,110,0.12)] hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_AMOUNT_INPUT_CLASS =
   `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground`;
 const SWAP_MAX_BUTTON_CLASS =
-  `${OCK_COMPAT_FONT} flex min-h-8 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-2 py-1 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
+  `${OCK_COMPAT_FONT} flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
-  'relative z-10 mx-auto -my-4 flex h-10 w-16 items-center justify-center rounded-[var(--radius-control)] border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'relative z-10 mx-auto -my-5 flex h-11 min-h-11 w-16 items-center justify-center rounded-[var(--radius-control)] border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_PRIMARY_ACTION_CLASS =
   `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
-const SWAP_BALANCE_ROW_CLASS = 'mt-4 flex h-7 w-full items-center justify-between';
+const SWAP_BALANCE_ROW_CLASS = 'mt-2 flex min-h-11 w-full items-center justify-between';
 
 function isTransientStatus(status: number | undefined): boolean {
   if (status === undefined) return true;
@@ -121,7 +121,7 @@ function isTransientStatus(status: number | undefined): boolean {
 
 // Turns wallet/viem errors into something a user can actually read.
 // Viem rejection errors include a pile of metadata (chain id, RPC url, version,
-// request args, contract selectors…) that we never want to toast verbatim.
+// request args, contract selectors...) that we never want to toast verbatim.
 function humanizeSwapError(error: UntypedValue): string {
   if (!(error instanceof Error)) return 'Swap failed.';
 
@@ -204,7 +204,7 @@ function TokenSelector({
           >
             {token.displaySymbol}
           </span>
-          {/* Single chevron-down SVG; rotate 180° when the menu is open so
+          {/* Single chevron-down SVG; rotate 180 degrees when the menu is open so
               the glyph transitions smoothly instead of swapping shapes. */}
           <svg
             role="img"

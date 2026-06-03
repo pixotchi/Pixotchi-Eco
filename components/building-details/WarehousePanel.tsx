@@ -157,15 +157,17 @@ export default function WarehousePanel({
             onChange={(e) => setApplyPts(e.target.value)}
             placeholder="Amount"
             inputMode="decimal"
-            className={`h-9 text-sm pr-16 border-border ${ptsTooHigh ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+            className={`h-11 text-sm pr-20 border-border ${ptsTooHigh ? 'border-destructive focus-visible:ring-destructive' : ''}`}
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="default"
             onClick={() => setApplyPts(availablePtsHuman)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none rounded-md bg-muted hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 btn-compact"
+            className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
           >
             Max
-          </button>
+          </Button>
         </div>
         {ptsTooHigh && (
           <div className="col-span-2 -mt-1 text-xs text-destructive">Amount exceeds available PTS.</div>
@@ -176,7 +178,7 @@ export default function WarehousePanel({
           amount={applyPts}
           mode="points"
           buttonText="Apply"
-          buttonClassName="h-9 px-3 text-sm"
+          buttonClassName="h-11 min-h-11 px-4 text-sm"
           disabled={!selectedPlantId || !applyPts || ptsTooHigh || ptsParsedScaled === null || ptsParsedScaled <= BigInt(0)}
           onSuccess={(tx: UntypedValue) => {
             toast.success('PTS applied');
@@ -204,15 +206,17 @@ export default function WarehousePanel({
             onChange={(e) => setApplyTodMinutes(e.target.value)}
             placeholder="Minutes"
             inputMode="numeric"
-            className={`h-9 text-sm pr-16 border-border ${minutesTooHigh ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+            className={`h-11 text-sm pr-20 border-border ${minutesTooHigh ? 'border-destructive focus-visible:ring-destructive' : ''}`}
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="default"
             onClick={() => setApplyTodMinutes(availableMinutes)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none rounded-md bg-muted hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 btn-compact"
+            className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
           >
             Max
-          </button>
+          </Button>
         </div>
         {minutesTooHigh && (
           <div className="col-span-2 -mt-1 text-xs text-destructive">Minutes exceed available TOD.</div>
@@ -223,7 +227,7 @@ export default function WarehousePanel({
           amount={applyTodMinutes}
           mode="lifetime"
           buttonText="Apply"
-          buttonClassName="h-9 px-3 text-sm"
+          buttonClassName="h-11 min-h-11 px-4 text-sm"
           disabled={!selectedPlantId || !applyTodMinutes || minutesTooHigh || !Number.isFinite(minutesParsed) || minutesParsed <= 0}
           onSuccess={(tx: UntypedValue) => {
             toast.success('TOD applied');

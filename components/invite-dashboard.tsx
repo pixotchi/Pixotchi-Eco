@@ -253,21 +253,21 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
                           variant="ghost"
                           size="sm"
                           onClick={() => copyToClipboard(code)}
-                          className="h-8 w-8 p-0"
+                          className="h-11 w-11 p-0"
                         >
                           {copiedCode === code ? (
-                            <Check className="w-3 h-3 text-[hsl(var(--success-strong))]" />
+                            <Check className="h-4 w-4 text-[hsl(var(--success-strong))]" />
                           ) : (
-                            <Copy className="w-3 h-3" />
+                            <Copy className="h-4 w-4" />
                           )}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => shareInviteCode(code)}
-                          className="h-8 w-8 p-0"
+                          className="h-11 w-11 p-0"
                         >
-                          <Share2 className="w-3 h-3" />
+                          <Share2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>

@@ -614,8 +614,8 @@ function LandsViewContent() {
                   <Button
                     onClick={() => setIsMapOpen(true)}
                     variant="primary"
-                    size="xs"
-                    className="btn-compact"
+                    size="default"
+                    className="h-11 min-h-11 px-3 text-xs"
                     aria-label="Open map"
                   >
                     MAP
@@ -637,7 +637,7 @@ function LandsViewContent() {
                 {/* Next/Previous controls for multiple lands */}
                 {lands.length > 1 && (
                   <>
-                    <button
+                    <Button
                       type="button"
                       onClick={() => {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
@@ -646,13 +646,15 @@ function LandsViewContent() {
                           setSelectedLand(lands[prevIndex]);
                         }
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      variant="outline"
+                      size="icon"
+                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
                       aria-label="Previous land"
                       title="Previous"
                     >
                       <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       onClick={() => {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
@@ -661,12 +663,14 @@ function LandsViewContent() {
                           setSelectedLand(lands[nextIndex]);
                         }
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      variant="outline"
+                      size="icon"
+                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
                       aria-label="Next land"
                       title="Next"
                     >
                       <ChevronRight className="w-5 h-5" />
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
@@ -674,15 +678,15 @@ function LandsViewContent() {
               <div className="text-center">
                 <div className="inline-flex max-w-full items-center justify-center gap-1">
                   <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 truncate text-lg font-bold font-pixel">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
+                  <h3 className="min-w-0 truncate text-lg font-semibold">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
                   <EditLandName
                     land={selectedLand}
                     onNameChanged={(landId, newName) => {
                       setSelectedLand(prev => prev ? { ...prev, name: newName } : null);
                       // update any cached arrays if present
                     }}
-                    iconSize={16}
-                    className="h-7 min-h-7 w-7 min-w-7 shrink-0"
+                    iconSize={18}
+                    className="h-11 min-h-11 w-11 min-w-11 shrink-0"
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">Token ID: {selectedLand.tokenId.toString()}</p>
@@ -697,7 +701,7 @@ function LandsViewContent() {
           <Card className="lg:h-fit lg:w-full">
             <CardHeader>
               <div className="flex justify-between items-center">
-                <CardTitle className="font-pixel">Buildings</CardTitle>
+                <CardTitle>Buildings</CardTitle>
                 <div className="lg:hidden">
                   <ToggleGroup
                     value={buildingType}

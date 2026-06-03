@@ -978,7 +978,7 @@ export default function BarracksPanelV2({
           { value: "history", label: "History" },
         ]}
         className="w-full justify-between"
-        getButtonClassName={() => "flex-1 justify-center h-8"}
+        getButtonClassName={() => "flex-1 justify-center"}
       />
 
       {activeTab === "train" && (
@@ -1022,7 +1022,7 @@ export default function BarracksPanelV2({
               label: troop.name,
             }))}
             className="w-full justify-between"
-            getButtonClassName={() => "flex-1 justify-center h-8"}
+            getButtonClassName={() => "flex-1 justify-center"}
           />
 
           <div className="relative">
@@ -1183,15 +1183,17 @@ export default function BarracksPanelV2({
                   onChange={(event) => setAttackSwordsmen(event.target.value)}
                   placeholder="Swordsmen"
                   inputMode="numeric"
-                  className="h-10 pr-16"
+                  className="h-11 pr-20"
                 />
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="default"
                   onClick={() => setAttackSwordsmen(availableSwordsmenToSend.toString())}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-muted px-2 py-0.5 text-xs hover:bg-accent"
+                  className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
                 >
                   Max
-                </button>
+                </Button>
               </div>
               <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
@@ -1207,15 +1209,17 @@ export default function BarracksPanelV2({
                   onChange={(event) => setAttackPhalanx(event.target.value)}
                   placeholder="Phalanx"
                   inputMode="numeric"
-                  className="h-10 pr-16"
+                  className="h-11 pr-20"
                 />
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="default"
                   onClick={() => setAttackPhalanx(availablePhalanxToSend.toString())}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-muted px-2 py-0.5 text-xs hover:bg-accent"
+                  className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
                 >
                   Max
-                </button>
+                </Button>
               </div>
               <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
@@ -1330,7 +1334,7 @@ export default function BarracksPanelV2({
               { value: "incoming", label: "Last Defense" },
             ]}
             className="w-full justify-between"
-            getButtonClassName={() => "flex-1 justify-center h-8"}
+            getButtonClassName={() => "flex-1 justify-center"}
           />
 
           <ReportCard

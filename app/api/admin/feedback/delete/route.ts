@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (deleteAll) {
       // Delete all feedback
       const feedbackIds = (await redis.zrange('pixotchi:feedback:list', 0, -1)) as string[];
-      
+
       if (feedbackIds && feedbackIds.length > 0) {
         const keysToDelete = feedbackIds.map(id => `pixotchi:feedback:${id}`);
         await redis.del(...keysToDelete);

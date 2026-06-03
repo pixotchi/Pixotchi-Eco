@@ -36,6 +36,7 @@ import { CLIENT_ENV } from "@/lib/env-config";
 import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
 import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
 import { isSolanaAuthAvailable } from "@/lib/solana-auth-availability";
+import { cn } from "@/lib/utils";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -611,8 +612,16 @@ export default function App() {
         className="app-shell-inner w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="bg-card/90 supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 overscroll-none">
-          <header data-viewport-shell="header" className="bg-card/90 supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 border-b border-border/60 px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
+        <div className="relative z-[var(--z-sticky)] bg-card/90 bg-[image:var(--gradient-app-chrome)] supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 overscroll-none">
+          <header
+            data-viewport-shell="header"
+            className={cn(
+              "bg-transparent px-4 py-2 overscroll-none safe-area-top",
+              !(isConnected && !isHeaderStatusPlacement) && "surface-header-divider"
+            )}
+            role="banner"
+            aria-label="Application header"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
                 <Image
@@ -691,7 +700,7 @@ export default function App() {
         </div>
 
         {/* Main Content */}
-        <main data-viewport-shell="main" className="flex-1 bg-muted/40 flex flex-col xl:flex-row overflow-hidden" role="main" aria-label="Main content area">
+        <main data-viewport-shell="main" className="flex-1 bg-muted/40 bg-[image:var(--gradient-content-well)] flex flex-col xl:flex-row overflow-hidden" role="main" aria-label="Main content area">
           {(!isConnected) ? (
             <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
               <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-lg md:border md:border-b-0 md:border-border md:bg-card/80 md:px-5 md:pt-5">
@@ -730,7 +739,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-card/80 p-3" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-card/80 bg-[image:var(--gradient-app-chrome)] p-3" role="navigation" aria-label="Main navigation">
                 <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
@@ -808,7 +817,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="bg-card/90 supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 border-t border-border/60 px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="surface-footer-divider bg-card/90 bg-[image:var(--gradient-app-chrome)] supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button

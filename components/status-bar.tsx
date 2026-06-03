@@ -63,9 +63,9 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
   const leafAriaLabel = loading ? "Leaf balance loading" : `Leaf balance: ${leafValue} LEAF`;
   const pixotchiAriaLabel = loading ? "PIXOTCHI balance loading" : `PIXOTCHI balance: ${pixotchiValue}`;
   const ethAriaLabel = ethLoading ? "ETH balance loading" : `ETH balance: ${ethValue} ETH`;
-  const balanceItemClassName = "flex items-center gap-1.5 min-w-0";
-  const balanceTextClassName = "text-[15px] font-bold leading-none tabular-nums truncate";
-  const balanceIconClassName = "h-[18px] w-[18px] shrink-0";
+  const balanceItemClassName = "flex shrink-0 items-center gap-1.5";
+  const balanceTextClassName = "whitespace-nowrap text-[14px] font-bold leading-none tabular-nums max-[360px]:text-[12px]";
+  const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[360px]:h-4 max-[360px]:w-4";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
@@ -76,7 +76,7 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
   return (
     <div
       data-viewport-shell={!isHeaderPlacement ? "status" : undefined}
-      className={isHeaderPlacement ? "shrink-0" : "w-full bg-background xl:flex xl:justify-end xl:bg-transparent"}
+      className={isHeaderPlacement ? "shrink-0" : "w-full bg-transparent xl:flex xl:justify-end"}
       role="region"
       aria-label="Account balance and staking"
     >
@@ -84,11 +84,11 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
         className={
           isHeaderPlacement
             ? "w-fit max-w-full rounded-lg border border-border/60 bg-background/55 px-3 py-1 shadow-none backdrop-blur-xl backdrop-saturate-150"
-            : "app-status-scroll rounded-b-2xl border border-border/60 bg-card/90 px-4 py-1.5 shadow-[var(--shadow-hairline)] backdrop-blur-xl backdrop-saturate-150 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:bg-background/55 xl:shadow-none"
+            : "surface-header-divider app-status-scroll rounded-b-2xl border-x border-b border-border/60 bg-transparent px-4 py-1.5 backdrop-blur-xl backdrop-saturate-150 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg"
         }
       >
-        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex items-center justify-between gap-3 xl:justify-start"}>
-          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex items-center gap-2 min-w-0 xl:gap-3"} role="group" aria-label="Token balances">
+        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex min-w-max items-center justify-between gap-3 xl:justify-start"}>
+          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex shrink-0 items-center gap-2 xl:gap-3"} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className={balanceItemClassName} aria-label={`SOL balance: ${solText} SOL`}>
@@ -127,8 +127,8 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
                 type="button"
                 onClick={handleTasksClick}
                 variant="warning"
-                size="touchCompact"
-                className="btn-touch-compact px-2"
+                size="compact"
+                className="px-3 text-xs"
                 aria-label="Open tasks"
                 aria-haspopup="dialog"
               >
@@ -141,8 +141,8 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
                 type="button"
                 onClick={() => setStakingOpen(true)}
                 variant="primary"
-                size="touchCompact"
-                className="btn-touch-compact px-2"
+                size="compact"
+                className="px-3 text-xs"
                 aria-label="Open staking dialog"
                 aria-expanded={stakingOpen}
                 aria-haspopup="dialog"

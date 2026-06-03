@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, ChevronDown } from "lucide-react";
+import { ChevronDown, CircleDot, Diamond, Loader2 } from "lucide-react";
 import {
   blackjackGetGameSnapshot,
   blackjackGetGameToken,
@@ -75,7 +75,7 @@ function CasinoTokenLabel({
         className="h-5 w-5 rounded-full"
       />
       <span className="truncate text-sm font-medium">{label}</span>
-      {selected && <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Selected</span>}
+      {selected && <span className="text-xs uppercase text-muted-foreground">Selected</span>}
     </div>
   );
 }
@@ -423,14 +423,15 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
       {supportedTokens.length > 0 ? (
         <div className="space-y-2 pt-1">
-          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Betting Token</div>
+          <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Betting Token</div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
-                className="mx-auto flex h-10 min-w-[220px] justify-between gap-3"
+                className="mx-auto flex h-11 min-h-11 min-w-[220px] justify-between gap-3"
                 disabled={supportedTokens.length === 0}
+                aria-label="Select casino betting token"
               >
                 {selectedToken ? (
                   <CasinoTokenLabel tokenAddress={selectedToken} />
@@ -484,20 +485,24 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
       <div className="pt-2 flex justify-center gap-2">
         <Button
-          className="h-9 px-3 text-sm"
+          className="px-3 text-sm"
           onClick={() => handleOpenCasinoGame("roulette")}
           disabled={rouletteButtonDisabled}
+          aria-label={hasActiveRouletteGame ? "Resume Roulette game" : "Play Roulette"}
+          leadingIcon={<CircleDot className="h-4 w-4" aria-hidden="true" />}
         >
-          {hasActiveRouletteGame ? "🎰 Resume Roulette" : "🎰 Play Roulette"}
+          {hasActiveRouletteGame ? "Resume Roulette" : "Play Roulette"}
         </Button>
         {casinoPolicy.blackjackEnabled && (
           <Button
             variant="success"
-            className="h-9 px-3 text-sm"
+            className="px-3 text-sm"
             onClick={() => handleOpenCasinoGame("blackjack")}
             disabled={blackjackButtonDisabled}
+            aria-label={hasActiveBlackjackGame ? "Resume Blackjack game" : "Play Blackjack"}
+            leadingIcon={<Diamond className="h-4 w-4" aria-hidden="true" />}
           >
-            {hasActiveBlackjackGame ? "♦️ Resume Blackjack" : "♦️ Play Blackjack"}
+            {hasActiveBlackjackGame ? "Resume Blackjack" : "Play Blackjack"}
           </Button>
         )}
       </div>

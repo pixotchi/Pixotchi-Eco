@@ -21,7 +21,7 @@ export default function BuildingClaimTransaction({
   onSuccess,
   onError,
   buttonText = "Collect",
-  buttonClassName = "h-9 px-3 text-sm",
+  buttonClassName = "h-11 min-h-11 px-3 text-sm",
   disabled = false,
 }: BuildingClaimTransactionProps) {
   const calls = [
@@ -45,5 +45,4 @@ export default function BuildingClaimTransaction({
     />
   );
 }
-
 

@@ -10,7 +10,7 @@ import ReviveTransaction from "@/components/transactions/revive-transaction";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import {
 DropdownMenu,
 DropdownMenuContent,
@@ -41,7 +41,7 @@ Flower,
 Info
 } from "lucide-react";
 import Image from "next/image";
-import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
 import PlantImage from "../PlantImage";
@@ -51,6 +51,59 @@ import ItemDetailsPanel from "../item-details-panel";
 
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 // Removed BalanceCard from tabs; status bar now shows balances globally
+
+const REWARD_VALUE_MAX_FONT_SIZE = 13;
+const REWARD_VALUE_MIN_FONT_SIZE = 8;
+
+function FittedEthRewardValue({ amount }: { amount: string }) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const valueRef = useRef<HTMLSpanElement | null>(null);
+  const [fontSize, setFontSize] = useState(REWARD_VALUE_MAX_FONT_SIZE);
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    const value = valueRef.current;
+    if (!frame || !value) return;
+
+    let frameId = 0;
+    const measure = () => {
+      const currentFontSize = Number.parseFloat(window.getComputedStyle(value).fontSize) || REWARD_VALUE_MAX_FONT_SIZE;
+      const naturalWidth = value.scrollWidth * (REWARD_VALUE_MAX_FONT_SIZE / currentFontSize);
+      const availableWidth = Math.max(0, frame.clientWidth - 8);
+      const nextFontSize = Math.max(
+        REWARD_VALUE_MIN_FONT_SIZE,
+        Math.min(REWARD_VALUE_MAX_FONT_SIZE, (availableWidth / Math.max(naturalWidth, 1)) * REWARD_VALUE_MAX_FONT_SIZE)
+      );
+      setFontSize(Math.floor(nextFontSize * 10) / 10);
+    };
+    const scheduleMeasure = () => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    const observer = new ResizeObserver(scheduleMeasure);
+    observer.observe(frame);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
+  }, [amount]);
+
+  return (
+    <div ref={frameRef} className="w-full min-w-0 overflow-hidden text-center" title={`${amount} ETH`}>
+      <span
+        ref={valueRef}
+        style={{ fontSize }}
+        className="inline-flex max-w-full items-center justify-center gap-0.5 whitespace-nowrap font-bold leading-none tabular-nums"
+      >
+        <Image src="/icons/ethlogo.svg" alt="" aria-hidden="true" width={14} height={14} className="h-[1em] w-[1em] shrink-0" />
+        <span>{amount} ETH</span>
+      </span>
+    </div>
+  );
+}
 
 export default function PlantsView() {
   const { address: evmAddress } = useAccount();
@@ -334,26 +387,26 @@ export default function PlantsView() {
               <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] bg-muted/50">
 
                 {/* Top Stats Bar - LVL, PTS, STARS */}
-                <div className="absolute top-3 left-3 right-3 grid grid-cols-3 gap-2 text-sm font-bold text-foreground/80 z-20">
+                <div className="absolute top-2 left-2 right-2 z-20 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 text-[11px] font-bold text-foreground/80 sm:top-3 sm:left-3 sm:right-3 sm:gap-2 sm:text-sm">
                   {/* Left: Level */}
                   <div className="flex justify-start">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                      <Image src="/icons/level.svg" alt="Level" width={16} height={16} className="w-4 h-4" />
-                      <span>LVL {selectedPlant.level}</span>
+                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] bg-background/65 px-1.5 py-1 backdrop-blur-sm sm:px-2">
+                      <Image src="/icons/level.svg" alt="Level" width={16} height={16} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="truncate">LVL {selectedPlant.level}</span>
                     </div>
                   </div>
                   {/* Center: Points */}
                   <div className="flex justify-center">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                      <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4 text-yellow-500" />
-                      <span>{formatScore(selectedPlant.score)} PTS</span>
+                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] bg-background/65 px-1.5 py-1 backdrop-blur-sm sm:px-2">
+                      <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="h-3.5 w-3.5 text-yellow-500 sm:h-4 sm:w-4" />
+                      <span className="truncate">{formatScore(selectedPlant.score)} PTS</span>
                     </div>
                   </div>
                   {/* Right: Stars */}
                   <div className="flex justify-end">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                      <Image src="/icons/Star.svg" alt="Star" width={16} height={16} className="w-4 h-4 text-amber-400" />
-                      <span>{selectedPlant.stars}</span>
+                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] bg-background/65 px-1.5 py-1 backdrop-blur-sm sm:px-2">
+                      <Image src="/icons/Star.svg" alt="Star" width={16} height={16} className="h-3.5 w-3.5 text-amber-400 sm:h-4 sm:w-4" />
+                      <span className="truncate">{selectedPlant.stars}</span>
                     </div>
                   </div>
                 </div>
@@ -364,7 +417,7 @@ export default function PlantsView() {
                     <PlantImage selectedPlant={selectedPlant} width={180} height={180} priority={true} />
                     {hasActiveFence && (
                       <div className="absolute top-0 right-0 z-10">
-                        <Image src="/icons/Shield.svg" alt="Shield" width={28} height={28} title="Fence protection active" />
+                        <Image src="/icons/Shield.svg" alt="Shield" width={28} height={28} className="h-7 w-7" title="Fence protection active" />
                       </div>
                     )}
                   </div>
@@ -373,7 +426,7 @@ export default function PlantsView() {
                 {/* Next/Previous controls for multiple plants */}
                 {plants.length > 1 && (
                   <>
-                    <button
+                    <Button
                       type="button"
                       onClick={() => {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
@@ -382,13 +435,15 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      variant="outline"
+                      size="icon"
+                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
                       aria-label="Previous plant"
                       title="Previous"
                     >
                       <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       onClick={() => {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
@@ -397,12 +452,14 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      variant="outline"
+                      size="icon"
+                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
                       aria-label="Next plant"
                       title="Next"
                     >
                       <ChevronRight className="w-5 h-5" />
-                    </button>
+                    </Button>
                   </>
                 )}
 
@@ -447,7 +504,7 @@ export default function PlantsView() {
               <div className="text-center">
                 <div className="inline-flex max-w-full items-center justify-center gap-1">
                   <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 truncate text-lg font-bold font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
+                  <h3 className="min-w-0 truncate text-lg font-semibold">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
                   <EditPlantName
                     plant={selectedPlant}
                     onNameChanged={(plantId, newName) => {
@@ -458,8 +515,8 @@ export default function PlantsView() {
                         p.id === plantId ? { ...p, name: newName } : p
                       ));
                     }}
-                    iconSize={16}
-                    className="h-7 min-h-7 w-7 min-w-7 shrink-0"
+                    iconSize={18}
+                    className="h-11 min-h-11 w-11 min-w-11 shrink-0"
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">{getStrainName(selectedPlant.strain)}</p>
@@ -474,8 +531,10 @@ export default function PlantsView() {
               <div className="pt-3 border-t border-border">
                 <div className="grid grid-cols-2 gap-2">
                   {/* Claim Rewards (half width) */}
-                  <button
-                    className="w-full"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="group h-auto min-h-0 w-full justify-stretch rounded-[var(--radius-panel)] bg-transparent p-0 text-left hover:bg-transparent"
                     onClick={() => {
                       if (!selectedPlant || Number(selectedPlant.rewards) <= 0) {
                         toast.error('No rewards to claim');
@@ -483,31 +542,32 @@ export default function PlantsView() {
                       }
                       setClaimOpen(true);
                     }}
-                    title="Claim ETH rewards"
+                    title={`${formatEth(selectedPlant.rewards)} ETH rewards`}
+                    aria-label={`Claim ${formatEth(selectedPlant.rewards)} ETH rewards`}
                   >
-                    <StandardContainer className="flex items-center justify-center space-x-2 bg-primary/10 text-foreground p-2 hover:bg-primary/15 transition-colors">
-                      <Image src="/icons/ethlogo.svg" alt="ETH" width={18} height={18} />
-                      <div>
-                        <p className="text-xs font-semibold leading-tight">Rewards</p>
-                        <p className="text-sm font-bold">{formatEth(selectedPlant.rewards)} ETH</p>
-                      </div>
+                    <StandardContainer className="flex min-h-[4rem] w-full min-w-0 flex-col items-center justify-center gap-1.5 overflow-hidden border-[hsl(var(--warning)/0.45)] bg-[hsl(var(--warning)/0.12)] px-2 py-2 text-center text-foreground transition-[filter] group-hover:brightness-105">
+                      <p className="text-xs font-semibold leading-tight">Rewards</p>
+                      <FittedEthRewardValue amount={formatEth(selectedPlant.rewards)} />
                     </StandardContainer>
-                  </button>
+                  </Button>
 
                   {/* Arcade Games (half width) */}
-                  <button
-                    className="w-full"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="group h-auto min-h-0 w-full justify-stretch rounded-[var(--radius-panel)] bg-transparent p-0 text-left hover:bg-transparent"
                     onClick={() => setArcadeOpen(true)}
                     title="Arcade games"
+                    aria-label="Open arcade games"
                   >
-                    <StandardContainer className="flex items-center justify-center space-x-2 bg-accent/15 text-foreground p-2 hover:bg-accent transition-colors">
-                      <Image src="/icons/GAME.png" alt="Arcade" width={18} height={18} />
-                      <div>
+                    <StandardContainer className="flex min-h-[4rem] w-full items-center justify-center gap-2 p-2 text-foreground transition-[filter] group-hover:brightness-105">
+                      <Image src="/icons/GAME.png" alt="Arcade" width={18} height={18} className="shrink-0" />
+                      <div className="min-w-0">
                         <p className="text-xs font-semibold leading-tight">Arcade</p>
                         <p className="text-sm font-bold">Play games</p>
                       </div>
                     </StandardContainer>
-                  </button>
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -523,6 +583,9 @@ export default function PlantsView() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Claim ETH Rewards?</DialogTitle>
+                <DialogDescription>
+                  Confirm this irreversible claim. Your current points will be burned and this plant will reset to level 0.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 text-sm text-muted-foreground">
                 <p>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
@@ -603,9 +666,9 @@ export default function PlantsView() {
           {selectedPlant.status === 4 ? (
             <Card className="lg:w-full">
               <CardHeader>
-                <CardTitle className="font-pixel">Revive Plant</CardTitle>
+                <CardTitle>Revive Plant</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-1">
                 <div className="grid grid-cols-1 gap-4">
                   <StandardContainer className="p-3 bg-destructive/10">
                     <div className="flex items-start space-x-2">
@@ -681,7 +744,7 @@ export default function PlantsView() {
             <Card className="lg:h-fit lg:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle className="font-pixel">Marketplace</CardTitle>
+                  <CardTitle>Marketplace</CardTitle>
                   <ToggleGroup
                     value={itemType}
                     onValueChange={(v) => handleItemTypeChange(v as 'garden' | 'shop')}
@@ -733,20 +796,25 @@ export default function PlantsView() {
                                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
                                 <div className="h-px flex-1 bg-border/50" />
                               </div>
-                              <div className="grid grid-cols-3 gap-2">
+                              <div className={items.length === 4 ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-2"}>
                                 {items.map((item: GardenItem) => {
                                   const quantity = getItemQuantity(item.id);
                                   return (
                                     <div key={item.id} className="space-y-1">
                                       <div className="flex justify-center">
-                                        <button
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
                                           onClick={() => setSelectedItem(item)}
-                                          className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                          className={`h-14 min-h-14 w-14 min-w-14 rounded-lg p-0.5 transition-all ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                          aria-label={`Select ${item.name}`}
+                                          aria-pressed={selectedItem?.id === item.id}
                                         >
                                           <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
                                             <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
                                           </div>
-                                        </button>
+                                        </Button>
                                       </div>
                                       {isSmartWallet && (
                                         <div className="flex justify-center">
@@ -758,7 +826,7 @@ export default function PlantsView() {
                                             }}
                                             max={80}
                                             min={0}
-                                            size="sm"
+                                            size={items.length === 4 ? "xs" : "sm"}
                                           />
                                         </div>
                                       )}
@@ -792,14 +860,19 @@ export default function PlantsView() {
                           return (
                             <div key={item.id} className="space-y-1">
                               <div className="flex justify-center">
-                                <button
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
                                   onClick={() => setSelectedItem(item)}
-                                  className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                  className={`h-14 min-h-14 w-14 min-w-14 rounded-lg p-0.5 transition-all ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                  aria-label={`Select ${item.name}`}
+                                  aria-pressed={selectedItem?.id === item.id}
                                 >
                                   <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
                                     <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
                                   </div>
-                                </button>
+                                </Button>
                               </div>
                             </div>
                           );

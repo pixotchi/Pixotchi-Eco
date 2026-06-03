@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info, AlertTriangle, CheckCircle, Megaphone, ExternalLink } from 'lucide-react';
@@ -97,6 +97,9 @@ export function BroadcastMessageModal({
                   {priorityLabel}
                 </span>
               )}
+              <DialogDescription className="sr-only">
+                Important Pixotchi message. Review the content and choose the available action.
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>

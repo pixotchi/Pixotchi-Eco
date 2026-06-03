@@ -1699,13 +1699,14 @@ export default function AdminInviteDashboard() {
                 value={adminKey}
                 onChange={(e) => setAdminKey(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && authenticate()}
-                className="pr-10"
+                className="pr-14"
               />
               <Button
                 variant="ghost"
                 size="sm"
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                className="absolute right-1 top-1/2 h-11 w-11 -translate-y-1/2 p-0"
                 onClick={() => setShowKey(!showKey)}
+                aria-label={showKey ? "Hide admin key" : "Show admin key"}
               >
                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </Button>
@@ -2110,7 +2111,7 @@ export default function AdminInviteDashboard() {
                           key={option.value}
                           type="button"
                           onClick={() => setBroadcastType(option.value as UntypedValue)}
-                          className={`p-3 rounded-lg border-2 transition-all ${broadcastType === option.value
+                          className={`min-h-11 rounded-[var(--radius-control)] border-2 p-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastType === option.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
                             }`}
@@ -2134,7 +2135,7 @@ export default function AdminInviteDashboard() {
                           key={option.value}
                           type="button"
                           onClick={() => setBroadcastPriority(option.value as UntypedValue)}
-                          className={`w-full p-3 rounded-lg border-2 transition-all text-left ${broadcastPriority === option.value
+                          className={`min-h-11 w-full rounded-[var(--radius-control)] border-2 p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastPriority === option.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
                             }`}
@@ -2166,7 +2167,7 @@ export default function AdminInviteDashboard() {
                           setBroadcastExpiresIn(option.value);
                           setCustomExpiry('');
                         }}
-                        className={`p-2 rounded-lg border transition-all text-sm ${!broadcastNeverExpires && broadcastExpiresIn === option.value
+                        className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === option.value
                           ? 'border-primary bg-primary/10 font-medium'
                           : 'border-border hover:border-primary/50'
                           }`}
@@ -2180,7 +2181,7 @@ export default function AdminInviteDashboard() {
                         setBroadcastNeverExpires(false);
                         setBroadcastExpiresIn('custom');
                       }}
-                      className={`p-2 rounded-lg border transition-all text-sm ${!broadcastNeverExpires && broadcastExpiresIn === 'custom'
+                      className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === 'custom'
                         ? 'border-primary bg-primary/10 font-medium'
                         : 'border-border hover:border-primary/50'
                         }`}
@@ -2190,7 +2191,7 @@ export default function AdminInviteDashboard() {
                     <button
                       type="button"
                       onClick={() => setBroadcastNeverExpires(true)}
-                      className={`p-2 rounded-lg border transition-all text-sm ${broadcastNeverExpires
+                      className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastNeverExpires
                         ? 'border-primary bg-primary/10 font-medium'
                         : 'border-border hover:border-primary/50'
                         }`}
@@ -2243,11 +2244,13 @@ export default function AdminInviteDashboard() {
                   <button
                     type="button"
                     onClick={() => setBroadcastDismissible(!broadcastDismissible)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${broadcastDismissible ? 'bg-primary' : 'bg-gray-300'
+                    aria-pressed={broadcastDismissible}
+                    aria-label="Toggle broadcast dismissal"
+                    className={`relative inline-flex h-11 w-16 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastDismissible ? 'bg-primary' : 'bg-gray-300'
                       }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${broadcastDismissible ? 'translate-x-6' : 'translate-x-1'
+                      className={`inline-block h-7 w-7 transform rounded-full bg-white shadow-sm transition-transform ${broadcastDismissible ? 'translate-x-8' : 'translate-x-1'
                         }`}
                     />
                   </button>
@@ -3483,7 +3486,7 @@ export default function AdminInviteDashboard() {
                     {Object.entries((notifKeys.grouped || {}) as Record<string, UntypedValue[]>).map(([prefix, keys]) => (
                       <div key={prefix} className="border rounded-lg overflow-hidden">
                         <button
-                          className="w-full px-3 py-2 bg-muted/50 hover:bg-muted flex items-center justify-between text-sm font-medium"
+                          className="flex min-h-11 w-full items-center justify-between bg-muted/50 px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-inset"
                           onClick={() => setNotifKeysExpanded(prev => ({ ...prev, [prefix]: !prev[prefix] }))}
                         >
                           <span>{prefix} ({keys.length} keys)</span>
@@ -3509,7 +3512,7 @@ export default function AdminInviteDashboard() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                  className="h-11 w-11 p-0 text-destructive hover:text-destructive"
                                   onClick={() => {
                                     showConfirmDialog({
                                       title: 'Delete Key',
@@ -4277,7 +4280,7 @@ export default function AdminInviteDashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            className="h-11 w-11 p-0 text-destructive hover:text-destructive"
                             onClick={() => {
                               showConfirmDialog({
                                 title: 'Delete Claim',

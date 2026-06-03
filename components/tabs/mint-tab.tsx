@@ -1734,7 +1734,7 @@ export default function MintTab() {
                       type="button"
                       onClick={() => (!isSoldOut && !isBaseOnly) && setSelectedStrain(strain)}
                       disabled={isSoldOut || isBaseOnly}
-                      className={`btn-compact flex min-h-[58px] items-center justify-between rounded-[var(--radius-panel)] border px-3 py-2 text-left transition-colors ${isSelected
+                      className={`flex min-h-[58px] items-center justify-between rounded-[var(--radius-panel)] border px-3 py-2 text-left transition-colors ${isSelected
                         ? 'border-primary bg-primary/10'
                         : 'border-border bg-card/70 hover:bg-accent'
                         } ${isSoldOut || isBaseOnly ? 'opacity-50' : ''}`}
@@ -2143,7 +2143,7 @@ export default function MintTab() {
           <CardContent className="flex flex-col space-y-3">
             <div className="flex justify-between items-start w-full gap-4">
               <div className="space-y-2">
-                <h3 className="text-lg font-pixel font-bold leading-tight min-[380px]:text-xl">
+                <h3 className="text-lg font-semibold leading-tight min-[380px]:text-xl">
                   {showLandOption
                     ? (mintType === 'plant' ? 'Mint a Plant' : 'Mint a Land')
                     : 'Mint a Plant'}

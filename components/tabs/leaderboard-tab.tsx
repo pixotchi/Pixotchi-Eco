@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { PaginationFooter } from "@/components/ui/pagination-footer";
 import { DisabledReason } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
@@ -29,7 +30,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { ChevronLeft,ChevronRight,Skull,Sword,Terminal } from "lucide-react";
+import { Skull,Sword,Terminal } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
@@ -725,43 +726,19 @@ export default function LeaderboardTab() {
     const activePage = getBoundedPage(currentPage, totalPageCount, 1);
 
     return (
-      <div
-        className={cn(
-          "flex-none border-t border-border/60 bg-card/95 pt-3",
-          "lg:justify-center lg:bg-transparent",
-          className
-        )}
-      >
-        <div className="mx-auto grid max-w-xs grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-          <Button
-            variant="compactUtility"
-            size="touchCompact"
-            onClick={() => {
-              setCurrentPage(Math.max(activePage - 1, 1));
-              scrollLeaderboardToTop();
-            }}
-            disabled={activePage === 1}
-            leadingIcon={<ChevronLeft className="h-4 w-4" aria-hidden="true" />}
-          >
-            Back
-          </Button>
-          <span className="min-w-[5.5rem] text-center text-xs font-semibold tabular-nums text-muted-foreground">
-            {activePage} / {totalPageCount}
-          </span>
-          <Button
-            variant="compactUtility"
-            size="touchCompact"
-            onClick={() => {
-              setCurrentPage(Math.min(activePage + 1, totalPageCount));
-              scrollLeaderboardToTop();
-            }}
-            disabled={activePage === totalPageCount}
-            trailingIcon={<ChevronRight className="h-4 w-4" aria-hidden="true" />}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      <PaginationFooter
+        currentPage={activePage}
+        totalPages={totalPageCount}
+        onPrevious={() => {
+          setCurrentPage(Math.max(activePage - 1, 1));
+          scrollLeaderboardToTop();
+        }}
+        onNext={() => {
+          setCurrentPage(Math.min(activePage + 1, totalPageCount));
+          scrollLeaderboardToTop();
+        }}
+        className={className}
+      />
     );
   }
 
@@ -778,7 +755,7 @@ export default function LeaderboardTab() {
           <div
             key={columnIndex}
             className={cn(
-              "lg:flex lg:flex-col lg:rounded-[var(--radius-panel)] lg:border lg:border-border/60 lg:bg-background/20 lg:px-3 lg:py-2",
+              "lg:flex lg:flex-col lg:rounded-[var(--radius-panel)] lg:border lg:border-border/55 lg:bg-[image:var(--gradient-scroll-surface)] lg:px-3 lg:py-2 lg:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
               fillHeight && "lg:min-h-0"
             )}
           >
@@ -815,7 +792,7 @@ export default function LeaderboardTab() {
   ) {
     return (
       <div className={cn("flex h-full min-h-0 flex-col", fillDesktop && "lg:flex lg:h-full lg:min-h-0 lg:flex-col")}>
-        <div data-ranking-scroll className="min-h-0 flex-1 space-y-2 divide-y divide-border overflow-y-auto -mx-4 px-4 pb-3 lg:hidden">
+        <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-border/55 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 lg:hidden">
           {mobileRows.map((row) => renderRow(row))}
         </div>
 
@@ -832,7 +809,7 @@ export default function LeaderboardTab() {
       <div className="flex h-full min-h-0 flex-col">
         <div
           data-ranking-scroll
-          className="min-h-0 flex-1 overflow-y-auto -mx-4 px-4 pb-3 lg:mx-0 lg:px-0 lg:pr-2"
+          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 lg:pr-3"
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
@@ -862,7 +839,7 @@ export default function LeaderboardTab() {
           plant.isDead && "opacity-60"
         )}
       >
-        <div className={cn("flex items-center space-x-2", compact && "min-h-10")}>
+        <div className={cn("flex items-center space-x-2", compact && "min-h-11")}>
           <div className={cn("flex items-center justify-center", compact ? "w-6" : "w-8")}>
             <div className={`flex items-center ${getRankColor(plant.rank)}`}>
               {plant.rank <= 3 ? (
@@ -875,8 +852,8 @@ export default function LeaderboardTab() {
 
           <div
             className={cn(
-              "relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity",
-              compact && "flex h-8 w-8 items-center justify-center"
+              "relative flex-shrink-0 cursor-pointer rounded-[var(--radius-control)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              compact && "flex h-11 w-11 items-center justify-center"
             )}
             onClick={() => handlePlantImageClick(plant)}
             role="button"
@@ -897,7 +874,7 @@ export default function LeaderboardTab() {
             />
             {hasActiveFence(plant) && (
               <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
-                <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} />
+                <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} className="h-3 w-3" />
               </div>
             )}
             {plant.isDead && (
@@ -990,8 +967,7 @@ export default function LeaderboardTab() {
                 <Button
                   type="button"
                   variant="gamePrimary"
-                  size="touchCompact"
-                  className="btn-touch-compact h-9 w-11 px-0"
+                  size="icon"
                   onClick={() => {
                     setTargetPlant(plant);
                     setSelectedAttackerId(eligibleAttackers(plant)[0]?.id ?? null);
@@ -1023,9 +999,8 @@ export default function LeaderboardTab() {
                 <Button
                   type="button"
                   variant="danger"
-                  size="touchCompact"
+                  size="icon"
                   className={cn(
-                    "btn-touch-compact h-9 w-11 px-0",
                     !killCooldown.canKill && "opacity-50"
                   )}
                   onClick={() => {
@@ -1065,9 +1040,11 @@ export default function LeaderboardTab() {
             )}
             {canShowRevive && (
               compact ? (
-                <button
+                <Button
                   type="button"
-                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-[var(--radius-control)] border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  variant="outline"
+                  size="icon"
+                  className="rounded-[var(--radius-control)]"
                   onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
                   aria-label="Revive your plant"
                   title="Revive"
@@ -1079,7 +1056,7 @@ export default function LeaderboardTab() {
                     height={16}
                     className="h-4 w-4 object-contain"
                   />
-                </button>
+                </Button>
               ) : (
                 <Button
                   variant="outline"
@@ -1568,7 +1545,7 @@ export default function LeaderboardTab() {
             </div>
           </DialogBody>
 
-          <DialogFooter className="block flex-none -mx-5 mt-4 border-t border-border bg-inherit px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-mx-6 sm:px-6">
+          <DialogFooter sticky className="block flex-none">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm Attack</span>
@@ -1743,7 +1720,7 @@ export default function LeaderboardTab() {
             </div>
           </DialogBody>
 
-          <DialogFooter className="block flex-none -mx-5 mt-4 border-t border-border bg-inherit px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-mx-6 sm:px-6">
+          <DialogFooter sticky className="block flex-none">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm Kill</span>
@@ -1796,6 +1773,9 @@ export default function LeaderboardTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Revive your plant</DialogTitle>
+            <DialogDescription>
+              Confirm the revive cost before restoring this plant to active play.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             {targetPlant && (
@@ -1860,6 +1840,9 @@ export default function LeaderboardTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cooldown Active</DialogTitle>
+            <DialogDescription>
+              Your attack action is cooling down. Wait until the timer reaches zero before attacking again.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-lg space-y-3">

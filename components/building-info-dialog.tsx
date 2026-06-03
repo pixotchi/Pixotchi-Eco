@@ -414,7 +414,7 @@ export default function BuildingInfoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={`max-h-[80vh] overflow-y-auto ${isBarracks ? 'max-w-md' : 'max-w-sm'}`}>
         <DialogHeader className="pb-4">
-          <DialogTitle className="font-pixel text-lg">{info.name}</DialogTitle>
+          <DialogTitle>{info.name}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             {isCasino ? info.description : info.description}
           </DialogDescription>

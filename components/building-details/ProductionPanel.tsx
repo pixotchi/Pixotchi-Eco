@@ -70,7 +70,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
               landId={landId}
               buildingId={building.id}
               buttonText="Collect"
-              buttonClassName="h-9 px-3 text-sm"
+              buttonClassName="h-11 min-h-11 px-3 text-sm"
               onSuccess={(tx: UntypedValue) => { 
                 toast.success('Collected to Warehouse'); 
                 onClaimSuccess(); 

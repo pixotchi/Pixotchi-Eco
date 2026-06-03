@@ -104,9 +104,9 @@ async function getKeyInfo(key: string): Promise<KeyInfo> {
 
 /**
  * GET /api/admin/notifications/keys
- * 
+ *
  * List all notification-related Redis keys with their values and TTLs.
- * 
+ *
  * Query params:
  * - pattern: Optional pattern to filter keys (default: all notification patterns)
  * - limit: Max keys to return (default: 100, max: 500)
@@ -174,9 +174,9 @@ export async function GET(request: NextRequest) {
 
 /**
  * DELETE /api/admin/notifications/keys
- * 
+ *
  * Delete specific Redis keys.
- * 
+ *
  * Query params:
  * - key: Specific key to delete (can be repeated for multiple keys)
  * - pattern: Delete all keys matching pattern (use with caution!)

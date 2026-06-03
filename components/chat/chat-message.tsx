@@ -9,6 +9,7 @@ import { Bot, User, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { postMissionProgress } from "@/lib/mission-tracking";
 import { MessageResponse } from "@/components/ai-elements/message";
+import { Button } from "@/components/ui/button";
 import ChatProfileDialog from "./chat-profile-dialog";
 
 function formatRelativeShort(date: Date) {
@@ -90,17 +91,19 @@ export default function ChatMessageComponent({
   );
 
   const profileTrigger = canOpenProfile ? (
-    <button
+    <Button
       type="button"
       onClick={() => {
         setProfileOpen(true);
         trackProfileVisit();
       }}
-      className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+      variant="primary"
+      size="default"
+      className="px-3 text-xs"
       aria-label={`Open profile for ${displayName}`}
     >
       Profile
-    </button>
+    </Button>
   ) : null;
 
   return (

@@ -293,7 +293,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               key={txKey} // Force re-mount to reset button state after each batch
               calls={calls}
               buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
-              buttonClassName="w-full font-bold h-9 text-sm"
+              buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
               onSuccess={(tx) => {
                 const claimedCount = currentBatchItems.length;
                 const remainingCount = claimableItems.length - claimedCount;

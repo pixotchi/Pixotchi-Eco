@@ -317,7 +317,6 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             onClick={() => refresh()}
             title="Refresh"
             aria-label="Refresh stake data"
-            className="h-8 w-8"
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -326,14 +325,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
         <div className="space-y-3 pb-2">
           {mode === 'stake' ? (
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg border border-border bg-card p-2">
+              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   SEED Balance
                 </div>
                 <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(seedBalance)}</div>
               </div>
-              <div className="rounded-lg border border-border bg-card p-2">
+              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
@@ -343,14 +342,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg border border-border bg-card p-2">
+              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   Staked SEED
                 </div>
                 <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(stakeInfo?.staked)}</div>
               </div>
-              <div className="rounded-lg border border-border bg-card p-2">
+              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
@@ -361,7 +360,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           )}
 
           {rewardRateInfo && (
-            <div className="rounded-lg border border-border bg-card p-2 text-xs">
+            <div className="rounded-lg border border-border/70 bg-background/45 p-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Reward Rate 
@@ -417,9 +416,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             {helperText && <div className="text-xs text-destructive">{helperText}</div>}
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               {mode === 'stake' ? (
-                <button onClick={() => setMaxAmount("stake")} className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-sm px-1">Use wallet balance</button>
+                <Button type="button" variant="ghost" size="default" onClick={() => setMaxAmount("stake")} className="px-2 text-xs">Use wallet balance</Button>
               ) : (
-                <button onClick={() => setMaxAmount("unstake")} className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-sm px-1">Use staked balance</button>
+                <Button type="button" variant="ghost" size="default" onClick={() => setMaxAmount("unstake")} className="px-2 text-xs">Use staked balance</Button>
               )}
               <span>{mode === 'stake' ? `Wallet: ${formatToken(seedBalance)} SEED` : `Staked: ${formatToken(stakeInfo?.staked)} SEED`}</span>
             </div>
@@ -434,7 +433,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
         </div>
       </div>
 
-      <DialogFooter className="block flex-none -mx-5 mt-3 border-t border-border bg-inherit px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-mx-6 sm:px-6">
+      <DialogFooter sticky className="block flex-none">
         <ActionBar sticky={false} className="space-y-2">
           {isSponsored && <div className="flex justify-end"><SponsoredBadge show /></div>}
           <div className="grid grid-cols-2 gap-2">

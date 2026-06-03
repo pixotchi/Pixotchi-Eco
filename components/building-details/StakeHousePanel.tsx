@@ -17,7 +17,7 @@ export default function StakeHousePanel() {
         Stake your SEED to earn LEAF.
       </div>
       <Button
-        className="h-9 px-3 text-sm"
+        className="px-4 text-sm"
         onClick={handleOpenStaking}
       >
         Stake

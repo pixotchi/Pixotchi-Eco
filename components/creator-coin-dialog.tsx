@@ -1,6 +1,7 @@
 "use client";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { openExternalUrl } from "@/lib/open-external";
 
@@ -45,21 +46,25 @@ export function CreatorCoinDialog({ open, onOpenChange }: CreatorCoinDialogProps
             16th of December, ~16:00 UTC
             <br/>
             on{" "}
-            <button 
+            <Button
               type="button"
+              variant="link"
+              size="default"
               onClick={() => openExternalUrl("https://zora.co/@pixotchi/")}
-              className="text-primary hover:underline underline-offset-4 bg-transparent border-0 p-0 cursor-pointer inline font-medium"
+              className="inline-flex px-1 align-baseline text-lg font-medium"
             >
               Zora
-            </button>
+            </Button>
           </DialogDescription>
-          <button 
+          <Button
             type="button"
+            variant="link"
+            size="default"
             onClick={() => openExternalUrl("https://doc.pixotchi.tech/tokens/pixotchi-token")}
-            className="text-xs text-primary hover:underline underline-offset-4 bg-transparent border-0 p-0 cursor-pointer"
+            className="px-3 text-xs"
           >
             Learn more
-          </button>
+          </Button>
         </DialogHeader>
 
         <div className="space-y-6 pt-2 pb-4">
@@ -82,4 +87,3 @@ export function CreatorCoinDialog({ open, onOpenChange }: CreatorCoinDialogProps
     </Dialog>
   );
 }
-

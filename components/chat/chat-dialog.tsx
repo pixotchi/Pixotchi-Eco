@@ -38,14 +38,14 @@ function DesktopChatPane({
 
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background/40">
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <div className="surface-header-divider flex items-center gap-2 px-3 py-2">
         <Image src={icon} alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         <ChatMessages modeOverride={mode} />
       </div>
-      <div className="border-t border-border p-3">
+      <div className="surface-footer-divider p-3">
         <div className="space-y-2">
           {isAITypingForMode(mode) && <AITypingIndicator />}
           <ChatInput modeOverride={mode} />
@@ -71,7 +71,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
         if (txModalOpen) event.preventDefault();
       }}
     >
-      <DialogHeader className="border-b border-border">
+      <DialogHeader>
         <DialogTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {mode === 'ai' ? (
@@ -113,7 +113,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
         <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" />
       </div>
 
-      <DialogFooter sticky className="border-t border-border pt-3 xl:hidden">
+      <DialogFooter sticky className="pt-3 xl:hidden">
         <div className="w-full space-y-2">
           {isAITyping && <AITypingIndicator />}
           <ChatInput />

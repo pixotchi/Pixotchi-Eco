@@ -280,14 +280,16 @@ export default function PlantProfileDialog({
               <div className="h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
               <div className="absolute inset-x-6 top-8 flex items-start justify-between text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 <span className="pt-1">Powered by:</span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="default"
                   onClick={() => openExternalUrl('https://efp.app')}
-                  className="flex items-center gap-2 transition hover:text-foreground normal-case text-xs font-medium"
+                  className="gap-2 px-2 text-xs font-medium normal-case"
                 >
                   <Image src="/icons/efp-logo.svg" alt="EFP" width={16} height={16} />
                   Ethereum Follow Protocol
-                </button>
+                </Button>
               </div>
               <div className="absolute -bottom-8 left-6">
                 <div className="relative">
@@ -413,7 +415,7 @@ export default function PlantProfileDialog({
                     variant="outline"
                     size="sm"
                     onClick={handleCopyAddress}
-                    className="flex-1 h-10 font-mono text-sm justify-between"
+                    className="h-11 min-h-11 flex-1 justify-between font-mono text-sm"
                     disabled={!ownerAddress}
                   >
                     <span className="truncate">{ownerAddress ? formatAddress(ownerAddress, 6, 4) : '—'}</span>
@@ -421,10 +423,10 @@ export default function PlantProfileDialog({
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={handleViewOnBlockscout}
-                    className="h-10 w-10 p-0"
                     disabled={!ownerAddress}
+                    aria-label="View profile address on Blockscout"
                   >
                     <ExternalLink className="w-4 h-4" />
                   </Button>
@@ -475,7 +477,7 @@ export default function PlantProfileDialog({
                           onDisconnectedClick={() => {
                             toast.error('Please connect your wallet to follow users');
                           }}
-                          className="w-full h-10 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                          className="h-11 min-h-11 w-full rounded-[var(--radius-control)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                         />
                       </div>
                     </div>

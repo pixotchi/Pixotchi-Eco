@@ -1,11 +1,11 @@
 /**
  * Batch Limits Diagnostic API
- * 
+ *
  * Tests the practical limits for batch transactions by estimating gas
  * for different batch sizes of villageClaimProduction calls.
- * 
+ *
  * GET /api/admin/batch-limits?address=0x...&maxBatch=50
- * 
+ *
  * Returns gas estimates for batch sizes from 1 to maxBatch
  */
 
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     // Get user's lands and their claimable buildings
     const lands = await getLandsByOwner(address);
-    
+
     if (lands.length === 0) {
       return NextResponse.json({
         error: 'No lands found for address',
@@ -84,14 +84,14 @@ export async function GET(request: NextRequest) {
       points: bigint;
       lifetime: bigint;
     }
-    
+
     const claimableItems: ClaimableItem[] = [];
     buildingResults.forEach(result => {
       result.villageBuildings.forEach((b: UntypedValue) => {
         const id = Number(b.id);
         const points = BigInt(b.accumulatedPoints || 0);
         const lifetime = BigInt(b.accumulatedLifetime || 0);
-        
+
         // Production buildings only (0: Solar, 3: Soil, 5: Bee)
         if ((id === 0 || id === 3 || id === 5) && (points > BigInt(0) || lifetime > BigInt(0))) {
           claimableItems.push({
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
 
     // Test different batch sizes
     const batchSizesToTest = [1, 5, 10, 15, 20, 25, 30, 40, 50].filter(n => n <= maxBatch && n <= claimableItems.length);
-    
+
     const results: {
       batchSize: number;
       gasEstimate: string;
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
 
     for (const batchSize of batchSizesToTest) {
       const batchItems = claimableItems.slice(0, batchSize);
-      
+
       // Encode calls for gas estimation
       const calls = batchItems.map(item => ({
         to: LAND_CONTRACT_ADDRESS as `0x${string}`,
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
         // Note: For smart wallet batching, gas is estimated differently,
         // but this gives us a baseline for each call's complexity
         let totalGas = BigInt(0);
-        
+
         for (const call of calls) {
           try {
             const gas = await client.estimateGas({
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
 
         const gasPerCall = totalGas / BigInt(batchSize);
         const fitsInTxLimit = totalGas < PER_TX_GAS_LIMIT;
-        
+
         // Calculate recommended max based on gas per call
         // Leave 20% headroom for smart wallet bundler overhead
         const recommendedMax = Number((PER_TX_GAS_LIMIT * BigInt(80) / BigInt(100)) / gasPerCall);

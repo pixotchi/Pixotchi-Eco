@@ -637,10 +637,10 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
               <span className="font-medium">{selectedLandsCount} / {counts.lands}</span>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-3 rounded-[var(--radius-control)] border border-border/60 bg-card/70 px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
             <input
               type="checkbox"
-              className="accent-current"
+              className="h-5 w-5 rounded border-border accent-current"
               checked={ack}
               onChange={(e) => setAck(e.target.checked)}
               disabled={loading}

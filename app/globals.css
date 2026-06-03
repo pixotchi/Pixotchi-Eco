@@ -90,9 +90,9 @@
     --border: 212 38% 68%;
     --input: 212 38% 68%;
     --ring: 212 86.2% 36.3%;
-    --radius: 1rem;
-    --radius-control: 1rem;
-    --radius-panel: 1rem;
+    --radius: 0.75rem;
+    --radius-control: 0.75rem;
+    --radius-panel: 0.875rem;
     --radius-dialog: 1rem;
     --shadow-hairline: 0 1px 0 hsl(var(--foreground) / 0.05);
     --shadow-control: 0 1px 2px hsl(var(--foreground) / 0.08), 0 8px 18px -14px hsl(var(--foreground) / 0.22);
@@ -105,6 +105,15 @@
     --gradient-special: linear-gradient(135deg, hsl(265 72% 52%), hsl(330 76% 54%));
     --gradient-solana: linear-gradient(135deg, hsl(265 76% 52%), hsl(319 72% 54%));
     --gradient-success: linear-gradient(135deg, hsl(145 65% 36%), hsl(165 64% 34%));
+    --gradient-control-active: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.78));
+    --gradient-app-chrome: linear-gradient(180deg, hsl(var(--card) / 0.94), hsl(var(--card) / 0.84));
+    --gradient-content-well: linear-gradient(180deg, hsl(var(--muted) / 0.42), hsl(var(--background) / 0.34));
+    --gradient-dialog: linear-gradient(145deg, hsl(var(--card) / 0.96) 0%, hsl(var(--card) / 0.9) 48%, hsl(var(--background) / 0.36) 100%);
+    --gradient-surface: linear-gradient(145deg, hsl(var(--card) / 0.9) 0%, hsl(var(--card) / 0.8) 100%);
+    --gradient-surface-strong: linear-gradient(145deg, hsl(var(--card) / 0.94) 0%, hsl(var(--card) / 0.86) 100%);
+    --gradient-panel: linear-gradient(145deg, hsl(var(--card) / 0.9) 0%, hsl(var(--card) / 0.82) 100%);
+    --gradient-scroll-surface: linear-gradient(180deg, hsl(var(--background) / 0), hsl(var(--background) / 0));
+    --gradient-control-track: linear-gradient(145deg, hsl(var(--background) / 0.74) 0%, hsl(var(--muted) / 0.7) 100%);
     /* Theme-specific value highlight color for token amounts */
     --value: 212 86% 45%;
 
@@ -129,8 +138,8 @@
      * 
      * Hierarchy (lowest to highest):
      * - base (0): Default content
-     * - dropdown (100): Dropdown menus, popovers
-     * - sticky (200): Sticky headers, floating elements
+     * - sticky (1100): Sticky headers, floating elements
+     * - dropdown (1150): Dropdown menus and popovers above app chrome
      * - overlay (300): Background overlays for modals
      * - modal (400): Standard modals and dialogs
      * - modal-nested (500): Modals that open from other modals
@@ -139,8 +148,8 @@
      * - tooltip (3200): Tooltips (highest priority)
      */
     --z-base: 0;
-    --z-dropdown: 1000;
     --z-sticky: 1100;
+    --z-dropdown: 1150;
     --z-overlay: 1200;
     --z-modal: 1210;
     --z-modal-nested: 1300;
@@ -536,6 +545,26 @@
 @layer components {
   /* (removed legacy spacing/padding helpers; use Tailwind utilities directly) */
 
+  .surface-header-divider {
+    border-bottom: 1px solid hsl(var(--border) / 0.7);
+    box-shadow:
+      0 1px 0 hsl(var(--card) / 0.45),
+      0 14px 24px -18px hsl(var(--foreground) / 0.36);
+  }
+
+  .surface-footer-divider {
+    border-top: 1px solid hsl(var(--border) / 0.7);
+    box-shadow:
+      0 -1px 0 hsl(var(--card) / 0.45),
+      0 -14px 24px -18px hsl(var(--foreground) / 0.36);
+  }
+
+  .surface-scroll-area {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
 
 
   /* Theme-aware status colors */
@@ -561,6 +590,14 @@
 
   .status-unknown {
     @apply text-gray-400 dark:text-gray-500;
+  }
+
+  .casino-dialog-surface {
+    background-image: linear-gradient(rgba(8, 17, 14, 0.82), rgba(8, 17, 14, 0.9)), url("/icons/casino.png");
+  }
+
+  .blackjack-dialog-surface {
+    background-image: linear-gradient(rgba(12, 15, 24, 0.84), rgba(12, 15, 24, 0.9)), url("/icons/casinobj.png");
   }
 
   /* Base Loader Animations - Sequential Box Appearance */
@@ -749,8 +786,8 @@
   }
 
   .btn-touch-compact {
-    min-height: 2rem !important;
-    min-width: 2rem !important;
+    min-height: 2.25rem !important;
+    min-width: 2.25rem !important;
   }
 
   .app-status-scroll {
@@ -759,6 +796,12 @@
     overscroll-behavior-x: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+  }
+
+  @media (max-width: 360px) {
+    .app-status-scroll {
+      scroll-padding-inline: 0.625rem;
+    }
   }
 
   .app-status-scroll::-webkit-scrollbar {
@@ -850,11 +893,11 @@
  * 
  * Layer order (lowest to highest):
  * 1. Base content (--z-base: 0)
- * 2. Dropdowns/Popovers (--z-dropdown: 100)
- * 3. Sticky headers (--z-sticky: 200)
- * 4. Modal overlays (--z-overlay: 300)
- * 5. Standard modals (--z-modal: 400)
- * 6. Nested modals (--z-modal-nested: 500)
+ * 2. Sticky headers (--z-sticky: 1100)
+ * 3. Dropdowns/Popovers (--z-dropdown: 1150)
+ * 4. Modal overlays (--z-overlay: 1200)
+ * 5. Standard modals (--z-modal: 1210)
+ * 6. Nested modals (--z-modal-nested: 1300)
  * 7. Transaction modals (--z-transaction: 3000)
  * 8. Toast notifications (--z-toast: 3100)
  * 9. Tooltips (--z-tooltip: 3200)

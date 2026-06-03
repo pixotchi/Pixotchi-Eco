@@ -36,6 +36,12 @@ interface EditPlantNameProps {
 
 const NAME_CHANGE_COST = 350; // SEED tokens required
 const MAX_NAME_LENGTH = 9; // Under 10 characters as requested
+const formatSeedShortage = (balance: bigint) => {
+  const shortage = Math.max(0, NAME_CHANGE_COST - Number(formatUnits(balance, 18)));
+  return shortage.toLocaleString(undefined, {
+    maximumFractionDigits: 4,
+  });
+};
 
 export function EditPlantName({
   plant,
@@ -162,6 +168,7 @@ export function EditPlantName({
           size="icon-sm"
           className={`hover:bg-muted ${className}`}
           title="Change plant name"
+          aria-label="Change plant name"
         >
           <Image
             src="/icons/pencil.svg"
@@ -257,7 +264,7 @@ export function EditPlantName({
 
                 {!canAffordNameChange && !isLoadingBalance && (
                   <p className="text-sm text-destructive">
-                    Insufficient SEED tokens. You need {NAME_CHANGE_COST - parseFloat(formatUnits(seedBalance, 18))} more.
+                    Insufficient SEED tokens. You need {formatSeedShortage(seedBalance)} more.
                   </p>
                 )}
               </>

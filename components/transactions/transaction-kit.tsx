@@ -86,6 +86,7 @@ type TransactionButtonRenderProps = {
 };
 
 type TransactionButtonProps = {
+  ariaLabel?: string;
   className?: string;
   disabled?: boolean;
   onClick?: () => void;
@@ -923,6 +924,7 @@ export function Transaction({
 }
 
 export function TransactionButton({
+  ariaLabel,
   className,
   disabled = false,
   onClick,
@@ -1026,6 +1028,15 @@ export function TransactionButton({
     return "default";
   }, [errorMessage, isExecuting, receipt]);
 
+  const resolvedAriaLabel = ariaLabel
+    ?? (receipt
+      ? "View transaction"
+      : errorMessage
+        ? "Try again"
+        : isExecuting
+          ? getPendingButtonText(idleText)
+          : idleText);
+
   if (render) {
     return render({
       context,
@@ -1049,6 +1060,7 @@ export function TransactionButton({
       onClick={handleSubmit}
       type="button"
       disabled={isDisabled}
+      aria-label={resolvedAriaLabel}
       aria-live="polite"
       data-testid="ockTransactionButton_Button"
     >
@@ -1224,10 +1236,11 @@ export function TransactionToast({
         )}
       </div>
       <button
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] p-2 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+        className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] p-2 text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         onClick={dismissToast}
         type="button"
         data-testid="ockCloseButton"
+        aria-label="Dismiss transaction status"
       >
         <CloseSvg />
       </button>

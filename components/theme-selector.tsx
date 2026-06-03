@@ -40,15 +40,21 @@ function MenuSwitchRow({
   return (
     <button
       onClick={onClick}
-      className="flex min-h-11 w-full items-center justify-between gap-4 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className={`flex min-h-11 w-full items-center justify-between gap-4 rounded-md px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+        checked
+          ? "bg-background/55 shadow-[var(--shadow-hairline)]"
+          : "hover:bg-accent/55"
+      }`}
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
     >
       <span className="text-xs font-medium">{label}</span>
       <span
-        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors ${
-          checked ? "bg-[hsl(var(--success))]" : "bg-muted-foreground/24"
+        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-[background-color,box-shadow] ${
+          checked
+            ? "bg-[image:var(--gradient-control-active)] shadow-[var(--shadow-hairline)]"
+            : "border border-border/60 bg-background/60"
         }`}
         aria-hidden="true"
       >
@@ -137,16 +143,16 @@ export function ThemeSelector() {
             <Button
               key={themeOption.name}
               variant="outline"
-              size="icon"
+              size="iconCompact"
               title={themeOption.label}
               onClick={() => handleThemeChange(themeOption.name)}
-              className={`${theme === themeOption.name ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
+              className={`p-0 ${theme === themeOption.name ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
                 }`}
               role="radio"
               aria-checked={theme === themeOption.name}
               aria-label={`Select ${themeOption.label} theme`}
             >
-              <div className={`base-logo-corner h-4 w-4 ${themeOption.color}`} />
+              <div className={`base-logo-corner h-5 w-5 shrink-0 ${themeOption.color}`} />
             </Button>
           ))}
         </div>

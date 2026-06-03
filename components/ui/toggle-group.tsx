@@ -85,7 +85,7 @@ export function ToggleGroup({
 
   return (
     <div
-      className={cn("inline-flex items-center rounded-[var(--radius-control)] border border-border/65 bg-card/95 p-0.5 shadow-[var(--shadow-hairline)]", className)}
+      className={cn("inline-flex items-center rounded-[var(--radius-control)] border border-border/80 bg-[image:var(--gradient-control-track)] p-0.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.32),inset_0_-10px_18px_-20px_hsl(var(--foreground)/0.34),var(--shadow-control)]", className)}
       role="radiogroup"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
@@ -96,7 +96,7 @@ export function ToggleGroup({
           key={String(opt.value)}
           type="button"
           size="xs"
-          variant={value === opt.value ? "secondary" : "ghost"}
+          variant={value === opt.value ? "toggleActive" : "ghost"}
           role="radio"
           aria-checked={value === opt.value}
           aria-label={opt.ariaLabel ?? (typeof opt.label === "string" ? opt.label : String(opt.value))}
@@ -108,7 +108,10 @@ export function ToggleGroup({
           }}
           className={cn(
             sizeClassNames[size],
-            "flex items-center gap-1 rounded-[var(--radius-control)]",
+            "flex min-w-11 items-center justify-center gap-1 rounded-[calc(var(--radius-control)-0.125rem)]",
+            value === opt.value
+              ? "text-primary-foreground"
+              : "text-foreground/86 hover:bg-card/40 hover:text-foreground",
             getButtonClassName?.(opt.value, value === opt.value)
           )}
         >

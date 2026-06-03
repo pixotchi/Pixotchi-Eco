@@ -169,7 +169,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       <SponsoredTransaction
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                         buttonText="Return now"
-                        buttonClassName="h-8 px-3 text-xs"
+                        buttonClassName="h-11 min-h-11 px-3 text-xs"
                         hideStatus
                         onSuccess={() => handleSuccess({ slotIndex: idx, awaitCommitted: true })}
                       />
@@ -180,7 +180,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         <SponsoredTransaction
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                           buttonText="Open now"
-                          buttonClassName="h-8 px-3 text-xs"
+                          buttonClassName="h-11 min-h-11 px-3 text-xs"
                           hideStatus
                           onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess({ slotIndex: idx, awaitUncommitted: true }); }}
                         />
@@ -216,7 +216,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       <SponsoredTransaction
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
                         buttonText="Start"
-                        buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
+                        buttonClassName="h-11 min-h-11 px-3 text-xs w-full sm:w-auto shrink-0"
                         hideStatus
                         disabled={isRewardsDepleted}
                         onSuccess={(tx: UntypedValue) => {

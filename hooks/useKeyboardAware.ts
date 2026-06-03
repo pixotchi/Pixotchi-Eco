@@ -18,22 +18,26 @@ export function useKeyboardAware(): KeyboardState {
   const updateKeyboardState = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    // Check if we're on a mobile device
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    );
-
-    if (!isMobile) return;
-
     const viewport = window.visualViewport;
-    if (!viewport) return;
+    if (!viewport) {
+      setKeyboardState({
+        isVisible: false,
+        height: 0,
+        animationDuration: 250
+      });
+      return;
+    }
 
     const windowHeight = window.innerHeight;
     const viewportHeight = viewport.height;
     const keyboardHeight = windowHeight - viewportHeight;
 
-    // Consider keyboard visible if height > 150px (accounting for some threshold)
-    const isKeyboardVisible = keyboardHeight > 150;
+    const activeElement = document.activeElement;
+    const isTextInputFocused =
+      activeElement instanceof HTMLInputElement ||
+      activeElement instanceof HTMLTextAreaElement ||
+      (activeElement instanceof HTMLElement && activeElement.isContentEditable);
+    const isKeyboardVisible = isTextInputFocused && keyboardHeight > 120;
 
     setKeyboardState({
       isVisible: isKeyboardVisible,

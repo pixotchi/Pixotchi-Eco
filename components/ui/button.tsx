@@ -31,7 +31,7 @@ const buttonVariants = cva(
         gamePrimary:
           "border border-primary/25 bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-primary/90",
         reward:
-          "border border-[hsl(var(--warning)/0.38)] bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-hairline)] hover:bg-[hsl(var(--warning)/0.26)]",
+          "border border-[hsl(var(--warning)/0.38)] bg-[image:linear-gradient(135deg,hsl(var(--warning)/0.22),hsl(var(--warning)/0.11))] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-hairline)] hover:brightness-105",
         promo:
           "bg-[image:var(--gradient-special)] text-white shadow-[var(--shadow-control)] hover:brightness-105",
         nav:
@@ -46,18 +46,22 @@ const buttonVariants = cva(
           "border border-input bg-background/80 shadow-[var(--shadow-hairline)] hover:bg-accent hover:text-accent-foreground",
         secondary:
           "bg-secondary text-secondary-foreground shadow-[var(--shadow-hairline)] hover:bg-secondary/80",
+        toggleActive:
+          "border border-primary/25 bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-105",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        xs: "tap-target-44 h-7 min-h-7 px-2 py-1 text-xs",
-        touchCompact: "tap-target-44 h-8 min-h-8 px-2.5 py-1 text-xs",
+        xs: "h-11 min-h-11 px-3 py-2 text-xs",
+        compact: "h-9 min-h-9 px-3 py-1.5 text-xs",
+        touchCompact: "h-11 min-h-11 px-3 py-2 text-xs",
         default: "h-11 min-h-11 px-4 py-2",
         md: "h-11 min-h-11 px-4 py-2",
-        sm: "h-9 min-h-9 px-3 text-sm",
+        sm: "h-11 min-h-11 px-3 py-2 text-sm",
         lg: "h-12 min-h-12 px-6 text-base",
         icon: "h-11 min-h-11 w-11 min-w-11",
-        "icon-sm": "tap-target-44 h-8 min-h-8 w-8 min-w-8",
+        iconCompact: "h-9 min-h-9 w-9 min-w-9",
+        "icon-sm": "h-11 min-h-11 w-11 min-w-11",
       },
       fullWidth: {
         true: "w-full",

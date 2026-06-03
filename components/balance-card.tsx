@@ -159,20 +159,20 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </h3>
           <Button
             variant="ghost"
-            size="icon"
+            size="iconCompact"
             onClick={handleRefresh}
             disabled={ethLoading || loading}
             aria-label="Refresh balances"
-            className="btn-compact !h-7 !min-h-7 !w-7 !min-w-7 bg-background/60 p-0"
+            className="bg-background/60 p-0"
           >
             <RefreshCw
-              className={`w-3 h-3 ${ethLoading || loading ? "animate-spin" : ""
+              className={`h-4 w-4 ${ethLoading || loading ? "animate-spin" : ""
                 }`}
             />
           </Button>
         </div>
 
-        <StandardContainer className="space-y-0.5 rounded-[var(--radius-panel)] border border-border/65 bg-card/90 p-2.5 shadow-[var(--shadow-hairline)]">
+        <StandardContainer className="space-y-0.5 rounded-[var(--radius-panel)] border border-border/70 bg-background/45 p-2.5 shadow-[var(--shadow-hairline)]">
           {isSolana ? (
             <>
               {renderBalanceRow({

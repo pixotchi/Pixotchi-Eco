@@ -3,7 +3,7 @@
 import ChatProfileDialog from "@/components/chat/chat-profile-dialog";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Button } from "@/components/ui/button";
-import { Dialog,DialogContent,DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
 import { LandLeaderboardEntry,getLandOwner } from "@/lib/contracts";
 import { contractToVisual,getCoordinateFromTokenId } from "@/lib/land-utils";
 import { Land } from "@/lib/types";
@@ -150,11 +150,14 @@ export function LandMapModal({
         hideCloseButton
       >
         <DialogTitle className="sr-only">World Map</DialogTitle>
+        <DialogDescription className="sr-only">
+          Explore discovered land plots, inspect neighboring owners, and select one of your lands.
+        </DialogDescription>
         
         {/* Header overlay */}
         <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
           <div className="bg-background/80 backdrop-blur-md px-3 py-2 rounded-lg border border-border shadow-sm pointer-events-auto">
-            <h2 className="font-pixel text-sm font-bold flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Compass className="w-4 h-4 text-primary" />
               World Map
             </h2>
@@ -168,14 +171,14 @@ export function LandMapModal({
             size="icon" 
             onClick={onClose}
             aria-label="Close world map"
-            className="bg-background/80 backdrop-blur-md pointer-events-auto h-8 w-8 rounded-full"
+            className="pointer-events-auto rounded-full bg-background/80 backdrop-blur-md"
           >
             <X className="w-4 h-4" />
           </Button>
         </div>
 
         {/* Map Canvas Area */}
-        <div className="flex-1 relative w-full h-full bg-[#a7c7e7] overflow-hidden touch-none">
+        <div className="relative h-full w-full flex-1 overflow-hidden bg-[hsl(var(--info)/0.18)] touch-none">
           <LandMapCanvas 
             center={center}
             zoom={zoom}
@@ -243,7 +246,7 @@ export function LandMapModal({
                     </div>
                     
                     <div className="flex-1">
-                        <h3 className="font-pixel font-bold text-lg capitalize">
+                        <h3 className="text-lg font-semibold capitalize">
                             {
                                 tappedWilderness.type === 'water' ? 'Lake' :
                                 tappedWilderness.type === 'none' ? 'Cemetery' : 
@@ -255,7 +258,8 @@ export function LandMapModal({
                     <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        aria-label="Dismiss terrain details"
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
                         onClick={() => setTappedWilderness(null)}
                     >
                         <X className="w-4 h-4" />
@@ -282,7 +286,7 @@ export function LandMapModal({
                         {/* Header Row */}
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                                <h3 className="font-pixel font-bold text-base truncate flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 truncate text-base font-semibold">
                                     {neighbor?.name || (tappedLandId <= totalSupply ? `Land #${tappedLandId}` : "Cemetery")}
                                     {isUserOwned && <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded">YOU</span>}
                                 </h3>
@@ -290,7 +294,7 @@ export function LandMapModal({
                                     <span className="font-mono">#{tappedLandId}</span>
                                     {tappedLandId <= totalSupply && (
                                         <>
-                                            <span className="mx-1">•</span>
+                                            <span className="mx-1">/</span>
                                             <span className="font-mono">
                                                 ({getCoordinateFromTokenId(tappedLandId).x}, {getCoordinateFromTokenId(tappedLandId).y})
                                             </span>
@@ -301,7 +305,8 @@ export function LandMapModal({
                             <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="h-6 w-6 text-muted-foreground hover:text-foreground -mt-1 -mr-1"
+                                aria-label="Dismiss land details"
+                                className="-mt-1 -mr-1 shrink-0 text-muted-foreground hover:text-foreground"
                                 onClick={() => setTappedLandId(null)}
                             >
                                 <X className="w-3.5 h-3.5" />
@@ -323,14 +328,16 @@ export function LandMapModal({
                                 </div>
                                 
                                 {ownerAddress && (
-                                    <button
+                                    <Button
                                         type="button"
                                         onClick={() => setProfileOpen(true)}
-                                        className="inline-flex items-center justify-center gap-1 px-2 py-0.5 text-[10px] leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                                        variant="primary"
+                                        size="default"
+                                        className="gap-1 px-3 text-xs"
                                         aria-label="Open owner profile"
                                     >
                                         Profile <User className="w-3 h-3" />
-                                    </button>
+                                    </Button>
                                 )}
                              </div>
                         ) : (
@@ -359,7 +366,8 @@ export function LandMapModal({
               variant="ghost" 
               size="icon" 
               onClick={handleZoomIn}
-              className="h-10 w-10 rounded-none border-b border-border/50 active:bg-muted"
+              aria-label="Zoom in on map"
+              className="rounded-none border-b border-border/50 active:bg-muted"
             >
               <Plus className="w-5 h-5" />
             </Button>
@@ -367,7 +375,8 @@ export function LandMapModal({
               variant="ghost" 
               size="icon" 
               onClick={handleZoomOut}
-              className="h-10 w-10 rounded-none active:bg-muted"
+              aria-label="Zoom out on map"
+              className="rounded-none active:bg-muted"
             >
               <Minus className="w-5 h-5" />
             </Button>
@@ -377,7 +386,8 @@ export function LandMapModal({
             variant="outline" 
             size="icon"
             onClick={handleCenterOnUser} 
-            className="bg-background/80 backdrop-blur-md pointer-events-auto h-10 w-10 rounded-lg shadow-sm"
+            aria-label="Center map on selected land"
+            className="bg-background/80 backdrop-blur-md pointer-events-auto rounded-lg shadow-sm"
           >
             <Image src="/icons/location.svg" alt="Center" width={20} height={20} className="w-5 h-5" />
           </Button>

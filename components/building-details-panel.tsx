@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { Info } from 'lucide-react';
@@ -184,14 +185,17 @@ function BuildingDetailsPanel({
           />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <CardTitle className="font-pixel">{buildingName}</CardTitle>
-              <button
+              <CardTitle>{buildingName}</CardTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => setShowInfoDialog(true)}
-                className="flex items-center justify-center w-6 h-6 hover:bg-muted rounded transition-colors"
+                aria-label={`Info about ${buildingName}`}
                 title={`Info about ${buildingName}`}
               >
-                <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-              </button>
+                <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              </Button>
             </div>
             <p className="text-sm text-muted-foreground">
               {isCasino

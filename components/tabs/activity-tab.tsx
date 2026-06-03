@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { PaginationFooter } from "@/components/ui/pagination-footer";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-client";
 import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ChevronLeft, ChevronRight, Terminal } from "lucide-react";
+import { Terminal } from "lucide-react";
 import {
   AttackEventRenderer,
   KilledEventRenderer,
@@ -34,7 +34,6 @@ import {
   BlackjackResultEventRenderer,
 } from "@/components/activity";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { useIsSolanaWallet, useTwinAddress } from "@/components/solana";
 import { useFrameContext } from "@/lib/frame-context";
@@ -328,47 +327,20 @@ export default function ActivityTab() {
   const renderPaginationControls = useCallback((
     activePage: number,
     totalPages: number,
-    setPage: PaginationConfig["setPage"],
-    className?: string
+    setPage: PaginationConfig["setPage"]
   ) => (
-    <div
-      className={cn(
-        "flex-none border-t border-border/60 bg-card/95 pt-3",
-        className
-      )}
-    >
-      <div className="mx-auto grid max-w-xs grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-        <Button
-          variant="compactUtility"
-          size="touchCompact"
-          onClick={() => {
-            setPage(prev => Math.max(prev - 1, 1));
-            scrollActivityToTop();
-          }}
-          disabled={activePage === 1}
-          leadingIcon={<ChevronLeft className="h-4 w-4" aria-hidden="true" />}
-          className="justify-center"
-        >
-          Back
-        </Button>
-        <span className="min-w-[5.5rem] text-center text-xs font-semibold tabular-nums text-muted-foreground">
-          {activePage} / {totalPages}
-        </span>
-        <Button
-          variant="compactUtility"
-          size="touchCompact"
-          onClick={() => {
-            setPage(prev => Math.min(prev + 1, totalPages));
-            scrollActivityToTop();
-          }}
-          disabled={activePage === totalPages}
-          trailingIcon={<ChevronRight className="h-4 w-4" aria-hidden="true" />}
-          className="justify-center"
-        >
-          Next
-        </Button>
-      </div>
-    </div>
+    <PaginationFooter
+      currentPage={activePage}
+      totalPages={totalPages}
+      onPrevious={() => {
+        setPage(prev => Math.max(prev - 1, 1));
+        scrollActivityToTop();
+      }}
+      onNext={() => {
+        setPage(prev => Math.min(prev + 1, totalPages));
+        scrollActivityToTop();
+      }}
+    />
   ), [scrollActivityToTop]);
 
   useEffect(() => {
@@ -418,7 +390,7 @@ export default function ActivityTab() {
       <div className="flex h-full min-h-0 flex-col">
         <div
           data-activity-feed-scroll
-          className="min-h-0 flex-1 overflow-y-auto -mx-4 px-4 pb-3 lg:mx-0 lg:px-0 lg:pr-2"
+          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 lg:pr-3"
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
@@ -470,7 +442,7 @@ export default function ActivityTab() {
 
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <div data-activity-feed-scroll className="min-h-0 flex-1 space-y-2 divide-y divide-border/60 overflow-y-auto -mx-4 px-4 pb-3 lg:mx-0 lg:px-0 lg:pr-2">
+        <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-border/55 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 lg:pr-3">
           {visibleActivities.map(renderActivity)}
         </div>
 

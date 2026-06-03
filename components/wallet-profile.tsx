@@ -75,16 +75,21 @@ const EthModeToggleRow = () => {
       <button
         type="button"
         onClick={toggleEthMode}
-        className={`relative inline-flex h-7 w-11 items-center rounded-full p-0 transition-colors ${isEthMode ? 'bg-[hsl(var(--success))]' : 'bg-muted'
-          }`}
+        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         role="switch"
         aria-checked={isEthMode}
         aria-label="ETH Mode"
       >
         <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[22px]' : 'translate-x-[3px]'
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isEthMode ? 'bg-[hsl(var(--success))]' : 'bg-muted'
             }`}
-        />
+          aria-hidden="true"
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[22px]' : 'translate-x-[4px]'
+              }`}
+          />
+        </span>
       </button>
     </div>
   );
@@ -567,7 +572,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <h3 className="text-sm font-medium text-muted-foreground">
                   Account
                 </h3>
-                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/65 bg-card/90 p-3 shadow-[var(--shadow-hairline)]">
+                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/45 p-3 shadow-[var(--shadow-hairline)]">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">Provider</span>
                     <span className="text-xs font-semibold">
@@ -596,8 +601,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           type="button"
                           onClick={() => openExternalUrl("https://base.org/names")}
                           variant="primary"
-                          size="xs"
-                          className="btn-compact"
+                          size="compact"
+                          className="px-3 text-xs"
                         >
                           Get a Basename!
                         </Button>
@@ -616,11 +621,10 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <Button
                           onClick={() => copyToClipboard(address, "Wallet address")}
                           variant="ghost"
-                          size="icon-sm"
-                          className="btn-compact !h-7 !min-h-7 !w-7 !min-w-7"
+                          size="icon"
                           aria-label="Copy wallet address"
                         >
-                          <Copy className="w-3 h-3 text-muted-foreground" />
+                          <Copy className="h-4 w-4 text-muted-foreground" />
                         </Button>
                       </div>
                     </div>
@@ -709,13 +713,13 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                       <button
                         type="button"
                         onClick={() => setShowFcDetails((v) => !v)}
-                        className="w-full flex items-center justify-between text-left py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md"
+                        className="flex min-h-11 w-full items-center justify-between rounded-[var(--radius-control)] px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                         aria-expanded={showFcDetails}
                         aria-controls="fc-context-details"
                       >
                         <span className="text-xs font-medium">Farcaster Context</span>
                         <ChevronRight
-                          className={`h-3 w-3 text-muted-foreground transition-transform ${showFcDetails ? 'rotate-90' : ''}`}
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${showFcDetails ? 'rotate-90' : ''}`}
                           aria-hidden="true"
                         />
                       </button>
@@ -769,7 +773,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     </h3>
                     <SolanaBridgeBadge />
                   </div>
-                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/65 bg-card/90 p-3 shadow-[var(--shadow-hairline)]">
+                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/45 p-3 shadow-[var(--shadow-hairline)]">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium">Solana Address</span>
                       <div className="flex items-center gap-1">
@@ -782,13 +786,12 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             </span>
                             <Button
                               variant="ghost"
-                              size="icon-sm"
-                              className="btn-compact !h-7 !min-h-7 !w-7 !min-w-7"
+                              size="icon"
                               onClick={() => copyToClipboard(solanaAddress, "Solana address")}
                               aria-label="Copy Solana address"
                               title="Copy Solana address"
                             >
-                              <Copy className="w-3 h-3" />
+                              <Copy className="h-4 w-4" />
                             </Button>
                           </>
                         ) : (
@@ -808,13 +811,12 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             </span>
                             <Button
                               variant="ghost"
-                              size="icon-sm"
-                              className="btn-compact !h-7 !min-h-7 !w-7 !min-w-7"
+                              size="icon"
                               onClick={() => copyToClipboard(twinAddress, "Twin address")}
                               aria-label="Copy twin address"
                               title="Copy twin address"
                             >
-                              <Copy className="w-3 h-3" />
+                              <Copy className="h-4 w-4" />
                             </Button>
                           </>
                         ) : (
@@ -862,7 +864,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             {canExportEmbeddedWallet && (
               <Button
                 variant="outline"
-                size="sm"
+                size="default"
                 onClick={handleOpenExportDialog}
                 className="w-full sm:col-span-2"
               >
@@ -872,7 +874,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             )}
             <Button
               variant="secondary"
-              size="sm"
+              size="default"
               onClick={() => { setTransferOpen(true); onOpenChange(false); }}
               className="w-full"
             >
@@ -881,7 +883,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             {!isFrameContextResolved ? (
               <Button
                 variant="secondary"
-                size="sm"
+                size="default"
                 disabled
                 className="w-full"
               >
@@ -890,7 +892,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             ) : isMiniApp ? (
               <Button
                 variant="secondary"
-                size="sm"
+                size="default"
                 onClick={handleCloseMiniApp}
                 className="w-full"
               >
@@ -900,7 +902,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             ) : (
               <Button
                 variant="destructive"
-                size="sm"
+                size="default"
                 onClick={handleDisconnect}
                 className="w-full"
               >
@@ -942,7 +944,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                   {embeddedWallets.map((wallet) => (
                     <label
                       key={wallet.address}
-                      className="flex items-center space-x-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+                      className="flex min-h-11 items-center space-x-3 rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 text-sm hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
                     >
                       <input
                         type="radio"
@@ -950,7 +952,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         value={wallet.address}
                         checked={selectedEmbeddedAddress === wallet.address}
                         onChange={handleEmbeddedWalletAddressChange}
-                        className="h-4 w-4 border-border text-primary focus:ring-primary"
+                        className="h-5 w-5 border-border text-primary focus:ring-primary"
                         disabled={isExporting}
                       />
                       <span className="font-mono text-xs break-all">

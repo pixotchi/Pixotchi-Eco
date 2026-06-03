@@ -10,14 +10,14 @@ export const maxDuration = 30; // Should be fast - just calling Neynar API
 
 /**
  * POST /api/admin/notifications/trigger
- * 
+ *
  * Directly send plant TOD notification to specific FID(s).
  * This is a FAST operation - just calls Neynar API.
- * 
+ *
  * Query params:
  * - fid: Target FID (required for direct send)
  * - dry: Set to '1' for dry run (shows what would be sent without sending)
- * 
+ *
  * Examples:
  * - POST /api/admin/notifications/trigger?fid=123 - Send to specific user
  * - POST /api/admin/notifications/trigger?fid=123&dry=1 - Dry run for specific user

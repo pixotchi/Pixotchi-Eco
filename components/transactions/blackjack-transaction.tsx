@@ -31,6 +31,7 @@ interface BlackjackTransactionProps {
     handIndex?: number;
     action?: BlackjackAction;
     disabled?: boolean;
+    buttonAriaLabel?: string;
     buttonText?: string;
     buttonClassName?: string;
     onStatusUpdate?: (status: LifecycleStatus) => void;
@@ -129,6 +130,7 @@ export default function BlackjackTransaction({
     handIndex = 0,
     action,
     disabled = false,
+    buttonAriaLabel,
     buttonText,
     buttonClassName,
     onStatusUpdate,
@@ -562,14 +564,14 @@ export default function BlackjackTransaction({
         if (phase === "fetching") return "Preparing...";
         if (phase === "pending") return "Confirming...";
         if (buttonText) return buttonText;
-        if (mode === "deal") return "DEAL";
+        if (mode === "deal") return "Deal";
         switch (action) {
-            case BlackjackAction.HIT: return "HIT";
-            case BlackjackAction.STAND: return "STAND";
-            case BlackjackAction.DOUBLE: return "DOUBLE";
-            case BlackjackAction.SPLIT: return "SPLIT";
-            case BlackjackAction.SURRENDER: return "SURRENDER";
-            default: return "ACTION";
+            case BlackjackAction.HIT: return "Hit";
+            case BlackjackAction.STAND: return "Stand";
+            case BlackjackAction.DOUBLE: return "Double";
+            case BlackjackAction.SPLIT: return "Split";
+            case BlackjackAction.SURRENDER: return "Surrender";
+            default: return "Action";
         }
     };
 
@@ -580,23 +582,38 @@ export default function BlackjackTransaction({
     const defaultClassName = "w-full min-h-11 rounded-[var(--radius-control)] px-4 py-2 font-bold transition-colors";
     const activeClassName = buttonClassName || `${defaultClassName} bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning)/0.9)]`;
     const disabledClassName = `${defaultClassName} bg-muted text-muted-foreground cursor-not-allowed`;
+    const resolvedButtonText = getButtonText();
+    const resolvedButtonAriaLabel = buttonAriaLabel ?? (
+        mode === "deal"
+            ? "Deal Blackjack hand"
+            : `${resolvedButtonText} current Blackjack hand`
+    );
 
     // Phase: idle, error - show prepare button
     if (phase === "idle" || phase === "error" || phase === "fetching") {
         return (
             <button
+                type="button"
                 onClick={fetchRandomnessAndBuildCalls}
                 disabled={isDisabled}
                 className={isDisabled ? disabledClassName : activeClassName}
+                aria-label={error ? `Retry ${resolvedButtonAriaLabel}` : resolvedButtonAriaLabel}
+                aria-busy={phase === "fetching"}
             >
                 {phase === "fetching" ? (
-                    <span className="flex items-center justify-center gap-2">
-                        <span className="animate-spin">⟳</span> Preparing...
-                    </span>
+                    <>
+                        <span className="flex items-center justify-center gap-2">
+                            <span
+                                className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                                aria-hidden="true"
+                            />
+                            Preparing...
+                        </span>
+                    </>
                 ) : error ? (
                     "Retry"
                 ) : (
-                    getButtonText()
+                    resolvedButtonText
                 )}
             </button>
         );
@@ -618,12 +635,14 @@ export default function BlackjackTransaction({
                         text={phase === "ready" ? "Confirm Transaction" : getButtonText()}
                         className={activeClassName}
                         disabled={phase !== "ready"}
+                        ariaLabel={`${resolvedButtonAriaLabel}. Confirm transaction`}
                     />
                     {phase === "ready" && (
                         <button
                             type="button"
                             onClick={() => resetPreparedAction("cancelled")}
-                            className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-xs font-medium text-white/80 hover:bg-black/50"
+                            aria-label="Cancel prepared Blackjack action"
+                            className="min-h-11 w-full rounded-[var(--radius-control)] border border-white/20 bg-black/30 px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:bg-black/50"
                         >
                             Cancel prepared action
                         </button>

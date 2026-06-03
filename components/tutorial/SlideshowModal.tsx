@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useSlideshow } from "./SlideshowProvider";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
 import type { SyntheticEvent } from "react";
 
@@ -111,13 +111,16 @@ export default function SlideshowModal() {
         onPointerDownOutside={(event) => event.preventDefault()}
       >
         <DialogTitle className="sr-only">Pixotchi tutorial: {slide.title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Step-by-step Pixotchi tutorial slide with navigation controls.
+        </DialogDescription>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border bg-card/80 px-4 py-3 backdrop-blur-sm">
+        <div className="surface-header-divider flex items-center justify-between bg-transparent px-4 py-3">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi" width={20} height={20} />
-            <span className="font-pixel text-sm">TUTORIAL</span>
+            <span className="text-sm font-semibold">Tutorial</span>
           </div>
-          <button onClick={close} className="text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md px-2 py-1">Skip</button>
+          <Button variant="ghost" size="default" onClick={close} className="px-3 text-sm text-muted-foreground hover:text-foreground">Skip</Button>
         </div>
 
         {/* Body */}
@@ -131,7 +134,7 @@ export default function SlideshowModal() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border bg-card/80 px-4 py-3 backdrop-blur-sm safe-area-bottom">
+        <div className="surface-footer-divider bg-transparent px-4 py-3 safe-area-bottom">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               {slides.map((_, i) => (

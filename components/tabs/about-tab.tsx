@@ -14,7 +14,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { InviteStats } from '@/lib/types';
 import packageJson from '@/package.json';
-import { Book,Calendar,Check,Copy,Gift,MessageCircle,Plus } from "lucide-react";
+import { Book,Calendar,Check,Copy,ExternalLink,Gift,MessageCircle,PlayCircle,Plus,Radio } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useId,useRef,useState } from "react";
 import { toast } from 'react-hot-toast';
@@ -266,7 +266,7 @@ export default function AboutTab() {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('Thank you for your feedback! 🙏');
+        toast.success('Thank you for your feedback!');
         setFeedbackText('');
         setShowFeedbackDialog(false);
       } else {
@@ -361,13 +361,13 @@ export default function AboutTab() {
                     {(showAllRecentCodes ? recentCodes : recentCodes.slice(0, 3)).map((codeData) => (
                       <div
                         key={codeData.code}
-                        className={`flex items-center justify-between p-2 bg-muted/50 rounded-lg ${codeData.isUsed ? 'opacity-60' : ''
+                        className={`flex items-center justify-between gap-2 rounded-[var(--radius-control)] border border-border/60 bg-muted/50 p-2.5 ${codeData.isUsed ? 'opacity-60' : ''
                           }`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${codeData.isUsed ? 'bg-[hsl(var(--success))]' : 'bg-[hsl(var(--info))]'
                             }`} />
-                          <div className={`font-pixel text-sm font-medium ${codeData.isUsed ? 'line-through text-muted-foreground' : ''
+                          <div className={`min-w-0 truncate font-mono text-sm font-semibold ${codeData.isUsed ? 'line-through text-muted-foreground' : ''
                             }`}>
                             {codeData.code}
                           </div>
@@ -380,10 +380,11 @@ export default function AboutTab() {
                         <div className="flex gap-1">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon-sm"
                             onClick={() => copyToClipboard(codeData.code)}
-                            className="h-7 w-7 p-0 hover:bg-background"
+                            className="shrink-0 hover:bg-background"
                             disabled={codeData.isUsed}
+                            aria-label={`Copy invite code ${codeData.code}`}
                           >
                             {copiedCode === codeData.code ? (
                               <Check className="w-3 h-3 text-[hsl(var(--success-strong))]" />
@@ -437,12 +438,15 @@ export default function AboutTab() {
               >
                 <Book className="w-4 h-4 mr-2" />
                 Documentation
+                <ExternalLink className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
                 className="w-full lg:w-auto"
+                aria-label="Open Pixotchi status"
               >
+                <Radio className="w-4 h-4 mr-2" />
                 Status
               </Button>
             </div>
@@ -451,14 +455,18 @@ export default function AboutTab() {
                 <Button
                   onClick={() => start({ reset: true })}
                   className="bg-value text-white hover:opacity-90 lg:w-auto"
+                  aria-label="Start Pixotchi tutorial"
                 >
+                  <PlayCircle className="w-4 h-4 mr-2" />
                   Tutorial
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowFeedbackDialog(true)}
                   className="lg:w-auto"
+                  aria-label="Open feedback dialog"
                 >
+                  <MessageCircle className="w-4 h-4 mr-2" />
                   Feedback
                 </Button>
               </div>
@@ -468,7 +476,9 @@ export default function AboutTab() {
                 variant="outline"
                 onClick={() => setShowFeedbackDialog(true)}
                 className="lg:w-auto"
+                aria-label="Open feedback dialog"
               >
+                <MessageCircle className="w-4 h-4 mr-2" />
                 Feedback
               </Button>
             )}
@@ -478,7 +488,7 @@ export default function AboutTab() {
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
-          <DialogContent>
+          <DialogContent mobileMode="sheet" surface="soft" className="p-4 sm:p-6">
             <DialogHeader className="mb-6">
             <DialogTitle>Share Your Feedback</DialogTitle>
             <DialogDescription>
@@ -501,7 +511,7 @@ export default function AboutTab() {
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
               rows={5}
-              className="w-full"
+              className="min-h-32 w-full"
               spellCheck={true}
               autoComplete="off"
               aria-describedby={feedbackHelpId}
@@ -511,6 +521,7 @@ export default function AboutTab() {
               onClick={submitFeedback}
               disabled={feedbackLoading || !address}
               aria-busy={feedbackLoading}
+              className="w-full"
             >
               {feedbackLoading ? (
                 <>
@@ -542,17 +553,19 @@ export default function AboutTab() {
             <button
               type="button"
               onClick={() => openExternalUrl('https://x.com/pixotchi')}
-              className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+              aria-label="Open Pixotchi on X"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             >
-              <Image src="/icons/twitter.png" alt="X" width={24} height={24} />
+              <Image src="/icons/twitter.png" alt="" width={24} height={24} />
               <span className="sr-only">X (Twitter)</span>
             </button>
             <button
               type="button"
               onClick={() => openExternalUrl('https://t.me/pixotchi')}
-              className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md p-1"
+              aria-label="Open Pixotchi on Telegram"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             >
-              <Image src="/icons/Telegram.png" alt="Telegram" width={24} height={24} />
+              <Image src="/icons/Telegram.png" alt="" width={24} height={24} />
               <span className="sr-only">Telegram</span>
             </button>
           </div>
