@@ -17,11 +17,11 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       lg: density === 'compact' ? 'p-4' : density === 'spacious' ? 'p-7' : 'p-6',
     };
     const surfaceStyles = {
-      default: 'border-border/55 bg-card/92 text-card-foreground shadow-[var(--shadow-hairline)]',
-      raised: 'border-border/55 bg-card/95 text-card-foreground shadow-[var(--shadow-raised)]',
-      inset: 'border-border/45 bg-muted/50 text-foreground shadow-none',
-      promo: 'border-primary/20 bg-primary/5 text-foreground shadow-none',
-      game: 'border-primary/20 bg-card/92 text-card-foreground shadow-[var(--shadow-hairline)]',
+      default: 'border-border/60 bg-card bg-[image:var(--gradient-surface)] text-card-foreground shadow-[var(--shadow-hairline)]',
+      raised: 'border-border/65 bg-card bg-[image:var(--gradient-surface-strong)] text-card-foreground shadow-[var(--shadow-raised)]',
+      inset: 'border-border/60 bg-secondary bg-[image:var(--gradient-panel)] text-foreground shadow-none',
+      promo: 'border-primary/25 bg-primary/10 bg-[image:var(--gradient-nav-active)] text-foreground shadow-none',
+      game: 'border-border/60 bg-card bg-[image:var(--gradient-surface)] text-card-foreground shadow-[var(--shadow-hairline)]',
     };
 
     return (
@@ -30,7 +30,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         className={cn(
           'rounded-[var(--radius-panel)] border',
           surfaceStyles[surface],
-          hover && 'transition-[border-color,background-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-primary/30 hover:bg-card hover:shadow-[var(--shadow-raised)]',
+          hover && 'transition-[border-color,background-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-primary/35 hover:bg-card hover:shadow-[var(--shadow-raised)]',
           className
         )}
         {...props}

@@ -10,8 +10,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-primary/90",
-        primary: "bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-primary/90",
+        default: "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
+        primary: "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         destructive:
           "bg-destructive text-destructive-foreground shadow-[var(--shadow-control)] hover:bg-destructive/90",
         danger:
@@ -21,33 +21,33 @@ const buttonVariants = cva(
         warning:
           "bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-control)] hover:bg-[hsl(var(--warning)/0.9)]",
         neutral:
-          "border border-border/70 bg-background/70 text-foreground shadow-[var(--shadow-hairline)] hover:bg-accent/70",
+          "border border-input bg-card bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
         special:
-          "bg-[image:var(--gradient-special)] text-white shadow-[var(--shadow-control)] hover:brightness-105",
+          "border border-primary/25 bg-primary bg-[image:var(--gradient-special)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-[1.04]",
         transaction:
-          "bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-primary/90",
+          "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         transactionSuccess:
           "bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] shadow-[var(--shadow-control)] hover:brightness-105",
         gamePrimary:
-          "border border-primary/25 bg-primary text-primary-foreground shadow-[var(--shadow-control)] hover:bg-primary/90",
+          "border border-primary/25 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         reward:
-          "border border-[hsl(var(--warning)/0.38)] bg-[image:linear-gradient(135deg,hsl(var(--warning)/0.22),hsl(var(--warning)/0.11))] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-hairline)] hover:brightness-105",
+          "border border-[hsl(var(--warning)/0.38)] bg-[hsl(var(--warning)/0.12)] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-hairline)] hover:bg-[hsl(var(--warning)/0.18)]",
         promo:
-          "bg-[image:var(--gradient-special)] text-white shadow-[var(--shadow-control)] hover:brightness-105",
+          "border border-primary/25 bg-primary bg-[image:var(--gradient-special)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-[1.04]",
         nav:
-          "border border-transparent text-muted-foreground hover:border-primary/20 hover:bg-primary/10 hover:text-primary data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary",
+          "border border-transparent text-muted-foreground hover:border-primary/25 hover:bg-accent hover:text-accent-foreground data-[active=true]:border-primary/30 data-[active=true]:bg-primary/10 data-[active=true]:bg-[image:var(--gradient-nav-active)] data-[active=true]:text-primary",
         compactUtility:
-          "border border-border/70 bg-background/70 text-foreground shadow-[var(--shadow-hairline)] hover:bg-accent/70",
+          "border border-input bg-card bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
         gasless:
           "border border-[hsl(var(--success)/0.28)] bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))] hover:bg-[hsl(var(--success)/0.18)]",
         game:
           "border border-white/20 bg-slate-950/80 text-white shadow-[var(--shadow-raised)] hover:bg-slate-900/90",
         outline:
-          "border border-input bg-background/80 shadow-[var(--shadow-hairline)] hover:bg-accent hover:text-accent-foreground",
+          "border border-input bg-card bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-accent hover:text-accent-foreground",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-[var(--shadow-hairline)] hover:bg-secondary/80",
+          "border border-border/70 bg-secondary bg-[image:var(--gradient-panel)] text-secondary-foreground shadow-[var(--shadow-hairline)] hover:bg-muted",
         toggleActive:
-          "border border-primary/20 bg-primary text-primary-foreground shadow-[var(--shadow-hairline)] hover:bg-primary/90",
+          "border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)] hover:brightness-[1.03]",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },

@@ -16,14 +16,14 @@ import { useAmbientAudio } from "@/lib/ambient-audio-context";
 const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
 
 const themes = [
-  { name: "light", label: "Light", color: "bg-slate-300" },
-  { name: "dark", label: "Dark", color: "bg-slate-800" },
-  { name: "green", label: "Green", color: "bg-green-500" },
-  { name: "yellow", label: "Yellow", color: "bg-yellow-500" },
-  { name: "red", label: "Red", color: "bg-red-500" },
-  { name: "pink", label: "Pink", color: "bg-pink-500" },
-  { name: "blue", label: "Blue", color: "bg-blue-500" },
-  { name: "violet", label: "Violet", color: "bg-fuchsia-500" }
+  { name: "light", label: "Light", color: "#a7c7e7" },
+  { name: "dark", label: "Dark", color: "#2d3c53" },
+  { name: "green", label: "Green", color: "#78ad88" },
+  { name: "yellow", label: "Yellow", color: "#c7ad66" },
+  { name: "red", label: "Red", color: "#c59ba4" },
+  { name: "pink", label: "Pink", color: "#ca9db8" },
+  { name: "blue", label: "Blue", color: "#8aa0c1" },
+  { name: "violet", label: "Violet", color: "#b9a4cf" }
 ];
 
 function MenuSwitchRow({
@@ -133,7 +133,7 @@ export function ThemeSelector() {
           title={`Change theme: ${currentTheme.label}`}
           aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
         >
-          <div className={`base-logo-corner h-4 w-4 ${currentTheme.color}`} />
+          <div className="base-logo-corner h-4 w-4" style={{ backgroundColor: currentTheme.color }} />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -152,7 +152,7 @@ export function ThemeSelector() {
               aria-checked={theme === themeOption.name}
               aria-label={`Select ${themeOption.label} theme`}
             >
-              <div className={`base-logo-corner h-5 w-5 shrink-0 ${themeOption.color}`} />
+              <div className="base-logo-corner h-5 w-5 shrink-0" style={{ backgroundColor: themeOption.color }} />
             </Button>
           ))}
         </div>

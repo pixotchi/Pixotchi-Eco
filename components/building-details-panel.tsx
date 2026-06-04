@@ -180,8 +180,7 @@ function BuildingDetailsPanel({
             alt={buildingName}
             width={48}
             height={48}
-            className="rounded-md"
-            style={{ height: 'auto' }}
+            className="h-12 w-12 shrink-0 rounded-md object-contain"
           />
           <div className="flex-1">
             <div className="flex items-center gap-2">

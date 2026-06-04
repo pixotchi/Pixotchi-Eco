@@ -601,7 +601,7 @@ export default function App() {
   return (
     <div
       data-viewport-shell="outer"
-      className={`flex justify-center w-full min-h-dvh bg-background overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
+      className={`flex justify-center w-full min-h-dvh bg-background bg-[image:var(--gradient-content-well)] overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
         } ${isKeyboardNavigation ? 'keyboard-navigation' : ''
         }`}
       aria-label="Pixotchi Mini Game"
@@ -609,10 +609,10 @@ export default function App() {
       <div
         data-viewport-shell="inner"
         data-connected={isConnected ? "true" : "false"}
-        className="app-shell-inner w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
+        className="app-shell-inner w-full flex flex-col h-dvh bg-background bg-[image:var(--gradient-content-well)] overflow-hidden overscroll-none"
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="relative z-[var(--z-sticky)] border-b border-border/55 bg-secondary/95 shadow-[var(--shadow-hairline)] overscroll-none">
+        <div className="relative z-[var(--z-sticky)] border-b border-border/55 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
           <header
             data-viewport-shell="header"
             className={cn(
@@ -739,7 +739,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-secondary/95 p-3" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75" role="navigation" aria-label="Main navigation">
                 <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
@@ -817,7 +817,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="surface-footer-divider bg-secondary/95 px-4 py-1 shadow-[var(--shadow-hairline)] overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="surface-footer-divider bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button

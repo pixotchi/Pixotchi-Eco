@@ -45,10 +45,10 @@ const dialogSizeClassName: Record<DialogSize, string> = {
 };
 
 const dialogSurfaceClassName: Record<DialogSurface, string> = {
-  default: "border-border/55 bg-card text-card-foreground",
-  soft: "border-border/55 bg-card/95 bg-[image:var(--gradient-dialog)] text-card-foreground backdrop-blur-md",
+  default: "border-border/65 bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
+  soft: "border-border/65 bg-popover/95 bg-[image:var(--gradient-dialog)] text-popover-foreground backdrop-blur-md",
   game: "border-white/15 bg-slate-950/90 text-white shadow-[var(--shadow-modal)]",
-  danger: "border-destructive/30 bg-card text-card-foreground",
+  danger: "border-destructive/30 bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
 };
 
 const DialogContent = React.forwardRef<
@@ -161,7 +161,7 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      sticky && "sticky bottom-0 z-10 -mx-5 mt-4 border-t border-border/45 bg-card/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-mx-6 sm:px-6",
+      sticky && "sticky bottom-0 z-10 -mx-5 mt-4 border-t border-border/55 bg-popover/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-mx-6 sm:px-6",
       className
     )}
     {...props}

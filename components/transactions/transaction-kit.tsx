@@ -153,14 +153,14 @@ const RECEIPT_TIMEOUT_MESSAGE =
   "Transaction was not confirmed after several minutes. Refresh and check the game before trying again.";
 
 const PRESSABLE_PRIMARY =
-  "cursor-pointer bg-primary hover:bg-primary/90 active:bg-primary/85 focus:bg-primary/85";
+  "cursor-pointer bg-primary bg-[image:var(--gradient-control-active)] hover:brightness-[1.03] active:brightness-[0.98] focus:brightness-[0.98]";
 const PRESSABLE_DISABLED = "opacity-[0.38] pointer-events-none";
 const TEXT_HEADLINE = "ock-compat-font font-semibold";
 const TEXT_LABEL1 = "ock-compat-font text-sm font-semibold";
 const TEXT_LABEL2 = "ock-compat-font text-sm";
 const TEXT_DEFAULT = "text-[var(--ock-compat-foreground)]";
 const TEXT_MUTED = "text-[var(--ock-compat-foreground-muted)]";
-const TEXT_INVERSE = "text-[var(--ock-compat-foreground-inverse)]";
+const TEXT_INVERSE = "text-primary-foreground";
 const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
 const TEXT_ERROR = "text-[var(--ock-compat-error)]";
 const BG_SURFACE = "bg-[var(--ock-compat-background)]";
