@@ -8,10 +8,10 @@ const panelVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-border/65 bg-card/95 shadow-[var(--shadow-hairline)]",
-        soft: "border-border/60 bg-card/75 shadow-[var(--shadow-hairline)]",
-        elevated: "border-border/60 bg-card/95 shadow-[var(--shadow-raised)]",
-        inset: "border-border/55 bg-background/50 shadow-inner",
+        default: "border-border/55 bg-card/92 shadow-[var(--shadow-hairline)]",
+        soft: "border-border/45 bg-muted/50 shadow-none",
+        elevated: "border-border/55 bg-card/95 shadow-[var(--shadow-raised)]",
+        inset: "border-border/45 bg-muted/45 shadow-none",
         game: "border-white/15 bg-slate-950/75 text-white shadow-[var(--shadow-raised)]",
       },
       padding: {

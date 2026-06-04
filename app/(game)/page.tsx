@@ -612,7 +612,7 @@ export default function App() {
         className="app-shell-inner w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none"
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="relative z-[var(--z-sticky)] bg-card/90 bg-[image:var(--gradient-app-chrome)] supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 overscroll-none">
+        <div className="relative z-[var(--z-sticky)] border-b border-border/55 bg-secondary/95 shadow-[var(--shadow-hairline)] overscroll-none">
           <header
             data-viewport-shell="header"
             className={cn(
@@ -739,7 +739,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-card/80 bg-[image:var(--gradient-app-chrome)] p-3" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-secondary/95 p-3" role="navigation" aria-label="Main navigation">
                 <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
@@ -817,7 +817,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="surface-footer-divider bg-card/90 bg-[image:var(--gradient-app-chrome)] supports-[backdrop-filter]:bg-card/75 backdrop-blur-xl backdrop-saturate-150 px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="surface-footer-divider bg-secondary/95 px-4 py-1 shadow-[var(--shadow-hairline)] overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
                 <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button

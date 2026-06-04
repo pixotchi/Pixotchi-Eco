@@ -83,8 +83,8 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
       <div
         className={
           isHeaderPlacement
-            ? "w-fit max-w-full rounded-lg border border-border/60 bg-background/55 px-3 py-1 shadow-none backdrop-blur-xl backdrop-saturate-150"
-            : "surface-header-divider app-status-scroll rounded-b-2xl border-x border-b border-border/60 bg-transparent px-4 py-1.5 backdrop-blur-xl backdrop-saturate-150 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg"
+            ? "w-fit max-w-full px-0 py-0"
+            : "app-status-scroll bg-transparent px-4 pb-2 pt-1.5 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:border xl:border-border/35 xl:bg-secondary/70"
         }
       >
         <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex min-w-max items-center justify-between gap-3 xl:justify-start"}>
@@ -118,7 +118,7 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
               <span className={balanceTextClassName} aria-hidden="true">{pixotchiText}</span>
             </div>
           </div>
-          <div className={isHeaderPlacement ? "h-5 w-px bg-border/70" : "hidden h-5 w-px bg-border/70 xl:block"} aria-hidden="true" />
+          <div className={isHeaderPlacement ? "h-5 w-px bg-border/55" : "hidden h-5 w-px bg-border/55 xl:block"} aria-hidden="true" />
           <div data-status-actions className="shrink-0 flex items-center gap-2">
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}

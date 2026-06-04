@@ -85,7 +85,7 @@ export function ToggleGroup({
 
   return (
     <div
-      className={cn("inline-flex items-center rounded-[var(--radius-control)] border border-border/80 bg-[image:var(--gradient-control-track)] p-0.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.32),inset_0_-10px_18px_-20px_hsl(var(--foreground)/0.34),var(--shadow-control)]", className)}
+      className={cn("inline-flex items-center rounded-[var(--radius-control)] border border-border/55 bg-muted/55 p-0.5 shadow-[var(--shadow-hairline)]", className)}
       role="radiogroup"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
@@ -111,7 +111,7 @@ export function ToggleGroup({
             "flex min-w-11 items-center justify-center gap-1 rounded-[calc(var(--radius-control)-0.125rem)]",
             value === opt.value
               ? "text-primary-foreground"
-              : "text-foreground/86 hover:bg-card/40 hover:text-foreground",
+              : "text-foreground/80 hover:bg-card/55 hover:text-foreground",
             getButtonClassName?.(opt.value, value === opt.value)
           )}
         >

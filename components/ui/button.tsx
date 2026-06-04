@@ -47,7 +47,7 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground shadow-[var(--shadow-hairline)] hover:bg-secondary/80",
         toggleActive:
-          "border border-primary/25 bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:brightness-105",
+          "border border-primary/20 bg-primary text-primary-foreground shadow-[var(--shadow-hairline)] hover:bg-primary/90",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },

@@ -17,11 +17,11 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       lg: density === 'compact' ? 'p-4' : density === 'spacious' ? 'p-7' : 'p-6',
     };
     const surfaceStyles = {
-      default: 'border-border/70 bg-card/95 text-card-foreground shadow-[var(--shadow-hairline)]',
-      raised: 'border-border/65 bg-card/95 text-card-foreground shadow-[var(--shadow-raised)]',
-      inset: 'border-border/55 bg-background/45 text-foreground shadow-[var(--shadow-hairline)]',
-      promo: 'border-primary/20 bg-primary/5 text-foreground shadow-[var(--shadow-hairline)]',
-      game: 'border-primary/24 bg-card/90 text-card-foreground shadow-[var(--shadow-control)]',
+      default: 'border-border/55 bg-card/92 text-card-foreground shadow-[var(--shadow-hairline)]',
+      raised: 'border-border/55 bg-card/95 text-card-foreground shadow-[var(--shadow-raised)]',
+      inset: 'border-border/45 bg-muted/50 text-foreground shadow-none',
+      promo: 'border-primary/20 bg-primary/5 text-foreground shadow-none',
+      game: 'border-primary/20 bg-card/92 text-card-foreground shadow-[var(--shadow-hairline)]',
     };
 
     return (
@@ -30,7 +30,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         className={cn(
           'rounded-[var(--radius-panel)] border',
           surfaceStyles[surface],
-          hover && 'transition-all duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:shadow-[var(--shadow-raised)]',
+          hover && 'transition-[border-color,background-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-primary/30 hover:bg-card hover:shadow-[var(--shadow-raised)]',
           className
         )}
         {...props}
@@ -50,7 +50,7 @@ const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
     return (
       <div
         ref={ref}
-        className={cn('surface-header-divider mb-3 flex flex-col space-y-1.5 pb-3', className)}
+        className={cn('mb-3 flex flex-col space-y-1.5', className)}
         {...props}
       >
         {children}

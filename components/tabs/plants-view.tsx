@@ -32,7 +32,7 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { GardenItem,Plant,ShopItem } from "@/lib/types";
-import { formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
+import { cn,formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
 import {
 ChevronDown,
 ChevronLeft,
@@ -807,11 +807,16 @@ export default function PlantsView() {
                                           variant="ghost"
                                           size="icon"
                                           onClick={() => setSelectedItem(item)}
-                                          className={`h-14 min-h-14 w-14 min-w-14 rounded-lg p-0.5 transition-all ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                          className={cn(
+                                            "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
+                                            selectedItem?.id === item.id
+                                              ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
+                                              : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-accent/55"
+                                          )}
                                           aria-label={`Select ${item.name}`}
                                           aria-pressed={selectedItem?.id === item.id}
                                         >
-                                          <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
+                                          <div className="flex h-12 w-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
                                             <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
                                           </div>
                                         </Button>
@@ -865,11 +870,16 @@ export default function PlantsView() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => setSelectedItem(item)}
-                                  className={`h-14 min-h-14 w-14 min-w-14 rounded-lg p-0.5 transition-all ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
+                                  className={cn(
+                                    "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
+                                    selectedItem?.id === item.id
+                                      ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
+                                      : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-accent/55"
+                                  )}
                                   aria-label={`Select ${item.name}`}
                                   aria-pressed={selectedItem?.id === item.id}
                                 >
-                                  <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
+                                  <div className="flex h-12 w-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
                                     <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
                                   </div>
                                 </Button>

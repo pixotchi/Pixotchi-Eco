@@ -83,8 +83,8 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
     <div className="flex justify-center w-full min-h-dvh bg-background">
       <div className="w-full max-w-md flex flex-col h-dvh bg-background">
         {/* Header wrapper with matching background */}
-        <div className="bg-card/90 backdrop-blur-sm">
-          <header className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 safe-area-top">
+        <div className="bg-secondary/95">
+          <header className="border-b border-border bg-secondary/95 px-4 py-2 safe-area-top">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
                 <Image
