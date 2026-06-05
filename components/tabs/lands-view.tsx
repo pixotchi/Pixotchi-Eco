@@ -535,10 +535,10 @@ function LandsViewContent() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className={`grid grid-cols-1 gap-4 lg:mx-auto lg:w-full ${lands.length > 1
-        ? "lg:max-w-[860px] lg:grid-cols-2 lg:items-start"
-        : "lg:max-w-[420px]"
+    <div className="space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-[34rem] xl:max-w-none">
+      <div className={`grid grid-cols-1 gap-4 xl:mx-auto xl:w-full ${lands.length > 1
+        ? "xl:max-w-[860px] xl:grid-cols-2 xl:items-start"
+        : "xl:max-w-[420px]"
         }`}>
         {/* Batch Claim Card - Only shows if there are claimable rewards */}
         {lands.length > 0 && (
@@ -565,7 +565,7 @@ function LandsViewContent() {
                     {selectedLand ? (
                       <div className="flex items-center space-x-2">
                         <LandPlot className="w-4 h-4" />
-                        <span>{selectedLand.name || `Land #${selectedLand.tokenId}`}</span>
+                        <span className="font-pixel">{selectedLand.name || `Land #${selectedLand.tokenId}`}</span>
                       </div>
                     ) : "Select a Land"}
                     <ChevronDown className="w-4 h-4" />
@@ -576,7 +576,7 @@ function LandsViewContent() {
                     <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => setSelectedLand(land)}>
                       <div className="flex items-center space-x-2">
                         <LandPlot className="w-4 h-4" />
-                        <span>{land.name || `Land #${land.tokenId}`} (XP {formatXP(land.experiencePoints)})</span>
+                        <span><span className="font-pixel">{land.name || `Land #${land.tokenId}`}</span> (XP {formatXP(land.experiencePoints)})</span>
                       </div>
                     </DropdownMenuItem>
                   ))}
@@ -588,8 +588,8 @@ function LandsViewContent() {
       </div>
 
       {selectedLand && (
-        <div className="space-y-4 lg:mx-auto lg:grid lg:w-full lg:max-w-[1368px] lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start lg:justify-center lg:gap-5 lg:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
-          <div className="space-y-4 lg:sticky lg:top-0">
+        <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
+          <div className="space-y-4 xl:sticky xl:top-0">
           <Card>
             <CardContent className="space-y-3">
               <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
@@ -649,7 +649,7 @@ function LandsViewContent() {
                       }}
                       variant="outline"
                       size="icon"
-                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
+                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
                       aria-label="Previous land"
                       title="Previous"
                     >
@@ -666,7 +666,7 @@ function LandsViewContent() {
                       }}
                       variant="outline"
                       size="icon"
-                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
+                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
                       aria-label="Next land"
                       title="Next"
                     >
@@ -679,7 +679,7 @@ function LandsViewContent() {
               <div className="text-center">
                 <div className="inline-flex max-w-full items-center justify-center gap-1">
                   <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 truncate text-lg font-semibold">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
+                  <h3 className="min-w-0 truncate font-pixel text-lg">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
                   <EditLandName
                     land={selectedLand}
                     onNameChanged={(landId, newName) => {
@@ -699,11 +699,11 @@ function LandsViewContent() {
 
           <div className="min-w-0">
           {/* Building Management Section */}
-          <Card className="lg:h-fit lg:w-full">
+          <Card className="xl:h-fit xl:w-full">
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Buildings</CardTitle>
-                <div className="lg:hidden">
+                <div className="xl:hidden">
                   <ToggleGroup
                     value={buildingType}
                     onValueChange={(v) => {
@@ -720,7 +720,7 @@ function LandsViewContent() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(230px,320px)_minmax(0,1fr)] lg:items-start lg:justify-center xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)]">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(230px,320px)_minmax(0,1fr)] xl:items-start xl:justify-center xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)]">
                 {/* Building Grid */}
                 <div className="space-y-4">
                   {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
@@ -729,7 +729,7 @@ function LandsViewContent() {
                     </div>
                   ) : (
                     <>
-                      <div className="lg:hidden">
+                      <div className="xl:hidden">
                         <BuildingGrid
                           buildings={buildingType === 'village' ? villageBuildings : townBuildings}
                           buildingType={buildingType}
@@ -741,7 +741,7 @@ function LandsViewContent() {
                         />
                       </div>
 
-                      <div className="hidden lg:block space-y-4">
+                      <div className="hidden xl:block space-y-4">
                         <section
                           className={`rounded-[var(--radius-panel)] border p-3 transition-colors ${buildingType === 'village' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
                             }`}

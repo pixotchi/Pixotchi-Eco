@@ -87,17 +87,6 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
       <div
         className="tradingview-widget-container__widget flex-1"
       />
-      <div className="tradingview-widget-copyright text-xs text-muted-foreground px-3 py-1 border-t border-border/50">
-        <a
-          href="https://www.tradingview.com/symbols/SEEDWETH_AA6A81.USD/?exchange=BASESWAP"
-          rel="noopener nofollow"
-          target="_blank"
-          className="text-primary hover:underline"
-        >
-          <span>SEED/WETH price</span>
-        </a>
-        <span className="text-muted-foreground"> by TradingView</span>
-      </div>
     </div>
   );
 }

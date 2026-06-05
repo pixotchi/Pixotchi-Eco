@@ -20,7 +20,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     data-viewport-debug-dialog-overlay=""
     className={cn(
-      "fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-[2px] sm:backdrop-blur-sm",
+      "fixed inset-0 bg-black/60 backdrop-blur-[2px] sm:backdrop-blur-sm",
       "supports-[backdrop-filter]:bg-black/50 motion-reduce:bg-black/75 motion-reduce:backdrop-blur-none",
       "duration-[var(--motion-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -35,13 +35,14 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
 type DialogSurface = "default" | "soft" | "game" | "danger";
 type DialogMobileMode = "auto" | "center" | "sheet";
+type DialogLayer = "default" | "nested";
 
 const dialogSizeClassName: Record<DialogSize, string> = {
   sm: "max-w-sm",
   md: "max-w-md",
   lg: "max-w-lg",
   xl: "max-w-2xl",
-  full: "w-[min(96vw,72rem)] max-w-none",
+  full: "w-[min(96vw,64rem)] max-w-none",
 };
 
 const dialogSurfaceClassName: Record<DialogSurface, string> = {
@@ -57,6 +58,7 @@ const DialogContent = React.forwardRef<
     danger?: boolean;
     frameClassName?: string;
     hideCloseButton?: boolean;
+    layer?: DialogLayer;
     mobileMode?: DialogMobileMode;
     overlayClassName?: string;
     size?: DialogSize;
@@ -70,6 +72,7 @@ const DialogContent = React.forwardRef<
   danger = false,
   frameClassName,
   hideCloseButton,
+  layer = "default",
   mobileMode = "auto",
   overlayClassName,
   size = "md",
@@ -79,13 +82,23 @@ const DialogContent = React.forwardRef<
   ...props
 }, ref) => (
   <DialogPortal>
-    <DialogOverlay className={overlayClassName} />
+    <DialogOverlay
+      className={cn(
+        layer === "nested"
+          ? "z-[calc(var(--z-modal-nested)-1)]"
+          : "z-[var(--z-overlay)]",
+        overlayClassName
+      )}
+    />
     <DialogPrimitive.Content
       ref={ref}
       data-viewport-debug-dialog-frame=""
       data-sticky-footer={stickyFooter ? "true" : undefined}
       className={cn(
-        "fixed inset-0 z-[var(--z-modal)] flex justify-center",
+        "fixed inset-0 flex justify-center",
+        layer === "nested"
+          ? "z-[var(--z-modal-nested)]"
+          : "z-[var(--z-modal)]",
         mobileMode === "sheet" ? "items-end sm:items-center" : "items-center",
         useSafeAreaInset && "safe-area-inset",
         "duration-[var(--motion-modal)] data-[state=open]:animate-in data-[state=closed]:animate-out",
@@ -100,8 +113,8 @@ const DialogContent = React.forwardRef<
       <div
         data-viewport-debug-dialog-surface=""
         className={cn(
-          "relative flex w-full flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
-          "max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh]",
+          "relative flex w-[min(94vw,100%)] flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
+          "max-h-[90dvh]",
           "rounded-[var(--radius-dialog)]",
           dialogSizeClassName[size],
           dialogSurfaceClassName[danger ? "danger" : surface],
@@ -118,7 +131,7 @@ const DialogContent = React.forwardRef<
               // Size and alignment
               "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
               // Visuals: avoid borders, provide hover background only
-              "rounded-[var(--radius-control)] bg-transparent text-muted-foreground hover:bg-muted/60",
+              "rounded-[var(--radius-control)] bg-transparent text-muted-foreground hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
               // Accessibility focus style (no persistent ring/border)
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               // Ensure ring offset blends with dialog background
@@ -143,7 +156,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "mb-4 flex flex-col space-y-2 pr-12 text-left",
+      "surface-header-divider -mx-5 -mt-5 mb-0 flex flex-col space-y-2 px-5 pb-3 pt-5 pr-16 text-left sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 sm:pr-16",
       className
     )}
     {...props}
@@ -159,7 +172,7 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 mt-4 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6",
+      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 mt-0 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6",
       className
     )}
     {...props}

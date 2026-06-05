@@ -41,8 +41,39 @@ export function ToggleGroup({
   ariaLabelledBy,
   orientation = "horizontal",
 }: ToggleGroupProps) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const selectedIndex = Math.max(0, options.findIndex((opt) => opt.value === value));
+  const [indicatorStyle, setIndicatorStyle] = React.useState<React.CSSProperties>({
+    opacity: 0,
+  });
+
+  React.useLayoutEffect(() => {
+    const container = containerRef.current;
+    const selectedOption = optionRefs.current[selectedIndex];
+    if (!container || !selectedOption) return;
+
+    const updateIndicator = () => {
+      setIndicatorStyle({
+        height: selectedOption.offsetHeight,
+        opacity: 1,
+        transform: `translate3d(${selectedOption.offsetLeft}px, ${selectedOption.offsetTop}px, 0)`,
+        width: selectedOption.offsetWidth,
+      });
+    };
+
+    updateIndicator();
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    resizeObserver.observe(container);
+    optionRefs.current.forEach((option) => {
+      if (option) resizeObserver.observe(option);
+    });
+
+    return () => resizeObserver.disconnect();
+  }, [options.length, orientation, selectedIndex, size]);
 
   const focusOption = (index: number) => {
     optionRefs.current[index]?.focus();
@@ -85,18 +116,28 @@ export function ToggleGroup({
 
   return (
     <div
-      className={cn("inline-flex items-center rounded-[calc(var(--radius-nav)+0.125rem)] border border-border/55 bg-muted/55 p-0.5 shadow-[var(--shadow-hairline)]", className)}
+      ref={containerRef}
+      className={cn(
+        "surface-control relative isolate inline-flex items-center rounded-[calc(var(--radius-nav)+0.125rem)] border p-0.5",
+        orientation === "vertical" && "flex-col",
+        className
+      )}
       role="radiogroup"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-orientation={orientation}
     >
+      <span
+        aria-hidden="true"
+        className="surface-control-selected pointer-events-none absolute left-0 top-0 z-0 rounded-[var(--radius-nav)] border transition-[transform,width,height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
+        style={indicatorStyle}
+      />
       {options.map((opt, index) => (
         <Button
           key={String(opt.value)}
           type="button"
           size="xs"
-          variant={value === opt.value ? "toggleActive" : "ghost"}
+          variant="ghost"
           role="radio"
           aria-checked={value === opt.value}
           aria-label={opt.ariaLabel ?? (typeof opt.label === "string" ? opt.label : String(opt.value))}
@@ -108,10 +149,10 @@ export function ToggleGroup({
           }}
           className={cn(
             sizeClassNames[size],
-            "flex min-w-11 items-center justify-center gap-1 !rounded-[var(--radius-nav)]",
+            "relative z-10 flex min-w-11 items-center justify-center gap-1 !rounded-[var(--radius-nav)] bg-transparent shadow-none",
             value === opt.value
-              ? "text-primary-foreground"
-              : "text-foreground/80 hover:bg-card/55 hover:text-foreground",
+              ? "text-primary hover:bg-transparent hover:text-primary"
+              : "text-foreground/80 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
             getButtonClassName?.(opt.value, value === opt.value)
           )}
         >

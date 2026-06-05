@@ -13,13 +13,13 @@ const buttonVariants = cva(
         default: "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
         primary: "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-[var(--shadow-control)] hover:bg-destructive/90",
+          "bg-destructive bg-[image:var(--gradient-danger)] text-destructive-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         danger:
-          "bg-destructive text-destructive-foreground shadow-[var(--shadow-control)] hover:bg-destructive/90",
+          "bg-destructive bg-[image:var(--gradient-danger)] text-destructive-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         success:
-          "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] shadow-[var(--shadow-control)] hover:bg-[hsl(var(--success)/0.9)]",
+          "bg-[hsl(var(--success))] bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         warning:
-          "bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-control)] hover:bg-[hsl(var(--warning)/0.9)]",
+          "bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         neutral:
           "border border-input bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)] backdrop-blur-md hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         special:
@@ -35,11 +35,15 @@ const buttonVariants = cva(
         promo:
           "border border-primary/25 bg-primary bg-[image:var(--gradient-special)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.04]",
         nav:
-          "!rounded-[var(--radius-nav)] border border-transparent text-muted-foreground hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary data-[active=true]:border-primary/30 data-[active=true]:bg-[hsl(var(--nav-active-bg))] data-[active=true]:bg-[image:var(--gradient-nav-active)] data-[active=true]:text-primary data-[active=true]:shadow-[var(--shadow-hairline)]",
+          "!rounded-[var(--radius-nav)] border border-transparent text-muted-foreground hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:border-primary/30 data-[active=true]:bg-[hsl(var(--nav-active-bg))] data-[active=true]:bg-[image:var(--gradient-nav-active)] data-[active=true]:text-primary data-[active=true]:shadow-[var(--shadow-nav-active)]",
         headerIcon:
-          "border border-[hsl(var(--header-control-border))] bg-[hsl(var(--header-control-bg))] text-foreground shadow-[var(--shadow-hairline)] backdrop-blur-md hover:border-[hsl(var(--header-control-border-hover))] hover:bg-[hsl(var(--header-control-hover))] hover:text-foreground",
+          "border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         statusAction:
-          "border border-[hsl(var(--header-control-border))] bg-[hsl(var(--header-control-bg))] text-foreground shadow-[var(--shadow-hairline)] backdrop-blur-md hover:border-[hsl(var(--header-control-border-hover))] hover:bg-[hsl(var(--header-control-hover))] hover:text-primary",
+          "border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
+        surfaceControl:
+          "border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
+        imageCardPrimary:
+          "border border-white/30 bg-slate-950 bg-[image:linear-gradient(180deg,hsl(222_47%_20%)_0%,hsl(222_47%_11%)_56%,hsl(229_84%_5%)_100%)] text-white shadow-[0_10px_24px_-14px_rgba(2,6,23,0.9)] hover:brightness-[1.06] hover:text-white hover:shadow-[0_14px_30px_-16px_rgba(2,6,23,0.95)]",
         compactUtility:
           "border border-input bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)] backdrop-blur-md hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         game:

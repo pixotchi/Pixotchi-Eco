@@ -65,15 +65,46 @@ function formatTokenShort(amount: bigint, decimals: number = 18): string {
   return "<.01";
 }
 
+function formatTokenDetailed(
+  amount: bigint,
+  decimals: number = 18,
+  options: { maxFractionDigits?: number; smallValueDigits?: number } = {},
+): string {
+  const num = parseFloat(formatUnits(amount, decimals));
+  if (!Number.isFinite(num) || num <= 0) return "0";
+
+  const maxFractionDigits = options.maxFractionDigits ?? 2;
+  const smallValueDigits = options.smallValueDigits ?? 4;
+  const fractionDigits = num > 0 && num < 1 ? smallValueDigits : maxFractionDigits;
+  const threshold = 1 / (10 ** fractionDigits);
+
+  if (num > 0 && num < threshold) {
+    return `<${threshold.toLocaleString("en-US", {
+      maximumFractionDigits: fractionDigits,
+      minimumFractionDigits: fractionDigits,
+    })}`;
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: fractionDigits,
+  }).format(num);
+}
+
 type StatusBarPlacement = "standalone" | "header";
 
-export default function StatusBar({ placement = "standalone" }: { placement?: StatusBarPlacement }) {
+export default function StatusBar({
+  placement = "standalone",
+  showEthInStandalone = false,
+}: {
+  placement?: StatusBarPlacement;
+  showEthInStandalone?: boolean;
+}) {
   const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading } = useBalances();
   const { address } = useAccount();
   const isSolana = useIsSolanaWallet();
   const { solBalance } = useSolanaWallet();
   const isHeaderPlacement = placement === "header";
-  const showEthBalance = isHeaderPlacement && !isSolana;
+  const showEthBalance = (isHeaderPlacement || showEthInStandalone) && !isSolana;
   const { data: ethBalance, isLoading: ethLoading } = useBalance({
     address,
     query: {
@@ -97,10 +128,15 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
     return onStakingDialogOpen(() => setStakingOpen(true));
   }, []);
 
-  const seedValue = formatTokenShort(seed);
-  const leafValue = formatTokenShort(leaf);
-  const pixotchiValue = formatTokenShort(pixotchi);
-  const ethValue = ethBalance ? formatTokenShort(ethBalance.value, ethBalance.decimals) : "0";
+  const useDetailedBalances = showEthBalance;
+  const seedValue = useDetailedBalances ? formatTokenDetailed(seed, 18, { maxFractionDigits: 2 }) : formatTokenShort(seed);
+  const leafValue = useDetailedBalances ? formatTokenDetailed(leaf, 18, { maxFractionDigits: 2 }) : formatTokenShort(leaf);
+  const pixotchiValue = useDetailedBalances ? formatTokenDetailed(pixotchi, 18, { maxFractionDigits: 2 }) : formatTokenShort(pixotchi);
+  const ethValue = ethBalance
+    ? useDetailedBalances
+      ? formatTokenDetailed(ethBalance.value, ethBalance.decimals, { maxFractionDigits: 5, smallValueDigits: 6 })
+      : formatTokenShort(ethBalance.value, ethBalance.decimals)
+    : "0";
   const balanceSkeletonClassName = "h-4 w-10 max-[340px]:h-3.5 max-[340px]:w-8";
   const seedText = loading ? <Skeleton className={balanceSkeletonClassName} /> : seedValue;
   const leafText = loading ? <Skeleton className={balanceSkeletonClassName} /> : leafValue;

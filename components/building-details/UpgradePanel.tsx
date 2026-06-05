@@ -12,6 +12,7 @@ import DisabledTransaction from '@/components/transactions/disabled-transaction'
 import LeafApproveTransaction from '@/components/transactions/leaf-approve-transaction';
 import { toast } from 'react-hot-toast';
 import { StandardContainer } from '@/components/ui/pixel-container';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { useBalances } from '@/lib/balance-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import { LAND_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -63,12 +64,7 @@ export default function UpgradePanel({
             <span className="text-muted-foreground">Upgrade Progress:</span>
             <span className="font-semibold">{upgradeProgress.toFixed(1)}%</span>
           </div>
-          <div className="w-full bg-muted rounded-md overflow-hidden">
-            <div
-              className="h-2 bg-primary transition-all duration-300"
-              style={{ width: `${Math.min(100, upgradeProgress)}%` }}
-            />
-          </div>
+          <ProgressBar label="Building upgrade progress" value={upgradeProgress} />
           <div className="flex justify-between items-center text-xs">
             <span className="text-muted-foreground">Time left:</span>
             <span className="font-semibold">{timeLeft}</span>

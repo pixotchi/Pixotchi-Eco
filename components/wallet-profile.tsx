@@ -334,8 +334,12 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     const isTestnet = chainId === 84532;
 
     if (isBase) {
-      // Blue rounded square for Base mainnet (Base logo style)
-      return <div className="w-4 h-4 bg-[hsl(var(--info))] rounded-sm" />;
+      return (
+        <span
+          className="base-logo-corner inline-block h-4 w-4 shrink-0 bg-[#0000ff]"
+          aria-hidden="true"
+        />
+      );
     }
 
     const color = isTestnet ? "text-[hsl(var(--warning))]" : "text-destructive";
@@ -507,7 +511,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   return (
     <React.Fragment>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent size="xl" surface="soft" className="w-[min(94vw,36rem)]">
+        <DialogContent size="lg" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
           <DialogHeader>
             <div className="flex items-center space-x-2">
               {/* Profile Avatar or Wallet icon - with 5-tap debug mode trigger */}
@@ -573,6 +577,25 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                   Account
                 </h3>
                 <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+                  <div className="flex justify-center pb-1 text-center">
+                    {isNameLoading ? (
+                      <Skeleton className="h-8 w-36 rounded-[var(--radius-control)]" />
+                    ) : name ? (
+                      <span className="max-w-full truncate text-sm font-bold text-foreground">
+                        {name}
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={() => openExternalUrl("https://base.org/names")}
+                        variant="compactUtility"
+                        size="compact"
+                        className="border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] px-3 text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45"
+                      >
+                        Get a Base Name
+                      </Button>
+                    )}
+                  </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">Provider</span>
                     <span className="text-xs font-semibold">
@@ -589,27 +612,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Basename</span>
-                    <div className="flex items-center space-x-1">
-                      {isNameLoading ? (
-                        <Skeleton className="h-4 w-32" />
-                      ) : name ? (
-                        <span className="text-xs font-semibold">{name}</span>
-                      ) : (
-                        <Button
-                          type="button"
-                          onClick={() => openExternalUrl("https://base.org/names")}
-                          variant="compactUtility"
-                          size="compact"
-                          className="px-2.5 text-xs"
-                        >
-                          Get a Basename!
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Wallet Address with copy icon */}
                   {address && (
                     <div className="flex items-center justify-between">
@@ -618,14 +620,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <span className="text-xs font-mono text-muted-foreground">
                           {formatAddress(address)}
                         </span>
-                        <Button
+                        <button
+                          type="button"
                           onClick={() => copyToClipboard(address, "Wallet address")}
-                          variant="ghost"
-                          size="icon"
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-4px)] text-muted-foreground transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                           aria-label="Copy wallet address"
                         >
-                          <Copy className="h-4 w-4 text-muted-foreground" />
-                        </Button>
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -672,30 +674,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           <Wallet className="w-3 h-3 text-[hsl(var(--info))]" />
                           <span className="text-xs font-semibold text-[hsl(var(--info))]">
                             {getWalletTypeLabel()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Gas Fees Indicator */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Gas Fees</span>
-                    <div className="flex items-center space-x-1">
-                      {smartWalletLoading ? (
-                        <Skeleton className="h-4 w-16" />
-                      ) : isSmartWallet || isSolana ? (
-                        <div className="flex items-center space-x-1">
-                          <CheckCircle className="w-3 h-3 text-value" />
-                          <span className="text-xs font-semibold text-value">
-                            Sponsored
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1">
-                          <XCircle className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">
-                            No
                           </span>
                         </div>
                       )}
@@ -904,7 +882,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 variant="destructive"
                 size="default"
                 onClick={handleDisconnect}
-                className="w-full"
+                className="w-full border border-red-500/60 !bg-[#dc2626] !bg-[image:linear-gradient(180deg,#ef4444_0%,#dc2626_48%,#b91c1c_100%)] !text-white shadow-[0_10px_22px_-14px_rgba(185,28,28,0.85)] hover:!brightness-[1.04] hover:shadow-[0_12px_26px_-14px_rgba(185,28,28,0.95)] focus-visible:ring-red-500/45"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Disconnect Wallet
@@ -915,7 +893,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       </Dialog>
       <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent className="max-w-lg" hideCloseButton={isExporting}>
+        <DialogContent className="w-[min(94vw,28rem)] max-w-md" hideCloseButton={isExporting}>
           <DialogHeader>
             <div className="flex items-center space-x-2">
               <Key className="w-5 h-5 text-primary" />
@@ -944,7 +922,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                   {embeddedWallets.map((wallet) => (
                     <label
                       key={wallet.address}
-                      className="flex min-h-11 items-center space-x-3 rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 text-sm hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+                      className="flex min-h-11 items-center space-x-3 rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 text-sm hover:border-primary/50 hover:bg-[hsl(var(--nav-hover-bg))] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
                     >
                       <input
                         type="radio"

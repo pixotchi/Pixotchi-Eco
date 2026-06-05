@@ -30,7 +30,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         className={cn(
           'rounded-[var(--radius-panel)] border',
           surfaceStyles[surface],
-          hover && 'transition-[border-color,background-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:shadow-[var(--shadow-raised)]',
+          hover && 'transition-[border-color,background-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:shadow-[var(--shadow-raised)]',
           className
         )}
         {...props}

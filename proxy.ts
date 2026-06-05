@@ -26,6 +26,12 @@ const DEFAULT_ADMIN_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ];
+const DEFAULT_PUBLIC_API_ORIGINS = [
+  'https://mini.pixotchi.tech',
+  'https://beta.mini.pixotchi.tech',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
 const DEFAULT_FRAME_ANCESTORS = [
   "'self'",
   'https://mini.pixotchi.tech',
@@ -80,7 +86,7 @@ function isCrossSiteBrowserRequest(request: NextRequest): boolean {
     return false;
   }
 
-  return secFetchSite !== 'same-origin';
+  return secFetchSite === 'cross-site';
 }
 
 export async function proxy(request: NextRequest) {
@@ -140,6 +146,7 @@ export async function proxy(request: NextRequest) {
     const requestOrigin = request.nextUrl.origin;
     const allowedPublicApiOrigins = new Set([
       requestOrigin,
+      ...DEFAULT_PUBLIC_API_ORIGINS,
       ...parseOrigins(process.env.ALLOWED_PUBLIC_API_ORIGINS),
     ]);
     

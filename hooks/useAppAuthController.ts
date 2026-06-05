@@ -847,37 +847,45 @@ export function useAppAuthController() {
       reportFailure?: boolean;
       toastOnFailure?: boolean;
     }): Promise<{ message?: string; ok: boolean }> => {
-      if (isMiniApp || state.surface !== "base") {
+      const isSiweSurface = state.surface === "base" || state.surface === "test";
+      const surfaceLabel = state.surface === "test" ? "test wallet" : "Base";
+
+      if (isMiniApp || !isSiweSurface) {
         return {
-          message: "Base chat session recovery is only available on the Base surface.",
+          message: "Chat session recovery is only available on signed EVM wallet surfaces.",
           ok: false,
         };
       }
 
       if (!isEvmConnected || !normalizedAddress) {
         return {
-          message: "Connect your Base wallet to restore the chat session.",
+          message: `Connect your ${surfaceLabel} to restore the chat session.`,
           ok: false,
         };
       }
 
       if (baseAuthInFlightRef.current) {
         return {
-          message: "Base authentication is already in progress.",
+          message: `${surfaceLabel} authentication is already in progress.`,
           ok: false,
         };
       }
 
-      const base =
-        (connectors || []).find((connector: UntypedValue) => connector.id === "baseAccount") ||
-        (connectors || [])[0];
-      const legacyBase = (connectors || []).find(
-        (connector: UntypedValue) => connector.id === "coinbaseWalletSDK",
-      );
+      const base = state.surface === "test"
+        ? (connectors || []).find(
+            (connector: UntypedValue) => connector?.id === "localTest" || connector?.type === "localTest",
+          )
+        : (connectors || []).find((connector: UntypedValue) => connector.id === "baseAccount") ||
+          (connectors || [])[0];
+      const legacyBase = state.surface === "base"
+        ? (connectors || []).find(
+            (connector: UntypedValue) => connector.id === "coinbaseWalletSDK",
+          )
+        : null;
 
       if (!base) {
         return {
-          message: "Base wallet connector unavailable.",
+          message: `${surfaceLabel} connector unavailable.`,
           ok: false,
         };
       }
@@ -960,7 +968,7 @@ export function useAppAuthController() {
 
         const fallbackMessage = shouldUseLegacyBaseFallback(error)
           ? "This Coinbase app version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy."
-          : "Base authentication failed. Please try again.";
+          : `${surfaceLabel} authentication failed. Please try again.`;
         const message = getErrorMessage(error, fallbackMessage);
 
         if (options.reportFailure) {
@@ -1066,7 +1074,9 @@ export function useAppAuthController() {
 
   const isWebPrivySurface = !isMiniApp && state.surface === "privy";
   const isBaseAuthPending =
-    !isMiniApp && state.surface === "base" && state.baseAuthStatus !== "idle";
+    !isMiniApp &&
+    (state.surface === "base" || state.surface === "test") &&
+    state.baseAuthStatus !== "idle";
 
   useEffect(() => {
     const nextState: AuthConnectionState =
@@ -1122,7 +1132,7 @@ export function useAppAuthController() {
       return;
     }
 
-    if (state.surface === "base") {
+    if (state.surface === "base" || state.surface === "test") {
       dispatch({
         type: "set-base-authenticated-address",
         address: sessionStorageManager.getBaseAuthenticatedAddress(),
@@ -1134,7 +1144,11 @@ export function useAppAuthController() {
   }, [state.surface, state.surfaceInitialized]);
 
   useEffect(() => {
-    if (!state.surfaceInitialized || isMiniApp || state.surface !== "base") {
+    if (
+      !state.surfaceInitialized ||
+      isMiniApp ||
+      (state.surface !== "base" && state.surface !== "test")
+    ) {
       baseSessionCheckRef.current = null;
       baseSessionRecoveryAttemptRef.current = null;
       dispatch({ type: "set-base-authenticated-address", address: null });
@@ -1269,9 +1283,9 @@ export function useAppAuthController() {
         return;
       }
 
-      if (isMiniApp || state.surface !== "base") {
+      if (isMiniApp || (state.surface !== "base" && state.surface !== "test")) {
         emitBaseChatSessionRefreshResult({
-          message: "Base chat session recovery is unavailable on this auth surface.",
+          message: "Chat session recovery is unavailable on this auth surface.",
           requestId: detail.requestId,
           status: "ignored",
         });
@@ -1384,7 +1398,7 @@ export function useAppAuthController() {
       return;
     }
 
-    if (state.surface === "base" && isBaseAuthPending) {
+    if ((state.surface === "base" || state.surface === "test") && isBaseAuthPending) {
       return;
     }
 
@@ -1404,6 +1418,7 @@ export function useAppAuthController() {
 
           ensureLocalTestWallet();
           await connectAsync({ connector: testConnector as UntypedValue });
+          await completeBaseAuthentication(testConnector as UntypedValue);
           if (storedAuto === "test") {
             await sessionStorageManager.removeAutologin();
           }

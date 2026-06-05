@@ -158,7 +158,7 @@ export const slides: TutorialSlide[] = [
       <div className="space-y-2 text-sm">
         <p>Everyone plays differently, so find the strategy that fits you.</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li>Use a <strong>Smart Wallet</strong> for the best experience (sponsored gas).</li>
+          <li>Use a <strong>Smart Wallet</strong> for the smoothest onchain experience.</li>
           <li>Good luck, and enjoy your journey in Pixotchi! 🌱</li>
         </ul>
       </div>

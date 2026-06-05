@@ -156,15 +156,17 @@ const YouBadge = () => (
   <span className="ml-1 text-xs font-semibold text-[hsl(var(--info))]">(You)</span>
 );
 
+const activityAssetNameClass = "font-pixel text-[0.86em] leading-normal";
+
 const PlantName = ({ name, id, isYou }: { name?: string, id: string, isYou: boolean }) => (
-  <span className={`font-bold ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
+  <span className={`${activityAssetNameClass} ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
     {name || `Plant #${id}`}
     {isYou && <YouBadge />}
   </span>
 );
 
-const LandName = ({ landId, isYou }: { landId: string, isYou: boolean }) => (
-  <span className={`font-bold ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
+const LandName = ({ landId, isYou }: { landId: string | number | bigint, isYou: boolean }) => (
+  <span className={`${activityAssetNameClass} ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
     Land #{landId}
     {isYou && <YouBadge />}
   </span>
@@ -268,7 +270,7 @@ export const KilledEventRenderer = ({ event, userAddress, shopItemMap, gardenIte
 export const MintEventRenderer = ({ event, shopItemMap, gardenItemMap }: { event: MintEvent, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => (
   <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
     <p className="text-sm">
-      A new Pixotchi, <span className="font-bold">Plant #{event.nftId}</span>, was born!
+      <PlantName id={event.nftId} isYou={false} />, was born!
     </p>
   </EventWrapper>
 );
@@ -375,7 +377,7 @@ export const LandMintedEventRenderer = ({ event }: { event: LandMintedEvent, use
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        A new land, <span className="font-bold">Land #{event.tokenId}</span>, was claimed!
+        A new land, <LandName landId={event.tokenId} isYou={false} />, was claimed!
       </p>
     </EventWrapper>
   );
@@ -384,7 +386,7 @@ export const LandMintedEventRenderer = ({ event }: { event: LandMintedEvent, use
 export const LandNameChangedEventRenderer = ({ event }: { event: LandNameChangedEvent }) => (
     <EventWrapper event={event}>
       <p className="text-sm">
-      Land #{event.tokenId} was renamed to &quot;<span className="font-semibold">{event.name}</span>&quot;.
+      <LandName landId={event.tokenId} isYou={false} /> was renamed to &quot;<span className={activityAssetNameClass}>{event.name}</span>&quot;.
       </p>
     </EventWrapper>
   );
@@ -395,7 +397,7 @@ export const VillageUpgradeEventRenderer = ({ event }: { event: VillageUpgradedW
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> started upgrading {buildingName}.
+        <LandName landId={event.landId} isYou={false} /> started upgrading {buildingName}.
       </p>
     </EventWrapper>
   );
@@ -407,7 +409,7 @@ export const VillageSpeedUpEventRenderer = ({ event }: { event: VillageSpeedUpWi
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> sped up {buildingName} construction.
+        <LandName landId={event.landId} isYou={false} /> sped up {buildingName} construction.
       </p>
     </EventWrapper>
   );
@@ -419,7 +421,7 @@ export const TownUpgradeEventRenderer = ({ event }: { event: TownUpgradedWithLea
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> started upgrading {buildingName}.
+        <LandName landId={event.landId} isYou={false} /> started upgrading {buildingName}.
       </p>
     </EventWrapper>
   );
@@ -431,7 +433,7 @@ export const TownSpeedUpEventRenderer = ({ event }: { event: TownSpeedUpWithSeed
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> sped up {buildingName} construction.
+        <LandName landId={event.landId} isYou={false} /> sped up {buildingName} construction.
       </p>
     </EventWrapper>
   );
@@ -443,7 +445,7 @@ export const QuestStartedEventRenderer = ({ event }: { event: QuestStartedEvent 
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> started a {difficulty} quest.
+        <LandName landId={event.landId} isYou={false} /> started a {difficulty} quest.
       </p>
     </EventWrapper>
   );
@@ -455,7 +457,7 @@ export const QuestFinalizedEventRenderer = ({ event }: { event: QuestFinalizedEv
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> completed a quest and earned <span className="font-semibold text-value">{reward}</span>.
+        <LandName landId={event.landId} isYou={false} /> completed a quest and earned <span className="font-semibold text-value">{reward}</span>.
       </p>
     </EventWrapper>
   );
@@ -467,7 +469,7 @@ export const VillageProductionClaimedEventRenderer = ({ event }: { event: Villag
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> claimed production from {buildingName}.
+        <LandName landId={event.landId} isYou={false} /> claimed production from {buildingName}.
       </p>
     </EventWrapper>
   );
@@ -476,7 +478,7 @@ export const VillageProductionClaimedEventRenderer = ({ event }: { event: Villag
 export const BarracksBuiltEventRenderer = ({ event }: { event: BarracksBuiltEvent }) => (
   <EventWrapper event={event}>
     <p className="text-sm">
-      <span className="font-bold">Land #{event.landId}</span> built Barracks.
+      <LandName landId={event.landId} isYou={false} /> built Barracks.
     </p>
   </EventWrapper>
 );
@@ -484,9 +486,9 @@ export const BarracksBuiltEventRenderer = ({ event }: { event: BarracksBuiltEven
 export const BarracksRaidEventRenderer = ({ event }: { event: BarracksRaidEvent }) => (
   <EventWrapper event={event}>
     <p className="text-sm">
-      <span className="font-bold">Land #{event.attackerLandId}</span>
+      <LandName landId={event.attackerLandId} isYou={false} />
       {" attacked "}
-      <span className="font-bold">Land #{event.defenderLandId}</span>
+      <LandName landId={event.defenderLandId} isYou={false} />
       {event.attackerWon ? " and won." : " and lost."}
     </p>
   </EventWrapper>
@@ -499,7 +501,7 @@ export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: Casino
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span> built a Casino{isYou ? " (You)" : ""}.
+        <LandName landId={event.landId} isYou={!!isYou} /> built a Casino.
       </p>
     </EventWrapper>
   );
@@ -514,7 +516,7 @@ export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event:
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Roulette</span>
+        <LandName landId={event.landId} isYou={!!isYou} /> played <span className="font-bold">Roulette</span>
         {event.won ? (
           <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
         ) : (
@@ -535,7 +537,7 @@ export const BlackjackResultEventRenderer = ({ event, userAddress }: { event: Bl
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
-        <span className="font-bold">Land #{event.landId}</span>{isYou ? " (You)" : ""} played <span className="font-bold">Blackjack</span>
+        <LandName landId={event.landId} isYou={!!isYou} /> played <span className="font-bold">Blackjack</span>
         {won ? (
           <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
         ) : (

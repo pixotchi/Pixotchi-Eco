@@ -580,7 +580,7 @@ export default function BlackjackTransaction({
         (mode === "action" && action === undefined);
 
     const defaultClassName = "w-full min-h-11 rounded-[var(--radius-control)] px-4 py-2 font-bold transition-colors";
-    const activeClassName = buttonClassName || `${defaultClassName} bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] hover:bg-[hsl(var(--warning)/0.9)]`;
+    const activeClassName = buttonClassName || `${defaultClassName} bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] hover:brightness-[1.03]`;
     const disabledClassName = `${defaultClassName} bg-muted text-muted-foreground cursor-not-allowed`;
     const resolvedButtonText = getButtonText();
     const resolvedButtonAriaLabel = buttonAriaLabel ?? (

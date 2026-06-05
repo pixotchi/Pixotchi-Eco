@@ -37,7 +37,7 @@ import {
 ChevronDown,
 ChevronLeft,
 ChevronRight,
-Flower,
+Flower2,
 Info
 } from "lucide-react";
 import Image from "next/image";
@@ -309,7 +309,7 @@ export default function PlantsView() {
   const renderNoPlantsView = () => (
     <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">
       <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
-        <Flower className="w-12 h-12 text-muted-foreground" />
+        <Flower2 className="w-12 h-12 text-muted-foreground" />
       </div>
       <h3 className="text-lg font-semibold text-foreground mb-2">
         No Plants Yet!
@@ -349,7 +349,7 @@ export default function PlantsView() {
                     {selectedPlant ? (
                       <div className="flex items-center space-x-2">
                         <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
-                        <span>{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
+                        <span className="font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
                       </div>
                     ) : "Select a Plant"}
                     <ChevronDown className="w-4 h-4" />
@@ -360,7 +360,7 @@ export default function PlantsView() {
                     <DropdownMenuItem key={plant.id} onSelect={() => setSelectedPlant(plant)}>
                       <div className="flex items-center space-x-2">
                         <PlantImage selectedPlant={plant} width={24} height={24} />
-                        <span>{plant.name || `Plant #${plant.id}`} (Lvl {plant.level})</span>
+                        <span><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Lvl {plant.level})</span>
                       </div>
                     </DropdownMenuItem>
                   ))}
@@ -375,11 +375,11 @@ export default function PlantsView() {
         <div
           className={
             selectedPlant.status === 4
-              ? "space-y-4 lg:mx-auto lg:grid lg:w-full lg:max-w-[980px] lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start lg:justify-center lg:gap-5 lg:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)]"
-              : "space-y-4 lg:mx-auto lg:grid lg:w-full lg:max-w-[1100px] lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start lg:justify-center lg:gap-5 lg:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
+              ? "space-y-4 min-[54rem]:mx-auto min-[54rem]:grid min-[54rem]:w-full min-[54rem]:max-w-[980px] min-[54rem]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] min-[54rem]:items-start min-[54rem]:justify-center min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)]"
+              : "space-y-4 min-[54rem]:mx-auto min-[54rem]:grid min-[54rem]:w-full min-[54rem]:max-w-[1100px] min-[54rem]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] min-[54rem]:items-start min-[54rem]:justify-center min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
           }
         >
-          <div className="space-y-4 lg:sticky lg:top-0">
+          <div className="space-y-4 min-[54rem]:sticky min-[54rem]:top-0">
           {/* Plant "Screen" Display */}
           <Card>
             <CardContent className="p-4 space-y-3">
@@ -387,28 +387,15 @@ export default function PlantsView() {
               <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
                 <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
 
-                {/* Top Stats Bar - LVL, PTS, STARS */}
-                <div className="absolute top-2 left-2 right-2 z-20 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 text-[11px] font-bold text-foreground/80 sm:top-3 sm:left-3 sm:right-3 sm:gap-2 sm:text-sm">
-                  {/* Left: Level */}
-                  <div className="flex justify-start">
-                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-1.5 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md sm:px-2">
-                      <Image src="/icons/level.svg" alt="Level" width={16} height={16} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      <span className="truncate">LVL {selectedPlant.level}</span>
-                    </div>
+                {/* Top corners: points and stars */}
+                <div className="absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2 text-[11px] font-bold text-foreground/80 sm:text-sm">
+                  <div className="flex min-h-7 max-w-[48%] items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                    <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{formatScore(selectedPlant.score)} PTS</span>
                   </div>
-                  {/* Center: Points */}
-                  <div className="flex justify-center">
-                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-1.5 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md sm:px-2">
-                      <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="h-3.5 w-3.5 text-yellow-500 sm:h-4 sm:w-4" />
-                      <span className="truncate">{formatScore(selectedPlant.score)} PTS</span>
-                    </div>
-                  </div>
-                  {/* Right: Stars */}
-                  <div className="flex justify-end">
-                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-1.5 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md sm:px-2">
-                      <Image src="/icons/Star.svg" alt="Star" width={16} height={16} className="h-3.5 w-3.5 text-amber-400 sm:h-4 sm:w-4" />
-                      <span className="truncate">{selectedPlant.stars}</span>
-                    </div>
+                  <div className="flex min-h-7 max-w-[48%] items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                    <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{selectedPlant.stars}</span>
                   </div>
                 </div>
 
@@ -438,7 +425,7 @@ export default function PlantsView() {
                       }}
                       variant="outline"
                       size="icon"
-                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-card/90"
+                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
                       aria-label="Previous plant"
                       title="Previous"
                     >
@@ -455,7 +442,7 @@ export default function PlantsView() {
                       }}
                       variant="outline"
                       size="icon"
-                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-card/90"
+                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
                       aria-label="Next plant"
                       title="Next"
                     >
@@ -473,20 +460,20 @@ export default function PlantsView() {
                       {hasActiveFence && (
                         <div className="flex flex-col gap-1">
                           {fenceStatuses.map((fence) => (
-                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                               <FenceTimer effectUntil={fence.effectUntil} noBackground={true} className="text-sm" label={fence.type} />
                             </div>
                           ))}
                         </div>
                       )}
                       {/* TOD Timer */}
-                      <div className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                      <div className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                         <CountdownTimer timeUntilStarving={selectedPlant.timeUntilStarving} noBackground={true} className="text-sm" />
                       </div>
                     </div>
                     {/* Bottom-right: Health Status */}
                     <div className="flex justify-end">
-                      <div className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                      <div className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                         <Image
                           src={selectedPlant.status === 4 ? "/icons/skull.png" : "/icons/HEART.svg"}
                           alt={selectedPlant.status === 4 ? "Dead" : "Health"}
@@ -505,7 +492,7 @@ export default function PlantsView() {
               <div className="text-center">
                 <div className="inline-flex max-w-full items-center justify-center gap-1">
                   <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 truncate text-lg font-semibold">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
+                  <h3 className="min-w-0 truncate font-pixel text-lg">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
                   <EditPlantName
                     plant={selectedPlant}
                     onNameChanged={(plantId, newName) => {
@@ -520,12 +507,20 @@ export default function PlantsView() {
                     className="h-11 min-h-11 w-11 min-w-11 shrink-0"
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">{getStrainName(selectedPlant.strain)}</p>
-                {selectedPlant.timePlantBorn && (
-                  <p className="text-xs text-muted-foreground">
-                    Planted on {new Date(Number(selectedPlant.timePlantBorn) * 1000).toLocaleDateString()}
-                  </p>
-                )}
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 font-semibold text-foreground/80">
+                    <Image src="/icons/level.svg" alt="" width={14} height={14} className="h-3.5 w-3.5" aria-hidden="true" />
+                    LVL {selectedPlant.level}
+                  </span>
+                  <span aria-hidden="true">•</span>
+                  <span>{getStrainName(selectedPlant.strain)}</span>
+                  {selectedPlant.timePlantBorn && (
+                    <>
+                      <span aria-hidden="true">•</span>
+                      <span>Planted {new Date(Number(selectedPlant.timePlantBorn) * 1000).toLocaleDateString()}</span>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Actions Section: Unclaimed Rewards + Arcade */}
@@ -546,7 +541,7 @@ export default function PlantsView() {
                     title={`${formatEth(selectedPlant.rewards)} ETH rewards`}
                     aria-label={`Claim ${formatEth(selectedPlant.rewards)} ETH rewards`}
                   >
-                    <StandardContainer className="flex min-h-[4rem] w-full min-w-0 flex-col items-center justify-center gap-1.5 overflow-hidden border-[hsl(var(--warning)/0.45)] bg-[hsl(var(--warning)/0.12)] px-2 py-2 text-center text-foreground transition-[filter] group-hover:brightness-105">
+                    <StandardContainer className="surface-control flex min-h-[3.25rem] w-full min-w-0 flex-col items-center justify-center gap-1 overflow-hidden px-2 py-1.5 text-center transition-[filter] group-hover:brightness-105 sm:min-h-[3.5rem]">
                       <p className="text-xs font-semibold leading-tight">Rewards</p>
                       <FittedEthRewardValue amount={formatEth(selectedPlant.rewards)} />
                     </StandardContainer>
@@ -561,11 +556,11 @@ export default function PlantsView() {
                     title="Arcade games"
                     aria-label="Open arcade games"
                   >
-                    <StandardContainer className="flex min-h-[4rem] w-full items-center justify-center gap-2 p-2 text-foreground transition-[filter] group-hover:brightness-105">
-                      <Image src="/icons/GAME.png" alt="Arcade" width={18} height={18} className="shrink-0" />
-                      <div className="min-w-0">
+                    <StandardContainer className="surface-control flex min-h-[3.25rem] w-full min-w-0 items-center justify-center gap-1.5 px-1.5 py-1.5 transition-[filter] group-hover:brightness-105 min-[360px]:gap-2 min-[360px]:px-2 sm:min-h-[3.5rem]">
+                      <Image src="/icons/GAME.png" alt="Arcade" width={22} height={22} className="h-5 w-5 shrink-0 min-[360px]:h-[22px] min-[360px]:w-[22px]" />
+                      <div className="min-w-0 max-w-full">
                         <p className="text-xs font-semibold leading-tight">Arcade</p>
-                        <p className="text-sm font-bold">Play games</p>
+                        <p className="whitespace-normal text-[11px] font-bold leading-tight min-[360px]:text-xs">Play games</p>
                       </div>
                     </StandardContainer>
                   </Button>
@@ -662,10 +657,10 @@ export default function PlantsView() {
 
           </div>
 
-          <div className="min-w-0 lg:w-full">
+          <div className="min-w-0 min-[54rem]:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <Card className="lg:w-full">
+            <Card className="min-[54rem]:w-full">
               <CardHeader>
                 <CardTitle>Revive Plant</CardTitle>
               </CardHeader>
@@ -742,7 +737,7 @@ export default function PlantsView() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="lg:h-fit lg:w-full">
+            <Card className="min-[54rem]:h-fit min-[54rem]:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Marketplace</CardTitle>
@@ -757,10 +752,10 @@ export default function PlantsView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,340px)] lg:items-start lg:justify-center">
+                <div className="grid grid-cols-1 gap-4 min-[54rem]:grid-cols-[minmax(220px,260px)_minmax(0,340px)] min-[54rem]:items-start min-[54rem]:justify-center">
                   {/* Regular Wallet Info Message */}
                   {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                    <StandardContainer className="p-3 bg-primary/10 lg:col-span-2">
+                    <StandardContainer className="p-3 bg-primary/10 min-[54rem]:col-span-2">
                       <div className="flex items-start space-x-2">
                         <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                         <div className="text-sm text-foreground">
@@ -792,10 +787,10 @@ export default function PlantsView() {
                           return (
                             <div key={label} className="space-y-1.5">
                               {/* Subtle group divider with label */}
-                              <div className="flex items-center gap-2">
-                                <div className="h-px flex-1 bg-border/50" />
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="h-px w-14 shrink-0 bg-border/50" />
                                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-                                <div className="h-px flex-1 bg-border/50" />
+                                <div className="h-px w-14 shrink-0 bg-border/50" />
                               </div>
                               <div className={items.length === 4 ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-2"}>
                                 {items.map((item: GardenItem) => {
@@ -853,8 +848,8 @@ export default function PlantsView() {
 
                         return (
                           <div className="space-y-2">
-                            {renderItemGroup(todItems, 'TOD')}
-                            {renderItemGroup(ptsItems, 'PTS')}
+                            {renderItemGroup(todItems, 'Lifetime Hours (TOD)')}
+                            {renderItemGroup(ptsItems, 'Points (PTS)')}
                             {renderItemGroup(hybridItems, 'Hybrid')}
                           </div>
                         );

@@ -76,9 +76,9 @@ export default function ChatMessageComponent({
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
   
-  const bgColor = isAIMessage ? 'bg-[hsl(var(--info)/0.12)] text-foreground' :
-                  isOwnPublicMessage || isUserAIMessage ? 'bg-primary text-primary-foreground' :
-                  'bg-muted';
+  const bgColor = isAIMessage ? 'border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.12)] text-foreground' :
+                  isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)]' :
+                  'border border-border/50 bg-card/85 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
@@ -111,7 +111,7 @@ export default function ChatMessageComponent({
       <div className={cn("flex", alignment)}>
         <div
           className={cn(
-            "rounded-lg min-w-0 [overflow-wrap:anywhere]",
+            "min-w-0 rounded-[var(--radius-control)] [overflow-wrap:anywhere]",
             bubbleSize,
             bgColor
           )}

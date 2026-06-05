@@ -1,4 +1,5 @@
-import { isAddress } from 'viem';
+import { createPublicClient, http, isAddress } from 'viem';
+import { mainnet } from 'viem/chains';
 import { getBaseReadClient } from './base-rpc';
 import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
@@ -17,7 +18,16 @@ const BASE_ENS_REGISTRAR_ABI = [
   },
 ] as const;
 
+const ETHEREUM_ENS_RPC_URL =
+  process.env.ETHEREUM_RPC_URL ||
+  process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL ||
+  'https://ethereum-rpc.publicnode.com';
+
 const getBaseClient = () => getBaseReadClient();
+const ethereumEnsClient = createPublicClient({
+  chain: mainnet,
+  transport: http(ETHEREUM_ENS_RPC_URL),
+});
 
 async function readCache(key: string): Promise<string | null> {
   if (!redis) return null;
@@ -97,8 +107,23 @@ async function resolveBasename(address: `0x${string}`): Promise<string | null> {
 }
 
 /**
- * Resolve a single address to its Basename (Base network)
- * Uses the app's custom RPC transport with fallbacks
+ * Resolve an ENS name from Ethereum mainnet when no Basename exists.
+ */
+async function resolveEnsName(address: `0x${string}`): Promise<string | null> {
+  try {
+    const name = await ethereumEnsClient.getEnsName({ address });
+    return name && name.length > 0 ? name : null;
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Identity Resolver] ENS lookup failed', error);
+    }
+    return null;
+  }
+}
+
+/**
+ * Resolve a single address to its primary display name.
+ * Prefers Basename on Base, then falls back to mainnet ENS.
  */
 export async function resolvePrimaryName(
   address: string,
@@ -118,8 +143,7 @@ export async function resolvePrimaryName(
   }
 
   try {
-    // Resolve Basename using Base L2 resolver (uses app's RPC system)
-    const rawName = await resolveBasename(normalised);
+    const rawName = (await resolveBasename(normalised)) ?? (await resolveEnsName(normalised));
     const name = sanitiseResolvedName(normalised, rawName ?? null);
     await writeCache(cacheKey, name);
     return name;
@@ -135,8 +159,7 @@ export async function resolvePrimaryName(
 }
 
 /**
- * Resolve multiple addresses to their Basenames (Base network) in batch
- * Uses custom RPC transport with fallbacks
+ * Resolve multiple addresses to their primary display names.
  */
 export async function resolvePrimaryNames(
   addresses: string[],

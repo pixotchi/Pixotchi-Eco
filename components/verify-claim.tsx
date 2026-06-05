@@ -271,7 +271,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           </CardHeader>
           <CardContent className="space-y-3">
             <Button
-              variant="primary"
+              variant="imageCardPrimary"
               fullWidth
               className="font-sans"
               onClick={() => openExternalUrl('https://verify.base.dev')}
@@ -325,7 +325,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           )}
 
           <Button 
-            variant="special"
+            variant="imageCardPrimary"
             fullWidth
             className="font-sans" 
             onClick={handleVerify}
@@ -341,7 +341,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
             )}
           </Button>
           <p className="text-xs text-white/80 text-center font-sans">
-            Powered by Base Verify. No gas required.
+            Powered by Base Verify.
           </p>
         </CardContent>
       </div>

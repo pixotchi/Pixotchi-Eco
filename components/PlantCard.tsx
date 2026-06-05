@@ -96,7 +96,7 @@ const PlantCard = React.memo(function PlantCard({
           {/* Plant Details */}
           <div className="flex-1 min-w-0">
             <div className="relative">
-              <h3 className="font-semibold text-foreground truncate pr-6">
+              <h3 className="truncate pr-6 font-pixel text-foreground">
                 {plant.name || `Plant #${plant.id}`}
               </h3>
               <EditPlantName 

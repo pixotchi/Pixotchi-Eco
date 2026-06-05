@@ -166,7 +166,7 @@ export function EditPlantName({
         <Button
           variant="ghost"
           size="icon-sm"
-          className={`hover:bg-muted ${className}`}
+          className={`hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary ${className}`}
           title="Change plant name"
           aria-label="Change plant name"
         >
@@ -201,7 +201,7 @@ export function EditPlantName({
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Enter new name..."
               maxLength={MAX_NAME_LENGTH}
-              className="w-full"
+              className="w-full font-pixel"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{newName.length}/{MAX_NAME_LENGTH} characters</span>

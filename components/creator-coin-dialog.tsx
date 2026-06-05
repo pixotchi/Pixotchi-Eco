@@ -13,7 +13,7 @@ interface CreatorCoinDialogProps {
 export function CreatorCoinDialog({ open, onOpenChange }: CreatorCoinDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md border-primary/20 bg-card/95 backdrop-blur-xl">
+      <DialogContent className="sm:max-w-md border-primary/20 bg-card/95 bg-[image:var(--gradient-dialog)] backdrop-blur-xl">
         <DialogHeader className="items-center text-center space-y-4 pt-4 pr-0">
           <div className="relative w-24 h-24 flex items-center justify-center" style={{ perspective: '1000px' }}>
             <div className="relative w-24 h-24 animate-coin-flip" style={{ transformStyle: 'preserve-3d' }}>
@@ -39,7 +39,7 @@ export function CreatorCoinDialog({ open, onOpenChange }: CreatorCoinDialogProps
               </div>
             </div>
           </div>
-          <DialogTitle className="text-2xl font-pixel tracking-wide text-primary">
+          <DialogTitle className="text-2xl font-bold text-primary">
             $PIXOTCHI Launch
           </DialogTitle>
           <DialogDescription className="text-foreground text-lg font-medium">
@@ -68,7 +68,7 @@ export function CreatorCoinDialog({ open, onOpenChange }: CreatorCoinDialogProps
         </DialogHeader>
 
         <div className="space-y-6 pt-2 pb-4">
-          <div className="p-4 rounded-xl bg-muted/40 border border-border/50 text-center space-y-2">
+          <div className="space-y-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 text-center shadow-[var(--shadow-hairline)]">
             <p className="text-sm text-muted-foreground">
               Get ready for the official Creator Coin launch!
               <br/>

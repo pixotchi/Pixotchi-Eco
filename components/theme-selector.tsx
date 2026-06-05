@@ -16,15 +16,18 @@ import { useAmbientAudio } from "@/lib/ambient-audio-context";
 const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
 
 const themes = [
-  { name: "light", label: "Light", color: "linear-gradient(135deg, #a8d0f0 0%, #1661b1 58%, #8ee0d4 100%)" },
-  { name: "dark", label: "Dark", color: "linear-gradient(135deg, #1f2d42 0%, #76c5f9 62%, #24463f 100%)" },
-  { name: "green", label: "Green", color: "linear-gradient(135deg, #c1e7cb 0%, #188651 58%, #cbe978 100%)" },
-  { name: "yellow", label: "Yellow", color: "linear-gradient(135deg, #fae6a8 0%, #b06911 58%, #9adce5 100%)" },
-  { name: "red", label: "Red", color: "linear-gradient(135deg, #ebc2c6 0%, #b81e38 58%, #e6a26b 100%)" },
-  { name: "pink", label: "Pink", color: "linear-gradient(135deg, #edc4dc 0%, #bc2475 58%, #c6a8eb 100%)" },
-  { name: "blue", label: "Blue", color: "linear-gradient(135deg, #bbd4f1 0%, #1f56bd 58%, #99dfe8 100%)" },
-  { name: "violet", label: "Violet", color: "linear-gradient(135deg, #d5c9ed 0%, #6022c3 58%, #e4a7e5 100%)" }
+  { name: "light", label: "Light", color: "bg-slate-300" },
+  { name: "dark", label: "Dark", color: "bg-slate-800" },
+  { name: "green", label: "Green", color: "bg-green-500" },
+  { name: "yellow", label: "Yellow", color: "bg-yellow-500" },
+  { name: "red", label: "Red", color: "bg-red-500" },
+  { name: "pink", label: "Pink", color: "bg-pink-500" },
+  { name: "blue", label: "Blue", color: "bg-blue-500" },
+  { name: "violet", label: "Violet", color: "bg-fuchsia-500" }
 ];
+
+const currentThemeSwatchClass = "h-4 w-4 rounded-[4px]";
+const themeSwatchClass = "h-6 w-6 rounded-[4px]";
 
 function MenuSwitchRow({
   label,
@@ -51,16 +54,20 @@ function MenuSwitchRow({
     >
       <span className="text-xs font-medium">{label}</span>
       <span
-        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-[background-color,box-shadow] ${
+        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-[background-color,border-color,box-shadow] ${
           checked
-            ? "bg-[image:var(--gradient-control-active)] shadow-[var(--shadow-hairline)]"
-            : "border border-border/60 bg-background/60"
+            ? "border border-primary/25 bg-primary bg-[image:var(--gradient-control-active)] shadow-[var(--shadow-hairline)]"
+            : "border border-border/70 bg-muted/75 bg-[image:var(--gradient-panel)] shadow-[inset_0_1px_2px_hsl(var(--foreground)/0.10)]"
         }`}
         aria-hidden="true"
       >
         <span
-          className={`inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform ${
+          className={`inline-block h-5 w-5 rounded-full border transition-[transform,background-color,border-color,box-shadow] ${
             checked ? "translate-x-[18px]" : "translate-x-0.5"
+          } ${
+            checked
+              ? "border-white/45 bg-primary-foreground shadow-sm"
+              : "border-border/80 bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.20)]"
           }`}
         />
       </span>
@@ -133,7 +140,7 @@ export function ThemeSelector() {
           title={`Change theme: ${currentTheme.label}`}
           aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
         >
-          <div className="base-logo-corner h-4 w-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)]" style={{ background: currentTheme.color }} />
+          <div className={`${currentThemeSwatchClass} ${currentTheme.color}`} />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -146,13 +153,13 @@ export function ThemeSelector() {
               size="iconCompact"
               title={themeOption.label}
               onClick={() => handleThemeChange(themeOption.name)}
-              className={`p-0 ${theme === themeOption.name ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
+              className={`h-8 min-h-8 w-8 min-w-8 rounded-[6px] p-0 ${theme === themeOption.name ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
                 }`}
               role="radio"
               aria-checked={theme === themeOption.name}
               aria-label={`Select ${themeOption.label} theme`}
             >
-              <div className="base-logo-corner h-5 w-5 shrink-0 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)]" style={{ background: themeOption.color }} />
+              <div className={`${themeSwatchClass} ${themeOption.color}`} />
             </Button>
           ))}
         </div>

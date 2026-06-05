@@ -7,7 +7,7 @@ import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import type { ChatMode } from "@/lib/types";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 const SCROLL_THRESHOLD = 56;
 
@@ -33,6 +33,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
   const isAssistantMode = activeMode === 'ai';
   const publicChatUnavailable =
     (activeMode === 'public' || activeMode === 'ai') && !publicChatAuthenticated;
+  const isRefreshingSession = publicChatLoading || publicChatState === 'booting';
   const unavailableTitle = isAssistantMode ? 'Chat session unavailable' : 'Public chat unavailable';
   const unavailableDetail =
     publicChatLoading || publicChatState === 'booting'
@@ -79,8 +80,8 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
               aria-live="polite"
             >
               <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[var(--radius-control)] bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning-foreground))]">
-                  <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[var(--radius-control)] bg-[hsl(var(--warning)/0.18)]">
+                  <Image src="/icons/chat.svg" alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
                   <h3 className="font-semibold text-foreground">
@@ -94,12 +95,12 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
                     variant="warning"
                     size="sm"
                     className="mt-3"
-                    loading={publicChatLoading}
-                    loadingText="Refreshing..."
+                    aria-busy={isRefreshingSession || undefined}
+                    disabled={isRefreshingSession}
                     onClick={retryPublicChatSession}
                   >
-                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                    Refresh session
+                    <RefreshCw className={`h-4 w-4 ${isRefreshingSession ? 'animate-spin' : ''}`} aria-hidden="true" />
+                    {isRefreshingSession ? 'Refreshing...' : 'Refresh session'}
                   </Button>
                 </div>
               </div>

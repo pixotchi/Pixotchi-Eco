@@ -77,7 +77,7 @@ export default function PlantProfileDialog({
   const ownerName = walletNameOverride ?? ownerNameDerived ?? null;
 
   // React Query for Owner Stats
-  const { data: ownerStats, isLoading: loading } = useQuery({
+  const { data: ownerStats, isFetching: ownerStatsFetching, isLoading: loading } = useQuery({
     queryKey: ['ownerStats', ownerAddress, plantId],
     queryFn: async () => {
       if (!ownerAddress) return null;
@@ -259,6 +259,7 @@ export default function PlantProfileDialog({
   const displaySubtitle = !isWalletVariant && hasPlant && plant
     ? `Level ${plant.level}${plant.rank ? ` · Rank #${plant.rank}` : ''}`
     : undefined;
+  const ownerStatsPending = loading || (ownerStatsFetching && !ownerStats);
 
   const handleCopyAddress = () => {
     if (!ownerAddress) return;
@@ -274,24 +275,27 @@ export default function PlantProfileDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-[440px] p-0">
-          <div className="flex flex-col overflow-y-auto overflow-x-hidden">
-            <div className="relative">
-              <div className="h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
-              <div className="absolute inset-x-6 top-8 flex items-start justify-between text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span className="pt-1">Powered by:</span>
-                <Button
+        <DialogContent
+          layer={isWalletVariant ? "nested" : "default"}
+          surface="soft"
+          className="w-[min(94vw,27.5rem)] max-w-[27.5rem] !p-0"
+        >
+          <div className="flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
+            <div className="relative min-h-36 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent" aria-hidden="true" />
+              <div className="relative z-[1] flex items-start justify-between gap-3 px-6 pb-12 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="shrink-0 pt-2">Powered by:</span>
+                <button
                   type="button"
-                  variant="ghost"
-                  size="default"
                   onClick={() => openExternalUrl('https://efp.app')}
-                  className="gap-2 px-2 text-xs font-medium normal-case"
+                  className="inline-flex min-h-10 min-w-0 items-center justify-end gap-2 rounded-[var(--radius-control)] px-1 text-right text-xs font-semibold normal-case tracking-[0.14em] text-foreground/85 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                  aria-label="Open Ethereum Follow Protocol"
                 >
                   <Image src="/icons/efp-logo.svg" alt="EFP" width={16} height={16} />
-                  Ethereum Follow Protocol
-                </Button>
+                  <span className="min-w-0 truncate">Ethereum Follow Protocol</span>
+                </button>
               </div>
-              <div className="absolute -bottom-8 left-6">
+              <div className="absolute -bottom-8 left-6 z-[2]">
                 <div className="relative">
                   <div
                     className={`w-24 h-24 border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center ${isWalletVariant ? 'rounded-full' : 'rounded-xl'
@@ -322,11 +326,11 @@ export default function PlantProfileDialog({
                 </div>
               </div>
             </div>
-            <div className="flex flex-col gap-1 px-6 pb-5 pt-6">
+            <div className="relative z-[1] flex flex-col gap-1 px-6 pb-5 pt-6">
               {/* Plant Info */}
               <div className="mt-6 mb-2 flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <DialogTitle className="text-2xl font-bold truncate">
+                  <DialogTitle className={`truncate text-2xl ${isWalletVariant ? 'font-bold' : 'font-pixel'}`}>
                     {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
                   </DialogTitle>
                   {displaySubtitle && !showPrimaryLoading && (
@@ -359,20 +363,20 @@ export default function PlantProfileDialog({
                       </div>
                     </>
                   )}
-                  {loading ? (
+                  {ownerStatsPending ? (
                     <>
-                      <div className="flex items-center gap-1.5">
-                        <Skeleton className="h-4 w-4 rounded" />
+                      <div className="flex items-center gap-1.5" aria-label="Loading plant count">
+                        <Image src="/icons/plant1.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-8" />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Skeleton className="h-4 w-4 rounded" />
+                      <div className="flex items-center gap-1.5" aria-label="Loading land count">
+                        <Image src="/icons/bee-house.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-8" />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Skeleton className="h-4 w-4 rounded" />
+                      <div className="flex items-center gap-1.5" aria-label="Loading staked SEED">
+                        <Image src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-12" />
-                        <Skeleton className="h-3 w-12" />
+                        <span className="text-xs text-muted-foreground uppercase">Staked</span>
                       </div>
                     </>
                   ) : ownerStats ? (
@@ -477,7 +481,7 @@ export default function PlantProfileDialog({
                           onDisconnectedClick={() => {
                             toast.error('Please connect your wallet to follow users');
                           }}
-                          className="h-11 min-h-11 w-full rounded-[var(--radius-control)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                          className="profile-follow-button h-11 min-h-11 w-full rounded-[var(--radius-control)] bg-primary bg-[image:var(--gradient-control-active)] px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-control)] transition-[filter,box-shadow] hover:brightness-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                         />
                       </div>
                     </div>

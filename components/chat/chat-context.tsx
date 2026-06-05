@@ -33,7 +33,7 @@ import {
   useConfirmedMiniAppSession,
 } from '@/lib/confirmed-miniapp-session';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
-import { SecureSessionState } from '@/lib/auth-surface';
+import { resolvePreferredAuthSurface, SecureSessionState } from '@/lib/auth-surface';
 import { sessionStorageManager } from '@/lib/session-storage-manager';
 import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
 import { useIsSolanaWallet, useSolanaWallet } from '@/components/solana';
@@ -265,6 +265,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     publicChatSessionRef.current = publicChatSession;
   }, [publicChatSession]);
 
+  const getCurrentWebAuthSurface = useCallback(() => {
+    if (isMiniApp || typeof window === 'undefined') {
+      return null;
+    }
+
+    return resolvePreferredAuthSurface({
+      search: window.location.search,
+      storedSurface: sessionStorageManager.getAuthSurface(),
+    });
+  }, [isMiniApp]);
+
   useEffect(() => {
     if (publicChatAuthenticated) {
       setPublicChatState('ready');
@@ -311,11 +322,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleChatAuthFailure = useCallback(async () => {
-    const currentSurface = !isMiniApp
-      ? sessionStorageManager.getAuthSurface()
-      : null;
+    const currentSurface = getCurrentWebAuthSurface();
 
-    if (currentSurface === 'base' && chatAddress) {
+    if ((currentSurface === 'base' || currentSurface === 'test') && chatAddress) {
       const recovery = await requestBaseChatSessionRefresh('chat-auth-failure');
       if (recovery.status === 'success') {
         setPublicChatState('booting');
@@ -341,13 +350,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore cleanup failures after an auth rejection.
     }
-  }, [chatAddress, isMiniApp]);
+  }, [chatAddress, getCurrentWebAuthSurface]);
 
   const retryPublicChatSession = useCallback(() => {
     setError(null);
     setPublicChatState('booting');
+
+    const currentSurface = getCurrentWebAuthSurface();
+    if ((currentSurface === 'base' || currentSurface === 'test') && chatAddress) {
+      setPublicChatLoading(true);
+      void (async () => {
+        const recovery = await requestBaseChatSessionRefresh('chat-auth-failure');
+
+        if (recovery.status === 'success') {
+          setPublicChatRetryVersion((version) => version + 1);
+          return;
+        }
+
+        setPublicChatSession(null);
+        setPublicChatState('error');
+        setPublicChatLoading(false);
+        if (recovery.message) {
+          setError(recovery.message);
+        }
+      })();
+      return;
+    }
+
     setPublicChatRetryVersion((version) => version + 1);
-  }, []);
+  }, [chatAddress, getCurrentWebAuthSurface]);
 
   useEffect(() => {
     if (mode !== 'public' && mode !== 'ai') {
@@ -666,9 +697,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [chatAddress, handleChatAuthFailure, publicChatAddress, publicChatAuthenticated, updatePublicMessages]);
 
   useEffect(() => {
-    const currentSurface = !isMiniApp
-      ? sessionStorageManager.getAuthSurface()
-      : null;
+    const currentSurface = getCurrentWebAuthSurface();
     const bootstrapKey = isMiniApp
       ? [
         'miniapp',
@@ -770,7 +799,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       Boolean(chatAddress) &&
       (currentSurface !== 'privysolana' || Boolean(solanaAddress));
 
-    const shouldCheckBase = currentSurface === 'base';
+    const shouldCheckBase = currentSurface === 'base' || currentSurface === 'test';
 
     if (!shouldBootstrapPrivy && !shouldCheckBase) {
       bootstrapKeyRef.current = null;
@@ -906,6 +935,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     authenticated,
     chatAddress,
     getAccessToken,
+    getCurrentWebAuthSurface,
     identityToken,
     isMiniApp,
     publicChatSession,

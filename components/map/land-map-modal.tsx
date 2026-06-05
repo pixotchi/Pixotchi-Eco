@@ -146,7 +146,7 @@ export function LandMapModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-background/95 border-border flex flex-col gap-0 focus:outline-none"
+        className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-card/95 bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
         hideCloseButton
       >
         <DialogTitle className="sr-only">World Map</DialogTitle>
@@ -156,7 +156,7 @@ export function LandMapModal({
         
         {/* Header overlay */}
         <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
-          <div className="bg-background/80 backdrop-blur-md px-3 py-2 rounded-lg border border-border shadow-sm pointer-events-auto">
+          <div className="pointer-events-auto rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-hairline)] backdrop-blur-md">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Compass className="w-4 h-4 text-primary" />
               World Map
@@ -171,7 +171,7 @@ export function LandMapModal({
             size="icon" 
             onClick={onClose}
             aria-label="Close world map"
-            className="pointer-events-auto rounded-full bg-background/80 backdrop-blur-md"
+            className="pointer-events-auto bg-card/90 bg-[image:var(--gradient-surface)] backdrop-blur-md"
           >
             <X className="w-4 h-4" />
           </Button>
@@ -228,9 +228,9 @@ export function LandMapModal({
         {/* Wilderness Info Tooltip */}
         {tappedWilderness && (
             <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                <div className="bg-card/95 backdrop-blur-md p-4 rounded-xl border border-border shadow-lg flex gap-4 items-center">
+                <div className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-raised)] backdrop-blur-md">
                     {/* Thumbnail */}
-                    <div className="relative w-16 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-muted/50 aspect-square">
+                    <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
                             src={`/icons/${
                                 tappedWilderness.type === 'water' ? 'lake' :
@@ -271,9 +271,9 @@ export function LandMapModal({
         {/* Neighbor Info Tooltip / Sheet */}
         {tappedLandId && (
             <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                <div className="bg-card/95 backdrop-blur-md p-3 rounded-xl border border-border shadow-lg flex gap-3 items-center">
+                <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-raised)] backdrop-blur-md">
                     {/* Thumbnail */}
-                    <div className="relative w-16 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-muted/50 aspect-square">
+                    <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
                             src={tappedLandId <= totalSupply ? "/icons/taken.png" : "/icons/cemetery.png"} 
                             alt="Land Thumbnail" 
@@ -331,9 +331,9 @@ export function LandMapModal({
                                     <Button
                                         type="button"
                                         onClick={() => setProfileOpen(true)}
-                                        variant="primary"
-                                        size="default"
-                                        className="gap-1 px-3 text-xs"
+                                        variant="compactUtility"
+                                        size="compact"
+                                        className="h-7 min-h-7 gap-1.5 px-2 text-[11px]"
                                         aria-label="Open owner profile"
                                     >
                                         Profile <User className="w-3 h-3" />
@@ -361,7 +361,7 @@ export function LandMapModal({
 
         {/* Controls overlay */}
         <div className="absolute bottom-6 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-          <div className="flex flex-col bg-background/80 backdrop-blur-md rounded-lg border border-border shadow-sm overflow-hidden pointer-events-auto">
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] backdrop-blur-md">
             <Button 
               variant="ghost" 
               size="icon" 
@@ -387,7 +387,7 @@ export function LandMapModal({
             size="icon"
             onClick={handleCenterOnUser} 
             aria-label="Center map on selected land"
-            className="bg-background/80 backdrop-blur-md pointer-events-auto rounded-lg shadow-sm"
+            className="pointer-events-auto bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] backdrop-blur-md"
           >
             <Image src="/icons/location.svg" alt="Center" width={20} height={20} className="w-5 h-5" />
           </Button>
@@ -396,7 +396,7 @@ export function LandMapModal({
         {/* Legend overlay (hidden if showing neighbor info) */}
         {!tappedLandId && (
             <div className="absolute bottom-6 left-4 z-10 pointer-events-none">
-            <div className="bg-background/80 backdrop-blur-md p-2 rounded-lg border border-border shadow-sm pointer-events-auto flex flex-col gap-1.5">
+            <div className="pointer-events-auto flex flex-col gap-1.5 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                 <div className="flex items-center gap-2 text-[10px]">
                 <div className="w-3 h-3 bg-primary rounded-[2px] border border-primary/50"></div>
                 <span>Your Land</span>

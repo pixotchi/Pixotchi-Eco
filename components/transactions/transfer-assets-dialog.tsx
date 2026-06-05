@@ -383,7 +383,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </div>
 
           {(plantsList.length > 0 || landsList.length > 0) && (
-            <div className="space-y-3 rounded-lg border border-border/60 p-3">
+            <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
               <p className="text-xs text-muted-foreground">Choose which assets to send.</p>
               {plantsList.length > 0 && (
                 <div className="space-y-2 text-sm">
@@ -435,7 +435,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                             onCheckedChange={(nextChecked) => setPlantSelected(plant.id, nextChecked === true)}
                             onSelect={(event) => event.preventDefault()}
                           >
-                            <span className="min-w-0 flex-1 truncate">{plant.name || `Plant #${plant.id}`}</span>
+                            <span className="min-w-0 flex-1 truncate font-pixel">{plant.name || `Plant #${plant.id}`}</span>
                             {plant.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{plant.id}</span>}
                           </DropdownMenuCheckboxItem>
                         );
@@ -496,7 +496,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                             onCheckedChange={(nextChecked) => setLandSelected(id, nextChecked === true)}
                             onSelect={(event) => event.preventDefault()}
                           >
-                            <span className="min-w-0 flex-1 truncate">{land.name || `Land #${id}`}</span>
+                            <span className="min-w-0 flex-1 truncate font-pixel">{land.name || `Land #${id}`}</span>
                             {land.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{id}</span>}
                           </DropdownMenuCheckboxItem>
                         );

@@ -24,7 +24,7 @@ export function PaginationFooter({
   return (
     <div
       className={cn(
-        "surface-footer-divider flex-none -mx-4 -mb-4 mt-2 bg-transparent px-4 pb-4 pt-3",
+        "surface-footer-divider flex-none -mx-4 -mb-4 mt-0 bg-transparent px-4 pb-4 pt-3",
         "lg:mx-0 lg:mb-0 lg:px-0",
         className
       )}

@@ -20,6 +20,26 @@ import { useCallback,useEffect,useId,useRef,useState } from "react";
 import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
 
+const XBrandIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="currentColor" role="img" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z" />
+  </svg>
+);
+
+const TelegramBrandIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="#26A5E4" role="img" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+  </svg>
+);
+
+const FarcasterBrandIcon = ({ className }: { className?: string }) => (
+  <svg className={className} role="img" viewBox="0 0 1000 1000" aria-hidden="true">
+    <path d="M257.778 155.556H742.222V844.445H671.111V528.889H670.414C662.554 441.677 589.258 373.333 500 373.333C410.742 373.333 337.446 441.677 329.586 528.889H328.889V844.445H257.778V155.556Z" fill="#855DCD" />
+    <path d="M128.889 253.333L157.778 351.111H182.222V746.667C169.949 746.667 160 756.616 160 768.889V795.556H155.556C143.283 795.556 133.333 805.505 133.333 817.778V844.445H382.222V817.778C382.222 805.505 372.273 795.556 360 795.556H355.556V768.889C355.556 756.616 345.606 746.667 333.333 746.667H306.667V253.333H128.889Z" fill="#855DCD" />
+    <path d="M675.556 746.667C663.283 746.667 653.333 756.616 653.333 768.889V795.556H648.889C636.616 795.556 626.667 805.505 626.667 817.778V844.445H875.556V817.778C875.556 805.505 865.606 795.556 853.333 795.556H848.889V768.889C848.889 756.616 838.94 746.667 826.667 746.667V351.111H851.111L880 253.333H702.222V746.667H675.556Z" fill="#855DCD" />
+  </svg>
+);
+
 const ABOUT_SCENE_SPRITES = [
   { src: "/icons/plantGrowth.gif", alt: "", width: 190, height: 190, className: "left-[6%] top-[4%] w-[30%]", animation: "about-scene-bob 6s ease-in-out infinite" },
   { src: "/icons/plantGrowth4.gif", alt: "", width: 260, height: 260, className: "left-[36%] top-[26%] w-[41%]", animation: "about-scene-bob 7s ease-in-out infinite -1s" },
@@ -283,7 +303,7 @@ export default function AboutTab() {
 
 
   return (
-    <div className="space-y-8 lg:mx-auto lg:max-w-5xl">
+    <div className="mx-auto max-w-[36rem] space-y-8 lg:max-w-5xl">
 
       {/* Invite Section - Only show if system is enabled */}
       {INVITE_CONFIG.SYSTEM_ENABLED && (
@@ -454,7 +474,7 @@ export default function AboutTab() {
               <div className="grid grid-cols-2 gap-2 lg:contents">
                 <Button
                   onClick={() => start({ reset: true })}
-                  className="bg-value text-white hover:opacity-90 lg:w-auto"
+                  className="bg-value bg-[image:var(--gradient-value)] text-white hover:brightness-[1.03] lg:w-auto"
                   aria-label="Start Pixotchi tutorial"
                 >
                   <PlayCircle className="w-4 h-4 mr-2" />
@@ -539,7 +559,7 @@ export default function AboutTab() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-4 lg:space-y-0 lg:rounded-lg lg:border lg:border-border/65 lg:bg-card/95 lg:p-4 lg:shadow-[var(--shadow-hairline)]">
+      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-4 lg:space-y-0 lg:rounded-[var(--radius-panel)] lg:border lg:border-border/60 lg:bg-card/90 lg:bg-[image:var(--gradient-surface)] lg:p-4 lg:shadow-[var(--shadow-hairline)]">
         {/* Version Number */}
         <div className="text-center lg:order-2 lg:border-t lg:border-border/60 lg:pt-4">
           <span className="text-xs text-muted-foreground/60 font-mono">
@@ -549,24 +569,33 @@ export default function AboutTab() {
 
         <div className="text-center lg:order-1 lg:flex lg:flex-1 lg:flex-col lg:justify-center">
           <h3 className="text-sm font-semibold mb-2">Join our Community</h3>
-          <div className="flex justify-center space-x-4">
+          <div className="flex justify-center gap-3">
             <button
               type="button"
               onClick={() => openExternalUrl('https://x.com/pixotchi')}
               aria-label="Open Pixotchi on X"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+              className="surface-control inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             >
-              <Image src="/icons/twitter.png" alt="" width={24} height={24} />
+              <XBrandIcon className="h-5 w-5" />
               <span className="sr-only">X (Twitter)</span>
             </button>
             <button
               type="button"
               onClick={() => openExternalUrl('https://t.me/pixotchi')}
               aria-label="Open Pixotchi on Telegram"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+              className="surface-control inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             >
-              <Image src="/icons/Telegram.png" alt="" width={24} height={24} />
+              <TelegramBrandIcon className="h-6 w-6" />
               <span className="sr-only">Telegram</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openExternalUrl('https://farcaster.xyz/pixotchi.eth')}
+              aria-label="Open Pixotchi on Farcaster"
+              className="surface-control inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+            >
+              <FarcasterBrandIcon className="h-6 w-6" />
+              <span className="sr-only">Farcaster</span>
             </button>
           </div>
           <BaseAnimatedLogo className="mx-auto mt-4 w-full" />

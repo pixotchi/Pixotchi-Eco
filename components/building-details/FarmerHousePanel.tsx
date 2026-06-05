@@ -1,6 +1,7 @@
 "use client";
 
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { ERC20_BALANCE_ABI,getQuestSlotsByLandId,LAND_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
@@ -241,9 +242,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                 )}
                 {statusOf(s) === 'In progress' && (
                   <div className="space-y-1">
-                    <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-2 bg-primary transition-all" style={{ width: `${Math.min(100, progressPct(s)).toFixed(1)}%` }} />
-                    </div>
+                    <ProgressBar label={`Quest ${idx + 1} progress`} value={progressPct(s)} />
                     <div className="text-xs text-muted-foreground">Ends in ~{formatSeconds(Math.max(0, Math.ceil(blocksLeft(s.endBlock) * 2)))}</div>
                   </div>
                 )}

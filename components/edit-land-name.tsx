@@ -70,7 +70,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 				<Button
 					variant="ghost"
 					size="icon-sm"
-					className={`hover:bg-muted ${className}`}
+					className={`hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary ${className}`}
 					title="Change land name"
 					aria-label="Change land name"
 				>
@@ -87,7 +87,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 				<div className="space-y-6">
 					<div className="space-y-3">
 						<label htmlFor="land-name" className="text-sm font-medium">New Name</label>
-						<Input id="land-name" value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Enter new name..." maxLength={MAX_NAME_LENGTH} className="w-full" />
+						<Input id="land-name" value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Enter new name..." maxLength={MAX_NAME_LENGTH} className="w-full font-pixel" />
 						<div className="flex justify-between text-xs text-muted-foreground">
 							<span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
 							{newName.length === MAX_NAME_LENGTH && <span className="text-destructive">Maximum length reached</span>}

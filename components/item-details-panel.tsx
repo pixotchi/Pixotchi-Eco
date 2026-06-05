@@ -538,7 +538,7 @@ export default function ItemDetailsPanel({
 
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">For Plant:</span>
-            <span className="font-medium">
+            <span className="font-pixel">
               {selectedPlant.name || `#${selectedPlant.id}`}
             </span>
           </div>

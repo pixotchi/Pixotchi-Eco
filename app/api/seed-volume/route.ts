@@ -6,15 +6,90 @@ const DEXSCREENER_API = `https://api.dexscreener.com/latest/dex/pairs/base/${SEE
 // Cache duration for volume data (5 minutes)
 const CACHE_DURATION = 5 * 60 * 1000;
 
-let cachedData: {
-    volume24h: number;
+type DexTimeWindow = 'm5' | 'h1' | 'h6' | 'h24';
+type DexPairWindowStats = Partial<Record<DexTimeWindow, number>>;
+type DexTxnStats = Partial<Record<DexTimeWindow, { buys?: number; sells?: number }>>;
+type SeedMarketData = {
+    cached?: boolean;
+    dexId?: string;
+    fdv: number | null;
+    liquidityBase: number | null;
+    liquidityQuote: number | null;
+    liquidityUsd: number | null;
+    marketCap: number | null;
+    pairAddress?: string;
+    pairCreatedAt: number | null;
+    pairUrl?: string;
+    priceChange: DexPairWindowStats;
+    priceNative: string | null;
+    priceUsd: string | null;
     rewards: number;
+    stale?: boolean;
     timestamp: number;
-} | null = null;
+    txns: DexTxnStats;
+    volume: DexPairWindowStats;
+    volume24h: number;
+};
+type DexScreenerPair = {
+    dexId?: string;
+    fdv?: number | null;
+    liquidity?: {
+        base?: number | null;
+        quote?: number | null;
+        usd?: number | null;
+    } | null;
+    marketCap?: number | null;
+    pairAddress?: string;
+    pairCreatedAt?: number | null;
+    priceChange?: DexPairWindowStats | null;
+    priceNative?: string | null;
+    priceUsd?: string | null;
+    txns?: DexTxnStats | null;
+    url?: string;
+    volume?: DexPairWindowStats | null;
+};
+
+let cachedData: SeedMarketData | null = null;
+
+function normalizeNumber(value: UntypedValue): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizeWindowStats(value: UntypedValue): DexPairWindowStats {
+    const source = value && typeof value === 'object' ? value as Record<string, UntypedValue> : {};
+    return {
+        ...(normalizeNumber(source.m5) !== null ? { m5: normalizeNumber(source.m5)! } : {}),
+        ...(normalizeNumber(source.h1) !== null ? { h1: normalizeNumber(source.h1)! } : {}),
+        ...(normalizeNumber(source.h6) !== null ? { h6: normalizeNumber(source.h6)! } : {}),
+        ...(normalizeNumber(source.h24) !== null ? { h24: normalizeNumber(source.h24)! } : {}),
+    };
+}
+
+function normalizeTxns(value: UntypedValue): DexTxnStats {
+    const source = value && typeof value === 'object' ? value as Record<string, UntypedValue> : {};
+    const result: DexTxnStats = {};
+
+    (['m5', 'h1', 'h6', 'h24'] as const).forEach((window) => {
+        const entry = source[window];
+        if (!entry || typeof entry !== 'object') {
+            return;
+        }
+
+        const record = entry as Record<string, UntypedValue>;
+        const buys = normalizeNumber(record.buys);
+        const sells = normalizeNumber(record.sells);
+        result[window] = {
+            ...(buys !== null ? { buys } : {}),
+            ...(sells !== null ? { sells } : {}),
+        };
+    });
+
+    return result;
+}
 
 /**
  * GET /api/seed-volume
- * Fetches 24h volume from DexScreener and calculates 2% rewards
+ * Fetches SEED pair market data from DexScreener and calculates 2% rewards.
  */
 export async function GET() {
     try {
@@ -22,8 +97,7 @@ export async function GET() {
         const now = Date.now();
         if (cachedData && (now - cachedData.timestamp) < CACHE_DURATION) {
             return NextResponse.json({
-                volume24h: cachedData.volume24h,
-                rewards: cachedData.rewards,
+                ...cachedData,
                 cached: true,
             });
         }
@@ -40,24 +114,41 @@ export async function GET() {
             throw new Error(`DexScreener API error: ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as UntypedValue;
+        const pair = ((data?.pair ?? data?.pairs?.[0]) ?? {}) as DexScreenerPair;
+        const volume = normalizeWindowStats(pair.volume);
+        const priceChange = normalizeWindowStats(pair.priceChange);
+        const txns = normalizeTxns(pair.txns);
 
         // Extract 24h volume from the pair data
-        const volume24h = data.pair?.volume?.h24 || data.pairs?.[0]?.volume?.h24 || 0;
+        const volume24h = volume.h24 ?? 0;
 
         // Calculate 2% of volume as rewards
         const rewards = volume24h * 0.02;
 
         // Cache the result
         cachedData = {
-            volume24h,
+            dexId: pair.dexId,
+            fdv: normalizeNumber(pair.fdv),
+            liquidityBase: normalizeNumber(pair.liquidity?.base),
+            liquidityQuote: normalizeNumber(pair.liquidity?.quote),
+            liquidityUsd: normalizeNumber(pair.liquidity?.usd),
+            marketCap: normalizeNumber(pair.marketCap),
+            pairAddress: pair.pairAddress,
+            pairCreatedAt: normalizeNumber(pair.pairCreatedAt),
+            pairUrl: pair.url,
+            priceChange,
+            priceNative: typeof pair.priceNative === 'string' ? pair.priceNative : null,
+            priceUsd: typeof pair.priceUsd === 'string' ? pair.priceUsd : null,
             rewards,
+            volume24h,
+            volume,
+            txns,
             timestamp: now,
         };
 
         return NextResponse.json({
-            volume24h,
-            rewards,
+            ...cachedData,
             cached: false,
         });
     } catch (error) {
@@ -66,8 +157,7 @@ export async function GET() {
         // Return cached data if available, even if stale
         if (cachedData) {
             return NextResponse.json({
-                volume24h: cachedData.volume24h,
-                rewards: cachedData.rewards,
+                ...cachedData,
                 cached: true,
                 stale: true,
             });

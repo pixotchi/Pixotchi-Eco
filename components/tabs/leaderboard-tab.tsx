@@ -30,7 +30,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { Skull,Sword,Terminal } from "lucide-react";
+import { Skull,Swords,Terminal } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
@@ -750,13 +750,13 @@ export default function LeaderboardTab() {
     const columns = splitDesktopRows(rows);
 
     return (
-      <div className={cn("hidden lg:grid lg:grid-cols-2 lg:gap-4", fillHeight && "lg:min-h-0 lg:flex-1")}>
+      <div className={cn("hidden min-[54rem]:grid min-[54rem]:grid-cols-2 min-[54rem]:gap-4", fillHeight && "min-[54rem]:min-h-0 min-[54rem]:flex-1")}>
         {columns.map((column, columnIndex) => (
           <div
             key={columnIndex}
             className={cn(
-              "lg:flex lg:flex-col lg:rounded-[var(--radius-panel)] lg:border lg:border-border/55 lg:bg-[image:var(--gradient-scroll-surface)] lg:px-3 lg:py-2 lg:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
-              fillHeight && "lg:min-h-0"
+              "min-[54rem]:flex min-[54rem]:flex-col min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-border/55 min-[54rem]:bg-[image:var(--gradient-scroll-surface)] min-[54rem]:px-3 min-[54rem]:py-2 min-[54rem]:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
+              fillHeight && "min-[54rem]:min-h-0"
             )}
           >
             <div className="flex h-8 flex-none items-center justify-between border-b border-border/60 text-xs font-semibold text-muted-foreground">
@@ -791,15 +791,15 @@ export default function LeaderboardTab() {
     fillDesktop = false
   ) {
     return (
-      <div className={cn("flex h-full min-h-0 flex-col", fillDesktop && "lg:flex lg:h-full lg:min-h-0 lg:flex-col")}>
-        <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-border/55 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 lg:hidden">
+      <div className={cn("flex h-full min-h-0 flex-col", fillDesktop && "min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col")}>
+        <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-border/55 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
           {mobileRows.map((row) => renderRow(row))}
         </div>
 
         {renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
 
-        {renderPagination(mobilePageCount, "lg:hidden")}
-        {renderPagination(desktopPageCount, "hidden lg:flex")}
+        {renderPagination(mobilePageCount, "min-[54rem]:hidden")}
+        {renderPagination(desktopPageCount, "hidden min-[54rem]:flex")}
       </div>
     );
   }
@@ -809,7 +809,7 @@ export default function LeaderboardTab() {
       <div className="flex h-full min-h-0 flex-col">
         <div
           data-ranking-scroll
-          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 lg:pr-3"
+          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3"
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
@@ -835,7 +835,7 @@ export default function LeaderboardTab() {
         key={plant.id}
         className={cn(
           compact ? "py-0.5 transition-all" : "py-3 transition-all",
-          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg lg:mx-0 lg:px-3",
+          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3",
           plant.isDead && "opacity-60"
         )}
       >
@@ -887,7 +887,7 @@ export default function LeaderboardTab() {
           <div className="flex-1 min-w-0">
             {compact ? (
               <div className="min-w-0">
-                <h4 className="truncate text-sm font-semibold">
+                <h4 className="truncate font-pixel text-sm">
                   {plant.name || `Plant #${plant.id}`}
                   {isMine && <span className="ml-1 text-xs text-primary font-medium">(You)</span>}
                 </h4>
@@ -899,7 +899,7 @@ export default function LeaderboardTab() {
               <>
                 <div className="flex items-center space-x-2">
                   <div className="relative min-w-0">
-                    <h4 className="truncate pr-2 text-base font-semibold">
+                    <h4 className="truncate pr-2 font-pixel text-base">
                       {plant.name || `Plant #${plant.id}`}
                       {isMine && (
                         <span className="ml-2 text-xs text-primary font-medium">(You)</span>
@@ -976,7 +976,7 @@ export default function LeaderboardTab() {
                   aria-label="Attack this plant"
                   title="Attack"
                 >
-                  <Sword className="w-4 h-4" />
+                  <Swords className="w-4 h-4" />
                 </Button>
               ) : (
                 <Button
@@ -990,7 +990,7 @@ export default function LeaderboardTab() {
                   aria-label="Attack this plant"
                   title="Attack"
                 >
-                  <Sword className="w-4 h-4" />
+                  <Swords className="w-4 h-4" />
                 </Button>
               )
             )}
@@ -1122,7 +1122,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg lg:mx-0 lg:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1187,7 +1187,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address || `rock-${row.rank}`}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg lg:mx-0 lg:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1294,15 +1294,15 @@ export default function LeaderboardTab() {
   };
 
   return (
-    <div className="h-full min-h-0 space-y-4 lg:mx-auto lg:max-w-7xl">
-      <Card className="flex h-full min-h-[26rem] flex-col overflow-hidden">
+    <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
+      <Card className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:h-[calc(100dvh-12rem)] xl:h-fit">
         <CardHeader className="flex-none">
-          <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between min-[54rem]:grid min-[54rem]:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
             </CardTitle>
             {boardType === 'plants' && (
-              <div className="hidden items-center justify-center gap-4 lg:flex">
+              <div className="hidden items-center justify-center gap-4 min-[54rem]:flex">
                 <ToggleGroup
                   value={filterMode}
                   onValueChange={(v) => {
@@ -1338,7 +1338,7 @@ export default function LeaderboardTab() {
                 )}
               </div>
             )}
-            <div className="w-full min-[380px]:w-auto lg:col-start-3 lg:justify-self-end">
+            <div className="w-full min-[380px]:w-auto min-[54rem]:col-start-3 min-[54rem]:justify-self-end">
               <ToggleGroup
                 value={boardType}
                 onValueChange={(nextValue) => {
@@ -1357,7 +1357,7 @@ export default function LeaderboardTab() {
             </div>
           </div>
           {boardType === 'plants' && (
-            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap lg:hidden">
+            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap min-[54rem]:hidden">
               <ToggleGroup
                 value={filterMode}
                 onValueChange={(v) => {
@@ -1482,7 +1482,7 @@ export default function LeaderboardTab() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Target
                   </div>
-                  <div className="truncate text-sm font-semibold">
+                  <div className="truncate font-pixel text-sm">
                     {targetPlant.name || `Plant #${targetPlant.id}`}
                   </div>
                   <div className="text-xs text-muted-foreground">Level {targetPlant.level}</div>
@@ -1659,7 +1659,7 @@ export default function LeaderboardTab() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Dead target
                   </div>
-                  <div className="truncate text-sm font-semibold">
+                  <div className="truncate font-pixel text-sm">
                     {targetPlant.name || `Plant #${targetPlant.id}`}
                   </div>
                   <div className="text-xs text-muted-foreground">Collects 1 star</div>

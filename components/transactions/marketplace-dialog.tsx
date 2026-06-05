@@ -373,7 +373,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`m-ask-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
@@ -399,7 +399,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`m-bid-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
@@ -520,7 +520,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`ask-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >
@@ -639,7 +639,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return (
                         <button
                           key={`bid-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-muted/30 ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
+                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
                           onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
                           aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
                         >

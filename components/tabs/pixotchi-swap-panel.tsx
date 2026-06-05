@@ -102,15 +102,17 @@ const SWAP_CARD_CLASS =
   'my-0.5 box-border flex min-h-[158px] w-full flex-col items-start rounded-[var(--radius-panel)] border border-border/55 bg-secondary/80 bg-[image:var(--gradient-panel)] p-4 shadow-[var(--surface-inset)]';
 const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-between text-sm text-muted-foreground`;
 const SWAP_TOKEN_TRIGGER_CLASS =
-  'flex min-h-11 w-fit shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'flex min-h-11 min-w-[5.75rem] shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38] max-[360px]:min-w-[5.15rem] max-[360px]:gap-1.5 max-[360px]:px-2 max-[340px]:min-w-[4.75rem] max-[340px]:gap-1 max-[340px]:px-1.5';
 const SWAP_AMOUNT_INPUT_CLASS =
-  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground`;
+  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 border-none bg-transparent text-[clamp(1.85rem,10vw,2.5rem)] leading-none text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none max-[360px]:text-[1.55rem] max-[340px]:mr-1 max-[340px]:text-[1.4rem]`;
+const SWAP_AMOUNT_DISPLAY_CLASS =
+  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate bg-transparent text-[clamp(1.85rem,10vw,2.5rem)] leading-none text-foreground max-[360px]:text-[1.55rem] max-[340px]:mr-1 max-[340px]:text-[1.4rem]`;
 const SWAP_MAX_BUTTON_CLASS =
   `${OCK_COMPAT_FONT} flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
   'relative z-10 mx-auto -my-5 flex h-11 min-h-11 w-16 items-center justify-center rounded-[var(--radius-control)] border-[3px] border-solid border-card/90 bg-card/95 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-control)] hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_PRIMARY_ACTION_CLASS =
-  `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
+  `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-primary bg-[image:var(--gradient-control-active)] px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
 const SWAP_BALANCE_ROW_CLASS = 'mt-2 flex min-h-11 w-full items-center justify-between';
 
@@ -196,10 +198,10 @@ function TokenSelector({
             width={20}
             height={20}
             aria-hidden="true"
-            className="h-5 w-5 shrink-0 overflow-hidden rounded-full object-contain"
+            className="h-5 w-5 shrink-0 overflow-hidden rounded-full object-contain max-[340px]:h-4 max-[340px]:w-4"
           />
           <span
-            className={cn(OCK_COMPAT_FONT, 'whitespace-nowrap font-semibold text-foreground')}
+            className={cn(OCK_COMPAT_FONT, 'whitespace-nowrap font-semibold text-foreground max-[340px]:text-xs')}
             data-testid="ockTokenSelectButton_Symbol"
           >
             {token.displaySymbol}
@@ -213,7 +215,7 @@ function TokenSelector({
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             className={cn(
-              'h-4 w-4 shrink-0 transition-transform duration-150',
+              'h-4 w-4 shrink-0 transition-transform duration-150 max-[340px]:h-3.5 max-[340px]:w-3.5',
               isOpen && 'rotate-180',
             )}
             >
@@ -1287,7 +1289,7 @@ export default function PixotchiSwapPanel() {
             >
               {S.labels.sell}
             </label>
-            <div className="flex w-full items-center justify-between">
+            <div className="flex w-full min-w-0 items-center justify-between gap-2 max-[340px]:gap-1">
               <input
                 id="pixotchi-swap-sell-amount"
                 value={sellAmount}
@@ -1375,12 +1377,9 @@ export default function PixotchiSwapPanel() {
             <div className={SWAP_LABEL_CLASS}>
               {S.labels.buy}
             </div>
-            <div className="flex w-full items-center justify-between">
+            <div className="flex w-full min-w-0 items-center justify-between gap-2 max-[340px]:gap-1">
               <div
-                className={cn(
-                  OCK_COMPAT_FONT,
-                  'mr-2 w-full min-w-0 truncate bg-transparent text-[2.5rem] leading-none text-foreground',
-                )}
+                className={SWAP_AMOUNT_DISPLAY_CLASS}
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"

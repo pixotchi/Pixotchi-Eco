@@ -8,7 +8,8 @@ import { CLIENT_ENV } from "@/lib/env-config";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onTasksDialogOpen } from "@/lib/app-events";
 import type { GmMissionDay } from "@/lib/gamification-types";
-import { CheckCircle2, Circle, Flame, Sprout, Target, Trophy } from "lucide-react";
+import { CheckCircle2, Circle } from "lucide-react";
+import { ProgressBar } from "@/components/ui/progress-bar";
 
 type MissionTask = {
   done?: boolean;
@@ -16,48 +17,21 @@ type MissionTask = {
 };
 
 type MissionSection = {
-  icon: React.ComponentType<{ className?: string }>;
   reward: number;
   tasks: MissionTask[];
   title: string;
 };
 
-function ProgressBar({ label, value }: { label: string; value: number }) {
-  const normalizedValue = Math.max(0, Math.min(100, value));
-
-  return (
-    <div
-      aria-label={label}
-      aria-valuemax={100}
-      aria-valuemin={0}
-      aria-valuenow={Math.round(normalizedValue)}
-      className="h-2 overflow-hidden rounded-full bg-muted"
-      role="progressbar"
-    >
-      <div
-        className="h-full rounded-full bg-[hsl(var(--success))] transition-[width] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
-        style={{ width: `${normalizedValue}%` }}
-      />
-    </div>
-  );
-}
-
 function MissionCard({ section }: { section: MissionSection }) {
   const completed = section.tasks.filter((task) => task.done).length;
   const progress = section.tasks.length > 0 ? (completed / section.tasks.length) * 100 : 0;
-  const Icon = section.icon;
 
   return (
     <section className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-            <Icon className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold leading-tight">{section.title}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">{section.reward} Rocks available</p>
-          </div>
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold leading-tight">{section.title}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{section.reward} Rocks available</p>
         </div>
         <div className="shrink-0 rounded-[var(--radius-control)] border border-border/60 bg-card/80 px-2 py-1 text-xs font-semibold tabular-nums">
           {completed}/{section.tasks.length}
@@ -151,7 +125,6 @@ export default function TasksInfoDialog() {
 
   const missionSections: MissionSection[] = [
     {
-      icon: Target,
       reward: 30,
       title: "General",
       tasks: [
@@ -162,7 +135,6 @@ export default function TasksInfoDialog() {
       ],
     },
     {
-      icon: Sprout,
       reward: 20,
       title: "Social",
       tasks: [
@@ -172,7 +144,6 @@ export default function TasksInfoDialog() {
       ],
     },
     {
-      icon: Trophy,
       reward: 25,
       title: "Land",
       tasks: [
@@ -183,7 +154,6 @@ export default function TasksInfoDialog() {
       ],
     },
     {
-      icon: Flame,
       reward: 25,
       title: "Plant",
       tasks: [
@@ -200,10 +170,50 @@ export default function TasksInfoDialog() {
   );
   const totalTaskCount = missionSections.reduce((total, section) => total + section.tasks.length, 0);
   const dailyProgress = Math.max(0, Math.min(100, missionPts));
+  const summaryCard = (
+    <div className="sticky top-0 z-10 space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-sm">
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <span className="text-xs font-semibold text-muted-foreground">Streak</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-bold leading-none tabular-nums">{streak?.current ?? 0}</span>
+            <span className="text-xs text-muted-foreground">days</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Best {streak?.best ?? 0}</p>
+        </div>
+
+        <div>
+          <span className="text-xs font-semibold text-muted-foreground">Today</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-bold leading-none tabular-nums">{missionPts}</span>
+            <span className="text-xs text-muted-foreground">/100</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Rocks</p>
+        </div>
+
+        <div>
+          <span className="text-xs font-semibold text-muted-foreground">Tasks</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-bold leading-none tabular-nums">{completedTaskCount}</span>
+            <span className="text-xs text-muted-foreground">/{totalTaskCount}</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Done</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>Daily progress</span>
+          <span className="font-medium tabular-nums">Total {missionTotal}</span>
+        </div>
+        <ProgressBar label="Daily task reward progress" value={dailyProgress} />
+      </div>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent mobileMode="sheet" surface="soft" className="w-[min(95vw,34rem)] max-w-lg max-h-[calc(100dvh-1rem)] rounded-[var(--radius-dialog)]">
+      <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
         <DialogHeader className="space-y-2">
           <DialogTitle className="flex items-center gap-2">
             <Image src="/icons/Volcanic_Rock.svg" alt="" width={20} height={20} className="h-5 w-5" aria-hidden="true" />
@@ -212,46 +222,6 @@ export default function TasksInfoDialog() {
           <DialogDescription className="leading-relaxed">
             Earn up to 100 Rocks per day. Daily reset is 00:00 UTC.
           </DialogDescription>
-          {!effectiveDisabled && (
-            <div className="mt-2 space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <span className="text-xs font-semibold text-muted-foreground">Streak</span>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold leading-none tabular-nums">{streak?.current ?? 0}</span>
-                    <span className="text-xs text-muted-foreground">days</span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Best {streak?.best ?? 0}</p>
-                </div>
-
-                <div>
-                  <span className="text-xs font-semibold text-muted-foreground">Today</span>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold leading-none tabular-nums">{missionPts}</span>
-                    <span className="text-xs text-muted-foreground">/100</span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Rocks</p>
-                </div>
-
-                <div>
-                  <span className="text-xs font-semibold text-muted-foreground">Tasks</span>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold leading-none tabular-nums">{completedTaskCount}</span>
-                    <span className="text-xs text-muted-foreground">/{totalTaskCount}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Done</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                  <span>Daily progress</span>
-                  <span className="font-medium tabular-nums">Lifetime {missionTotal}</span>
-                </div>
-                <ProgressBar label="Daily task reward progress" value={dailyProgress} />
-              </div>
-            </div>
-          )}
         </DialogHeader>
 
         <DialogBody className="space-y-4 pb-2">
@@ -262,6 +232,7 @@ export default function TasksInfoDialog() {
             </div>
           ) : (
             <>
+              {summaryCard}
               <div className="grid gap-3 pb-1 sm:grid-cols-2">
                 {missionSections.map((section) => (
                   <MissionCard key={section.title} section={section} />

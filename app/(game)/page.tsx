@@ -351,6 +351,7 @@ export default function App() {
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
   const [isDesktopShell, setIsDesktopShell] = useState(false);
   const [isHeaderStatusPlacement, setIsHeaderStatusPlacement] = useState(false);
+  const [showStandaloneEthBalance, setShowStandaloneEthBalance] = useState(false);
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const previousActiveTabRef = useRef<Tab>(activeTab);
   const lastDismissedRef = useRef<string | null>(null);
@@ -372,18 +373,22 @@ export default function App() {
 
     const desktopQuery = window.matchMedia("(min-width: 80rem)");
     const compactLandscapeQuery = window.matchMedia("(min-width: 48rem) and (max-height: 700px)");
+    const roomyPortraitQuery = window.matchMedia("(min-width: 48rem)");
     const syncShellMode = () => {
       setIsDesktopShell(desktopQuery.matches);
       setIsHeaderStatusPlacement(desktopQuery.matches || compactLandscapeQuery.matches);
+      setShowStandaloneEthBalance(roomyPortraitQuery.matches && !desktopQuery.matches && !compactLandscapeQuery.matches);
     };
 
     syncShellMode();
     desktopQuery.addEventListener("change", syncShellMode);
     compactLandscapeQuery.addEventListener("change", syncShellMode);
+    roomyPortraitQuery.addEventListener("change", syncShellMode);
 
     return () => {
       desktopQuery.removeEventListener("change", syncShellMode);
       compactLandscapeQuery.removeEventListener("change", syncShellMode);
+      roomyPortraitQuery.removeEventListener("change", syncShellMode);
     };
   }, []);
 
@@ -612,7 +617,7 @@ export default function App() {
         className="app-shell-inner w-full flex flex-col h-dvh bg-background bg-[image:var(--gradient-content-well)] overflow-hidden overscroll-none"
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="relative z-[var(--z-sticky)] border-b border-border/55 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
+        <div className="relative z-[var(--z-sticky)] overflow-hidden rounded-b-[var(--radius-panel)] border-x border-b border-border/45 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
           <header
             data-viewport-shell="header"
             className={cn(
@@ -694,7 +699,7 @@ export default function App() {
                 console.error('Error in StatusBar:', { error, errorInfo });
               }}
             >
-              <StatusBar />
+              <StatusBar showEthInStandalone={showStandaloneEthBalance} />
             </ErrorBoundary>
           )}
         </div>
@@ -828,7 +833,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="surface-footer-divider bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="surface-footer-divider border-x border-border/45 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
                 <div className="grid w-full grid-cols-6 items-center gap-0.5" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
