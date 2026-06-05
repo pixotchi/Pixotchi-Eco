@@ -59,7 +59,7 @@ export const CLIENT_ENV = {
   ICON_URL: process.env.NEXT_PUBLIC_ICON_URL,
   HERO_IMAGE: process.env.NEXT_PUBLIC_APP_HERO_IMAGE,
   SPLASH_IMAGE: process.env.NEXT_PUBLIC_SPLASH_IMAGE,
-  SPLASH_BACKGROUND_COLOR: process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR || '#a7c7e7',
+  SPLASH_BACKGROUND_COLOR: process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR || '#a8d0f0',
 
   // CDP/paymaster configuration (requires client access)
   CDP_CLIENT_API_KEY: process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY,

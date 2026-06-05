@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogBody,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuItem,DropdownMenuSeparator,DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -354,6 +354,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="pr-1">
         {!confirmStep ? (
         <div className="space-y-4">
           <div className="space-y-2">
@@ -653,6 +654,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </div>
         </div>
         )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
     </>

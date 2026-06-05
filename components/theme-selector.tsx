@@ -16,14 +16,14 @@ import { useAmbientAudio } from "@/lib/ambient-audio-context";
 const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
 
 const themes = [
-  { name: "light", label: "Light", color: "#a7c7e7" },
-  { name: "dark", label: "Dark", color: "#2d3c53" },
-  { name: "green", label: "Green", color: "#78ad88" },
-  { name: "yellow", label: "Yellow", color: "#c7ad66" },
-  { name: "red", label: "Red", color: "#c59ba4" },
-  { name: "pink", label: "Pink", color: "#ca9db8" },
-  { name: "blue", label: "Blue", color: "#8aa0c1" },
-  { name: "violet", label: "Violet", color: "#b9a4cf" }
+  { name: "light", label: "Light", color: "linear-gradient(135deg, #a8d0f0 0%, #1661b1 58%, #8ee0d4 100%)" },
+  { name: "dark", label: "Dark", color: "linear-gradient(135deg, #1f2d42 0%, #76c5f9 62%, #24463f 100%)" },
+  { name: "green", label: "Green", color: "linear-gradient(135deg, #c1e7cb 0%, #188651 58%, #cbe978 100%)" },
+  { name: "yellow", label: "Yellow", color: "linear-gradient(135deg, #fae6a8 0%, #b06911 58%, #9adce5 100%)" },
+  { name: "red", label: "Red", color: "linear-gradient(135deg, #ebc2c6 0%, #b81e38 58%, #e6a26b 100%)" },
+  { name: "pink", label: "Pink", color: "linear-gradient(135deg, #edc4dc 0%, #bc2475 58%, #c6a8eb 100%)" },
+  { name: "blue", label: "Blue", color: "linear-gradient(135deg, #bbd4f1 0%, #1f56bd 58%, #99dfe8 100%)" },
+  { name: "violet", label: "Violet", color: "linear-gradient(135deg, #d5c9ed 0%, #6022c3 58%, #e4a7e5 100%)" }
 ];
 
 function MenuSwitchRow({
@@ -43,7 +43,7 @@ function MenuSwitchRow({
       className={`flex min-h-11 w-full items-center justify-between gap-4 rounded-md px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
         checked
           ? "bg-background/55 shadow-[var(--shadow-hairline)]"
-          : "hover:bg-accent/55"
+          : "hover:bg-[hsl(var(--nav-hover-bg))]"
       }`}
       role="switch"
       aria-checked={checked}
@@ -119,7 +119,7 @@ export function ThemeSelector() {
 
   if (!mounted) {
     // Render a placeholder to prevent layout shift
-    return <Button variant="outline" size="icon" disabled aria-label="Loading theme selector" />;
+    return <Button variant="headerIcon" size="icon" disabled aria-label="Loading theme selector" />;
   }
 
   const currentTheme = themes.find((t) => t.name === theme) ?? themes[0];
@@ -128,12 +128,12 @@ export function ThemeSelector() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant="headerIcon"
           size="icon"
           title={`Change theme: ${currentTheme.label}`}
           aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
         >
-          <div className="base-logo-corner h-4 w-4" style={{ backgroundColor: currentTheme.color }} />
+          <div className="base-logo-corner h-4 w-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)]" style={{ background: currentTheme.color }} />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -152,7 +152,7 @@ export function ThemeSelector() {
               aria-checked={theme === themeOption.name}
               aria-label={`Select ${themeOption.label} theme`}
             >
-              <div className="base-logo-corner h-5 w-5 shrink-0" style={{ backgroundColor: themeOption.color }} />
+              <div className="base-logo-corner h-5 w-5 shrink-0 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)]" style={{ background: themeOption.color }} />
             </Button>
           ))}
         </div>

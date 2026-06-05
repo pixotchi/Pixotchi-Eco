@@ -853,7 +853,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             setSeed(n);
             setBoxResultDetails(null);
           }}
-          className={`h-16 min-h-16 w-full rounded-[var(--radius-control)] p-0 sm:h-20 sm:min-h-20 ${seed === n ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-border bg-card hover:bg-accent"
+          className={`h-16 min-h-16 w-full rounded-[var(--radius-control)] p-0 sm:h-20 sm:min-h-20 ${seed === n ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-border bg-card hover:bg-[hsl(var(--nav-hover-bg))]"
             }`}
           aria-label={`Select box ${n}`}
           aria-pressed={seed === n}

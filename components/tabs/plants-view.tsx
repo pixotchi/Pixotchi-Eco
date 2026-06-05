@@ -384,27 +384,28 @@ export default function PlantsView() {
           <Card>
             <CardContent className="p-4 space-y-3">
               {/* Main image container with stats overlay */}
-              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] bg-muted/50">
+              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
+                <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
 
                 {/* Top Stats Bar - LVL, PTS, STARS */}
                 <div className="absolute top-2 left-2 right-2 z-20 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 text-[11px] font-bold text-foreground/80 sm:top-3 sm:left-3 sm:right-3 sm:gap-2 sm:text-sm">
                   {/* Left: Level */}
                   <div className="flex justify-start">
-                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] bg-background/65 px-1.5 py-1 backdrop-blur-sm sm:px-2">
+                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-1.5 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md sm:px-2">
                       <Image src="/icons/level.svg" alt="Level" width={16} height={16} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       <span className="truncate">LVL {selectedPlant.level}</span>
                     </div>
                   </div>
                   {/* Center: Points */}
                   <div className="flex justify-center">
-                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] bg-background/65 px-1.5 py-1 backdrop-blur-sm sm:px-2">
+                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-1.5 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md sm:px-2">
                       <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="h-3.5 w-3.5 text-yellow-500 sm:h-4 sm:w-4" />
                       <span className="truncate">{formatScore(selectedPlant.score)} PTS</span>
                     </div>
                   </div>
                   {/* Right: Stars */}
                   <div className="flex justify-end">
-                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] bg-background/65 px-1.5 py-1 backdrop-blur-sm sm:px-2">
+                    <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-1.5 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md sm:px-2">
                       <Image src="/icons/Star.svg" alt="Star" width={16} height={16} className="h-3.5 w-3.5 text-amber-400 sm:h-4 sm:w-4" />
                       <span className="truncate">{selectedPlant.stars}</span>
                     </div>
@@ -437,7 +438,7 @@ export default function PlantsView() {
                       }}
                       variant="outline"
                       size="icon"
-                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
+                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-card/90"
                       aria-label="Previous plant"
                       title="Previous"
                     >
@@ -454,7 +455,7 @@ export default function PlantsView() {
                       }}
                       variant="outline"
                       size="icon"
-                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-background/80"
+                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-card/90"
                       aria-label="Next plant"
                       title="Next"
                     >
@@ -472,20 +473,20 @@ export default function PlantsView() {
                       {hasActiveFence && (
                         <div className="flex flex-col gap-1">
                           {fenceStatuses.map((fence) => (
-                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                               <FenceTimer effectUntil={fence.effectUntil} noBackground={true} className="text-sm" label={fence.type} />
                             </div>
                           ))}
                         </div>
                       )}
                       {/* TOD Timer */}
-                      <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <div className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                         <CountdownTimer timeUntilStarving={selectedPlant.timeUntilStarving} noBackground={true} className="text-sm" />
                       </div>
                     </div>
                     {/* Bottom-right: Health Status */}
                     <div className="flex justify-end">
-                      <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <div className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                         <Image
                           src={selectedPlant.status === 4 ? "/icons/skull.png" : "/icons/HEART.svg"}
                           alt={selectedPlant.status === 4 ? "Dead" : "Health"}
@@ -811,7 +812,7 @@ export default function PlantsView() {
                                             "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
                                             selectedItem?.id === item.id
                                               ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
-                                              : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-accent/55"
+                                              : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]"
                                           )}
                                           aria-label={`Select ${item.name}`}
                                           aria-pressed={selectedItem?.id === item.id}
@@ -874,7 +875,7 @@ export default function PlantsView() {
                                     "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
                                     selectedItem?.id === item.id
                                       ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
-                                      : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-accent/55"
+                                      : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]"
                                   )}
                                   aria-label={`Select ${item.name}`}
                                   aria-pressed={selectedItem?.id === item.id}

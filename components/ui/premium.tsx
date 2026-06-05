@@ -77,7 +77,7 @@ export function ActionBar({
     <div
       className={cn(
         sticky
-          ? "surface-footer-divider sticky bottom-0 z-10 -mx-5 mt-4 bg-transparent px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-mx-6 sm:px-6"
+          ? "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 mt-4 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6"
           : "bg-inherit",
         className
       )}

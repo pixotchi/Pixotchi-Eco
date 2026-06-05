@@ -106,7 +106,7 @@ export default function SlideshowModal() {
         useSafeAreaInset={false}
         overlayClassName="bg-black/50 backdrop-blur-sm"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
-        className="max-h-[90dvh] w-full max-w-md rounded-t-2xl rounded-b-none border border-border p-0 shadow-xl sm:rounded-2xl"
+        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-border p-0 shadow-xl"
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
@@ -134,7 +134,7 @@ export default function SlideshowModal() {
         </div>
 
         {/* Footer */}
-        <div className="surface-footer-divider bg-transparent px-4 py-3 safe-area-bottom">
+        <div className="surface-footer-divider dialog-footer-surface px-4 py-3 safe-area-bottom">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               {slides.map((_, i) => (

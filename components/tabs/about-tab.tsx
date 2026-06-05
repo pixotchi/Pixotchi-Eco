@@ -554,7 +554,7 @@ export default function AboutTab() {
               type="button"
               onClick={() => openExternalUrl('https://x.com/pixotchi')}
               aria-label="Open Pixotchi on X"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             >
               <Image src="/icons/twitter.png" alt="" width={24} height={24} />
               <span className="sr-only">X (Twitter)</span>
@@ -563,7 +563,7 @@ export default function AboutTab() {
               type="button"
               onClick={() => openExternalUrl('https://t.me/pixotchi')}
               aria-label="Open Pixotchi on Telegram"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             >
               <Image src="/icons/Telegram.png" alt="" width={24} height={24} />
               <span className="sr-only">Telegram</span>

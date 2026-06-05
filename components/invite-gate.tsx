@@ -102,7 +102,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
                 {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="headerIcon"
                     size="sm"
                     onClick={handleAddFrame}
                     aria-label="Add Pixotchi Mini to your app"
@@ -115,7 +115,7 @@ export default function InviteGate({ onValidated, onSkip, showSkip = false }: In
                 {isConnected && address ? (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="headerIcon"
                     size="icon"
                     onClick={() => setShowWalletProfile(true)}
                     aria-label="Open wallet profile"

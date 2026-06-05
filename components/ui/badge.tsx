@@ -14,7 +14,6 @@ const badgeVariants = cva(
         warning: "border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning-foreground))]",
         danger: "border-destructive/25 bg-destructive/10 text-destructive",
         info: "border-[hsl(var(--info)/0.25)] bg-[hsl(var(--info)/0.12)] text-[hsl(var(--info))]",
-        gasless: "border-[hsl(var(--success)/0.28)] bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]",
         chain: "border-primary/25 bg-primary/10 text-primary",
         special: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-200",
         game: "border-white/20 bg-slate-950/70 text-white",

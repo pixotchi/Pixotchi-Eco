@@ -366,7 +366,7 @@ export const KNOWLEDGE_TOPICS: Record<KnowledgeTopicId, KnowledgeTopicRecord> = 
     purpose: 'Stake SEED to earn LEAF and support land upgrade loops.',
     stalenessRules: ['Reward ratio and claimable amounts are live values.'],
     title: 'Staking and LEAF',
-    userFlows: ['Open Stake from the status bar or Farm -> Lands -> Town -> Stake House.', 'Use the Stake/Unstake toggle.', 'Enter an amount or use Max where available.', 'Approve SEED if staking and approval is needed.', 'Press Stake or Unstake.', 'Use Claim Rewards to claim LEAF rewards.'],
+    userFlows: ['Open Stake from the status bar or Farm -> Lands -> Town -> Stake House.', 'Use the Stake/Unstake toggle.', 'Choose an amount or use Max where available.', 'Approve SEED if staking and approval is needed.', 'Press Stake or Unstake.', 'Use Claim Rewards to claim LEAF rewards.'],
     where: 'Status bar -> Stake or Farm -> Lands -> Stake House',
   },
   support: {
@@ -392,7 +392,7 @@ export const KNOWLEDGE_TOPICS: Record<KnowledgeTopicId, KnowledgeTopicRecord> = 
     purpose: 'Get SEED or supported tokens through the in-app swap flow.',
     stalenessRules: ['Quotes are time-sensitive; the Swap UI must fetch a fresh quote before action.'],
     title: 'Swap',
-    userFlows: ['Open Swap.', 'Choose sell and buy tokens.', 'Enter amount.', 'Review a fresh quote, route, warnings, and slippage/min-out shown by the UI.', 'Approve if prompted by the app.', 'Confirm the swap through the UI.'],
+    userFlows: ['Open Swap.', 'Choose sell and buy tokens.', 'Set the sell amount.', 'Review a fresh quote, route, warnings, and slippage/min-out shown by the UI.', 'Approve if prompted by the app.', 'Confirm the swap through the UI.'],
     where: 'Swap tab',
   },
   transfers: {

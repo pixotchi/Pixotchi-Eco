@@ -266,8 +266,8 @@ function LoginAuthActions({
         </AlertDescription>
       </Alert>
       <Button
-        className="w-full rounded-md text-base font-semibold text-white h-11 bg-[#ff8170] hover:bg-[#ff6b56] active:bg-[#ff8170] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ff8170] disabled:opacity-60 disabled:cursor-not-allowed"
-        variant="default"
+        className="w-full text-base"
+        variant="special"
         onClick={async () => {
           try {
             await switchAuthSurface('privy');
@@ -651,7 +651,7 @@ export default function App() {
                 {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="headerIcon"
                     size="sm"
                     onClick={handleAddFrame}
                     aria-label="Add Pixotchi Mini to your app"
@@ -666,7 +666,7 @@ export default function App() {
                 {isConnected ? (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="headerIcon"
                     size="icon"
                     onClick={() => setShowWalletProfile(true)}
                     aria-label="Open wallet profile"
@@ -773,7 +773,7 @@ export default function App() {
                 style={{
                   paddingTop: "var(--app-content-gutter)",
                   paddingRight: "var(--app-content-gutter)",
-                  paddingBottom: "var(--app-content-gutter)",
+                  paddingBottom: "calc(var(--app-content-gutter) + var(--app-content-bottom-offset))",
                   paddingLeft: "var(--app-content-gutter)",
                 }}
                 role="tabpanel"
@@ -792,13 +792,24 @@ export default function App() {
                   <TabVisibilityProvider activeTab={activeTab}>
                     {tabs.map((tab) => {
                       const TabComponent = tabComponents[tab.id];
+                      const usesContainedTabLayout =
+                        tab.id === 'activity' || tab.id === 'leaderboard';
                       // Activity mode: 'visible' means mounted/active effects, 'hidden' means kept in memory but effects unmounted.
                       // This preserves scroll position and state (e.g. inputs) when switching tabs.
                       const activityMode = activeTab === tab.id ? 'visible' : 'hidden';
 
                       return (
                         <Activity key={tab.id} mode={activityMode}>
-                          <div className={activeTab === tab.id ? 'block h-full min-h-0 animate-tab-content-in' : 'hidden'}>
+                          <div
+                            className={
+                              activeTab === tab.id
+                                ? cn(
+                                    'block min-h-0 animate-tab-content-in',
+                                    usesContainedTabLayout && 'h-full'
+                                  )
+                                : 'hidden'
+                            }
+                          >
                             <ErrorBoundary
                               resetKeys={[tab.id, ...(address ? [address] : [])]}
                               variant="card"
@@ -817,15 +828,15 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="surface-footer-divider bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
-                <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
+              <nav data-viewport-shell="nav" className="surface-footer-divider bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
+                <div className="grid w-full grid-cols-6 items-center gap-0.5" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
                       key={tab.id}
                       variant="nav"
                       onClick={() => setActiveTab(tab.id)}
                       data-active={activeTab === tab.id}
-                      className="flex h-auto w-16 flex-col items-center space-y-0.5 rounded-md px-2 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 rounded-md px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5"
                       role="tab"
                       id={`tab-mobile-${tab.id}`}
                       aria-selected={activeTab === tab.id}
@@ -834,10 +845,10 @@ export default function App() {
                       tabIndex={activeTab === tab.id ? 0 : -1}
                     >
                       <tab.icon
-                        className={`w-5 h-5 ${activeTab === tab.id ? "text-primary" : ""
+                        className={`h-5 w-5 shrink-0 max-[360px]:h-4 max-[360px]:w-4 ${activeTab === tab.id ? "text-primary" : ""
                           }`}
                       />
-                      <span className="text-xs font-medium">{tab.label}</span>
+                      <span className="max-w-full truncate text-[11px] font-medium leading-tight max-[340px]:text-[10px]">{tab.label}</span>
                     </Button>
                   ))}
                 </div>

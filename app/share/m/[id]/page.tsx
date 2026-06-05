@@ -64,7 +64,7 @@ export async function generateMetadata(
         name: "Pixotchi Mini",
         url: BASE_URL,
         splashImageUrl: `${BASE_URL}/splash.png`,
-        splashBackgroundColor: "#2d3c53",
+        splashBackgroundColor: "#1f2d42",
       },
     },
   };

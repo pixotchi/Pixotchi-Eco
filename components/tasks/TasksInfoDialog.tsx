@@ -48,7 +48,7 @@ function MissionCard({ section }: { section: MissionSection }) {
   const Icon = section.icon;
 
   return (
-    <section className="rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-3.5 shadow-[var(--shadow-hairline)]">
+    <section className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
@@ -59,7 +59,7 @@ function MissionCard({ section }: { section: MissionSection }) {
             <p className="mt-1 text-xs text-muted-foreground">{section.reward} Rocks available</p>
           </div>
         </div>
-        <div className="shrink-0 rounded-full border border-border/70 bg-background/70 px-2 py-1 text-xs font-semibold tabular-nums">
+        <div className="shrink-0 rounded-[var(--radius-control)] border border-border/60 bg-card/80 px-2 py-1 text-xs font-semibold tabular-nums">
           {completed}/{section.tasks.length}
         </div>
       </div>
@@ -213,7 +213,7 @@ export default function TasksInfoDialog() {
             Earn up to 100 Rocks per day. Daily reset is 00:00 UTC.
           </DialogDescription>
           {!effectiveDisabled && (
-            <div className="mt-2 space-y-3 rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-3.5 shadow-[var(--shadow-hairline)]">
+            <div className="mt-2 space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <span className="text-xs font-semibold text-muted-foreground">Streak</span>

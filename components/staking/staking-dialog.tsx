@@ -2,10 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ActionBar, DisabledReason, RewardResultPanel } from "@/components/ui/premium";
+import { RewardResultPanel } from "@/components/ui/premium";
 import {
   buildApproveStakeCall,
   buildClaimRewardsCall,
@@ -14,8 +14,6 @@ import {
 } from "@/lib/contracts";
 import UniversalTransaction from "@/components/transactions/universal-transaction";
 import Image from "next/image";
-import { SponsoredBadge } from "@/components/paymaster-toggle";
-import { usePaymaster } from "@/lib/paymaster-context";
 import { formatUnits, parseUnits } from "viem";
 import { RefreshCw } from "lucide-react";
 import { ToggleGroup } from "@/components/ui/toggle-group";
@@ -79,6 +77,7 @@ function formatToken(amount?: bigint): string {
 }
 
 const MIN_REFRESH_INTERVAL_MS = 1000;
+const stakingTileClassName = "rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]";
 
 export default function StakingDialog({ open, onOpenChange }: StakingDialogProps) {
   const { address } = useAccount();
@@ -282,13 +281,13 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     };
   }, [rewardRatio, rewardTimeUnit, stakeInfo?.staked, totalStaked]);
 
-  const { isSponsored } = usePaymaster();
   const refreshingRef = useRef<boolean>(false);
   const lastRefreshTime = useRef<number>(0);
+  const footerTransactionButtonClassName = "max-[340px]:px-2 max-[340px]:text-xs";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+      <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={20} height={20} />
@@ -299,7 +298,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <DialogBody className="pr-1">
         {/* Mode switch placed below description with positive spacing */}
         <div className="mb-2 mt-1 flex items-center justify-between">
           <ToggleGroup
@@ -325,14 +324,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
         <div className="space-y-3 pb-2">
           {mode === 'stake' ? (
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
+              <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   SEED Balance
                 </div>
                 <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(seedBalance)}</div>
               </div>
-              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
+              <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
@@ -342,14 +341,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
+              <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   Staked SEED
                 </div>
                 <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(stakeInfo?.staked)}</div>
               </div>
-              <div className="rounded-lg border border-border/70 bg-background/45 p-2">
+              <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
@@ -360,7 +359,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           )}
 
           {rewardRateInfo && (
-            <div className="rounded-lg border border-border/70 bg-background/45 p-2 text-xs">
+            <div className={`${stakingTileClassName} text-xs`}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Reward Rate 
@@ -431,11 +430,10 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           )}
 
         </div>
-      </div>
+        </DialogBody>
 
       <DialogFooter sticky className="block flex-none">
-        <ActionBar sticky={false} className="space-y-2">
-          {isSponsored && <div className="flex justify-end"><SponsoredBadge show /></div>}
+        <div className="w-full space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div className={!approved && mode === "stake" ? "col-span-2 space-y-2" : "space-y-2"}>
           {mode === 'stake' ? (
@@ -444,6 +442,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                  <UniversalTransaction
                    calls={[buildApproveStakeCall()]}
                    buttonText="Approve SEED for Staking"
+                   buttonClassName={footerTransactionButtonClassName}
                    feedbackMode="inline"
                    onSuccess={() => {
                      setApproved(true);
@@ -459,6 +458,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    calls={[buildStakeCall(amount)]}
                    buttonText="Stake"
                    disabled={disableStakeBtn}
+                   buttonClassName={footerTransactionButtonClassName}
                    feedbackMode="inline"
                    onSuccess={(tx: UntypedValue) => {
                      const stakedAmount = sanitizedAmount;
@@ -484,6 +484,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                  calls={[buildUnstakeCall(amount)]}
                  buttonText="Unstake"
                  disabled={disableUnstakeBtn}
+                 buttonClassName={footerTransactionButtonClassName}
                  feedbackMode="inline"
                  onSuccess={() => {
                    const unstakedAmount = sanitizedAmount;
@@ -501,7 +502,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             <UniversalTransaction
               calls={[buildClaimRewardsCall()]}
               buttonText="Claim Rewards"
-              buttonClassName="bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] hover:brightness-105"
+              buttonClassName={`${footerTransactionButtonClassName} bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] hover:brightness-105`}
               feedbackMode="inline"
               onSuccess={(tx: UntypedValue) => {
                 setResultMessage("LEAF rewards claimed. Balances will refresh in a moment.");
@@ -519,12 +520,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             />
           </div>
           </div>
-          {(mode === "stake" && approved && disableStakeBtn) || (mode === "unstake" && disableUnstakeBtn) ? (
-            <DisabledReason>
-              {helperText || (sanitizedAmount ? "Check the amount before continuing." : "Enter an amount to continue.")}
-            </DisabledReason>
-          ) : null}
-        </ActionBar>
+        </div>
       </DialogFooter>
     </DialogContent>
   </Dialog>

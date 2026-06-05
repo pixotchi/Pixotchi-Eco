@@ -8,10 +8,10 @@ const panelVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-border/60 bg-card bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]",
-        soft: "border-border/55 bg-secondary bg-[image:var(--gradient-panel)] shadow-none",
-        elevated: "border-border/65 bg-card bg-[image:var(--gradient-surface-strong)] shadow-[var(--shadow-raised)]",
-        inset: "border-border/55 bg-secondary bg-[image:var(--gradient-panel)] shadow-none",
+        default: "border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] surface-shadow backdrop-blur-md",
+        soft: "border-border/55 bg-secondary/80 bg-[image:var(--gradient-panel)] surface-inset",
+        elevated: "border-border/65 bg-card bg-[image:var(--gradient-surface-strong)] surface-shadow-raised backdrop-blur-md",
+        inset: "border-border/55 bg-secondary/80 bg-[image:var(--gradient-panel)] surface-inset",
         game: "border-white/15 bg-slate-950/75 text-white shadow-[var(--shadow-raised)]",
       },
       padding: {

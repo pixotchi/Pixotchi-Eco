@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
-import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Dialog,DialogBody,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 import { formatInviteUrl } from '@/lib/invite-utils';
 import { InviteStats } from '@/lib/types';
@@ -161,7 +161,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold flex items-center gap-2">
             <Gift className="w-5 h-5" />
@@ -172,7 +172,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <DialogBody className="space-y-6 pr-1">
           {/* Stats Cards */}
           {stats && (
             <div className="grid grid-cols-2 gap-3">
@@ -296,7 +296,7 @@ export default function InviteDashboard({ open, onOpenChange }: InviteDashboardP
               </div>
             </CardContent>
           </Card>
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

@@ -12,11 +12,57 @@ import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onStakingDialogOpen, openTasksDialog } from "@/lib/app-events";
 import { Button } from "./ui/button";
 
+function TasksRockIcon() {
+  return (
+    <Image
+      src="/icons/Volcanic_Rock.svg"
+      alt=""
+      width={16}
+      height={16}
+      className="h-4 w-4 object-contain max-[340px]:h-3.5 max-[340px]:w-3.5"
+      aria-hidden="true"
+    />
+  );
+}
+
+function StakeTokenCycleIcon() {
+  return (
+    <span className="status-token-cycle" aria-hidden="true">
+      <Image
+        src="/PixotchiKit/COIN.svg"
+        alt=""
+        width={16}
+        height={16}
+        className="stake-token-cycle-seed absolute inset-0 h-4 w-4 object-contain"
+      />
+      <Image
+        src="/icons/leaf.png"
+        alt=""
+        width={16}
+        height={16}
+        className="stake-token-cycle-leaf absolute inset-0 h-4 w-4 object-contain"
+      />
+    </span>
+  );
+}
+
+function trimCompactNumber(value: number, fractionDigits: number): string {
+  return value.toFixed(fractionDigits).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+}
+
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
   const num = parseFloat(formatUnits(amount, decimals));
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1') + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1') + "K";
-  return num.toFixed(4).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  if (!Number.isFinite(num) || num <= 0) return "0";
+  if (num >= 1_000_000_000) return `${trimCompactNumber(num / 1_000_000_000, num >= 10_000_000_000 ? 0 : 1)}B`;
+  if (num >= 1_000_000) return `${trimCompactNumber(num / 1_000_000, num >= 10_000_000 ? 0 : 1)}M`;
+  if (num >= 100_000) return `${trimCompactNumber(num / 1_000, 0)}K`;
+  if (num >= 1_000) return `${trimCompactNumber(num / 1_000, 1)}K`;
+  if (num >= 999.5) return "1K";
+  if (num >= 100) return trimCompactNumber(num, 0);
+  if (num >= 10) return trimCompactNumber(num, 1);
+  if (num >= 1) return trimCompactNumber(num, 2);
+  if (num >= 0.01) return trimCompactNumber(num, 2);
+  return "<.01";
 }
 
 type StatusBarPlacement = "standalone" | "header";
@@ -55,17 +101,19 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
   const leafValue = formatTokenShort(leaf);
   const pixotchiValue = formatTokenShort(pixotchi);
   const ethValue = ethBalance ? formatTokenShort(ethBalance.value, ethBalance.decimals) : "0";
-  const seedText = loading ? <Skeleton className="h-5 w-20" /> : seedValue;
-  const leafText = loading ? <Skeleton className="h-5 w-20" /> : leafValue;
-  const pixotchiText = loading ? <Skeleton className="h-5 w-20" /> : pixotchiValue;
-  const ethText = ethLoading ? <Skeleton className="h-5 w-16" /> : ethValue;
+  const balanceSkeletonClassName = "h-4 w-10 max-[340px]:h-3.5 max-[340px]:w-8";
+  const seedText = loading ? <Skeleton className={balanceSkeletonClassName} /> : seedValue;
+  const leafText = loading ? <Skeleton className={balanceSkeletonClassName} /> : leafValue;
+  const pixotchiText = loading ? <Skeleton className={balanceSkeletonClassName} /> : pixotchiValue;
+  const ethText = ethLoading ? <Skeleton className={balanceSkeletonClassName} /> : ethValue;
   const seedAriaLabel = loading ? "Seed balance loading" : `Seed balance: ${seedValue} SEED`;
   const leafAriaLabel = loading ? "Leaf balance loading" : `Leaf balance: ${leafValue} LEAF`;
   const pixotchiAriaLabel = loading ? "PIXOTCHI balance loading" : `PIXOTCHI balance: ${pixotchiValue}`;
   const ethAriaLabel = ethLoading ? "ETH balance loading" : `ETH balance: ${ethValue} ETH`;
-  const balanceItemClassName = "flex shrink-0 items-center gap-1.5";
-  const balanceTextClassName = "whitespace-nowrap text-[14px] font-bold leading-none tabular-nums max-[360px]:text-[12px]";
-  const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[360px]:h-4 max-[360px]:w-4";
+  const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1.5 max-[360px]:gap-1";
+  const balanceTextClassName = "shrink-0 whitespace-nowrap text-[13px] font-bold leading-none tabular-nums max-[380px]:text-[11px] max-[340px]:text-[10px]";
+  const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[380px]:h-4 max-[380px]:w-4 max-[340px]:h-3.5 max-[340px]:w-3.5";
+  const statusActionButtonClassName = "max-[380px]:h-8 max-[380px]:min-h-8 max-[380px]:px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] max-[340px]:!gap-1";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
@@ -84,11 +132,11 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
         className={
           isHeaderPlacement
             ? "w-fit max-w-full px-0 py-0"
-            : "app-status-scroll bg-transparent px-4 pb-2 pt-1.5 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:border xl:border-border/35 xl:bg-secondary/70"
+            : "app-status-scroll bg-transparent px-4 pb-2 pt-1.5 max-[380px]:px-2 max-[340px]:px-1.5 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:border xl:border-border/35 xl:bg-secondary/70"
         }
       >
-        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex min-w-max items-center justify-between gap-3 xl:justify-start"}>
-          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex shrink-0 items-center gap-2 xl:gap-3"} role="group" aria-label="Token balances">
+        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex w-full min-w-0 items-center justify-between gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:justify-start"}>
+          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex min-w-0 flex-1 items-center gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:gap-3"} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className={balanceItemClassName} aria-label={`SOL balance: ${solText} SOL`}>
@@ -119,16 +167,17 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
             </div>
           </div>
           <div className={isHeaderPlacement ? "h-5 w-px bg-border/55" : "hidden h-5 w-px bg-border/55 xl:block"} aria-hidden="true" />
-          <div data-status-actions className="shrink-0 flex items-center gap-2">
+          <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-[380px]:gap-1">
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}
             {showTasksButton && (
               <Button
                 type="button"
                 onClick={handleTasksClick}
-                variant="warning"
-                size="compact"
-                className="px-3 text-xs"
+                variant="statusAction"
+                size="status"
+                leadingIcon={<TasksRockIcon />}
+                className={statusActionButtonClassName}
                 aria-label="Open tasks"
                 aria-haspopup="dialog"
               >
@@ -140,9 +189,10 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
               <Button
                 type="button"
                 onClick={() => setStakingOpen(true)}
-                variant="primary"
-                size="compact"
-                className="px-3 text-xs"
+                variant="statusAction"
+                size="status"
+                leadingIcon={<StakeTokenCycleIcon />}
+                className={statusActionButtonClassName}
                 aria-label="Open staking dialog"
                 aria-expanded={stakingOpen}
                 aria-haspopup="dialog"

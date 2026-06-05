@@ -183,7 +183,7 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
-function SuccessSvg({ className = "fill-[#65A30D]" }: { className?: string }) {
+function SuccessSvg({ className = "fill-[hsl(var(--success))]" }: { className?: string }) {
   return (
     <svg
       aria-label="ock-successSvg"
@@ -203,7 +203,7 @@ function SuccessSvg({ className = "fill-[#65A30D]" }: { className?: string }) {
   );
 }
 
-function ErrorSvg({ className = "fill-[#E11D48]" }: { className?: string }) {
+function ErrorSvg({ className = "fill-[hsl(var(--destructive))]" }: { className?: string }) {
   return (
     <svg
       aria-label="ock-errorSvg"

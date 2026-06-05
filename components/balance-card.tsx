@@ -172,7 +172,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </Button>
         </div>
 
-        <StandardContainer className="space-y-0.5 rounded-[var(--radius-panel)] border border-border/70 bg-background/45 p-2.5 shadow-[var(--shadow-hairline)]">
+        <StandardContainer className="space-y-0.5 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2.5 shadow-[var(--shadow-hairline)]">
           {isSolana ? (
             <>
               {renderBalanceRow({

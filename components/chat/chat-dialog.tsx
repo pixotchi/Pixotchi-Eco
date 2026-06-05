@@ -45,7 +45,7 @@ function DesktopChatPane({
       <div className="min-h-0 flex-1 overflow-hidden">
         <ChatMessages modeOverride={mode} />
       </div>
-      <div className="surface-footer-divider p-3">
+      <div className="surface-footer-divider dialog-footer-surface p-3">
         <div className="space-y-2">
           {isAITypingForMode(mode) && <AITypingIndicator />}
           <ChatInput modeOverride={mode} />

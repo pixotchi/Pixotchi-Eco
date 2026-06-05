@@ -25,9 +25,9 @@ export interface ToggleGroupProps {
 }
 
 const sizeClassNames = {
-  sm: "h-auto min-h-11 px-3 py-2 text-xs",
-  default: "h-auto min-h-11 px-4 py-2 text-xs sm:text-sm",
-  lg: "h-auto min-h-12 px-4 py-2 text-sm",
+  sm: "h-auto min-h-10 px-2.5 py-1.5 text-xs",
+  default: "h-auto min-h-10 px-3 py-1.5 text-xs sm:text-sm",
+  lg: "h-auto min-h-11 px-3.5 py-2 text-sm",
 } as const;
 
 export function ToggleGroup({
@@ -85,7 +85,7 @@ export function ToggleGroup({
 
   return (
     <div
-      className={cn("inline-flex items-center rounded-[var(--radius-control)] border border-border/55 bg-muted/55 p-0.5 shadow-[var(--shadow-hairline)]", className)}
+      className={cn("inline-flex items-center rounded-[calc(var(--radius-nav)+0.125rem)] border border-border/55 bg-muted/55 p-0.5 shadow-[var(--shadow-hairline)]", className)}
       role="radiogroup"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
@@ -108,7 +108,7 @@ export function ToggleGroup({
           }}
           className={cn(
             sizeClassNames[size],
-            "flex min-w-11 items-center justify-center gap-1 rounded-[calc(var(--radius-control)-0.125rem)]",
+            "flex min-w-11 items-center justify-center gap-1 !rounded-[var(--radius-nav)]",
             value === opt.value
               ? "text-primary-foreground"
               : "text-foreground/80 hover:bg-card/55 hover:text-foreground",

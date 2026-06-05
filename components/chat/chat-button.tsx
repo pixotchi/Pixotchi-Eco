@@ -44,7 +44,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
     <>
       <Button
         type="button"
-        variant="outline"
+        variant="headerIcon"
         size="icon"
         onClick={handleOpenChat}
         className={`relative ${className}`}

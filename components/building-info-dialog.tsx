@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { BarracksConfigV2, BarracksTroopConfigV2, BuildingType } from '@/lib/types';
 import { formatDuration, formatTokenAmountPrecise } from '@/lib/utils';
 import { ToggleGroup } from '@/components/ui/toggle-group';
@@ -412,7 +412,7 @@ export default function BuildingInfoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`max-h-[80vh] overflow-y-auto ${isBarracks ? 'max-w-md' : 'max-w-sm'}`}>
+      <DialogContent className={isBarracks ? 'max-w-md' : 'max-w-sm'}>
         <DialogHeader className="pb-4">
           <DialogTitle>{info.name}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -420,7 +420,7 @@ export default function BuildingInfoDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <DialogBody className="space-y-3 pr-1">
           {/* Casino Game Toggle */}
           {isCasino && (
             <>
@@ -544,7 +544,7 @@ export default function BuildingInfoDialog({
               </div>
             </div>
           )}
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

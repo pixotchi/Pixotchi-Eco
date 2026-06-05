@@ -60,7 +60,7 @@ const GAME_TERMS = [
   'base network',
   'base blockchain',
   'onchain',
-  'on-chain',
+  'onchain',
   'smart wallet',
   'bridge',
   'solana',

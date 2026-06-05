@@ -75,7 +75,7 @@ const EthModeToggleRow = () => {
       <button
         type="button"
         onClick={toggleEthMode}
-        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         role="switch"
         aria-checked={isEthMode}
         aria-label="ETH Mode"
@@ -572,7 +572,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <h3 className="text-sm font-medium text-muted-foreground">
                   Account
                 </h3>
-                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/45 p-3 shadow-[var(--shadow-hairline)]">
+                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">Provider</span>
                     <span className="text-xs font-semibold">
@@ -600,9 +600,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <Button
                           type="button"
                           onClick={() => openExternalUrl("https://base.org/names")}
-                          variant="primary"
+                          variant="compactUtility"
                           size="compact"
-                          className="px-3 text-xs"
+                          className="px-2.5 text-xs"
                         >
                           Get a Basename!
                         </Button>
@@ -773,7 +773,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                     </h3>
                     <SolanaBridgeBadge />
                   </div>
-                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/70 bg-background/45 p-3 shadow-[var(--shadow-hairline)]">
+                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium">Solana Address</span>
                       <div className="flex items-center gap-1">

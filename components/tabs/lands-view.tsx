@@ -592,17 +592,18 @@ function LandsViewContent() {
           <div className="space-y-4 lg:sticky lg:top-0">
           <Card>
             <CardContent className="space-y-3">
-              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] bg-muted/50">
+              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
+                <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-2 gap-2 text-sm font-bold text-foreground/80 z-20">
                   <div className="flex justify-start">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    <div className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                       <Image src="/icons/pts.svg" alt="XP" width={16} height={16} className="w-4 h-4" />
                       <span>{formatXP(selectedLand.experiencePoints)} XP</span>
                     </div>
                   </div>
                   <div className="flex justify-end">
                     <div
-                      className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full"
+                      className="flex items-center gap-1 rounded-full border border-border/35 bg-card/75 px-2 py-0.5 shadow-[var(--shadow-hairline)] backdrop-blur-md"
                     >
                       <Image src="/icons/location.svg" alt="Coordinates" width={16} height={16} className="w-4 h-4" />
                       <span>({selectedLand.coordinateX.toString()}, {selectedLand.coordinateY.toString()})</span>

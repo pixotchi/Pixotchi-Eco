@@ -93,7 +93,7 @@ export async function getSwapQuoteForUserPair({
   originAddress,
 }: UserQuoteParams): Promise<SwapQuoteResponse> {
   if (amountIn <= BigInt(0)) {
-    throw new SwapBlockedError('Enter an amount greater than zero.');
+    throw new SwapBlockedError('Amount must be greater than zero.');
   }
 
   if (!isAllowedUserSwapPair(sellToken, buyToken)) {

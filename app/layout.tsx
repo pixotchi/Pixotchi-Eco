@@ -14,8 +14,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   // Enhanced mobile viewport settings
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#a7c7e7" },
-    { media: "(prefers-color-scheme: dark)", color: "#2d3c53" }
+    { media: "(prefers-color-scheme: light)", color: "#a8d0f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#1f2d42" }
   ]
 };
 
@@ -33,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
         name: "Pixotchi Mini",
         url: baseURL,
         splashImageUrl: process.env.NEXT_PUBLIC_SPLASH_IMAGE || `${baseURL}/splash.png`,
-        splashBackgroundColor: process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR || "#2d3c53",
+        splashBackgroundColor: process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR || "#1f2d42",
       },
     },
   };
@@ -142,7 +142,7 @@ export async function generateMetadata(): Promise<Metadata> {
         {
           rel: "mask-icon",
           url: "/safari-pinned-tab.svg",
-          color: "#2d3c53",
+          color: "#1f2d42",
         },
       ],
     },
@@ -166,10 +166,11 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${coinbaseSans.variable} ${pixelmix.variable}`}
       style={{
-        "--radius": "1rem",
-        "--radius-control": "1rem",
-        "--radius-panel": "1rem",
-        "--radius-dialog": "1rem",
+        "--radius": "1.125rem",
+        "--radius-control": "0.875rem",
+        "--radius-nav": "0.625rem",
+        "--radius-panel": "1.125rem",
+        "--radius-dialog": "1.25rem",
       } as CSSProperties}
     >
       <head>
@@ -211,8 +212,8 @@ export default function RootLayout({
           }}
         />
         {/* Theme color */}
-        <meta name="theme-color" content="#2d3c53" />
-        <meta name="msapplication-TileColor" content="#2d3c53" />
+        <meta name="theme-color" content="#1f2d42" />
+        <meta name="msapplication-TileColor" content="#1f2d42" />
         {/* Fonts are self-hosted via next/font/local */}
         <link rel="preconnect" href="https://auth.farcaster.xyz" crossOrigin="" />
         {/* Preload above-the-fold art to reduce first paint */}

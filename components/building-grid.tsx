@@ -59,7 +59,7 @@ const BuildingItem = React.memo(({
           onClick={() => onBuildingSelect(building)}
           aria-label={`Select ${buildingName}`}
           aria-pressed={isSelected}
-          className={`building-button rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow] building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:cursor-default disabled:opacity-100 ${isSelected ? 'border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]' : 'border-border/45 bg-card/70 hover:border-primary/35 hover:bg-accent/55'
+          className={`building-button rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow,transform] building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:cursor-default disabled:opacity-100 ${isSelected ? 'border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] shadow-[var(--shadow-glow)]' : 'border-border/45 bg-card/75 surface-shadow hover:-translate-y-0.5 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]'
             }`}
         >
           <div className="building-element relative flex h-16 w-16 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">

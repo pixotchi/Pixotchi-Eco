@@ -343,7 +343,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
         <div className="flex-1 overflow-y-auto pr-1">
           <div className="space-y-4 pb-4">
             {/* Top bar with mid price and quick actions */}
-            <div className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-4 shadow-[var(--shadow-hairline)] sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-xs text-muted-foreground">Mid (LEAF / SEED)</div>
                 <div className="max-w-full truncate text-xl font-semibold tabular-nums sm:text-2xl" title={mid ? fmt(mid, 6) : undefined}>
@@ -358,7 +358,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
             {/* Mobile: keep orders (asks+bids) together, then trade panel */}
             <div className="md:hidden space-y-4">
-              <div className="overflow-hidden rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)]">
+              <div className="overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
                 {/* Asks header and list */}
                 <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-destructive/10 text-destructive">
                   <span>Asks (Sell LEAF)</span>
@@ -414,7 +414,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel (mobile below orders) */}
-              <div className="space-y-4 rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-4 shadow-[var(--shadow-hairline)]">
+              <div className="space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
                 <div className="flex items-center gap-2 text-sm">
                   <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
                   <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
@@ -506,7 +506,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             {/* Desktop/tablet: three-column layout */}
             <div className="hidden md:grid md:grid-cols-3 items-start gap-4">
               {/* Asks */}
-                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)] ${focusedSide === 'asks' ? 'ring-1 ring-destructive/50' : ''}`}>
+                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] ${focusedSide === 'asks' ? 'ring-1 ring-destructive/50' : ''}`}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-destructive/10 text-destructive">
                     <span>Asks (Sell LEAF)</span>
@@ -535,7 +535,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel */}
-              <div className="min-h-[18rem] space-y-4 rounded-[var(--radius-panel)] border border-border/65 bg-background/45 p-4 shadow-[var(--shadow-hairline)] md:max-h-[22rem] md:overflow-y-auto">
+              <div className="min-h-[18rem] space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] md:max-h-[22rem] md:overflow-y-auto">
                 <div className="flex items-center gap-2 text-sm">
                   <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
                   <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
@@ -625,7 +625,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Bids */}
-                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)] ${focusedSide === 'bids' ? 'ring-1 ring-[hsl(var(--success)/0.5)]' : ''}`}>
+                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] ${focusedSide === 'bids' ? 'ring-1 ring-[hsl(var(--success)/0.5)]' : ''}`}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]">
                     <span>Bids (Sell SEED)</span>
@@ -656,7 +656,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
             {/* Price level details (individual orders with Take buttons) */}
             {selectedLevel !== null && selectedSide && (
-              <div className="rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)]">
+              <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-border">
                   <div className="text-sm font-medium">
                     Orders @ {fmt(selectedLevel, 6)} LEAF/SEED • {selectedSide === 'asks' ? 'Sell LEAF' : 'Sell SEED'}
@@ -749,7 +749,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   </div>
                 </div>
               </div>
-              <div className="max-h-56 overflow-y-auto rounded-[var(--radius-panel)] border border-border/65 bg-background/45 shadow-[var(--shadow-hairline)]">
+              <div className="max-h-56 overflow-y-auto rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
                 {(() => {
                   const ordersToShow = showUserOrders
                     ? (showHistory ? userOrders : userOrders.filter(o => o.isActive))

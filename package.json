@@ -21,7 +21,7 @@
     "@ai-sdk/anthropic": "3.0.81",
     "@ai-sdk/google": "3.0.80",
     "@ai-sdk/openai": "3.0.67",
-    "@ai-sdk/react": "3.0.198",
+    "@ai-sdk/react": "3.0.199",
     "@base-org/account": "2.5.6",
     "@base-org/account-ui": "1.0.1",
     "@coinbase/cdp-sdk": "1.51.0",
@@ -30,7 +30,7 @@
     "@farcaster/miniapp-wagmi-connector": "2.0.0",
     "@farcaster/quick-auth": "0.0.8",
     "@privy-io/node": "0.20.0",
-    "@privy-io/react-auth": "3.29.1",
+    "@privy-io/react-auth": "3.29.2",
     "@privy-io/wagmi": "4.0.11",
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-dropdown-menu": "2.1.16",
@@ -51,12 +51,12 @@
     "@tanstack/react-query": "5.101.0",
     "@upstash/redis": "1.38.0",
     "@vercel/analytics": "2.0.1",
-    "ai": "6.0.196",
+    "ai": "6.0.197",
     "bs58": "6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "date-fns": "4.4.0",
-    "ethereum-identity-kit": "0.2.77",
+    "ethereum-identity-kit": "0.2.78",
     "ethers": "6.16.0",
     "lucide-react": "1.17.0",
     "nanoid": "5.1.11",
@@ -72,7 +72,7 @@
     "streamdown": "2.5.0",
     "tailwind-merge": "3.6.0",
     "thread-stream": "4.2.0",
-    "viem": "2.52.0",
+    "viem": "2.52.2",
     "wagmi": "2.19.5",
     "zod": "4.4.3"
   },
@@ -101,6 +101,6 @@
     "axios": "1.16.1",
     "pino": "10.3.1",
     "thread-stream": "4.2.0",
-    "viem": "2.52.0"
+    "viem": "2.52.2"
   }
 }

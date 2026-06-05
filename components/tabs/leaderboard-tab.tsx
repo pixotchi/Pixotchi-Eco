@@ -1297,7 +1297,7 @@ export default function LeaderboardTab() {
     <div className="h-full min-h-0 space-y-4 lg:mx-auto lg:max-w-7xl">
       <Card className="flex h-full min-h-[26rem] flex-col overflow-hidden">
         <CardHeader className="flex-none">
-          <div className="flex justify-between items-center gap-3 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
             </CardTitle>
@@ -1338,13 +1338,15 @@ export default function LeaderboardTab() {
                 )}
               </div>
             )}
-            <div className="lg:col-start-3 lg:justify-self-end">
+            <div className="w-full min-[380px]:w-auto lg:col-start-3 lg:justify-self-end">
               <ToggleGroup
                 value={boardType}
                 onValueChange={(nextValue) => {
                   setCurrentPage(1);
                   setBoardType((nextValue as typeof boardType) || 'plants');
                 }}
+                className="w-full min-[380px]:w-auto"
+                getButtonClassName={() => "min-w-0 flex-1 px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] min-[380px]:flex-none"}
                 options={[
                   { value: 'plants', label: 'Plants' },
                   { value: 'lands', label: 'Lands' },
@@ -1521,7 +1523,7 @@ export default function LeaderboardTab() {
                   <label
                     key={p.id}
                     className={cn(
-                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-accent/70",
+                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-[hsl(var(--nav-hover-bg))]",
                       selectedAttackerId === p.id ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card"
                     )}
                   >
@@ -1696,7 +1698,7 @@ export default function LeaderboardTab() {
                   <label
                     key={p.id}
                     className={cn(
-                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-accent/70",
+                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-[hsl(var(--nav-hover-bg))]",
                       selectedKillerId === p.id ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card"
                     )}
                   >

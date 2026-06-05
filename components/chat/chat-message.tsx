@@ -97,9 +97,9 @@ export default function ChatMessageComponent({
         setProfileOpen(true);
         trackProfileVisit();
       }}
-      variant="primary"
-      size="default"
-      className="px-3 text-xs"
+      variant="compactUtility"
+      size="compact"
+      className="h-6 min-h-6 rounded-md border-primary/25 bg-primary/5 px-2 py-0 text-[10px] text-primary shadow-none hover:bg-primary/10 active:translate-y-0 active:scale-100"
       aria-label={`Open profile for ${displayName}`}
     >
       Profile

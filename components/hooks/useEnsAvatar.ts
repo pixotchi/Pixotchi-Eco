@@ -36,7 +36,7 @@ async function flushQueue() {
     addresses.forEach((address) => {
       cache.set(address, null);
     });
-    console.error('[useEnsAvatar] Failed to resolve avatars', error);
+    console.warn('[useEnsAvatar] Failed to resolve avatars', error);
   }
 }
 

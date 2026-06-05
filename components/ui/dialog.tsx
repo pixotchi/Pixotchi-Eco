@@ -45,10 +45,10 @@ const dialogSizeClassName: Record<DialogSize, string> = {
 };
 
 const dialogSurfaceClassName: Record<DialogSurface, string> = {
-  default: "border-border/65 bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
+  default: "border-border/65 bg-card/95 bg-[image:var(--gradient-dialog)] text-card-foreground backdrop-blur-md",
   soft: "border-border/65 bg-popover/95 bg-[image:var(--gradient-dialog)] text-popover-foreground backdrop-blur-md",
   game: "border-white/15 bg-slate-950/90 text-white shadow-[var(--shadow-modal)]",
-  danger: "border-destructive/30 bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
+  danger: "border-destructive/30 bg-card/95 bg-[image:var(--gradient-dialog)] text-card-foreground backdrop-blur-md",
 };
 
 const DialogContent = React.forwardRef<
@@ -100,11 +100,9 @@ const DialogContent = React.forwardRef<
       <div
         data-viewport-debug-dialog-surface=""
         className={cn(
-          "relative flex w-full flex-col overflow-hidden border p-5 shadow-[var(--shadow-modal)] sm:p-6",
+          "relative flex w-full flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
           "max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh]",
-          mobileMode === "sheet"
-            ? "rounded-t-[var(--radius-dialog)] rounded-b-none sm:rounded-[var(--radius-dialog)]"
-            : "rounded-[var(--radius-dialog)]",
+          "rounded-[var(--radius-dialog)]",
           dialogSizeClassName[size],
           dialogSurfaceClassName[danger ? "danger" : surface],
           className
@@ -120,7 +118,7 @@ const DialogContent = React.forwardRef<
               // Size and alignment
               "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
               // Visuals: avoid borders, provide hover background only
-              "rounded-md bg-transparent text-muted-foreground hover:bg-muted/60",
+              "rounded-[var(--radius-control)] bg-transparent text-muted-foreground hover:bg-muted/60",
               // Accessibility focus style (no persistent ring/border)
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               // Ensure ring offset blends with dialog background
@@ -161,7 +159,7 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      sticky && "sticky bottom-0 z-10 -mx-5 mt-4 border-t border-border/55 bg-popover/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-mx-6 sm:px-6",
+      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 mt-4 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6",
       className
     )}
     {...props}

@@ -99,16 +99,16 @@ const QUOTE_MAX_RETRIES = 2;
 const QUOTE_IDLE_REFRESH_MS = 5_000;
 const OCK_COMPAT_FONT = 'ock-compat-font';
 const SWAP_CARD_CLASS =
-  'my-0.5 box-border flex min-h-[158px] w-full flex-col items-start rounded-lg bg-secondary p-4';
+  'my-0.5 box-border flex min-h-[158px] w-full flex-col items-start rounded-[var(--radius-panel)] border border-border/55 bg-secondary/80 bg-[image:var(--gradient-panel)] p-4 shadow-[var(--surface-inset)]';
 const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-between text-sm text-muted-foreground`;
 const SWAP_TOKEN_TRIGGER_CLASS =
-  'flex min-h-11 w-fit shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-background px-3 py-2 shadow-[0px_8px_12px_0px_rgba(91,97,110,0.12)] hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'flex min-h-11 w-fit shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_AMOUNT_INPUT_CLASS =
   `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground`;
 const SWAP_MAX_BUTTON_CLASS =
   `${OCK_COMPAT_FONT} flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
-  'relative z-10 mx-auto -my-5 flex h-11 min-h-11 w-16 items-center justify-center rounded-[var(--radius-control)] border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'relative z-10 mx-auto -my-5 flex h-11 min-h-11 w-16 items-center justify-center rounded-[var(--radius-control)] border-[3px] border-solid border-card/90 bg-card/95 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-control)] hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_PRIMARY_ACTION_CLASS =
   `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
@@ -228,7 +228,7 @@ function TokenSelector({
         align="end"
         sideOffset={6}
         collisionPadding={12}
-        className="w-max min-w-[10rem] max-w-[calc(100vw-2rem)] rounded-xl p-2"
+        className="w-max min-w-[10rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-panel)] p-2"
       >
         {options.map((option) => {
           const optionToken = SWAP_TOKEN_MAP[option];
@@ -236,7 +236,7 @@ function TokenSelector({
             <DropdownMenuItem
               key={option}
               onSelect={() => onSelect(option)}
-              className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2.5"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-control)] px-3 py-2.5"
             >
               <span className="flex items-center gap-3">
                 <Image
@@ -1225,7 +1225,7 @@ export default function PixotchiSwapPanel() {
     if (isExecuting) return null;
     if (chainId !== BASE_CHAIN_ID) return S.errors.switchToBase;
     if (!walletClient?.account) return S.errors.walletClientUnavailable;
-    if (!sellAmount.trim()) return `Enter an amount of ${SWAP_TOKEN_MAP[sellToken].displaySymbol} to swap.`;
+    if (!sellAmount.trim()) return null;
     if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
     if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
     if (isDeferredLagging || isQuoteLoading) return S.quote.loading;
@@ -1248,7 +1248,7 @@ export default function PixotchiSwapPanel() {
     if (!actionDisabled || isExecuting) return S.buttons.swap;
     if (chainId !== BASE_CHAIN_ID) return 'Switch to Base';
     if (!walletClient?.account) return 'Connect Wallet';
-    if (!sellAmount.trim()) return 'Enter Amount';
+    if (!sellAmount.trim()) return S.buttons.swap;
     if (!isAmountValid) return 'Enter Valid Amount';
     if (hasInsufficientBalance) return `Insufficient ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`;
     if (isDeferredLagging || isQuoteLoading) return 'Fetching Quote...';

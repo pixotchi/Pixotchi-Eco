@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Check SEED bonus availability (on-chain balance) for unclaimed users
+    // Check SEED bonus availability (onchain balance) for unclaimed users
     let seedAvailable = false;
     if (SEED_BONUS_ENABLED && AGENT_ADDRESS) {
       try {

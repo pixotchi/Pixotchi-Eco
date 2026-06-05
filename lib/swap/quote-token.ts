@@ -11,7 +11,7 @@ import type { SwapStepKind, SwapTokenId, UserSwapTokenId } from './types';
 // enforcement (a token can be replayed to the build endpoint until it
 // expires), but that doesn't unlock any real attack: executing the swap
 // still requires the user's wallet signature, and Kyber's own deadline
-// bounds on-chain replay. Rate limits handle quota abuse.
+// bounds onchain replay. Rate limits handle quota abuse.
 
 const TOKEN_VERSION = 'v2';
 
