@@ -265,6 +265,7 @@ const TOOL_PROMPT_PRIORITY = [
   'get_combat_activity',
   'get_transaction_status',
   'get_plants',
+  'get_killable_plants',
   'get_attack_targets',
   'get_land_raid_targets',
   'get_game_prices',
@@ -276,6 +277,8 @@ const TOOL_PROMPT_PRIORITY = [
   'get_bridge_status',
   'get_app_status',
   'get_game_action_guide',
+  'get_token_info',
+  'get_seed_market_pulse',
   'get_staking',
   'get_swap_quote',
   'get_missions',
@@ -488,6 +491,23 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'get_killable_plants') {
+    return {
+      blockedSummary: data?.blockedSummary,
+      deadTargetCount: data?.deadTargetCount,
+      killCooldown: data?.killCooldown,
+      livingKillerCount: data?.livingKillerCount,
+      livingKillerPlants: (data?.livingKillerPlants || []).slice(0, 6),
+      ownedPlantCount: data?.ownedPlantCount,
+      readiness: data?.readiness,
+      rules: data?.rules,
+      scannedLeaderboardCount: data?.scannedLeaderboardCount,
+      targets: (data?.targets || []).slice(0, 10),
+      totalLeaderboardPlants: data?.totalLeaderboardPlants,
+      truncated: data?.truncated,
+    };
+  }
+
   if (toolName === 'get_land_raid_targets') {
     return {
       barracksConfig: data?.barracksConfig,
@@ -671,6 +691,51 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
         where: action.where,
       })),
       readOnlyPhase: data?.readOnlyPhase,
+    };
+  }
+
+  if (toolName === 'get_token_info') {
+    return {
+      noFinancialAdvice: data?.noFinancialAdvice,
+      tokens: (data?.tokens || []).map((token: UntypedValue) => ({
+        contractAddress: token.contractAddress,
+        id: token.id,
+        name: token.name,
+        noFinancialAdvice: token.noFinancialAdvice,
+        note: token.note,
+        sections: token.sections,
+        summary: token.summary,
+        symbol: token.symbol,
+      })),
+    };
+  }
+
+  if (toolName === 'get_seed_market_pulse') {
+    const market = data?.market;
+    return {
+      market: market
+        ? {
+          cached: market.cached,
+          dexId: market.dexId,
+          fdv: market.fdv,
+          liquidityUsd: market.liquidityUsd,
+          marketCap: market.marketCap,
+          pairAddress: market.pairAddress,
+          pairCreatedAt: market.pairCreatedAt,
+          priceChange: market.priceChange,
+          priceNative: market.priceNative,
+          priceUsd: market.priceUsd,
+          rewards: market.rewards,
+          stale: market.stale,
+          timestamp: market.timestamp,
+          txns: market.txns,
+          volume: market.volume,
+          volume24h: market.volume24h,
+        }
+        : null,
+      noFinancialAdvice: data?.noFinancialAdvice,
+      pairUrl: data?.pairUrl,
+      poweredBy: data?.poweredBy,
     };
   }
 

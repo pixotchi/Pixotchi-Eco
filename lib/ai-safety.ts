@@ -1,6 +1,6 @@
 type AIRequestSafety =
   | { allowed: true }
-  | { allowed: false; reason: 'private_data' | 'off_topic' | 'transaction_request'; response: string };
+  | { allowed: false; reason: 'financial_advice' | 'private_data' | 'off_topic' | 'transaction_request'; response: string };
 
 const GAME_TERMS = [
   'pixotchi',
@@ -119,6 +119,13 @@ const TRANSACTION_REQUEST_PATTERNS = [
   /\b(approve|mint|claim|stake|unstake|swap|transfer|raid|attack|upgrade|revive|buy|sign)\b.{0,80}\b(for me|on my behalf|with my wallet|transaction payload|calldata|raw tx|signature)\b/i,
 ];
 
+const FINANCIAL_ADVICE_PATTERNS = [
+  /\b(financial advice|investment advice|price prediction|portfolio sizing|entry price|exit price)\b/i,
+  /\b(should|would|do you think|recommend|worth|is it smart to)\b.{0,80}\b(buy|sell|hold|invest|ape|accumulate|dump|take profit|enter|exit)\b.{0,80}\b(seed|leaf|pixotchi|token|coin)\b/i,
+  /\b(seed|leaf|pixotchi|token|coin)\b.{0,80}\b(good investment|worth buying|undervalued|overvalued|price prediction|pump|moon|crash|profit)\b/i,
+  /\b(will|can|could)\b.{0,60}\b(seed|leaf|pixotchi)\b.{0,60}\b(go up|go down|pump|moon|make me money|profit|crash)\b/i,
+];
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -146,6 +153,14 @@ export function classifyAIUserMessage(message: string): AIRequestSafety {
       allowed: false,
       reason: 'transaction_request',
       response: 'I cannot prepare calldata, transaction payloads, approvals, or execute gameplay actions. I can inspect read-only Pixotchi data and point you to the right in-app flow so your wallet UI builds and confirms the transaction safely.',
+    };
+  }
+
+  if (FINANCIAL_ADVICE_PATTERNS.some((pattern) => pattern.test(message))) {
+    return {
+      allowed: false,
+      reason: 'financial_advice',
+      response: 'I cannot give financial advice, investment advice, price predictions, or buy/sell/hold recommendations. I can explain Pixotchi token utility, contract addresses, live market pulse data, swap quote mechanics, and in-app token use as factual information only.',
     };
   }
 

@@ -12,6 +12,12 @@ import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { PaginationFooter } from "@/components/ui/pagination-footer";
 import { DisabledReason } from "@/components/ui/premium";
@@ -30,7 +36,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { Skull,Swords,Terminal } from "lucide-react";
+import { ChevronDown,Skull,Swords,Terminal } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
@@ -76,9 +82,18 @@ const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const LAND_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
+const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the loser score
+const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
+const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
 
 function getTotalPages(itemCount: number, pageSize: number) {
   return Math.ceil(itemCount / pageSize) || 1;
+}
+
+function formatAttackScoreDelta(score: number, direction: "gain" | "loss") {
+  const formatted = formatScoreShort(score);
+  if (score <= 0 || formatted === "0") return formatted;
+  return `${direction === "gain" ? "+" : "-"}${formatted}`;
 }
 
 function getBoundedPage(page: number, itemCount: number, pageSize: number) {
@@ -654,6 +669,56 @@ export default function LeaderboardTab() {
     return true;
   }, [attackerCooldownOver, targetCooldownOver]);
   const eligibleAttackers = useCallback((target: LeaderboardPlant): Plant[] => myPlants.filter((p) => canAttackWith(p, target)), [canAttackWith, myPlants]);
+  const attackDialogAttackers = useMemo(
+    () => (targetPlant ? eligibleAttackers(targetPlant) : []),
+    [eligibleAttackers, targetPlant]
+  );
+  const selectedAttacker = useMemo(
+    () => attackDialogAttackers.find((plant) => plant.id === selectedAttackerId) ?? null,
+    [attackDialogAttackers, selectedAttackerId]
+  );
+  const attackOutcomePreview = useMemo(() => {
+    if (!selectedAttacker || !targetPlant) return null;
+
+    return {
+      winScore: Math.max(0, Math.floor(targetPlant.score * ATTACK_SCORE_TRANSFER_RATE)),
+      loseScore: Math.max(0, Math.floor(selectedAttacker.score * ATTACK_SCORE_TRANSFER_RATE)),
+    };
+  }, [selectedAttacker, targetPlant]);
+  const livingKillerPlants = useMemo(
+    () => myPlants.filter((plant) => plant.status !== 4),
+    [myPlants]
+  );
+  const selectedKillerPlant = useMemo(
+    () => livingKillerPlants.find((plant) => plant.id === selectedKillerId) ?? null,
+    [livingKillerPlants, selectedKillerId]
+  );
+
+  useEffect(() => {
+    if (!attackDialogOpen || !targetPlant) return;
+
+    if (attackDialogAttackers.length === 0) {
+      setSelectedAttackerId(null);
+      return;
+    }
+
+    if (!attackDialogAttackers.some((plant) => plant.id === selectedAttackerId)) {
+      setSelectedAttackerId(attackDialogAttackers[0]?.id ?? null);
+    }
+  }, [attackDialogAttackers, attackDialogOpen, selectedAttackerId, targetPlant]);
+
+  useEffect(() => {
+    if (!killDialogOpen || !targetPlant) return;
+
+    if (livingKillerPlants.length === 0) {
+      setSelectedKillerId(null);
+      return;
+    }
+
+    if (!livingKillerPlants.some((plant) => plant.id === selectedKillerId)) {
+      setSelectedKillerId(livingKillerPlants[0]?.id ?? null);
+    }
+  }, [killDialogOpen, livingKillerPlants, selectedKillerId, targetPlant]);
 
   const handlePlantImageClick = (plant: LeaderboardPlant) => {
     setSelectedPlantForProfile(plant);
@@ -765,7 +830,7 @@ export default function LeaderboardTab() {
             <div className={cn(
               "divide-y divide-border",
               fillHeight
-                ? "min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                ? "surface-scroll-fade min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 : "overflow-visible"
             )}>
               {column.length > 0 ? (
@@ -975,8 +1040,9 @@ export default function LeaderboardTab() {
                   }}
                   aria-label="Attack this plant"
                   title="Attack"
+                  className="h-12 min-h-12 w-12 min-w-12"
                 >
-                  <Swords className="w-4 h-4" />
+                  <Swords className="h-5 w-5" strokeWidth={2.5} />
                 </Button>
               ) : (
                 <Button
@@ -989,8 +1055,9 @@ export default function LeaderboardTab() {
                   }}
                   aria-label="Attack this plant"
                   title="Attack"
+                  className="h-12 min-h-12 w-12 min-w-12"
                 >
-                  <Swords className="w-4 h-4" />
+                  <Swords className="h-5 w-5" strokeWidth={2.5} />
                 </Button>
               )
             )}
@@ -1466,7 +1533,7 @@ export default function LeaderboardTab() {
 
       {/* Attack dialog */}
       <Dialog open={attackDialogOpen} onOpenChange={setAttackDialogOpen}>
-        <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+        <DialogContent mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
           <DialogHeader className="pb-1">
             <DialogTitle className="leading-tight">Attack plant</DialogTitle>
             <DialogDescription className="leading-relaxed">
@@ -1474,19 +1541,43 @@ export default function LeaderboardTab() {
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="mt-4 space-y-4 pr-1">
+          <DialogBody className="mt-4 space-y-4 pb-4 pr-1">
             {targetPlant && (
-              <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
-                <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
-                <div className="min-w-0">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Target
+              <div className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Target
+                    </div>
+                    <div className="truncate font-pixel text-sm">
+                      {targetPlant.name || `Plant #${targetPlant.id}`}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Level {targetPlant.level}</div>
                   </div>
-                  <div className="truncate font-pixel text-sm">
-                    {targetPlant.name || `Plant #${targetPlant.id}`}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Level {targetPlant.level}</div>
                 </div>
+                {attackOutcomePreview && (
+                  <div className="ml-auto shrink-0 space-y-1 text-right">
+                    <div className="rounded-[var(--radius-control)] border border-primary/25 bg-primary/10 px-2 py-1">
+                      <div className="text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
+                        If you win
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-end gap-1 text-xs font-bold text-primary">
+                        <span>{formatAttackScoreDelta(attackOutcomePreview.winScore, "gain")}</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">PTS</span>
+                      </div>
+                    </div>
+                    <div className="rounded-[var(--radius-control)] border border-destructive/25 bg-destructive/10 px-2 py-1">
+                      <div className="text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
+                        If you lose
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-end gap-1 text-xs font-bold text-destructive">
+                        <span>{formatAttackScoreDelta(attackOutcomePreview.loseScore, "loss")}</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">PTS</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1498,6 +1589,7 @@ export default function LeaderboardTab() {
                 <li>Each plant can attack once every 30 minutes.</li>
                 <li>Target can be attacked again after 60 minutes.</li>
                 <li>Attacker must be alive and a lower level than the target.</li>
+                <li>Your attacker has a {ATTACK_WIN_CHANCE_PERCENT}% win chance and a {ATTACK_LOSS_CHANCE_PERCENT}% loss chance.</li>
                 <li>Targets with an active fence cannot be attacked.</li>
                 <li>You cannot attack your own plant.</li>
               </ul>
@@ -1508,42 +1600,77 @@ export default function LeaderboardTab() {
                 <div className="text-sm font-semibold">Eligible attackers</div>
                 {targetPlant && (
                   <span className="text-xs text-muted-foreground">
-                    {eligibleAttackers(targetPlant).length} available
+                    {attackDialogAttackers.length} available
                   </span>
                 )}
               </div>
 
-              <div className="max-h-[min(14rem,34dvh)] space-y-2 overflow-y-auto rounded-[var(--radius-panel)] border border-border/70 bg-background/35 p-2">
-                {targetPlant && eligibleAttackers(targetPlant).length === 0 && (
-                  <DisabledReason>
-                    No eligible plants to attack with right now. Each plant can attack once every 30 minutes.
-                  </DisabledReason>
-                )}
-                {targetPlant && eligibleAttackers(targetPlant).map((p) => (
-                  <label
-                    key={p.id}
-                    className={cn(
-                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-[hsl(var(--nav-hover-bg))]",
-                      selectedAttackerId === p.id ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card"
-                    )}
+              {attackDialogAttackers.length === 0 ? (
+                <DisabledReason>
+                  No eligible plants to attack with right now. Each plant can attack once every 30 minutes.
+                </DisabledReason>
+              ) : (
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto min-h-11 w-full justify-between px-3 py-2 text-left"
+                    >
+                      {selectedAttacker ? (
+                        <div className="flex min-w-0 items-center gap-2">
+                          <PlantImage selectedPlant={selectedAttacker as UntypedValue} width={30} height={30} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {selectedAttacker.name || `Plant #${selectedAttacker.id}`}
+                            </div>
+                            <div className="text-xs font-normal text-muted-foreground">
+                              Level {selectedAttacker.level}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span>Select an attacker</span>
+                      )}
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto"
                   >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <input
-                        type="radio"
-                        name="attacker"
-                        className="accent-primary"
-                        checked={selectedAttackerId === p.id}
-                        onChange={() => setSelectedAttackerId(p.id)}
-                      />
-                      <PlantImage selectedPlant={p as UntypedValue} width={30} height={30} />
-                      <div className="min-w-0 text-sm">
-                        <div className="truncate font-medium">{p.name || `Plant #${p.id}`}</div>
-                        <div className="text-xs text-muted-foreground">Level {p.level}</div>
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
+                    {attackDialogAttackers.map((attacker) => {
+                      const selected = selectedAttackerId === attacker.id;
+                      return (
+                        <DropdownMenuItem
+                          key={attacker.id}
+                          onSelect={() => setSelectedAttackerId(attacker.id)}
+                          className="min-h-12"
+                        >
+                          <div className="flex w-full min-w-0 items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <PlantImage selectedPlant={attacker as UntypedValue} width={28} height={28} />
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">
+                                  {attacker.name || `Plant #${attacker.id}`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Level {attacker.level}
+                                </div>
+                              </div>
+                            </div>
+                            {selected ? (
+                              <span className="shrink-0 text-xs font-semibold text-primary">Selected</span>
+                            ) : null}
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </DialogBody>
 
@@ -1643,15 +1770,15 @@ export default function LeaderboardTab() {
 
       {/* Kill dialog */}
       <Dialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
-        <DialogContent mobileMode="sheet" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+        <DialogContent mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
           <DialogHeader className="pb-1">
-            <DialogTitle className="leading-tight">Collect star</DialogTitle>
+            <DialogTitle className="leading-tight">Kill a plant</DialogTitle>
             <DialogDescription className="leading-relaxed">
               Select one living plant to collect a star from the dead target. This action has a wallet cooldown.
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="mt-4 space-y-4 pr-1">
+          <DialogBody className="mt-4 space-y-4 pb-4 pr-1">
             {targetPlant && (
               <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
                 <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
@@ -1684,48 +1811,83 @@ export default function LeaderboardTab() {
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold">Living plants</div>
                 <span className="text-xs text-muted-foreground">
-                  {myPlants.filter(p => p.status !== 4).length} available
+                  {livingKillerPlants.length} available
                 </span>
               </div>
 
-              <div className="max-h-[min(14rem,34dvh)] space-y-2 overflow-y-auto rounded-[var(--radius-panel)] border border-border/70 bg-background/35 p-2">
-                {myPlants.filter(p => p.status !== 4).length === 0 && (
-                  <DisabledReason>
-                    You need a living plant to collect a star.
-                  </DisabledReason>
-                )}
-                {myPlants.filter(p => p.status !== 4).map((p) => (
-                  <label
-                    key={p.id}
-                    className={cn(
-                      "flex cursor-pointer items-center justify-between rounded-[var(--radius-control)] border p-3 transition-colors hover:bg-[hsl(var(--nav-hover-bg))]",
-                      selectedKillerId === p.id ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card"
-                    )}
+              {livingKillerPlants.length === 0 ? (
+                <DisabledReason>
+                  You need a living plant to collect a star.
+                </DisabledReason>
+              ) : (
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto min-h-11 w-full justify-between px-3 py-2 text-left"
+                    >
+                      {selectedKillerPlant ? (
+                        <div className="flex min-w-0 items-center gap-2">
+                          <PlantImage selectedPlant={selectedKillerPlant as UntypedValue} width={30} height={30} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {selectedKillerPlant.name || `Plant #${selectedKillerPlant.id}`}
+                            </div>
+                            <div className="text-xs font-normal text-muted-foreground">
+                              Level {selectedKillerPlant.level}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span>Select your plant</span>
+                      )}
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto"
                   >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <input
-                        type="radio"
-                        name="killer"
-                        className="accent-primary"
-                        checked={selectedKillerId === p.id}
-                        onChange={() => setSelectedKillerId(p.id)}
-                      />
-                      <PlantImage selectedPlant={p as UntypedValue} width={30} height={30} />
-                      <div className="min-w-0 text-sm">
-                        <div className="truncate font-medium">{p.name || `Plant #${p.id}`}</div>
-                        <div className="text-xs text-muted-foreground">Level {p.level}</div>
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
+                    {livingKillerPlants.map((plant) => {
+                      const selected = selectedKillerId === plant.id;
+                      return (
+                        <DropdownMenuItem
+                          key={plant.id}
+                          onSelect={() => setSelectedKillerId(plant.id)}
+                          className="min-h-12"
+                        >
+                          <div className="flex w-full min-w-0 items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <PlantImage selectedPlant={plant as UntypedValue} width={28} height={28} />
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">
+                                  {plant.name || `Plant #${plant.id}`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Level {plant.level}
+                                </div>
+                              </div>
+                            </div>
+                            {selected ? (
+                              <span className="shrink-0 text-xs font-semibold text-primary">Selected</span>
+                            ) : null}
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </DialogBody>
 
           <DialogFooter sticky className="block flex-none">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Confirm Kill</span>
+                <span className="text-sm font-medium">Confirm kill and earn one star</span>
                 <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
               </div>
               {isSolana ? (

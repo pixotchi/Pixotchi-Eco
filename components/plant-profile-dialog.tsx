@@ -280,7 +280,7 @@ export default function PlantProfileDialog({
           surface="soft"
           className="w-[min(94vw,27.5rem)] max-w-[27.5rem] !p-0"
         >
-          <div className="flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
+          <div className="surface-scroll-fade flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
             <div className="relative min-h-36 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent" aria-hidden="true" />
               <div className="relative z-[1] flex items-start justify-between gap-3 px-6 pb-12 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">

@@ -124,7 +124,7 @@ export default function SlideshowModal() {
         </div>
 
         {/* Body */}
-        <div className="max-h-[65vh] overflow-y-auto p-6 space-y-5">
+        <div className="surface-scroll-fade max-h-[65vh] overflow-y-auto p-6 space-y-5">
           <div className="flex items-start gap-3">
             {slide.icon}
             <h2 className="text-lg font-semibold leading-tight">{slide.title}</h2>

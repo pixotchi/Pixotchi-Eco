@@ -34,6 +34,7 @@ import {
   getLeafBalance,
   getPlantsByOwner,
   getPlantsInfoExtended,
+  KILL_COOLDOWN_ABI,
   getQuestSlotsByLandId,
   getRevivePrice,
   getShopItems,
@@ -63,6 +64,8 @@ import { getSwapQuoteForUserPair } from './swap/engine';
 import { getSwapToken, isUserSwapTokenId, USER_SWAP_TOKEN_IDS } from './swap/constants';
 import type { UserSwapTokenId } from './swap/types';
 import { GAME_ACTION_TOPICS, getGameActionGuide } from './ai-action-guide';
+import { fetchSeedMarketPulse, SEED_PAIR_DEXSCREENER_URL } from './seed-market';
+import { getAllPixotchiTokenInfo, getPixotchiTokenInfo } from './pixotchi-token-info';
 import { fetchIndexerGraphQL } from './indexer-client';
 import { PLANT_STRAINS_BY_ID, TOWN_BUILDING_NAMES, VILLAGE_BUILDING_NAMES } from './constants';
 import { CLIENT_ENV } from './env-config';
@@ -116,6 +119,7 @@ const SOLANA_ADDRESS_INPUT = z
 
 const USER_SWAP_TOKEN_ENUM = z.enum(USER_SWAP_TOKEN_IDS);
 const GAME_ACTION_TOPIC_ENUM = z.enum(GAME_ACTION_TOPICS);
+const PIXOTCHI_TOKEN_INFO_ENUM = z.enum(['all', 'seed', 'leaf', 'pixotchi']);
 
 const TOWN_BUILDING_LABELS: Record<number, string> = {
   ...TOWN_BUILDING_NAMES,
@@ -600,6 +604,45 @@ function cooldownDetails(lastTimestamp: string | number | undefined, cooldownSec
   };
 }
 
+async function readKillCooldownForWallet(address: `0x${string}`, readClient: PixotchiReadClient) {
+  const [canKillResult, remainingResult, cooldownSecondsResult] = await readClient.multicall({
+    allowFailure: true,
+    contracts: [
+      {
+        address: PIXOTCHI_NFT_ADDRESS,
+        abi: KILL_COOLDOWN_ABI,
+        functionName: 'canKill',
+        args: [address],
+      },
+      {
+        address: PIXOTCHI_NFT_ADDRESS,
+        abi: KILL_COOLDOWN_ABI,
+        functionName: 'getKillCooldownRemaining',
+        args: [address],
+      },
+      {
+        address: PIXOTCHI_NFT_ADDRESS,
+        abi: KILL_COOLDOWN_ABI,
+        functionName: 'getKillCooldownSeconds',
+      },
+    ],
+  });
+  const canKill = canKillResult?.status === 'success' ? Boolean(canKillResult.result) : null;
+  const remainingSeconds = remainingResult?.status === 'success' ? Number(remainingResult.result) : null;
+  const cooldownSeconds = cooldownSecondsResult?.status === 'success' ? Number(cooldownSecondsResult.result) : 60 * 60;
+  const availableAt = remainingSeconds && remainingSeconds > 0
+    ? Math.floor(Date.now() / 1000) + remainingSeconds
+    : null;
+
+  return {
+    availableAt,
+    availableAtIso: availableAt ? new Date(availableAt * 1000).toISOString() : null,
+    canKill,
+    cooldownSeconds,
+    remainingSeconds,
+  };
+}
+
 function summarizeAttackPlant(plant: ReturnType<typeof normalizePlant>) {
   return {
     fence: plant.fence,
@@ -1051,7 +1094,7 @@ function buildMissionTaskRows(mission: UntypedValue) {
     { done: Boolean(mission?.s3?.playCasinoGame), id: 's3_play_casino_game', label: 'Play a casino game', section: 'Land', where: 'Casino/Blackjack' },
     { done: Boolean(mission?.s4?.buy10), id: 's4_buy10_elements', label: `Buy at least 10 elements (${Number(mission?.s4?.buyElementsCount || 0)}/10)`, section: 'Plant', where: 'Plant Shop' },
     { done: Boolean(mission?.s4?.buyShield), id: 's4_buy_shield', label: 'Buy a shield/fence', section: 'Plant', where: 'Plant Shop/Fence' },
-    { done: Boolean(mission?.s4?.collectStar), id: 's4_collect_star', label: 'Collect a star by killing a plant', section: 'Plant', where: 'Ranking/Attack' },
+    { done: Boolean(mission?.s4?.collectStar), id: 's4_collect_star', label: 'Collect a star by killing an already-dead plant', section: 'Plant', where: 'Ranking/Dead' },
     { done: Boolean(mission?.s4?.playArcade), id: 's4_play_arcade', label: 'Play an arcade game', section: 'Plant', where: 'Arcade' },
   ];
 
@@ -1505,6 +1548,59 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             topics,
           }),
           readOnlyPhase: true,
+        }),
+        readClient,
+      ),
+    }),
+
+    get_token_info: tool({
+      description: 'Read app-approved SEED, LEAF, and PIXOTCHI token utility, tokenomics, contract addresses, and caveats from the same knowledge source used by Swap -> Info. Use for token info, tokenomics, utility, contract address, LEAF marketplace, PIXOTCHI creator coin, SEED burn/tax/reward questions. Never use this for financial advice.',
+      inputSchema: z.object({
+        token: PIXOTCHI_TOKEN_INFO_ENUM.default('all'),
+      }),
+      execute: async ({ token }) => withToolResult(
+        'get_token_info',
+        'Bundled Pixotchi token knowledge used by Swap -> Info',
+        {
+          cache: 'Bundled app token knowledge; contract addresses are public configuration.',
+          includeBlock: false,
+          limitations: [
+            'Informational gameplay/token utility only.',
+            'No financial advice, investment advice, price predictions, or buy/sell/hold recommendations.',
+            'Live market stats require get_seed_market_pulse.',
+          ],
+        },
+        async () => ({
+          noFinancialAdvice: true,
+          tokens: token === 'all'
+            ? getAllPixotchiTokenInfo()
+            : [getPixotchiTokenInfo(token)],
+        }),
+        readClient,
+      ),
+    }),
+
+    get_seed_market_pulse: tool({
+      description: 'Read live-ish SEED market pulse data from the same DexScreener-backed source used by the Swap chart card: price, 24h volume, liquidity, market cap/FDV, price changes, txns, and 2% rewards estimate. Use for factual SEED market stats only, never financial advice.',
+      inputSchema: z.object({}),
+      execute: async () => withToolResult(
+        'get_seed_market_pulse',
+        `DexScreener SEED/Base pair data (${SEED_PAIR_DEXSCREENER_URL})`,
+        {
+          cache: 'DexScreener data is cached for about 5 minutes and may be stale if the upstream API is unavailable.',
+          confidence: 'medium',
+          includeBlock: false,
+          limitations: [
+            'DexScreener data may be delayed, cached, missing, or temporarily unavailable.',
+            'Rewards estimate is 2% of reported 24h SEED trading volume.',
+            'No financial advice, investment advice, price predictions, or buy/sell/hold recommendations.',
+          ],
+        },
+        async () => ({
+          market: await fetchSeedMarketPulse(),
+          noFinancialAdvice: true,
+          pairUrl: SEED_PAIR_DEXSCREENER_URL,
+          poweredBy: ['DEX Screener', 'TradingView chart UI'],
         }),
         readClient,
       ),
@@ -2234,6 +2330,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               attackerCooldown: cooldownDetails(attacker.lastAttackUsed, PLANT_ATTACK_ATTACKER_COOLDOWN_SECONDS),
             })),
             rules: [
+              'Attack is separate from dead-plant kill.',
               'Attacker must be alive.',
               'Target must be alive.',
               'Attacker level must be lower than target level.',
@@ -2241,12 +2338,112 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               'A target can be attacked again after 60 minutes.',
               'Targets with an active fence/shield cannot be attacked.',
               'You cannot attack your own plant.',
+              'Attacks are PTS combat: attacker has a 31% win chance and 69% loss chance.',
+              'Winner gains 0.5% of the loser score, and loser loses that PTS.',
+              'Attacks do not reduce TOD, lifetime, or starving timers.',
             ],
             scannedLeaderboardCount: scanned.length,
             targetCooldownSeconds: PLANT_ATTACK_TARGET_COOLDOWN_SECONDS,
             targets: targets.slice(0, limit),
             totalLeaderboardPlants: ranked.length,
             truncated: targets.length > limit || ranked.length > scanned.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_killable_plants: tool({
+      description: 'Read current dead-plant kill eligibility for collecting a star: dead targets, owned living killer plants, and the wallet kill cooldown. Use for "can I kill", "which plant can I kill", "collect a star by killing a plant", or dead leaderboard kill questions. This is separate from attacks.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        limit: z.number().int().min(1).max(20).default(10),
+        scanLimit: z.number().int().min(20).max(500).default(500),
+      }),
+      execute: async ({ address, limit, scanLimit }) => withToolResult(
+        'get_killable_plants',
+        `Base contract reads for owned Pixotchi plants, dead leaderboard targets, and wallet kill cooldown via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Read-only eligibility mirrors current app UI guardrails and does not guarantee transaction success.',
+            'Dead targets are scanned from the current plant leaderboard up to scanLimit; use Ranking -> Dead for the final live kill button.',
+            'The AI cannot execute kills or choose a transaction for the player.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const [ownedPlants, allPlantIds, killCooldown] = await Promise.all([
+            readPlantsForAddress(target, readClient),
+            getAliveTokenIds(readClient),
+            readKillCooldownForWallet(target, readClient),
+          ]);
+          const leaderboardPlants = await getPlantsInfoExtended(allPlantIds, readClient);
+          const owned = ownedPlants.map(normalizePlant);
+          const ownedIds = new Set(owned.map((plant) => plant.id));
+          const livingKillerPlants = owned.filter((plant) => plant.status !== 4);
+          const ranked = leaderboardPlants
+            .map(normalizePlant)
+            .sort((a, b) => b.scorePts - a.scorePts)
+            .map((plant, index) => ({
+              ...plant,
+              rank: index + 1,
+            }));
+          const scanned = ranked.slice(0, scanLimit);
+          let ownDeadTargets = 0;
+          const deadTargets: UntypedValue[] = [];
+
+          for (const candidate of scanned) {
+            if (candidate.status !== 4) {
+              continue;
+            }
+
+            const isOwn = ownedIds.has(candidate.id) || sameAddress(candidate.owner, target);
+            if (isOwn) {
+              ownDeadTargets += 1;
+              continue;
+            }
+
+            deadTargets.push({
+              rank: candidate.rank,
+              rewardStars: 1,
+              target: summarizeAttackPlant(candidate),
+            });
+          }
+
+          return {
+            address: target,
+            blockedSummary: {
+              noDeadTargets: deadTargets.length === 0,
+              noLivingKillerPlant: livingKillerPlants.length === 0,
+              ownDeadTargets,
+              walletCooldown: killCooldown.canKill === false,
+            },
+            deadTargetCount: deadTargets.length,
+            killCooldown,
+            livingKillerCount: livingKillerPlants.length,
+            livingKillerPlants: livingKillerPlants.slice(0, 10).map(summarizeAttackPlant),
+            ownedPlantCount: owned.length,
+            readiness: {
+              canKillNow: killCooldown.canKill === true && livingKillerPlants.length > 0 && deadTargets.length > 0,
+              hasDeadTargets: deadTargets.length > 0,
+              hasLivingKillerPlant: livingKillerPlants.length > 0,
+              walletCooldownReady: killCooldown.canKill,
+            },
+            rules: [
+              'Kill is separate from attack.',
+              'Target must already be dead.',
+              'Killer plant must be one of your living plants.',
+              'You cannot kill your own dead plant from the public dead-target flow.',
+              'Wallet kill cooldown is once per hour.',
+              'Killing grants exactly 1 star to the selected living plant and removes/burns the dead target.',
+              'Killing does not use attack odds, does not transfer PTS between attacker/target, and does not reduce TOD/lifetime.',
+            ],
+            scannedLeaderboardCount: scanned.length,
+            targets: deadTargets.slice(0, limit),
+            totalLeaderboardPlants: ranked.length,
+            truncated: deadTargets.length > limit || ranked.length > scanned.length,
           };
         },
         readClient,

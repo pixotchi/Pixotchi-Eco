@@ -185,7 +185,7 @@ const DialogBody = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("min-h-0 flex-1 overflow-y-auto", className)}
+    className={cn("surface-scroll-fade min-h-0 flex-1 overflow-y-auto", className)}
     {...props}
   />
 );

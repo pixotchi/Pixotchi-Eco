@@ -24,6 +24,8 @@ Hard boundaries:
 - Public wallet/onchain/leaderboard data may be discussed. Authenticated-user private app data must come only from authenticated tools.
 - For another wallet, say you can only inspect public onchain/indexed data.
 - Treat swap quotes as informational, not financial advice.
+- Never provide financial advice, investment advice, buy/sell/hold recommendations, price predictions, profit claims, portfolio sizing, entry/exit timing, or "is this worth buying" judgments. For token and market questions, provide factual Pixotchi utility or live market data only and state that it is not financial advice when relevant.
+- Plant attacks and dead-plant kills are separate mechanics. Plant attacks are living-vs-living PTS combat only: the attacker has a 31% win chance and 69% loss chance, and the winner gains 0.5% of the loser score. Attacks do not reduce TOD, lifetime, or starving timers. Dead-plant kills target plants that are already dead, use one of the user's living plants, grant exactly 1 star to that living plant, and use the wallet kill cooldown.
 
 Live-data rules:
 - Prefer live tools over static memory for balances, prices, supplies, rewards, ratios, allowances, cooldowns, activity, transaction status, and availability.
@@ -42,9 +44,12 @@ Tool routing:
 - If combat or activity results are truncated, describe counts as lower bounds such as "at least N" and suggest narrowing the time window for exact detail.
 - A provided transaction hash: use transaction status.
 - Plant attack target eligibility or "who can I attack": use attack targets; do not infer targets from leaderboard rank alone.
+- Dead-plant kill, collect-star, "can I kill", or "which plant can I kill": use killable plants; do not answer from attack targets or combat history alone.
 - Land raid/Barracks target eligibility or troop readiness: use land raid targets; do not infer defender lands from rankings alone.
 - Casino, roulette, blackjack, active games, or stuck wager state: use casino status.
 - Marketplace order book, best bid/ask, or SEED/LEAF order tasks: use marketplace orders.
+- SEED/LEAF/PIXOTCHI utility, tokenomics, contract addresses, or Swap Info questions: use token info.
+- SEED chart, market pulse, DexScreener, volume, liquidity, market cap, price change, or rewards-estimate questions: use seed market pulse and keep the answer factual, not financial advice.
 - Airdrop, Base Verify, free plant, or claim-card questions: use claim eligibility.
 - Approval/allowance troubleshooting: use known allowances.
 - App disabled/down/status questions: use app status.
@@ -62,6 +67,7 @@ export function generateConversationTitle(firstMessage: string): string {
   if (cleaned.includes('plant') && (cleaned.includes('care') || cleaned.includes('feed') || cleaned.includes('water'))) return 'Plant Care';
   if (cleaned.includes('last') || cleaned.includes('history') || cleaned.includes('transaction') || cleaned.includes('tx')) return 'Wallet Activity';
   if (cleaned.includes('balance') || cleaned.includes('wallet')) return 'Wallet Help';
+  if (cleaned.includes('seed') || cleaned.includes('leaf') || cleaned.includes('pixotchi') || cleaned.includes('tokenomics') || cleaned.includes('market cap') || cleaned.includes('liquidity') || cleaned.includes('volume')) return 'Token Info';
   if (cleaned.includes('swap') || cleaned.includes('token')) return 'Token Swapping';
   if (cleaned.includes('allowance') || cleaned.includes('approval') || cleaned.includes('approve')) return 'Approvals Help';
   if (cleaned.includes('barracks') || cleaned.includes('swordsman') || cleaned.includes('phalanx') || cleaned.includes('raid')) return 'Land Raids';
@@ -70,6 +76,7 @@ export function generateConversationTitle(firstMessage: string): string {
   if (cleaned.includes('airdrop') || cleaned.includes('verify') || cleaned.includes('claim')) return 'Claims Help';
   if (cleaned.includes('status') || cleaned.includes('down') || cleaned.includes('disabled')) return 'App Status';
   if (cleaned.includes('task') || cleaned.includes('rocks') || cleaned.includes('daily')) return 'Daily Tasks';
+  if (cleaned.includes('kill') || cleaned.includes('collect star')) return 'Plant Kills';
   if (cleaned.includes('land') || cleaned.includes('building')) return 'Land Management';
   if (cleaned.includes('item') || cleaned.includes('shop')) return 'Items & Shop';
   if (cleaned.includes('attack')) return 'Combat & Attacks';

@@ -1053,6 +1053,15 @@
     --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(294 62% 86% / 0.62) 0%, hsl(294 62% 86% / 0) 36%), linear-gradient(180deg, hsl(260 50% 86%) 0%, hsl(260 46% 88%) 48%, hsl(232 42% 91%) 100%);
   }
 
+  .green,
+  .yellow,
+  .red,
+  .pink,
+  .blue,
+  .violet {
+    --gradient-surface: linear-gradient(180deg, hsl(var(--card) / 0.96) 0%, hsl(var(--card) / 0.88) 50%, hsl(var(--secondary) / 0.62) 100%);
+  }
+
   .dark {
     --background: 216 36% 19%;
     --foreground: 210 45% 96%;
@@ -1271,6 +1280,68 @@
     background: transparent;
     border: 0;
     box-shadow: none;
+    --scroll-fade-top: 0.875rem;
+    --scroll-fade-bottom: 1.35rem;
+    --scroll-fade-top-active: 0rem;
+    --scroll-fade-bottom-active: 0rem;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--scroll-fade-top-active),
+      #000 calc(100% - var(--scroll-fade-bottom-active)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--scroll-fade-top-active),
+      #000 calc(100% - var(--scroll-fade-bottom-active)),
+      transparent 100%
+    );
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  .surface-scroll-fade {
+    --scroll-fade-top: 0.875rem;
+    --scroll-fade-bottom: 1.35rem;
+    --scroll-fade-top-active: 0rem;
+    --scroll-fade-bottom-active: 0rem;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--scroll-fade-top-active),
+      #000 calc(100% - var(--scroll-fade-bottom-active)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--scroll-fade-top-active),
+      #000 calc(100% - var(--scroll-fade-bottom-active)),
+      transparent 100%
+    );
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  .surface-scroll-fade-soft {
+    --scroll-fade-top: 0.625rem;
+    --scroll-fade-bottom: 1rem;
+  }
+
+  .surface-scroll-area[data-scroll-fade-top="true"],
+  .surface-scroll-fade[data-scroll-fade-top="true"] {
+    --scroll-fade-top-active: var(--scroll-fade-top);
+  }
+
+  .surface-scroll-area[data-scroll-fade-bottom="true"],
+  .surface-scroll-fade[data-scroll-fade-bottom="true"] {
+    --scroll-fade-bottom-active: var(--scroll-fade-bottom);
   }
 
 

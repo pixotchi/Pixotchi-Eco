@@ -883,7 +883,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             Pick a game, choose how you want to play, and use the bottom action when you are ready.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto pr-1">
+        <div className="surface-scroll-fade flex-1 overflow-y-auto pr-1">
           <div className="space-y-4 mt-4">
             <GameSelector selected={selectedGame} onSelect={setSelectedGame} />
 

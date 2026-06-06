@@ -17,6 +17,7 @@ DropdownMenuContent,
 DropdownMenuItem,
 DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import { Input } from "@/components/ui/input";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { StandardContainer } from "@/components/ui/pixel-container";
@@ -35,8 +36,6 @@ import { GardenItem,Plant,ShopItem } from "@/lib/types";
 import { cn,formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
 import {
 ChevronDown,
-ChevronLeft,
-ChevronRight,
 Flower2,
 Info
 } from "lucide-react";
@@ -414,8 +413,7 @@ export default function PlantsView() {
                 {/* Next/Previous controls for multiple plants */}
                 {plants.length > 1 && (
                   <>
-                    <Button
-                      type="button"
+                    <AssetCarouselButton
                       onClick={() => {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
                         if (idx >= 0) {
@@ -423,16 +421,11 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      variant="outline"
-                      size="icon"
-                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
-                      aria-label="Previous plant"
+                      direction="previous"
+                      label="Previous plant"
                       title="Previous"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </Button>
-                    <Button
-                      type="button"
+                    />
+                    <AssetCarouselButton
                       onClick={() => {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
                         if (idx >= 0) {
@@ -440,14 +433,10 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      variant="outline"
-                      size="icon"
-                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-card/75 backdrop-blur-md hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
-                      aria-label="Next plant"
+                      direction="next"
+                      label="Next plant"
                       title="Next"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </Button>
+                    />
                   </>
                 )}
 

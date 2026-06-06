@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import {
 DropdownMenu,
 DropdownMenuContent,
@@ -34,7 +35,7 @@ import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BatchClaimCard from "@/components/transactions/batch-claim-card";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useLandMap } from "@/hooks/useLandMap";
-import { ChevronDown,ChevronLeft,ChevronRight,LandPlot } from "lucide-react";
+import { ChevronDown,LandPlot } from "lucide-react";
 import LandImage from "../LandImage";
 
 import { useSmartWallet } from "@/lib/smart-wallet-context";
@@ -638,8 +639,7 @@ function LandsViewContent() {
                 {/* Next/Previous controls for multiple lands */}
                 {lands.length > 1 && (
                   <>
-                    <Button
-                      type="button"
+                    <AssetCarouselButton
                       onClick={() => {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
                         if (idx >= 0) {
@@ -647,16 +647,11 @@ function LandsViewContent() {
                           setSelectedLand(lands[prevIndex]);
                         }
                       }}
-                      variant="outline"
-                      size="icon"
-                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
-                      aria-label="Previous land"
+                      direction="previous"
+                      label="Previous land"
                       title="Previous"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </Button>
-                    <Button
-                      type="button"
+                    />
+                    <AssetCarouselButton
                       onClick={() => {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
                         if (idx >= 0) {
@@ -664,14 +659,10 @@ function LandsViewContent() {
                           setSelectedLand(lands[nextIndex]);
                         }
                       }}
-                      variant="outline"
-                      size="icon"
-                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/70 backdrop-blur-sm hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary"
-                      aria-label="Next land"
+                      direction="next"
+                      label="Next land"
                       title="Next"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </Button>
+                    />
                   </>
                 )}
               </div>
