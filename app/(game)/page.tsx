@@ -3,16 +3,18 @@
 import { ChatButton } from "@/components/chat";
 import InviteGate from "@/components/invite-gate";
 import StatusBar from "@/components/status-bar";
+import { useIsSolanaWallet } from "@/components/solana";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
+import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { WalletProfile } from "@/components/wallet-profile";
 import { INVITE_CONFIG,getLocalStorageKeys } from "@/lib/invite-utils";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
 import { sdk } from "@farcaster/miniapp-sdk";
-import { History,Info,KeyRound,Leaf,PlusCircle,Repeat,Sparkles,Trophy } from "lucide-react";
+import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -315,6 +317,77 @@ function LoginAuthActions({
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+function SharedFarmMintMobileToggle({
+  activeTab,
+  isMiniApp,
+}: {
+  activeTab: Tab;
+  isMiniApp: boolean;
+}) {
+  const isSolana = useIsSolanaWallet();
+  const [dashboardView, setDashboardView] = useWebQueryState<'plants' | 'lands'>({
+    key: 'dashboardView',
+    defaultValue: 'plants',
+    enabled: !isMiniApp,
+    parse: (rawValue) => (rawValue === 'plants' || rawValue === 'lands' ? rawValue : null),
+    serialize: (value) => (value === 'plants' ? null : value),
+  });
+  const [mintType, setMintType] = useWebQueryState<'plant' | 'land'>({
+    key: 'mintType',
+    defaultValue: 'plant',
+    enabled: !isMiniApp,
+    parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
+    serialize: (value) => (value === 'plant' ? null : value),
+  });
+
+  const isFarmOrMint = activeTab === 'dashboard' || activeTab === 'mint';
+  const showToggle = isFarmOrMint && !(activeTab === 'mint' && isSolana);
+  const value =
+    activeTab === 'mint'
+      ? (mintType === 'land' ? 'lands' : 'plants')
+      : dashboardView;
+
+  const handleValueChange = (nextValue: ToggleValue) => {
+    if (nextValue !== 'plants' && nextValue !== 'lands') {
+      return;
+    }
+
+    if (activeTab === 'mint') {
+      setMintType(nextValue === 'lands' ? 'land' : 'plant');
+      return;
+    }
+
+    setDashboardView(nextValue);
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex justify-center pb-3 min-[54rem]:hidden",
+        !showToggle && "hidden",
+      )}
+      data-shared-farm-mint-toggle
+    >
+      <ToggleGroup
+        value={value}
+        onValueChange={handleValueChange}
+        options={[
+          {
+            value: 'plants',
+            ariaLabel: 'Plants',
+            label: <span className="flex items-center gap-1"><Leaf className="h-4 w-4" /> Plants</span>,
+          },
+          {
+            value: 'lands',
+            ariaLabel: 'Lands',
+            label: <span className="flex items-center gap-1"><LandPlot className="h-4 w-4" /> Lands</span>,
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -786,6 +859,7 @@ export default function App() {
                 aria-labelledby={isDesktopShell ? `tab-desktop-${activeTab}` : `tab-mobile-${activeTab}`}
                 aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
               >
+                <SharedFarmMintMobileToggle activeTab={activeTab} isMiniApp={isMiniApp} />
                 <ErrorBoundary
                   key="tab-boundary"
                   resetKeys={address ? [address] : []}

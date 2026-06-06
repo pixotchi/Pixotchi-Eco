@@ -3,6 +3,7 @@
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import type { TransactionCall } from '@/lib/types';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -13,6 +14,13 @@ const PIXOTCHI_NFT_ABI = [
     type: 'function',
   },
 ] as const;
+
+export const getPlantMintCall = (strain: number): TransactionCall => ({
+  address: PIXOTCHI_NFT_ADDRESS,
+  abi: PIXOTCHI_NFT_ABI,
+  functionName: 'mint',
+  args: [BigInt(strain)],
+});
 
 interface MintTransactionProps {
   strain: number;
@@ -34,16 +42,9 @@ export default function MintTransaction({
   showToast = true,
 }: MintTransactionProps) {
 
-  const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'mint',
-    args: [BigInt(strain)],
-  }];
-
   return (
     <SponsoredTransaction
-      calls={calls}
+      calls={[getPlantMintCall(strain)]}
       onSuccess={onSuccess}
       onError={onError}
       buttonText={buttonText}

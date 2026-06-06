@@ -340,7 +340,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
           </DialogDescription>
         </DialogHeader>
 
-        <div className="surface-scroll-fade flex-1 overflow-y-auto pr-1">
+        <div className="surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1">
           <div className="space-y-4 pb-4">
             {/* Top bar with mid price and quick actions */}
             <div className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] sm:flex-row sm:items-center sm:justify-between">

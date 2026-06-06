@@ -2,9 +2,9 @@
 
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { SolanaNotSupported,useIsSolanaWallet } from '@/components/solana';
-import ApproveTransaction from '@/components/transactions/approve-transaction';
+import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
 import BundleBuyTransaction from '@/components/transactions/bundle-buy-transaction';
-import { BuyGardenItemTransaction,BuyShopItemTransaction } from '@/components/transactions/buy-item-transaction';
+import { BuyGardenItemTransaction,BuyShopItemTransaction,getBuyGardenItemCall,getBuyShopItemCall } from '@/components/transactions/buy-item-transaction';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
@@ -22,7 +22,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { formatWsol } from '@/lib/solana-quote';
 import { extractTransactionHash } from '@/lib/transaction-utils';
-import { GardenItem,Plant,ShopItem } from '@/lib/types';
+import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
 import { formatDuration,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/utils';
 import Image from 'next/image';
 import { useEffect,useMemo,useState } from 'react';
@@ -223,6 +223,17 @@ export default function ItemDetailsPanel({
     return [buildFenceV2PurchaseCall(selectedPlant.id, validFenceV2Days)];
   }, [selectedPlant, validFenceV2Days]);
 
+  const purchaseActionCalls = useMemo<TransactionCall[]>(() => {
+    if (!selectedPlant || !selectedItem) return [];
+    if (isFenceItem) return fenceV2Calls as TransactionCall[];
+    if (itemType === 'shop') {
+      return [getBuyShopItemCall(selectedPlant.id, selectedItem.id)];
+    }
+
+    const count = quantity > 0 ? quantity : 0;
+    return Array.from({ length: count }, () => getBuyGardenItemCall(selectedPlant.id, selectedItem.id));
+  }, [fenceV2Calls, isFenceItem, itemType, quantity, selectedItem, selectedPlant]);
+
   const fenceButtonText = fenceV2Active
     ? `Extend Fence (+${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'})`
     : `Buy Fence (${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'})`;
@@ -421,6 +432,60 @@ export default function ItemDetailsPanel({
     }
   };
 
+  const requiredSeedAllowance = isFenceItem ? (fenceV2Quote || BigInt(0)) : totalCost;
+  const needsSeedApproval =
+    !isSolana
+    && seedAllowance < requiredSeedAllowance
+    && !(isSmartWallet && isEthMode && ethQuote);
+  const approvalActionButtonText = isFenceItem
+    ? 'Approve + Buy Fence'
+    : itemType === 'garden' && quantity > 1
+      ? `Approve + Buy ${quantity}x`
+      : 'Approve + Buy Item';
+  const purchaseActionButtonText = isFenceItem
+    ? fenceButtonText
+    : itemType === 'garden' && quantity > 1
+      ? `Buy ${quantity}x ${selectedItem.name}`
+      : 'Buy Item';
+
+  const handlePurchaseSuccess = (tx: UntypedValue) => {
+    onPurchaseSuccess();
+    setPurchaseResult(`${selectedItem.name} applied: ${getItemBenefits()}.`);
+
+    try {
+      if (itemType === 'shop') {
+        const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
+        const txHash = extractTransactionHash(tx);
+        if (txHash) {
+          payload.proof = { txHash };
+        }
+        void postMissionProgress(payload);
+      } else if (itemType === 'garden') {
+        const post = async (currentTx: UntypedValue, attempt = 0) => {
+          try {
+            const payload: Record<string, UntypedValue> = {
+              address,
+              taskId: 's4_buy10_elements',
+              count: quantity,
+            };
+            const txHash = extractTransactionHash(currentTx);
+            if (txHash) {
+              payload.proof = { txHash };
+            }
+            const res = await postMissionProgress(payload);
+            if (!res.ok) throw new Error('missions post failed');
+          } catch {
+            if (attempt < 2) {
+              const delay = 400 * Math.pow(2, attempt);
+              setTimeout(() => post(currentTx, attempt + 1), delay);
+            }
+          }
+        };
+        void post(tx);
+      }
+    } catch { }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -596,25 +661,6 @@ export default function ItemDetailsPanel({
                 toast.error(getFriendlyErrorMessage(message));
               }}
             />
-          ) : seedAllowance < (isFenceItem ? (fenceV2Quote || BigInt(0)) : totalCost) && !(isSmartWallet && isEthMode && ethQuote) ? (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground text-center">
-                Approve SEED spending once to unlock shop and garden purchases.
-              </p>
-              <ApproveTransaction
-                spenderAddress={PIXOTCHI_NFT_ADDRESS}
-                onSuccess={() => {
-                  toast.success('SEED approval successful!');
-                  // Refresh allowance
-                  if (address) {
-                    checkTokenApproval(address).then(setSeedAllowance);
-                  }
-                }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Approve SEED"
-                buttonClassName="w-full"
-              />
-            </div>
           ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && selectedPlant && selectedItem ? (
             // ETH Mode purchase - atomic swap + buy transaction
             <div className="flex flex-col space-y-2">
@@ -676,6 +722,44 @@ export default function ItemDetailsPanel({
               buttonText={disabledMessage}
               buttonClassName="w-full"
             />
+          ) : needsSeedApproval ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground text-center">
+                Approve SEED spending once to unlock shop and garden purchases.
+              </p>
+              <ApprovalActionTransaction
+                actionCalls={purchaseActionCalls}
+                approvalSpender={PIXOTCHI_NFT_ADDRESS}
+                needsApproval={needsSeedApproval}
+                onApprovalSuccess={() => {
+                  toast.success('SEED approval successful!');
+                  if (address) {
+                    checkTokenApproval(address).then(setSeedAllowance);
+                  }
+                }}
+                onSuccess={(tx) => {
+                  toast.success(isSmartWallet ? 'Approved and purchased successfully!' : 'Purchase successful!');
+                  if (address) {
+                    checkTokenApproval(address).then(setSeedAllowance);
+                  }
+                  handlePurchaseSuccess(tx);
+                }}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                batchButtonText={approvalActionButtonText}
+                approvalButtonText="Approve SEED"
+                actionButtonText={purchaseActionButtonText}
+                buttonClassName="w-full"
+                disabled={
+                  selectedPlant.status === 4
+                  || fenceV2QuoteLoading
+                  || fenceV2BlockedByV1
+                  || fenceV2Bounds.todCapBreached
+                  || fenceV2InputInvalid
+                  || purchaseActionCalls.length === 0
+                }
+                resetKey={`${itemType}-${selectedPlant.id}-${selectedItem.id}-${quantity}-${activeFenceV2Days}`}
+              />
+            </div>
           ) : canBundle && isSmartWallet && selectedPlant && selectedItem ? (
             // Bundle Purchase for multiple garden items (Smart Wallet only)
             <BundleBuyTransaction

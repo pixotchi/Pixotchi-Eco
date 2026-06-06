@@ -1542,7 +1542,7 @@ export default function LeaderboardTab() {
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="mt-4 space-y-4 pb-4 pr-1">
+          <DialogBody className="space-y-4 pb-4 pr-1">
             {targetPlant && (
               <div className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
                 <div className="flex min-w-0 items-center gap-3">
@@ -1785,7 +1785,7 @@ export default function LeaderboardTab() {
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="mt-4 space-y-4 pb-4 pr-1">
+          <DialogBody className="space-y-4 pb-4 pr-1">
             {targetPlant && (
               <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
                 <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />

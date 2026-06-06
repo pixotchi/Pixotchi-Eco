@@ -171,7 +171,7 @@ export default function TasksInfoDialog() {
   const totalTaskCount = missionSections.reduce((total, section) => total + section.tasks.length, 0);
   const dailyProgress = Math.max(0, Math.min(100, missionPts));
   const summaryCard = (
-    <div className="sticky top-0 z-10 space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-sm">
+    <div className="sticky top-3 z-10 space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-sm">
       <div className="grid grid-cols-3 gap-2">
         <div>
           <span className="text-xs font-semibold text-muted-foreground">Streak</span>
@@ -224,7 +224,7 @@ export default function TasksInfoDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="space-y-4 pb-2">
+        <DialogBody className="space-y-4 pr-1 pt-0">
           {effectiveDisabled ? (
             <div className="rounded-[var(--radius-panel)] border border-amber-500/30 bg-amber-500/10 p-3.5">
               <p className="text-sm font-semibold">Temporarily Disabled</p>

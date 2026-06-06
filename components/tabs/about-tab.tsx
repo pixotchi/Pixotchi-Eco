@@ -14,7 +14,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { InviteStats } from '@/lib/types';
 import packageJson from '@/package.json';
-import { Book,Calendar,Check,Copy,ExternalLink,Gift,MessageCircle,PlayCircle,Plus,Radio } from "lucide-react";
+import { Calendar,Check,Copy,Gift,MessageCircle,PlayCircle,Plus,Radio } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useId,useRef,useState } from "react";
 import { toast } from 'react-hot-toast';
@@ -451,15 +451,6 @@ export default function AboutTab() {
 
           <div className="space-y-3 lg:flex lg:flex-wrap lg:gap-2 lg:space-y-0">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:contents">
-              <Button
-                variant="secondary"
-                onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
-                className="w-full lg:w-auto"
-              >
-                <Book className="w-4 h-4 mr-2" />
-                Documentation
-                <ExternalLink className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
               <Button
                 variant="secondary"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}

@@ -70,6 +70,68 @@ const arcade = projectFile('components/arcade/ArcadeDialog.tsx');
 assert.equal((arcade.match(/feedbackMode="toast"/g) || []).length, 3);
 assert.doesNotMatch(arcade, /feedbackMode="inline"/);
 assert.doesNotMatch(arcade, /showToast=\{false\}/);
+assert.match(arcade, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
+
+const dialogUi = projectFile('components/ui/dialog.tsx');
+assert.match(dialogUi, /sticky && "surface-footer-divider dialog-footer-surface sticky[\s\S]*mt-3/);
+assert.match(dialogUi, /surface-scroll-fade min-h-0 flex-1 overflow-y-auto py-3/);
+
+const tasksInfoDialog = projectFile('components/tasks/TasksInfoDialog.tsx');
+assert.match(tasksInfoDialog, /sticky top-3 z-10/);
+assert.doesNotMatch(tasksInfoDialog, /sticky top-0 z-10/);
+assert.match(tasksInfoDialog, /<DialogBody className="space-y-4 pr-1 pt-0">/);
+
+const premiumUi = projectFile('components/ui/premium.tsx');
+assert.match(premiumUi, /surface-footer-divider dialog-footer-surface sticky[\s\S]*mt-3[\s\S]*sm:mt-4/);
+
+const marketplaceDialog = projectFile('components/transactions/marketplace-dialog.tsx');
+assert.match(marketplaceDialog, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
+
+const aboutTab = projectFile('components/tabs/about-tab.tsx');
+assert.doesNotMatch(aboutTab, /Documentation/);
+assert.doesNotMatch(aboutTab, /doc\.pixotchi\.tech/);
+
+const appPage = projectFile('app/(game)/page.tsx');
+assert.match(appPage, /function SharedFarmMintMobileToggle/);
+assert.match(appPage, /data-shared-farm-mint-toggle/);
+assert.match(appPage, /setMintType\(nextValue === 'lands' \? 'land' : 'plant'\)/);
+
+const webQueryState = projectFile('hooks/useWebQueryState.ts');
+assert.match(webQueryState, /pixotchi:web-query-state/);
+assert.match(webQueryState, /window\.dispatchEvent\(new Event\(WEB_QUERY_STATE_EVENT\)\)/);
+
+const dashboardTab = projectFile('components/tabs/dashboard-tab.tsx');
+assert.match(dashboardTab, /hidden justify-center min-\[54rem\]:flex/);
+
+const mintTab = projectFile('components/tabs/mint-tab.tsx');
+assert.match(mintTab, /ApprovalActionTransaction/);
+assert.match(mintTab, /batchButtonText="Approve \+ Mint"/);
+assert.match(mintTab, /batchButtonText="Approve \+ Mint Land"/);
+assert.doesNotMatch(mintTab, /Step 1/);
+assert.doesNotMatch(mintTab, /Step 2/);
+assert.doesNotMatch(mintTab, /isSmartWallet && isSponsored \?/);
+
+const approvalActionTransaction = projectFile('components/transactions/approval-action-transaction.tsx');
+assert.match(approvalActionTransaction, /SmartWalletTransaction[\s\S]*calls=\{\[approvalCall, \.\.\.actionCalls\]\}/);
+assert.match(approvalActionTransaction, /SponsoredTransaction[\s\S]*calls=\{\[approvalCall\]\}/);
+assert.match(approvalActionTransaction, /feedbackMode = 'toast'/);
+
+const itemDetailsPanel = projectFile('components/item-details-panel.tsx');
+assert.match(itemDetailsPanel, /ApprovalActionTransaction/);
+assert.match(itemDetailsPanel, /getBuyShopItemCall/);
+assert.match(itemDetailsPanel, /getBuyGardenItemCall/);
+assert.match(itemDetailsPanel, /batchButtonText=\{approvalActionButtonText\}/);
+assert.doesNotMatch(itemDetailsPanel, /ApproveTransaction/);
+
+const envConfig = projectFile('lib/env-config.ts');
+assert.match(envConfig, /SWAP_QUOTE_SUMMARY_ENABLED: process\.env\.NEXT_PUBLIC_SWAP_QUOTE_SUMMARY_ENABLED === 'true'/);
+
+const envExample = projectFile('.env.example');
+assert.match(envExample, /NEXT_PUBLIC_SWAP_QUOTE_SUMMARY_ENABLED=false/);
+
+const swapPanelQuoteFlag = projectFile('components/tabs/pixotchi-swap-panel.tsx');
+assert.match(swapPanelQuoteFlag, /const showQuoteSummary = CLIENT_ENV\.SWAP_QUOTE_SUMMARY_ENABLED/);
+assert.match(swapPanelQuoteFlag, /\{showQuoteSummary && quoteSummary && \(/);
 
 const blackjackDialog = projectFile('components/transactions/BlackjackDialog.tsx');
 assert.match(blackjackDialog, /mobileMode="center"/);

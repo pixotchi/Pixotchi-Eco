@@ -4,6 +4,7 @@ import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import type { TransactionFeedbackMode } from './transaction-kit';
+import type { TransactionCall } from '@/lib/types';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -28,6 +29,20 @@ const PIXOTCHI_NFT_ABI = [
   },
 ] as const;
 
+export const getBuyShopItemCall = (plantId: number, itemId: string): TransactionCall => ({
+  address: PIXOTCHI_NFT_ADDRESS,
+  abi: PIXOTCHI_NFT_ABI,
+  functionName: 'shopBuyItem',
+  args: [BigInt(plantId), BigInt(itemId)],
+});
+
+export const getBuyGardenItemCall = (plantId: number, itemId: string): TransactionCall => ({
+  address: PIXOTCHI_NFT_ADDRESS,
+  abi: PIXOTCHI_NFT_ABI,
+  functionName: 'buyAccessory',
+  args: [BigInt(plantId), BigInt(itemId)],
+});
+
 interface BuyShopItemTransactionProps {
   plantId: number;
   itemId: string;
@@ -50,16 +65,9 @@ export function BuyShopItemTransaction({
   feedbackMode
 }: BuyShopItemTransactionProps) {
 
-  const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'shopBuyItem',
-    args: [BigInt(plantId), BigInt(itemId)],
-  }];
-
   return (
     <SponsoredTransaction
-      calls={calls}
+      calls={[getBuyShopItemCall(plantId, itemId)]}
       onSuccess={onSuccess}
       onError={onError}
       buttonText={buttonText}
@@ -92,16 +100,9 @@ export function BuyGardenItemTransaction({
   feedbackMode
 }: BuyGardenItemTransactionProps) {
 
-  const calls = [{
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'buyAccessory',
-    args: [BigInt(plantId), BigInt(itemId)],
-  }];
-
   return (
     <SponsoredTransaction
-      calls={calls}
+      calls={[getBuyGardenItemCall(plantId, itemId)]}
       onSuccess={onSuccess}
       onError={onError}
       buttonText={buttonText}

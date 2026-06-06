@@ -172,7 +172,7 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 mt-0 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6",
+      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 mt-3 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:mt-4 sm:px-6",
       className
     )}
     {...props}
@@ -185,7 +185,7 @@ const DialogBody = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("surface-scroll-fade min-h-0 flex-1 overflow-y-auto", className)}
+    className={cn("surface-scroll-fade min-h-0 flex-1 overflow-y-auto py-3", className)}
     {...props}
   />
 );

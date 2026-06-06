@@ -21,7 +21,7 @@ export default function DashboardTab() {
   return (
     <div className="space-y-4">
       {/* Switch Toggle */}
-      <div className="flex justify-center">
+      <div className="hidden justify-center min-[54rem]:flex">
         <ToggleGroup
           value={dashboardView}
           onValueChange={(v) => setDashboardView(v as 'plants' | 'lands')}

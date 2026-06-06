@@ -59,6 +59,7 @@ import {
   normalizeTransactionReceipt,
 } from '@/lib/transaction-utils';
 import { cn, formatTokenAmountRounded } from '@/lib/utils';
+import { CLIENT_ENV } from '@/lib/env-config';
 import { SWAP_PANEL_STRINGS as S } from './pixotchi-swap-panel.strings';
 
 type QuoteState =
@@ -1233,7 +1234,8 @@ export default function PixotchiSwapPanel() {
 
   const isQuoteLoading = quoteState.status === 'loading';
   const showQuoteLoadingText = isQuoteLoading || isDeferredLagging;
-  const quoteSummary = currentQuote && currentQuote.strategy !== 'blocked'
+  const showQuoteSummary = CLIENT_ENV.SWAP_QUOTE_SUMMARY_ENABLED;
+  const quoteSummary = showQuoteSummary && currentQuote && currentQuote.strategy !== 'blocked'
     ? {
         minReceived: formatTokenAmountRounded(
           BigInt(currentQuote.minOut),
@@ -1430,7 +1432,7 @@ export default function PixotchiSwapPanel() {
             </div>
           </div>
 
-          {quoteSummary && (
+          {showQuoteSummary && quoteSummary && (
             <div className="mt-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/55 p-3 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="font-semibold text-foreground">Quote summary</span>

@@ -4,10 +4,9 @@ import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import { MintShareModal } from '@/components/mint-share-modal';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { SolanaNotSupported,useIsSolanaWallet,useSolanaBridge,useSolanaWallet,useTwinAddress } from '@/components/solana';
-import ApproveMintBundle from '@/components/transactions/approve-mint-bundle';
-import ApproveTransaction from '@/components/transactions/approve-transaction';
+import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
-import MintTransaction from '@/components/transactions/mint-transaction';
+import { getPlantMintCall } from '@/components/transactions/mint-transaction';
 import SwapLandMintBundle from '@/components/transactions/swap-land-mint-bundle';
 import SwapMintBundle from '@/components/transactions/swap-mint-bundle';
 import {
@@ -39,7 +38,7 @@ import Image from 'next/image';
 import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
-import LandMintTransaction from '../transactions/land-mint-transaction';
+import { getLandMintCall } from '../transactions/land-mint-transaction';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card,CardContent,CardHeader,CardTitle } from '../ui/card';
@@ -1418,81 +1417,47 @@ export default function MintTab() {
             </div>
           )}
 
-          {!showPlantEthFlow && selectedStrain && !hasInsufficientPlantBalance && needsPlantApproval && (
-            <div className="flex flex-col space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Approval</span>
-                <SponsoredBadge show={isSponsored && isSmartWallet} />
-              </div>
-              {/* If smart wallet + sponsored, offer bundled Approve + Mint */}
-              {(() => {
-                const useBundle = isSmartWallet && isSponsored;
-
-                return useBundle ? (
-                  <>
-                    <ApproveMintBundle
-                      strain={selectedStrain.id}
-                      tokenAddress={plantPaymentToken}
-                      onSuccess={() => {
-                        toast.success('Approved and minted successfully!');
-                        if (address) {
-                          checkTokenApproval(address, selectedStrain.paymentToken).then(setPaymentTokenAllowance);
-                        }
-                        incrementForcedFetch();
-                        window.dispatchEvent(new Event('balances:refresh'));
-                      }}
-                      onTransactionComplete={(tx) => {
-                        openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
-                      }}
-                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                      buttonText="Approve + Mint"
-                      buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                      showToast={false}
-                    />
-                  </>
-                ) : (
-                  <ApproveTransaction
-                    spenderAddress={PIXOTCHI_NFT_ADDRESS}
-                    tokenAddress={plantPaymentToken}
-                    onSuccess={() => {
-                      toast.success('Token approval successful!');
-                      if (address) {
-                        checkTokenApproval(address, plantPaymentToken).then(setPaymentTokenAllowance);
-                      }
-                      incrementForcedFetch();
-                    }}
-                    onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                    buttonText={`Approve ${paymentTokenSymbol}`}
-                    buttonClassName="w-full"
-                    showToast={false}
-                  />
-                );
-              })()}
-            </div>
-          )}
-
-          {!showPlantEthFlow && selectedStrain && !hasInsufficientPlantBalance && !needsPlantApproval && (
+          {!showPlantEthFlow && selectedStrain && !hasInsufficientPlantBalance && (
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">
-                  <span className="min-[54rem]:hidden">Mint Plant</span>
-                  <span className="hidden min-[54rem]:inline">Confirm Mint</span>
+                  {needsPlantApproval ? 'Approval + Mint' : (
+                    <>
+                      <span className="min-[54rem]:hidden">Mint Plant</span>
+                      <span className="hidden min-[54rem]:inline">Confirm Mint</span>
+                    </>
+                  )}
                 </span>
-                <SponsoredBadge show={isSponsored && isSmartWallet} />
+                <SponsoredBadge show={Boolean(isSmartWallet && (needsPlantApproval || isSponsored))} />
               </div>
-              <MintTransaction
-                strain={selectedStrain.id}
+              <ApprovalActionTransaction
+                actionCalls={[getPlantMintCall(selectedStrain.id)]}
+                approvalSpender={PIXOTCHI_NFT_ADDRESS}
+                approvalTokenAddress={plantPaymentToken}
+                needsApproval={needsPlantApproval}
+                onApprovalSuccess={() => {
+                  toast.success('Token approval successful!');
+                  if (address) {
+                    checkTokenApproval(address, plantPaymentToken).then(setPaymentTokenAllowance);
+                  }
+                  incrementForcedFetch();
+                }}
                 onSuccess={(tx) => {
-                  toast.success('Plant minted successfully!');
+                  toast.success(needsPlantApproval && isSmartWallet ? 'Approved and minted successfully!' : 'Plant minted successfully!');
+                  if (address) {
+                    checkTokenApproval(address, plantPaymentToken).then(setPaymentTokenAllowance);
+                  }
                   incrementForcedFetch();
                   window.dispatchEvent(new Event('balances:refresh'));
                   openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                   void notifyMintSuccess(selectedStrain.name);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Mint Plant"
+                batchButtonText="Approve + Mint"
+                approvalButtonText={`Approve ${paymentTokenSymbol}`}
+                actionButtonText="Mint Plant"
                 buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                showToast={false}
+                resetKey={`plant-${selectedStrain.id}-${plantPaymentToken}`}
               />
             </div>
           )}
@@ -1506,14 +1471,6 @@ export default function MintTab() {
         </div>
       </>
     );
-  };
-
-  const getLandMintButtonText = (needsApproval: boolean) => {
-    if (!landMintStatus) return 'Checking Mint Status';
-    if (!landMintStatus.canMint) return landMintStatus.reason;
-    if (seedBalanceRaw < landMintPrice) return 'Insufficient Balance';
-    if (needsApproval) return 'Approve SEED First';
-    return 'Mint Land';
   };
 
   const renderLandMinting = () => (
@@ -1619,64 +1576,60 @@ export default function MintTab() {
         {/* Standard SEED land minting (not ETH mode or no quote or can't mint) */}
         {!(isSmartWallet && isEthMode && (landEthQuote || landEthQuoteLoading) && landMintStatus?.canMint) && (
           <>
-            {landMintAllowance < landMintPrice && (
-              <div className="flex flex-col space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Step 1: Approve SEED</span>
-                  <SponsoredBadge show={isSponsored && isSmartWallet} />
-                </div>
-                <ApproveTransaction
-                  spenderAddress={LAND_CONTRACT_ADDRESS}
-                  onSuccess={() => {
-                    toast.success('Token approval successful!');
-                    if (address) {
-                      checkLandMintApproval(address).then(setLandMintAllowance);
-                    }
-                    incrementForcedFetch();
-                  }}
-                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                  buttonText="Approve SEED for Land"
-                  buttonClassName="w-full"
-                  showToast={false}
-                />
-              </div>
-            )}
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {landMintAllowance < landMintPrice ? 'Step 2: Mint Land' : (
+                {landMintAllowance < landMintPrice ? 'Approval + Mint Land' : (
                   <>
                     <span className="min-[54rem]:hidden">Mint Land</span>
                     <span className="hidden min-[54rem]:inline">Confirm Mint</span>
                   </>
                 )}
               </span>
-              <SponsoredBadge show={isSmartWallet} />
+              <SponsoredBadge show={Boolean(isSmartWallet && (landMintAllowance < landMintPrice || isSponsored))} />
             </div>
             {landMintStatus && !landMintStatus.canMint ? (
               <DisabledTransaction
                 buttonText={landMintStatus.reason}
                 buttonClassName="w-full"
               />
-            ) : (
+            ) : seedBalanceRaw < landMintPrice ? (
               <>
-                <LandMintTransaction
-                  onSuccess={() => {
-                    toast.success('Land minted successfully!');
-                    incrementForcedFetch();
-                    window.dispatchEvent(new Event('balances:refresh'));
-                  }}
-                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                  buttonText={getLandMintButtonText(landMintAllowance < landMintPrice)}
+                <DisabledTransaction
+                  buttonText="Insufficient Balance"
                   buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                  disabled={!landMintStatus?.canMint || (landMintAllowance < landMintPrice) || seedBalanceRaw < landMintPrice}
-                  showToast={false}
                 />
-                {landMintStatus?.canMint && !(landMintAllowance < landMintPrice) && seedBalanceRaw < landMintPrice && (
-                  <p className="text-xs text-value text-center mt-2">
-                    Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
-                  </p>
-                )}
+                <p className="text-xs text-value text-center mt-2">
+                  Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
+                </p>
               </>
+            ) : (
+              <ApprovalActionTransaction
+                actionCalls={[getLandMintCall()]}
+                approvalSpender={LAND_CONTRACT_ADDRESS}
+                needsApproval={landMintAllowance < landMintPrice}
+                onApprovalSuccess={() => {
+                  toast.success('Token approval successful!');
+                  if (address) {
+                    checkLandMintApproval(address).then(setLandMintAllowance);
+                  }
+                  incrementForcedFetch();
+                }}
+                onSuccess={() => {
+                  toast.success(landMintAllowance < landMintPrice && isSmartWallet ? 'Approved and minted land successfully!' : 'Land minted successfully!');
+                  if (address) {
+                    checkLandMintApproval(address).then(setLandMintAllowance);
+                  }
+                  incrementForcedFetch();
+                  window.dispatchEvent(new Event('balances:refresh'));
+                }}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                batchButtonText="Approve + Mint Land"
+                approvalButtonText="Approve SEED for Land"
+                actionButtonText="Mint Land"
+                buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
+                disabled={!landMintStatus?.canMint}
+                resetKey={`land-${landMintPrice.toString()}`}
+              />
             )}
           </>
         )}
@@ -1837,7 +1790,7 @@ export default function MintTab() {
             <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold">Confirm Mint</h3>
-                <SponsoredBadge show={Boolean(isSmartWallet && (showEthPlantMint || isSponsored))} />
+                <SponsoredBadge show={Boolean(isSmartWallet && (showEthPlantMint || needsPlantApproval || isSponsored))} />
               </div>
 
               {showEthPlantMint && (
@@ -1882,65 +1835,36 @@ export default function MintTab() {
                 </div>
               )}
 
-              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !hasInsufficientPlantBalance && needsPlantApproval && (
+              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !hasInsufficientPlantBalance && (
                 <div className="space-y-2">
-                  {isSmartWallet && isSponsored ? (
-                    <>
-                      <ApproveMintBundle
-                        strain={selectedStrain.id}
-                        tokenAddress={paymentToken}
-                        onSuccess={() => {
-                          toast.success('Approved and minted successfully!');
-                          if (address) {
-                            checkTokenApproval(address, selectedStrain.paymentToken).then(setPaymentTokenAllowance);
-                          }
-                          incrementForcedFetch();
-                          window.dispatchEvent(new Event('balances:refresh'));
-                        }}
-                        onTransactionComplete={(tx) => {
-                          openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
-                        }}
-                        onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                        buttonText="Approve + Mint"
-                        buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                        showToast={false}
-                      />
-                    </>
-                  ) : (
-                    <ApproveTransaction
-                      spenderAddress={PIXOTCHI_NFT_ADDRESS}
-                      tokenAddress={paymentToken}
-                      onSuccess={() => {
-                        toast.success('Token approval successful!');
-                        if (address) {
-                          checkTokenApproval(address, paymentToken).then(setPaymentTokenAllowance);
-                        }
-                        incrementForcedFetch();
-                      }}
-                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                      buttonText={`Approve ${paymentTokenSymbol}`}
-                      buttonClassName="w-full"
-                      showToast={false}
-                    />
-                  )}
-                </div>
-              )}
-
-              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !hasInsufficientPlantBalance && !needsPlantApproval && (
-                <div className="space-y-2">
-                  <MintTransaction
-                    strain={selectedStrain.id}
+                  <ApprovalActionTransaction
+                    actionCalls={[getPlantMintCall(selectedStrain.id)]}
+                    approvalSpender={PIXOTCHI_NFT_ADDRESS}
+                    approvalTokenAddress={paymentToken}
+                    needsApproval={needsPlantApproval}
+                    onApprovalSuccess={() => {
+                      toast.success('Token approval successful!');
+                      if (address) {
+                        checkTokenApproval(address, paymentToken).then(setPaymentTokenAllowance);
+                      }
+                      incrementForcedFetch();
+                    }}
                     onSuccess={(tx) => {
-                      toast.success('Plant minted successfully!');
+                      toast.success(needsPlantApproval && isSmartWallet ? 'Approved and minted successfully!' : 'Plant minted successfully!');
+                      if (address) {
+                        checkTokenApproval(address, paymentToken).then(setPaymentTokenAllowance);
+                      }
                       incrementForcedFetch();
                       window.dispatchEvent(new Event('balances:refresh'));
                       openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                       void notifyMintSuccess(selectedStrain.name);
                     }}
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                    buttonText="Mint Plant"
+                    batchButtonText="Approve + Mint"
+                    approvalButtonText={`Approve ${paymentTokenSymbol}`}
+                    actionButtonText="Mint Plant"
                     buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                    showToast={false}
+                    resetKey={`plant-${selectedStrain.id}-${paymentToken}`}
                   />
                 </div>
               )}
@@ -2029,7 +1953,7 @@ export default function MintTab() {
           <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold">Confirm Mint</h3>
-              <SponsoredBadge show={Boolean(isSmartWallet && (showEthLandMint || isSponsored))} />
+              <SponsoredBadge show={Boolean(isSmartWallet && (showEthLandMint || needsLandApproval || isSponsored))} />
             </div>
 
             {showEthLandMint && landEthQuote && (
@@ -2062,60 +1986,49 @@ export default function MintTab() {
 
             {!showEthLandMint && !showEthLandLoading && (
               <div className="space-y-3">
-                {needsLandApproval && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Step 1: Approve SEED</span>
-                      <SponsoredBadge show={isSponsored && isSmartWallet} />
-                    </div>
-                    <ApproveTransaction
-                      spenderAddress={LAND_CONTRACT_ADDRESS}
-                      onSuccess={() => {
-                        toast.success('Token approval successful!');
-                        if (address) {
-                          checkLandMintApproval(address).then(setLandMintAllowance);
-                        }
-                        incrementForcedFetch();
-                      }}
-                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                      buttonText="Approve SEED for Land"
-                      buttonClassName="w-full"
-                      showToast={false}
-                    />
-                  </div>
-                )}
-
-                {needsLandApproval && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Step 2: Mint Land</span>
-                    <SponsoredBadge show={isSmartWallet} />
-                  </div>
-                )}
                 {landMintStatus && !landMintStatus.canMint ? (
                   <DisabledTransaction
                     buttonText={landMintStatus.reason}
                     buttonClassName="w-full"
                   />
-                ) : (
+                ) : hasInsufficientLandBalance ? (
                   <>
-                    <LandMintTransaction
-                      onSuccess={() => {
-                        toast.success('Land minted successfully!');
-                        incrementForcedFetch();
-                        window.dispatchEvent(new Event('balances:refresh'));
-                      }}
-                      onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                      buttonText={getLandMintButtonText(needsLandApproval)}
+                    <DisabledTransaction
+                      buttonText="Insufficient Balance"
                       buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                      disabled={!landMintStatus?.canMint || needsLandApproval || hasInsufficientLandBalance}
-                      showToast={false}
                     />
-                    {landMintStatus?.canMint && !needsLandApproval && hasInsufficientLandBalance && (
-                      <p className="text-xs text-value text-center mt-2">
-                        Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
-                      </p>
-                    )}
+                    <p className="text-xs text-value text-center mt-2">
+                      Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
+                    </p>
                   </>
+                ) : (
+                  <ApprovalActionTransaction
+                    actionCalls={[getLandMintCall()]}
+                    approvalSpender={LAND_CONTRACT_ADDRESS}
+                    needsApproval={needsLandApproval}
+                    onApprovalSuccess={() => {
+                      toast.success('Token approval successful!');
+                      if (address) {
+                        checkLandMintApproval(address).then(setLandMintAllowance);
+                      }
+                      incrementForcedFetch();
+                    }}
+                    onSuccess={() => {
+                      toast.success(needsLandApproval && isSmartWallet ? 'Approved and minted land successfully!' : 'Land minted successfully!');
+                      if (address) {
+                        checkLandMintApproval(address).then(setLandMintAllowance);
+                      }
+                      incrementForcedFetch();
+                      window.dispatchEvent(new Event('balances:refresh'));
+                    }}
+                    onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                    batchButtonText="Approve + Mint Land"
+                    approvalButtonText="Approve SEED for Land"
+                    actionButtonText="Mint Land"
+                    buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
+                    disabled={!landMintStatus?.canMint}
+                    resetKey={`land-${landMintPrice.toString()}`}
+                  />
                 )}
               </div>
             )}
@@ -2150,7 +2063,7 @@ export default function MintTab() {
     return (
       <div className="space-y-4 min-[54rem]:space-y-3">
         {showLandOption && !useCombinedMintLayout && (
-          <div className="flex justify-center">
+          <div className="hidden justify-center min-[54rem]:flex">
             <ToggleGroup
               value={mintType}
               onValueChange={(v) => setMintType(v as 'plant' | 'land')}
