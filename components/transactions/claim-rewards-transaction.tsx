@@ -4,7 +4,6 @@ import React, { useCallback, useMemo } from 'react';
 import {
   Transaction,
   TransactionButton,
-  TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from './transaction-kit';
@@ -89,10 +88,6 @@ export default function ClaimRewardsTransaction({
           className={buttonClassName}
           disabled={disabled}
         />
-
-        {!minimal && (
-          <TransactionStatus />
-        )}
 
         <GlobalTransactionToast />
       </Transaction>

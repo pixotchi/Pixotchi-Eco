@@ -77,7 +77,7 @@ export default function SmartWalletTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess]);
-  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "both" : "inline");
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "toast" : "inline");
   const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
   const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
 

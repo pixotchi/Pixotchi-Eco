@@ -4,7 +4,6 @@ import React, { useCallback, useMemo } from 'react';
 import {
   Transaction,
   TransactionButton,
-  TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from './transaction-kit';
@@ -95,8 +94,6 @@ export function PlantNameTransaction({
           className={buttonClassName}
           disabled={disabled}
         />
-
-        <TransactionStatus />
 
         <GlobalTransactionToast />
       </Transaction>

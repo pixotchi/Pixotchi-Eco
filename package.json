@@ -9,6 +9,7 @@
     "lint": "node ./scripts/run-eslint-chunked.mjs && npm run lint:base-rpc",
     "lint:base-rpc": "node ./scripts/check-base-rpc-hardening.mjs",
     "typecheck": "tsc --noEmit",
+    "production-fixes:smoke": "tsx smoke/production-fixes-smoke.ts",
     "ai:smoke:gemini": "node smoke/ai-smoke-gemini.mjs",
     "ai:smoke:real-tools": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-smoke-real-tools.ts",
     "ai:smoke:budget": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-budget-smoke.ts",

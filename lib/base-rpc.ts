@@ -7,7 +7,7 @@ import {
   type TransactionReceipt,
   type Transport,
 } from 'viem';
-import { base } from 'viem/chains';
+import { base, mainnet } from 'viem/chains';
 import { getRpcConfig } from './env-config';
 import {
   type BaseRpcEndpointDescriptor,
@@ -835,9 +835,23 @@ const getServerBaseReadClient = cache(() => createBaseClient('read'));
 const getServerBaseReceiptClient = cache(() => createBaseClient('receipt'));
 const getServerBaseLogClient = cache(() => createBaseClient('log'));
 
+const ETHEREUM_ENS_RPC_URL =
+  process.env.ETHEREUM_RPC_URL ||
+  process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL ||
+  'https://ethereum-rpc.publicnode.com';
+
+const createEthereumEnsClient = () =>
+  createPublicClient({
+    chain: mainnet,
+    transport: http(ETHEREUM_ENS_RPC_URL),
+  });
+
+const getServerEthereumEnsClient = cache(() => createEthereumEnsClient());
+
 let browserBaseReadClient: ReturnType<typeof createBaseClient> | null = null;
 let browserBaseReceiptClient: ReturnType<typeof createBaseClient> | null = null;
 let browserBaseLogClient: ReturnType<typeof createBaseClient> | null = null;
+let browserEthereumEnsClient: ReturnType<typeof createEthereumEnsClient> | null = null;
 
 const getRetryableFlag = (error: UntypedValue): boolean => {
   const message =
@@ -952,6 +966,15 @@ export const getBaseLogClient = () => {
   }
 
   return getServerBaseLogClient();
+};
+
+export const getEthereumEnsClient = () => {
+  if (typeof window !== 'undefined') {
+    browserEthereumEnsClient ??= createEthereumEnsClient();
+    return browserEthereumEnsClient;
+  }
+
+  return getServerEthereumEnsClient();
 };
 
 export const getBaseTransactionReceipt = async (

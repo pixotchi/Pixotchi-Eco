@@ -266,8 +266,8 @@ export default function LeaderboardTab() {
   const leaderboardDataLoadedRef = useRef(false);
   const stakeDataLoadedRef = useRef(false);
 
-  const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
-    if (!hash) return;
+  const showAttackOutcomeFromHash = useCallback(async (hash?: string | null): Promise<boolean> => {
+    if (!hash) return false;
     try {
       const receipt = await getBaseTransactionReceipt(hash as `0x${string}`);
       const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
@@ -279,15 +279,15 @@ export default function LeaderboardTab() {
             const winner = Number(decoded.args.winner);
             const scoresWon = Number(decoded.args.scoresWon) / 1e12;
             const didWin = attacker === winner;
-            toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
-            return;
+            const message = `${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`;
+            (didWin ? toast.success : toast.error)(message, { id: 'attack-result' });
+            return true;
           }
         } catch { }
       }
-      // Fallback
-      toast.success('Attack confirmed', { id: 'attack-result' });
+      return false;
     } catch {
-      // Swallow decoding errors; keep UX smooth
+      return false;
     }
   }, []);
 
@@ -302,7 +302,8 @@ export default function LeaderboardTab() {
             const winner = Number(decoded.args.winner);
             const scoresWon = Number(decoded.args.scoresWon) / 1e12;
             const didWin = attacker === winner;
-            toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
+            const message = `${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`;
+            (didWin ? toast.success : toast.error)(message, { id: 'attack-result' });
             return true;
           }
         } catch { }
@@ -1728,23 +1729,29 @@ export default function LeaderboardTab() {
                         if (status.statusName === 'pending' || status.statusName === 'transactionPending') {
                           setIsSubmitting(true);
                           try {
-                            const h = status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
+                            const h = status.statusData?.transactionHash || status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
                             if (h) setPendingHash(h);
                           } catch { }
                           toast.loading('Submitting attack...', { id: 'attack-tx' });
                         }
                         if (status.statusName === 'success') {
                           setIsSubmitting(false);
-                          toast.success('Attack confirmed!', { id: 'attack-tx' });
+                          toast.dismiss('attack-tx');
                           try {
                             const receipt = status.statusData?.transactionReceipts?.[0];
                             const logs = receipt?.logs || [];
                             const shown = showAttackOutcomeFromLogs(logs);
                             if (!shown) {
-                              const h = receipt?.transactionHash || pendingHash;
-                              void showAttackOutcomeFromHash(h);
+                              const h = receipt?.transactionHash || status.statusData?.transactionHash || pendingHash;
+                              void showAttackOutcomeFromHash(h).then((hashShown) => {
+                                if (!hashShown) {
+                                  toast('Attack confirmed. Check Activity for the result.', { id: 'attack-result' });
+                                }
+                              });
                             }
-                          } catch { }
+                          } catch {
+                            toast('Attack confirmed. Check Activity for the result.', { id: 'attack-result' });
+                          }
                           // After a successful attack, refresh lists
                           fetchLeaderboardData();
                           void fetchMyPlants();

@@ -5,7 +5,6 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import {
     Transaction,
     TransactionButton,
-    TransactionStatus,
 } from './transaction-kit';
 import type { LifecycleStatus } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
@@ -648,7 +647,6 @@ export default function BlackjackTransaction({
                         </button>
                     )}
                 </div>
-                <TransactionStatus />
                 <GlobalTransactionToast />
             </Transaction>
         );

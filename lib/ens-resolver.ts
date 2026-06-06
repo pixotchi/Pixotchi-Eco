@@ -1,6 +1,5 @@
-import { createPublicClient, http, isAddress } from 'viem';
-import { mainnet } from 'viem/chains';
-import { getBaseReadClient } from './base-rpc';
+import { isAddress } from 'viem';
+import { getBaseReadClient, getEthereumEnsClient } from './base-rpc';
 import { redis } from './redis';
 import { ENS_CONFIG } from './constants';
 
@@ -18,16 +17,7 @@ const BASE_ENS_REGISTRAR_ABI = [
   },
 ] as const;
 
-const ETHEREUM_ENS_RPC_URL =
-  process.env.ETHEREUM_RPC_URL ||
-  process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL ||
-  'https://ethereum-rpc.publicnode.com';
-
 const getBaseClient = () => getBaseReadClient();
-const ethereumEnsClient = createPublicClient({
-  chain: mainnet,
-  transport: http(ETHEREUM_ENS_RPC_URL),
-});
 
 async function readCache(key: string): Promise<string | null> {
   if (!redis) return null;
@@ -111,7 +101,7 @@ async function resolveBasename(address: `0x${string}`): Promise<string | null> {
  */
 async function resolveEnsName(address: `0x${string}`): Promise<string | null> {
   try {
-    const name = await ethereumEnsClient.getEnsName({ address });
+    const name = await getEthereumEnsClient().getEnsName({ address });
     return name && name.length > 0 ? name : null;
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {

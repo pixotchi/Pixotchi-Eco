@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, CircleDot, Diamond, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import {
   blackjackGetGameSnapshot,
   blackjackGetGameToken,
@@ -483,24 +483,24 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         </div>
       )}
 
-      <div className="pt-2 flex justify-center gap-2">
+      <div className="flex flex-col gap-2 pt-2">
         <Button
-          className="px-3 text-sm"
+          className="w-full justify-center px-3 text-sm"
           onClick={() => handleOpenCasinoGame("roulette")}
           disabled={rouletteButtonDisabled}
           aria-label={hasActiveRouletteGame ? "Resume Roulette game" : "Play Roulette"}
-          leadingIcon={<CircleDot className="h-4 w-4" aria-hidden="true" />}
+          leadingIcon={<span className="text-base leading-none" aria-hidden="true">🎰</span>}
         >
           {hasActiveRouletteGame ? "Resume Roulette" : "Play Roulette"}
         </Button>
         {casinoPolicy.blackjackEnabled && (
           <Button
             variant="success"
-            className="px-3 text-sm"
+            className="w-full justify-center px-3 text-sm"
             onClick={() => handleOpenCasinoGame("blackjack")}
             disabled={blackjackButtonDisabled}
             aria-label={hasActiveBlackjackGame ? "Resume Blackjack game" : "Play Blackjack"}
-            leadingIcon={<Diamond className="h-4 w-4" aria-hidden="true" />}
+            leadingIcon={<span className="text-base leading-none" aria-hidden="true">♦️</span>}
           >
             {hasActiveBlackjackGame ? "Resume Blackjack" : "Play Blackjack"}
           </Button>

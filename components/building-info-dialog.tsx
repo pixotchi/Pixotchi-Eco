@@ -184,10 +184,10 @@ function InfoSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-muted/30 rounded-lg p-3">
-      <h4 className="font-semibold text-sm mb-2 text-foreground">{title}</h4>
+    <section className="space-y-2">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -199,7 +199,7 @@ function InfoStatTile({
   value: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md bg-background/60 p-2">
+    <div className="rounded-[var(--radius-control)] border border-border/55 bg-background/55 px-3 py-2">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
@@ -218,7 +218,7 @@ function BarracksTroopTile({
   troop: BarracksTroopConfigV2;
 }) {
   return (
-    <div className="rounded-md border border-border/70 bg-muted/40 p-3">
+    <div className="rounded-[var(--radius-control)] border border-border/55 bg-background/55 p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="inline-flex items-center gap-2">
           <Image src={icon} alt={title} width={18} height={18} className="h-4.5 w-4.5 object-contain" />
@@ -234,7 +234,7 @@ function BarracksTroopTile({
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
         <InfoStatTile
-          label="Strenght"
+          label="Strength"
           value={
             <span className="inline-flex items-center gap-1.5">
               <span>{troop.troopAttackStrength.toString()}</span>
@@ -409,10 +409,11 @@ export default function BuildingInfoDialog({
 
   // Get current game info based on toggle
   const currentGameInfo = selectedGame === 'roulette' ? rouletteInfo : blackjackInfo;
+  const currentGameIcon = selectedGame === 'roulette' ? '🎰' : '♦️';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isBarracks ? 'max-w-md' : 'max-w-sm'}>
+      <DialogContent className={isBarracks || isCasino ? 'max-w-md' : 'max-w-sm'}>
         <DialogHeader className="pb-4">
           <DialogTitle>{info.name}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -420,130 +421,141 @@ export default function BuildingInfoDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="space-y-3 pr-1">
-          {/* Casino Game Toggle */}
-          {isCasino && (
-            <>
-              <div className="flex justify-center">
-                <ToggleGroup
-                  value={selectedGame}
-                  onValueChange={(v) => setSelectedGame(v as 'roulette' | 'blackjack')}
-                  options={[
-                    { value: 'roulette', label: '🎰 Roulette' },
-                    { value: 'blackjack', label: '♦️ Blackjack' }
-                  ]}
-                  className="bg-muted/50"
-                />
-              </div>
+        <DialogBody className="pr-1">
+          <div className="space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+            {/* Casino Game Toggle */}
+            {isCasino && (
+              <>
+                <div className="flex justify-center">
+                  <ToggleGroup
+                    value={selectedGame}
+                    onValueChange={(v) => setSelectedGame(v as 'roulette' | 'blackjack')}
+                    options={[
+                      {
+                        value: 'roulette',
+                        ariaLabel: 'Roulette info',
+                        label: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span aria-hidden="true">🎰</span>
+                            Roulette
+                          </span>
+                        ),
+                      },
+                      {
+                        value: 'blackjack',
+                        ariaLabel: 'Blackjack info',
+                        label: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span aria-hidden="true">♦️</span>
+                            Blackjack
+                          </span>
+                        ),
+                      },
+                    ]}
+                    ariaLabel="Casino game info"
+                  />
+                </div>
 
-              {/* Game Description */}
-              <div className="bg-muted/30 rounded-lg p-3">
-                <p className="text-sm text-muted-foreground">{currentGameInfo.description}</p>
-              </div>
+                <div className="flex items-start gap-3 rounded-[var(--radius-control)] border border-border/55 bg-background/55 p-3">
+                  <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-primary/30 bg-primary/10 text-base leading-none">
+                    <span aria-hidden="true">{currentGameIcon}</span>
+                  </span>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{currentGameInfo.description}</p>
+                </div>
 
-              {/* Features */}
-              <div className="bg-muted/30 rounded-lg p-3">
-                <h4 className="font-semibold text-sm mb-2 text-foreground">Key Features</h4>
+                <InfoSection title="Key Features">
+                  <ul className="space-y-1.5 text-sm">
+                    {currentGameInfo.features.map((feature, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <span className="text-primary mt-0.5">•</span>
+                        <span className="text-muted-foreground">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </InfoSection>
+
+                {selectedGame === 'roulette' && (
+                  <InfoSection title="Bet Types & Payouts">
+                    <div className="space-y-1.5 text-sm">
+                      {Object.entries(rouletteInfo.betTypes).map(([betType, payout]) => (
+                        <div key={betType} className="flex items-start justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/45 px-3 py-2">
+                          <span className="text-muted-foreground">{betType}</span>
+                          <span className="shrink-0 font-medium text-[hsl(var(--success-strong))]">{payout}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </InfoSection>
+                )}
+
+                {selectedGame === 'blackjack' && (
+                  <>
+                    <InfoSection title="Player Actions">
+                      <div className="space-y-1.5 text-sm">
+                        {Object.entries(blackjackInfo.actions).map(([action, desc]) => (
+                          <div key={action} className="flex items-start justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/45 px-3 py-2">
+                            <span className="font-medium text-foreground">{action}</span>
+                            <span className="text-right text-muted-foreground">{desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </InfoSection>
+
+                    <InfoSection title="Payouts">
+                      <div className="space-y-1.5 text-sm">
+                        {Object.entries(blackjackInfo.payouts).map(([result, payout]) => (
+                          <div key={result} className="flex items-start justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/45 px-3 py-2">
+                            <span className="text-muted-foreground">{result}</span>
+                            <span className="text-right font-medium text-[hsl(var(--success-strong))]">{payout}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </InfoSection>
+                  </>
+                )}
+              </>
+            )}
+
+            {isBarracks && <BarracksInfoContent open={open} />}
+
+            {isProductionBuilding && productionEntries && (
+              <InfoSection title="Production Rates">
+                <div className="space-y-1.5 text-sm">
+                  {productionEntries.map(([levelKey, value]) => (
+                    <div key={levelKey} className="flex items-start justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/45 px-3 py-2">
+                      <span className="text-muted-foreground">{formatLevelLabel(levelKey)}</span>
+                      <span className="text-right font-medium text-primary">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </InfoSection>
+            )}
+
+            {isUtilityBuilding && 'features' in info && (
+              <InfoSection title="Key Features">
                 <ul className="space-y-1.5 text-sm">
-                  {currentGameInfo.features.map((feature, index) => (
+                  {info.features.map((feature, index) => (
                     <li key={index} className="flex items-start gap-2">
                       <span className="text-primary mt-0.5">•</span>
                       <span className="text-muted-foreground">{feature}</span>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </InfoSection>
+            )}
 
-              {/* Roulette bet types */}
-              {selectedGame === 'roulette' && (
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <h4 className="font-semibold text-sm mb-2 text-foreground">Bet Types & Payouts</h4>
-                  <div className="space-y-1.5 text-sm">
-                    {Object.entries(rouletteInfo.betTypes).map(([betType, payout]) => (
-                      <div key={betType} className="flex justify-between items-center">
-                        <span className="text-muted-foreground">{betType}:</span>
-                        <span className="font-medium text-[hsl(var(--success-strong))]">{payout}</span>
-                      </div>
-                    ))}
-                  </div>
+            {upgradeEntries && (
+              <InfoSection title="Upgrade Costs">
+                <div className="space-y-1.5 text-sm">
+                  {upgradeEntries.map(([levelKey, value]) => (
+                    <div key={levelKey} className="flex items-start justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/45 px-3 py-2">
+                      <span className="text-muted-foreground">{formatLevelLabel(levelKey)}</span>
+                      <span className="text-right font-medium text-amber-600">{value}</span>
+                    </div>
+                  ))}
                 </div>
-              )}
-
-              {/* Blackjack actions */}
-              {selectedGame === 'blackjack' && (
-                <>
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <h4 className="font-semibold text-sm mb-2 text-foreground">Player Actions</h4>
-                    <div className="space-y-1.5 text-sm">
-                      {Object.entries(blackjackInfo.actions).map(([action, desc]) => (
-                        <div key={action} className="flex justify-between items-center">
-                          <span className="font-medium text-foreground">{action}:</span>
-                          <span className="text-muted-foreground">{desc}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <h4 className="font-semibold text-sm mb-2 text-foreground">Payouts</h4>
-                    <div className="space-y-1.5 text-sm">
-                      {Object.entries(blackjackInfo.payouts).map(([result, payout]) => (
-                        <div key={result} className="flex justify-between items-center">
-                          <span className="text-muted-foreground">{result}:</span>
-                          <span className="font-medium text-[hsl(var(--success-strong))]">{payout}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {/* Non-casino buildings */}
-          {isBarracks && <BarracksInfoContent open={open} />}
-
-          {isProductionBuilding && productionEntries && (
-            <div className="bg-muted/30 rounded-lg p-3">
-              <h4 className="font-semibold text-sm mb-2 text-foreground">Production Rates</h4>
-              <div className="space-y-1.5 text-sm">
-                {productionEntries.map(([levelKey, value]) => (
-                  <div key={levelKey} className="flex justify-between items-center">
-                    <span className="text-muted-foreground">{formatLevelLabel(levelKey)}:</span>
-                    <span className="font-medium text-primary">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {isUtilityBuilding && 'features' in info && (
-            <div className="bg-muted/30 rounded-lg p-3">
-              <h4 className="font-semibold text-sm mb-2 text-foreground">Key Features</h4>
-              <ul className="space-y-1.5 text-sm">
-                {info.features.map((feature, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span className="text-muted-foreground">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {upgradeEntries && (
-            <div className="bg-muted/30 rounded-lg p-3">
-              <h4 className="font-semibold text-sm mb-2 text-foreground">Upgrade Costs</h4>
-              <div className="space-y-1.5 text-sm">
-                {upgradeEntries.map(([levelKey, value]) => (
-                  <div key={levelKey} className="flex justify-between items-center">
-                    <span className="text-muted-foreground">{formatLevelLabel(levelKey)}:</span>
-                    <span className="font-medium text-amber-600">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+              </InfoSection>
+            )}
+          </div>
         </DialogBody>
       </DialogContent>
     </Dialog>

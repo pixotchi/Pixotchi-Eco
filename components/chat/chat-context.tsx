@@ -350,7 +350,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore cleanup failures after an auth rejection.
     }
-  }, [chatAddress, getCurrentWebAuthSurface]);
+  }, [chatAddress, getCurrentWebAuthSurface, isMiniApp]);
 
   const retryPublicChatSession = useCallback(() => {
     setError(null);

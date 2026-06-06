@@ -9,6 +9,9 @@ export const SPIN_GAME_V2_COMMITTED_EVENT = parseAbiItem(
   'event SpinGameV2Committed(uint256 indexed nftId, address indexed player, bytes32 commitHash)',
 );
 export const SPIN_GAME_V2_PLAYED_EVENT = parseAbiItem(
+  'event SpinGameV2Played(uint256 indexed nftId, address indexed player, uint256 indexed rewardIndex, int256 pointsDelta, uint256 timeAdded, uint256 leafAmount)',
+);
+const LEGACY_SPIN_GAME_V2_PLAYED_EVENT = parseAbiItem(
   'event SpinGameV2Played(uint256 indexed nftId, address indexed player, uint256 rewardIndex, int256 pointsDelta, uint256 timeAdded, uint256 leafAmount)',
 );
 export const SPIN_GAME_V2_FORFEITED_EVENT = parseAbiItem(
@@ -20,12 +23,6 @@ const LEGACY_PLAYED_EVENT = parseAbiItem(
 const LEGACY_PLAYED_V2_EVENT = parseAbiItem(
   'event PlayedV2(uint256 indexed id, int256 points, int256 timeExtension, string gameName)',
 );
-
-const SPIN_RESULT_EVENT_ABI = [
-  SPIN_GAME_V2_PLAYED_EVENT,
-  LEGACY_PLAYED_EVENT,
-  LEGACY_PLAYED_V2_EVENT,
-] as const;
 
 type DecodableLog = {
   data?: Hex;
@@ -60,55 +57,64 @@ function decodeSpinRewardLog(log: DecodableLog): ScoredSpinRewardResult | null {
     return null;
   }
 
-  try {
-    const decoded = decodeEventLog({
-      abi: SPIN_RESULT_EVENT_ABI,
-      data: log.data,
-      topics: log.topics as [Hex, ...Hex[]],
-    });
+  const decodeAttempts = [
+    [SPIN_GAME_V2_PLAYED_EVENT],
+    [LEGACY_SPIN_GAME_V2_PLAYED_EVENT],
+    [LEGACY_PLAYED_EVENT],
+    [LEGACY_PLAYED_V2_EVENT],
+  ] as const;
 
-    if (decoded.eventName === 'SpinGameV2Played') {
-      const pointsDelta = Number(decoded.args.pointsDelta ?? 0);
-      const timeAdded = Number(decoded.args.timeAdded ?? 0);
-      const leafAmount = BigInt(decoded.args.leafAmount ?? 0);
-      const rewardIndexRaw = decoded.args.rewardIndex;
-      const reward: SpinRewardResult = {
-        rewardIndex:
-          rewardIndexRaw !== undefined ? Number(rewardIndexRaw) : undefined,
-        pointsDelta,
-        timeAdded,
-        leafAmount,
-      };
+  for (const abi of decodeAttempts) {
+    try {
+      const decoded = decodeEventLog({
+        abi,
+        data: log.data,
+        topics: log.topics as [Hex, ...Hex[]],
+      });
 
-      return {
-        ...reward,
-        score: scoreSpinReward(reward, 'spin_v2'),
-      };
+      if (decoded.eventName === 'SpinGameV2Played') {
+        const pointsDelta = Number(decoded.args.pointsDelta ?? 0);
+        const timeAdded = Number(decoded.args.timeAdded ?? 0);
+        const leafAmount = BigInt(decoded.args.leafAmount ?? 0);
+        const rewardIndexRaw = decoded.args.rewardIndex;
+        const reward: SpinRewardResult = {
+          rewardIndex:
+            rewardIndexRaw !== undefined ? Number(rewardIndexRaw) : undefined,
+          pointsDelta,
+          timeAdded,
+          leafAmount,
+        };
+
+        return {
+          ...reward,
+          score: scoreSpinReward(reward, 'spin_v2'),
+        };
+      }
+
+      if (
+        decoded.eventName === 'Played' ||
+        decoded.eventName === 'PlayedV2'
+      ) {
+        const reward: SpinRewardResult = {
+          pointsDelta: Number(decoded.args.points ?? 0),
+          timeAdded: Number(decoded.args.timeExtension ?? 0),
+          leafAmount: BigInt(0),
+        };
+
+        return {
+          ...reward,
+          score: scoreSpinReward(reward, 'legacy'),
+        };
+      }
+    } catch (error) {
+      if (error instanceof AbiEventSignatureNotFoundError) {
+        continue;
+      }
+      continue;
     }
-
-    if (
-      decoded.eventName === 'Played' ||
-      decoded.eventName === 'PlayedV2'
-    ) {
-      const reward: SpinRewardResult = {
-        pointsDelta: Number(decoded.args.points ?? 0),
-        timeAdded: Number(decoded.args.timeExtension ?? 0),
-        leafAmount: BigInt(0),
-      };
-
-      return {
-        ...reward,
-        score: scoreSpinReward(reward, 'legacy'),
-      };
-    }
-
-    return null;
-  } catch (error) {
-    if (error instanceof AbiEventSignatureNotFoundError) {
-      return null;
-    }
-    throw error;
   }
+
+  return null;
 }
 
 export function extractBestSpinRewardFromLogs(

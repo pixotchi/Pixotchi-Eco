@@ -100,7 +100,7 @@ export default function SponsoredTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess, onStatusUpdate]);
-  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "both" : "inline");
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "toast" : "inline");
   const showInlineStatus = !hideStatus && (resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both");
   const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
 

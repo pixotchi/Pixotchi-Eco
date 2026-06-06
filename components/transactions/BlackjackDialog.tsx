@@ -1,8 +1,7 @@
 "use client";
 
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { Button } from '@/components/ui/button';
-import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Dialog,DialogContent,DialogDescription,DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { CardHand,calculateHandValue,getCardValue } from '@/components/ui/PlayingCard';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
@@ -18,10 +17,9 @@ blackjackGetGameToken,
 blackjackGetTokenConfig,
 checkCasinoApproval,
 } from '@/lib/contracts';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
 import { getResultText } from '@/public/abi/blackjack-abi';
-import { Diamond } from 'lucide-react';
+import { X } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -244,7 +242,6 @@ export default function BlackjackDialog({
 }: BlackjackDialogProps) {
     const betAmountInputId = useId();
     const { address } = useAccount();
-    const { isSponsored } = usePaymaster();
     const casinoPolicy = getClientCasinoPolicy();
     const blackjackPlayable = casinoPolicy.playable && casinoPolicy.blackjackEnabled;
 
@@ -1282,24 +1279,27 @@ export default function BlackjackDialog({
     return (
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent
-                mobileMode="sheet"
+                hideCloseButton
+                mobileMode="center"
                 surface="game"
-                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-cover bg-center bg-no-repeat p-4 text-white sm:p-5"
+                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj.png')] bg-cover bg-center bg-no-repeat p-3 text-white sm:p-4"
             >
-                <DialogHeader>
-                    <DialogTitle className="flex items-center justify-between gap-3 text-xl font-semibold text-white">
-                        <span className="inline-flex items-center gap-2">
-                            <Diamond className="h-5 w-5 text-red-300" aria-hidden="true" />
-                            Blackjack
-                        </span>
-                        <SponsoredBadge show={isSponsored} />
-                    </DialogTitle>
-                    <DialogDescription className="sr-only">
-                        Blackjack game dialog with active hand state, onchain action controls, and transaction status.
-                    </DialogDescription>
-                </DialogHeader>
+                <DialogTitle className="sr-only">Blackjack</DialogTitle>
+                <DialogDescription className="sr-only">
+                    Blackjack game dialog with active hand state, onchain action controls, and transaction status.
+                </DialogDescription>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="iconCompact"
+                    onClick={handleClose}
+                    aria-label="Close Blackjack dialog"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 border border-white/45 bg-black/70 text-white shadow-[0_8px_20px_rgba(0,0,0,0.45)] hover:bg-black/85 hover:text-white focus-visible:ring-white sm:right-3 sm:top-3"
+                >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
 
-                <div className="space-y-6 py-4">
+                <div className="space-y-4 pb-3 pt-1 sm:space-y-5">
                     {/* Dealer Hand */}
                     {showDealerHand && (
                         <CardHand

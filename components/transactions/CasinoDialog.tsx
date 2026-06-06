@@ -1,10 +1,9 @@
 "use client";
 
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import type { LifecycleStatus } from '@/components/transactions/transaction-kit';
 import EuropeanRouletteWheel from '@/components/ui/EuropeanRouletteWheel';
 import { Button } from '@/components/ui/button';
-import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
@@ -23,7 +22,6 @@ checkCasinoApproval,
 LAND_CONTRACT_ADDRESS,
 type CasinoActiveBetV2,
 } from '@/lib/contracts';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
 import { BET_TYPE_NAMES,CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
 import { Loader2,Trash2,X } from 'lucide-react';
@@ -100,7 +98,6 @@ function getRouletteBetLabel(type: CasinoBetType, numbers: number[]): string {
 
 export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete, selectedToken }: CasinoDialogProps) {
     const { address } = useAccount();
-    const { isSponsored } = usePaymaster();
     const casinoPolicy = getClientCasinoPolicy();
     const betAmountInputId = useId();
 
@@ -727,33 +724,42 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             : pendingGame && activeBet?.isExpired
                 ? 'Settle expired game'
                 : revealModeActive && !canRevealActiveBet
-                    ? (revealBlocksRemaining > 0 ? `Waiting ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}` : 'Waiting for block...')
-                    : 'Reveal Result';
+                ? (revealBlocksRemaining > 0 ? `Waiting ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}` : 'Waiting for block...')
+                : 'Reveal Result';
+    const wheelSettling = wheelSpinning && wheelWinningNumber !== null;
+    const showRoundResult = !!result && !isSpinning && !wheelSpinning;
+    const showExpiredRoundResult = !!expiredResult && !isSpinning && !wheelSpinning;
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent
-                mobileMode="sheet"
+                hideCloseButton
+                mobileMode="center"
                 surface="game"
                 size="full"
-                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-cover bg-center bg-no-repeat p-3 sm:p-4 md:p-6"
+                stickyFooter
+                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino.png')] bg-cover bg-center bg-no-repeat p-3 sm:p-4 md:p-6"
             >
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-xl font-semibold text-white">
-                        Roulette
-                        <span className="text-xs font-normal text-white/80 ml-2">(Beta)</span>
-                        <SponsoredBadge show={isSponsored} className="ml-auto" />
-                    </DialogTitle>
-                    <DialogDescription className="sr-only">
-                        Roulette game dialog with betting controls, active spin state, reveal controls, and transaction status.
-                    </DialogDescription>
-                </DialogHeader>
+                <DialogTitle className="sr-only">Roulette</DialogTitle>
+                <DialogDescription className="sr-only">
+                    Roulette game dialog with betting controls, active spin state, reveal controls, and transaction status.
+                </DialogDescription>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="iconCompact"
+                    onClick={() => handleClose(false)}
+                    aria-label="Close Roulette dialog"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 border border-white/45 bg-black/70 text-white shadow-[0_8px_20px_rgba(0,0,0,0.45)] hover:bg-black/85 hover:text-white focus-visible:ring-white sm:right-3 sm:top-3"
+                >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
 
-                <div className="space-y-4 relative mt-4">
+                <div className="relative space-y-3 sm:space-y-4">
                     {/* Wheel + Bets Panel Side by Side */}
-                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                    <div className="grid gap-3 md:grid-cols-[minmax(11rem,13.5rem)_minmax(0,1fr)] md:items-stretch md:gap-4">
                         {/* European Roulette Wheel - Left Side */}
-                        <div className="flex flex-col items-center gap-2 shrink-0">
+                        <div className="mx-auto flex flex-col items-center justify-center gap-2">
                             <div className="w-40 h-40 md:w-48 md:h-48">
                                 <EuropeanRouletteWheel
                                     spinning={wheelSpinning}
@@ -768,69 +774,122 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 </div>
                             )}
                             {/* Spin Status */}
-                            {isSpinning && (
+                            {(isSpinning || wheelSettling) && (
                                 <div className="text-center text-sm text-white/90">
                                     <Loader2 className="inline h-4 w-4 animate-spin mr-2" />
-                                    {spinPhase === 'betting' && 'Placing bets...'}{spinPhase === 'waiting' && 'Waiting for block...'}{spinPhase === 'revealing' && 'Revealing...'}
+                                    {wheelSettling
+                                        ? 'Settling result...'
+                                        : <>{spinPhase === 'betting' && 'Placing bets...'}{spinPhase === 'waiting' && 'Waiting for block...'}{spinPhase === 'revealing' && 'Revealing...'}</>}
                                 </div>
                             )}
                         </div>
 
                         {/* Bets Panel - Right Side */}
-                        <div className="flex-1 w-full md:w-auto">
-                            <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-white/10 h-full text-white">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-sm font-semibold">Your Bets ({placedBets.length}/{maxBets})</span>
-                                    {placedBets.length > 0 && <Button variant="ghost" size="default" onClick={clearBets} disabled={bettingLocked} className="px-3 text-xs"><Trash2 className="h-4 w-4" />Clear</Button>}
+                        <div className="w-full min-w-0">
+                            <div className="h-full rounded-md border border-white/10 bg-black/35 p-2 text-white backdrop-blur-sm sm:p-2.5">
+                                <div className="mb-1.5 flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold uppercase tracking-wide text-white/85">Bets {placedBets.length}/{maxBets}</span>
+                                    {placedBets.length > 0 && (
+                                        <Button
+                                            variant="ghost"
+                                            size="compact"
+                                            onClick={clearBets}
+                                            disabled={bettingLocked}
+                                            className="h-7 min-h-7 px-2 text-xs text-white/80 hover:bg-white/10 hover:text-white"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Clear
+                                        </Button>
+                                    )}
                                 </div>
                                 {placedBets.length === 0 ? (
-                                    <p className="text-xs text-white/60 text-center py-4">Click on table below to add bets</p>
+                                    <p className="rounded border border-dashed border-white/15 bg-black/20 py-2 text-center text-xs text-white/60">Tap the table to add bets</p>
                                 ) : (
-                                    <div className="flex flex-wrap gap-1">
+                                    <div className="flex max-h-16 flex-wrap gap-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
                                         {placedBets.map(bet => (
-                                            <div key={bet.id} className="inline-flex shrink-0 items-center gap-2 rounded border border-white/20 bg-black/60 py-1 pl-2 pr-1 text-xs">
-                                                <span className="font-medium whitespace-nowrap text-white">{bet.label}</span>
-                                                <span className="text-white/70 opacity-80">({bet.amount})</span>
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeBet(bet.id)} disabled={bettingLocked} aria-label={`Remove ${bet.label} bet`} className="shrink-0 rounded-full p-0 text-red-400 opacity-80 hover:text-red-300 hover:opacity-100 disabled:opacity-30">
-                                                    <X className="h-4 w-4" />
-                                                </Button>
+                                            <div key={bet.id} className="inline-flex min-w-0 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-black/60 py-0.5 pl-2 pr-0.5 text-[11px] leading-none">
+                                                <span className="max-w-[7rem] truncate font-medium text-white">{bet.label}</span>
+                                                <span className="rounded-full bg-white/10 px-1.5 py-0.5 tabular-nums text-white/75">{bet.amount}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeBet(bet.id)}
+                                                    disabled={bettingLocked}
+                                                    aria-label={`Remove ${bet.label} bet`}
+                                                    className="inline-flex h-5 min-h-5 w-5 min-w-5 shrink-0 items-center justify-center rounded-full text-red-300/80 transition-colors hover:bg-red-500/20 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-30"
+                                                >
+                                                    <X className="h-3 w-3" aria-hidden="true" />
+                                                </button>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                                 {placedBets.length > 0 && (
-                                    <div className="flex justify-between mt-2 pt-2 border-t border-border text-xs">
-                                        <span>Total: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmount.toFixed(2)} {tokenSymbol}</strong></span>
-                                        <span className="text-green-500">Max Payout: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)} {tokenSymbol}</strong></span>
+                                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2 text-[11px]">
+                                        <span>Total <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmount.toFixed(2)}</strong></span>
+                                        <span className="text-right text-green-300">Max <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)}</strong></span>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Result Banner */}
-                            {result && !isSpinning && (
-                                <div className={`mt-3 text-center p-2 rounded-lg text-sm border font-medium ${result.won ? 'bg-green-600/90 text-white border-green-400' : 'bg-black/60 text-white/90 border-white/20'}`}>
-                                    {result.won ? (
-                                        <span className="inline-flex items-center gap-1 font-bold">
-                                            <span>Payout</span>
-                                            <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
-                                            <span>{parseFloat(result.payout).toFixed(2)} {tokenSymbol}!</span>
-                                        </span>
-                                    ) : (
-                                        <span className="font-bold">No win</span>
-                                    )}
-                                </div>
-                            )}
-                            {expiredResult && !isSpinning && (
-                                <div className="mt-3 text-center p-2 rounded-lg text-sm border font-medium bg-black/60 text-white/90 border-yellow-400/40">
-                                    <span className="inline-flex items-center gap-1 font-bold">
-                                        <span>Bet expired</span>
-                                        <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
-                                        <span>{parseFloat(expiredResult.forfeitedAmount).toFixed(2)} {tokenSymbol} forfeited</span>
-                                    </span>
-                                </div>
-                            )}
                         </div>
                     </div>
+
+                    {/* Round Result */}
+                    {showRoundResult && result && (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className={`relative z-0 rounded-[var(--radius-panel)] border p-3 text-sm shadow-[0_12px_32px_rgba(0,0,0,0.32)] backdrop-blur-md ${result.won
+                                ? 'border-green-300/45 bg-green-950/75 text-green-50'
+                                : 'border-white/15 bg-black/70 text-white'
+                                }`}
+                        >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-white shadow-lg ${getNumberColor(result.number)}`}>
+                                        {result.number}
+                                    </span>
+                                    <div className="min-w-0">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-white/60">Round result</div>
+                                        <div className="text-base font-bold leading-tight">
+                                            {result.won ? 'Winning spin' : 'No win this spin'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {result.won ? (
+                                    <div className="inline-flex items-center gap-1.5 rounded-full border border-green-200/30 bg-green-400/15 px-3 py-1.5 font-bold text-green-100">
+                                        <span>Payout</span>
+                                        <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                                        <span>{parseFloat(result.payout).toFixed(2)} {tokenSymbol}</span>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/75">
+                                        Better luck next spin
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {showExpiredRoundResult && expiredResult && (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className="relative z-0 rounded-[var(--radius-panel)] border border-yellow-300/40 bg-black/70 p-3 text-sm text-white shadow-[0_12px_32px_rgba(0,0,0,0.32)] backdrop-blur-md"
+                        >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-yellow-200/70">Round result</div>
+                                    <div className="text-base font-bold leading-tight text-yellow-100">Bet expired</div>
+                                </div>
+                                <div className="inline-flex items-center gap-1.5 rounded-full border border-yellow-200/25 bg-yellow-400/10 px-3 py-1.5 font-bold text-yellow-100">
+                                    <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                                    <span>{parseFloat(expiredResult.forfeitedAmount).toFixed(2)} {tokenSymbol} forfeited</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Bet Amount */}
                     <div className="flex flex-wrap items-center gap-2">
@@ -948,75 +1007,74 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />6-Line</span>
                     </div>
 
-                    {/* Action */}
-                    <div className="space-y-2">
-                        {!pendingGame && config && !config.enabled ? (
-                            <Button className="w-full" disabled variant="secondary">
-                                Roulette disabled
-                            </Button>
-                        ) : !hasApproval ? (
-                            <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={config?.bettingToken as `0x${string}`} onSuccess={() => refreshApproval(true)} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
-                        ) : isInsufficientBalance && !pendingGame ? (
-                            <Button className="w-full" disabled variant="destructive">
-                                Insufficient Balance
-                            </Button>
-                        ) : pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' ? (
-                            <CasinoTransaction
-                                mode="reveal"
-                                landId={landId}
-                                buttonText={revealButtonText}
-                                buttonClassName="w-full"
-                                disabled={revealButtonDisabled}
-                                onStatusUpdate={handleStatusUpdate}
-                                onComplete={handleRevealComplete}
-                                onButtonClick={handleRevealButtonClick}
-                                tokenSymbol={tokenSymbol}
-                                tokenDecimals={tokenDecimals}
-                            />
-                        ) : placedBets.length === 0 ? (
-                            <Button className="w-full" disabled>
-                                Select bets
-                            </Button>
-                        ) : (
-                            <CasinoTransaction
-                                mode="placeBets"
-                                landId={landId}
-                                betTypes={betTypes}
-                                betNumbersArray={betNumbersArray}
-                                betAmounts={betAmounts}
-                                buttonText={isSpinning ? 'Placing...' : `🎲 Spin (${totalBetAmount.toFixed(2)} ${tokenSymbol})`}
-                                buttonClassName="w-full"
-                                disabled={isSpinning || hasUnsupportedZeroCombo}
-                                onStatusUpdate={handleStatusUpdate}
-                                onComplete={handlePlaceBetsComplete}
-                                onButtonClick={handleSpinButtonClick}
-                                tokenSymbol={tokenSymbol}
-                                tokenDecimals={tokenDecimals}
-                                bettingToken={config?.bettingToken ?? null}
-                            />
-                        )}
-                        {hasUnsupportedZeroCombo && !pendingGame && (
-                            <p className="text-xs text-destructive text-center">
-                                Only straight bets can include 0.
-                            </p>
-                        )}
-                        {pendingGame && !isSpinning && !canRevealActiveBet && activeBetBelongsToWallet && (
-                            <p className="text-xs text-white/70 text-center">
-                                {revealBlocksRemaining > 0
-                                    ? `Reveal unlocks in ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}.`
-                                    : 'Waiting for the reveal block to be indexed.'}
-                            </p>
-                        )}
-                        {pendingGame && !activeBetBelongsToWallet && (
-                            <p className="text-xs text-destructive text-center">
-                                {address
-                                    ? 'This roulette game was started by another wallet.'
-                                    : 'Connect the wallet that started this roulette game.'}
-                            </p>
-                        )}
-                        {error && <p className="text-xs text-destructive text-center">{error}</p>}
-                    </div>
                 </div>
+                <DialogFooter sticky className="block space-y-2 -bottom-3 -mx-3 -mb-3 border-white/15 bg-black/75 bg-none px-3 pt-3 text-white backdrop-blur-md sm:-bottom-4 sm:-mx-4 sm:-mb-4 sm:px-4 md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6">
+                    {!pendingGame && config && !config.enabled ? (
+                        <Button className="w-full" disabled variant="secondary">
+                            Roulette disabled
+                        </Button>
+                    ) : !hasApproval ? (
+                        <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={config?.bettingToken as `0x${string}`} onSuccess={() => refreshApproval(true)} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
+                    ) : isInsufficientBalance && !pendingGame ? (
+                        <Button className="w-full" disabled variant="destructive">
+                            Insufficient Balance
+                        </Button>
+                    ) : pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' ? (
+                        <CasinoTransaction
+                            mode="reveal"
+                            landId={landId}
+                            buttonText={revealButtonText}
+                            buttonClassName="w-full"
+                            disabled={revealButtonDisabled}
+                            onStatusUpdate={handleStatusUpdate}
+                            onComplete={handleRevealComplete}
+                            onButtonClick={handleRevealButtonClick}
+                            tokenSymbol={tokenSymbol}
+                            tokenDecimals={tokenDecimals}
+                        />
+                    ) : placedBets.length === 0 ? (
+                        <Button className="w-full" disabled>
+                            Select bets
+                        </Button>
+                    ) : (
+                        <CasinoTransaction
+                            mode="placeBets"
+                            landId={landId}
+                            betTypes={betTypes}
+                            betNumbersArray={betNumbersArray}
+                            betAmounts={betAmounts}
+                            buttonText={isSpinning ? 'Placing...' : `Spin (${totalBetAmount.toFixed(2)} ${tokenSymbol})`}
+                            buttonClassName="w-full"
+                            disabled={isSpinning || hasUnsupportedZeroCombo}
+                            onStatusUpdate={handleStatusUpdate}
+                            onComplete={handlePlaceBetsComplete}
+                            onButtonClick={handleSpinButtonClick}
+                            tokenSymbol={tokenSymbol}
+                            tokenDecimals={tokenDecimals}
+                            bettingToken={config?.bettingToken ?? null}
+                        />
+                    )}
+                    {hasUnsupportedZeroCombo && !pendingGame && (
+                        <p className="text-center text-xs text-destructive">
+                            Only straight bets can include 0.
+                        </p>
+                    )}
+                    {pendingGame && !isSpinning && !canRevealActiveBet && activeBetBelongsToWallet && (
+                        <p className="text-center text-xs text-white/70">
+                            {revealBlocksRemaining > 0
+                                ? `Reveal unlocks in ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}.`
+                                : 'Waiting for the reveal block to be indexed.'}
+                        </p>
+                    )}
+                    {pendingGame && !activeBetBelongsToWallet && (
+                        <p className="text-center text-xs text-destructive">
+                            {address
+                                ? 'This roulette game was started by another wallet.'
+                                : 'Connect the wallet that started this roulette game.'}
+                        </p>
+                    )}
+                    {error && <p className="text-center text-xs text-destructive">{error}</p>}
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

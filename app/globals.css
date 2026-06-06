@@ -1372,11 +1372,11 @@
   }
 
   .casino-dialog-surface {
-    background-image: linear-gradient(rgba(8, 17, 14, 0.82), rgba(8, 17, 14, 0.9)), url("/icons/casino.png");
+    background-image: url("/icons/casino.png");
   }
 
   .blackjack-dialog-surface {
-    background-image: linear-gradient(rgba(12, 15, 24, 0.84), rgba(12, 15, 24, 0.9)), url("/icons/casinobj.png");
+    background-image: url("/icons/casinobj.png");
   }
 
   /* Base Loader Animations - Sequential Box Appearance */

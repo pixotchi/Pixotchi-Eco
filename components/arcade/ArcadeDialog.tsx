@@ -1126,7 +1126,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               buttonText={withStar ? "Play with star" : "Play box"}
               buttonClassName="w-full"
               disabled={boxPlayDisabled}
-              feedbackMode="inline"
+              feedbackMode="toast"
               onStatusUpdate={(status: UntypedValue) => {
                 if (status?.statusName === "transactionPending") {
                   setBoxResultDetails(null);
@@ -1134,7 +1134,6 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 onStatus(status as LifecycleStatus);
               }}
               onResult={(result) => setBoxResultDetails(result)}
-              showToast={false}
             />
           )}
 
@@ -1145,7 +1144,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               commitment={commitmentHex ?? undefined}
               disabled={spinPlayDisabled}
               buttonClassName="w-full"
-              feedbackMode="inline"
+              feedbackMode="toast"
               buttonText={spinStarCost > 0 ? `Spin Leaf (${spinStarCost}★)` : "Spin Leaf"}
               onStatusUpdate={handleSpinStatus("commit") as UntypedValue}
               onButtonClick={() => {
@@ -1164,7 +1163,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               secret={secretHex}
               disabled={spinPlayDisabled}
               buttonClassName="w-full"
-              feedbackMode="inline"
+              feedbackMode="toast"
               buttonText="Stop Wheel"
               onStatusUpdate={handleSpinStatus("reveal") as UntypedValue}
               onComplete={(result) => {

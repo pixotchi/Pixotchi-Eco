@@ -478,6 +478,22 @@ export default function PixotchiSwapPanel() {
       parsedAmount > BigInt(0) &&
       parsedAmount > sellBalanceRaw,
   );
+  const usesSponsoredSmartWalletForSwap =
+    isSmartWallet &&
+    isSponsored &&
+    typeof (walletClient as UntypedValue)?.sendCalls === 'function';
+  const requiredEthForSwap = useMemo(() => {
+    const nativeValue = sellToken === 'ETH' && parsedAmount ? parsedAmount : BigInt(0);
+    return nativeValue + (usesSponsoredSmartWalletForSwap ? BigInt(0) : ETH_GAS_REQUIRED_WEI);
+  }, [parsedAmount, sellToken, usesSponsoredSmartWalletForSwap]);
+  const hasInsufficientGas = Boolean(
+    address &&
+      currentQuote &&
+      currentQuote.strategy !== 'blocked' &&
+      isAmountValid &&
+      ethBalanceData?.value !== undefined &&
+      ethBalanceData.value < requiredEthForSwap,
+  );
   const actionDisabled =
     isExecuting ||
     !currentQuote ||
@@ -486,7 +502,8 @@ export default function PixotchiSwapPanel() {
     isDeferredLagging ||
     chainId !== BASE_CHAIN_ID ||
     !walletClient?.account ||
-    hasInsufficientBalance;
+    hasInsufficientBalance ||
+    hasInsufficientGas;
 
   const markQuoteActivity = useCallback(() => {
     quoteActivityAtRef.current = Date.now();
@@ -514,6 +531,10 @@ export default function PixotchiSwapPanel() {
 
     if (hasInsufficientBalance) {
       return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    }
+
+    if (hasInsufficientGas) {
+      return S.errors.insufficientGas;
     }
 
     if (!executionSteps?.[0]) {
@@ -546,6 +567,7 @@ export default function PixotchiSwapPanel() {
     currentQuote,
     executionSteps,
     hasInsufficientBalance,
+    hasInsufficientGas,
     isAmountValid,
     quoteState,
     sellAmount,
@@ -1230,6 +1252,7 @@ export default function PixotchiSwapPanel() {
     if (!sellAmount.trim()) return null;
     if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
     if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    if (hasInsufficientGas) return S.errors.insufficientGas;
     if (isDeferredLagging || isQuoteLoading) return S.quote.loading;
     if (currentQuote?.strategy === 'blocked') return currentQuote.blockedReason || S.errors.blockedPairFallback;
     if (!currentQuote) return 'Waiting for a swap quote.';
@@ -1238,6 +1261,7 @@ export default function PixotchiSwapPanel() {
     chainId,
     currentQuote,
     hasInsufficientBalance,
+    hasInsufficientGas,
     isAmountValid,
     isDeferredLagging,
     isExecuting,
@@ -1253,6 +1277,7 @@ export default function PixotchiSwapPanel() {
     if (!sellAmount.trim()) return S.buttons.swap;
     if (!isAmountValid) return 'Enter Valid Amount';
     if (hasInsufficientBalance) return `Insufficient ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`;
+    if (hasInsufficientGas) return 'Need ETH for Gas';
     if (isDeferredLagging || isQuoteLoading) return 'Fetching Quote...';
     if (currentQuote?.strategy === 'blocked') return 'Pair Unavailable';
     if (!currentQuote) return 'Waiting for Quote';
@@ -1262,6 +1287,7 @@ export default function PixotchiSwapPanel() {
     chainId,
     currentQuote,
     hasInsufficientBalance,
+    hasInsufficientGas,
     isAmountValid,
     isDeferredLagging,
     isExecuting,
