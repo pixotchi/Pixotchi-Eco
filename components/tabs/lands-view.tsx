@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import {
 DropdownMenu,
@@ -35,7 +35,7 @@ import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BatchClaimCard from "@/components/transactions/batch-claim-card";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useLandMap } from "@/hooks/useLandMap";
-import { ChevronDown,LandPlot } from "lucide-react";
+import { ChevronDown,LandPlot,PackageCheck } from "lucide-react";
 import LandImage from "../LandImage";
 
 import { useSmartWallet } from "@/lib/smart-wallet-context";
@@ -46,6 +46,7 @@ const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
 const LAND_SELECTION_STORAGE_KEY = 'pixotchi:selected-land-id';
 const BUILDING_TYPE_STORAGE_KEY = 'pixotchi:selected-building-type';
 const BUILDING_ID_STORAGE_KEY = 'pixotchi:selected-building-id';
+type LandUtilityPanel = 'batch-claim';
 
 function readStoredBigInt(key: string): bigint | null {
   if (typeof window === 'undefined') return null;
@@ -69,6 +70,36 @@ function readStoredNumber(key: string): number | null {
 function readStoredBuildingType(): BuildingType {
   if (typeof window === 'undefined') return 'village';
   return window.localStorage.getItem(BUILDING_TYPE_STORAGE_KEY) === 'town' ? 'town' : 'village';
+}
+
+function BatchClaimBuildingTile({
+  selected,
+  onSelect
+}: {
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-label="Open batch claim"
+          aria-pressed={selected}
+          className={`building-button building-element rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selected ? 'border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] shadow-[var(--shadow-glow)]' : 'border-border/45 bg-card/75 surface-shadow hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]'}`}
+        >
+          <div className="building-element relative flex h-16 w-16 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
+            <PackageCheck className={`h-8 w-8 ${selected ? 'text-primary' : 'text-foreground/80'}`} aria-hidden="true" />
+          </div>
+        </button>
+      </div>
+      <div className="text-center">
+        <div className="text-xs font-semibold truncate" title="Batch Claim">Batch Claim</div>
+        <div className="text-xs text-muted-foreground">All lands</div>
+      </div>
+    </div>
+  );
 }
 
 export default function LandsView() {
@@ -106,6 +137,7 @@ function LandsViewContent() {
   const [villageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
   const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
+  const [selectedUtilityPanel, setSelectedUtilityPanel] = useState<LandUtilityPanel | null>(null);
   const selectedLandId = selectedLand?.tokenId ?? null;
   const selectedBuildingId = selectedBuilding?.id ?? null;
   const [buildingsLoading, setBuildingsLoading] = useState(false);
@@ -220,6 +252,7 @@ function LandsViewContent() {
       setVillageBuildings([]);
       setTownBuildings([]);
       setSelectedBuilding(null);
+      setSelectedUtilityPanel(null);
       fetchBuildingDataPendingRef.current = null;
       fetchBuildingDataQueuedRef.current = false;
       return;
@@ -417,6 +450,15 @@ function LandsViewContent() {
     window.dispatchEvent(new Event('balances:refresh'));
   }, [fetchBuildingData, selectedLandId]);
 
+  const handleBatchClaimSuccess = useCallback(() => {
+    fetchBuildingData();
+    if (selectedLand) {
+      getLandById(selectedLand.tokenId).then(latest => {
+        if (latest) setSelectedLand(latest);
+      });
+    }
+  }, [fetchBuildingData, selectedLand]);
+
   // Refresh when dashboard becomes visible
   useEffect(() => {
     if (isVisible) {
@@ -459,6 +501,7 @@ function LandsViewContent() {
     if (selectedLandId == null) return;
     // Reset selected building so fetchBuildingData will pick first of new land
     setSelectedBuilding(null);
+    setSelectedUtilityPanel(null);
     (async () => {
       try {
         const latest = await getLandById(selectedLandId);
@@ -497,8 +540,14 @@ function LandsViewContent() {
   });
 
   const handleBuildingSelect = useCallback((type: BuildingType, building: BuildingData) => {
+    setSelectedUtilityPanel(null);
     setBuildingType(type);
     setSelectedBuilding(building);
+  }, []);
+
+  const handleBatchClaimUtilitySelect = useCallback(() => {
+    setBuildingType('village');
+    setSelectedUtilityPanel('batch-claim');
   }, []);
 
 
@@ -541,7 +590,7 @@ function LandsViewContent() {
         <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
           <div className="space-y-4 xl:sticky xl:top-0">
           {lands.length > 1 && (
-            <Card>
+            <TabCard>
               <CardHeader><CardTitle>Select Land</CardTitle></CardHeader>
               <CardContent>
                 <DropdownMenu>
@@ -568,9 +617,9 @@ function LandsViewContent() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </CardContent>
-            </Card>
+            </TabCard>
           )}
-          <Card>
+          <TabCard>
             <CardContent className="space-y-3">
               <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
                 <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
@@ -663,27 +712,20 @@ function LandsViewContent() {
                 <p className="text-sm text-muted-foreground">Token ID: {selectedLand.tokenId.toString()}</p>
               </div>
             </CardContent>
-          </Card>
+          </TabCard>
 
           </div>
 
           <div className="min-w-0 space-y-4">
           {lands.length > 0 && (
             <BatchClaimCard
+              className={selectedUtilityPanel === 'batch-claim' ? "hidden" : "hidden xl:block"}
               lands={lands}
-              onSuccess={() => {
-                fetchBuildingData(); // Refresh current land buildings
-                // Also refresh selected land to update warehouse numbers
-                if (selectedLand) {
-                  getLandById(selectedLand.tokenId).then(latest => {
-                    if (latest) setSelectedLand(latest);
-                  });
-                }
-              }}
+              onSuccess={handleBatchClaimSuccess}
             />
           )}
           {/* Building Management Section */}
-          <Card className="xl:h-fit xl:w-full">
+          <TabCard className="xl:h-fit xl:w-full">
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Buildings</CardTitle>
@@ -692,6 +734,7 @@ function LandsViewContent() {
                     value={buildingType}
                     onValueChange={(v) => {
                       const newType = v as 'village' | 'town';
+                      setSelectedUtilityPanel(null);
                       setBuildingType(newType);
                       setSelectedBuilding((newType === 'village' ? villageBuildings[0] : townBuildings[0]) || null);
                     }}
@@ -717,11 +760,17 @@ function LandsViewContent() {
                         <BuildingGrid
                           buildings={buildingType === 'village' ? villageBuildings : townBuildings}
                           buildingType={buildingType}
-                          selectedBuilding={selectedBuilding}
+                          selectedBuilding={selectedUtilityPanel === 'batch-claim' ? null : selectedBuilding}
                           selectedBuildingType={buildingType}
                           onBuildingSelect={(building) => handleBuildingSelect(buildingType, building)}
                           currentBlock={currentBlock}
                           landId={selectedLand.tokenId}
+                          extraItems={buildingType === 'village' && lands.length > 0 ? (
+                            <BatchClaimBuildingTile
+                              selected={selectedUtilityPanel === 'batch-claim'}
+                              onSelect={handleBatchClaimUtilitySelect}
+                            />
+                          ) : null}
                         />
                       </div>
 
@@ -773,7 +822,14 @@ function LandsViewContent() {
                 </div>
 
                 {/* Building Details Panel */}
-                {selectedBuilding && (
+                {selectedUtilityPanel === 'batch-claim' ? (
+                  <BatchClaimCard
+                    lands={lands}
+                    onSuccess={handleBatchClaimSuccess}
+                    variant="embedded"
+                    showWhenEmpty
+                  />
+                ) : selectedBuilding && (
                   <BuildingDetailsPanel
                     selectedBuilding={selectedBuilding}
                     landId={selectedLand.tokenId}
@@ -791,7 +847,7 @@ function LandsViewContent() {
                 )}
               </div>
             </CardContent>
-          </Card>
+          </TabCard>
           </div>
         </div>
       )}

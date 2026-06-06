@@ -27,7 +27,7 @@ export function StatusCard({ service }: StatusCardProps) {
     : undefined;
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-card/70 p-4 shadow-sm transition hover:shadow-lg">
+    <div className="rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.36)] bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-[var(--shadow-raised)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {iconMap[service.status]}

@@ -9,7 +9,7 @@ import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-tra
 import ReviveTransaction from "@/components/transactions/revive-transaction";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Button } from "@/components/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import {
 DropdownMenu,
@@ -344,7 +344,7 @@ export default function PlantsView() {
         >
           <div className="space-y-4 min-[54rem]:sticky min-[54rem]:top-0">
           {plants.length > 1 && (
-            <Card>
+            <TabCard>
               <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
               <CardContent>
                 <DropdownMenu>
@@ -371,10 +371,10 @@ export default function PlantsView() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </CardContent>
-            </Card>
+            </TabCard>
           )}
           {/* Plant "Screen" Display */}
-          <Card>
+          <TabCard>
             <CardContent className="p-4 space-y-3">
               {/* Main image container with stats overlay */}
               <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
@@ -550,7 +550,7 @@ export default function PlantsView() {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </TabCard>
 
           {/* Claim Rewards Dialog */}
           <Dialog open={claimOpen} onOpenChange={(open) => {
@@ -643,7 +643,7 @@ export default function PlantsView() {
           <div className="min-w-0 min-[54rem]:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <Card className="min-[54rem]:w-full">
+            <TabCard className="min-[54rem]:w-full">
               <CardHeader>
                 <CardTitle>Revive Plant</CardTitle>
               </CardHeader>
@@ -718,9 +718,9 @@ export default function PlantsView() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </TabCard>
           ) : (
-            <Card className="min-[54rem]:h-fit min-[54rem]:w-full">
+            <TabCard className="min-[54rem]:h-fit min-[54rem]:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Marketplace</CardTitle>
@@ -880,7 +880,7 @@ export default function PlantsView() {
                   />
                 </div>
               </CardContent>
-            </Card>
+            </TabCard>
           )}
           </div>
         </div>

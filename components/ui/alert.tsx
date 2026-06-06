@@ -8,7 +8,7 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-border/70",
+        default: "border-[hsl(var(--border-strong)/0.34)]",
         info:
           "border-[hsl(var(--info)/0.28)] bg-[hsl(var(--info)/0.1)] [&>svg]:text-[hsl(var(--info))]",
         success:

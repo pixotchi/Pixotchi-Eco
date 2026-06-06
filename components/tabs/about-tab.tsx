@@ -2,7 +2,7 @@
 
 import { useSlideshow } from "@/components/tutorial";
 import { Button } from "@/components/ui/button";
-import { Card,CardContent } from "@/components/ui/card";
+import { CardContent, TabCard } from "@/components/ui/card";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { Textarea } from "@/components/ui/textarea";
@@ -314,7 +314,7 @@ export default function AboutTab() {
           </h2>
 
           {/* Compact Stats & Generate Section */}
-          <Card>
+          <TabCard>
             <CardContent className="p-4">
               {stats && (
                 <div className="grid grid-cols-3 gap-4 mb-4">
@@ -434,13 +434,13 @@ export default function AboutTab() {
                 </div>
               )}
             </CardContent>
-          </Card>
+          </TabCard>
         </div>
       )}
 
       <div className="space-y-8 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-stretch lg:gap-5 lg:space-y-0">
       {/* Description */}
-      <Card className="lg:h-fit">
+      <TabCard className="lg:h-fit">
         <CardContent>
           <p className="text-muted-foreground mb-4">
             <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
@@ -464,8 +464,9 @@ export default function AboutTab() {
             {enabled && (
               <div className="grid grid-cols-2 gap-2 lg:contents">
                 <Button
+                  variant="primary"
                   onClick={() => start({ reset: true })}
-                  className="bg-value bg-[image:var(--gradient-value)] text-white hover:brightness-[1.03] lg:w-auto"
+                  className="lg:w-auto"
                   aria-label="Start Pixotchi tutorial"
                 >
                   <PlayCircle className="w-4 h-4 mr-2" />
@@ -495,7 +496,7 @@ export default function AboutTab() {
             )}
           </div>
         </CardContent>
-      </Card>
+      </TabCard>
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
@@ -550,7 +551,7 @@ export default function AboutTab() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-4 lg:space-y-0 lg:rounded-[var(--radius-panel)] lg:border lg:border-border/60 lg:bg-card/90 lg:bg-[image:var(--gradient-surface)] lg:p-4 lg:shadow-[var(--shadow-hairline)]">
+      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-4 lg:space-y-0 lg:rounded-[var(--radius-panel)] lg:border lg:border-[hsl(var(--border-strong)/0.4)] lg:bg-card lg:bg-[image:var(--gradient-surface-strong)] lg:p-4 lg:[box-shadow:var(--surface-highlight),var(--shadow-raised)] lg:backdrop-blur-md">
         {/* Version Number */}
         <div className="text-center lg:order-2 lg:border-t lg:border-border/60 lg:pt-4">
           <span className="text-xs text-muted-foreground/60 font-mono">

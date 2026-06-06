@@ -24,13 +24,12 @@ import { openExternalUrl } from "@/lib/open-external";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { isSolanaEnabled } from "@/lib/solana-constants";
-import { formatAddress } from "@/lib/utils";
+import { cn,formatAddress } from "@/lib/utils";
 import { sdk } from "@farcaster/miniapp-sdk";
 import type { WalletWithMetadata } from "@privy-io/react-auth";
 import { useLogin,useLogout,usePrivy } from "@privy-io/react-auth";
 import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana";
 import {
-CheckCircle,
 ChevronRight,
 Copy,
 Info,
@@ -41,7 +40,6 @@ RefreshCw,
 ShieldAlert,
 Wallet,
 X,
-XCircle
 } from "lucide-react";
 import React,{ useEffect,useMemo,useState } from "react";
 import toast from "react-hot-toast";
@@ -62,6 +60,130 @@ const AUTH_CACHE_PREFIXES = [
   "coinbase",
 ];
 
+const walletCardSurfaceClassName =
+  "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-0 shadow-[var(--shadow-raised)]";
+
+const walletChromaticWhiteSurfaceClassName = `${walletCardSurfaceClassName} chromatic-white-surface`;
+
+const walletInnerGlowClassName =
+  "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
+
+const walletChromaticWhiteInnerGlowClassName = `${walletInnerGlowClassName} chromatic-white-inner-glow`;
+
+function WalletSectionHeader({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        {icon ? (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 text-primary shadow-[var(--shadow-hairline)]">
+            {icon}
+          </span>
+        ) : null}
+        <h3 className="truncate text-sm font-semibold text-foreground">
+          {title}
+        </h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function WalletCopyButton({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.26)] bg-background/55 text-muted-foreground shadow-[var(--shadow-hairline)] transition-[border-color,background-color,color,box-shadow,transform] duration-[var(--motion-quick)] hover:-translate-y-0.5 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+      aria-label={label}
+    >
+      <Copy className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+function WalletStatusPill({
+  children,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  tone?: "default" | "success" | "info" | "warning" | "muted" | "base";
+}) {
+  const toneClassName = {
+    default: "border-[hsl(var(--border-strong)/0.28)] bg-background/55 text-foreground",
+    success: "border-[hsl(var(--success)/0.26)] bg-[hsl(var(--success)/0.12)] text-value",
+    info: "border-[hsl(var(--info)/0.26)] bg-[hsl(var(--info)/0.10)] text-[hsl(var(--info))]",
+    warning: "border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.13)] text-[hsl(var(--warning-foreground))]",
+    muted: "border-border/55 bg-muted/65 text-muted-foreground",
+    base: "border-[#0000ff]/55 bg-[#0000ff] bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] text-white shadow-[0_8px_18px_-14px_rgba(0,0,255,0.9)]",
+  }[tone];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 py-1 text-[11px] font-semibold leading-none shadow-[var(--shadow-hairline)]",
+        toneClassName
+      )}
+    >
+      {tone === "base" ? (
+        <span
+          aria-hidden="true"
+          className="h-2.5 w-2.5 shrink-0 rounded-[5%] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.88),0_1px_3px_rgba(0,0,0,0.16)]"
+        />
+      ) : null}
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
+
+function WalletInfoRow({
+  label,
+  children,
+  description,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  description?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-11 items-center justify-between gap-3 py-2.5",
+        className
+      )}
+    >
+      <div className="min-w-0">
+        <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {label}
+        </span>
+        {description ? (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground/80">
+            {description}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex min-w-0 max-w-[66%] items-center justify-end gap-1.5 text-right text-xs font-semibold text-foreground">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // Compact ETH Mode toggle row for Connection card
 const EthModeToggleRow = () => {
   const { isEthMode, toggleEthMode, isFeatureEnabled } = useEthMode();
@@ -70,8 +192,10 @@ const EthModeToggleRow = () => {
   if (!isFeatureEnabled) return null;
 
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium">ETH Mode (Beta)</span>
+    <WalletInfoRow
+      label="ETH Mode"
+      description="Beta network preference"
+    >
       <button
         type="button"
         onClick={toggleEthMode}
@@ -91,7 +215,7 @@ const EthModeToggleRow = () => {
           />
         </span>
       </button>
-    </div>
+    </WalletInfoRow>
   );
 };
 
@@ -329,23 +453,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     }
   };
 
-  const getNetworkStatusIcon = (chainId: number) => {
-    const isBase = chainId === 8453;
-    const isTestnet = chainId === 84532;
-
-    if (isBase) {
-      return (
-        <span
-          className="base-logo-corner inline-block h-4 w-4 shrink-0 bg-[#0000ff]"
-          aria-hidden="true"
-        />
-      );
-    }
-
-    const color = isTestnet ? "text-[hsl(var(--warning))]" : "text-destructive";
-    return <CheckCircle className={`w-4 h-4 ${color}`} />;
-  };
-
   // Wallet provider info with MiniKit awareness and Solana support
   const getWalletProviderName = () => {
     if (isSolana) {
@@ -573,259 +680,227 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               <AirdropClaimCard />
 
               <div className="space-y-3">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  Account
-                </h3>
-                <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
-                  <div className="flex justify-center pb-1 text-center">
-                    {isNameLoading ? (
-                      <Skeleton className="h-8 w-36 rounded-[var(--radius-control)]" />
-                    ) : name ? (
-                      <span className="max-w-full truncate text-sm font-bold text-foreground">
-                        {name}
-                      </span>
-                    ) : (
-                      <Button
-                        type="button"
-                        onClick={() => openExternalUrl("https://base.org/names")}
-                        variant="compactUtility"
-                        size="compact"
-                        className="border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] px-3 text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45"
-                      >
-                        Get a Base Name
-                      </Button>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Provider</span>
-                    <span className="text-xs font-semibold">
-                      {getWalletProviderName()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Network</span>
-                    <div className="flex items-center space-x-1">
-                      {getNetworkStatusIcon(chainId)}
-                      <span className="text-xs font-semibold">
-                        {getNetworkName(chainId)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Wallet Address with copy icon */}
-                  {address && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Address</span>
-                      <div className="flex items-center space-x-1">
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {formatAddress(address)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(address, "Wallet address")}
-                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-4px)] text-muted-foreground transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
-                          aria-label="Copy wallet address"
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
+                <WalletSectionHeader title="Account" />
+                <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
+                  <div className={walletChromaticWhiteInnerGlowClassName}>
+                    <div className="relative space-y-3 p-3">
+                      <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-primary/20 bg-primary/10 bg-[image:var(--gradient-selection)] p-3 shadow-[var(--shadow-hairline)]">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 shadow-[var(--shadow-control)]">
+                          {address ? (
+                            <WalletAvatar address={address} className="h-9 w-9" />
+                          ) : (
+                            <Wallet className="h-6 w-6 text-primary" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          {isNameLoading ? (
+                            <Skeleton className="h-5 w-36 rounded-[var(--radius-control)]" />
+                          ) : (
+                            <p className="truncate text-[13px] font-bold text-foreground sm:text-sm">
+                              {name || (address ? formatAddress(address) : getWalletProviderName())}
+                            </p>
+                          )}
+                          <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                            {name && address ? formatAddress(address) : getWalletProviderName()}
+                          </p>
+                        </div>
+                        {!isNameLoading && !name ? (
+                          <Button
+                            type="button"
+                            onClick={() => openExternalUrl("https://base.org/names")}
+                            variant="compactUtility"
+                            size="compact"
+                            className="shrink-0 border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] px-3 text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45"
+                          >
+                            Get Name
+                          </Button>
+                        ) : null}
                       </div>
-                    </div>
-                  )}
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Mini App</span>
-                    <div className="flex items-center space-x-1">
-                      {isMiniApp ? (
-                        <React.Fragment>
-                          <CheckCircle className="w-3 h-3 text-value" />
-                          <span className="text-xs font-semibold text-value">Yes</span>
-                        </React.Fragment>
-                      ) : (
-                        <React.Fragment>
-                          <XCircle className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">No</span>
-                        </React.Fragment>
-                      )}
-                    </div>
-                  </div>
+                      <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-3">
+                        <WalletInfoRow
+                          label="Provider"
+                        >
+                          <span className="truncate">{getWalletProviderName()}</span>
+                        </WalletInfoRow>
 
-                  {/* Smart Wallet Indicator */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Wallet Type</span>
-                    <div className="flex items-center space-x-1">
-                      {smartWalletLoading ? (
-                        <Skeleton className="h-4 w-32" />
-                      ) : isSolana ? (
-                        <div className="flex items-center space-x-1">
-                          <Wallet className="w-3 h-3 text-violet-700 dark:text-violet-200" />
-                          <span className="text-xs font-semibold text-violet-700 dark:text-violet-200">
-                            {getWalletTypeLabel()}
-                          </span>
-                        </div>
-                      ) : isSmartWallet ? (
-                        <div className="flex items-center space-x-1">
-                          <CheckCircle className="w-3 h-3 text-value" />
-                          <span className="text-xs font-semibold text-value">
-                            {getWalletTypeLabel()}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1">
-                          <Wallet className="w-3 h-3 text-[hsl(var(--info))]" />
-                          <span className="text-xs font-semibold text-[hsl(var(--info))]">
-                            {getWalletTypeLabel()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                        <WalletInfoRow
+                          label="Network"
+                        >
+                          <WalletStatusPill
+                            tone={chainId === 8453 ? "base" : chainId === 84532 ? "warning" : "muted"}
+                          >
+                            {getNetworkName(chainId)}
+                          </WalletStatusPill>
+                        </WalletInfoRow>
 
-                  {/* ETH Mode Toggle - only for smart wallet users */}
-                  {(isSmartWallet || isSolana) && (
-                    <EthModeToggleRow />
-                  )}
-
-                  {/* Farcaster Mini App Context (collapsible) - only shown in debug mode */}
-                  {debugMode && isMiniApp && fcContext && (
-                    <div className="pt-2 mt-2 border-t border-border">
-                      <button
-                        type="button"
-                        onClick={() => setShowFcDetails((v) => !v)}
-                        className="flex min-h-11 w-full items-center justify-between rounded-[var(--radius-control)] px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
-                        aria-expanded={showFcDetails}
-                        aria-controls="fc-context-details"
-                      >
-                        <span className="text-xs font-medium">Farcaster Context</span>
-                        <ChevronRight
-                          className={`h-4 w-4 text-muted-foreground transition-transform ${showFcDetails ? 'rotate-90' : ''}`}
-                          aria-hidden="true"
-                        />
-                      </button>
-                      {showFcDetails && (
-                        <div id="fc-context-details" className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Context Type</span>
-                            <span className="text-xs font-semibold">{fcContext?.location?.type ?? '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Referrer</span>
-                            <span className="text-xs font-semibold">{referrerDomain ?? '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Client</span>
-                            <span className="text-xs font-semibold">
-                              {fcContext?.client?.name ? `${fcContext.client.name}${fcContext?.client?.version ? ` v${fcContext.client.version}` : ''}` : '—'}
+                        {address && (
+                          <WalletInfoRow
+                            label="Address"
+                          >
+                            <span className="truncate font-mono text-muted-foreground">
+                              {formatAddress(address)}
                             </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Added</span>
-                            <span className="text-xs font-semibold">{String(fcContext?.client?.added ?? '—')}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">FID</span>
-                            <span className="text-xs font-semibold">{fcContext?.user?.fid ?? '—'}</span>
-                          </div>
+                            <WalletCopyButton
+                              onClick={() => copyToClipboard(address, "Wallet address")}
+                              label="Copy wallet address"
+                            />
+                          </WalletInfoRow>
+                        )}
+
+                        <WalletInfoRow
+                          label="Mini App"
+                        >
+                          <WalletStatusPill
+                            tone={isMiniApp ? "success" : "muted"}
+                          >
+                            {isMiniApp ? "Yes" : "No"}
+                          </WalletStatusPill>
+                        </WalletInfoRow>
+
+                        <WalletInfoRow
+                          label="Wallet Type"
+                        >
+                          {smartWalletLoading ? (
+                            <Skeleton className="h-7 w-32 rounded-[var(--radius-control)]" />
+                          ) : (
+                            <WalletStatusPill
+                              tone={isSolana ? "info" : isSmartWallet ? "success" : "info"}
+                            >
+                              {getWalletTypeLabel()}
+                            </WalletStatusPill>
+                          )}
+                        </WalletInfoRow>
+
+                        {(isSmartWallet || isSolana) && (
+                          <EthModeToggleRow />
+                        )}
+                      </div>
+
+                      {debugMode && isMiniApp && fcContext && (
+                        <div className="overflow-hidden rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.24)] bg-background/40 shadow-[var(--shadow-hairline)]">
+                          <button
+                            type="button"
+                            onClick={() => setShowFcDetails((v) => !v)}
+                            className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-[hsl(var(--nav-hover-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                            aria-expanded={showFcDetails}
+                            aria-controls="fc-context-details"
+                          >
+                            <span className="text-xs font-semibold">Farcaster Context</span>
+                            <ChevronRight
+                              className={`h-4 w-4 text-muted-foreground transition-transform ${showFcDetails ? 'rotate-90' : ''}`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                          {showFcDetails && (
+                            <div id="fc-context-details" className="grid gap-2 border-t border-border/55 p-2">
+                              <WalletInfoRow label="Context Type">
+                                <span>{fcContext?.location?.type ?? '—'}</span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="Referrer">
+                                <span>{referrerDomain ?? '—'}</span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="Client">
+                                <span className="truncate">
+                                  {fcContext?.client?.name ? `${fcContext.client.name}${fcContext?.client?.version ? ` v${fcContext.client.version}` : ''}` : '—'}
+                                </span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="Added">
+                                <span>{String(fcContext?.client?.added ?? '—')}</span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="FID">
+                                <span>{fcContext?.user?.fid ?? '—'}</span>
+                              </WalletInfoRow>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {!smartWalletLoading && !isSmartWallet && !isSolana && (
+                        <div className="flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 text-[hsl(var(--info))] shadow-[var(--shadow-hairline)]">
+                          <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span className="text-xs leading-relaxed text-muted-foreground">
+                            For best experience, consider using a smart wallet
+                          </span>
                         </div>
                       )}
                     </div>
-                  )}
-
-                  {/* Smart Wallet Recommendation for Regular Wallets */}
-                  {!smartWalletLoading && !isSmartWallet && !isSolana && (
-                    <div className="flex items-start space-x-2">
-                      <Lightbulb className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground">
-                        For best experience, consider using a smart wallet
-                      </span>
-                    </div>
-                  )}
+                  </div>
                 </StandardContainer>
               </div>
 
               {/* Solana Bridge Info (only shown for Solana wallets) */}
               {isSolana && isSolanaEnabled() && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-medium text-muted-foreground">
-                      Solana Bridge
-                    </h3>
+                  <WalletSectionHeader title="Solana Bridge" icon={<Wallet className="h-3.5 w-3.5" />}>
                     <SolanaBridgeBadge />
-                  </div>
-                  <StandardContainer className="space-y-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Solana Address</span>
-                      <div className="flex items-center gap-1">
-                        {solanaLoading ? (
-                          <Skeleton className="h-4 w-24" />
-                        ) : solanaAddress ? (
-                          <>
-                            <span className="text-xs font-mono">
-                              {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => copyToClipboard(solanaAddress, "Solana address")}
-                              aria-label="Copy Solana address"
-                              title="Copy Solana address"
+                  </WalletSectionHeader>
+                  <StandardContainer padding="none" className={walletCardSurfaceClassName}>
+                    <div className={walletInnerGlowClassName}>
+                      <div className="relative p-3">
+                        <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-3">
+                        <WalletInfoRow
+                          label="Solana Address"
+                        >
+                          {solanaLoading ? (
+                            <Skeleton className="h-7 w-24 rounded-[var(--radius-control)]" />
+                          ) : solanaAddress ? (
+                            <>
+                              <span className="truncate font-mono text-muted-foreground">
+                                {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
+                              </span>
+                              <WalletCopyButton
+                                onClick={() => copyToClipboard(solanaAddress, "Solana address")}
+                                label="Copy Solana address"
+                              />
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </WalletInfoRow>
+
+                        <WalletInfoRow
+                          label="Twin Address"
+                          description="Base ownership address"
+                        >
+                          {solanaLoading ? (
+                            <Skeleton className="h-7 w-24 rounded-[var(--radius-control)]" />
+                          ) : twinAddress ? (
+                            <>
+                              <span className="truncate font-mono text-muted-foreground">
+                                {twinAddress.slice(0, 6)}...{twinAddress.slice(-4)}
+                              </span>
+                              <WalletCopyButton
+                                onClick={() => copyToClipboard(twinAddress, "Twin address")}
+                                label="Copy twin address"
+                              />
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </WalletInfoRow>
+
+                        <WalletInfoRow
+                          label="Bridge Setup"
+                        >
+                          {solanaLoading ? (
+                            <Skeleton className="h-7 w-20 rounded-[var(--radius-control)]" />
+                          ) : (
+                            <WalletStatusPill
+                              tone={isTwinSetup ? "success" : "warning"}
                             >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Twin Address (Base)</span>
-                      <div className="flex items-center gap-1">
-                        {solanaLoading ? (
-                          <Skeleton className="h-4 w-24" />
-                        ) : twinAddress ? (
-                          <>
-                            <span className="text-xs font-mono">
-                              {twinAddress.slice(0, 6)}...{twinAddress.slice(-4)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => copyToClipboard(twinAddress, "Twin address")}
-                              aria-label="Copy twin address"
-                              title="Copy twin address"
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Bridge Setup</span>
-                      <div className="flex items-center space-x-1">
-                        {solanaLoading ? (
-                          <Skeleton className="h-4 w-16" />
-                        ) : isTwinSetup ? (
-                          <>
-                            <CheckCircle className="w-3 h-3 text-value" />
-                            <span className="text-xs font-semibold text-value">Ready</span>
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-3 h-3 text-[hsl(var(--warning))]" />
-                            <span className="text-xs font-semibold text-[hsl(var(--warning))]">Setup Required</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="pt-2 mt-2 border-t border-border">
-                      <div className="flex items-start space-x-2">
-                        <Info className="w-3 h-3 text-violet-700 dark:text-violet-200 mt-0.5 flex-shrink-0" />
-                        <span className="text-xs text-muted-foreground">
-                          Your plants are owned by your Twin address on Base. Some features like Land NFTs are not available with Solana wallets.
-                        </span>
+                              {isTwinSetup ? "Ready" : "Setup Required"}
+                            </WalletStatusPill>
+                          )}
+                        </WalletInfoRow>
+                        </div>
+
+                        <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 shadow-[var(--shadow-hairline)]">
+                          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--info))]" />
+                          <span className="text-xs leading-relaxed text-muted-foreground">
+                            Your plants are owned by your Twin address on Base. Some features like Land NFTs are not available with Solana wallets.
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </StandardContainer>

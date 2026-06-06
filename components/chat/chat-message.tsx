@@ -76,13 +76,16 @@ export default function ChatMessageComponent({
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
   
-  const bgColor = isAIMessage ? 'border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.12)] text-foreground' :
+  const bgColor = isAIMessage ? 'chromatic-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]' :
                   isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)]' :
-                  'border border-border/50 bg-card/85 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
+                  'chromatic-white-surface border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
   const canOpenProfile = !isAIMessage && !isUserAIMessage && !isOwnPublicMessage;
+  const timestampColor = isOwnPublicMessage || isUserAIMessage
+    ? 'text-primary-foreground/80'
+    : 'text-muted-foreground';
 
   const displayNameNode = (
     <span className="text-xs font-semibold">
@@ -130,7 +133,7 @@ export default function ChatMessageComponent({
               )}
               {profileTrigger}
             </div>
-            <span className="text-xs text-muted-foreground whitespace-nowrap self-start">
+            <span className={cn("text-xs whitespace-nowrap self-start", timestampColor)}>
               {formatRelativeShort(new Date(message.timestamp))}
             </span>
           </div>

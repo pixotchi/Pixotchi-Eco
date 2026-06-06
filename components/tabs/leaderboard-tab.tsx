@@ -10,7 +10,7 @@ import ReviveTransaction from "@/components/transactions/revive-transaction";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -36,7 +36,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { ChevronDown,Skull,Swords,Terminal } from "lucide-react";
+import { ChevronDown,Skull,Terminal } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
@@ -85,7 +85,9 @@ const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the loser score
 const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
 const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
-const RANKING_ATTACK_BUTTON_CLASS = "h-10 min-h-10 w-10 min-w-10";
+const RANKING_ACTION_BUTTON_CLASS =
+  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.28)] bg-card/75 bg-[image:var(--gradient-surface)] p-0 shadow-[var(--shadow-hairline)] transition-[border-color,background-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/40 hover:bg-[hsl(var(--nav-hover-bg))] hover:shadow-[var(--shadow-control)] active:translate-y-0 active:scale-[0.985]";
+const RANKING_ACTION_ICON_CLASS = "h-6 w-6 object-contain";
 
 function getTotalPages(itemCount: number, pageSize: number) {
   return Math.ceil(itemCount / pageSize) || 1;
@@ -822,15 +824,15 @@ export default function LeaderboardTab() {
           <div
             key={columnIndex}
             className={cn(
-              "min-[54rem]:flex min-[54rem]:flex-col min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-border/55 min-[54rem]:bg-[image:var(--gradient-scroll-surface)] min-[54rem]:px-3 min-[54rem]:py-2 min-[54rem]:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
+              "min-[54rem]:flex min-[54rem]:flex-col min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-[hsl(var(--border-strong)/0.32)] min-[54rem]:bg-[image:var(--gradient-scroll-surface)] min-[54rem]:px-3 min-[54rem]:py-2 min-[54rem]:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
               fillHeight && "min-[54rem]:min-h-0"
             )}
           >
-            <div className="flex h-8 flex-none items-center justify-between border-b border-border/60 text-xs font-semibold text-muted-foreground">
+            <div className="flex h-8 flex-none items-center justify-between border-b border-[hsl(var(--divider)/0.66)] text-xs font-semibold text-muted-foreground">
               <span>{getRankRangeLabel(column)}</span>
             </div>
             <div className={cn(
-              "divide-y divide-border",
+              "divide-y divide-[hsl(var(--divider)/0.62)]",
               fillHeight
                 ? "surface-scroll-fade min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 : "overflow-visible"
@@ -859,7 +861,7 @@ export default function LeaderboardTab() {
   ) {
     return (
       <div className={cn("flex h-full min-h-0 flex-col", fillDesktop && "min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col")}>
-        <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-border/55 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
+        <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
           {mobileRows.map((row) => renderRow(row))}
         </div>
 
@@ -1030,82 +1032,59 @@ export default function LeaderboardTab() {
               </div>
             )}
             {canShowAttack && (
-              compact ? (
-                <Button
-                  type="button"
-                  variant="gamePrimary"
-                  size="icon"
-                  onClick={() => {
-                    setTargetPlant(plant);
-                    setSelectedAttackerId(eligibleAttackers(plant)[0]?.id ?? null);
-                    setAttackDialogOpen(true);
-                  }}
-                  aria-label="Attack this plant"
-                  title="Attack"
-                  className={RANKING_ATTACK_BUTTON_CLASS}
-                >
-                  <Swords className="h-5 w-5" strokeWidth={2.5} />
-                </Button>
-              ) : (
-                <Button
-                  variant="gamePrimary"
-                  size="icon"
-                  onClick={() => {
-                    setTargetPlant(plant);
-                    setSelectedAttackerId(eligibleAttackers(plant)[0]?.id ?? null);
-                    setAttackDialogOpen(true);
-                  }}
-                  aria-label="Attack this plant"
-                  title="Attack"
-                  className={RANKING_ATTACK_BUTTON_CLASS}
-                >
-                  <Swords className="h-5 w-5" strokeWidth={2.5} />
-                </Button>
-              )
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setTargetPlant(plant);
+                  setSelectedAttackerId(eligibleAttackers(plant)[0]?.id ?? null);
+                  setAttackDialogOpen(true);
+                }}
+                aria-label="Attack this plant"
+                title="Attack"
+                className={RANKING_ACTION_BUTTON_CLASS}
+              >
+                <Image
+                  src="/icons/Attackwon.svg"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className={RANKING_ACTION_ICON_CLASS}
+                  aria-hidden="true"
+                />
+              </Button>
             )}
             {canShowKill && (
-              compact ? (
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="icon"
-                  className={cn(
-                    !killCooldown.canKill && "opacity-50"
-                  )}
-                  onClick={() => {
-                    if (!killCooldown.canKill) {
-                      setCooldownDialogOpen(true);
-                    } else {
-                      setTargetPlant(plant);
-                      setSelectedKillerId(myPlants.find(p => p.status !== 4)?.id ?? null);
-                      setKillDialogOpen(true);
-                    }
-                  }}
-                  aria-label="Kill dead plant to collect star"
-                  title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
-                >
-                  <Skull className="w-4 h-4" />
-                </Button>
-              ) : (
-                <Button
-                  variant="danger"
-                  size="icon"
-                  className={cn(!killCooldown.canKill && "opacity-50")}
-                  onClick={() => {
-                    if (!killCooldown.canKill) {
-                      setCooldownDialogOpen(true);
-                    } else {
-                      setTargetPlant(plant);
-                      setSelectedKillerId(myPlants.find(p => p.status !== 4)?.id ?? null);
-                      setKillDialogOpen(true);
-                    }
-                  }}
-                  aria-label="Kill dead plant to collect star"
-                  title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
-                >
-                  <Skull className="w-4 h-4" />
-                </Button>
-              )
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  RANKING_ACTION_BUTTON_CLASS,
+                  !killCooldown.canKill && "opacity-55"
+                )}
+                onClick={() => {
+                  if (!killCooldown.canKill) {
+                    setCooldownDialogOpen(true);
+                  } else {
+                    setTargetPlant(plant);
+                    setSelectedKillerId(myPlants.find(p => p.status !== 4)?.id ?? null);
+                    setKillDialogOpen(true);
+                  }
+                }}
+                aria-label="Kill dead plant to collect star"
+                title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
+              >
+                <Image
+                  src="/icons/skull.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className={RANKING_ACTION_ICON_CLASS}
+                  aria-hidden="true"
+                />
+              </Button>
             )}
             {canShowRevive && (
               compact ? (
@@ -1364,7 +1343,7 @@ export default function LeaderboardTab() {
 
   return (
     <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
-      <Card className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:h-[calc(100dvh-12rem)] xl:h-fit">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:h-[calc(100dvh-12rem)] xl:h-fit">
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between min-[54rem]:grid min-[54rem]:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
@@ -1531,7 +1510,7 @@ export default function LeaderboardTab() {
             )
           )}
         </CardContent>
-      </Card>
+      </TabCard>
 
       {/* Attack dialog */}
       <Dialog open={attackDialogOpen} onOpenChange={setAttackDialogOpen}>

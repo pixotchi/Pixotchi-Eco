@@ -68,7 +68,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-secondary/95 px-4 py-3">
+      <header className="sticky top-0 z-[var(--z-sticky)] border-b border-[hsl(var(--divider)/0.66)] bg-secondary/95 bg-[image:var(--gradient-app-chrome)] px-4 py-3 shadow-[var(--shadow-hairline)]">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi logo" width={28} height={28} priority />
@@ -100,7 +100,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
 
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12 pb-24">
         {error && (
-          <p className="rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive">
+          <p className="rounded-[var(--radius-panel)] border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive shadow-[var(--shadow-hairline)]">
             {error}
           </p>
         )}

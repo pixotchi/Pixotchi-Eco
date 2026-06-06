@@ -27,7 +27,7 @@ function MissionCard({ section }: { section: MissionSection }) {
   const progress = section.tasks.length > 0 ? (completed / section.tasks.length) * 100 : 0;
 
   return (
-    <section className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+    <section className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold leading-tight">{section.title}</h3>
@@ -172,7 +172,7 @@ export default function TasksInfoDialog() {
   const dailyProgress = Math.max(0, Math.min(100, missionPts));
   const summaryCard = (
     <div
-      className="mr-[-2.75rem] space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)] sm:mr-[-2.5rem]"
+      className="chromatic-white-surface mr-[-2.75rem] space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)] sm:mr-[-2.5rem]"
       data-task-summary-card
     >
       <div className="grid grid-cols-3 gap-2">

@@ -67,13 +67,13 @@ const PlantCard = React.memo(function PlantCard({
 
   return (
     <Card 
-      className={`cursor-pointer transition-all hover:shadow-md group ${className}`}
+      className={`group cursor-pointer transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-[var(--shadow-raised)] ${className}`}
       onClick={onClick}
     >
       <CardContent className="p-4">
         <div className="flex items-center space-x-3">
           {/* Plant Image with Shop Item Overlay */}
-          <div className="relative w-16 h-16 rounded-lg overflow-hidden">
+          <div className="relative h-16 w-16 overflow-hidden rounded-[var(--radius-control)]">
             <PlantImage
               selectedPlant={plant}
               width={64}

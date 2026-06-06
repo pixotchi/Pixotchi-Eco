@@ -26,7 +26,7 @@ function Art({ type }: { type?: string }) {
   if (!art) return null;
   return (
     <div key={type} className="w-full flex items-center justify-center">
-      <div className="w-[90%] max-w-[360px] aspect-[16/10] rounded-xl bg-card/70 border border-border overflow-hidden shadow-md">
+      <div className="aspect-[16/10] w-[90%] max-w-[360px] overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/70 shadow-[var(--shadow-hairline)]">
         <Image
           key={art.src}
           src={art.src}
@@ -106,7 +106,7 @@ export default function SlideshowModal() {
         useSafeAreaInset={false}
         overlayClassName="bg-black/50 backdrop-blur-[var(--blur-overlay)]"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
-        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-border p-0 shadow-xl"
+        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--border-strong)/0.42)] p-0 shadow-[var(--shadow-modal)]"
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
@@ -115,7 +115,7 @@ export default function SlideshowModal() {
           Step-by-step Pixotchi tutorial slide with navigation controls.
         </DialogDescription>
         {/* Header */}
-        <div className="surface-header-divider flex items-center justify-between bg-transparent px-4 py-3">
+        <div className="surface-header-divider dialog-header-surface flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi" width={20} height={20} />
             <span className="text-sm font-semibold">Tutorial</span>

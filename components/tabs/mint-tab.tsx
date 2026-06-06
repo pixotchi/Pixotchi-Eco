@@ -41,7 +41,7 @@ import { useAccount,useBalance } from 'wagmi';
 import { getLandMintCall } from '../transactions/land-mint-transaction';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Card,CardContent,CardHeader,CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle, TabCard } from '../ui/card';
 import { BaseExpandedLoadingPageLoader } from '../ui/loading';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
@@ -55,7 +55,7 @@ const PLANT_MINT_DESCRIPTION = 'Choose a strain and mint your Plant onchain. Eac
 const LAND_MINT_DESCRIPTION = 'Mint a Land to produce PTS and TOD passively by staking SEED instead of spending it, helping grow your Plant and ETH rewards over the long term.';
 const SUCCESS_TRANSACTION_BUTTON_CLASS = 'w-full bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground hover:brightness-[1.03] shadow-[var(--shadow-control)]';
 const SOLANA_SPECIAL_BUTTON_CLASS = 'w-full bg-[image:var(--gradient-solana)] text-white hover:brightness-105 disabled:opacity-55';
-const MINT_DETAIL_TILE_CLASS = 'rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]';
+const MINT_DETAIL_TILE_CLASS = 'chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]';
 
 // Placeholder for plant images, assuming you might have them
 const PLANT_STATIC_IMAGES = [
@@ -986,7 +986,7 @@ export default function MintTab() {
 
       return (
         <>
-          <Card>
+          <TabCard>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
                 <Image
@@ -1088,7 +1088,7 @@ export default function MintTab() {
                 </div>
               )}
             </CardContent>
-          </Card>
+          </TabCard>
 
           {/* Solana Bridge Minting */}
           <Card className="border-violet-500/30 bg-violet-500/5">
@@ -1237,7 +1237,7 @@ export default function MintTab() {
 
     return (
       <>
-        <Card>
+        <TabCard>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
               <Image
@@ -1351,7 +1351,7 @@ export default function MintTab() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </TabCard>
 
         {/* StatusBar replaces BalanceCard globally under header */}
 
@@ -1475,7 +1475,7 @@ export default function MintTab() {
 
   const renderLandMinting = () => (
     <>
-      <Card>
+      <TabCard>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-3">
             <Image
@@ -1528,7 +1528,7 @@ export default function MintTab() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </TabCard>
       {/* StatusBar replaces BalanceCard globally under header */}
       <div className="flex flex-col space-y-2 min-[54rem]:space-y-3 min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-border/60 min-[54rem]:bg-card/90 min-[54rem]:bg-[image:var(--gradient-surface)] min-[54rem]:p-4 min-[54rem]:shadow-[var(--shadow-hairline)]">
         <h3 className="hidden text-base font-semibold leading-none min-[54rem]:block">Mint Land</h3>
@@ -1667,7 +1667,7 @@ export default function MintTab() {
       : formatNumber(selectedStrain?.mintPrice || 0);
 
     return (
-      <Card padding="sm" className="min-[54rem]:min-h-[520px]">
+      <TabCard padding="sm" className="min-[54rem]:min-h-[520px]">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -1677,7 +1677,7 @@ export default function MintTab() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 min-[54rem]:grid-cols-[minmax(220px,0.86fr)_minmax(0,1fr)] xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
-          <div className="flex min-h-[372px] flex-col justify-between rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+          <div className="chromatic-white-surface flex min-h-[372px] flex-col justify-between rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
             <div className="flex flex-1 items-center justify-center">
               <div className="relative flex h-48 w-48 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-card/70 2xl:h-56 2xl:w-56">
                 <Image
@@ -1704,7 +1704,7 @@ export default function MintTab() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+            <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold">Strain</h3>
                 <span className="text-xs text-muted-foreground">{strains.length} options</span>
@@ -1787,7 +1787,7 @@ export default function MintTab() {
               )}
             </div>
 
-            <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+            <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold">Confirm Mint</h3>
                 <SponsoredBadge show={Boolean(isSmartWallet && (showEthPlantMint || needsPlantApproval || isSponsored))} />
@@ -1878,7 +1878,7 @@ export default function MintTab() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </TabCard>
     );
   };
 
@@ -1893,7 +1893,7 @@ export default function MintTab() {
     const showEthLandLoading = Boolean(isSmartWallet && isEthMode && landEthQuoteLoading && landMintStatus?.canMint);
 
     return (
-      <Card padding="sm">
+      <TabCard padding="sm">
         <CardHeader className="pb-3">
           <CardTitle>Mint Land</CardTitle>
           <p className="text-sm text-muted-foreground">{LAND_MINT_DESCRIPTION}</p>
@@ -1950,7 +1950,7 @@ export default function MintTab() {
             )}
           </div>
 
-          <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+          <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold">Confirm Mint</h3>
               <SponsoredBadge show={Boolean(isSmartWallet && (showEthLandMint || needsLandApproval || isSponsored))} />
@@ -2034,7 +2034,7 @@ export default function MintTab() {
             )}
           </div>
         </CardContent>
-      </Card>
+      </TabCard>
     );
   };
 
@@ -2042,10 +2042,10 @@ export default function MintTab() {
   const renderContent = () => {
     if (!isConnected) {
       return (
-        <Card className="text-center p-6">
+        <TabCard className="text-center p-6">
           <h3 className="text-lg font-semibold mb-2">Connect Wallet</h3>
           <p className="text-muted-foreground mb-4">Please connect your wallet to mint plants.</p>
-        </Card>
+        </TabCard>
       );
     }
 

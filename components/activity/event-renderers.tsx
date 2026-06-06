@@ -183,8 +183,8 @@ const EventWrapper = ({
   shopItemMap?: { [key: string]: string },
   gardenItemMap?: { [key: string]: string }
 }) => (
-  <div className="flex items-start space-x-3 py-2">
-    <div className="mt-1 flex-shrink-0">
+  <div className="flex items-start gap-3 px-2 py-2">
+    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.28)] bg-card/75 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
       <EventIcon
         type={event.__typename}
         event={event}

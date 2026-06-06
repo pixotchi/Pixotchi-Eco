@@ -964,7 +964,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 <div className="text-sm font-medium">Choose a box</div>
                 <BoxGrid />
 
-                <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+                <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
                   <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                     <div className="min-w-0 font-medium text-foreground">
                       {withStar ? 'Playing with Stars' : 'Playing without Stars'}
@@ -1107,7 +1107,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+                <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
                   <div>
                     <div className="text-sm font-medium">Star Spin</div>
                     <p className="text-xs text-muted-foreground">

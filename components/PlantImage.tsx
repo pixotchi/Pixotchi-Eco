@@ -68,7 +68,7 @@ const PlantImage = React.memo(({
       {/* Loading placeholder */}
       {!imageLoaded && !imageError && (
         <div
-          className="absolute inset-0 bg-muted animate-pulse rounded-lg"
+          className="absolute inset-0 animate-pulse rounded-[var(--radius-control)] bg-muted"
           style={{ width, height }}
           aria-hidden="true"
         />
@@ -101,7 +101,7 @@ const PlantImage = React.memo(({
 
       {/* Error state indicator */}
       {imageError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded-lg">
+        <div className="absolute inset-0 flex items-center justify-center rounded-[var(--radius-control)] bg-muted/50">
           <div className="text-xs text-muted-foreground text-center">
             <div>🌱</div>
             <div>Plant #{selectedPlant.id}</div>

@@ -18,6 +18,7 @@ interface BuildingGridProps {
   onBuildingSelect: (building: BuildingData) => void;
   currentBlock: bigint;
   landId: bigint;
+  extraItems?: React.ReactNode;
   gridClassName?: string;
   denseLabels?: boolean;
 }
@@ -118,6 +119,7 @@ export default function BuildingGrid({
   selectedBuildingType = buildingType,
   onBuildingSelect,
   landId,
+  extraItems,
   gridClassName,
   denseLabels = false
 }: BuildingGridProps) {
@@ -177,6 +179,7 @@ export default function BuildingGrid({
           />
         );
       })}
+      {extraItems}
     </div>
   );
 }

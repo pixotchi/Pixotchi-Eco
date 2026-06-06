@@ -118,7 +118,7 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
 
   return (
     <div className="pointer-events-none fixed left-1/2 top-[calc(max(0.75rem,env(safe-area-inset-top),var(--safe-area-inset-top),var(--browser-safe-area-top))+4.75rem)] z-[var(--z-overlay)] w-[calc(100%-1rem)] max-w-md -translate-x-1/2 px-2">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border/80 bg-card/95 px-3 py-2 shadow-lg backdrop-blur-[var(--blur-surface)] supports-[backdrop-filter]:bg-card/90">
+      <div className="pointer-events-auto flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.38)] bg-card/95 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-raised)] backdrop-blur-[var(--blur-surface)] supports-[backdrop-filter]:bg-card/90">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <div className="mt-0.5 rounded-full bg-primary/10 p-1">
             <Info className="h-3.5 w-3.5 text-primary" />

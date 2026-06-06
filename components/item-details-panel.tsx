@@ -354,7 +354,7 @@ export default function ItemDetailsPanel({
   // Early return AFTER all hooks have been called
   if (!selectedItem || !selectedPlant) {
     return (
-      <Card>
+      <Card className="marketplace-detail-card">
         <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
             <span className="text-2xl">🛍️</span>
@@ -487,7 +487,7 @@ export default function ItemDetailsPanel({
   };
 
   return (
-    <Card>
+    <Card className="marketplace-detail-card">
       <CardHeader>
         <CardTitle>{headerTitle}</CardTitle>
       </CardHeader>

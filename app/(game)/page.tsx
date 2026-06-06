@@ -286,9 +286,9 @@ function LoginAuthActions({
       {isSolanaAuthAvailable() && (
         <>
           <div className="flex items-center gap-2 my-2">
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
             <span className="text-xs text-muted-foreground">or bridge from Solana</span>
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
           </div>
           <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
         </>
@@ -296,12 +296,12 @@ function LoginAuthActions({
       {localTestAuthAvailable && (
         <>
           <div className="flex items-center gap-2 my-2">
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
             <span className="text-xs text-muted-foreground">or local testing</span>
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
           </div>
           <Button
-            className="w-full h-11 rounded-md text-base font-semibold"
+            className="h-11 w-full rounded-[var(--radius-control)] text-base font-semibold"
             variant="outline"
             onClick={async () => {
               try {
@@ -690,7 +690,7 @@ export default function App() {
         className="app-shell-inner w-full flex flex-col h-dvh bg-background bg-[image:var(--gradient-content-well)] overflow-hidden overscroll-none"
       >
         {/* Header wrapper with matching background and safe area */}
-        <div className="relative z-[var(--z-sticky)] overflow-hidden rounded-b-[var(--radius-panel)] border-x border-b border-border/45 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
+        <div className="relative z-[var(--z-sticky)] overflow-hidden rounded-b-[var(--radius-panel)] border-x border-b border-x-[hsl(var(--border-strong)/0.28)] border-b-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
           <header
             data-viewport-shell="header"
             className={cn(
@@ -781,7 +781,7 @@ export default function App() {
         <main data-viewport-shell="main" className="flex-1 bg-muted/40 bg-[image:var(--gradient-content-well)] flex flex-col xl:flex-row overflow-hidden" role="main" aria-label="Main content area">
           {(!isConnected) ? (
             <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
-              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-lg md:border md:border-b-0 md:border-border md:bg-card/80 md:px-5 md:pt-5">
+              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pt-5">
                 <div className="flex flex-col items-center space-y-3 mb-8">
                   <Image
                     src="/PixotchiKit/Logonotext.svg"
@@ -805,7 +805,7 @@ export default function App() {
                 </p>
               </div>
               <LoginAuthActions
-                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-lg md:border md:border-t-0 md:border-border md:bg-card/80 md:px-5 md:pb-5 md:shadow-sm"
+                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
                 handleMiniAppReconnect={handleMiniAppReconnect}
                 isInMiniApp={Boolean(fc?.isInMiniApp)}
                 isMiniConnectRetrying={state.isMiniConnectRetrying}
@@ -817,7 +817,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border/60 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-[hsl(var(--divider)/0.62)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75" role="navigation" aria-label="Main navigation">
                 <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
@@ -825,7 +825,7 @@ export default function App() {
                       variant="nav"
                       onClick={() => setActiveTab(tab.id)}
                       data-active={activeTab === tab.id}
-                      className="flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-md px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="flex h-[68px] w-full flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       role="tab"
                       id={`tab-desktop-${tab.id}`}
                       aria-selected={activeTab === tab.id}
@@ -907,7 +907,7 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="surface-footer-divider border-x border-border/45 bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="surface-footer-divider rounded-t-[var(--radius-panel)] border-x border-t border-x-[hsl(var(--border-strong)/0.28)] border-t-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
                 <div className="grid w-full grid-cols-6 items-center gap-0.5" role="tablist" aria-label="Application tabs">
                   {tabs.map((tab) => (
                     <Button
@@ -915,7 +915,7 @@ export default function App() {
                       variant="nav"
                       onClick={() => setActiveTab(tab.id)}
                       data-active={activeTab === tab.id}
-                      className="flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 rounded-md px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5"
+                      className="flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5"
                       role="tab"
                       id={`tab-mobile-${tab.id}`}
                       aria-selected={activeTab === tab.id}

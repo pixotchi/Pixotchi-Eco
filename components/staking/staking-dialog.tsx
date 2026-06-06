@@ -77,7 +77,7 @@ function formatToken(amount?: bigint): string {
 }
 
 const MIN_REFRESH_INTERVAL_MS = 1000;
-const stakingTileClassName = "rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]";
+const stakingTileClassName = "chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]";
 
 export default function StakingDialog({ open, onOpenChange }: StakingDialogProps) {
   const { address } = useAccount();

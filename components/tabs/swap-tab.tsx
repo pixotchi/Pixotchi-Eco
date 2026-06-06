@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
+import { CardContent, CardHeader, CardTitle, TabCard } from '@/components/ui/card';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { CLIENT_ENV } from '@/lib/env-config';
@@ -397,7 +397,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
           </div>
         </div>
 
-        <div className="divide-y divide-border/35 px-3 py-1">
+        <div className="divide-y divide-[hsl(var(--divider)/0.5)] px-3 py-1">
           {marketRows.map((row) => (
             <div key={row.label} className="flex items-center justify-between gap-4 py-2.5">
               <div className="min-w-0">
@@ -533,7 +533,7 @@ export default function SwapTab() {
 
   return (
     <div className="space-y-4 min-[54rem]:grid min-[54rem]:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] min-[54rem]:items-stretch min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)]">
-      <Card
+      <TabCard
         className={`${isChartView ? 'flex flex-col' : ''} min-[54rem]:hidden`}
         padding={isChartView ? 'none' : 'md'}
       >
@@ -575,9 +575,9 @@ export default function SwapTab() {
             />
           )}
         </CardContent>
-      </Card>
+      </TabCard>
 
-      <Card className="hidden min-[54rem]:flex min-[54rem]:h-full min-[54rem]:flex-col">
+      <TabCard className="hidden min-[54rem]:flex min-[54rem]:h-full min-[54rem]:flex-col">
         <CardHeader>
           <CardTitle>Swap</CardTitle>
         </CardHeader>
@@ -591,19 +591,19 @@ export default function SwapTab() {
           )}
           <SeedMarketStats marketData={seedMarketData} />
         </CardContent>
-      </Card>
+      </TabCard>
 
-      <Card className="hidden min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col" padding="none">
+      <TabCard className="hidden min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col" padding="none">
         <CardHeader className="px-4 pt-4 pb-3">
           <CardTitle>Chart</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-hidden p-4">
           <SeedChartPanel marketData={seedMarketData} showStats={false} />
         </CardContent>
-      </Card>
+      </TabCard>
 
       {/* Token Info Section */}
-      <Card className="hidden min-[54rem]:block min-[54rem]:col-span-2 min-[54rem]:h-fit">
+      <TabCard className="hidden min-[54rem]:block min-[54rem]:col-span-2 min-[54rem]:h-fit">
         <CardHeader>
           <CardTitle>Token Info</CardTitle>
         </CardHeader>
@@ -616,7 +616,7 @@ export default function SwapTab() {
             setActiveToken={setActiveInfoToken}
           />
         </CardContent>
-      </Card>
+      </TabCard>
     </div>
   );
 }

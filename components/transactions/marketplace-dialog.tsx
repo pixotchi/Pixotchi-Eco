@@ -332,7 +332,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent surface="soft" className="w-[min(96vw,64rem)] max-w-5xl">
+      <DialogContent surface="soft" className="w-[min(94vw,28rem)] max-w-md min-[54rem]:w-[min(92vw,64rem)] min-[54rem]:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Marketplace (Experimental)</DialogTitle>
           <DialogDescription>
@@ -357,7 +357,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             </div>
 
             {/* Mobile: keep orders (asks+bids) together, then trade panel */}
-            <div className="md:hidden space-y-4">
+            <div className="space-y-4 min-[54rem]:hidden">
               <div className="overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
                 {/* Asks header and list */}
                 <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-destructive/10 text-destructive">
@@ -504,7 +504,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             </div>
 
             {/* Desktop/tablet: three-column layout */}
-            <div className="hidden md:grid md:grid-cols-3 items-start gap-4">
+            <div className="hidden items-start gap-4 min-[54rem]:grid min-[54rem]:grid-cols-3">
               {/* Asks */}
                 <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] ${focusedSide === 'asks' ? 'ring-1 ring-destructive/50' : ''}`}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
@@ -535,7 +535,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel */}
-              <div className="min-h-[18rem] space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] md:max-h-[22rem] md:overflow-y-auto">
+              <div className="min-h-[18rem] space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] min-[54rem]:max-h-[22rem] min-[54rem]:overflow-y-auto">
                 <div className="flex items-center gap-2 text-sm">
                   <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
                   <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>

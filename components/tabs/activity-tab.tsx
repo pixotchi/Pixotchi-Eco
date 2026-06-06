@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useAccount } from "wagmi";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { PaginationFooter } from "@/components/ui/pagination-footer";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
@@ -442,7 +442,7 @@ export default function ActivityTab() {
 
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-border/55 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3">
+        <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3">
           {visibleActivities.map(renderActivity)}
         </div>
 
@@ -455,7 +455,7 @@ export default function ActivityTab() {
 
   return (
     <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
-      <Card className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:hidden" density="compact" surface="raised">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:hidden" density="compact">
         <CardHeader className="flex-none">
           <div className="flex justify-between items-center">
             <div className="min-w-0">
@@ -488,10 +488,10 @@ export default function ActivityTab() {
             setPage: setCurrentPage,
           })}
         </CardContent>
-      </Card>
+      </TabCard>
 
       <div className="hidden min-[54rem]:grid min-[54rem]:min-h-0 min-[54rem]:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] min-[54rem]:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <Card className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col xl:h-[calc(100dvh-7rem)]" surface="raised">
+        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col xl:h-[calc(100dvh-7rem)]">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
@@ -503,9 +503,9 @@ export default function ActivityTab() {
               setPage: (nextPage) => setDesktopPage("all", nextPage),
             })}
           </CardContent>
-        </Card>
+        </TabCard>
 
-        <Card className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col xl:h-[calc(100dvh-7rem)]" surface="raised">
+        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col xl:h-[calc(100dvh-7rem)]">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
@@ -517,7 +517,7 @@ export default function ActivityTab() {
               setPage: (nextPage) => setDesktopPage("my", nextPage),
             })}
           </CardContent>
-        </Card>
+        </TabCard>
       </div>
     </div>
   );

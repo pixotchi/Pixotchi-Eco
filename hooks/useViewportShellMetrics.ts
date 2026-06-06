@@ -32,7 +32,7 @@ export function useViewportShellMetrics() {
       setRootPx("--app-header-height", headerHeight);
       setRootPx("--app-status-height", statusHeight);
       setRootPx("--app-bottom-nav-height", navHeight);
-      setRootPx("--app-content-bottom-offset", isDesktopShell ? 0 : 12);
+      setRootPx("--app-content-bottom-offset", 0);
       const isMidShell = window.innerWidth >= 768 && !isDesktopShell;
       const shellMode: ShellMode = isDesktopShell ? "desktop" : isMidShell ? "mid" : "mobile";
       const isCompactShell = window.innerHeight <= 700 && !isDesktopShell;
