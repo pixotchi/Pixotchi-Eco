@@ -171,7 +171,10 @@ export default function TasksInfoDialog() {
   const totalTaskCount = missionSections.reduce((total, section) => total + section.tasks.length, 0);
   const dailyProgress = Math.max(0, Math.min(100, missionPts));
   const summaryCard = (
-    <div className="sticky top-3 z-10 space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-sm">
+    <div
+      className="mr-[-2.75rem] space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)] sm:mr-[-2.5rem]"
+      data-task-summary-card
+    >
       <div className="grid grid-cols-3 gap-2">
         <div>
           <span className="text-xs font-semibold text-muted-foreground">Streak</span>
@@ -222,23 +225,21 @@ export default function TasksInfoDialog() {
           <DialogDescription className="leading-relaxed">
             Earn up to 100 Rocks per day. Daily reset is 00:00 UTC.
           </DialogDescription>
+          {!effectiveDisabled && summaryCard}
         </DialogHeader>
 
-        <DialogBody className="space-y-4 pr-1 pt-0">
+        <DialogBody className="space-y-4 pr-1">
           {effectiveDisabled ? (
             <div className="rounded-[var(--radius-panel)] border border-amber-500/30 bg-amber-500/10 p-3.5">
               <p className="text-sm font-semibold">Temporarily Disabled</p>
               <p className="text-xs text-muted-foreground mt-1">{effectiveDisabledMessage}</p>
             </div>
           ) : (
-            <>
-              {summaryCard}
-              <div className="grid gap-3 pb-1 sm:grid-cols-2">
-                {missionSections.map((section) => (
-                  <MissionCard key={section.title} section={section} />
-                ))}
-              </div>
-            </>
+            <div className="grid gap-3 pb-1 sm:grid-cols-2">
+              {missionSections.map((section) => (
+                <MissionCard key={section.title} section={section} />
+              ))}
+            </div>
           )}
         </DialogBody>
       </DialogContent>

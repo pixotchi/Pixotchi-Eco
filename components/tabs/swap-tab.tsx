@@ -347,17 +347,26 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
   const pairUrl =
     marketData?.pairUrl ?? 'https://dexscreener.com/base/0xaa6a81a7df94dab346e2d677225cad47220540c5';
   const h24Txns = totalTxns(marketData?.txns.h24);
-  const statCards = [
-    { label: 'Price', value: formatSeedPriceUsd(marketData?.priceUsd ? Number(marketData.priceUsd) : null) },
-    { label: '24h Volume', value: formatUsd(marketData?.volume.h24) },
-    { label: 'Liquidity', value: formatUsd(marketData?.liquidityUsd) },
-    { label: 'Market Cap', value: formatUsd(marketData?.marketCap ?? marketData?.fdv) },
+  const h24Change = marketData?.priceChange.h24;
+  const h24ChangeTone =
+    typeof h24Change === 'number' && h24Change > 0
+      ? 'text-[hsl(var(--success-strong))]'
+      : typeof h24Change === 'number' && h24Change < 0
+        ? 'text-destructive'
+        : 'text-muted-foreground';
+  const marketRows = [
+    { label: '24h volume', value: formatUsd(marketData?.volume.h24), detail: `${h24Txns === null ? '...' : h24Txns.toLocaleString()} txns` },
+    { label: 'Liquidity', value: formatUsd(marketData?.liquidityUsd), detail: 'Pool depth' },
+    { label: 'Market cap', value: formatUsd(marketData?.marketCap ?? marketData?.fdv), detail: marketData?.marketCap != null ? 'Circulating' : 'FDV' },
   ];
 
   return (
-    <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+    <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold leading-tight text-foreground">SEED market pulse</h4>
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold leading-tight text-foreground">SEED market pulse</h4>
+          <p className="mt-0.5 text-[11px] font-medium leading-tight text-muted-foreground">Live BaseSwap quote data</p>
+        </div>
         <a
           href={pairUrl}
           target="_blank"
@@ -367,19 +376,46 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
           View pair
         </a>
       </div>
-      <div className="grid grid-cols-2 gap-2 min-[390px]:grid-cols-4 min-[54rem]:grid-cols-2 min-[66rem]:grid-cols-4">
-        {statCards.map((stat) => (
-          <div
-            key={stat.label}
-            className="min-w-0 rounded-[var(--radius-control)] border border-border/55 bg-background/35 px-2.5 py-2 shadow-[var(--shadow-hairline)]"
-          >
-            <p className="text-[11px] font-medium leading-tight text-muted-foreground">{stat.label}</p>
-            <p className="mt-1 break-words text-[13px] font-semibold leading-tight tabular-nums text-foreground">
-              {stat.value}
+
+      <div className="rounded-[var(--radius-panel)] border border-border/55 bg-background/40 shadow-[var(--shadow-hairline)]">
+        <div className="flex items-start justify-between gap-3 border-b border-border/45 px-3 py-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
+              SEED / USD
+            </p>
+            <p className="mt-1 break-words text-2xl font-bold leading-none tabular-nums text-foreground">
+              {formatSeedPriceUsd(marketData?.priceUsd ? Number(marketData.priceUsd) : null)}
             </p>
           </div>
-        ))}
+          <div className="shrink-0 text-right">
+            <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
+              24h
+            </p>
+            <p className={`mt-1 text-sm font-bold leading-none tabular-nums ${h24ChangeTone}`}>
+              {formatPercent(h24Change)}
+            </p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-border/35 px-3 py-1">
+          {marketRows.map((row) => (
+            <div key={row.label} className="flex items-center justify-between gap-4 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
+                  {row.label}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground/85">
+                  {row.detail}
+                </p>
+              </div>
+              <p className="max-w-[58%] shrink-0 text-right text-sm font-semibold leading-tight tabular-nums text-foreground">
+                {row.value}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
+
       <div className="mt-2 grid grid-cols-3 gap-2">
         {([
           ['1H', marketData?.priceChange.h1, totalTxns(marketData?.txns.h1)],

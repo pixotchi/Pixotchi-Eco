@@ -77,9 +77,12 @@ assert.match(dialogUi, /sticky && "surface-footer-divider dialog-footer-surface 
 assert.match(dialogUi, /surface-scroll-fade min-h-0 flex-1 overflow-y-auto py-3/);
 
 const tasksInfoDialog = projectFile('components/tasks/TasksInfoDialog.tsx');
-assert.match(tasksInfoDialog, /sticky top-3 z-10/);
+assert.match(tasksInfoDialog, /data-task-summary-card/);
+assert.match(tasksInfoDialog, /mr-\[-2\.75rem\]/);
+assert.match(tasksInfoDialog, /<DialogDescription className="leading-relaxed">[\s\S]*\{!effectiveDisabled && summaryCard\}[\s\S]*<\/DialogHeader>/);
+assert.doesNotMatch(tasksInfoDialog, /sticky top-3 z-10/);
 assert.doesNotMatch(tasksInfoDialog, /sticky top-0 z-10/);
-assert.match(tasksInfoDialog, /<DialogBody className="space-y-4 pr-1 pt-0">/);
+assert.match(tasksInfoDialog, /<DialogBody className="space-y-4 pr-1">/);
 
 const premiumUi = projectFile('components/ui/premium.tsx');
 assert.match(premiumUi, /surface-footer-divider dialog-footer-surface sticky[\s\S]*mt-3[\s\S]*sm:mt-4/);
@@ -140,6 +143,11 @@ assert.match(blackjackDialog, /hideCloseButton/);
 assert.match(blackjackDialog, /<DialogTitle className="sr-only">Blackjack<\/DialogTitle>/);
 assert.match(blackjackDialog, /Close Blackjack dialog/);
 assert.doesNotMatch(blackjackDialog, /<DialogHeader/);
+assert.match(blackjackDialog, /BLACKJACK_STICKY_ACTIONS_CLASS/);
+assert.match(blackjackDialog, /data-blackjack-action-footer/);
+assert.match(blackjackDialog, /dialog-footer-surface sticky/);
+assert.match(blackjackDialog, /bg-\[linear-gradient\(180deg,rgba\(0,0,0,0\.82\)_0%,rgba\(0,0,0,0\.96\)_42%,rgba\(0,0,0,1\)_100%\)\]/);
+assert.doesNotMatch(blackjackDialog, /BLACKJACK_STICKY_ACTIONS_CLASS = .*bg-black\/75/);
 
 const casinoDialog = projectFile('components/transactions/CasinoDialog.tsx');
 assert.match(casinoDialog, /mobileMode="center"/);
@@ -151,6 +159,8 @@ assert.doesNotMatch(casinoDialog, /<DialogHeader/);
 assert.match(casinoDialog, /showRoundResult = !!result && !isSpinning && !wheelSpinning/);
 assert.match(casinoDialog, /No win this spin/);
 assert.doesNotMatch(casinoDialog, /<span className="font-bold">No win<\/span>/);
+assert.match(casinoDialog, /bg-\[linear-gradient\(180deg,rgba\(0,0,0,0\.82\)_0%,rgba\(0,0,0,0\.96\)_42%,rgba\(0,0,0,1\)_100%\)\]/);
+assert.doesNotMatch(casinoDialog, /<DialogFooter sticky className="[^"]*bg-black\/75/);
 
 for (const transactionWrapper of [
   'components/transactions/sponsored-transaction.tsx',

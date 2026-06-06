@@ -16,8 +16,8 @@ export function AppToaster() {
           boxShadow: "var(--shadow-raised)",
           color: "hsl(var(--foreground))",
           zIndex: "var(--z-toast)",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
+          backdropFilter: "blur(var(--blur-surface))",
+          WebkitBackdropFilter: "blur(var(--blur-surface))",
         },
         success: {
           iconTheme: {

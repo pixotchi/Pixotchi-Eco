@@ -1021,7 +1021,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         </div>
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-24 h-24 rounded-full border border-primary/20 bg-card/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-1">
+                        <div className="w-24 h-24 rounded-full border border-primary/20 bg-card/70 backdrop-blur-[var(--blur-surface)] flex flex-col items-center justify-center space-y-1">
                           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
                           <span className="text-xs font-semibold text-primary">Good luck!</span>
                         </div>

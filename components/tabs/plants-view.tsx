@@ -334,42 +334,6 @@ export default function PlantsView() {
 
   return (
     <div className="space-y-4">
-      {/* Top Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* StatusBar replaces BalanceCard globally under header */}
-
-        {plants.length > 1 && (
-          <Card>
-            <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
-            <CardContent>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between">
-                    {selectedPlant ? (
-                      <div className="flex items-center space-x-2">
-                        <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
-                        <span className="font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
-                      </div>
-                    ) : "Select a Plant"}
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
-                  {plants.map((plant) => (
-                    <DropdownMenuItem key={plant.id} onSelect={() => setSelectedPlant(plant)}>
-                      <div className="flex items-center space-x-2">
-                        <PlantImage selectedPlant={plant} width={24} height={24} />
-                        <span><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Lvl {plant.level})</span>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
       {selectedPlant && (
         <div
           className={
@@ -379,6 +343,36 @@ export default function PlantsView() {
           }
         >
           <div className="space-y-4 min-[54rem]:sticky min-[54rem]:top-0">
+          {plants.length > 1 && (
+            <Card>
+              <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
+              <CardContent>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {selectedPlant ? (
+                        <div className="flex min-w-0 items-center space-x-2">
+                          <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
+                          <span className="truncate font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
+                        </div>
+                      ) : "Select a Plant"}
+                      <ChevronDown className="h-4 w-4 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                    {plants.map((plant) => (
+                      <DropdownMenuItem key={plant.id} onSelect={() => setSelectedPlant(plant)}>
+                        <div className="flex min-w-0 items-center space-x-2">
+                          <PlantImage selectedPlant={plant} width={24} height={24} />
+                          <span className="truncate"><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Lvl {plant.level})</span>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardContent>
+            </Card>
+          )}
           {/* Plant "Screen" Display */}
           <Card>
             <CardContent className="p-4 space-y-3">

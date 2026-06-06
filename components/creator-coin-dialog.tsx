@@ -13,7 +13,7 @@ interface CreatorCoinDialogProps {
 export function CreatorCoinDialog({ open, onOpenChange }: CreatorCoinDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md border-primary/20 bg-card/95 bg-[image:var(--gradient-dialog)] backdrop-blur-xl">
+      <DialogContent className="sm:max-w-md border-primary/20 bg-card/95 bg-[image:var(--gradient-dialog)]">
         <DialogHeader className="items-center text-center space-y-4 pt-4 pr-0">
           <div className="relative w-24 h-24 flex items-center justify-center" style={{ perspective: '1000px' }}>
             <div className="relative w-24 h-24 animate-coin-flip" style={{ transformStyle: 'preserve-3d' }}>

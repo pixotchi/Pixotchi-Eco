@@ -786,7 +786,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
                         {/* Bets Panel - Right Side */}
                         <div className="w-full min-w-0">
-                            <div className="h-full rounded-md border border-white/10 bg-black/35 p-2 text-white backdrop-blur-sm sm:p-2.5">
+                            <div className="h-full rounded-md border border-white/10 bg-black/35 p-2 text-white backdrop-blur-[var(--blur-surface)] sm:p-2.5">
                                 <div className="mb-1.5 flex items-center justify-between gap-2">
                                     <span className="text-xs font-semibold uppercase tracking-wide text-white/85">Bets {placedBets.length}/{maxBets}</span>
                                     {placedBets.length > 0 && (
@@ -1008,7 +1008,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     </div>
 
                 </div>
-                <DialogFooter sticky className="block space-y-2 -bottom-3 -mx-3 -mb-3 border-white/15 bg-black/75 bg-none px-3 pt-3 text-white backdrop-blur-md sm:-bottom-4 sm:-mx-4 sm:-mb-4 sm:px-4 md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6">
+                <DialogFooter sticky className="block space-y-2 -bottom-3 -mx-3 -mb-3 border-white/15 bg-black bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.96)_42%,rgba(0,0,0,1)_100%)] px-3 pt-3 text-white backdrop-blur-md sm:-bottom-4 sm:-mb-4 sm:-ml-4 sm:-mr-7 sm:px-4 md:-bottom-6 md:-mb-6 md:-ml-6 md:-mr-9 md:px-6">
                     {!pendingGame && config && !config.enabled ? (
                         <Button className="w-full" disabled variant="secondary">
                             Roulette disabled

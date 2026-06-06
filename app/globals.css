@@ -130,6 +130,8 @@
     --app-bottom-nav-height: 0px;
     --app-content-gutter: 1rem;
     --app-content-bottom-offset: 0.75rem;
+    --blur-overlay: 4px;
+    --blur-surface: 12px;
 
     /* 
      * Z-index scale for consistent layering

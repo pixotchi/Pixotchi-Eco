@@ -20,7 +20,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     data-viewport-debug-dialog-overlay=""
     className={cn(
-      "fixed inset-0 bg-black/60 backdrop-blur-[2px] sm:backdrop-blur-sm",
+      "fixed inset-0 bg-black/60 backdrop-blur-[var(--blur-overlay)]",
       "supports-[backdrop-filter]:bg-black/50 motion-reduce:bg-black/75 motion-reduce:backdrop-blur-none",
       "duration-[var(--motion-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",

@@ -85,6 +85,7 @@ const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the loser score
 const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
 const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
+const RANKING_ATTACK_BUTTON_CLASS = "h-10 min-h-10 w-10 min-w-10";
 
 function getTotalPages(itemCount: number, pageSize: number) {
   return Math.ceil(itemCount / pageSize) || 1;
@@ -1041,7 +1042,7 @@ export default function LeaderboardTab() {
                   }}
                   aria-label="Attack this plant"
                   title="Attack"
-                  className="h-12 min-h-12 w-12 min-w-12"
+                  className={RANKING_ATTACK_BUTTON_CLASS}
                 >
                   <Swords className="h-5 w-5" strokeWidth={2.5} />
                 </Button>
@@ -1056,7 +1057,7 @@ export default function LeaderboardTab() {
                   }}
                   aria-label="Attack this plant"
                   title="Attack"
-                  className="h-12 min-h-12 w-12 min-w-12"
+                  className={RANKING_ATTACK_BUTTON_CLASS}
                 >
                   <Swords className="h-5 w-5" strokeWidth={2.5} />
                 </Button>

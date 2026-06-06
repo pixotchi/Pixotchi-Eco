@@ -131,7 +131,7 @@ export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
       {open && txModalOpen && typeof document !== 'undefined'
         ? createPortal(
           <div
-            className="fixed inset-0 z-[calc(var(--z-transaction)-1)] bg-black/60 backdrop-blur-sm pointer-events-none"
+            className="fixed inset-0 z-[calc(var(--z-transaction)-1)] bg-black/60 backdrop-blur-[var(--blur-overlay)] pointer-events-none"
             aria-hidden="true"
           />,
           document.body

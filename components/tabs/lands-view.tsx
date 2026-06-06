@@ -537,60 +537,39 @@ function LandsViewContent() {
 
   return (
     <div className="space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-[34rem] xl:max-w-none">
-      <div className={`grid grid-cols-1 gap-4 xl:mx-auto xl:w-full ${lands.length > 1
-        ? "xl:max-w-[860px] xl:grid-cols-2 xl:items-start"
-        : "xl:max-w-[420px]"
-        }`}>
-        {/* Batch Claim Card - Only shows if there are claimable rewards */}
-        {lands.length > 0 && (
-          <BatchClaimCard
-            lands={lands}
-            onSuccess={() => {
-              fetchBuildingData(); // Refresh current land buildings
-              // Also refresh selected land to update warehouse numbers
-              if (selectedLand) {
-                getLandById(selectedLand.tokenId).then(latest => {
-                  if (latest) setSelectedLand(latest);
-                });
-              }
-            }}
-          />
-        )}
-        {lands.length > 1 && (
-          <Card>
-            <CardHeader><CardTitle>Select Land</CardTitle></CardHeader>
-            <CardContent>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between">
-                    {selectedLand ? (
-                      <div className="flex items-center space-x-2">
-                        <LandPlot className="w-4 h-4" />
-                        <span className="font-pixel">{selectedLand.name || `Land #${selectedLand.tokenId}`}</span>
-                      </div>
-                    ) : "Select a Land"}
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
-                  {lands.map((land) => (
-                    <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => setSelectedLand(land)}>
-                      <div className="flex items-center space-x-2">
-                        <LandPlot className="w-4 h-4" />
-                        <span><span className="font-pixel">{land.name || `Land #${land.tokenId}`}</span> (XP {formatXP(land.experiencePoints)})</span>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
       {selectedLand && (
         <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
           <div className="space-y-4 xl:sticky xl:top-0">
+          {lands.length > 1 && (
+            <Card>
+              <CardHeader><CardTitle>Select Land</CardTitle></CardHeader>
+              <CardContent>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {selectedLand ? (
+                        <div className="flex min-w-0 items-center space-x-2">
+                          <LandPlot className="h-4 w-4 shrink-0" />
+                          <span className="truncate font-pixel">{selectedLand.name || `Land #${selectedLand.tokenId}`}</span>
+                        </div>
+                      ) : "Select a Land"}
+                      <ChevronDown className="h-4 w-4 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                    {lands.map((land) => (
+                      <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => setSelectedLand(land)}>
+                        <div className="flex min-w-0 items-center space-x-2">
+                          <LandPlot className="h-4 w-4 shrink-0" />
+                          <span className="truncate"><span className="font-pixel">{land.name || `Land #${land.tokenId}`}</span> (XP {formatXP(land.experiencePoints)})</span>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardContent className="space-y-3">
               <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
@@ -688,7 +667,21 @@ function LandsViewContent() {
 
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-4">
+          {lands.length > 0 && (
+            <BatchClaimCard
+              lands={lands}
+              onSuccess={() => {
+                fetchBuildingData(); // Refresh current land buildings
+                // Also refresh selected land to update warehouse numbers
+                if (selectedLand) {
+                  getLandById(selectedLand.tokenId).then(latest => {
+                    if (latest) setSelectedLand(latest);
+                  });
+                }
+              }}
+            />
+          )}
           {/* Building Management Section */}
           <Card className="xl:h-fit xl:w-full">
             <CardHeader>

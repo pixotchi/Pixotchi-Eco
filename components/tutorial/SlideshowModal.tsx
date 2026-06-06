@@ -104,7 +104,7 @@ export default function SlideshowModal() {
       <DialogContent
         hideCloseButton
         useSafeAreaInset={false}
-        overlayClassName="bg-black/50 backdrop-blur-sm"
+        overlayClassName="bg-black/50 backdrop-blur-[var(--blur-overlay)]"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
         className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-border p-0 shadow-xl"
         onInteractOutside={(event) => event.preventDefault()}
