@@ -2257,8 +2257,8 @@ export default function AdminInviteDashboard() {
                 </div>
 
                 {!broadcastDismissible && (
-                  <Alert className="bg-[hsl(var(--warning)/0.12)] border-[hsl(var(--warning)/0.28)]">
-                    <AlertTriangle className="w-4 h-4 text-[hsl(var(--warning))]" />
+                  <Alert variant="warning">
+                    <AlertTriangle className="w-4 h-4" />
                     <AlertDescription className="text-sm">
                       Non-dismissible messages will persist until manually deleted or expired.
                       Use carefully for critical announcements only.

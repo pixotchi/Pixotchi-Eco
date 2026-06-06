@@ -9,15 +9,18 @@ export function AppToaster() {
       toastOptions={{
         duration: 4000,
         style: {
-          backgroundColor: "hsl(var(--card) / 0.96)",
+          backgroundColor: "hsl(var(--card) / 0.97)",
           backgroundImage: "var(--gradient-surface)",
-          border: "1px solid hsl(var(--border))",
+          border: "1px solid hsl(var(--border) / 0.75)",
           borderRadius: "var(--radius-panel)",
-          boxShadow: "var(--shadow-raised)",
+          boxShadow: "var(--shadow-raised), inset 0 1px 0 hsl(var(--background) / 0.44)",
           color: "hsl(var(--foreground))",
           zIndex: "var(--z-toast)",
           backdropFilter: "blur(var(--blur-surface))",
           WebkitBackdropFilter: "blur(var(--blur-surface))",
+          padding: "0.875rem 1rem",
+          fontSize: "0.875rem",
+          lineHeight: "1.35",
         },
         success: {
           iconTheme: {

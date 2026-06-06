@@ -7,7 +7,7 @@ import SpinGameTransaction from "@/components/transactions/spin-game-transaction
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
-import { RewardResultPanel } from "@/components/ui/premium";
+import { DisabledReason, RewardResultPanel } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { getBaseLogClient } from "@/lib/base-rpc";
 import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
@@ -21,7 +21,7 @@ SPIN_GAME_V2_PLAYED_EVENT,
 import { Plant } from "@/lib/types";
 import { cn,formatDuration,formatScore,formatTokenAmount } from "@/lib/utils";
 import Image from "next/image";
-import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { type ReactNode,useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { encodePacked,hexToBytes,keccak256,toHex } from "viem";
 import { useAccount,usePublicClient,useSignMessage } from "wagmi";
@@ -126,6 +126,33 @@ const GameSelector = ({
     />
   </div>
 );
+
+function ArcadeStatRow({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  tone?: "default" | "primary" | "success" | "warning" | "danger";
+}) {
+  const toneClassName = {
+    danger: "text-destructive",
+    default: "text-foreground",
+    primary: "text-primary",
+    success: "text-[hsl(var(--success-strong))]",
+    warning: "text-[hsl(var(--warning-foreground))]",
+  }[tone];
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/55 px-3 py-2 text-xs">
+      <span className="min-w-0 text-muted-foreground">{label}</span>
+      <span className={cn("shrink-0 text-right font-semibold tabular-nums", toneClassName)}>
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
   const { address } = useAccount();
@@ -828,7 +855,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   );
 
   const BoxGrid = () => (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 gap-2.5">
       {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
         <Button
           key={n}
@@ -838,12 +865,30 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             setSeed(n);
             setBoxResultDetails(null);
           }}
-          className={`h-16 min-h-16 w-full rounded-[var(--radius-control)] p-0 sm:h-20 sm:min-h-20 ${seed === n ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-border bg-card hover:bg-[hsl(var(--nav-hover-bg))]"
-            }`}
+          className={cn(
+            "group relative h-16 min-h-16 w-full overflow-hidden rounded-[var(--radius-panel)] p-0 sm:h-20 sm:min-h-20",
+            "transition-[background-color,border-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)]",
+            seed === n
+              ? "border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary shadow-[var(--shadow-glow)] ring-2 ring-primary/25"
+              : "border-border/55 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[var(--shadow-control)] hover:brightness-[1.02]",
+          )}
           aria-label={`Select box ${n}`}
           aria-pressed={seed === n}
         >
-          <Image src="/icons/box.png" alt={`Box ${n}`} width={32} height={32} className="w-8 h-8 object-contain" />
+          <span
+            className={cn(
+              "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-[var(--motion-standard)]",
+              "bg-[radial-gradient(circle_at_34%_18%,hsl(var(--primary)/0.2)_0%,transparent_42%),linear-gradient(180deg,hsl(var(--card)/0.2),hsl(var(--primary)/0.06))]",
+              seed === n ? "opacity-100" : "group-hover:opacity-80",
+            )}
+            aria-hidden="true"
+          />
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/40 bg-background/45 shadow-[var(--shadow-hairline)] sm:h-12 sm:w-12">
+            <Image src="/icons/box.png" alt="" width={34} height={34} className="h-8 w-8 object-contain drop-shadow-sm" aria-hidden />
+          </span>
+          <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/40 bg-card/80 px-1.5 py-0.5 text-[10px] font-bold leading-none text-muted-foreground">
+            {n}
+          </span>
         </Button>
       ))}
     </div>
@@ -854,6 +899,33 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const starsAvailable = plant?.stars ?? 0;
   const boxPlayDisabled = disabled || (withStar && starsAvailable <= 0);
   const spinPlayDisabled = pending ? !canReveal : !(commitmentHex && canCommit);
+  const boxDisabledReason = !address
+    ? "Connect a wallet before opening a box."
+    : !seed
+      ? "Choose a box to play."
+      : currentCooldown > 0
+        ? `Box cooldown clears in ${formatDuration(currentCooldown)}.`
+        : withStar && starsAvailable <= 0
+          ? "Collect a star before playing with stars."
+          : null;
+  const spinDisabledReason = pending
+    ? canReveal
+      ? null
+      : "The wheel is still preparing the result."
+    : !address
+      ? "Connect a wallet before spinning."
+      : spinCooldown > 0
+        ? `SpinLeaf cooldown clears in ${formatDuration(spinCooldown)}.`
+        : starsAvailable < spinStarCost
+          ? `SpinLeaf needs ${spinStarCost} star${spinStarCost === 1 ? "" : "s"}.`
+          : !commitmentHex
+            ? "Preparing the spin commitment."
+            : null;
+  const hasSpinReward = resultDetails
+    ? (resultDetails.pointsDelta ?? 0) !== 0 ||
+      (resultDetails.timeAdded ?? 0) !== 0 ||
+      (resultDetails.leafAmount !== undefined && resultDetails.leafAmount !== BigInt("0"))
+    : false;
 
   // Gate arcade games for Solana users
   if (isSolana) {
@@ -892,12 +964,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 <div className="text-sm font-medium">Choose a box</div>
                 <BoxGrid />
 
-                <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="font-medium text-foreground">
+                <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <div className="min-w-0 font-medium text-foreground">
                       {withStar ? 'Playing with Stars' : 'Playing without Stars'}
                     </div>
-                    <div className="grid grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-border/55 bg-card/85 p-1">
+                    <div className="grid shrink-0 grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-border/55 bg-card/85 bg-[image:var(--gradient-control-track)] p-1">
                       <Button
                         type="button"
                         variant="outline"
@@ -931,18 +1003,14 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     </div>
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Cooldown: <span className="font-medium text-foreground">
-                      {currentCooldown > 0 ? `${formatDuration(currentCooldown)} remaining` : 'Ready to play'}
-                    </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ArcadeStatRow label="Selected box" value={seed ? `Box ${seed}` : "None"} tone={seed ? "primary" : "warning"} />
+                    <ArcadeStatRow label="Cooldown" value={currentCooldown > 0 ? formatDuration(currentCooldown) : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
+                    <ArcadeStatRow label="Mode" value={withStar ? "Use star" : "No star"} tone={withStar ? "primary" : "default"} />
+                    <ArcadeStatRow label="Stars available" value={starsAvailable} tone={withStar && starsAvailable <= 0 ? "danger" : "default"} />
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Stars available: <span className="font-semibold text-foreground">{starsAvailable}</span>
-                    {withStar && starsAvailable <= 0 && (
-                      <span className="ml-2 text-destructive">Not enough stars</span>
-                    )}
-                  </div>
+                  {boxDisabledReason && <DisabledReason>{boxDisabledReason}</DisabledReason>}
                 </div>
                 {boxResultDetails && (
                   <RewardResultPanel title="Box result" tone={(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? "success" : "warning"}>
@@ -978,12 +1046,14 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   </div>
                 </div>
 
-                <div className="relative mx-auto mt-6 w-48 h-48 sm:w-56 sm:h-56">
+                <div className="relative mx-auto mt-6 flex h-56 w-56 items-center justify-center sm:h-60 sm:w-60">
+                  <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_32%,hsl(var(--scene-glow)/0.5)_0%,hsl(var(--scene-glow)/0.12)_48%,transparent_76%)] blur-xl" aria-hidden="true" />
+                  <div className="absolute inset-3 rounded-full border border-primary/15 bg-[conic-gradient(from_0deg,hsl(var(--primary)/0.16),hsl(var(--accent)/0.34),hsl(var(--scene-glow)/0.24),hsl(var(--primary)/0.16))] opacity-80 shadow-[var(--shadow-glow)]" aria-hidden="true" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="relative w-full h-full rounded-full bg-gradient-to-br from-primary/10 via-background to-card shadow-[0_20px_45px_-20px_rgba(0,0,0,0.35)]" aria-hidden>
+                    <div className="relative h-48 w-48 rounded-full border border-border/55 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[0_24px_54px_-28px_hsl(var(--foreground)/0.5)] sm:h-56 sm:w-56" aria-hidden>
                       <div
                         className={cn(
-                          "absolute inset-4 rounded-full border border-primary/30 flex items-center justify-center",
+                          "absolute inset-4 flex items-center justify-center rounded-full border border-primary/35 bg-background/25 shadow-inner",
                           targetRotation !== null ? "transition-transform duration-[2200ms] ease-out" : "",
                           wheelState.spinning && targetRotation === null ? "animate-[spin-slow_1.5s_linear_infinite]" : "",
                         )}
@@ -995,7 +1065,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                               : { transform: `rotate(${currentRotation}deg)` }
                         }
                       >
-                        <svg viewBox="0 0 200 200" className="w-full h-full">
+                        <svg viewBox="0 0 200 200" className="h-full w-full drop-shadow-sm">
+                          <circle cx="100" cy="100" r="88" fill="none" stroke="hsl(var(--primary) / 0.18)" strokeWidth="7" />
+                          <circle cx="100" cy="100" r="58" fill="none" stroke="hsl(var(--accent) / 0.22)" strokeWidth="2" />
                           {[...Array(6)].map((_, index) => {
                             const angle = index * 60;
                             const radius = 68;
@@ -1017,24 +1089,25 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                           })}
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-4 h-4 bg-primary rounded-full shadow-inner" />
+                          <div className="h-5 w-5 rounded-full border border-primary/35 bg-primary shadow-[0_0_18px_hsl(var(--primary)/0.32)]" />
                         </div>
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-24 h-24 rounded-full border border-primary/20 bg-card/70 backdrop-blur-[var(--blur-surface)] flex flex-col items-center justify-center space-y-1">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
-                          <span className="text-xs font-semibold text-primary">Good luck!</span>
+                        <div className="flex h-24 w-24 flex-col items-center justify-center space-y-1 rounded-full border border-primary/25 bg-card/80 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-control)] backdrop-blur-[var(--blur-surface)]">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
+                          <span className="text-xs font-bold text-primary">{pending ? "In motion" : "Good luck"}</span>
                         </div>
                       </div>
-                      <div className="absolute inset-0 rounded-full border border-white/10" />
+                      <div className="absolute inset-0 rounded-full border border-white/15 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.25)]" />
                     </div>
                   </div>
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                    <div className="w-0 h-0 border-l-8 border-r-8 border-t-12 border-l-transparent border-r-transparent border-t-primary" />
+                  <div className="absolute top-2 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center">
+                    <div className="h-4 w-5 rounded-b-[var(--radius-nav)] bg-primary shadow-[0_8px_18px_-10px_hsl(var(--primary)/0.8)]" />
+                    <div className="h-0 w-0 border-l-[10px] border-r-[10px] border-t-[16px] border-l-transparent border-r-transparent border-t-primary drop-shadow-sm" />
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+                <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
                   <div>
                     <div className="text-sm font-medium">Star Spin</div>
                     <p className="text-xs text-muted-foreground">
@@ -1042,22 +1115,17 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     </p>
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Status: <span className="font-medium text-foreground">
-                      {pending ? (canReveal ? "Ready to stop" : "Wheel is spinning") : spinCooldown > 0 ? formatDuration(spinCooldown) + " cooldown" : "Ready to spin"}
-                    </span>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <ArcadeStatRow
+                      label="Status"
+                      value={pending ? (canReveal ? "Ready to stop" : "Wheel spinning") : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown` : "Ready to spin"}
+                      tone={pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
+                    />
+                    <ArcadeStatRow label="Stars available" value={starsAvailable} tone={starsAvailable < spinStarCost && !pending ? "danger" : "default"} />
+                    <ArcadeStatRow label="Cost per spin" value={spinStarCost} tone="primary" />
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Stars available: <span className="font-semibold text-foreground">{starsAvailable}</span>
-                    {spinStarCost > 0 && starsAvailable < spinStarCost && !pending && (
-                      <span className="ml-2 text-destructive">Not enough stars to spin</span>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    Cost per spin: <span className="font-semibold text-foreground">{spinStarCost}</span>
-                  </div>
+                  {spinDisabledReason && <DisabledReason>{spinDisabledReason}</DisabledReason>}
 
                   <div className="space-y-2">
                     {/* Reset button for users stuck with lost secrets */}
@@ -1076,9 +1144,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               </div>
             )}
             {selectedGame === "spin" && resultDetails && (
-              <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-                <div className="font-semibold text-primary">Spin Reward</div>
-                <ul className="mt-2 space-y-1">
+              <RewardResultPanel className="mt-4" title="Spin Reward" tone={hasSpinReward ? "success" : "warning"}>
+                <ul className="space-y-1">
                   {typeof resultDetails.pointsDelta === "number" && resultDetails.pointsDelta !== 0 && (
                     <li>
                       PTS: <span className="font-medium text-foreground">{`${resultDetails.pointsDelta > 0 ? "+" : ""}${formatScore(Math.abs(resultDetails.pointsDelta))}`}</span>
@@ -1099,7 +1166,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                       <li className="text-muted-foreground">No reward this time. Better luck next spin!</li>
                     )}
                 </ul>
-              </div>
+              </RewardResultPanel>
             )}
           </div>
         </div>

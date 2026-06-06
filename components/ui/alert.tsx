@@ -4,13 +4,19 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const alertVariants = cva(
-  "relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
+  "relative w-full overflow-hidden rounded-[var(--radius-panel)] border bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 text-foreground shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)] [&>svg~*]:pl-7 [&>svg]:absolute [&>svg]:left-3.5 [&>svg]:top-3.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-current",
   {
     variants: {
       variant: {
-        default: "bg-background text-foreground",
+        default: "border-border/70",
+        info:
+          "border-[hsl(var(--info)/0.28)] bg-[hsl(var(--info)/0.1)] [&>svg]:text-[hsl(var(--info))]",
+        success:
+          "border-[hsl(var(--success)/0.3)] bg-[hsl(var(--success)/0.1)] [&>svg]:text-[hsl(var(--success-strong))]",
+        warning:
+          "border-[hsl(var(--warning)/0.36)] bg-[hsl(var(--warning)/0.14)] [&>svg]:text-[hsl(var(--warning))]",
         destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+          "border-destructive/35 bg-destructive/10 [&>svg]:text-destructive",
       },
     },
     defaultVariants: {
@@ -33,12 +39,12 @@ const Alert = React.forwardRef<
 Alert.displayName = "Alert"
 
 const AlertTitle = React.forwardRef<
-  HTMLParagraphElement,
+  HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>
 >(({ className, ...props }, ref) => (
   <h5
     ref={ref}
-    className={cn("mb-1 font-medium leading-none tracking-tight", className)}
+    className={cn("mb-1 text-sm font-semibold leading-tight text-foreground", className)}
     {...props}
   />
 ))
@@ -50,7 +56,7 @@ const AlertDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm [&_p]:leading-relaxed", className)}
+    className={cn("text-sm leading-relaxed text-muted-foreground [&_p]:leading-relaxed", className)}
     {...props}
   />
 ))
