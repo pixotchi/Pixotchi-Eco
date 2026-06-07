@@ -16,7 +16,7 @@ import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,t
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Activity,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties } from "react";
+import { Activity,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type KeyboardEvent } from "react";
 import toast from "react-hot-toast";
 
 // Import custom hooks
@@ -440,6 +440,45 @@ function SlidingNavTabs({
     return () => resizeObserver.disconnect();
   }, [mode, selectedIndex, tabs.length]);
 
+  const focusTab = (index: number) => {
+    tabRefs.current[index]?.focus();
+  };
+
+  const selectTab = (index: number) => {
+    const tab = tabs[index];
+    if (!tab) return;
+
+    onTabChange(tab.id);
+    focusTab(index);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (tabs.length === 0) return;
+
+    const isVertical = mode === "desktop";
+    const previousKey = isVertical ? "ArrowUp" : "ArrowLeft";
+    const nextKey = isVertical ? "ArrowDown" : "ArrowRight";
+    let nextIndex = index;
+
+    if (event.key === previousKey) {
+      event.preventDefault();
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (event.key === nextKey) {
+      event.preventDefault();
+      nextIndex = (index + 1) % tabs.length;
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      event.preventDefault();
+      nextIndex = tabs.length - 1;
+    } else {
+      return;
+    }
+
+    selectTab(nextIndex);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -451,6 +490,7 @@ function SlidingNavTabs({
       )}
       role="tablist"
       aria-label="Application tabs"
+      aria-orientation={mode === "desktop" ? "vertical" : "horizontal"}
     >
       <span
         aria-hidden="true"
@@ -468,6 +508,7 @@ function SlidingNavTabs({
             variant="nav"
             onClick={() => onTabChange(tab.id)}
             data-active={isActive}
+            onKeyDown={(event) => handleKeyDown(event, index)}
             ref={(node) => {
               tabRefs.current[index] = node;
             }}
