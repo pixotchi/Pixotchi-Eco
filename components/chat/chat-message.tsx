@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { ChatMessage, AIChatMessage } from "@/lib/types";
 import { differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from "date-fns";
 import { useAccount } from "wagmi";
@@ -53,7 +53,7 @@ interface ChatMessageProps {
   'aria-posinset'?: number;
 }
 
-function ChatMessageComponent({
+export default function ChatMessageComponent({
   message,
   isAIMode = false,
   'aria-setsize': ariaSetsize,
@@ -84,9 +84,9 @@ function ChatMessageComponent({
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
   
-  const bgColor = isAIMessage ? 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 text-foreground sm:bg-[image:var(--gradient-surface)] sm:shadow-[var(--shadow-hairline)]' :
-                  isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary text-primary-foreground sm:bg-[image:var(--gradient-control-active)] sm:shadow-[var(--shadow-hairline)]' :
-                  'chat-white-surface border border-border/60 bg-card/95 text-foreground sm:bg-[image:var(--gradient-surface)] sm:shadow-[var(--shadow-hairline)]';
+  const bgColor = isAIMessage ? 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]' :
+                  isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)]' :
+                  'chat-white-surface border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
@@ -186,13 +186,3 @@ function ChatMessageComponent({
     </>
   );
 }
-
-export default memo(ChatMessageComponent, (previous, next) => (
-  previous.isAIMode === next.isAIMode &&
-  previous["aria-setsize"] === next["aria-setsize"] &&
-  previous["aria-posinset"] === next["aria-posinset"] &&
-  previous.message.id === next.message.id &&
-  previous.message.address === next.message.address &&
-  previous.message.timestamp === next.message.timestamp &&
-  previous.message.message === next.message.message
-));

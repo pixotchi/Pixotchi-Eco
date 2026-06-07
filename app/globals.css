@@ -598,6 +598,69 @@
     scroll-behavior: auto !important;
   }
 
+  .performance-mode {
+    --blur-overlay: 0px;
+    --blur-surface: 0px;
+    --shadow-hairline: none;
+    --shadow-control: none;
+    --shadow-raised: none;
+    --shadow-modal: none;
+    --shadow-glow: none;
+    --shadow-nav-hover: none;
+    --shadow-nav-active: none;
+    --surface-highlight: none;
+    --surface-inset: none;
+    --gradient-app-chrome: none;
+    --gradient-content-well: none;
+    --gradient-control-active: none;
+    --gradient-control-surface: none;
+    --gradient-control-track: none;
+    --gradient-dialog: none;
+    --gradient-panel: none;
+    --gradient-prize: none;
+    --gradient-scroll-surface: none;
+    --gradient-selection: none;
+    --gradient-special: none;
+    --gradient-surface: none;
+    --gradient-surface-strong: none;
+    --gradient-success: none;
+    --gradient-warning: none;
+    --gradient-danger: none;
+    --gradient-value: none;
+  }
+
+  .performance-mode *,
+  .performance-mode *::before,
+  .performance-mode *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0ms !important;
+  }
+
+  .performance-mode [class*="shadow-"],
+  .performance-mode [class*="shadow-"]::before,
+  .performance-mode [class*="shadow-"]::after {
+    box-shadow: none !important;
+  }
+
+  .performance-mode [class*="backdrop-blur"],
+  .performance-mode .dialog-header-surface,
+  .performance-mode .dialog-footer-surface {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .performance-mode .surface-scroll-area,
+  .performance-mode .surface-scroll-fade {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+
+  .performance-mode .surface-header-divider,
+  .performance-mode .surface-footer-divider {
+    box-shadow: none !important;
+  }
+
   /* Root sizing shared by web and mini-app surfaces */
   html,
   body {
@@ -772,14 +835,6 @@
   .surface-scroll-area[data-scroll-fade-bottom="true"],
   .surface-scroll-fade[data-scroll-fade-bottom="true"] {
     --scroll-fade-bottom-active: var(--scroll-fade-bottom);
-  }
-
-  @media (max-width: 640px), (pointer: coarse) {
-    .surface-scroll-area,
-    .surface-scroll-fade {
-      -webkit-mask-image: none;
-      mask-image: none;
-    }
   }
 
 

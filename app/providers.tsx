@@ -37,6 +37,7 @@ import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { AppUpdateBanner } from "@/components/app-update-banner";
 import { AppToaster } from "@/components/ui/app-toaster";
+import { PerformanceModeController } from "@/components/ui/performance-mode";
 import { ScrollFadeController } from "@/components/ui/scroll-fade-controller";
 import { usePathname } from "next/navigation";
 import {
@@ -542,6 +543,7 @@ function ProvidersContent({
                       {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
                       {/** added provider wrapper **/}
                       <AppToaster />
+                      <PerformanceModeController />
                       <ScrollFadeController />
                       {children}
                       <SlideshowModal />

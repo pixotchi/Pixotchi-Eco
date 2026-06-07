@@ -5,6 +5,7 @@ import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { SolanaBridgeBadge,useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 import {
 Dialog,
 DialogBody,
@@ -61,12 +62,12 @@ const AUTH_CACHE_PREFIXES = [
 ];
 
 const walletCardSurfaceClassName =
-  "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 p-0 sm:bg-[image:var(--gradient-surface-strong)] sm:shadow-[var(--shadow-raised)]";
+  "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-0 shadow-[var(--shadow-raised)]";
 
 const walletChromaticWhiteSurfaceClassName = `${walletCardSurfaceClassName} chromatic-white-surface`;
 
 const walletInnerGlowClassName =
-  "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] sm:before:pointer-events-none sm:before:absolute sm:before:inset-x-0 sm:before:top-0 sm:before:h-20 sm:before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
+  "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
 
 const walletChromaticWhiteInnerGlowClassName = `${walletInnerGlowClassName} chromatic-white-inner-glow`;
 
@@ -194,7 +195,7 @@ const EthModeToggleRow = () => {
   return (
     <WalletInfoRow
       label="ETH Mode"
-      description="Beta network preference"
+      description="Spend ETH in-game instead of SEED"
     >
       <button
         type="button"
@@ -211,6 +212,37 @@ const EthModeToggleRow = () => {
         >
           <span
             className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[22px]' : 'translate-x-[4px]'
+              }`}
+          />
+        </span>
+      </button>
+    </WalletInfoRow>
+  );
+};
+
+const PerformanceModeToggleRow = () => {
+  const { enabled, setEnabled } = usePerformanceMode();
+
+  return (
+    <WalletInfoRow
+      label="Performance Mode"
+      description="Disable effects and animations"
+    >
+      <button
+        type="button"
+        onClick={() => setEnabled((current) => !current)}
+        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Performance Mode"
+      >
+        <span
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${enabled ? 'bg-[hsl(var(--success))]' : 'bg-muted'
+            }`}
+          aria-hidden="true"
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-[22px]' : 'translate-x-[4px]'
               }`}
           />
         </span>
@@ -684,8 +716,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
                   <div className={walletChromaticWhiteInnerGlowClassName}>
                     <div className="relative space-y-3 p-3">
-                      <div className="chromatic-white-surface flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/90 p-3 sm:bg-[image:var(--gradient-surface)] sm:shadow-[var(--shadow-hairline)]">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 sm:shadow-[var(--shadow-control)]">
+                      <div className="chromatic-white-surface flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 shadow-[var(--shadow-control)]">
                           {address ? (
                             <WalletAvatar address={address} className="h-9 w-9" />
                           ) : (
@@ -775,6 +807,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         {(isSmartWallet || isSolana) && (
                           <EthModeToggleRow />
                         )}
+
+                        <PerformanceModeToggleRow />
                       </div>
 
                       {debugMode && isMiniApp && fcContext && (

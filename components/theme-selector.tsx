@@ -12,8 +12,11 @@ import {
 import { THEMES, Theme } from "@/lib/theme-utils";
 import { useSnow } from "@/lib/snow-context";
 import { useAmbientAudio } from "@/lib/ambient-audio-context";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
+import toast from "react-hot-toast";
 
 const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
+const PERFORMANCE_MODE_BLOCKED_MESSAGE = "Performance Mode is on. Disable Performance Mode first to use this effect.";
 
 const themes: Array<{ name: Theme; label: string; color: string }> = [
   { name: "light", label: "Light", color: "bg-slate-300" },
@@ -88,6 +91,7 @@ export function ThemeSelector({
   const { theme, setTheme } = useTheme();
   const { isEnabled: isSnowEnabled, isFeatureEnabled: isSnowFeatureEnabled, toggleSnow } = useSnow();
   const { isEnabled: isMusicEnabled, toggleAudio } = useAmbientAudio();
+  const { enabled: performanceModeEnabled } = usePerformanceMode();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -137,6 +141,24 @@ export function ThemeSelector({
     }
   }, [handleSecretProgress, setTheme]);
 
+  const handleSnowToggle = React.useCallback(() => {
+    if (performanceModeEnabled) {
+      toast.error(PERFORMANCE_MODE_BLOCKED_MESSAGE);
+      return;
+    }
+
+    toggleSnow();
+  }, [performanceModeEnabled, toggleSnow]);
+
+  const handleMusicToggle = React.useCallback(() => {
+    if (performanceModeEnabled) {
+      toast.error(PERFORMANCE_MODE_BLOCKED_MESSAGE);
+      return;
+    }
+
+    toggleAudio();
+  }, [performanceModeEnabled, toggleAudio]);
+
   if (!mounted) {
     // Render a placeholder to prevent layout shift
     return <Button variant="headerIcon" size="icon" disabled aria-label="Loading theme selector" />;
@@ -182,7 +204,7 @@ export function ThemeSelector({
             <MenuSwitchRow
               label="Winter Mode"
               checked={isSnowEnabled}
-              onClick={toggleSnow}
+              onClick={handleSnowToggle}
               ariaLabel="Toggle winter snow effect"
             />
           </div>
@@ -192,7 +214,7 @@ export function ThemeSelector({
             <MenuSwitchRow
               label="Music"
               checked={isMusicEnabled}
-              onClick={toggleAudio}
+              onClick={handleMusicToggle}
               ariaLabel="Toggle ambient music"
             />
           </div>
