@@ -10,6 +10,7 @@ import Image from "next/image";
 import type { ChatMode } from "@/lib/types";
 
 const SCROLL_THRESHOLD = 56;
+const CHAT_SCROLL_CLASS_NAME = "h-full overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]";
 
 type ChatMessagesProps = {
   modeOverride?: ChatMode;
@@ -61,7 +62,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
 
   if (activeLoading && activeMessages.length === 0) {
     return (
-      <div ref={containerRef} className="surface-scroll-fade h-full overflow-y-auto" onScroll={handleScroll}>
+      <div ref={containerRef} className={CHAT_SCROLL_CLASS_NAME} onScroll={handleScroll}>
         <div className="flex items-center justify-center h-full">
           <BaseExpandedLoadingPageLoader text="Loading messages..." />
         </div>
@@ -71,7 +72,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
 
   if (activeMessages.length === 0) {
     return (
-      <div ref={containerRef} className="surface-scroll-fade h-full overflow-y-auto" onScroll={handleScroll}>
+      <div ref={containerRef} className={CHAT_SCROLL_CLASS_NAME} onScroll={handleScroll}>
         <div className="flex flex-col items-center justify-center h-full text-center p-4">
           {publicChatUnavailable ? (
             <div
@@ -145,7 +146,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="surface-scroll-fade h-full overflow-y-auto"
+      className={CHAT_SCROLL_CLASS_NAME}
     >
       <div
         className="p-4 space-y-4"

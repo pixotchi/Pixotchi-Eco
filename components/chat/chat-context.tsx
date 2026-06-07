@@ -183,6 +183,26 @@ function uiMessageToAIChatMessage(
   };
 }
 
+function areChatMessageListsEqual(previous: AnyChatMessage[], next: AnyChatMessage[]) {
+  if (previous === next) {
+    return true;
+  }
+
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  return previous.every((message, index) => {
+    const nextMessage = next[index];
+    return (
+      message.id === nextMessage.id &&
+      message.timestamp === nextMessage.timestamp &&
+      message.address === nextMessage.address &&
+      message.message === nextMessage.message
+    );
+  });
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { address } = useAccount();
   const { authenticated, getAccessToken, ready: privyReady } = usePrivy();
@@ -514,6 +534,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const writeModeMessages = useCallback((targetMode: ChatMode, next: AnyChatMessage[]) => {
+    const previous = messageCacheRef.current[targetMode] || [];
+    if (areChatMessageListsEqual(previous, next)) {
+      return;
+    }
+
     messageCacheRef.current[targetMode] = next;
     setMessageCacheVersion((version) => version + 1);
 

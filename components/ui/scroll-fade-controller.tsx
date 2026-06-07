@@ -25,6 +25,12 @@ function updateScrollFade(element: HTMLElement) {
 export function ScrollFadeController() {
   useEffect(() => {
     if (typeof document === "undefined") return;
+    if (
+      window.matchMedia("(max-width: 640px)").matches ||
+      window.matchMedia("(pointer: coarse)").matches
+    ) {
+      return;
+    }
 
     const elements = new Set<HTMLElement>();
     const cleanupCallbacks = new Map<HTMLElement, () => void>();

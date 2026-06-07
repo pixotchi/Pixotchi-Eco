@@ -61,12 +61,12 @@ const AUTH_CACHE_PREFIXES = [
 ];
 
 const walletCardSurfaceClassName =
-  "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-0 shadow-[var(--shadow-raised)]";
+  "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 p-0 sm:bg-[image:var(--gradient-surface-strong)] sm:shadow-[var(--shadow-raised)]";
 
 const walletChromaticWhiteSurfaceClassName = `${walletCardSurfaceClassName} chromatic-white-surface`;
 
 const walletInnerGlowClassName =
-  "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
+  "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] sm:before:pointer-events-none sm:before:absolute sm:before:inset-x-0 sm:before:top-0 sm:before:h-20 sm:before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
 
 const walletChromaticWhiteInnerGlowClassName = `${walletInnerGlowClassName} chromatic-white-inner-glow`;
 
@@ -684,8 +684,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
                   <div className={walletChromaticWhiteInnerGlowClassName}>
                     <div className="relative space-y-3 p-3">
-                      <div className="chromatic-white-surface flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 shadow-[var(--shadow-control)]">
+                      <div className="chromatic-white-surface flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/90 p-3 sm:bg-[image:var(--gradient-surface)] sm:shadow-[var(--shadow-hairline)]">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 sm:shadow-[var(--shadow-control)]">
                           {address ? (
                             <WalletAvatar address={address} className="h-9 w-9" />
                           ) : (

@@ -46,10 +46,10 @@ const dialogSizeClassName: Record<DialogSize, string> = {
 };
 
 const dialogSurfaceClassName: Record<DialogSurface, string> = {
-  default: "border-border/65 bg-card/95 bg-[image:var(--gradient-dialog)] text-card-foreground backdrop-blur-md",
-  soft: "border-border/65 bg-popover/95 bg-[image:var(--gradient-dialog)] text-popover-foreground backdrop-blur-md",
+  default: "border-border/65 bg-card/95 bg-[image:var(--gradient-dialog)] text-card-foreground sm:backdrop-blur-md",
+  soft: "border-border/65 bg-popover/95 bg-[image:var(--gradient-dialog)] text-popover-foreground sm:backdrop-blur-md",
   game: "border-white/15 bg-slate-950/90 text-white shadow-[var(--shadow-modal)]",
-  danger: "border-destructive/30 bg-card/95 bg-[image:var(--gradient-dialog)] text-card-foreground backdrop-blur-md",
+  danger: "border-destructive/30 bg-card/95 bg-[image:var(--gradient-dialog)] text-card-foreground sm:backdrop-blur-md",
 };
 
 const DialogContent = React.forwardRef<
@@ -131,7 +131,7 @@ const DialogContent = React.forwardRef<
               // Size and alignment
               "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
               // Visuals: match header/task/stake icon controls
-              "rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] backdrop-blur-md",
+              "rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] sm:backdrop-blur-md",
               "hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]",
               // Accessibility focus style
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -173,7 +173,7 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 overflow-visible px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 backdrop-blur-md sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6",
+      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 overflow-visible px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6 sm:backdrop-blur-md",
       className
     )}
     {...props}
@@ -183,10 +183,15 @@ DialogFooter.displayName = "DialogFooter";
 
 const DialogBody = ({
   className,
+  scrollFade = false,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+}: React.HTMLAttributes<HTMLDivElement> & { scrollFade?: boolean }) => (
   <div
-    className={cn("surface-scroll-fade -mx-1.5 min-h-0 flex-1 overflow-y-auto px-1.5 py-3", className)}
+    className={cn(
+      "-mx-1.5 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 py-3 [-webkit-overflow-scrolling:touch]",
+      scrollFade && "surface-scroll-fade",
+      className
+    )}
     {...props}
   />
 );

@@ -774,6 +774,14 @@
     --scroll-fade-bottom-active: var(--scroll-fade-bottom);
   }
 
+  @media (max-width: 640px), (pointer: coarse) {
+    .surface-scroll-area,
+    .surface-scroll-fade {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+  }
+
 
 
   /* Theme-aware status colors */
