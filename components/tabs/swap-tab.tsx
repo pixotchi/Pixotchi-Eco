@@ -377,7 +377,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
         </a>
       </div>
 
-      <div className="rounded-[var(--radius-panel)] border border-border/55 bg-background/40 shadow-[var(--shadow-hairline)]">
+      <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
         <div className="flex items-start justify-between gap-3 border-b border-border/45 px-3 py-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
@@ -424,7 +424,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
         ] as const).map(([label, change, txns]) => (
           <div
             key={label}
-            className="rounded-[var(--radius-control)] border border-border/45 bg-background/25 px-2 py-1.5 text-center"
+            className="chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1.5 text-center shadow-[var(--shadow-hairline)]"
           >
             <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
             <p className={`mt-0.5 text-xs font-semibold tabular-nums ${
