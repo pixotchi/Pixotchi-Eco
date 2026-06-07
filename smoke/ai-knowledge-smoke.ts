@@ -45,6 +45,7 @@ const REQUIRED_READ_TOOLS = [
   'get_marketplace_orders',
   'get_mint_availability',
   'get_plant_care_audit',
+  'get_plant_lifecycle_audit',
   'get_quest_readiness',
 ] as const;
 
@@ -182,6 +183,8 @@ async function main() {
   assert(actionGuideImport.KNOWLEDGE_TOPICS.warehouse.liveDataSources.includes('get_land_production_audit'), 'Warehouse topic is not routed to production audit tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.mint_plants.liveDataSources.includes('get_mint_availability'), 'Mint plants topic is not routed to mint availability tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.plant_care.liveDataSources.includes('get_plant_care_audit'), 'Plant care topic is not routed to plant care audit tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.plant_kill.liveDataSources.includes('get_plant_lifecycle_audit'), 'Plant kill topic is not routed to plant lifecycle audit tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.revive.liveDataSources.includes('get_plant_lifecycle_audit'), 'Revive topic is not routed to plant lifecycle audit tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.arcade.liveDataSources.includes('get_arcade_status'), 'Arcade topic is not routed to arcade status tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.quests.liveDataSources.includes('get_quest_readiness'), 'Quest topic is not routed to quest readiness tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.marketplace.liveDataSources.includes('get_marketplace_orders'), 'Marketplace topic is not routed to marketplace orders tool.');
