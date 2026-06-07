@@ -130,14 +130,15 @@ const DialogContent = React.forwardRef<
               "absolute top-3 right-3 md:top-4 md:right-4 z-10",
               // Size and alignment
               "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
-              // Visuals: avoid borders, provide hover background only
-              "rounded-[var(--radius-control)] bg-transparent text-muted-foreground hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
-              // Accessibility focus style (no persistent ring/border)
+              // Visuals: match header/task/stake icon controls
+              "rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] backdrop-blur-md",
+              "hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]",
+              // Accessibility focus style
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               // Ensure ring offset blends with dialog background
               "ring-offset-background",
               // Behavior
-              "transition-colors disabled:pointer-events-none"
+              "transition-[border-color,background-color,color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] disabled:pointer-events-none"
             )}
           >
             <X className="h-4 w-4" />

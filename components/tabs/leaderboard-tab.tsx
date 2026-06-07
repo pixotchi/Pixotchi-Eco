@@ -86,7 +86,7 @@ const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the lo
 const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
 const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
 const RANKING_ACTION_BUTTON_CLASS =
-  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.28)] bg-card/75 bg-[image:var(--gradient-surface)] p-0 shadow-[var(--shadow-hairline)] transition-[border-color,background-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/40 hover:bg-[hsl(var(--nav-hover-bg))] hover:shadow-[var(--shadow-control)] active:translate-y-0 active:scale-[0.985]";
+  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-control-surface)] p-0 text-foreground shadow-[var(--shadow-control)] transition-[border-color,background-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]";
 const RANKING_ACTION_ICON_CLASS = "h-6 w-6 object-contain";
 
 function getTotalPages(itemCount: number, pageSize: number) {
@@ -1702,8 +1702,6 @@ export default function LeaderboardTab() {
                       onError={() => { }}
                       buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
                       buttonClassName="w-full"
-                      feedbackMode="inline"
-                      showToast={false}
                       disabled={isSubmitting || !eligible}
                       onStatusUpdate={(status: UntypedValue) => {
                         if (status.statusName === 'pending' || status.statusName === 'transactionPending') {
@@ -1712,11 +1710,9 @@ export default function LeaderboardTab() {
                             const h = status.statusData?.transactionHash || status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
                             if (h) setPendingHash(h);
                           } catch { }
-                          toast.loading('Submitting attack...', { id: 'attack-tx' });
                         }
                         if (status.statusName === 'success') {
                           setIsSubmitting(false);
-                          toast.dismiss('attack-tx');
                           try {
                             const receipt = status.statusData?.transactionReceipts?.[0];
                             const logs = receipt?.logs || [];
@@ -1739,7 +1735,7 @@ export default function LeaderboardTab() {
                         if (status.statusName === 'error') {
                           setIsSubmitting(false);
                           setPendingHash(null);
-                          toast.error('Attack failed', { id: 'attack-tx' });
+                          toast.error('Attack failed');
                         }
                       }}
                     />
@@ -1885,17 +1881,12 @@ export default function LeaderboardTab() {
                   tokenId={selectedKillerId}
                   buttonText="Confirm Kill"
                   buttonClassName="w-full"
-                  feedbackMode="inline"
-                  showToast={false}
                   onStatusUpdate={(status: UntypedValue) => {
-                    if (status.statusName === 'pending' || status.statusName === 'transactionPending') {
-                      toast.loading('Submitting kill...', { id: 'kill-tx' });
-                    }
                     if (status.statusName === 'success') {
-                      toast.success('Kill successful! You earned 1 star.', { id: 'kill-tx' });
+                      toast.success('Kill successful! You earned 1 star.');
                     }
                     if (status.statusName === 'error') {
-                      toast.error('Kill failed', { id: 'kill-tx' });
+                      toast.error('Kill failed');
                     }
                   }}
                   onSuccess={() => {

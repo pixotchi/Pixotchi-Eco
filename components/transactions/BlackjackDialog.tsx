@@ -1291,11 +1291,11 @@ export default function BlackjackDialog({
                 </DialogDescription>
                 <Button
                     type="button"
-                    variant="ghost"
+                    variant="headerIcon"
                     size="iconCompact"
                     onClick={handleClose}
                     aria-label="Close Blackjack dialog"
-                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 border border-white/45 bg-black/70 text-white shadow-[0_8px_20px_rgba(0,0,0,0.45)] hover:bg-black/85 hover:text-white focus-visible:ring-white sm:right-3 sm:top-3"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 backdrop-blur-md sm:right-3 sm:top-3"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
                 </Button>

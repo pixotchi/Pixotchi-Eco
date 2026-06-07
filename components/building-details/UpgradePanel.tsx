@@ -11,12 +11,12 @@ import BuildingSpeedUpTransaction from '@/components/transactions/building-speed
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import LeafApproveTransaction from '@/components/transactions/leaf-approve-transaction';
 import { toast } from 'react-hot-toast';
-import { StandardContainer } from '@/components/ui/pixel-container';
 import { InlineBalanceNotice } from '@/components/ui/premium';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useBalances } from '@/lib/balance-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import { LAND_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS } from '@/lib/contracts';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface UpgradePanelProps {
   building: BuildingData;
@@ -61,7 +61,7 @@ export default function UpgradePanel({
     <div className="border-t border-border/55 pt-4">
       <div className="chromatic-white-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
         {building.isUpgrading && (
-          <StandardContainer className="space-y-2 rounded-[var(--radius-control)] border border-border/50 bg-background/45 p-3 shadow-none">
+          <div className="chromatic-white-surface space-y-2 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Upgrade Progress:</span>
               <span className="font-semibold">{upgradeProgress.toFixed(1)}%</span>
@@ -71,7 +71,7 @@ export default function UpgradePanel({
               <span className="text-muted-foreground">Time left:</span>
               <span className="font-semibold">{timeLeft}</span>
             </div>
-          </StandardContainer>
+          </div>
         )}
 
         {!isMaxLevel && (
@@ -128,9 +128,7 @@ export default function UpgradePanel({
                 onSuccess={() => {
                   toast.success('Building upgrade sped up!', { id: `speedup-${landId}-${building.id}` });
                   onUpgradeSuccess();
-                  // Refresh both balances and buildings immediately
-                  window.dispatchEvent(new Event('balances:refresh'));
-                  window.dispatchEvent(new Event('buildings:refresh'));
+                  dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
                 }}
                 onError={(error) => toast.error(`Speed up failed: ${error.message}`)}
                 buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI)`}
@@ -159,9 +157,7 @@ export default function UpgradePanel({
                 onSuccess={() => {
                   toast.success('Building upgrade started!', { id: `upgrade-${landId}-${building.id}` });
                   onUpgradeSuccess();
-                  // Refresh both balances and buildings immediately
-                  window.dispatchEvent(new Event('balances:refresh'));
-                  window.dispatchEvent(new Event('buildings:refresh'));
+                  dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
                 }}
                 onError={(error) => toast.error(`Upgrade failed: ${error.message}`)}
                 buttonText={`${needsLeafApproval ? 'Step 2: ' : ''}Upgrade (${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF)`}

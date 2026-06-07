@@ -73,8 +73,8 @@ assert.doesNotMatch(arcade, /showToast=\{false\}/);
 assert.match(arcade, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
 
 const dialogUi = projectFile('components/ui/dialog.tsx');
-assert.match(dialogUi, /sticky && "surface-footer-divider dialog-footer-surface sticky[\s\S]*mt-3/);
-assert.match(dialogUi, /surface-scroll-fade min-h-0 flex-1 overflow-y-auto py-3/);
+assert.match(dialogUi, /sticky && "surface-footer-divider dialog-footer-surface sticky[\s\S]*pt-3/);
+assert.match(dialogUi, /surface-scroll-fade[\s\S]*min-h-0[\s\S]*flex-1[\s\S]*overflow-y-auto[\s\S]*py-3/);
 
 const tasksInfoDialog = projectFile('components/tasks/TasksInfoDialog.tsx');
 assert.match(tasksInfoDialog, /data-task-summary-card/);
@@ -85,7 +85,7 @@ assert.doesNotMatch(tasksInfoDialog, /sticky top-0 z-10/);
 assert.match(tasksInfoDialog, /<DialogBody className="space-y-4 pr-1">/);
 
 const premiumUi = projectFile('components/ui/premium.tsx');
-assert.match(premiumUi, /surface-footer-divider dialog-footer-surface sticky[\s\S]*mt-3[\s\S]*sm:mt-4/);
+assert.match(premiumUi, /surface-footer-divider dialog-footer-surface sticky[\s\S]*pt-3[\s\S]*sm:-bottom-6/);
 
 const marketplaceDialog = projectFile('components/transactions/marketplace-dialog.tsx');
 assert.match(marketplaceDialog, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
@@ -168,8 +168,10 @@ for (const transactionWrapper of [
   'components/transactions/universal-transaction.tsx',
 ]) {
   const source = projectFile(transactionWrapper);
-  assert.match(source, /feedbackMode \?\? \(showToast \? "toast" : "inline"\)/);
+  assert.match(source, /feedbackMode \?\? "toast"/);
+  assert.match(source, /const showGlobalToast = resolvedFeedbackMode !== "none"/);
   assert.doesNotMatch(source, /feedbackMode \?\? \(showToast \? "both"/);
+  assert.doesNotMatch(source, /feedbackMode \?\? \(showToast \? "toast" : "inline"\)/);
 }
 
 for (const toastOnlyTransaction of [

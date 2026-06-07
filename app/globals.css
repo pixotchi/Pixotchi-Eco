@@ -256,7 +256,7 @@
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(132 54% 91% / 0.92), hsl(138 42% 80% / 0.74));
-    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(88 74% 84% / 0.72) 0%, hsl(88 74% 84% / 0) 36%), linear-gradient(180deg, hsl(137 44% 83%) 0%, hsl(122 42% 87%) 46%, hsl(162 44% 90%) 100%);
+    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(88 74% 84% / 0.72) 0%, hsl(88 74% 84% / 0) 36%), linear-gradient(180deg, hsl(137 44% 83%) 0%, hsl(122 42% 87%) 46%, hsl(126 38% 91%) 100%);
   }
 
   .yellow {
@@ -286,7 +286,7 @@
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(47 90% 91% / 0.92), hsl(42 72% 80% / 0.74));
-    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(38 96% 82% / 0.76) 0%, hsl(38 96% 82% / 0) 36%), linear-gradient(180deg, hsl(45 90% 82%) 0%, hsl(43 76% 84%) 48%, hsl(190 42% 90%) 100%);
+    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(38 96% 82% / 0.76) 0%, hsl(38 96% 82% / 0) 36%), linear-gradient(180deg, hsl(45 90% 82%) 0%, hsl(43 76% 84%) 48%, hsl(48 70% 92%) 100%);
   }
 
   .red {
@@ -316,7 +316,7 @@
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(8 56% 94% / 0.92), hsl(354 34% 82% / 0.74));
-    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(24 70% 82% / 0.54) 0%, hsl(24 70% 82% / 0) 36%), linear-gradient(180deg, hsl(356 42% 86%) 0%, hsl(354 34% 88%) 48%, hsl(22 34% 91%) 100%);
+    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(24 70% 82% / 0.54) 0%, hsl(24 70% 82% / 0) 36%), linear-gradient(180deg, hsl(356 42% 86%) 0%, hsl(354 34% 88%) 48%, hsl(8 38% 92%) 100%);
   }
 
   .pink {
@@ -346,7 +346,7 @@
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(326 72% 93% / 0.92), hsl(326 48% 81% / 0.74));
-    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(276 64% 86% / 0.62) 0%, hsl(276 64% 86% / 0) 36%), linear-gradient(180deg, hsl(326 54% 85%) 0%, hsl(326 48% 87%) 48%, hsl(304 42% 90%) 100%);
+    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(276 64% 86% / 0.62) 0%, hsl(276 64% 86% / 0) 36%), linear-gradient(180deg, hsl(326 54% 85%) 0%, hsl(326 48% 87%) 48%, hsl(326 42% 92%) 100%);
   }
 
   .blue {
@@ -374,7 +374,7 @@
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(213 78% 92% / 0.92), hsl(213 58% 80% / 0.74));
-    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(188 76% 84% / 0.68) 0%, hsl(188 76% 84% / 0) 36%), linear-gradient(180deg, hsl(213 66% 84%) 0%, hsl(213 58% 86%) 48%, hsl(188 46% 91%) 100%);
+    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(188 76% 84% / 0.68) 0%, hsl(188 76% 84% / 0) 36%), linear-gradient(180deg, hsl(213 66% 84%) 0%, hsl(213 58% 86%) 48%, hsl(213 52% 92%) 100%);
   }
 
   .violet {
@@ -404,7 +404,7 @@
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(260 68% 93% / 0.92), hsl(260 46% 82% / 0.74));
-    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(294 62% 86% / 0.62) 0%, hsl(294 62% 86% / 0) 36%), linear-gradient(180deg, hsl(260 50% 86%) 0%, hsl(260 46% 88%) 48%, hsl(232 42% 91%) 100%);
+    --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(294 62% 86% / 0.62) 0%, hsl(294 62% 86% / 0) 36%), linear-gradient(180deg, hsl(260 50% 86%) 0%, hsl(260 46% 88%) 48%, hsl(260 44% 92%) 100%);
   }
 
   .green,
@@ -673,8 +673,9 @@
     border-bottom-right-radius: var(--radius-panel);
     border-bottom-left-radius: var(--radius-panel);
     box-shadow:
-      inset 0 -1px 0 hsl(var(--divider) / 0.58),
-      var(--shadow-contact);
+      var(--surface-highlight),
+      inset 0 -1px 0 hsl(var(--divider) / 0.38),
+      0 10px 18px -20px hsl(var(--foreground) / 0.32);
   }
 
   .surface-footer-divider {
@@ -688,12 +689,11 @@
   .dialog-header-surface {
     background-color: hsl(var(--popover) / 0.95);
     background-image:
-      radial-gradient(circle at top left, hsl(var(--primary) / 0.075), transparent 62%),
       linear-gradient(
         180deg,
-        color-mix(in hsl, hsl(var(--secondary)) 78%, hsl(var(--popover))) 0%,
-        color-mix(in hsl, hsl(var(--secondary)) 62%, hsl(var(--card))) 54%,
-        color-mix(in hsl, hsl(var(--secondary)) 46%, hsl(var(--card))) 100%
+        color-mix(in hsl, hsl(var(--popover)) 82%, hsl(var(--chromatic-layer-highlight))) 0%,
+        hsl(var(--popover) / 0.96) 42%,
+        color-mix(in hsl, hsl(var(--popover)) 84%, hsl(var(--secondary))) 100%
       );
     background-clip: padding-box;
     -webkit-backdrop-filter: blur(var(--blur-surface));
@@ -937,6 +937,38 @@
 
   .surface-inset {
     box-shadow: var(--surface-inset);
+  }
+
+  .building-detail-surface {
+    background-color: color-mix(in hsl, hsl(var(--card)) 54%, hsl(var(--chromatic-layer-surface))) !important;
+    background-image:
+      linear-gradient(
+        180deg,
+        color-mix(in hsl, hsl(var(--card)) 42%, hsl(var(--chromatic-layer-highlight))) 0%,
+        color-mix(in hsl, hsl(var(--card)) 54%, hsl(var(--chromatic-layer-surface))) 48%,
+        color-mix(in hsl, hsl(var(--secondary)) 62%, hsl(var(--chromatic-layer-surface))) 100%
+      ) !important;
+    border-color: hsl(var(--border-strong) / 0.38);
+    box-shadow:
+      var(--surface-highlight),
+      0 1px 1px hsl(var(--foreground) / 0.07),
+      0 16px 34px -30px hsl(var(--foreground) / 0.52);
+  }
+
+  .building-subpanel-surface {
+    background-color: color-mix(in hsl, hsl(var(--card)) 42%, hsl(var(--chromatic-layer-surface))) !important;
+    background-image:
+      linear-gradient(
+        180deg,
+        color-mix(in hsl, hsl(var(--card)) 30%, hsl(var(--chromatic-layer-highlight))) 0%,
+        color-mix(in hsl, hsl(var(--card)) 42%, hsl(var(--chromatic-layer-surface))) 50%,
+        color-mix(in hsl, hsl(var(--secondary)) 52%, hsl(var(--chromatic-layer-surface))) 100%
+      ) !important;
+    border-color: hsl(var(--border-strong) / 0.36);
+    box-shadow:
+      var(--surface-highlight),
+      0 1px 1px hsl(var(--foreground) / 0.06),
+      0 14px 28px -28px hsl(var(--foreground) / 0.46);
   }
 
   /* Safe area support for device cutouts and in-app browser overlays.

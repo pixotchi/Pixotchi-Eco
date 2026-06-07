@@ -1379,7 +1379,6 @@ export default function MintTab() {
                 buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint"}
                 buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                 disabled={ethBalance < ethQuote.ethAmountWithBuffer}
-                showToast={false}
               />
               {ethBalance < ethQuote.ethAmountWithBuffer && (
                 <InlineBalanceNotice>
@@ -1552,7 +1551,6 @@ export default function MintTab() {
               buttonText={ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
               buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
               disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
-              showToast={false}
             />
             {ethBalance < landEthQuote.ethAmountWithBuffer && (
               <InlineBalanceNotice>
@@ -1810,7 +1808,6 @@ export default function MintTab() {
                     buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint with ETH"}
                     buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                     disabled={ethBalance < ethQuote.ethAmountWithBuffer}
-                    showToast={false}
                   />
                   {ethBalance < ethQuote.ethAmountWithBuffer && (
                     <InlineBalanceNotice>
@@ -1971,7 +1968,6 @@ export default function MintTab() {
                   buttonText={ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
                   buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                   disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
-                  showToast={false}
                 />
                 {ethBalance < landEthQuote.ethAmountWithBuffer && (
                   <InlineBalanceNotice>

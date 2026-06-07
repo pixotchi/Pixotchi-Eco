@@ -12,6 +12,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
@@ -31,8 +32,7 @@ export default function SmartWalletTransaction({
   buttonText,
   buttonClassName = "",
   disabled = false,
-  feedbackMode,
-  showToast = true
+  feedbackMode
 }: SmartWalletTransactionProps) {
   const { isSponsored } = usePaymaster();
   const builderCapabilities = getBuilderCapabilities();
@@ -46,7 +46,7 @@ export default function SmartWalletTransaction({
 
   const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
+    dispatchPostTransactionRefresh();
   }, [onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
@@ -77,9 +77,9 @@ export default function SmartWalletTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess]);
-  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "toast" : "inline");
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? "toast";
   const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
-  const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
+  const showGlobalToast = resolvedFeedbackMode !== "none";
 
   return (
     <Transaction

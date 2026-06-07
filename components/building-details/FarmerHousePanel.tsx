@@ -22,6 +22,9 @@ interface FarmerHousePanelProps {
 // Rewards wallet that funds farmer quests
 const QUEST_REWARDS_WALLET = '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB' as const;
 const MIN_SEED_BALANCE = parseUnits('300', 18);
+const QUEST_SLOT_SURFACE_CLASS = 'chromatic-white-surface flex flex-col gap-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]';
+const QUEST_START_SURFACE_CLASS = 'building-subpanel-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2';
+const QUEST_STATUS_PILL_CLASS = 'chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]';
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
@@ -156,7 +159,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
           )}
           <div className="grid grid-cols-1 gap-2">
             {slots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
-              <div key={idx} className="flex flex-col gap-2 rounded-md border bg-card p-3">
+              <div key={idx} className={QUEST_SLOT_SURFACE_CLASS}>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">
                     <div className="font-medium">Slot {idx + 1}</div>
@@ -164,7 +167,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   </div>
                   <div className="flex items-center gap-2">
                     {statusOf(s) === 'Loading' && (
-                      <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">Loading…</div>
+                      <div className={QUEST_STATUS_PILL_CLASS}>Loading…</div>
                     )}
                     {statusOf(s) === 'Ready to commit' && (
                       <SponsoredTransaction
@@ -188,7 +191,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       </div>
                     )}
                     {statusOf(s) === 'Cooldown' && (
-                      <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                      <div className={QUEST_STATUS_PILL_CLASS}>
                         ~{formatSeconds(blocksLeft(s.coolDownBlock) * 2)} left
                       </div>
                     )}
@@ -196,7 +199,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                 </div>
                 {statusOf(s) === 'Available' && (
                   <>
-                    <div className="grid gap-2 sm:grid-cols-[1fr,auto] items-center rounded-md border bg-background/50 p-2">
+                    <div className={`${QUEST_START_SURFACE_CLASS} grid gap-2 sm:grid-cols-[1fr,auto] items-center`}>
                       <div className="overflow-x-auto sm:overflow-visible">
                         <ToggleGroup
                           value={String(difficulty[idx] ?? 0)}
@@ -249,7 +252,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
               </div>
             ))}
             {slots.length === 0 && (
-              <div className="text-center text-sm text-muted-foreground">No quest slots available.</div>
+              <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 text-center text-sm text-muted-foreground shadow-[var(--shadow-hairline)]">No quest slots available.</div>
             )}
           </div>
         </>

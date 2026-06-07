@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { StandardContainer } from "@/components/ui/pixel-container";
 import { InlineBalanceNotice } from "@/components/ui/premium";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
@@ -35,6 +34,7 @@ import {
   getLandsByIds,
 } from "@/lib/contracts";
 import { CLIENT_ENV } from "@/lib/env-config";
+import { dispatchPostTransactionRefresh } from "@/lib/transaction-refresh";
 import type {
   BarracksConfigV2,
   BarracksLandStateV2,
@@ -79,6 +79,14 @@ const PLANT_POINTS_DECIMALS = 12;
 const BARRACKS_PREVIEW_ENABLED = CLIENT_ENV.BARRACKS_PREVIEW_ENABLED;
 const HOME_DEFENSE_MAX_BPS = 1000;
 const HIDDEN_REPORT_VALUE = "?";
+const BARRACKS_SECTION_SURFACE_CLASS =
+  "building-subpanel-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4";
+const BARRACKS_BUBBLE_SURFACE_CLASS =
+  "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
+const BARRACKS_COMPACT_BUBBLE_SURFACE_CLASS =
+  "chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-hairline)]";
+const BARRACKS_TABLE_SURFACE_CLASS =
+  "building-subpanel-surface overflow-hidden rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)]";
 
 const TROOP_OPTIONS = [
   {
@@ -270,7 +278,7 @@ function StatTile({
   hint?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md bg-muted/50 p-3">
+    <div className={BARRACKS_BUBBLE_SURFACE_CLASS}>
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm font-semibold">{value}</div>
       {hint ? <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div> : null}
@@ -320,13 +328,13 @@ function BattleReportTable({
   const showPhalanxLossHighlight = typeof phalanxLost === "bigint" && phalanxLost > ZERO_BIGINT;
 
   return (
-    <div className="rounded-md border border-border/70 overflow-hidden bg-background">
-      <div className="bg-muted/60 px-3 py-1.5 border-b border-border/70 text-xs font-semibold text-foreground tracking-wide uppercase flex justify-between items-center">
+    <div className={BARRACKS_TABLE_SURFACE_CLASS}>
+      <div className="border-b border-border/50 bg-card/50 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-foreground flex justify-between items-center">
         <span>{label}</span>
         {landId && <span className="text-muted-foreground">Land #{landId.toString()}</span>}
       </div>
       <div className="w-full">
-        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 border-b border-border/40 bg-muted/10 items-center">
+        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 border-b border-border/40 bg-card/30 items-center">
           <div></div>
           <div className="flex justify-center">
             <Image src="/icons/swordsman.svg" alt="Swordsman" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
@@ -365,14 +373,14 @@ function ReportCard({
 }) {
   if (!hasReport(report)) {
     return (
-      <StandardContainer className="space-y-2">
+      <div className={`${BARRACKS_BUBBLE_SURFACE_CLASS} space-y-2`}>
         <div className="text-sm font-semibold">
           {mode === "outgoing" ? "Last Attack" : "Last Defense"}
         </div>
         <p className="text-sm text-muted-foreground">
           No {mode === "outgoing" ? "attack" : "defense"} report recorded yet.
         </p>
-      </StandardContainer>
+      </div>
     );
   }
 
@@ -389,7 +397,7 @@ function ReportCard({
     shouldHideOutgoingIntel ? HIDDEN_REPORT_VALUE : value;
 
   return (
-    <StandardContainer className="space-y-3">
+    <div className={`${BARRACKS_BUBBLE_SURFACE_CLASS} space-y-3`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold">
@@ -423,7 +431,7 @@ function ReportCard({
         />
       </div>
 
-      <div className="rounded-md bg-primary/10 px-3 py-2 text-sm">
+      <div className={BARRACKS_COMPACT_BUBBLE_SURFACE_CLASS}>
         <span className="font-semibold">Raided:</span>{" "}
         {shouldHideOutgoingIntel ? (
           <span>None of your troops came back.</span>
@@ -441,7 +449,7 @@ function ReportCard({
         {formatBarracksLifetime(report.pendingLifetimeSettled)} pending TOD on{" "}
         {new Date(Number(report.timestamp) * 1000).toLocaleString()}.
       </div>
-    </StandardContainer>
+    </div>
   );
 }
 
@@ -739,10 +747,7 @@ export default function BarracksPanelV2({
 
   const dispatchRefreshEvents = useCallback(() => {
     onUpdate();
-    try {
-      window.dispatchEvent(new Event("balances:refresh"));
-      window.dispatchEvent(new Event("buildings:refresh"));
-    } catch { }
+    dispatchPostTransactionRefresh(["balances:refresh", "buildings:refresh"]);
   }, [onUpdate]);
 
   const refreshAfterSuccess = useCallback(async () => {
@@ -869,7 +874,7 @@ export default function BarracksPanelV2({
 
   if (!config || !landState) {
     return (
-      <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+      <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-dashed border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 text-sm text-muted-foreground shadow-[var(--shadow-hairline)]">
         Barracks data is unavailable.
       </div>
     );
@@ -888,7 +893,7 @@ export default function BarracksPanelV2({
           </div>
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-border">
+        <div className="building-subpanel-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4">
           <div className="space-y-2">
             <h4 className="font-semibold text-sm">Build Cost:</h4>
             <div className="flex justify-between items-center text-sm">
@@ -986,7 +991,7 @@ export default function BarracksPanelV2({
       />
 
       {activeTab === "train" && (
-        <StandardContainer className="space-y-3">
+        <div className={BARRACKS_SECTION_SURFACE_CLASS}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <StatTile
               label="Swordsman Ready"
@@ -1101,11 +1106,11 @@ export default function BarracksPanelV2({
               onError={(error) => toast.error(`Training failed: ${error.message || error}`)}
             />
           )}
-        </StandardContainer>
+        </div>
       )}
 
       {activeTab === "raid" && (
-        <StandardContainer className="space-y-3">
+        <div className={BARRACKS_SECTION_SURFACE_CLASS}>
           <div className="grid grid-cols-2 gap-2">
             <StatTile
               label="Attack Cooldown"
@@ -1239,7 +1244,7 @@ export default function BarracksPanelV2({
           </div>
 
           {BARRACKS_PREVIEW_ENABLED ? (
-            <div className="rounded-md bg-muted/50 p-3 space-y-2">
+            <div className={`${BARRACKS_BUBBLE_SURFACE_CLASS} space-y-2`}>
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold">Preview</div>
                 {previewLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
@@ -1286,7 +1291,7 @@ export default function BarracksPanelV2({
 
                   {preview.statusCode === RAID_STATUS_OK && (
                     <>
-                      <div className="rounded-md bg-primary/10 px-3 py-2 text-sm">
+                      <div className={BARRACKS_COMPACT_BUBBLE_SURFACE_CLASS}>
                         <span className="font-semibold">Estimated Loot:</span>{" "}
                         <span className="text-primary">{formatBarracksPoints(preview.estimatedPointsLoot)} PTS</span>
                         <span className="text-muted-foreground"> / </span>
@@ -1330,7 +1335,7 @@ export default function BarracksPanelV2({
           ) : (
             <DisabledTransaction buttonText="Raid Unavailable" buttonClassName="w-full" />
           )}
-        </StandardContainer>
+        </div>
       )}
 
       {activeTab === "history" && (

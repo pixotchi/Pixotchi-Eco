@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
+import { dispatchPostTransactionRefresh,POST_TRANSACTION_REFRESH_DELAYS_MS } from '@/lib/transaction-refresh';
 import {
 rouletteBetWins,
 rouletteCanReveal,
@@ -137,6 +138,16 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         token: config?.bettingToken as `0x${string}` | undefined,
         query: { enabled: !!address && !!config?.bettingToken }
     });
+    const refetchBalanceAfterTx = useCallback(() => {
+        dispatchPostTransactionRefresh();
+        for (const delay of POST_TRANSACTION_REFRESH_DELAYS_MS) {
+            if (delay <= 0) {
+                void refetchBalance();
+            } else {
+                window.setTimeout(() => void refetchBalance(), delay);
+            }
+        }
+    }, [refetchBalance]);
     const { data: liveBlock } = useBlockNumber({
         watch: open && pendingGame,
         query: {
@@ -438,8 +449,9 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         setSpinPhase('waiting');
         setPendingGame(true);
         setActiveBet(null);
+        refetchBalanceAfterTx();
         void syncPlacedRouletteState();
-    }, [syncPlacedRouletteState]);
+    }, [refetchBalanceAfterTx, syncPlacedRouletteState]);
 
     // Handle reveal completion
     const handleRevealComplete = useCallback((result?: { winningNumber?: number; won?: boolean; payout?: string; expired?: boolean; forfeitedAmount?: string; receiptIncomplete?: boolean; transactionHash?: string }) => {
@@ -463,7 +475,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             setResult(null);
             setExpiredResult({ forfeitedAmount: result.forfeitedAmount ?? '0' });
             setWheelSpinning(false);
-            refetchBalance();
+            refetchBalanceAfterTx();
             setPendingGame(false);
             setActiveBet(null);
             setPlacedBets([]);
@@ -480,7 +492,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 payout: result.payout ?? '0'
             });
             setWheelWinningNumber(result.winningNumber);
-            refetchBalance();
+            refetchBalanceAfterTx();
             setPendingGame(false);
             setActiveBet(null);
             setPlacedBets([]);
@@ -504,7 +516,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     setPlacedBets([]);
                     setSpinPhase('idle');
                     setError('Spin completed. Check recent activity for the result.');
-                    refetchBalance();
+                    refetchBalanceAfterTx();
                     onSpinComplete?.();
                     return;
                 }
@@ -516,7 +528,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
             setError('Reveal was submitted, but the game still appears active. Try revealing again after the next refresh.');
         })();
-    }, [isSpinning, landId, onSpinComplete, pendingGame, refetchBalance, refreshCasinoState, spinPhase]);
+    }, [isSpinning, landId, onSpinComplete, pendingGame, refetchBalanceAfterTx, refreshCasinoState, spinPhase]);
 
     // Handle transaction status updates for UI feedback
     const handleStatusUpdate = useCallback((status: LifecycleStatus) => {
@@ -746,11 +758,11 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 </DialogDescription>
                 <Button
                     type="button"
-                    variant="ghost"
+                    variant="headerIcon"
                     size="iconCompact"
                     onClick={() => handleClose(false)}
                     aria-label="Close Roulette dialog"
-                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 border border-white/45 bg-black/70 text-white shadow-[0_8px_20px_rgba(0,0,0,0.45)] hover:bg-black/85 hover:text-white focus-visible:ring-white sm:right-3 sm:top-3"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 backdrop-blur-md sm:right-3 sm:top-3"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
                 </Button>

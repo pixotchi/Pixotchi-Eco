@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { ERC20_APPROVE_ABI,getLeafAllowanceForLand,getLeafBalance,getReadClient,getSeedAllowanceForLand,getTokenBalance,LAND_CONTRACT_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { extractTransactionHash } from '@/lib/transaction-utils';
+import { cn } from "@/lib/utils";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
-import { useCallback,useEffect,useMemo,useState } from "react";
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
 
@@ -20,6 +21,12 @@ type OrderView = {
   isActive: boolean;
   amountAsk: bigint; // wei
 };
+
+const MARKETPLACE_ORDER_LIST_LIMIT = 48;
+const PRICE_LEVEL_ORDER_LIST_LIMIT = 20;
+const marketplacePanelClassName =
+  "chat-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]";
+const marketplacePaddedPanelClassName = `${marketplacePanelClassName} p-4`;
 
 function toNumberWei(v: bigint): number {
   return Number(v) / 1e18;
@@ -59,7 +66,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [sellSide, setSellSide] = useState<"SEED" | "LEAF">("LEAF");
   const [amount, setAmount] = useState<string>("");
   const [price, setPrice] = useState<string>("");
-  const [, setLoading] = useState<boolean>(false);
+  const [ordersLoading, setLoading] = useState<boolean>(false);
   const [focusedSide, setFocusedSide] = useState<"asks" | "bids" | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [selectedSide, setSelectedSide] = useState<"asks" | "bids" | null>(null);
@@ -68,6 +75,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [isMarketplaceActive, setIsMarketplaceActive] = useState<boolean>(true);
 
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const refreshingBalancesRef = useRef(false);
 
   // NEW: State for user's lands to ensure we use a valid landId for transactions
   const [userLandIds, setUserLandIds] = useState<bigint[]>([]);
@@ -129,7 +137,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   // Extract fetchBalances outside useEffect to be reusable
   const fetchBalances = useCallback(async () => {
-    if (!address || isRefreshing) return;
+    if (!address || refreshingBalancesRef.current) return;
+    refreshingBalancesRef.current = true;
     setIsRefreshing(true);
     try {
       const [seed, leaf, seedAll, leafAll] = await Promise.all([
@@ -146,9 +155,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
       console.warn('[Marketplace] Failed to fetch balances:', error);
       // Don't reset state on error - keep stale data to prevent UI flash
     } finally {
+      refreshingBalancesRef.current = false;
       setIsRefreshing(false);
     }
-  }, [address, isRefreshing]);
+  }, [address]);
 
   // NEW: Improved refresh function that triggers allowance updates
   const refreshBalancesAndAllowances = useCallback(() => {
@@ -188,6 +198,11 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   const refresh = () => {
     try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
+  };
+
+  const refreshNow = () => {
+    void fetchBalances();
+    void fetchOrders();
   };
 
   // Build order book (asks: sell LEAF; bids: sell SEED)
@@ -343,22 +358,34 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
         <div className="surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1">
           <div className="space-y-4 pb-4">
             {/* Top bar with mid price and quick actions */}
-            <div className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] sm:flex-row sm:items-center sm:justify-between">
+            <div className={cn(marketplacePaddedPanelClassName, "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between")}>
               <div>
                 <div className="text-xs text-muted-foreground">Mid (LEAF / SEED)</div>
                 <div className="max-w-full truncate text-xl font-semibold tabular-nums sm:text-2xl" title={mid ? fmt(mid, 6) : undefined}>
                   {mid ? formatCompact(mid) : '—'}
                 </div>
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  {activeOrders.length} active • {userOrders.filter((order) => order.isActive).length} mine
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <Button variant="outline" size="compact" onClick={useBestBid}>Use Best Bid</Button>
                 <Button variant="outline" size="compact" onClick={useBestAsk}>Use Best Ask</Button>
+                <Button
+                  variant="outline"
+                  size="compact"
+                  onClick={refreshNow}
+                  loading={ordersLoading || isRefreshing}
+                  loadingText="Refreshing"
+                >
+                  Refresh
+                </Button>
               </div>
             </div>
 
             {/* Mobile: keep orders (asks+bids) together, then trade panel */}
             <div className="space-y-4 min-[54rem]:hidden">
-              <div className="overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
+              <div className={cn(marketplacePanelClassName, "overflow-hidden")}>
                 {/* Asks header and list */}
                 <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-destructive/10 text-destructive">
                   <span>Asks (Sell LEAF)</span>
@@ -414,7 +441,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel (mobile below orders) */}
-              <div className="space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+              <div className={cn(marketplacePaddedPanelClassName, "space-y-4")}>
                 <div className="flex items-center gap-2 text-sm">
                   <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
                   <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
@@ -506,7 +533,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             {/* Desktop/tablet: three-column layout */}
             <div className="hidden items-start gap-4 min-[54rem]:grid min-[54rem]:grid-cols-3">
               {/* Asks */}
-                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] ${focusedSide === 'asks' ? 'ring-1 ring-destructive/50' : ''}`}>
+                <div className={cn(marketplacePanelClassName, "overflow-hidden", focusedSide === 'asks' && "ring-1 ring-destructive/50")}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-destructive/10 text-destructive">
                     <span>Asks (Sell LEAF)</span>
@@ -535,7 +562,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel */}
-              <div className="min-h-[18rem] space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] min-[54rem]:max-h-[22rem] min-[54rem]:overflow-y-auto">
+              <div className={cn(marketplacePaddedPanelClassName, "min-h-[18rem] space-y-4 min-[54rem]:max-h-[22rem] min-[54rem]:overflow-y-auto")}>
                 <div className="flex items-center gap-2 text-sm">
                   <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
                   <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
@@ -625,7 +652,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Bids */}
-                <div className={`overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] ${focusedSide === 'bids' ? 'ring-1 ring-[hsl(var(--success)/0.5)]' : ''}`}>
+                <div className={cn(marketplacePanelClassName, "overflow-hidden", focusedSide === 'bids' && "ring-1 ring-[hsl(var(--success)/0.5)]")}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]">
                     <span>Bids (Sell SEED)</span>
@@ -656,7 +683,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
             {/* Price level details (individual orders with Take buttons) */}
             {selectedLevel !== null && selectedSide && (
-              <div className="rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
+              <div className={marketplacePanelClassName}>
                 <div className="flex items-center justify-between px-3 py-2 border-b border-border">
                   <div className="text-sm font-medium">
                     Orders @ {fmt(selectedLevel, 6)} LEAF/SEED • {selectedSide === 'asks' ? 'Sell LEAF' : 'Sell SEED'}
@@ -675,16 +702,24 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     if (list.length === 0) {
                       return <div className="text-center text-sm text-muted-foreground p-3">No orders at this price.</div>;
                     }
+                    const visibleList = list.slice(0, PRICE_LEVEL_ORDER_LIST_LIMIT);
                     return (
                       <div className="divide-y divide-border">
-                        {list.map((o) => {
+                        {visibleList.map((o) => {
                           const payTokenIsLeaf = o.sellToken === 0;
                           const currentAllowance = payTokenIsLeaf ? leafAllowance : seedAllowance;
                           const needsApproval = currentAllowance < o.amountAsk;
                           const isMyOrder = address && o.seller.toLowerCase() === address.toLowerCase();
+                          const disabledReason = isMyOrder
+                            ? 'Your order'
+                            : !transactionLandId
+                              ? 'No land'
+                              : !hasSufficientForOrder(o)
+                                ? 'Low balance'
+                                : '';
 
                           return (
-                            <div key={String(o.id)} className="px-3 py-2 text-xs flex items-center justify-between gap-3">
+                            <div key={String(o.id)} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-xs [content-visibility:auto]">
                               <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
                                 <span className="font-medium">#{String(o.id)}</span>
                                 <span className="text-muted-foreground">Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
@@ -710,7 +745,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                               ) : (
                                 <SponsoredTransaction
                                   calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
-                                  buttonText="Take"
+                                  buttonText={disabledReason || "Take"}
                                   buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
                                   disabled={loadingBalances || !hasSufficientForOrder(o) || !!isMyOrder || !transactionLandId}
                                   hideStatus
@@ -720,6 +755,11 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                             </div>
                           );
                         })}
+                        {list.length > visibleList.length && (
+                          <div className="px-3 py-2 text-center text-xs text-muted-foreground">
+                            Showing {visibleList.length} of {list.length} orders at this price. Use All orders for the full level.
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -749,11 +789,17 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   </div>
                 </div>
               </div>
-              <div className="max-h-56 overflow-y-auto rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
+              <div className={cn(marketplacePanelClassName, "max-h-[18rem] overflow-y-auto")}>
                 {(() => {
                   const ordersToShow = showUserOrders
                     ? (showHistory ? userOrders : userOrders.filter(o => o.isActive))
                     : activeOrders;
+                  const visibleOrders = [...ordersToShow]
+                    .sort((a, b) => {
+                      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+                      return Number(b.id - a.id);
+                    })
+                    .slice(0, MARKETPLACE_ORDER_LIST_LIMIT);
 
                   if (ordersToShow.length === 0) {
                     return (
@@ -769,23 +815,36 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     );
                   }
 
-                  return ordersToShow.map((o) => {
+                  return (
+                    <>
+                      {visibleOrders.map((o) => {
                     // Determine what token the buyer pays (User pays amountAsk)
                     // If sellToken is LEAF(1), buyer pays SEED(0) -> Check SEED Allowance
                     // If sellToken is SEED(0), buyer pays LEAF(1) -> Check LEAF Allowance
                     const payTokenIsLeaf = o.sellToken === 0;
                     const currentAllowance = payTokenIsLeaf ? leafAllowance : seedAllowance;
                     const needsApproval = currentAllowance < o.amountAsk;
+                    const isMyOrder = !!address && o.seller.toLowerCase() === address.toLowerCase();
+                    const canTakeOrder = !loadingBalances && hasSufficientForOrder(o) && isOrderActive(o.id) && !isMyOrder && !!transactionLandId;
+                    const disabledReason = isMyOrder
+                      ? 'Mine'
+                      : !transactionLandId
+                        ? 'No land'
+                        : !hasSufficientForOrder(o)
+                          ? 'Low balance'
+                          : !isOrderActive(o.id)
+                            ? 'Inactive'
+                            : '';
 
                     return (
-                      <div key={String(o.id)} className="p-2 border-b border-border last:border-b-0">
-                        <div className="text-xs flex items-center justify-between gap-3">
+                      <div key={String(o.id)} className="border-b border-border p-2 last:border-b-0 [content-visibility:auto]">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-xs">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
                             <span className="font-medium">{o.sellToken === 1 ? 'Sell LEAF' : 'Sell SEED'} • #{String(o.id)}</span>
                             <span className="text-muted-foreground">Price {formatCompact(computePriceLeafPerSeed(o))} • Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
                             {!o.isActive && <span className="text-muted-foreground italic">(Inactive)</span>}
                           </div>
-                          {showUserOrders && address && o.seller.toLowerCase() === address.toLowerCase() && o.isActive && (
+                          {showUserOrders && isMyOrder && o.isActive && (
                             <SponsoredTransaction
                               calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                               buttonText="Cancel"
@@ -796,7 +855,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                             />
                           )}
                           {/* Take Order Button (or Approve) */}
-                          {!showUserOrders && (!address || o.seller.toLowerCase() !== address.toLowerCase()) && o.isActive && (
+                          {!showUserOrders && !isMyOrder && o.isActive && (
                             <>
                               {needsApproval ? (
                                 <SponsoredTransaction
@@ -819,20 +878,32 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 />
                               ) : (
                                 <SponsoredTransaction
-                                  calls={[{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [landId, o.id] as UntypedValue[] }]}
-                                  buttonText="Take"
+                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
+                                  buttonText={disabledReason || "Take"}
                                   buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
-                                  disabled={loadingBalances || !hasSufficientForOrder(o) || !isOrderActive(o.id)}
+                                  disabled={!canTakeOrder}
                                   hideStatus
                                   onSuccess={() => { toast.success('Order filled'); fetchOrders(); refresh(); }}
                                 />
                               )}
                             </>
                           )}
+                          {!showUserOrders && (isMyOrder || !o.isActive) && (
+                            <span className="rounded-[var(--radius-control)] border border-border/60 px-2.5 py-2 text-xs font-semibold text-muted-foreground">
+                              {disabledReason || 'Unavailable'}
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
-                  });
+                  })}
+                      {ordersToShow.length > visibleOrders.length && (
+                        <div className="px-3 py-2 text-center text-xs text-muted-foreground">
+                          Showing {visibleOrders.length} of {ordersToShow.length} orders. Use price levels above to narrow the list.
+                        </div>
+                      )}
+                    </>
+                  );
                 })()}
               </div>
             </div>

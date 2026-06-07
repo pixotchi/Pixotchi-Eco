@@ -165,13 +165,13 @@ export function LandMapModal({
               {totalSupply.toLocaleString()} Plots Discovered
             </p>
           </div>
-          
-          <Button 
-            variant="outline" 
-            size="icon" 
+
+          <Button
+            variant="headerIcon"
+            size="icon"
             onClick={onClose}
             aria-label="Close world map"
-            className="pointer-events-auto bg-card/90 bg-[image:var(--gradient-surface)] backdrop-blur-md"
+            className="pointer-events-auto"
           >
             <X className="w-4 h-4" />
           </Button>
@@ -255,11 +255,11 @@ export function LandMapModal({
                         </h3>
                     </div>
 
-                    <Button 
-                        variant="ghost" 
-                        size="icon" 
+                    <Button
+                        variant="headerIcon"
+                        size="iconCompact"
                         aria-label="Dismiss terrain details"
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        className="shrink-0"
                         onClick={() => setTappedWilderness(null)}
                     >
                         <X className="w-4 h-4" />
@@ -302,11 +302,11 @@ export function LandMapModal({
                                     )}
                                 </div>
                             </div>
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
+                            <Button
+                                variant="headerIcon"
+                                size="iconCompact"
                                 aria-label="Dismiss land details"
-                                className="-mt-1 -mr-1 shrink-0 text-muted-foreground hover:text-foreground"
+                                className="-mt-1 -mr-1 shrink-0"
                                 onClick={() => setTappedLandId(null)}
                             >
                                 <X className="w-3.5 h-3.5" />

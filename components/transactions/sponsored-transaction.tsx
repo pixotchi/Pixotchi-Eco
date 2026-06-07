@@ -14,6 +14,7 @@ import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
@@ -37,7 +38,6 @@ export default function SponsoredTransaction({
   buttonClassName = "",
   disabled = false,
   feedbackMode,
-  showToast = true,
   onStatusUpdate,
   hideStatus = false,
   onButtonClick
@@ -55,7 +55,7 @@ export default function SponsoredTransaction({
 
   const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
+    dispatchPostTransactionRefresh();
     // Gamification: track daily activity (non-blocking)
     if (address) {
       void (async () => {
@@ -100,9 +100,9 @@ export default function SponsoredTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess, onStatusUpdate]);
-  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "toast" : "inline");
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? "toast";
   const showInlineStatus = !hideStatus && (resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both");
-  const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
+  const showGlobalToast = resolvedFeedbackMode !== "none";
 
   return (
     <Transaction

@@ -67,7 +67,7 @@ function BuildingDetailsPanel({
 
   if (!selectedBuilding) {
     return (
-      <Card>
+      <Card className="building-detail-surface">
         <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
             <span className="text-2xl">🏗️</span>
@@ -172,7 +172,7 @@ function BuildingDetailsPanel({
   };
 
   return (
-    <Card>
+    <Card className="building-detail-surface">
       <CardHeader>
         <div className="flex items-center space-x-3">
           <Image

@@ -7,13 +7,14 @@ export function AppToaster() {
     <Toaster
       position="top-center"
       toastOptions={{
+        className: "chat-white-surface",
         duration: 4000,
         style: {
-          backgroundColor: "hsl(var(--card) / 0.97)",
+          backgroundColor: "hsl(var(--card) / 0.95)",
           backgroundImage: "var(--gradient-surface)",
-          border: "1px solid hsl(var(--border-strong) / 0.42)",
-          borderRadius: "var(--radius-panel)",
-          boxShadow: "var(--shadow-raised), inset 0 1px 0 hsl(var(--background) / 0.44)",
+          border: "1px solid hsl(var(--border) / 0.6)",
+          borderRadius: "var(--radius-control)",
+          boxShadow: "var(--shadow-hairline)",
           color: "hsl(var(--foreground))",
           zIndex: "var(--z-toast)",
           backdropFilter: "blur(var(--blur-surface))",

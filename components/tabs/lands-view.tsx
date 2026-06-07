@@ -40,6 +40,7 @@ import LandImage from "../LandImage";
 
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } from "@/lib/transaction-refresh";
 
 const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
 const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
@@ -433,11 +434,8 @@ function LandsViewContent() {
     refreshWarehouseOnSelect();
   }, [selectedBuildingId, buildingType, selectedLandId]);
 
-  // Combined function to refresh both building data and balances after transactions
-  const handleBuildingTransactionSuccess = useCallback(() => {
-    // Refresh building lists and production/upgrade stats
+  const refreshBuildingSnapshot = useCallback(() => {
     fetchBuildingData();
-    // Also refresh selected land summary (Warehouse totals) so WarehousePanel props stay current
     (async () => {
       try {
         if (selectedLandId != null) {
@@ -446,9 +444,23 @@ function LandsViewContent() {
         }
       } catch { }
     })();
-    // Balances are refreshed globally via the 'balances:refresh' event
-    window.dispatchEvent(new Event('balances:refresh'));
   }, [fetchBuildingData, selectedLandId]);
+
+  const scheduleBuildingSnapshotRefresh = useCallback(() => {
+    for (const delay of POST_TRANSACTION_REFRESH_DELAYS_MS) {
+      if (delay <= 0) {
+        refreshBuildingSnapshot();
+      } else {
+        window.setTimeout(refreshBuildingSnapshot, delay);
+      }
+    }
+  }, [refreshBuildingSnapshot]);
+
+  // Combined function to refresh both building data and balances after transactions.
+  const handleBuildingTransactionSuccess = useCallback(() => {
+    scheduleBuildingSnapshotRefresh();
+    dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
+  }, [scheduleBuildingSnapshotRefresh]);
 
   const handleBatchClaimSuccess = useCallback(() => {
     fetchBuildingData();
@@ -474,21 +486,10 @@ function LandsViewContent() {
 
   // Listen for global buildings refresh events (emitted on tx success in panels)
   useEffect(() => {
-    const handler = () => {
-      fetchBuildingData();
-      // Also refresh the selected land summary to reflect warehouse/accumulated changes
-      (async () => {
-        try {
-          if (selectedLandId != null) {
-            const latest = await getLandById(selectedLandId);
-            if (latest) setSelectedLand(latest);
-          }
-        } catch { }
-      })();
-    };
+    const handler = () => refreshBuildingSnapshot();
     window.addEventListener('buildings:refresh', handler as EventListener);
     return () => window.removeEventListener('buildings:refresh', handler as EventListener);
-  }, [fetchBuildingData, selectedLandId]);
+  }, [refreshBuildingSnapshot]);
 
   // Remove aggressive image preloads; Next/Image will handle efficient lazy-loading
 

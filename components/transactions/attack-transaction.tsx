@@ -40,7 +40,7 @@ export default function AttackTransaction({
   buttonClassName,
   disabled = false,
   feedbackMode,
-  showToast = false,
+  showToast = true,
   onStatusUpdate,
 }: AttackTransactionProps) {
   const calls = [{

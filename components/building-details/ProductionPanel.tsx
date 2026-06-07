@@ -6,7 +6,6 @@ import { BuildingData } from '@/lib/types';
 import { formatProductionRate, formatLifetimeProduction } from '@/lib/utils';
 import BuildingClaimTransaction from '@/components/transactions/building-claim-transaction';
 import { toast } from 'react-hot-toast';
-import { StandardContainer } from '@/components/ui/pixel-container';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
 
@@ -63,7 +62,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
       {/* Claim button */}
       {(building.accumulatedPoints > BigInt(0) || building.accumulatedLifetime > BigInt(0)) && (
         <div className="pt-2">
-          <StandardContainer className="flex items-center justify-between p-2 rounded-lg border bg-card">
+          <div className="chromatic-white-surface flex items-center justify-between rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]">
             <div className="text-xs sm:text-sm text-muted-foreground">Collect accumulated production into Warehouse</div>
             <BuildingClaimTransaction
               key={`${landId.toString()}-${building.id}`}
@@ -87,7 +86,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
               }}
               onError={(e) => toast.error(`Collect failed: ${e.message || e}`)}
             />
-          </StandardContainer>
+          </div>
         </div>
       )}
     </>

@@ -165,6 +165,8 @@ const buildingInfo = {
 
 const PLANT_POINTS_DECIMALS = 12;
 const XP_DECIMALS = 18;
+const INFO_NESTED_SURFACE_CLASS =
+  "building-subpanel-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3";
 
 function formatBarracksPoints(value: bigint): string {
   return formatTokenAmountPrecise(value, PLANT_POINTS_DECIMALS, 2);
@@ -233,7 +235,7 @@ function BarracksTroopTile({
   troop: BarracksTroopConfigV2;
 }) {
   return (
-    <div className="rounded-[var(--radius-control)] border border-border/55 bg-background/55 p-3">
+    <div className={INFO_NESTED_SURFACE_CLASS}>
       <div className="flex items-start justify-between gap-3">
         <div className="inline-flex items-center gap-2">
           <Image src={icon} alt={title} width={18} height={18} className="h-4.5 w-4.5 object-contain" />
@@ -439,7 +441,7 @@ export default function BuildingInfoDialog({
         </DialogHeader>
 
         <DialogBody className="pr-1">
-          <div className="space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+          <div className="building-subpanel-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5">
             {/* Casino Game Toggle */}
             {isCasino && (
               <>
@@ -473,7 +475,7 @@ export default function BuildingInfoDialog({
                   />
                 </div>
 
-                <div className="flex items-start gap-3 rounded-[var(--radius-control)] border border-border/55 bg-background/55 p-3">
+                <div className={`${INFO_NESTED_SURFACE_CLASS} flex items-start gap-3`}>
                   <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-primary/30 bg-primary/10 text-base leading-none">
                     <span aria-hidden="true">{currentGameIcon}</span>
                   </span>

@@ -163,8 +163,8 @@ const TEXT_MUTED = "text-[var(--ock-compat-foreground-muted)]";
 const TEXT_INVERSE = "text-primary-foreground";
 const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
 const TEXT_ERROR = "text-[var(--ock-compat-error)]";
-const BG_SURFACE = "bg-card/95 bg-[image:var(--gradient-surface)] backdrop-blur-[var(--blur-surface)]";
-const TOAST_SHADOW = "shadow-[0px_8px_24px_0px_rgba(0,0,0,0.12)]";
+const BG_SURFACE = "chat-white-surface bg-card/95 bg-[image:var(--gradient-surface)] backdrop-blur-[var(--blur-surface)]";
+const TOAST_SHADOW = "shadow-[var(--shadow-hairline)]";
 const unsupportedSendCallsKeys = new Set<string>();
 
 function Spinner({ className }: { className?: string }) {
@@ -1215,7 +1215,7 @@ export function TransactionToast({
     <div
       aria-live="polite"
       className={cn(
-        "fixed z-[var(--z-toast)] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-[var(--radius-panel)] border border-border/70 p-2 sm:max-w-sm",
+        "fixed z-[var(--z-toast)] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-[var(--radius-control)] border border-border/60 p-2 sm:max-w-sm",
         BG_SURFACE,
         TEXT_DEFAULT,
         TOAST_SHADOW,

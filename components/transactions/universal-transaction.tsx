@@ -11,6 +11,7 @@ import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
@@ -32,7 +33,6 @@ export default function UniversalTransaction({
   buttonClassName = "",
   disabled = false,
   feedbackMode,
-  showToast = true,
   forceUnsponsored = false
 }: UniversalTransactionProps) {
   const { isSponsored: paymasterEnabled } = usePaymaster();
@@ -50,8 +50,7 @@ export default function UniversalTransaction({
 
   const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
-    // Notify status bar to refresh balances
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
+    dispatchPostTransactionRefresh();
   }, [onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
@@ -79,9 +78,9 @@ export default function UniversalTransaction({
       handleOnSuccess(status.statusData.transactionReceipts[0]);
     }
   }, [handleOnSuccess]);
-  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? (showToast ? "toast" : "inline");
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? "toast";
   const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
-  const showGlobalToast = resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both";
+  const showGlobalToast = resolvedFeedbackMode !== "none";
 
   return (
     <Transaction

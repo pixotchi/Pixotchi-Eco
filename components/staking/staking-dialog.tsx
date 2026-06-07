@@ -5,7 +5,6 @@ import { useAccount } from "wagmi";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RewardResultPanel } from "@/components/ui/premium";
 import { RefreshIcon } from "@/components/ui/refresh-icon";
 import {
   buildApproveStakeCall,
@@ -91,7 +90,6 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const [rewardRatio, setRewardRatio] = useState<{ numerator: bigint; denominator: bigint } | null>(null);
   const [rewardTimeUnit, setRewardTimeUnit] = useState<bigint | null>(null);
   const [totalStaked, setTotalStaked] = useState<bigint | null>(null);
-  const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -251,6 +249,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const exceedsUnstake = mode === 'unstake' && amountValidPositive && parsed! > stakedBal;
   const disableStakeBtn = mode !== 'stake' || !approved || !amountValidPositive || !!exceedsStake;
   const disableUnstakeBtn = mode !== 'unstake' || !amountValidPositive || !!exceedsUnstake;
+  const disableClaimRewardsBtn = loading || !stakeInfo || stakeInfo.rewards <= BigInt(0);
   const helperText = sanitizedAmount !== "" && !amountValidPositive
     ? "Enter a valid amount (max 18 decimals)"
     : (exceedsStake ? "Amount exceeds wallet balance" : (exceedsUnstake ? "Amount exceeds staked balance" : ""));
@@ -439,12 +438,6 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </div>
           </div>
 
-          {resultMessage && (
-            <RewardResultPanel title="Staking updated">
-              {resultMessage}
-            </RewardResultPanel>
-          )}
-
         </div>
         </DialogBody>
 
@@ -459,10 +452,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    calls={[buildApproveStakeCall()]}
                    buttonText="Approve SEED for Staking"
                    buttonClassName={footerTransactionButtonClassName}
-                   feedbackMode="inline"
                    onSuccess={() => {
                      setApproved(true);
-                     setResultMessage("SEED approved. You can stake without approving again.");
                      refresh();
                      window.dispatchEvent(new Event('balances:refresh'));
                    }}
@@ -475,11 +466,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    buttonText="Stake"
                    disabled={disableStakeBtn}
                    buttonClassName={footerTransactionButtonClassName}
-                   feedbackMode="inline"
                    onSuccess={(tx: UntypedValue) => {
-                     const stakedAmount = sanitizedAmount;
                      setAmount("");
-                     setResultMessage(`${stakedAmount} SEED staked. Rewards are now accruing.`);
                      refresh();
                      window.dispatchEvent(new Event('balances:refresh'));
                      try {
@@ -501,11 +489,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                  buttonText="Unstake"
                  disabled={disableUnstakeBtn}
                  buttonClassName={footerTransactionButtonClassName}
-                 feedbackMode="inline"
                  onSuccess={() => {
-                   const unstakedAmount = sanitizedAmount;
                    setAmount("");
-                   setResultMessage(`${unstakedAmount} SEED unstaked and returned to your wallet.`);
                    refresh();
                    window.dispatchEvent(new Event('balances:refresh'));
                  }}
@@ -518,10 +503,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             <UniversalTransaction
               calls={[buildClaimRewardsCall()]}
               buttonText="Claim Rewards"
-              buttonClassName={`${footerTransactionButtonClassName} bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] hover:brightness-105`}
-              feedbackMode="inline"
+              disabled={disableClaimRewardsBtn}
+              buttonClassName={footerTransactionButtonClassName}
               onSuccess={(tx: UntypedValue) => {
-                setResultMessage("LEAF rewards claimed. Balances will refresh in a moment.");
                 refresh();
                 window.dispatchEvent(new Event('balances:refresh'));
                 try {
