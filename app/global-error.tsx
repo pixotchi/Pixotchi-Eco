@@ -39,7 +39,7 @@ export default function GlobalError({
                 height={64}
                 sizes="64px"
                 quality={90}
-                priority
+                preload
                 className="mx-auto mb-4 opacity-50"
               />
               <h1 className="text-lg font-semibold mb-2">Critical Error</h1>

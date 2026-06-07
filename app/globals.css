@@ -1887,10 +1887,11 @@ button.profile-follow-button.follow-button p {
 }
 
 .login-theme-cycle {
+  --login-theme-transition-duration: 3200ms;
   position: relative;
   isolation: isolate;
   color: hsl(var(--foreground));
-  transition: color 1600ms ease-in-out;
+  transition: color var(--login-theme-transition-duration) ease-in-out;
 }
 
 .login-theme-cycle .app-shell-inner[data-connected="false"] {
@@ -1898,9 +1899,13 @@ button.profile-follow-button.follow-button p {
 }
 
 .login-theme-cycle :is(button, [role="alert"], div, p, h1, h2, span) {
-  transition-duration: 1600ms !important;
+  transition-duration: var(--login-theme-transition-duration) !important;
   transition-property: background-color, border-color, box-shadow, color, opacity !important;
   transition-timing-function: ease-in-out !important;
+}
+
+.login-theme-cycle :is(button, [role="button"], .surface-control, .primary-control) {
+  background-image: none !important;
 }
 
 .login-theme-background {
@@ -1920,7 +1925,7 @@ button.profile-follow-button.follow-button p {
   background-position: center top;
   background-size: 160% 120%;
   opacity: 0;
-  transition: opacity 1600ms ease-in-out;
+  transition: opacity var(--login-theme-transition-duration) ease-in-out;
 }
 
 .login-theme-layer.is-active {

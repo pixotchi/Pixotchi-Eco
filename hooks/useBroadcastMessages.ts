@@ -145,6 +145,12 @@ export function useBroadcastMessages() {
     }
   }, [identity, localDismissedIds]);
 
+  const fetchMessagesRef = useRef(fetchMessages);
+
+  useEffect(() => {
+    fetchMessagesRef.current = fetchMessages;
+  }, [fetchMessages]);
+
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {
     // Optimistically remove from UI
@@ -196,12 +202,12 @@ export function useBroadcastMessages() {
   useEffect(() => {
     mountedRef.current = true;
     // Initial fetch
-    fetchMessages();
+    fetchMessagesRef.current();
 
     // Set up polling interval (only once)
     pollingIntervalRef.current = setInterval(() => {
       if (mountedRef.current) {
-        fetchMessages();
+        fetchMessagesRef.current();
       }
     }, POLL_INTERVAL);
 
@@ -216,7 +222,6 @@ export function useBroadcastMessages() {
         pollingIntervalRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run once
 
   // Refresh when wallet connects/disconnects (but don't restart polling)
@@ -229,8 +234,7 @@ export function useBroadcastMessages() {
       }
       fetchMessages();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, authSurface, authenticated, ready, user?.id]); // Identity-related triggers
+  }, [address, authSurface, authenticated, fetchMessages, ready, user?.id]); // Identity-related triggers
 
   return {
     messages,

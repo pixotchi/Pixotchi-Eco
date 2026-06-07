@@ -261,7 +261,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   width={128}
                   height={128}
                   className="object-contain relative z-10 animate-[bounce_1s_ease-in-out_3]"
-                  priority
+                  preload
                 />
               </div>
               <div className="text-center text-xl font-semibold leading-tight">{data.strainName}</div>

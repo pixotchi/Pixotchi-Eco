@@ -5,7 +5,7 @@ import type { MintShareData } from '@/lib/types';
 import { nanoid } from 'nanoid';
 import { isAddress } from 'viem';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 const SHARE_CREATE_IP_LIMIT = 60;
 const SHARE_CREATE_WINDOW_SECONDS = 600;

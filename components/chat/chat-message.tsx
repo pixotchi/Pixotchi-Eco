@@ -8,9 +8,17 @@ import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Bot, User, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { postMissionProgress } from "@/lib/mission-tracking";
-import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import ChatProfileDialog from "./chat-profile-dialog";
+import dynamic from "next/dynamic";
+
+const MessageResponse = dynamic(
+  () => import("@/components/ai-elements/message").then((mod) => mod.MessageResponse),
+  {
+    loading: () => <span className="text-sm leading-6 text-current">Loading response...</span>,
+    ssr: false,
+  }
+);
 
 function formatRelativeShort(date: Date) {
   const now = new Date();

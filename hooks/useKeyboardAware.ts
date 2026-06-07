@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface KeyboardState {
   isVisible: boolean;
@@ -14,16 +14,23 @@ export function useKeyboardAware(): KeyboardState {
     height: 0,
     animationDuration: 250
   });
+  const frameRef = useRef<number | null>(null);
 
   const updateKeyboardState = useCallback(() => {
     if (typeof window === 'undefined') return;
 
     const viewport = window.visualViewport;
     if (!viewport) {
-      setKeyboardState({
-        isVisible: false,
-        height: 0,
-        animationDuration: 250
+      setKeyboardState((previous) => {
+        if (!previous.isVisible && previous.height === 0 && previous.animationDuration === 250) {
+          return previous;
+        }
+
+        return {
+          isVisible: false,
+          height: 0,
+          animationDuration: 250
+        };
       });
       return;
     }
@@ -38,13 +45,33 @@ export function useKeyboardAware(): KeyboardState {
       activeElement instanceof HTMLTextAreaElement ||
       (activeElement instanceof HTMLElement && activeElement.isContentEditable);
     const isKeyboardVisible = isTextInputFocused && keyboardHeight > 120;
-
-    setKeyboardState({
+    const nextState = {
       isVisible: isKeyboardVisible,
-      height: keyboardHeight,
+      height: Math.max(0, Math.round(keyboardHeight)),
       animationDuration: 250
+    };
+
+    setKeyboardState((previous) => {
+      if (
+        previous.isVisible === nextState.isVisible &&
+        previous.height === nextState.height &&
+        previous.animationDuration === nextState.animationDuration
+      ) {
+        return previous;
+      }
+
+      return nextState;
     });
   }, []);
+
+  const scheduleKeyboardStateUpdate = useCallback(() => {
+    if (typeof window === 'undefined' || frameRef.current !== null) return;
+
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      updateKeyboardState();
+    });
+  }, [updateKeyboardState]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -53,22 +80,42 @@ export function useKeyboardAware(): KeyboardState {
     const viewport = window.visualViewport;
     if (!viewport) {
       // Fallback to window resize events
-      window.addEventListener('resize', updateKeyboardState);
-      return () => window.removeEventListener('resize', updateKeyboardState);
+      window.addEventListener('resize', scheduleKeyboardStateUpdate);
+      window.addEventListener('focusin', scheduleKeyboardStateUpdate);
+      window.addEventListener('focusout', scheduleKeyboardStateUpdate);
+      return () => {
+        window.removeEventListener('resize', scheduleKeyboardStateUpdate);
+        window.removeEventListener('focusin', scheduleKeyboardStateUpdate);
+        window.removeEventListener('focusout', scheduleKeyboardStateUpdate);
+        if (frameRef.current !== null) {
+          window.cancelAnimationFrame(frameRef.current);
+          frameRef.current = null;
+        }
+      };
     }
 
     // Listen to visual viewport changes
-    viewport.addEventListener('resize', updateKeyboardState);
-    viewport.addEventListener('scroll', updateKeyboardState);
+    viewport.addEventListener('resize', scheduleKeyboardStateUpdate);
+    window.addEventListener('resize', scheduleKeyboardStateUpdate);
+    window.addEventListener('focusin', scheduleKeyboardStateUpdate);
+    window.addEventListener('focusout', scheduleKeyboardStateUpdate);
+    window.addEventListener('orientationchange', scheduleKeyboardStateUpdate);
 
     // Initial check
-    updateKeyboardState();
+    scheduleKeyboardStateUpdate();
 
     return () => {
-      viewport.removeEventListener('resize', updateKeyboardState);
-      viewport.removeEventListener('scroll', updateKeyboardState);
+      viewport.removeEventListener('resize', scheduleKeyboardStateUpdate);
+      window.removeEventListener('resize', scheduleKeyboardStateUpdate);
+      window.removeEventListener('focusin', scheduleKeyboardStateUpdate);
+      window.removeEventListener('focusout', scheduleKeyboardStateUpdate);
+      window.removeEventListener('orientationchange', scheduleKeyboardStateUpdate);
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
     };
-  }, [updateKeyboardState]);
+  }, [scheduleKeyboardStateUpdate]);
 
   return keyboardState;
 }

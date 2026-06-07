@@ -33,7 +33,7 @@ export default function Error({
             height={64}
             sizes="64px"
             quality={90}
-            priority
+            preload
             className="mx-auto mb-4 opacity-50"
           />
           <h1 id="error-title" className="text-lg font-semibold mb-2">We hit a temporary app error</h1>

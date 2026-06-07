@@ -113,9 +113,18 @@ const tabComponents = {
     "Ranking"
   ),
 };
+const tabPrefetchers: Record<Tab, () => Promise<unknown>> = {
+  dashboard: () => import("@/components/tabs/dashboard-tab"),
+  mint: () => import("@/components/tabs/mint-tab"),
+  about: () => import("@/components/tabs/about-tab"),
+  swap: () => import("@/components/tabs/swap-tab"),
+  activity: () => import("@/components/tabs/activity-tab"),
+  leaderboard: () => import("@/components/tabs/leaderboard-tab"),
+};
 
 const TAB_VALUES: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
 const LOGIN_THEME_SEQUENCE = ["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"] as const;
+const LOGIN_THEME_INTERVAL_MS = 4000;
 const LOGIN_THEME_LAYER_STYLE: CSSProperties = {
   backgroundImage: "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--secondary)) 52%, hsl(var(--card)) 100%)",
   backgroundPosition: "center top",
@@ -151,12 +160,17 @@ const TAB_QUERY_KEY_ALLOWLIST: Record<Tab, ReadonlySet<string>> = {
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
   const loadedTabs = useRef(new Set<string>());
   const prefetchingTabs = useRef(new Set<string>());
-  const prefetchPromises = useRef<Map<string, Promise<void>>>(new Map());
+  const prefetchPromises = useRef<Map<string, Promise<unknown>>>(new Map());
 
   useEffect(() => {
     if (!isConnected) return;
     const prefetchingTabsRef = prefetchingTabs.current;
     const prefetchPromisesRef = prefetchPromises.current;
+    const connection = (navigator as UntypedValue).connection;
+
+    if (connection?.saveData || connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") {
+      return;
+    }
 
     // Define tab navigation patterns for prefetching
     const currentIndex = TAB_VALUES.indexOf(activeTab);
@@ -172,37 +186,41 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
     const tabsToPrefetch = [...new Set([...prefetchTabs, ...frequentlyAccessedTabs])]
       .filter((tab): tab is Tab => tab !== activeTab);
 
-    // Use requestIdleCallback for non-blocking prefetching, avoid duplicates
-    if ('requestIdleCallback' in window) {
-      const idleCallbackId = (window as UntypedValue).requestIdleCallback?.(() => {
-        tabsToPrefetch.forEach((tab) => {
-          const key = String(tab);
-          if (key === activeTab) return;
-          if (loadedTabs.current.has(key) || prefetchingTabsRef.has(key)) return;
-          prefetchingTabsRef.add(key);
+    const runPrefetch = () => {
+      tabsToPrefetch.forEach((tab) => {
+        const key = String(tab);
+        if (key === activeTab) return;
+        if (loadedTabs.current.has(key) || prefetchingTabsRef.has(key)) return;
+        prefetchingTabsRef.add(key);
 
-          const prefetchPromise = import(`@/components/tabs/${tab}-tab`)
-            .finally(() => {
-              prefetchingTabsRef.delete(key);
-              loadedTabs.current.add(key);
-              prefetchPromisesRef.delete(key);
-            });
+        const prefetchPromise = tabPrefetchers[tab]()
+          .finally(() => {
+            prefetchingTabsRef.delete(key);
+            loadedTabs.current.add(key);
+            prefetchPromisesRef.delete(key);
+          });
 
-          prefetchPromisesRef.set(key, prefetchPromise);
-        });
+        prefetchPromisesRef.set(key, prefetchPromise);
       });
+    };
 
-      // Cleanup function to clear pending prefetches on unmount
-      return () => {
-        if (idleCallbackId && typeof idleCallbackId === 'number') {
-          (window as UntypedValue).cancelIdleCallback?.(idleCallbackId);
-        }
-        prefetchingTabsRef.clear();
-        prefetchPromisesRef.clear();
+    const requestIdleCallback = (window as UntypedValue).requestIdleCallback;
+    const scheduler = typeof requestIdleCallback === 'function'
+      ? {
+        kind: 'idle' as const,
+        id: requestIdleCallback(runPrefetch, { timeout: 2500 }) as number,
+      }
+      : {
+        kind: 'timeout' as const,
+        id: window.setTimeout(runPrefetch, 750),
       };
-    }
 
     return () => {
+      if (scheduler.kind === 'idle') {
+        (window as UntypedValue).cancelIdleCallback?.(scheduler.id);
+      } else {
+        window.clearTimeout(scheduler.id);
+      }
       prefetchingTabsRef.clear();
       prefetchPromisesRef.clear();
     };
@@ -591,12 +609,17 @@ export default function App() {
   const [loginThemeState, setLoginThemeState] = useState({
     current: 0,
     previous: 0,
+    activeLayer: 0,
   });
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const previousActiveTabRef = useRef<Tab>(activeTab);
   const lastDismissedRef = useRef<string | null>(null);
   const loginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.current];
   const previousLoginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.previous];
+  const loginThemeLayers = [
+    loginThemeState.activeLayer === 0 ? loginTheme : previousLoginTheme,
+    loginThemeState.activeLayer === 1 ? loginTheme : previousLoginTheme,
+  ] as const;
 
   useTabPrefetching(activeTab, isConnected);
 
@@ -613,7 +636,8 @@ export default function App() {
     }
 
     const advanceLoginTheme = () => {
-      setLoginThemeState(({ current }) => ({
+      setLoginThemeState(({ activeLayer, current }) => ({
+        activeLayer: activeLayer === 0 ? 1 : 0,
         current: (current + 1) % LOGIN_THEME_SEQUENCE.length,
         previous: current,
       }));
@@ -621,7 +645,7 @@ export default function App() {
 
     const intervalId = window.setInterval(() => {
       advanceLoginTheme();
-    }, 7500);
+    }, LOGIN_THEME_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
   }, [isConnected]);
@@ -842,8 +866,22 @@ export default function App() {
     >
       {!isConnected && (
         <div className="login-theme-background" aria-hidden="true">
-          <div className={cn("login-theme-layer", previousLoginTheme)} style={LOGIN_THEME_LAYER_STYLE} />
-          <div className={cn("login-theme-layer is-active", loginTheme)} style={LOGIN_THEME_LAYER_STYLE} />
+          <div
+            className={cn(
+              "login-theme-layer",
+              loginThemeLayers[0],
+              loginThemeState.activeLayer === 0 && "is-active",
+            )}
+            style={LOGIN_THEME_LAYER_STYLE}
+          />
+          <div
+            className={cn(
+              "login-theme-layer",
+              loginThemeLayers[1],
+              loginThemeState.activeLayer === 1 && "is-active",
+            )}
+            style={LOGIN_THEME_LAYER_STYLE}
+          />
         </div>
       )}
       <div
@@ -957,16 +995,15 @@ export default function App() {
             <div className="relative z-10 flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
               <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pt-5">
                 <div className="flex flex-col items-center space-y-3 mb-8">
-                  <Image
-                    src="/PixotchiKit/Logonotext.svg"
-                    alt="Pixotchi Mini Logo"
-                    width={80}
-                    height={80}
-                    priority
-                    fetchPriority="high"
-                    sizes="80px"
-                    quality={90}
-                  />
+	                  <Image
+	                    src="/PixotchiKit/Logonotext.svg"
+	                    alt="Pixotchi Mini Logo"
+	                    width={80}
+	                    height={80}
+	                    preload
+	                    sizes="80px"
+	                    quality={90}
+	                  />
                   <h1 className="text-2xl font-pixel text-foreground">
                     {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
                   </h1>

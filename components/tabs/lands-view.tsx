@@ -23,24 +23,32 @@ getVillageBuildingsByLandId
 import { CLIENT_ENV } from "@/lib/env-config";
 import { BuildingData,BuildingType,Land } from "@/lib/types";
 import { formatXP } from "@/lib/utils";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useCallback,useEffect,useRef,useState } from "react";
 import { useAccount,useWatchBlockNumber } from "wagmi";
 // Removed BalanceCard from tabs; status bar now shows balances globally
-import BuildingDetailsPanel from "@/components/building-details-panel";
 import BuildingGrid from "@/components/building-grid";
 import { EditLandName } from "@/components/edit-land-name";
-import { LandMapModal } from "@/components/map/land-map-modal";
 import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
-import BatchClaimCard from "@/components/transactions/batch-claim-card";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useLandMap } from "@/hooks/useLandMap";
-import { ChevronDown,LandPlot,PackageCheck } from "lucide-react";
+import { ChevronDown,LandPlot } from "lucide-react";
 import LandImage from "../LandImage";
 
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } from "@/lib/transaction-refresh";
+
+const BatchClaimCard = dynamic(() => import("@/components/transactions/batch-claim-card"), {
+  ssr: false,
+});
+const BuildingDetailsPanel = dynamic(() => import("@/components/building-details-panel"), {
+  ssr: false,
+});
+const LandMapModal = dynamic(() => import("@/components/map/land-map-modal").then((mod) => mod.LandMapModal), {
+  ssr: false,
+});
 
 const BARRACKS_ENABLED = CLIENT_ENV.BARRACKS_ENABLED;
 const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
@@ -91,7 +99,12 @@ function BatchClaimBuildingTile({
           className={`building-button building-element rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selected ? 'border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] shadow-[var(--shadow-glow)]' : 'border-border/45 bg-card/75 surface-shadow hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]'}`}
         >
           <div className="building-element relative flex h-16 w-16 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
-            <PackageCheck className={`h-8 w-8 ${selected ? 'text-primary' : 'text-foreground/80'}`} aria-hidden="true" />
+            <span
+              className={`font-pixel text-[1.35rem] leading-none tracking-normal ${selected ? 'text-primary' : 'text-foreground/80'}`}
+              aria-hidden="true"
+            >
+              BC
+            </span>
           </div>
         </button>
       </div>
@@ -852,7 +865,7 @@ function LandsViewContent() {
         </div>
       )}
       {/* Map Modal */}
-      {selectedLand && (
+      {selectedLand && isMapOpen && (
         <LandMapModal
           isOpen={isMapOpen}
           onClose={() => setIsMapOpen(false)}

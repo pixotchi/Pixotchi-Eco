@@ -23,7 +23,10 @@ export function useViewportShellMetrics() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    let frameId: number | null = null;
+
     const sync = () => {
+      frameId = null;
       const headerHeight = getShellHeight("header");
       const statusHeight = getShellHeight("status");
       const navHeight = getShellHeight("nav");
@@ -45,7 +48,12 @@ export function useViewportShellMetrics() {
       );
     };
 
-    const observer = new ResizeObserver(sync);
+    const scheduleSync = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(sync);
+    };
+
+    const observer = new ResizeObserver(scheduleSync);
     const observed = Array.from(
       document.querySelectorAll<HTMLElement>("[data-viewport-shell]")
     );
@@ -53,15 +61,17 @@ export function useViewportShellMetrics() {
     observed.forEach((element) => observer.observe(element));
     sync();
 
-    window.addEventListener("resize", sync);
-    window.visualViewport?.addEventListener("resize", sync);
-    window.visualViewport?.addEventListener("scroll", sync);
+    window.addEventListener("resize", scheduleSync);
+    window.visualViewport?.addEventListener("resize", scheduleSync);
 
     return () => {
       observer.disconnect();
-      window.removeEventListener("resize", sync);
-      window.visualViewport?.removeEventListener("resize", sync);
-      window.visualViewport?.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", scheduleSync);
+      window.visualViewport?.removeEventListener("resize", scheduleSync);
+
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
 
       document.documentElement.style.setProperty("--app-header-height", ZERO_VALUE);
       document.documentElement.style.setProperty("--app-status-height", ZERO_VALUE);

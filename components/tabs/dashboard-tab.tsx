@@ -4,8 +4,12 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import { Leaf, LandPlot } from "lucide-react";
 import { useFrameContext } from "@/lib/frame-context";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
+import dynamic from "next/dynamic";
 import PlantsView from "./plants-view";
-import LandsView from "./lands-view";
+
+const LandsView = dynamic(() => import("./lands-view"), {
+  ssr: false,
+});
 
 export default function DashboardTab() {
   const frame = useFrameContext();

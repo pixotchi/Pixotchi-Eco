@@ -1,13 +1,9 @@
 "use client";
 
-import ArcadeDialog from "@/components/arcade/ArcadeDialog";
 import EditPlantName from "@/components/edit-plant-name";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import QuantitySelector from "@/components/quantity-selector";
 import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
-import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
-import ReviveTransaction from "@/components/transactions/revive-transaction";
-import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
@@ -39,13 +35,37 @@ ChevronDown,
 Flower2
 } from "lucide-react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
 import PlantImage from "../PlantImage";
 import CountdownTimer from "../countdown-timer";
 import FenceTimer from "../fence-timer";
-import ItemDetailsPanel from "../item-details-panel";
+
+const ArcadeDialog = dynamic(() => import("@/components/arcade/ArcadeDialog"), {
+  ssr: false,
+});
+const ClaimRewardsTransaction = dynamic(() => import("@/components/transactions/claim-rewards-transaction"), {
+  loading: () => <Button className="w-full" disabled>Loading...</Button>,
+  ssr: false,
+});
+const ReviveTransaction = dynamic(() => import("@/components/transactions/revive-transaction"), {
+  loading: () => <Button className="w-full" disabled>Loading...</Button>,
+  ssr: false,
+});
+const SolanaBridgeButton = dynamic(() => import("@/components/transactions/solana-bridge-button"), {
+  loading: () => <Button className="w-full" disabled>Loading...</Button>,
+  ssr: false,
+});
+const ItemDetailsPanel = dynamic(() => import("@/components/item-details-panel"), {
+  loading: () => (
+    <div className="flex min-h-[16rem] items-center justify-center rounded-[var(--radius-panel)] border border-border/60 bg-card/80">
+      <BaseExpandedLoadingPageLoader text="Loading marketplace..." />
+    </div>
+  ),
+  ssr: false,
+});
 
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 // Removed BalanceCard from tabs; status bar now shows balances globally
@@ -553,90 +573,94 @@ export default function PlantsView() {
           </TabCard>
 
           {/* Claim Rewards Dialog */}
-          <Dialog open={claimOpen} onOpenChange={(open) => {
-            setClaimOpen(open);
-            if (!open) {
-              setClaimConfirmationText(""); // Reset confirmation text when dialog closes
-            }
-          }}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Claim ETH Rewards?</DialogTitle>
-                <DialogDescription>
-                  Confirm this irreversible claim. Your current points will be burned and this plant will reset to level 0.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
-                <div className="flex items-center gap-2 font-medium text-foreground">
-                  <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                  <span>{formatEth(selectedPlant.rewards)} ETH</span>
-                </div>
-                <div className="space-y-2 pt-2">
-                  <p className="text-sm font-medium text-foreground">Type <strong>CONFIRM</strong> to claim:</p>
-                  <Input
-                    value={claimConfirmationText}
-                    onChange={(e) => setClaimConfirmationText(e.target.value)}
-                    placeholder="CONFIRM"
-                    className="font-mono"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-3 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => {
-                  setClaimOpen(false);
-                  setClaimConfirmationText("");
-                }}>Cancel</Button>
-                <div className="flex-1">
-                  {isSolana ? (
-                    <SolanaBridgeButton
-                      actionType="claimRewards"
-                      plantId={selectedPlant.id}
-                      buttonText="Yes, Claim"
-                      buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
-                      onSuccess={() => {
-                        setClaimOpen(false);
-                        setClaimConfirmationText("");
-                        toast.success('Rewards claimed via bridge!');
-                        fetchData();
-                        window.dispatchEvent(new Event('balances:refresh'));
-                      }}
-                      onError={() => {
-                        toast.error('Claim failed');
-                      }}
+          {claimOpen && (
+            <Dialog open={claimOpen} onOpenChange={(open) => {
+              setClaimOpen(open);
+              if (!open) {
+                setClaimConfirmationText(""); // Reset confirmation text when dialog closes
+              }
+            }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Claim ETH Rewards?</DialogTitle>
+                  <DialogDescription>
+                    Confirm this irreversible claim. Your current points will be burned and this plant will reset to level 0.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <p>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                    <span>{formatEth(selectedPlant.rewards)} ETH</span>
+                  </div>
+                  <div className="space-y-2 pt-2">
+                    <p className="text-sm font-medium text-foreground">Type <strong>CONFIRM</strong> to claim:</p>
+                    <Input
+                      value={claimConfirmationText}
+                      onChange={(e) => setClaimConfirmationText(e.target.value)}
+                      placeholder="CONFIRM"
+                      className="font-mono"
+                      autoFocus
                     />
-                  ) : (
-                    <ClaimRewardsTransaction
-                      plantId={selectedPlant.id}
-                      buttonText="Yes, Claim"
-                      buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
-                      minimal
-                      onSuccess={() => {
-                        setClaimOpen(false);
-                        setClaimConfirmationText("");
-                        toast.success('Rewards claimed!');
-                        fetchData();
-                        window.dispatchEvent(new Event('balances:refresh'));
-                      }}
-                      onError={() => {
-                        toast.error('Claim failed');
-                      }}
-                    />
-                  )}
+                  </div>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+                <div className="flex items-center gap-3 pt-2">
+                  <Button variant="outline" className="flex-1" onClick={() => {
+                    setClaimOpen(false);
+                    setClaimConfirmationText("");
+                  }}>Cancel</Button>
+                  <div className="flex-1">
+                    {isSolana ? (
+                      <SolanaBridgeButton
+                        actionType="claimRewards"
+                        plantId={selectedPlant.id}
+                        buttonText="Yes, Claim"
+                        buttonClassName="w-full"
+                        disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
+                        onSuccess={() => {
+                          setClaimOpen(false);
+                          setClaimConfirmationText("");
+                          toast.success('Rewards claimed via bridge!');
+                          fetchData();
+                          window.dispatchEvent(new Event('balances:refresh'));
+                        }}
+                        onError={() => {
+                          toast.error('Claim failed');
+                        }}
+                      />
+                    ) : (
+                      <ClaimRewardsTransaction
+                        plantId={selectedPlant.id}
+                        buttonText="Yes, Claim"
+                        buttonClassName="w-full"
+                        disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
+                        minimal
+                        onSuccess={() => {
+                          setClaimOpen(false);
+                          setClaimConfirmationText("");
+                          toast.success('Rewards claimed!');
+                          fetchData();
+                          window.dispatchEvent(new Event('balances:refresh'));
+                        }}
+                        onError={() => {
+                          toast.error('Claim failed');
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Arcade Dialog */}
-          <ArcadeDialog
-            open={arcadeOpen}
-            onOpenChange={setArcadeOpen}
-            plant={selectedPlant}
-          />
+          {arcadeOpen && (
+            <ArcadeDialog
+              open={arcadeOpen}
+              onOpenChange={setArcadeOpen}
+              plant={selectedPlant}
+            />
+          )}
 
           </div>
 

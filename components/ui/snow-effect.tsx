@@ -35,7 +35,7 @@ const WIND_VARIANCE = 0.3;
 function SnowEffectCanvas() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const snowflakesRef = useRef<Snowflake[]>([]);
-    const animationRef = useRef<number>(0);
+    const animationRef = useRef<number | null>(null);
     const isVisibleRef = useRef(true);
 
     useEffect(() => {
@@ -72,19 +72,16 @@ function SnowEffectCanvas() {
         };
         initSnowflakes();
 
-        // Visibility change handler
-        const handleVisibility = () => {
-            isVisibleRef.current = document.visibilityState === "visible";
+        const stopAnimation = () => {
+            if (animationRef.current !== null) {
+                cancelAnimationFrame(animationRef.current);
+                animationRef.current = null;
+            }
         };
-        document.addEventListener("visibilitychange", handleVisibility);
+        isVisibleRef.current = document.visibilityState === "visible";
 
         // Animation loop
         const animate = () => {
-            if (!isVisibleRef.current) {
-                animationRef.current = requestAnimationFrame(animate);
-                return;
-            }
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             snowflakesRef.current.forEach((flake) => {
@@ -114,12 +111,27 @@ function SnowEffectCanvas() {
             animationRef.current = requestAnimationFrame(animate);
         };
 
-        animate();
+        // Visibility change handler
+        const handleVisibility = () => {
+            isVisibleRef.current = document.visibilityState === "visible";
+            if (isVisibleRef.current) {
+                if (animationRef.current === null) {
+                    animate();
+                }
+            } else {
+                stopAnimation();
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisibility);
+
+        if (isVisibleRef.current) {
+            animate();
+        }
 
         return () => {
             window.removeEventListener("resize", updateSize);
             document.removeEventListener("visibilitychange", handleVisibility);
-            cancelAnimationFrame(animationRef.current);
+            stopAnimation();
         };
     }, []);
 

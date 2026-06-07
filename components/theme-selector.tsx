@@ -76,7 +76,15 @@ function MenuSwitchRow({
   );
 }
 
-export function ThemeSelector() {
+interface ThemeSelectorProps {
+  enableSecretGardenProgress?: boolean;
+  showMusicToggle?: boolean;
+}
+
+export function ThemeSelector({
+  enableSecretGardenProgress = true,
+  showMusicToggle = true,
+}: ThemeSelectorProps) {
   const { theme, setTheme } = useTheme();
   const { isEnabled: isSnowEnabled, isFeatureEnabled: isSnowFeatureEnabled, toggleSnow } = useSnow();
   const { isEnabled: isMusicEnabled, toggleAudio } = useAmbientAudio();
@@ -87,6 +95,10 @@ export function ThemeSelector() {
   }, []);
 
   const handleSecretProgress = React.useCallback(async (selectedTheme: string) => {
+    if (!enableSecretGardenProgress) {
+      return;
+    }
+
     try {
       const response = await fetch("/api/secret-garden/progress", {
         method: "POST",
@@ -116,7 +128,7 @@ export function ThemeSelector() {
     } catch (error) {
       console.warn("Secret garden progress check failed", error);
     }
-  }, []);
+  }, [enableSecretGardenProgress]);
 
   const handleThemeChange = React.useCallback((newTheme: string) => {
     if (THEMES[newTheme as Theme]) {
@@ -175,15 +187,16 @@ export function ThemeSelector() {
             />
           </div>
         )}
-        {/* Ambient Music Toggle */}
-        <div className={`${isSnowFeatureEnabled ? 'mt-1' : 'mt-2 border-t border-[hsl(var(--divider)/0.68)] pt-2'}`}>
-          <MenuSwitchRow
-            label="Music"
-            checked={isMusicEnabled}
-            onClick={toggleAudio}
-            ariaLabel="Toggle ambient music"
-          />
-        </div>
+        {showMusicToggle && (
+          <div className={`${isSnowFeatureEnabled ? 'mt-1' : 'mt-2 border-t border-[hsl(var(--divider)/0.68)] pt-2'}`}>
+            <MenuSwitchRow
+              label="Music"
+              checked={isMusicEnabled}
+              onClick={toggleAudio}
+              ariaLabel="Toggle ambient music"
+            />
+          </div>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

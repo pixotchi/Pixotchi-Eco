@@ -17,7 +17,7 @@ export default function NotFound() {
             alt="Pixotchi Mini logo"
             width={96}
             height={96}
-            priority
+            preload
             className="opacity-80 drop-shadow-lg"
           />
           <div className="space-y-3">

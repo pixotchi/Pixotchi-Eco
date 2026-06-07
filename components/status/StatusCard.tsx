@@ -49,7 +49,6 @@ export function StatusCard({ service }: StatusCardProps) {
     ...(rpcMetrics
       ? [{ label: "Healthy endpoints", value: `${rpcMetrics.healthyCount ?? 0}/${rpcMetrics.totalCount ?? 0}` }]
       : []),
-    ...(service.details ? [{ label: "Signal", value: service.details }] : []),
   ];
 
   return (

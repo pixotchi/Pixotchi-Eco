@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import Image from "next/image";
-import ChatDialog from "./chat-dialog";
+import dynamic from "next/dynamic";
 import { useIsSolanaWallet, useSolanaWallet } from "@/components/solana";
 import { useChat } from "./chat-context";
+
+const ChatDialog = dynamic(() => import("./chat-dialog"), {
+  ssr: false,
+});
 
 interface ChatButtonProps {
   className?: string;
@@ -63,8 +67,8 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
         />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-3 w-3" aria-hidden="true">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive"></span>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(0_84%_60%)] opacity-75"></span>
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-[hsl(0_84%_60%)]"></span>
           </span>
         )}
       </Button>

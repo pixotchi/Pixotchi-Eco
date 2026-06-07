@@ -455,7 +455,7 @@ export default function ActivityTab() {
 
   return (
     <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:hidden" density="compact">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:hidden">
         <CardHeader className="flex-none">
           <div className="flex justify-between items-center">
             <div className="min-w-0">

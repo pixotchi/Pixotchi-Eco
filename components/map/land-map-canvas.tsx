@@ -22,15 +22,17 @@ export function LandMapCanvas({
   userLands,
   selectedLand,
   totalSupply,
-  neighborData,
   onLandClick,
   onCenterChange
 }: LandMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const centerRef = useRef(center);
+  const isDraggingRef = useRef(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
+  const pendingCenterRef = useRef(center);
+  const centerChangeFrameRef = useRef<number | null>(null);
   const dragDistanceRef = useRef(0);
   const didDragRef = useRef(false);
 
@@ -58,6 +60,19 @@ export function LandMapCanvas({
   const ownedTokenIds = useMemo(() => {
     return new Set(userLands.map((land) => Number(land.tokenId)));
   }, [userLands]);
+
+  useEffect(() => {
+    centerRef.current = center;
+    pendingCenterRef.current = center;
+  }, [center]);
+
+  useEffect(() => {
+    return () => {
+      if (centerChangeFrameRef.current !== null) {
+        cancelAnimationFrame(centerChangeFrameRef.current);
+      }
+    };
+  }, []);
 
   // Load sprites on mount
   useEffect(() => {
@@ -157,14 +172,19 @@ export function LandMapCanvas({
     const displayWidth = Math.floor(dimensions.width);
     const displayHeight = Math.floor(dimensions.height);
 
-    canvas.width = displayWidth * dpr;
-    canvas.height = displayHeight * dpr;
+    const targetCanvasWidth = displayWidth * dpr;
+    const targetCanvasHeight = displayHeight * dpr;
+
+    if (canvas.width !== targetCanvasWidth || canvas.height !== targetCanvasHeight) {
+      canvas.width = targetCanvasWidth;
+      canvas.height = targetCanvasHeight;
+    }
 
     // Ensure CSS style matches exactly 
     canvas.style.width = `${displayWidth}px`;
     canvas.style.height = `${displayHeight}px`;
 
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false; // Pixel art style
 
     // Clear canvas with water color (ocean background)
@@ -314,22 +334,34 @@ export function LandMapCanvas({
       }
     }
 
-  }, [dimensions, center, zoom, ownedTokenIds, selectedLand, totalSupply, sprites, neighborData]);
+  }, [dimensions, center, zoom, ownedTokenIds, selectedLand, totalSupply, sprites]);
 
   // Interaction Handlers
   const handlePointerDown = (e: React.PointerEvent) => {
-    setIsDragging(true);
-    setLastPos({ x: e.clientX, y: e.clientY });
+    isDraggingRef.current = true;
+    lastPosRef.current = { x: e.clientX, y: e.clientY };
+    pendingCenterRef.current = centerRef.current;
     dragDistanceRef.current = 0;
     didDragRef.current = false;
     canvasRef.current?.setPointerCapture(e.pointerId);
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+  const scheduleCenterChange = () => {
+    if (centerChangeFrameRef.current !== null) return;
 
-    const dx = e.clientX - lastPos.x;
-    const dy = e.clientY - lastPos.y;
+    centerChangeFrameRef.current = requestAnimationFrame(() => {
+      centerChangeFrameRef.current = null;
+      const nextCenter = pendingCenterRef.current;
+      centerRef.current = nextCenter;
+      onCenterChange(nextCenter);
+    });
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current) return;
+
+    const dx = e.clientX - lastPosRef.current.x;
+    const dy = e.clientY - lastPosRef.current.y;
 
     const distance = Math.sqrt(dx * dx + dy * dy);
     dragDistanceRef.current += distance;
@@ -342,16 +374,18 @@ export function LandMapCanvas({
     const coordDx = dx / effectiveTileSize;
     const coordDy = -dy / effectiveTileSize; // Invert Y
 
-    onCenterChange({
-      x: center.x - coordDx,
-      y: center.y - coordDy
-    });
+    const currentCenter = pendingCenterRef.current;
+    pendingCenterRef.current = {
+      x: currentCenter.x - coordDx,
+      y: currentCenter.y - coordDy
+    };
+    scheduleCenterChange();
 
-    setLastPos({ x: e.clientX, y: e.clientY });
+    lastPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false);
+    isDraggingRef.current = false;
     canvasRef.current?.releasePointerCapture(e.pointerId);
   };
 

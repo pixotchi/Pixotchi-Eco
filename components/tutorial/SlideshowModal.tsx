@@ -33,7 +33,7 @@ function Art({ type }: { type?: string }) {
           alt={art.alt}
           width={720}
           height={450}
-          priority
+          preload
           className="w-full h-full object-cover transition-opacity duration-300"
           onError={(event: SyntheticEvent<HTMLImageElement>) => {
             try {
