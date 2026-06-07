@@ -16,6 +16,7 @@ DropdownMenuItem,
 DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ProgressBar } from '@/components/ui/progress-bar';
+import { InlineBalanceNotice } from '@/components/ui/premium';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { VerifyClaim } from '@/components/verify-claim';
 import { useWebQueryState } from '@/hooks/useWebQueryState';
@@ -1381,9 +1382,9 @@ export default function MintTab() {
                 showToast={false}
               />
               {ethBalance < ethQuote.ethAmountWithBuffer && (
-                <p className="text-xs text-value text-center">
-                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-                </p>
+                <InlineBalanceNotice>
+                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+                </InlineBalanceNotice>
               )}
             </div>
           )}
@@ -1411,9 +1412,9 @@ export default function MintTab() {
                 buttonText="Insufficient Balance"
                 buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
               />
-              <p className="text-xs text-value text-center mt-2">
-                Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} {paymentTokenSymbol} • Required: {plantRequiredLabel} {paymentTokenSymbol}
-              </p>
+              <InlineBalanceNotice>
+                Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} • Required: {plantRequiredLabel}
+              </InlineBalanceNotice>
             </div>
           )}
 
@@ -1554,9 +1555,9 @@ export default function MintTab() {
               showToast={false}
             />
             {ethBalance < landEthQuote.ethAmountWithBuffer && (
-              <p className="text-xs text-value text-center">
-                Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-              </p>
+              <InlineBalanceNotice>
+                Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+              </InlineBalanceNotice>
             )}
           </div>
         )}
@@ -1598,9 +1599,9 @@ export default function MintTab() {
                   buttonText="Insufficient Balance"
                   buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                 />
-                <p className="text-xs text-value text-center mt-2">
-                  Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
-                </p>
+                <InlineBalanceNotice>
+                  Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} • Required: {formatTokenAmount(landMintPrice)}
+                </InlineBalanceNotice>
               </>
             ) : (
               <ApprovalActionTransaction
@@ -1812,9 +1813,9 @@ export default function MintTab() {
                     showToast={false}
                   />
                   {ethBalance < ethQuote.ethAmountWithBuffer && (
-                    <p className="text-xs text-value text-center">
-                      Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-                    </p>
+                    <InlineBalanceNotice>
+                      Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+                    </InlineBalanceNotice>
                   )}
                 </div>
               )}
@@ -1829,9 +1830,9 @@ export default function MintTab() {
                     buttonText="Insufficient Balance"
                     buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                   />
-                  <p className="text-xs text-value text-center">
-                    Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} {paymentTokenSymbol} • Required: {plantRequiredLabel} {paymentTokenSymbol}
-                  </p>
+                  <InlineBalanceNotice>
+                    Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} • Required: {plantRequiredLabel}
+                  </InlineBalanceNotice>
                 </div>
               )}
 
@@ -1973,9 +1974,9 @@ export default function MintTab() {
                   showToast={false}
                 />
                 {ethBalance < landEthQuote.ethAmountWithBuffer && (
-                  <p className="text-xs text-value text-center">
-                    Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-                  </p>
+                  <InlineBalanceNotice>
+                    Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+                  </InlineBalanceNotice>
                 )}
               </div>
             )}
@@ -1997,9 +1998,9 @@ export default function MintTab() {
                       buttonText="Insufficient Balance"
                       buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
                     />
-                    <p className="text-xs text-value text-center mt-2">
-                      Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} SEED • Required: {formatTokenAmount(landMintPrice)} SEED
-                    </p>
+                    <InlineBalanceNotice>
+                      Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} • Required: {formatTokenAmount(landMintPrice)}
+                    </InlineBalanceNotice>
                   </>
                 ) : (
                   <ApprovalActionTransaction

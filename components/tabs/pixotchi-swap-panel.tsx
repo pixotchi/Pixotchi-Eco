@@ -535,7 +535,7 @@ export default function PixotchiSwapPanel() {
     }
 
     if (hasInsufficientGas) {
-      return S.errors.insufficientGas;
+      return '\u00A0';
     }
 
     if (!executionSteps?.[0]) {
@@ -1254,7 +1254,7 @@ export default function PixotchiSwapPanel() {
     if (!sellAmount.trim()) return null;
     if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
     if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
-    if (hasInsufficientGas) return S.errors.insufficientGas;
+    if (hasInsufficientGas) return null;
     if (isDeferredLagging || isQuoteLoading) return S.quote.loading;
     if (currentQuote?.strategy === 'blocked') return currentQuote.blockedReason || S.errors.blockedPairFallback;
     if (!currentQuote) return 'Waiting for a swap quote.';

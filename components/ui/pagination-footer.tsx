@@ -24,19 +24,18 @@ export function PaginationFooter({
   return (
     <div
       className={cn(
-        "surface-footer-divider flex-none -mx-4 -mb-4 mt-0 bg-transparent px-4 pb-4 pt-3",
-        "lg:mx-0 lg:mb-0 lg:px-0",
+        "surface-footer-divider dialog-footer-surface -mx-4 -mb-4 mt-0 flex min-h-[4.25rem] flex-none items-center overflow-visible px-4 py-3",
         className
       )}
     >
-      <div className="mx-auto grid max-w-xs grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+      <div className="mx-auto grid w-full max-w-xs grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <Button
           variant="compactUtility"
           size="touchCompact"
           onClick={onPrevious}
           disabled={currentPage === 1}
           leadingIcon={<ChevronLeft className="h-4 w-4" aria-hidden="true" />}
-          className="justify-center text-xs"
+          className="justify-center text-xs active:translate-y-0"
         >
           Back
         </Button>
@@ -49,7 +48,7 @@ export function PaginationFooter({
           onClick={onNext}
           disabled={currentPage === totalPages}
           trailingIcon={<ChevronRight className="h-4 w-4" aria-hidden="true" />}
-          className="justify-center text-xs"
+          className="justify-center text-xs active:translate-y-0"
         >
           Next
         </Button>

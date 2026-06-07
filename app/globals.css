@@ -250,8 +250,8 @@
     --ring: 151 78% 24%;
     --scene-glow: 88 72% 82%;
     --scene-floor: 151 52% 86%;
-    --chromatic-layer-surface: 116 32% 89%;
-    --chromatic-layer-highlight: 112 36% 91%;
+    --chromatic-layer-surface: 116 30% 90%;
+    --chromatic-layer-highlight: 112 34% 92%;
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
@@ -280,8 +280,8 @@
     --ring: 33 86% 29%;
     --scene-glow: 38 92% 80%;
     --scene-floor: 48 78% 88%;
-    --chromatic-layer-surface: 46 58% 89%;
-    --chromatic-layer-highlight: 48 66% 91%;
+    --chromatic-layer-surface: 46 56% 90%;
+    --chromatic-layer-highlight: 48 64% 92%;
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
@@ -310,8 +310,8 @@
     --ring: 348 62% 36%;
     --scene-glow: 24 74% 82%;
     --scene-floor: 354 48% 89%;
-    --chromatic-layer-surface: 12 34% 90%;
-    --chromatic-layer-highlight: 8 40% 92%;
+    --chromatic-layer-surface: 12 32% 91%;
+    --chromatic-layer-highlight: 8 38% 93%;
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
@@ -340,8 +340,8 @@
     --ring: 328 68% 36%;
     --scene-glow: 276 66% 84%;
     --scene-floor: 326 56% 90%;
-    --chromatic-layer-surface: 326 36% 90%;
-    --chromatic-layer-highlight: 326 46% 92%;
+    --chromatic-layer-surface: 326 34% 91%;
+    --chromatic-layer-highlight: 326 44% 93%;
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
@@ -368,8 +368,8 @@
     --ring: 219 78% 36%;
     --scene-glow: 188 76% 84%;
     --scene-floor: 216 60% 90%;
-    --chromatic-layer-surface: 212 42% 90%;
-    --chromatic-layer-highlight: 210 54% 92%;
+    --chromatic-layer-surface: 212 40% 91%;
+    --chromatic-layer-highlight: 210 52% 93%;
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
@@ -398,8 +398,8 @@
     --ring: 263 72% 38%;
     --scene-glow: 294 62% 86%;
     --scene-floor: 258 54% 91%;
-    --chromatic-layer-surface: 260 36% 90%;
-    --chromatic-layer-highlight: 260 46% 92%;
+    --chromatic-layer-surface: 260 34% 91%;
+    --chromatic-layer-highlight: 260 44% 93%;
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
@@ -454,21 +454,24 @@
     --ring: 204 92% 74%;
     --scene-glow: 204 92% 62%;
     --scene-floor: 216 30% 29%;
+    --chromatic-layer-surface: 216 28% 40%;
+    --chromatic-layer-highlight: 216 34% 47%;
     --status-great: 150 70% 58%;
     --status-okay: 78 68% 58%;
     --status-dry: 32 90% 58%;
     --status-dying: 356 78% 66%;
     --status-dead: 220 12% 60%;
     --status-unknown: 218 12% 66%;
-    --header-control-bg: 216 28% 28% / 0.86;
-    --header-control-hover: 216 30% 32% / 0.94;
-    --header-control-border: 216 20% 52% / 0.5;
-    --header-control-border-hover: var(--primary) / 0.42;
-    --nav-hover-bg: var(--primary) / 0.12;
-    --nav-active-bg: var(--primary) / 0.18;
-    --gradient-nav-hover: linear-gradient(180deg, hsl(var(--primary) / 0.15) 0%, hsl(var(--primary) / 0.1) 52%, hsl(var(--primary) / 0.065) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.24) 0%, hsl(var(--primary) / 0.16) 52%, hsl(var(--primary) / 0.09) 100%);
-    --surface-highlight: inset 0 1px 0 hsl(0 0% 100% / 0.16);
+    --header-control-bg: 216 32% 38% / 0.92;
+    --header-control-hover: 216 34% 43% / 0.96;
+    --header-control-border: 216 24% 64% / 0.52;
+    --header-control-border-hover: var(--primary) / 0.48;
+    --nav-hover-bg: var(--primary) / 0.16;
+    --nav-active-bg: var(--primary) / 0.24;
+    --gradient-nav-hover: linear-gradient(180deg, hsl(var(--primary) / 0.22) 0%, hsl(216 34% 40% / 0.72) 54%, hsl(216 30% 35% / 0.62) 100%);
+    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.32) 0%, hsl(216 34% 42% / 0.86) 52%, hsl(216 30% 36% / 0.74) 100%);
+    --gradient-selection: linear-gradient(180deg, hsl(var(--primary) / 0.3) 0%, hsl(216 34% 42% / 0.86) 56%, hsl(216 30% 36% / 0.72) 100%);
+    --surface-highlight: inset 0 1px 0 hsl(0 0% 100% / 0.22);
     --surface-inset: inset 0 1px 0 hsl(0 0% 100% / 0.12), inset 0 -1px 0 hsl(0 0% 0% / 0.1);
     --shadow-hairline: 0 1px 0 hsl(0 0% 100% / 0.075);
     --shadow-contact: 0 1px 0 hsl(0 0% 100% / 0.065);
@@ -481,7 +484,7 @@
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-solana: linear-gradient(135deg, hsl(265 80% 66%), hsl(184 82% 54%));
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-control-surface: linear-gradient(180deg, hsl(216 31% 34% / 0.98) 0%, hsl(216 30% 31% / 0.94) 54%, hsl(216 28% 28% / 0.88) 100%);
+    --gradient-control-surface: linear-gradient(180deg, hsl(216 32% 43% / 0.98) 0%, hsl(216 31% 39% / 0.94) 54%, hsl(216 30% 34% / 0.88) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(216 30% 33% / 0.94), hsl(216 28% 28% / 0.82));
     --gradient-content-well: radial-gradient(circle at 50% -12%, hsl(204 92% 40% / 0.24) 0%, hsl(216 30% 25% / 0) 34%), linear-gradient(180deg, hsl(216 30% 25%) 0%, hsl(216 29% 27%) 44%, hsl(216 30% 29%) 100%);
     --gradient-dialog: linear-gradient(180deg, hsl(216 30% 33% / 0.98) 0%, hsl(216 30% 31% / 0.96) 52%, hsl(216 28% 28% / 0.88) 100%);
@@ -872,6 +875,7 @@
   }
 
   :root:not(.dark):not(.green):not(.yellow):not(.red):not(.pink):not(.blue):not(.violet) :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
+  .dark :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
   .green :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
   .yellow :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
   .red :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
@@ -885,6 +889,7 @@
   }
 
   :root:not(.dark):not(.green):not(.yellow):not(.red):not(.pink):not(.blue):not(.violet) .chromatic-white-inner-glow::before,
+  .dark .chromatic-white-inner-glow::before,
   .green .chromatic-white-inner-glow::before,
   .yellow .chromatic-white-inner-glow::before,
   .red .chromatic-white-inner-glow::before,
@@ -959,7 +964,7 @@
     max-width: 28rem;
   }
 
-  @media (min-width: 48rem) {
+  @media (min-width: 54rem) {
     .app-shell-inner[data-connected="true"] {
       max-width: min(100vw, 56rem);
     }

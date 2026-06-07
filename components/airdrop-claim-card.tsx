@@ -122,8 +122,10 @@ export function AirdropClaimCard() {
         "relative p-3 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
     const featureCardClassName =
         "relative flex items-center gap-3 rounded-[var(--radius-panel)] border border-primary/20 bg-primary/10 bg-[image:var(--gradient-selection)] p-3 shadow-[var(--shadow-hairline)]";
-    const iconClassName =
-        "flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 text-primary shadow-[var(--shadow-control)]";
+    const airdropGiftIconClassName =
+        "h-9 w-9 shrink-0 text-primary drop-shadow-[0_6px_14px_hsl(var(--primary)/0.28)]";
+    const claimedIconClassName =
+        "h-8 w-8 shrink-0 text-value drop-shadow-[0_6px_14px_hsl(var(--success)/0.24)]";
     const baseActionClassName =
         "w-full border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45";
 
@@ -142,9 +144,7 @@ export function AirdropClaimCard() {
                     </h3>
                 </div>
                 <div className={featureCardClassName}>
-                    <span className={iconClassName}>
-                        <Gift className="h-4 w-4" />
-                    </span>
+                    <Gift className={airdropGiftIconClassName} />
                     <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground">No Allocation</p>
                         <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
@@ -216,9 +216,7 @@ export function AirdropClaimCard() {
                     {status.claimed ? (
                         // Already claimed state
                         <div className={featureCardClassName}>
-                            <span className={iconClassName}>
-                                <CheckCircle className="h-4 w-4 text-value" />
-                            </span>
+                            <CheckCircle className={claimedIconClassName} />
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold text-value">
                                     Airdrop Claimed
@@ -232,9 +230,7 @@ export function AirdropClaimCard() {
                         // Unclaimed state
                         <div className="relative space-y-3">
                             <div className={featureCardClassName}>
-                                <span className={iconClassName}>
-                                    <Gift className="h-4 w-4" />
-                                </span>
+                                <Gift className={airdropGiftIconClassName} />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-semibold">Claimable Tokens</p>
                                     <div className="mt-2 flex flex-wrap gap-2">

@@ -6,25 +6,26 @@ import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import SwapPlantNameBundle from '@/components/transactions/swap-plant-name-bundle';
 import { Button } from '@/components/ui/button';
 import {
-Dialog,
-DialogContent,
-DialogDescription,
-DialogHeader,
-DialogTitle,
-DialogTrigger,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InlineBalanceNotice } from '@/components/ui/premium';
 import { useBalances } from '@/lib/balance-context';
 import { getEthQuoteForSeedAmount } from '@/lib/contracts';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { formatWsol } from '@/lib/solana-quote';
 import { Plant } from '@/lib/types';
+import { formatTokenAmount } from '@/lib/utils';
 import Image from 'next/image';
 import { useEffect,useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { formatUnits } from "viem";
 import { useAccount,useBalance } from 'wagmi';
 
 interface EditPlantNameProps {
@@ -36,12 +37,8 @@ interface EditPlantNameProps {
 
 const NAME_CHANGE_COST = 350; // SEED tokens required
 const MAX_NAME_LENGTH = 9; // Under 10 characters as requested
-const formatSeedShortage = (balance: bigint) => {
-  const shortage = Math.max(0, NAME_CHANGE_COST - Number(formatUnits(balance, 18)));
-  return shortage.toLocaleString(undefined, {
-    maximumFractionDigits: 4,
-  });
-};
+const renamePanelClassName =
+  "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
 
 export function EditPlantName({
   plant,
@@ -54,7 +51,7 @@ export function EditPlantName({
   const isSolana = useIsSolanaWallet();
   const { isSmartWallet } = useSmartWallet();
   const { isEthMode } = useEthModeSafe();
-  const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
+  const [, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [newName, setNewName] = useState(plant.name || '');
   const [isTransactionPending, setIsTransactionPending] = useState(false);
@@ -180,7 +177,7 @@ export function EditPlantName({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-md">
+      <DialogContent surface="soft" className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Change Plant Name</DialogTitle>
           <DialogDescription>
@@ -188,13 +185,16 @@ export function EditPlantName({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-
-          {/* Name input */}
-          <div className="space-y-3">
-            <label htmlFor="plant-name" className="text-sm font-medium">
-              New Name
-            </label>
+        <DialogBody className="pt-4">
+          <section className={renamePanelClassName}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <label htmlFor="plant-name" className="text-sm font-semibold text-foreground">
+                New Name
+              </label>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Plant #{plant.id}
+              </span>
+            </div>
             <Input
               id="plant-name"
               value={newName}
@@ -203,86 +203,16 @@ export function EditPlantName({
               maxLength={MAX_NAME_LENGTH}
               className="w-full font-pixel"
             />
-            <div className="flex justify-between text-xs text-muted-foreground">
+            <div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
               <span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
               {newName.length === MAX_NAME_LENGTH && (
                 <span className="text-destructive">Maximum length reached</span>
               )}
             </div>
-          </div>
+          </section>
+        </DialogBody>
 
-          {/* Balance and cost info */}
-          <div className="space-y-3">
-            {/* ETH Mode: show ETH balance/cost */}
-            {isSmartWallet && isEthMode && !isSolana ? (
-              <>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Your ETH Balance:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                    <span>{(Number(ethBalance) / 1e18).toFixed(6)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <span>Cost:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                    <span className="font-medium">
-                      {ethQuoteLoading ? <Skeleton className="h-4 w-20" />
-                        : ethQuote ? `${(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH`
-                          : '...'}
-                    </span>
-                  </div>
-                </div>
-
-                {!canAffordNameChange && ethQuote && (
-                  <p className="text-sm text-destructive">
-                    Insufficient ETH. Need {((Number(ethQuote.ethAmountWithBuffer) - Number(ethBalance)) / 1e18).toFixed(6)} more ETH.
-                  </p>
-                )}
-              </>
-            ) : !isSolana ? (
-              <>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Your SEED Balance:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                    <span className={isLoadingBalance ? 'animate-pulse' : ''}>
-                      {isLoadingBalance ? '...' : parseFloat(formatUnits(seedBalance, 18)).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <span>Cost:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                    <span className="font-medium">{NAME_CHANGE_COST.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {!canAffordNameChange && !isLoadingBalance && (
-                  <p className="text-sm text-destructive">
-                    Insufficient SEED tokens. You need {formatSeedShortage(seedBalance)} more.
-                  </p>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-between text-sm">
-                <span>Est. cost (SOL):</span>
-                <div className="font-medium">
-                  {solanaQuote
-                    ? solanaQuote.error
-                      ? <span className="text-amber-500">Quote error</span>
-                      : `${formatWsol(solanaQuote.wsolAmount)} SOL`
-                    : '...'}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Transaction Button */}
+        <DialogFooter sticky className="block space-y-2">
           {isSolana ? (
             // Solana bridge transaction for name change
             <SolanaBridgeButton
@@ -337,6 +267,7 @@ export function EditPlantName({
                 buttonText={`Change Name (${NAME_CHANGE_COST} SEED)`}
                 buttonClassName="w-full"
                 disabled={!canSubmit}
+                hideLabel
               />
             </div>
           ) : (
@@ -352,7 +283,16 @@ export function EditPlantName({
                         'Change Name'}
             </Button>
           )}
-        </div>
+          {isSmartWallet && isEthMode && !isSolana && !canAffordNameChange && ethQuote ? (
+            <InlineBalanceNotice>
+              Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+            </InlineBalanceNotice>
+          ) : !isSolana && !canAffordNameChange && !isLoadingBalance ? (
+            <InlineBalanceNotice>
+              Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(nameChangeCostWei)}
+            </InlineBalanceNotice>
+          ) : null}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -62,7 +62,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
     <DialogContent
       size="full"
       surface="soft"
-      className={`flex h-[min(86dvh,42rem)] w-[min(94vw,28rem)] max-w-md flex-col rounded-[var(--radius-dialog)] border p-4 sm:h-[82dvh] sm:w-[calc(100vw-2rem)] sm:p-6 xl:w-[min(92vw,56rem)] xl:max-w-[56rem] ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
+      className={`flex h-[min(86dvh,42rem)] w-[min(94vw,28rem)] max-w-md flex-col rounded-[var(--radius-dialog)] border sm:h-[82dvh] sm:w-[calc(100vw-2rem)] xl:w-[min(92vw,56rem)] xl:max-w-[56rem] ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
       aria-hidden={txModalOpen || undefined}
       onInteractOutside={(event) => {
         if (txModalOpen) event.preventDefault();
@@ -71,7 +71,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
         if (txModalOpen) event.preventDefault();
       }}
     >
-      <DialogHeader className="-mx-4 -mt-4 px-4 pt-4 pr-16 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 sm:pr-16">
+      <DialogHeader>
         <DialogTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {mode === 'ai' ? (

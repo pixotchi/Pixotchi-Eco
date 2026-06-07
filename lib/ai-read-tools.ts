@@ -1192,6 +1192,24 @@ function buildPlantLifecycleEventsQuery(limit: number): string {
   const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 100);
   return `
     query GetPlantLifecycleEvents($plantIds: [BigInt!]) {
+      plants(orderBy: "lastTransferTimestamp", orderDirection: "desc", limit: ${safeLimit}, where: { id_in: $plantIds }) {
+        items {
+          id
+          mintedTo
+          currentOwner
+          strain
+          mintedTimestamp
+          lastTransferTimestamp
+          burnedAt
+          killedAt
+          killedBy
+          killedByPlantId
+          killReward
+          killTransactionHash
+          loserName
+          winnerName
+        }
+      }
       killeds(orderBy: "timestamp", orderDirection: "desc", limit: ${safeLimit}, where: { OR: [{ nftId_in: $plantIds }, { deadId_in: $plantIds }]}) {
         items {
           __typename
@@ -1203,6 +1221,9 @@ function buildPlantLifecycleEventsQuery(limit: number): string {
           winnerName
           loserName
           reward
+          blockHeight
+          transactionHash
+          logIndex
         }
       }
       mints(orderBy: "timestamp", orderDirection: "desc", limit: ${safeLimit}, where: { nftId_in: $plantIds }) {
@@ -1210,7 +1231,63 @@ function buildPlantLifecycleEventsQuery(limit: number): string {
           __typename
           id
           timestamp
+          to
+          strain
           nftId
+          blockHeight
+          transactionHash
+          logIndex
+        }
+      }
+    }
+  `;
+}
+
+function buildWalletPlantLifecycleQuery(limit: number): string {
+  const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 100);
+  return `
+    query GetWalletPlantLifecycle($wallet: String!) {
+      plants(orderBy: "lastTransferTimestamp", orderDirection: "desc", limit: ${safeLimit}, where: { OR: [{ mintedTo: $wallet }, { currentOwner: $wallet }] }) {
+        items {
+          id
+          mintedTo
+          currentOwner
+          strain
+          mintedTimestamp
+          lastTransferTimestamp
+          burnedAt
+          killedAt
+          killedBy
+          killedByPlantId
+          killReward
+          killTransactionHash
+          loserName
+          winnerName
+        }
+      }
+      mints(orderBy: "timestamp", orderDirection: "desc", limit: ${safeLimit}, where: { to: $wallet }) {
+        items {
+          __typename
+          id
+          timestamp
+          to
+          strain
+          nftId
+          blockHeight
+          transactionHash
+          logIndex
+        }
+      }
+      plantTransferEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${safeLimit}, where: { OR: [{ from: $wallet }, { to: $wallet }] }) {
+        items {
+          id
+          from
+          to
+          tokenId
+          blockHeight
+          transactionHash
+          logIndex
+          timestamp
         }
       }
     }
@@ -1220,11 +1297,15 @@ function buildPlantLifecycleEventsQuery(limit: number): string {
 function normalizeLifecycleMint(event: UntypedValue) {
   return {
     ...timestampMetadata(event.timestamp),
+    blockNumber: event.blockHeight ? String(event.blockHeight) : undefined,
     id: String(event.id || ''),
     kind: 'plant_mint',
+    logIndex: event.logIndex !== undefined ? Number(event.logIndex) : undefined,
     plantId: String(event.nftId ?? ''),
+    strain: event.strain !== undefined ? String(event.strain) : undefined,
+    to: event.to ? String(event.to) : undefined,
     source: 'Ponder indexer Mint events',
-    txHash: extractTxHash(String(event.id || '')),
+    txHash: event.transactionHash ? String(event.transactionHash) : extractTxHash(String(event.id || '')),
   };
 }
 
@@ -1234,18 +1315,77 @@ function normalizeLifecycleKilled(event: UntypedValue) {
 
   return {
     ...timestampMetadata(event.timestamp),
+    blockNumber: event.blockHeight ? String(event.blockHeight) : undefined,
     deadPlantId: String(event.deadId ?? ''),
     id: String(event.id || ''),
     kind: 'plant_killed',
     killer: event.killer ? String(event.killer) : undefined,
     killerPlantId: String(event.nftId ?? ''),
+    logIndex: event.logIndex !== undefined ? Number(event.logIndex) : undefined,
     loserName: event.loserName ? String(event.loserName) : undefined,
     rewardDisplay,
     rewardPolicy: 'Killed.reward is the contract-recorded ETH reward amount for the dead plant owner.',
     rewardRaw,
     source: 'Ponder indexer Killed events',
-    txHash: extractTxHash(String(event.id || '')),
+    txHash: event.transactionHash ? String(event.transactionHash) : extractTxHash(String(event.id || '')),
     winnerName: event.winnerName ? String(event.winnerName) : undefined,
+  };
+}
+
+function normalizeLifecyclePlant(event: UntypedValue) {
+  const rewardRaw = event.killReward !== undefined && event.killReward !== null ? String(event.killReward) : undefined;
+  const killedAt = event.killedAt ? String(event.killedAt) : undefined;
+  const burnedAt = event.burnedAt ? String(event.burnedAt) : undefined;
+
+  return {
+    burnedAt,
+    burnedAtIso: burnedAt ? new Date(Number(burnedAt) * 1000).toISOString() : undefined,
+    currentOwner: event.currentOwner ? String(event.currentOwner) : undefined,
+    id: String(event.id ?? ''),
+    killedAt,
+    killedAtIso: killedAt ? new Date(Number(killedAt) * 1000).toISOString() : undefined,
+    killedBy: event.killedBy ? String(event.killedBy) : undefined,
+    killedByPlantId: event.killedByPlantId !== undefined && event.killedByPlantId !== null ? String(event.killedByPlantId) : undefined,
+    killRewardDisplay: rewardRaw ? `${compactTokenAmount(formatToken(rewardRaw))} ETH` : undefined,
+    killRewardRaw: rewardRaw,
+    killTransactionHash: event.killTransactionHash ? String(event.killTransactionHash) : undefined,
+    lastTransferTimestamp: event.lastTransferTimestamp ? String(event.lastTransferTimestamp) : undefined,
+    lastTransferTimestampIso: event.lastTransferTimestamp ? new Date(Number(event.lastTransferTimestamp) * 1000).toISOString() : undefined,
+    loserName: event.loserName ? String(event.loserName) : undefined,
+    mintedTimestamp: event.mintedTimestamp ? String(event.mintedTimestamp) : undefined,
+    mintedTimestampIso: event.mintedTimestamp ? new Date(Number(event.mintedTimestamp) * 1000).toISOString() : undefined,
+    mintedTo: event.mintedTo ? String(event.mintedTo) : undefined,
+    plantId: String(event.id ?? ''),
+    strain: event.strain !== undefined && event.strain !== null ? String(event.strain) : undefined,
+    winnerName: event.winnerName ? String(event.winnerName) : undefined,
+  };
+}
+
+function normalizeLifecycleTransfer(event: UntypedValue, wallet: `0x${string}`) {
+  const from = event.from ? String(event.from) : undefined;
+  const to = event.to ? String(event.to) : undefined;
+  const isMint = Boolean(from && sameAddress(from, ZERO_ADDRESS));
+  const isBurn = Boolean(to && sameAddress(to, ZERO_ADDRESS));
+  const direction = to && sameAddress(to, wallet)
+    ? 'in'
+    : from && sameAddress(from, wallet)
+      ? 'out'
+      : 'unknown';
+
+  return {
+    ...timestampMetadata(event.timestamp),
+    blockNumber: event.blockHeight ? String(event.blockHeight) : undefined,
+    direction,
+    from,
+    id: String(event.id || ''),
+    isBurn,
+    isMint,
+    kind: isMint ? 'plant_mint_transfer' : isBurn ? 'plant_burn_transfer' : 'plant_transfer',
+    logIndex: event.logIndex !== undefined ? Number(event.logIndex) : undefined,
+    plantId: String(event.tokenId ?? ''),
+    to,
+    tokenId: String(event.tokenId ?? ''),
+    txHash: event.transactionHash ? String(event.transactionHash) : extractTxHash(String(event.id || '')),
   };
 }
 
@@ -1256,6 +1396,7 @@ async function fetchPlantLifecycleEvents(plantIds: string[], limit: number) {
       candidatePlantIds: [],
       killeds: [],
       mints: [],
+      plants: [],
       truncatedCandidates: false,
     };
   }
@@ -1268,7 +1409,26 @@ async function fetchPlantLifecycleEvents(plantIds: string[], limit: number) {
     candidatePlantIds: normalizedIds,
     killeds: (data.killeds?.items || []).map(normalizeLifecycleKilled),
     mints: (data.mints?.items || []).map(normalizeLifecycleMint),
+    plants: (data.plants?.items || []).map(normalizeLifecyclePlant),
     truncatedCandidates: normalizePlantIdList(plantIds).length > normalizedIds.length,
+  };
+}
+
+async function fetchWalletPlantLifecycle(address: `0x${string}`, limit: number) {
+  const data = await fetchIndexerGraphQL<UntypedValue>(buildWalletPlantLifecycleQuery(limit), {
+    wallet: address.toLowerCase(),
+  }, { revalidate: 5 });
+  const plants = (data.plants?.items || []).map(normalizeLifecyclePlant);
+  const transfers = (data.plantTransferEvents?.items || []).map((event: UntypedValue) => normalizeLifecycleTransfer(event, address));
+
+  return {
+    burnedOrKilledPlants: plants.filter((plant: UntypedValue) =>
+      Boolean(plant.burnedAt || plant.killedAt || (plant.currentOwner && sameAddress(String(plant.currentOwner), ZERO_ADDRESS)))
+    ),
+    mints: (data.mints?.items || []).map(normalizeLifecycleMint),
+    plants,
+    transfers,
+    transfersOutToZero: transfers.filter((transfer: UntypedValue) => transfer.isBurn && transfer.direction === 'out'),
   };
 }
 
@@ -1313,14 +1473,24 @@ function buildPlantLifecycleExplanations(args: {
   currentPlants: ReturnType<typeof normalizePlant>[];
   indexedKilleds: UntypedValue[];
   indexedMints: UntypedValue[];
+  indexedPlants: UntypedValue[];
   recentMints: NormalizedOnchainActivity[];
   requestedPlantIds: string[];
   requestedPlantStates: ReturnType<typeof normalizePlant>[];
   txEvents: NormalizedOnchainActivity[];
+  walletLifecycle: {
+    burnedOrKilledPlants: UntypedValue[];
+    mints: UntypedValue[];
+    plants: UntypedValue[];
+    transfers: UntypedValue[];
+    transfersOutToZero: UntypedValue[];
+  };
 }) {
   const explanations: string[] = [];
   const currentById = new Map(args.currentPlants.map((plant) => [String(plant.id), plant]));
   const stateById = new Map(args.requestedPlantStates.map((plant) => [String(plant.id), plant]));
+  const indexedPlantById = new Map(args.indexedPlants.map((plant) => [String(plant.plantId || plant.id), plant]));
+  const walletPlantById = new Map(args.walletLifecycle.plants.map((plant) => [String(plant.plantId || plant.id), plant]));
   const killedDeadIds = new Set(args.indexedKilleds.map((event) => String(event.deadPlantId || '')));
   const txKilledDeadIds = new Set(args.txEvents.filter((event) => event.kind === 'plant_killed').map((event) => String(event.deadPlantId || event.tokenId || '')));
 
@@ -1328,16 +1498,24 @@ function buildPlantLifecycleExplanations(args: {
     for (const id of args.requestedPlantIds) {
       const current = currentById.get(id);
       const state = stateById.get(id);
+      const indexedPlant = indexedPlantById.get(id) || walletPlantById.get(id);
       if (current) {
         explanations.push(`Plant #${id} is currently owned by this wallet and has status ${current.statusLabel}.`);
-      } else if (killedDeadIds.has(id) || txKilledDeadIds.has(id)) {
-        explanations.push(`Plant #${id} has kill/burn evidence as the dead plant, so it should no longer appear in the owner's active plant list.`);
+      } else if (indexedPlant?.killedAt || indexedPlant?.burnedAt || killedDeadIds.has(id) || txKilledDeadIds.has(id)) {
+        const reward = indexedPlant?.killRewardDisplay ? ` Recorded reward: ${indexedPlant.killRewardDisplay}.` : '';
+        explanations.push(`Plant #${id} has kill/burn evidence as the dead plant, so it should no longer appear in the owner's active plant list.${reward}`);
       } else if (state) {
         explanations.push(`Plant #${id} still exists onchain with status ${state.statusLabel}, but its current owner is ${state.owner}.`);
       } else {
         explanations.push(`Plant #${id} is not in the wallet's current plant list; the available reads did not prove whether it was transferred, burned, or outside the indexed window.`);
       }
     }
+  }
+
+  if (args.walletLifecycle.burnedOrKilledPlants.length > 0) {
+    const latest = args.walletLifecycle.burnedOrKilledPlants[0];
+    const reward = latest.killRewardDisplay ? ` recorded reward ${latest.killRewardDisplay}` : ' no recorded reward amount in the wallet lifecycle row';
+    explanations.push(`Wallet-indexed lifecycle found a missing/burned plant: #${latest.plantId || latest.id} was killed/burned by plant #${latest.killedByPlantId || 'unknown'} with${reward}.`);
   }
 
   if (args.indexedKilleds.length > 0) {
@@ -1356,6 +1534,8 @@ function buildPlantLifecycleExplanations(args: {
 
   if (args.recentMints.length > 0) {
     explanations.push(`Recent wallet mint evidence found for plant ID(s): ${args.recentMints.map((event) => `#${event.tokenId}`).join(', ')}.`);
+  } else if (args.walletLifecycle.mints.length > 0) {
+    explanations.push(`Wallet-indexed mint evidence found for plant ID(s): ${args.walletLifecycle.mints.map((event) => `#${event.plantId}`).join(', ')}.`);
   } else if (args.indexedMints.length > 0) {
     explanations.push(`Indexed mint evidence found for plant ID(s): ${args.indexedMints.map((event) => `#${event.plantId}`).join(', ')}.`);
   }
@@ -2292,13 +2472,13 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address, includeRecentTransferFallback, limit, plantId, plantIds, txHash }) => withToolResult(
         'get_plant_lifecycle_audit',
-        `Pixotchi plant ownership, indexed Mint/Killed events, and bounded Base RPC logs via ${aiRpcSource}`,
+        `Pixotchi plant ownership, wallet-indexed plant lifecycle events, indexed Mint/Killed events, and bounded Base RPC logs via ${aiRpcSource}`,
         {
-          cache: 'Current ownership is live; indexed lifecycle events are cached briefly; fallback Transfer logs are block-range bounded.',
+          cache: 'Current ownership is live; wallet-indexed lifecycle events are cached briefly; fallback Transfer logs are block-range bounded.',
           confidence: 'medium',
           includeBlock: true,
           limitations: [
-            'Without a plant ID, transaction hash, or recent mint/burn transfer, old missing plants may be outside the searchable window.',
+            'Wallet-only missing-plant reconstruction depends on the live indexer exposing Plant, Mint.to, and PlantTransferEvent history.',
             `Recent wallet Transfer fallback is capped to the most recent ${AI_WALLET_ACTIVITY_BLOCK_RANGE} blocks.`,
             'Standard transaction receipts do not expose internal native ETH transfers, so Killed.reward is used as the contract-recorded reward evidence.',
           ],
@@ -2311,7 +2491,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             ...(plantIds || []),
           ]);
 
-          const [currentPlantsResult, transferResult, receiptResult] = await Promise.allSettled([
+          const [currentPlantsResult, transferResult, receiptResult, walletLifecycleResult] = await Promise.allSettled([
             readPlantsForAddress(target, readClient),
             includeRecentTransferFallback
               ? getKnownWalletTransferActivity(readClient, target, Math.min(limit, AI_WALLET_ACTIVITY_LOG_LIMIT))
@@ -2319,6 +2499,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             txHash
               ? readClient.getTransactionReceipt({ hash: txHash as Hex })
               : Promise.resolve(null),
+            fetchWalletPlantLifecycle(target, limit),
           ]);
 
           const currentPlants = currentPlantsResult.status === 'fulfilled'
@@ -2342,10 +2523,20 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           }
           const txEvents = receipt ? summarizeKnownReceiptLogs(receipt.logs as readonly UntypedValue[]) : [];
 
+          const walletLifecycle = walletLifecycleResult.status === 'fulfilled'
+            ? walletLifecycleResult.value
+            : { burnedOrKilledPlants: [], mints: [], plants: [], transfers: [], transfersOutToZero: [] };
+          if (walletLifecycleResult.status === 'rejected') {
+            errors.push(`walletIndexedLifecycle: ${errorMessage(walletLifecycleResult.reason)}`);
+          }
+
           const candidatePlantIds = normalizePlantIdList([
             ...requestedPlantIds,
             ...currentPlants.map((plant) => plant.id),
             ...(transferActivity?.activities || []).map((activity) => activity.tokenId),
+            ...walletLifecycle.plants.map((plant: UntypedValue) => plant.plantId || plant.id),
+            ...walletLifecycle.mints.map((mint: UntypedValue) => mint.plantId),
+            ...walletLifecycle.transfers.map((transfer: UntypedValue) => transfer.plantId || transfer.tokenId),
             ...txEvents.map((event) => event.tokenId),
             ...txEvents.map((event) => event.deadPlantId),
             ...txEvents.map((event) => event.killerPlantId),
@@ -2367,7 +2558,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
           const indexedLifecycle = indexedResult.status === 'fulfilled'
             ? indexedResult.value
-            : { candidatePlantIds: [], killeds: [], mints: [], truncatedCandidates: false };
+            : { candidatePlantIds: [], killeds: [], mints: [], plants: [], truncatedCandidates: false };
           if (indexedResult.status === 'rejected') {
             errors.push(`indexedLifecycle: ${errorMessage(indexedResult.reason)}`);
           }
@@ -2377,10 +2568,12 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             currentPlants,
             indexedKilleds: indexedLifecycle.killeds,
             indexedMints: indexedLifecycle.mints,
+            indexedPlants: indexedLifecycle.plants,
             recentMints: classifiedTransfers.mintsToWallet,
             requestedPlantIds,
             requestedPlantStates: requestedState.plants,
             txEvents,
+            walletLifecycle,
           });
 
           return {
@@ -2400,7 +2593,15 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             indexedLifecycle: {
               killeds: indexedLifecycle.killeds.slice(0, limit),
               mints: indexedLifecycle.mints.slice(0, limit),
+              plants: indexedLifecycle.plants.slice(0, limit),
               truncatedCandidates: indexedLifecycle.truncatedCandidates,
+            },
+            indexedWalletLifecycle: {
+              burnedOrKilledPlants: walletLifecycle.burnedOrKilledPlants.slice(0, limit),
+              mints: walletLifecycle.mints.slice(0, limit),
+              plants: walletLifecycle.plants.slice(0, limit),
+              transfers: walletLifecycle.transfers.slice(0, limit),
+              transfersOutToZero: walletLifecycle.transfersOutToZero.slice(0, limit),
             },
             recentWalletPlantTransfers: {
               burnOrRemovalTransfers: classifiedTransfers.burnOrRemovalTransfers.slice(0, limit),

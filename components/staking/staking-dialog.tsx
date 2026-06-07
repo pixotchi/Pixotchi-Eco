@@ -6,6 +6,7 @@ import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDes
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RewardResultPanel } from "@/components/ui/premium";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
 import {
   buildApproveStakeCall,
   buildClaimRewardsCall,
@@ -15,7 +16,6 @@ import {
 import UniversalTransaction from "@/components/transactions/universal-transaction";
 import Image from "next/image";
 import { formatUnits, parseUnits } from "viem";
-import { RefreshCw } from "lucide-react";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
@@ -77,6 +77,7 @@ function formatToken(amount?: bigint): string {
 }
 
 const MIN_REFRESH_INTERVAL_MS = 1000;
+const MIN_REFRESH_FEEDBACK_MS = 650;
 const stakingTileClassName = "chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]";
 
 export default function StakingDialog({ open, onOpenChange }: StakingDialogProps) {
@@ -91,6 +92,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const [rewardTimeUnit, setRewardTimeUnit] = useState<bigint | null>(null);
   const [totalStaked, setTotalStaked] = useState<bigint | null>(null);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!address) return;
@@ -190,6 +192,23 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     window.addEventListener('balances:refresh', handler as EventListener);
     return () => window.removeEventListener('balances:refresh', handler as EventListener);
   }, [refresh]);
+
+  const handleManualRefresh = useCallback(async () => {
+    if (manualRefreshing || loading) return;
+
+    const startedAt = Date.now();
+    setManualRefreshing(true);
+
+    try {
+      await refresh();
+    } finally {
+      const remainingFeedbackMs = MIN_REFRESH_FEEDBACK_MS - (Date.now() - startedAt);
+      if (remainingFeedbackMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingFeedbackMs));
+      }
+      setManualRefreshing(false);
+    }
+  }, [loading, manualRefreshing, refresh]);
 
   // Note: Removed balances:refresh listener to prevent double refresh with status bar
   // The staking dialog will only refresh on manual refresh or dialog open
@@ -313,11 +332,13 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => refresh()}
+            onClick={handleManualRefresh}
+            disabled={loading || manualRefreshing}
             title="Refresh"
             aria-label="Refresh stake data"
+            aria-busy={loading || manualRefreshing || undefined}
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshIcon refreshing={loading || manualRefreshing} className="w-4 h-4" />
           </Button>
         </div>
 
@@ -413,12 +434,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               </Button>
             </div>
             {helperText && <div className="text-xs text-destructive">{helperText}</div>}
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              {mode === 'stake' ? (
-                <Button type="button" variant="ghost" size="default" onClick={() => setMaxAmount("stake")} className="px-2 text-xs">Use wallet balance</Button>
-              ) : (
-                <Button type="button" variant="ghost" size="default" onClick={() => setMaxAmount("unstake")} className="px-2 text-xs">Use staked balance</Button>
-              )}
+            <div className="flex items-center justify-end text-xs text-muted-foreground">
               <span>{mode === 'stake' ? `Wallet: ${formatToken(seedBalance)} SEED` : `Staked: ${formatToken(stakeInfo?.staked)} SEED`}</span>
             </div>
           </div>

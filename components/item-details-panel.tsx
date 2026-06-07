@@ -12,7 +12,7 @@ import SwapBuyItemBundle from '@/components/transactions/swap-buy-item-bundle';
 import SwapFencePurchaseBundle from '@/components/transactions/swap-fence-purchase-bundle';
 import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { RewardResultPanel } from '@/components/ui/premium';
+import { InlineBalanceNotice,RewardResultPanel } from '@/components/ui/premium';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FenceV2Config } from '@/lib/contracts';
 import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,getTokenBalance,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
@@ -712,9 +712,9 @@ export default function ItemDetailsPanel({
                 />
               )}
               {ethBalance < ethQuote.ethAmountWithBuffer && (
-                <p className="text-xs text-value text-center">
-                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-                </p>
+                <InlineBalanceNotice className="mt-0">
+                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+                </InlineBalanceNotice>
               )}
             </div>
           ) : disabledMessage ? (
@@ -863,15 +863,15 @@ export default function ItemDetailsPanel({
           )}
 
           {selectedPlant.status === 4 && (
-            <p className="text-xs text-value text-center mt-2">
+            <InlineBalanceNotice>
               Cannot buy items for dead plants.
-            </p>
+            </InlineBalanceNotice>
           )}
 
           {hasInsufficientFunds && !isEthMode && (
-            <p className="text-xs text-value text-center mt-2">
-              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} SEED • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)} SEED
-            </p>
+            <InlineBalanceNotice>
+              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)}
+            </InlineBalanceNotice>
           )}
 
 

@@ -3,17 +3,19 @@
 import { useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import { getLandsByOwner,getPlantsByOwner,getStakeInfo } from "@/lib/contracts";
 import { formatSolAmount } from "@/lib/solana-bridge-executor";
 import { cn,formatLargeNumber } from "@/lib/utils";
-import { RefreshCw } from "lucide-react";
 import Image from "next/image";
 import { type ReactNode,useEffect,useState } from "react";
 import { useAccount,useBalance } from "wagmi";
 
 import { StandardContainer } from "./ui/pixel-container";
+
+const MIN_REFRESH_FEEDBACK_MS = 650;
 
 interface BalanceCardProps {
   className?: string;
@@ -32,6 +34,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
   } = useBalances();
   const isSolana = useIsSolanaWallet();
   const { solBalance, twinInfo, isLoading: solanaLoading } = useSolanaWallet();
+  const [manualRefreshing, setManualRefreshing] = useState(false);
 
   // ETH balance for wallet profile variant (EVM only)
   const {
@@ -97,11 +100,24 @@ export default function BalanceCard({ className = "", variant = "default", onRef
   }, [address, variant]);
 
   const handleRefresh = async () => {
-    if (variant === "wallet-profile" && !isSolana) {
-      refetchEthBalance();
+    if (manualRefreshing) return;
+
+    const startedAt = Date.now();
+    setManualRefreshing(true);
+
+    try {
+      if (variant === "wallet-profile" && !isSolana) {
+        await refetchEthBalance();
+      }
+      await refreshBalances();
+      await onRefresh?.();
+    } finally {
+      const remainingFeedbackMs = MIN_REFRESH_FEEDBACK_MS - (Date.now() - startedAt);
+      if (remainingFeedbackMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingFeedbackMs));
+      }
+      setManualRefreshing(false);
     }
-    await refreshBalances();
-    if (onRefresh) onRefresh();
   };
 
   if (!address && !isSolana) return null;
@@ -176,14 +192,12 @@ export default function BalanceCard({ className = "", variant = "default", onRef
             variant="surfaceControl"
             size="iconCompact"
             onClick={handleRefresh}
-            disabled={ethLoading || loading}
+            disabled={ethLoading || loading || manualRefreshing}
             aria-label="Refresh balances"
+            aria-busy={ethLoading || loading || manualRefreshing || undefined}
             className="h-8 min-h-8 w-8 min-w-8 p-0"
           >
-            <RefreshCw
-              className={`h-4 w-4 ${ethLoading || loading ? "animate-spin" : ""
-                }`}
-            />
+            <RefreshIcon refreshing={ethLoading || loading || manualRefreshing} className="h-4 w-4" />
           </Button>
         </div>
 

@@ -7,7 +7,7 @@ import SpinGameTransaction from "@/components/transactions/spin-game-transaction
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
-import { DisabledReason, RewardResultPanel } from "@/components/ui/premium";
+import { DisabledReason, InlineBalanceNotice, RewardResultPanel } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { getBaseLogClient } from "@/lib/base-rpc";
 import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
@@ -139,25 +139,6 @@ function getArcadeToneClassName(tone: ArcadeTone) {
     success: "text-[hsl(var(--success-strong))]",
     warning: "text-[hsl(var(--warning-foreground))]",
   }[tone];
-}
-
-function ArcadeStatRow({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: ReactNode;
-  value: ReactNode;
-  tone?: ArcadeTone;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/55 px-3 py-2 text-xs">
-      <span className="min-w-0 text-muted-foreground">{label}</span>
-      <span className={cn("shrink-0 text-right font-semibold tabular-nums", getArcadeToneClassName(tone))}>
-        {value}
-      </span>
-    </div>
-  );
 }
 
 function ArcadeStatLine({
@@ -922,17 +903,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const currentCooldown = withStar ? cooldown.star : cooldown.normal;
   const disabled = !seed || !address || currentCooldown > 0;
   const starsAvailable = plant?.stars ?? 0;
+  const boxStarCost = 1;
   const boxPlayDisabled = disabled || (withStar && starsAvailable <= 0);
   const spinPlayDisabled = pending ? !canReveal : !(commitmentHex && canCommit);
+  const boxHasInsufficientStars = withStar && starsAvailable < boxStarCost;
+  const spinHasInsufficientStars = !pending && starsAvailable < spinStarCost;
   const boxDisabledReason = !address
     ? "Connect a wallet before opening a box."
     : !seed
       ? "Choose a box to play."
       : currentCooldown > 0
         ? `Box cooldown clears in ${formatDuration(currentCooldown)}.`
-        : withStar && starsAvailable <= 0
-          ? "Collect a star before playing with stars."
-          : null;
+        : null;
   const spinDisabledReason = pending
     ? canReveal
       ? null
@@ -942,7 +924,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       : spinCooldown > 0
         ? `SpinLeaf cooldown clears in ${formatDuration(spinCooldown)}.`
         : starsAvailable < spinStarCost
-          ? `SpinLeaf needs ${spinStarCost} star${spinStarCost === 1 ? "" : "s"}.`
+          ? null
           : !commitmentHex
             ? "Preparing the spin commitment."
             : null;
@@ -991,9 +973,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 <BoxGrid />
 
                 <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
-                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <div className="min-w-0 font-medium text-foreground">
-                      {withStar ? 'Playing with Stars' : 'Playing without Stars'}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground">Box play</div>
+                      <p className="text-xs text-muted-foreground">Pick a box, then choose whether to spend a star.</p>
                     </div>
                     <div className="grid shrink-0 grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-border/55 bg-card/85 bg-[image:var(--gradient-control-track)] p-1">
                       <Button
@@ -1029,11 +1012,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <ArcadeStatRow label="Selected box" value={seed ? `Box ${seed}` : "None"} tone={seed ? "primary" : "warning"} />
-                    <ArcadeStatRow label="Cooldown" value={currentCooldown > 0 ? formatDuration(currentCooldown) : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
-                    <ArcadeStatRow label="Mode" value={withStar ? "Use star" : "No star"} tone={withStar ? "primary" : "default"} />
-                    <ArcadeStatRow label="Stars available" value={starsAvailable} tone={withStar && starsAvailable <= 0 ? "danger" : "default"} />
+                  <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs shadow-[var(--shadow-hairline)]">
+                    <ArcadeStatLine label="Selected box" value={seed ? `Box ${seed}` : "None"} tone={seed ? "primary" : "warning"} />
+                    <ArcadeStatLine label="Cooldown" value={currentCooldown > 0 ? formatDuration(currentCooldown) : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
+                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={boxHasInsufficientStars ? "danger" : "default"} />
                   </div>
 
                   {boxDisabledReason && <DisabledReason>{boxDisabledReason}</DisabledReason>}
@@ -1286,6 +1268,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               }}
               onRewardConfigUpdate={handleRewardUpdate}
             />
+          )}
+
+          {selectedGame === "box" && boxHasInsufficientStars && (
+            <InlineBalanceNotice>
+              Not enough Stars. Balance: {starsAvailable} • Required: {boxStarCost}
+            </InlineBalanceNotice>
+          )}
+
+          {selectedGame === "spin" && spinHasInsufficientStars && (
+            <InlineBalanceNotice>
+              Not enough Stars. Balance: {starsAvailable} • Required: {spinStarCost}
+            </InlineBalanceNotice>
           )}
         </DialogFooter>
       </DialogContent>

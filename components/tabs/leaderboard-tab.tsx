@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { PaginationFooter } from "@/components/ui/pagination-footer";
-import { DisabledReason } from "@/components/ui/premium";
+import { DisabledReason, InlineBalanceNotice } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
@@ -860,7 +860,7 @@ export default function LeaderboardTab() {
     fillDesktop = false
   ) {
     return (
-      <div className={cn("flex h-full min-h-0 flex-col", fillDesktop && "min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col")}>
+      <div className={cn("flex h-full min-h-0 flex-col gap-3", fillDesktop && "min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col")}>
         <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
           {mobileRows.map((row) => renderRow(row))}
         </div>
@@ -1338,12 +1338,12 @@ export default function LeaderboardTab() {
       );
     }
 
-    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow);
+    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow, true);
   };
 
   return (
     <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:h-[calc(100dvh-12rem)] xl:h-fit">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:h-[calc(100dvh-12rem)] xl:h-[calc(100dvh-7rem)]">
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between min-[54rem]:grid min-[54rem]:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
@@ -1439,7 +1439,7 @@ export default function LeaderboardTab() {
             </div>
           )}
         </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-hidden">
+        <CardContent className="min-h-0 flex-1 overflow-visible">
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (
@@ -1454,7 +1454,7 @@ export default function LeaderboardTab() {
                 <div className="text-center text-muted-foreground">No lands found.</div>
               )
             ) : (
-              renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow)
+              renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow, true)
             )
           ) : boardType === 'stake' ? (
             stakeLoading && totalStakeItems === 0 ? (
@@ -1476,7 +1476,7 @@ export default function LeaderboardTab() {
                 <div className="text-center text-muted-foreground">No stakers found.</div>
               )
             ) : (
-              renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow)
+              renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow, true)
             )
           ) : rocksDisabledNotice ? (
             renderRankingState(
@@ -1506,7 +1506,7 @@ export default function LeaderboardTab() {
                 <div className="text-center text-muted-foreground">No rock earners found.</div>
               )
             ) : (
-              renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow)
+              renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow, true)
             )
           )}
         </CardContent>
@@ -1524,7 +1524,7 @@ export default function LeaderboardTab() {
 
           <DialogBody className="space-y-4 pb-4 pr-1">
             {targetPlant && (
-              <div className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
+              <div className="chat-white-surface flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-card/95 bg-[image:var(--gradient-surface)] p-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
                   <div className="min-w-0">
@@ -1969,7 +1969,9 @@ export default function LeaderboardTab() {
                       }}
                     />
                     {!hasEnough && (
-                      <div className="text-xs text-destructive">Insufficient SEED balance (requires {formatTokenAmount(revivePrice)} SEED)</div>
+                      <InlineBalanceNotice>
+                        Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}
+                      </InlineBalanceNotice>
                     )}
                   </>
                 );

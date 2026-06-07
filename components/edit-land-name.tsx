@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
 	Dialog,
+	DialogBody,
 	DialogContent,
 	DialogDescription,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
@@ -25,6 +27,8 @@ interface EditLandNameProps {
 }
 
 const MAX_NAME_LENGTH = 9; // match plant constraints
+const renamePanelClassName =
+	"chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
 
 export function EditLandName({ land, onNameChanged, className = "", iconSize = 16 }: EditLandNameProps) {
 	const { address } = useAccount();
@@ -78,22 +82,29 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 				</Button>
 			</DialogTrigger>
 
-			<DialogContent className="max-w-md">
+			<DialogContent surface="soft" className="max-w-md">
 				<DialogHeader>
 					<DialogTitle className="text-lg font-semibold">Change Land Name</DialogTitle>
 					<DialogDescription>Set a new onchain name for your land.</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-6">
-					<div className="space-y-3">
-						<label htmlFor="land-name" className="text-sm font-medium">New Name</label>
+				<DialogBody className="space-y-4 pt-4">
+					<section className={renamePanelClassName}>
+						<div className="mb-3 flex items-center justify-between gap-3">
+							<label htmlFor="land-name" className="text-sm font-semibold text-foreground">New Name</label>
+							<span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+								Land #{land.tokenId.toString()}
+							</span>
+						</div>
 						<Input id="land-name" value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Enter new name..." maxLength={MAX_NAME_LENGTH} className="w-full font-pixel" />
-						<div className="flex justify-between text-xs text-muted-foreground">
+						<div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
 							<span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
 							{newName.length === MAX_NAME_LENGTH && <span className="text-destructive">Maximum length reached</span>}
 						</div>
-					</div>
+					</section>
+				</DialogBody>
 
+				<DialogFooter sticky className="block space-y-2">
 					{canSubmit ? (
 						<LandNameTransaction
 							landId={land.tokenId}
@@ -110,7 +121,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 							{trimmedName.length === 0 ? 'Enter a name' : trimmedName.length > MAX_NAME_LENGTH ? 'Name too long' : trimmedName === (land.name || '').trim() ? 'Name unchanged' : 'Change Name'}
 						</Button>
 					)}
-				</div>
+				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);

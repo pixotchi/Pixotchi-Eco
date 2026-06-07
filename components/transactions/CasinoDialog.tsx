@@ -738,7 +738,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 surface="game"
                 size="full"
                 stickyFooter
-                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino.png')] bg-cover bg-center bg-no-repeat p-3 sm:p-4 md:p-6"
+                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino.png')] bg-cover bg-center bg-no-repeat !p-3 sm:!p-4 md:!p-6"
             >
                 <DialogTitle className="sr-only">Roulette</DialogTitle>
                 <DialogDescription className="sr-only">
@@ -1008,7 +1008,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     </div>
 
                 </div>
-                <DialogFooter sticky className="block space-y-2 -bottom-3 -mx-3 -mb-3 border-white/15 bg-black bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.96)_42%,rgba(0,0,0,1)_100%)] px-3 pt-3 text-white backdrop-blur-md sm:-bottom-4 sm:-mb-4 sm:-ml-4 sm:-mr-7 sm:px-4 md:-bottom-6 md:-mb-6 md:-ml-6 md:-mr-9 md:px-6">
+                <DialogFooter sticky className="block space-y-2 !-bottom-3 !-mx-3 !-mb-3 mt-auto border-white/15 bg-black bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.96)_42%,rgba(0,0,0,1)_100%)] px-3 pt-3 text-white backdrop-blur-md sm:!-bottom-4 sm:!-mx-4 sm:!-mb-4 sm:px-4 md:!-bottom-6 md:!-mx-6 md:!-mb-6 md:px-6">
                     {!pendingGame && config && !config.enabled ? (
                         <Button className="w-full" disabled variant="secondary">
                             Roulette disabled

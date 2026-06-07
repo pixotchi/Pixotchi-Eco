@@ -104,7 +104,12 @@ export default function StatusBar({
   const isSolana = useIsSolanaWallet();
   const { solBalance } = useSolanaWallet();
   const isHeaderPlacement = placement === "header";
-  const showEthBalance = (isHeaderPlacement || showEthInStandalone) && !isSolana;
+  const statusRootRef = React.useRef<HTMLDivElement>(null);
+  const [useCompactStandaloneStatus, setUseCompactStandaloneStatus] = useState(true);
+  const showEthBalance = (
+    isHeaderPlacement ||
+    (showEthInStandalone && !useCompactStandaloneStatus)
+  ) && !isSolana;
   const { data: ethBalance, isLoading: ethLoading } = useBalance({
     address,
     query: {
@@ -127,6 +132,34 @@ export default function StatusBar({
   useEffect(() => {
     return onStakingDialogOpen(() => setStakingOpen(true));
   }, []);
+
+  useEffect(() => {
+    if (isHeaderPlacement || typeof window === "undefined") {
+      setUseCompactStandaloneStatus(false);
+      return;
+    }
+
+    const syncCompactStatus = () => {
+      const statusWidth = statusRootRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+      const isBelowTabletLayout = !window.matchMedia("(min-width: 54rem)").matches;
+      const isPortraitLayout = window.matchMedia("(orientation: portrait)").matches;
+      setUseCompactStandaloneStatus(isBelowTabletLayout || isPortraitLayout || statusWidth < 520);
+    };
+
+    syncCompactStatus();
+
+    const resizeObserver = typeof ResizeObserver !== "undefined" && statusRootRef.current
+      ? new ResizeObserver(syncCompactStatus)
+      : null;
+
+    resizeObserver?.observe(statusRootRef.current as Element);
+    window.addEventListener("resize", syncCompactStatus);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", syncCompactStatus);
+    };
+  }, [isHeaderPlacement]);
 
   const useDetailedBalances = showEthBalance;
   const seedValue = useDetailedBalances ? formatTokenDetailed(seed, 18, { maxFractionDigits: 2 }) : formatTokenShort(seed);
@@ -159,6 +192,7 @@ export default function StatusBar({
 
   return (
     <div
+      ref={statusRootRef}
       data-viewport-shell={!isHeaderPlacement ? "status" : undefined}
       className={isHeaderPlacement ? "shrink-0" : "w-full bg-transparent xl:flex xl:justify-end"}
       role="region"

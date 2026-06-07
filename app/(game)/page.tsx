@@ -599,8 +599,8 @@ export default function App() {
     if (typeof window === "undefined" || !window.matchMedia) return;
 
     const desktopQuery = window.matchMedia("(min-width: 80rem)");
-    const compactLandscapeQuery = window.matchMedia("(min-width: 48rem) and (max-height: 700px)");
-    const roomyPortraitQuery = window.matchMedia("(min-width: 48rem)");
+    const compactLandscapeQuery = window.matchMedia("(min-width: 54rem) and (max-height: 700px)");
+    const roomyPortraitQuery = window.matchMedia("(min-width: 54rem)");
     const syncShellMode = () => {
       setIsDesktopShell(desktopQuery.matches);
       setIsHeaderStatusPlacement(desktopQuery.matches || compactLandscapeQuery.matches);

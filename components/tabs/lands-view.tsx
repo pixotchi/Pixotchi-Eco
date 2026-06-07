@@ -717,13 +717,6 @@ function LandsViewContent() {
           </div>
 
           <div className="min-w-0 space-y-4">
-          {lands.length > 0 && (
-            <BatchClaimCard
-              className={selectedUtilityPanel === 'batch-claim' ? "hidden" : "hidden xl:block"}
-              lands={lands}
-              onSuccess={handleBatchClaimSuccess}
-            />
-          )}
           {/* Building Management Section */}
           <TabCard className="xl:h-fit xl:w-full">
             <CardHeader>
@@ -786,13 +779,19 @@ function LandsViewContent() {
                           <BuildingGrid
                             buildings={villageBuildings}
                             buildingType="village"
-                            selectedBuilding={selectedBuilding}
+                            selectedBuilding={selectedUtilityPanel === 'batch-claim' ? null : selectedBuilding}
                             selectedBuildingType={buildingType}
                             onBuildingSelect={(building) => handleBuildingSelect('village', building)}
                             currentBlock={currentBlock}
                             landId={selectedLand.tokenId}
                             gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
                             denseLabels
+                            extraItems={lands.length > 0 ? (
+                              <BatchClaimBuildingTile
+                                selected={selectedUtilityPanel === 'batch-claim'}
+                                onSelect={handleBatchClaimUtilitySelect}
+                              />
+                            ) : null}
                           />
                         </section>
 

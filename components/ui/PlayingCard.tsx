@@ -81,7 +81,7 @@ export default function PlayingCard({ value, hidden = false, small = false, clas
     if (hidden) {
         return (
             <div
-                className={`${sizeClasses} rounded-lg border-2 border-white/10 
+                className={`${sizeClasses} rounded-[3px] border-2 border-white/10
                     relative overflow-hidden shadow-lg ${className}`}
             >
                 {/* Use the custom card back image */}
@@ -97,7 +97,7 @@ export default function PlayingCard({ value, hidden = false, small = false, clas
 
     return (
         <div
-            className={`${sizeClasses} rounded-lg border-2 border-white/10
+            className={`${sizeClasses} rounded-[3px] border-2 border-white/10
                   flex flex-col items-center justify-center shadow-lg bg-cover bg-center bg-no-repeat ${className}`}
             style={{ backgroundImage: "url('/icons/cardbjfront.png')" }}
         >

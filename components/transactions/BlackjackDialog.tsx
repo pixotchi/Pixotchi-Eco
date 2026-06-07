@@ -61,7 +61,7 @@ const BLACKJACK_WARNING_ACTION_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border 
 const BLACKJACK_SPECIAL_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
 const BLACKJACK_SPECIAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
 const BLACKJACK_NEUTRAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/15 bg-white/10 text-white/90 hover:bg-white/15`;
-const BLACKJACK_STICKY_ACTIONS_CLASS = "surface-footer-divider dialog-footer-surface sticky z-10 -bottom-3 -mx-3 -mb-3 space-y-3 border-white/15 bg-black bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.96)_42%,rgba(0,0,0,1)_100%)] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 text-white backdrop-blur-md sm:-bottom-4 sm:-mb-4 sm:-ml-4 sm:-mr-7 sm:px-4";
+const BLACKJACK_STICKY_ACTIONS_CLASS = "surface-footer-divider dialog-footer-surface sticky bottom-0 z-10 -mx-3 mt-auto space-y-3 overflow-visible border-white/15 bg-black bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.96)_42%,rgba(0,0,0,1)_100%)] px-3 pb-[max(0.875rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 text-white backdrop-blur-md sm:-mx-4 sm:px-4";
 
 /**
  * Simplified UI phase model for server-signed randomness flow
@@ -1283,7 +1283,7 @@ export default function BlackjackDialog({
                 hideCloseButton
                 mobileMode="center"
                 surface="game"
-                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj.png')] bg-cover bg-center bg-no-repeat p-3 text-white sm:p-4"
+                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj.png')] bg-cover bg-center bg-no-repeat !p-0 text-white"
             >
                 <DialogTitle className="sr-only">Blackjack</DialogTitle>
                 <DialogDescription className="sr-only">
@@ -1300,7 +1300,7 @@ export default function BlackjackDialog({
                     <X className="h-4 w-4" aria-hidden="true" />
                 </Button>
 
-                <div className="space-y-4 pb-3 pt-1 sm:space-y-5">
+                <div className="flex min-h-0 flex-1 flex-col gap-4 p-3 pb-0 pt-4 sm:gap-5 sm:p-4 sm:pb-0">
                     {/* Dealer Hand */}
                     {showDealerHand && (
                         <CardHand
@@ -1478,6 +1478,11 @@ export default function BlackjackDialog({
                                 ? 'This Blackjack game was started by another wallet.'
                                 : 'Connect the wallet that started this Blackjack game.'}
                         </div>
+                    )}
+
+                    {/* Error display */}
+                    {error && uiPhase !== 'betting' && (
+                        <p className="text-red-400 text-sm text-center">{error}</p>
                     )}
 
                     {/* Playing Phase - Action Buttons */}
@@ -1676,10 +1681,6 @@ export default function BlackjackDialog({
                         </Button>
                     )}
 
-                    {/* Error display */}
-                    {error && uiPhase !== 'betting' && (
-                        <p className="text-red-400 text-sm text-center">{error}</p>
-                    )}
                 </div>
             </DialogContent>
         </Dialog>

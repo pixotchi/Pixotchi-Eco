@@ -30,8 +30,10 @@ import {
 import { formatTokenAmount, getCasinoTokenImage } from "@/lib/utils";
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
+import DisabledTransaction from "@/components/transactions/disabled-transaction";
 import CasinoDialog from "@/components/transactions/CasinoDialog";
 import BlackjackDialog from "@/components/transactions/BlackjackDialog";
+import { InlineBalanceNotice } from "@/components/ui/premium";
 import { toast } from "react-hot-toast";
 import { useWalletClient, useAccount, useBalance } from "wagmi";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
@@ -381,9 +383,12 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                 Checking balance...
               </Button>
             ) : buildingConfig && !hasSufficientBalance ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Insufficient balance
-              </Button>
+              <>
+                <DisabledTransaction buttonText={`Insufficient ${buildTokenSymbol} Balance`} buttonClassName="w-full" />
+                <InlineBalanceNotice>
+                  Not enough {buildTokenSymbol}. Balance: {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."} • Required: {buildCostDisplay}
+                </InlineBalanceNotice>
+              </>
             ) : !hasApproval && buildingConfig ? (
               <ApproveTransaction
                 spenderAddress={LAND_CONTRACT_ADDRESS}

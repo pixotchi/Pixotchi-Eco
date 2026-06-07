@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
 import { CLIENT_ENV } from "@/lib/env-config";
-import { cn } from "@/lib/utils";
 
 type VersionPayload = {
   buildId?: string;
@@ -131,7 +131,7 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
           </div>
         </div>
         <Button size="xs" onClick={handleRefresh} disabled={refreshing} className="shrink-0">
-          <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", refreshing && "animate-spin")} />
+          <RefreshIcon refreshing={refreshing} className="mr-1.5 h-3.5 w-3.5" />
           {refreshing ? "Refreshing..." : "Refresh"}
         </Button>
       </div>

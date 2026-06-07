@@ -636,16 +636,6 @@ export default function BlackjackTransaction({
                         disabled={phase !== "ready"}
                         ariaLabel={`${resolvedButtonAriaLabel}. Confirm transaction`}
                     />
-                    {phase === "ready" && (
-                        <button
-                            type="button"
-                            onClick={() => resetPreparedAction("cancelled")}
-                            aria-label="Cancel prepared Blackjack action"
-                            className="min-h-11 w-full rounded-[var(--radius-control)] border border-white/20 bg-black/30 px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:bg-black/50"
-                        >
-                            Cancel prepared action
-                        </button>
-                    )}
                 </div>
                 <GlobalTransactionToast />
             </Transaction>

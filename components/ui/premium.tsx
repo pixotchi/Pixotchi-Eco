@@ -68,6 +68,26 @@ export function StatusChip({
   );
 }
 
+export function InlineBalanceNotice({
+  children,
+  className,
+}: React.HTMLAttributes<HTMLDivElement>) {
+  if (!children) return null;
+  return (
+    <div
+      className={cn(
+        "mt-2 flex min-h-10 w-full items-center justify-start gap-2 rounded-full border border-destructive/35 bg-destructive/10 bg-[linear-gradient(180deg,hsl(var(--destructive)/0.10)_0%,hsl(var(--destructive)/0.06)_100%)] px-3.5 py-2 text-left text-xs font-medium leading-snug text-foreground/70 shadow-[var(--shadow-hairline)]",
+        className
+      )}
+      role="status"
+      aria-live="polite"
+    >
+      <Info className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+      {children}
+    </div>
+  );
+}
+
 export function ActionBar({
   children,
   className,
@@ -77,7 +97,7 @@ export function ActionBar({
     <div
       className={cn(
         sticky
-          ? "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6"
+          ? "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 overflow-visible px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6"
           : "bg-inherit",
         className
       )}

@@ -34,6 +34,7 @@ interface PlantNameTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  hideLabel?: boolean;
 }
 
 export function PlantNameTransaction({
@@ -43,7 +44,8 @@ export function PlantNameTransaction({
   onError,
   buttonText = "Change Name (350 SEED)",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  hideLabel = false
 }: PlantNameTransactionProps) {
 
   const { isSponsored } = usePaymaster();
@@ -76,10 +78,12 @@ export function PlantNameTransaction({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{buttonText}</span>
-        <SponsoredBadge show={isSponsored && isSmartWallet} />
-      </div>
+      {!hideLabel && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">{buttonText}</span>
+          <SponsoredBadge show={isSponsored && isSmartWallet} />
+        </div>
+      )}
 
       <Transaction
         calls={transformedCalls}

@@ -521,6 +521,30 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
       tokenId: entry.tokenId,
       txHash: entry.txHash,
     });
+    const compactLifecyclePlant = (entry: UntypedValue) => ({
+      burnedAtIso: entry.burnedAtIso,
+      currentOwner: entry.currentOwner,
+      killedAtIso: entry.killedAtIso,
+      killedBy: entry.killedBy,
+      killedByPlantId: entry.killedByPlantId,
+      killRewardDisplay: entry.killRewardDisplay,
+      killTransactionHash: entry.killTransactionHash,
+      mintedTimestampIso: entry.mintedTimestampIso,
+      mintedTo: entry.mintedTo,
+      plantId: entry.plantId || entry.id,
+      strain: entry.strain,
+    });
+    const compactLifecycleTransfer = (entry: UntypedValue) => ({
+      direction: entry.direction,
+      from: entry.from,
+      isBurn: entry.isBurn,
+      isMint: entry.isMint,
+      kind: entry.kind,
+      plantId: entry.plantId || entry.tokenId,
+      timestampIso: entry.timestampIso,
+      to: entry.to,
+      txHash: entry.txHash,
+    });
     return {
       address: data?.address,
       candidatePlantIdsChecked: (data?.candidatePlantIdsChecked || []).slice(0, 30),
@@ -536,7 +560,15 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
       indexedLifecycle: {
         killeds: (data?.indexedLifecycle?.killeds || []).slice(0, 8),
         mints: (data?.indexedLifecycle?.mints || []).slice(0, 8),
+        plants: (data?.indexedLifecycle?.plants || []).slice(0, 8).map(compactLifecyclePlant),
         truncatedCandidates: data?.indexedLifecycle?.truncatedCandidates,
+      },
+      indexedWalletLifecycle: {
+        burnedOrKilledPlants: (data?.indexedWalletLifecycle?.burnedOrKilledPlants || []).slice(0, 8).map(compactLifecyclePlant),
+        mints: (data?.indexedWalletLifecycle?.mints || []).slice(0, 8),
+        plants: (data?.indexedWalletLifecycle?.plants || []).slice(0, 8).map(compactLifecyclePlant),
+        transfers: (data?.indexedWalletLifecycle?.transfers || []).slice(0, 8).map(compactLifecycleTransfer),
+        transfersOutToZero: (data?.indexedWalletLifecycle?.transfersOutToZero || []).slice(0, 8).map(compactLifecycleTransfer),
       },
       recentWalletPlantTransfers: {
         burnOrRemovalTransfers: (data?.recentWalletPlantTransfers?.burnOrRemovalTransfers || []).slice(0, 8).map(compactActivity),

@@ -5,9 +5,9 @@ import ChatMessageComponent from "./chat-message";
 import { useChat } from "./chat-context";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
 import Image from "next/image";
 import type { ChatMode } from "@/lib/types";
-import { RefreshCw } from "lucide-react";
 
 const SCROLL_THRESHOLD = 56;
 
@@ -99,7 +99,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
                     disabled={isRefreshingSession}
                     onClick={retryPublicChatSession}
                   >
-                    <RefreshCw className={`h-4 w-4 ${isRefreshingSession ? 'animate-spin' : ''}`} aria-hidden="true" />
+                    <RefreshIcon refreshing={isRefreshingSession} className="h-4 w-4" />
                     {isRefreshingSession ? 'Refreshing...' : 'Refresh session'}
                   </Button>
                 </div>

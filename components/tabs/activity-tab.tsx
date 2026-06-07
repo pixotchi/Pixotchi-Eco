@@ -387,7 +387,7 @@ export default function ActivityTab() {
     pagination?: PaginationConfig
   ) => {
     const renderFeedState = (content: ReactNode) => (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col gap-3">
         <div
           data-activity-feed-scroll
           className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3"
@@ -441,7 +441,7 @@ export default function ActivityTab() {
       : activities;
 
     return (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col gap-3">
         <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3">
           {visibleActivities.map(renderActivity)}
         </div>
@@ -482,7 +482,7 @@ export default function ActivityTab() {
             />
           </div>
         </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-hidden">
+        <CardContent className="min-h-0 flex-1 overflow-visible">
           {renderFeedContent(view, selectedActivities, selectedLoading, selectedError, {
             page: currentPage,
             setPage: setCurrentPage,
@@ -491,13 +491,13 @@ export default function ActivityTab() {
       </TabCard>
 
       <div className="hidden min-[54rem]:grid min-[54rem]:min-h-0 min-[54rem]:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] min-[54rem]:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col xl:h-[calc(100dvh-7rem)]">
+        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col min-[54rem]:overflow-hidden xl:h-[calc(100dvh-7rem)]">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-hidden">
+          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
             {renderFeedContent("all", activitiesByView.all, loadingByView.all, errorByView.all, {
               page: desktopPageByView.all,
               setPage: (nextPage) => setDesktopPage("all", nextPage),
@@ -505,13 +505,13 @@ export default function ActivityTab() {
           </CardContent>
         </TabCard>
 
-        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col xl:h-[calc(100dvh-7rem)]">
+        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col min-[54rem]:overflow-hidden xl:h-[calc(100dvh-7rem)]">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-hidden">
+          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
             {renderFeedContent("my", activitiesByView.my, loadingByView.my, errorByView.my, {
               page: desktopPageByView.my,
               setPage: (nextPage) => setDesktopPage("my", nextPage),

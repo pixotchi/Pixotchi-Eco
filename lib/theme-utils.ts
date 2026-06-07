@@ -124,7 +124,9 @@ const THEME_COLORS = {
     input: '216 20% 50%',
     ring: '204 92% 74%',
     'scene-glow': '204 92% 62%',
-    'scene-floor': '216 30% 29%'
+    'scene-floor': '216 30% 29%',
+    'chromatic-layer-surface': '216 28% 40%',
+    'chromatic-layer-highlight': '216 34% 47%'
   },
   green: {
     ...COLORFUL_BASE_COLORS,
@@ -145,8 +147,8 @@ const THEME_COLORS = {
     ring: '151 78% 24%',
     'scene-glow': '88 72% 82%',
     'scene-floor': '151 52% 86%',
-    'chromatic-layer-surface': '116 32% 89%',
-    'chromatic-layer-highlight': '112 36% 91%'
+    'chromatic-layer-surface': '116 30% 90%',
+    'chromatic-layer-highlight': '112 34% 92%'
   },
   yellow: {
     ...COLORFUL_BASE_COLORS,
@@ -169,8 +171,8 @@ const THEME_COLORS = {
     ring: '33 86% 29%',
     'scene-glow': '38 92% 80%',
     'scene-floor': '48 78% 88%',
-    'chromatic-layer-surface': '46 58% 89%',
-    'chromatic-layer-highlight': '48 66% 91%'
+    'chromatic-layer-surface': '46 56% 90%',
+    'chromatic-layer-highlight': '48 64% 92%'
   },
   red: {
     ...COLORFUL_BASE_COLORS,
@@ -193,8 +195,8 @@ const THEME_COLORS = {
     ring: '348 62% 36%',
     'scene-glow': '24 74% 82%',
     'scene-floor': '354 48% 89%',
-    'chromatic-layer-surface': '12 34% 90%',
-    'chromatic-layer-highlight': '8 40% 92%'
+    'chromatic-layer-surface': '12 32% 91%',
+    'chromatic-layer-highlight': '8 38% 93%'
   },
   pink: {
     ...COLORFUL_BASE_COLORS,
@@ -215,8 +217,8 @@ const THEME_COLORS = {
     ring: '328 68% 36%',
     'scene-glow': '276 66% 84%',
     'scene-floor': '326 56% 90%',
-    'chromatic-layer-surface': '326 36% 90%',
-    'chromatic-layer-highlight': '326 46% 92%'
+    'chromatic-layer-surface': '326 34% 91%',
+    'chromatic-layer-highlight': '326 44% 93%'
   },
   blue: {
     ...COLORFUL_BASE_COLORS,
@@ -237,8 +239,8 @@ const THEME_COLORS = {
     ring: '219 78% 36%',
     'scene-glow': '188 76% 84%',
     'scene-floor': '216 60% 90%',
-    'chromatic-layer-surface': '212 42% 90%',
-    'chromatic-layer-highlight': '210 54% 92%'
+    'chromatic-layer-surface': '212 40% 91%',
+    'chromatic-layer-highlight': '210 52% 93%'
   },
   violet: {
     ...COLORFUL_BASE_COLORS,
@@ -259,8 +261,8 @@ const THEME_COLORS = {
     ring: '263 72% 38%',
     'scene-glow': '294 62% 86%',
     'scene-floor': '258 54% 91%',
-    'chromatic-layer-surface': '260 36% 90%',
-    'chromatic-layer-highlight': '260 46% 92%'
+    'chromatic-layer-surface': '260 34% 91%',
+    'chromatic-layer-highlight': '260 44% 93%'
   }
 } satisfies Record<Theme, ThemeColorMap>;
 

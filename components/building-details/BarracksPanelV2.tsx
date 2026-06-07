@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { StandardContainer } from "@/components/ui/pixel-container";
+import { InlineBalanceNotice } from "@/components/ui/premium";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
@@ -933,9 +934,12 @@ export default function BarracksPanelV2({
                 onError={(error) => toast.error(`Approval failed: ${error.message || error}`)}
               />
             ) : !hasBuildBalance ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Insufficient balance
-              </Button>
+              <>
+                <DisabledTransaction buttonText={`Insufficient ${buildTokenSymbol} Balance`} buttonClassName="w-full" />
+                <InlineBalanceNotice>
+                  Not enough {buildTokenSymbol}. Balance: {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."} • Required: {buildCostDisplay}
+                </InlineBalanceNotice>
+              </>
             ) : (
               <SponsoredTransaction
                 calls={[buildBarracksBuildCall(landId)]}
@@ -1076,10 +1080,15 @@ export default function BarracksPanelV2({
               onError={(error) => toast.error(`Approval failed: ${error.message || error}`)}
             />
           ) : !hasTrainingBalance ? (
-            <DisabledTransaction
-              buttonText={`Insufficient ${trainingTokenSymbol}`}
-              buttonClassName="w-full"
-            />
+            <>
+              <DisabledTransaction
+                buttonText={`Insufficient ${trainingTokenSymbol} Balance`}
+                buttonClassName="w-full"
+              />
+              <InlineBalanceNotice>
+                Not enough {trainingTokenSymbol}. Balance: {trainingTokenBalance ? formatTokenAmount(trainingTokenBalance.value, trainingTokenDecimals) : "..."} • Required: {formatTokenAmount(trainCostTotal, trainingTokenDecimals)}
+              </InlineBalanceNotice>
+            </>
           ) : (
             <SponsoredTransaction
               calls={[buildBarracksTrainCallV2(landId, troopNumericType(selectedTrainTroop), parsedTrainAmount)]}

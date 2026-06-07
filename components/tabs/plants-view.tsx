@@ -21,6 +21,7 @@ import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import { Input } from "@/components/ui/input";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { StandardContainer } from "@/components/ui/pixel-container";
+import { InlineBalanceNotice } from "@/components/ui/premium";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { ITEM_ICONS } from "@/lib/constants";
 import {
@@ -708,9 +709,9 @@ export default function PlantsView() {
                           }}
                         />
                         {seedBalance < revivePrice && !reviveDataLoading && (
-                          <p className="text-xs text-destructive text-center">
-                            Insufficient SEED balance. You need {formatTokenAmount(revivePrice)} SEED to revive this plant.
-                          </p>
+                          <InlineBalanceNotice>
+                            Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}
+                          </InlineBalanceNotice>
                         )}
                       </>
                     )}

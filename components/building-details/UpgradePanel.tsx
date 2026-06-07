@@ -12,6 +12,7 @@ import DisabledTransaction from '@/components/transactions/disabled-transaction'
 import LeafApproveTransaction from '@/components/transactions/leaf-approve-transaction';
 import { toast } from 'react-hot-toast';
 import { StandardContainer } from '@/components/ui/pixel-container';
+import { InlineBalanceNotice } from '@/components/ui/premium';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useBalances } from '@/lib/balance-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
@@ -170,10 +171,14 @@ export default function UpgradePanel({
             )
           )}
           {hasInsufficientLeaf && !building.isUpgrading && !isMaxLevel && (
-            <p className="text-xs text-value text-center mt-2">Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} LEAF</p>
+            <InlineBalanceNotice>
+              Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} • Required: {formatTokenAmount(building.levelUpgradeCostLeaf)}
+            </InlineBalanceNotice>
           )}
           {hasInsufficientPixotchi && building.isUpgrading && (
-            <p className="text-xs text-value text-center mt-2">Not enough PIXOTCHI for speed up. Balance: {formatTokenAmount(userPixotchiBalance)} PIXOTCHI</p>
+            <InlineBalanceNotice>
+              Not enough PIXOTCHI. Balance: {formatTokenAmount(userPixotchiBalance)} • Required: {formatTokenAmount(building.levelUpgradeCostSeedInstant)}
+            </InlineBalanceNotice>
           )}
         </div>
       </div>
