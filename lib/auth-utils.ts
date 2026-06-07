@@ -40,10 +40,10 @@ function fingerprintAdminKey(adminKey: string): string {
 
 // Admin authentication utility
 export function validateAdminKey(request: NextRequest): boolean {
-  const adminKey = process.env.ADMIN_INVITE_KEY;
+  const adminKey = process.env.ADMIN_TOKEN;
   
   if (!adminKey) {
-    console.error('ADMIN_INVITE_KEY environment variable not set');
+    console.error('ADMIN_TOKEN environment variable not set');
     return false;
   }
   

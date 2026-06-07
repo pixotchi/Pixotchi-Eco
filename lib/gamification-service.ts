@@ -1,9 +1,12 @@
-import { getTodayDateString } from '@/lib/invite-utils';
 import { redis,redisCompareAndSetJSON,redisGetJSON,redisScanKeys,redisSetJSON,withPrefix } from '@/lib/redis';
 import { isGamificationDisabled } from './gamification-feature';
 import type { GmDay,GmLeaderEntry,GmMissionDay,GmProgressProof,GmStreak,GmTaskId } from './gamification-types';
 
 const PX = 'pixotchi:gm:';
+
+function getTodayDateString(): string {
+  return new Date().toISOString().split('T')[0];
+}
 
 const keys = {
   streak: (address: string) => `${PX}streak:${address.toLowerCase()}`,

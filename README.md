@@ -72,7 +72,7 @@ Built on Base and designed to be fast, simple, and fun.
 ## Local development
 1. Install dependencies: `npm install`
 2. Copy the example environment: `cp .env.example .env.local`
-3. Configure at least `NEXT_PUBLIC_URL`, Base RPC endpoints, one Redis/KV provider, and `ADMIN_INVITE_KEY`.
+3. Configure at least `NEXT_PUBLIC_URL`, Base RPC endpoints, one Redis/KV provider, and `ADMIN_TOKEN`.
 4. Add production-like integrations as needed: `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `NEXT_PUBLIC_CDP_CLIENT_API_KEY`, notification provider keys, and AI provider keys.
 5. Run locally: `npm run dev`
 6. Verify before shipping: `npm run typecheck` and `npm run lint`
@@ -80,7 +80,7 @@ Built on Base and designed to be fast, simple, and fun.
 Production deployments fail fast unless the required public URL, at least one unique Base RPC endpoint, indexer config, CDP client key, and Privy client/server keys are present. RPC endpoints may come from any mix of vendors, including a single vendor.
 
 ## Configuration notes
-- Feature flags control major surfaces: invites, gamification, casino/blackjack, barracks, swap module, Base Verify claims, and Solana support.
+- Feature flags control major surfaces: gamification, casino/blackjack, barracks, swap module, Base Verify claims, and Solana support.
 - Solana flows require `NEXT_PUBLIC_SOLANA_ENABLED=true` and a configured `NEXT_PUBLIC_SOLANA_TWIN_ADAPTER`.
 - Notifications can use the Base App provider or Neynar; keep `NEXT_PUBLIC_NOTIFICATION_PROVIDER` and `NOTIFICATION_PROVIDER` in sync.
 - Neural Seed is intentionally read-only. Set `AI_PROVIDER` plus the matching provider key for AI chat.

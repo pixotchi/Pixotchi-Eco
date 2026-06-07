@@ -6,17 +6,13 @@ import { CardContent, TabCard } from "@/components/ui/card";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BaseAnimatedLogo } from "@/components/ui/loading";
 import { Textarea } from "@/components/ui/textarea";
-import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
 import { useFrameContext } from "@/lib/frame-context";
-import { INVITE_CONFIG } from '@/lib/invite-utils';
 import { openExternalUrl } from "@/lib/open-external";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { useTabVisibility } from "@/lib/tab-visibility-context";
-import { InviteStats } from '@/lib/types';
 import packageJson from '@/package.json';
-import { Calendar,Check,Copy,Gift,MessageCircle,PlayCircle,Plus,Radio } from "lucide-react";
+import { MessageCircle,PlayCircle,Radio } from "lucide-react";
 import Image from "next/image";
-import { useCallback,useEffect,useId,useRef,useState } from "react";
+import { useId,useState } from "react";
 import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
 
@@ -85,156 +81,11 @@ export default function AboutTab() {
   const { start, enabled } = useSlideshow();
   const { walletType, isSmartWallet } = useSmartWallet();
   const frameData = useFrameContext();
-  const { isTabVisible } = useTabVisibility();
-  const isVisible = isTabVisible('about');
-  const [stats, setStats] = useState<InviteStats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [recentCodes, setRecentCodes] = useState<Array<{
-    code: string;
-    isUsed: boolean;
-    createdAt: number;
-  }>>([]);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [showAllRecentCodes, setShowAllRecentCodes] = useState(false);
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState(false);
-  const statsRef = useRef<InviteStats | null>(null);
-
-  useEffect(() => {
-    statsRef.current = stats;
-  }, [stats]);
-
-  const loadInviteStats = useCallback(async () => {
-    if (!address) return;
-
-    // Only show loading state if we have no stats yet
-    if (!statsRef.current) {
-      setLoading(true);
-    }
-    try {
-      const response = await fetch('/api/invite/stats', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
-      });
-
-      const data = await response.json();
-
-      if (data.systemEnabled) {
-        setStats(data.stats);
-      }
-    } catch (error) {
-      console.error('Error loading invite stats:', error);
-      toast.error('Failed to load invite statistics');
-    } finally {
-      setLoading(false);
-    }
-  }, [address]);
-
-  const loadUserCodes = useCallback(async () => {
-    if (!address) return;
-
-    try {
-      const response = await fetch('/api/invite/user-codes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Get the most recent 5 codes with their status
-        const codes = data.codes.slice(0, 5).map((codeData: UntypedValue) => ({
-          code: codeData.code,
-          isUsed: codeData.isUsed,
-          createdAt: codeData.createdAt,
-        }));
-        setRecentCodes(codes);
-      }
-    } catch (error) {
-      console.error('Error loading user codes:', error);
-      // Don't show error to user as this is not critical
-    }
-  }, [address]);
-
-  // Load invite stats and user codes when component mounts
-  useEffect(() => {
-    if (address && INVITE_CONFIG.SYSTEM_ENABLED) {
-      loadInviteStats();
-      loadUserCodes();
-    }
-  }, [address, loadInviteStats, loadUserCodes]);
-
-  // Refresh when tab becomes visible
-  useEffect(() => {
-    if (isVisible && address && INVITE_CONFIG.SYSTEM_ENABLED) {
-      loadInviteStats();
-      loadUserCodes();
-    }
-  }, [isVisible, address, loadInviteStats, loadUserCodes]);
-
-  const generateInviteCode = async () => {
-    if (!address) {
-      toast.error('Wallet not connected. Please connect your wallet.');
-      return;
-    }
-
-    setGenerating(true);
-    try {
-      const authHeaders = await getMiniAppQuickAuthHeaders();
-      const response = await fetch('/api/invite/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const newCode = data.code;
-
-        toast.success('New invite code generated!');
-
-        // Auto-copy to clipboard
-        await copyToClipboard(newCode, 'New invite code');
-
-        // Reload both stats and codes to ensure everything is up to date
-        await Promise.all([
-          loadInviteStats(),
-          loadUserCodes(),
-        ]);
-      } else {
-        toast.error(data.error || 'Failed to generate invite code');
-      }
-    } catch (error) {
-      console.error('Error generating invite code:', error);
-      toast.error('Failed to generate invite code');
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   // Note: Gamification streak/missions now handled by TasksInfoDialog component
-
-  const copyToClipboard = async (code: string, label: string = 'Invite code') => {
-    try {
-      // Copy just the code, not the full URL
-      await navigator.clipboard.writeText(code);
-      setCopiedCode(code);
-      toast.success(`${label} copied to clipboard!`);
-
-      // Reset copied state after 2 seconds
-      setTimeout(() => setCopiedCode(null), 2000);
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-      toast.error('Failed to copy to clipboard');
-    }
-  };
 
   const submitFeedback = async () => {
     if (!address) {
@@ -304,139 +155,6 @@ export default function AboutTab() {
 
   return (
     <div className="mx-auto max-w-[36rem] space-y-8 lg:max-w-5xl">
-
-      {/* Invite Section - Only show if system is enabled */}
-      {INVITE_CONFIG.SYSTEM_ENABLED && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Gift className="w-5 h-5" />
-            Invite Friends
-          </h2>
-
-          {/* Compact Stats & Generate Section */}
-          <TabCard>
-            <CardContent className="p-4">
-              {stats && (
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[hsl(var(--info))]">{stats.successfulInvites}</div>
-                    <div className="text-xs text-muted-foreground">Friends</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[hsl(var(--success-strong))]">{stats.dailyRemaining}</div>
-                    <div className="text-xs text-muted-foreground">Remaining</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-violet-700 dark:text-violet-200">{stats.totalInvites}</div>
-                    <div className="text-xs text-muted-foreground">Generated</div>
-                  </div>
-                </div>
-              )}
-
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Share Pixotchi Mini! Generate up to 2 codes daily.
-                </p>
-
-                <Button
-                  onClick={generateInviteCode}
-                  disabled={generating || !stats?.canGenerateToday || loading || !address}
-                  className="w-full max-w-xs"
-                  size="lg"
-                >
-                  {generating ? (
-                    <>
-                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-                      Generating…
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Generate Invite Code
-                    </>
-                  )}
-                </Button>
-
-                {stats && !stats.canGenerateToday && (
-                  <p className="text-xs text-[hsl(var(--warning))] mt-2">
-                    Daily limit reached. Try again tomorrow!
-                  </p>
-                )}
-
-                {!address && (
-                  <p className="text-xs text-[hsl(var(--warning))] mt-2">
-                    Connect your wallet to generate codes
-                  </p>
-                )}
-              </div>
-
-              {/* Recent Codes - Integrated Section */}
-              {recentCodes.length > 0 && (
-                <div className="mt-6 pt-4 border-t">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-medium">Your Recent Codes</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {(showAllRecentCodes ? recentCodes : recentCodes.slice(0, 3)).map((codeData) => (
-                      <div
-                        key={codeData.code}
-                        className={`flex items-center justify-between gap-2 rounded-[var(--radius-control)] border border-border/60 bg-muted/50 p-2.5 ${codeData.isUsed ? 'opacity-60' : ''
-                          }`}
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${codeData.isUsed ? 'bg-[hsl(var(--success))]' : 'bg-[hsl(var(--info))]'
-                            }`} />
-                          <div className={`min-w-0 truncate font-mono text-sm font-semibold ${codeData.isUsed ? 'line-through text-muted-foreground' : ''
-                            }`}>
-                            {codeData.code}
-                          </div>
-                          {codeData.isUsed && (
-                            <span className="text-xs bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))] px-1.5 py-0.5 rounded-full">
-                              Used
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => copyToClipboard(codeData.code)}
-                            className="shrink-0 hover:bg-background"
-                            disabled={codeData.isUsed}
-                            aria-label={`Copy invite code ${codeData.code}`}
-                          >
-                            {copiedCode === codeData.code ? (
-                              <Check className="w-3 h-3 text-[hsl(var(--success-strong))]" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {recentCodes.length > 3 && (
-                      <div className="text-center pt-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowAllRecentCodes((prev) => !prev)}
-                          className="text-xs text-muted-foreground h-6"
-                        >
-                          {showAllRecentCodes
-                            ? 'Show less'
-                            : `+${recentCodes.length - 3} more codes`}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </TabCard>
-        </div>
-      )}
 
       <div className="space-y-8 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-stretch lg:gap-5 lg:space-y-0">
       {/* Description */}

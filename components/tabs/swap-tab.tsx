@@ -160,7 +160,7 @@ function TokenInfoPanel({
           })}
         </div>
 
-        <div className="rounded-[var(--radius-panel)] border border-border/60 bg-background/35 p-3 shadow-[var(--shadow-hairline)]">
+        <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
           <div className="flex items-start gap-3">
             <Image
               src={activeTokenInfo.iconSrc}

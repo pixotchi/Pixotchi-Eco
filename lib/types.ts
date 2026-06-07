@@ -389,49 +389,6 @@ export type AsyncState<T> = {
   error: string | null;
 };
 
-// Invite System Types
-export type InviteCode = {
-  code: string;           // 8-char alphanumeric
-  createdBy: string;      // Wallet address
-  createdAt: number;      // Unix timestamp
-  usedBy?: string;        // Wallet address of user who used it
-  usedAt?: number;        // Unix timestamp when used
-  isUsed: boolean;
-  expiresAt?: number;     // Optional expiration timestamp
-};
-
-export type UserInviteData = {
-  address: string;
-  totalCodesGenerated: number;
-  totalCodesUsed: number;           // How many of their codes were used
-  dailyGenerated: number;
-  lastGeneratedDate: string;        // YYYY-MM-DD
-  invitedUsers: string[];           // Wallet addresses of users they invited
-  invitedBy?: string;               // Wallet address of who invited them
-  joinedAt: number;                 // Unix timestamp when they joined
-};
-
-export type InviteStats = {
-  totalInvites: number;
-  successfulInvites: number;
-  dailyRemaining: number;
-  canGenerateToday: boolean;
-};
-
-export type InviteValidationResult = {
-  valid: boolean;
-  code?: InviteCode;
-  error?: string;
-  errorCode?: 'NOT_FOUND' | 'ALREADY_USED' | 'EXPIRED' | 'INVALID_FORMAT' | 'SELF_INVITE' | 'INVALID_CODE';
-};
-
-export type InviteGenerationResult = {
-  success: boolean;
-  code?: string;
-  error?: string;
-  errorCode?: 'DAILY_LIMIT_EXCEEDED' | 'GENERATION_FAILED' | 'SYSTEM_DISABLED';
-};
-
 // Types for Ponder Indexer
 export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent;
 

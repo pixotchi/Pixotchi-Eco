@@ -44,40 +44,13 @@ Trash2,
 TrendingUp,
 Upload,
 Users,
-UserX,
 X as XIcon
 } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback,useEffect,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-interface AdminStats {
-  codes: {
-    total: number;
-    used: number;
-    active: number;
-    expired: number;
-    byDate: Record<string, number>;
-  };
-  users: {
-    totalUsers: number;
-    validatedUsers: number;
-    topGenerators: Array<{
-      address: string;
-      generated: number;
-      used: number;
-    }>;
-  };
-  recentCodes: Array<{
-    code: string;
-    createdAt: number;
-    isUsed: boolean;
-    createdBy: string;
-    usedBy?: string;
-  }>;
-}
-
-type AdminTab = 'overview' | 'codes' | 'users' | 'cleanup' | 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback' | 'airdrop' | 'claims';
+type AdminTab = 'chat' | 'ai-chat' | 'gamification' | 'rpc' | 'notifications' | 'broadcast' | 'og-images' | 'feedback' | 'airdrop' | 'claims';
 
 const ADMIN_NAV_GROUPS: Array<{
   label: string;
@@ -86,9 +59,6 @@ const ADMIN_NAV_GROUPS: Array<{
   {
     label: 'Community',
     tabs: [
-      { id: 'overview', label: 'Overview', icon: BarChart3 },
-      { id: 'codes', label: 'Codes', icon: Code },
-      { id: 'users', label: 'Users', icon: Users },
       { id: 'feedback', label: 'Feedback', icon: Plus },
     ],
   },
@@ -104,7 +74,6 @@ const ADMIN_NAV_GROUPS: Array<{
   {
     label: 'System',
     tabs: [
-      { id: 'cleanup', label: 'Cleanup', icon: Trash2 },
       { id: 'rpc', label: 'RPC', icon: BarChart3 },
       { id: 'notifications', label: 'Notifications', icon: Bell },
       { id: 'og-images', label: 'OG Images', icon: FileText },
@@ -226,16 +195,14 @@ const LoadingSpinner = ({ text }: { text?: string }) => (
   </div>
 );
 
-export default function AdminInviteDashboard() {
+export default function AdminDashboard() {
   const notificationProvider = CLIENT_ENV.NOTIFICATION_PROVIDER;
   const isBaseNotifications = notificationProvider === 'base';
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminKey, setAdminKey] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>('broadcast');
 
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
@@ -330,7 +297,6 @@ export default function AdminInviteDashboard() {
   const handleLogout = useCallback(() => {
     setIsAuthenticated(false);
     setAdminKey(''); // Clear admin key from memory
-    setStats(null);
     setChatMessages([]);
     setAIConversations([]);
     setGmLb(null);
@@ -345,7 +311,7 @@ export default function AdminInviteDashboard() {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/invite/admin/stats', {
+      const response = await fetch('/api/admin/auth', {
         headers: {
           'Authorization': `Bearer ${adminKey}`,
           'Content-Type': 'application/json',
@@ -353,13 +319,6 @@ export default function AdminInviteDashboard() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        // Extract the stats from the API response structure
-        setStats({
-          codes: data.codes,
-          users: data.users,
-          recentCodes: data.recentCodes,
-        });
         setIsAuthenticated(true);
         toast.success('Admin access granted');
       } else if (response.status === 429) {
@@ -375,69 +334,6 @@ export default function AdminInviteDashboard() {
       toast.error(getErrorMessage(error) || 'Network error during authentication');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const refreshStats = async () => {
-    if (!isAuthenticated) return;
-
-    setLoading(true);
-    try {
-      const response = await fetch('/api/invite/admin/stats', {
-        headers: {
-          'Authorization': `Bearer ${adminKey}`,
-          'Content-Type': 'application/json',
-        },
-        signal: abortControllerRef.current?.signal,
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Extract the stats from the API response structure
-        setStats({
-          codes: data.codes,
-          users: data.users,
-          recentCodes: data.recentCodes,
-        });
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        toast.error(errorData.message || 'Failed to refresh stats');
-      }
-    } catch (error) {
-      if (getErrorName(error) !== 'AbortError') {
-        console.error('Refresh stats error:', error);
-        toast.error('Failed to refresh stats');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generateAdminCodes = async (count: number) => {
-    setGenerating(true);
-    try {
-      const response = await fetch('/api/invite/admin/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminKey}`,
-        },
-        body: JSON.stringify({ count }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        toast.success(`Generated ${data.codes.length} codes`);
-        // Copy codes to clipboard
-        navigator.clipboard.writeText(data.codes.join('\n'));
-        toast.success('Codes copied to clipboard');
-        refreshStats();
-      } else {
-        toast.error(data.error || 'Failed to generate codes');
-      }
-    } catch {
-      toast.error('Generation failed');
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -669,99 +565,6 @@ export default function AdminInviteDashboard() {
       fetchClaims();
     }
   }, [isAuthenticated, activeTab, fetchBroadcastMessages, adminKey]);
-
-  const performCleanup = async (action: string, target?: string) => {
-    const actionNames = {
-      delete_all_codes: 'delete ALL codes',
-      delete_expired_codes: 'delete expired codes',
-      delete_used_codes: 'delete used codes',
-      reset_user_data: 'reset ALL user data',
-      reset_daily_limits: 'reset daily limits',
-      delete_specific_user: `delete user ${target}`,
-      delete_everything: 'DELETE EVERYTHING from the database',
-    };
-
-    setLoading(true);
-    try {
-      const response = await fetch('/api/invite/admin/cleanup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminKey}`,
-        },
-        // Map historical UI action to API's supported action name
-        body: JSON.stringify({ action: action === 'delete_specific_user' ? 'delete_user_data' : action, target }),
-        signal: abortControllerRef.current?.signal,
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        toast.success(data.message || `Successfully performed: ${actionNames[action as keyof typeof actionNames]}`);
-        refreshStats();
-      } else {
-        toast.error(data.error || `Cleanup failed: ${actionNames[action as keyof typeof actionNames]}`);
-      }
-    } catch (error) {
-      if (getErrorName(error) !== 'AbortError') {
-        console.error('Cleanup error:', error);
-        toast.error(getErrorMessage(error) || 'Cleanup operation failed');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Wrapper to show confirmation before cleanup
-  const confirmCleanup = (action: string, target?: string) => {
-    const actionNames = {
-      delete_all_codes: 'delete ALL codes',
-      delete_expired_codes: 'delete expired codes',
-      delete_used_codes: 'delete used codes',
-      reset_user_data: 'reset ALL user data',
-      reset_daily_limits: 'reset daily limits',
-      delete_specific_user: `delete user ${target}`,
-      delete_everything: 'DELETE EVERYTHING from the database',
-    };
-
-    const actionName = actionNames[action as keyof typeof actionNames];
-    const isDangerous = action === 'delete_everything' || action === 'delete_all_codes' || action === 'reset_user_data';
-
-    showConfirmDialog({
-      title: isDangerous ? '⚠️ Dangerous Operation' : 'Confirm Action',
-      description: `Are you sure you want to ${actionName}? This action cannot be undone.`,
-      confirmText: isDangerous ? 'Yes, I understand' : 'Confirm',
-      onConfirm: () => performCleanup(action, target),
-      isDangerous,
-      requiresTextConfirmation: action === 'delete_everything',
-      textToMatch: action === 'delete_everything' ? 'DELETE EVERYTHING' : undefined,
-    });
-  };
-
-  const exportRewardData = () => {
-    if (!stats) return;
-
-    const rewardData = stats.users.topGenerators.map(user => ({
-      address: user.address,
-      generated: user.generated,
-      successful: user.used,
-      tokens: user.used * 100, // 100 tokens per successful invite
-    }));
-
-    const csv = [
-      'Address,Generated,Successful,Tokens',
-      ...rewardData.map(r => `${r.address},${r.generated},${r.successful},${r.tokens}`)
-    ].join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invite-rewards-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    toast.success('Reward data exported');
-  };
 
   // Chat management functions
   const fetchChatData = useCallback(async () => {
@@ -1688,7 +1491,7 @@ export default function AdminInviteDashboard() {
             </div>
             <CardTitle className="text-xl">Admin Access Required</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Enter your admin key to access the invite management dashboard
+              Enter your admin key to access the dashboard
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1746,10 +1549,6 @@ export default function AdminInviteDashboard() {
               <h1 className="text-xl font-bold">Dashboard</h1>
             </div>
             <div className="flex items-center space-x-3">
-              <Button variant="outline" size="sm" onClick={refreshStats} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
               <ThemeSelector />
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 Logout
@@ -1786,197 +1585,6 @@ export default function AdminInviteDashboard() {
             </div>
           ))}
         </nav>
-
-        {/* Overview Tab */}
-        {activeTab === 'overview' && stats && (
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Codes</p>
-                      <p className="text-2xl font-bold">{stats.codes.total}</p>
-                    </div>
-                    <Code className="w-8 h-8 text-primary" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Used Codes</p>
-                      <p className="text-2xl font-bold">{stats.codes.used}</p>
-                    </div>
-                    <CheckCircle className="w-8 h-8 text-primary" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Active Users</p>
-                      <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
-                    </div>
-                    <Users className="w-8 h-8 text-primary" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Success Rate</p>
-                      <p className="text-2xl font-bold">
-                        {stats.codes.total > 0 ? Math.round((stats.codes.used / stats.codes.total) * 100) : 0}%
-                      </p>
-                    </div>
-                    <BarChart3 className="w-8 h-8 text-primary" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Top Generators */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Top Referrers</span>
-                  <Button size="sm" onClick={exportRewardData}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Rewards
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {stats.users.topGenerators.slice(0, 10).map((user, index) => (
-                    <div key={user.address} className="flex items-center justify-between p-3 bg-card rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-bold">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-mono text-sm">{user.address.slice(0, 10)}...{user.address.slice(-4)}</p>
-                          <p className="text-xs text-muted-foreground">{user.used} successful • {user.generated} generated</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{user.used * 100} tokens</p>
-                        <p className="text-xs text-muted-foreground">reward estimate</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Codes Tab */}
-        {activeTab === 'codes' && stats && (
-          <div className="space-y-6">
-            {/* Generate Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Generate Admin Codes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center space-x-3">
-                  <Button onClick={() => generateAdminCodes(1)} disabled={generating}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate 1
-                  </Button>
-                  <Button onClick={() => generateAdminCodes(5)} disabled={generating}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate 5
-                  </Button>
-                  <Button onClick={() => generateAdminCodes(10)} disabled={generating}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate 10
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Generated codes will be copied to clipboard automatically
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Recent Codes */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Codes ({stats.recentCodes.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {stats.recentCodes.map((code) => (
-                    <div key={code.code} className="flex items-center justify-between p-3 bg-card rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${code.isUsed ? 'bg-[hsl(var(--success)/0.7)]' : 'bg-[hsl(var(--warning)/0.7)]'}`} />
-                        <span className="font-mono">{code.code}</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm">{code.isUsed ? 'Used' : 'Active'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(code.createdAt).toLocaleString()} (Local)
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Users Tab */}
-        {activeTab === 'users' && stats && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Statistics</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Users</p>
-                    <p className="text-2xl font-bold">{stats.users.totalUsers}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Validated Users</p>
-                    <p className="text-2xl font-bold">{stats.users.validatedUsers}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {stats.users.topGenerators.map((user) => (
-                    <div key={user.address} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div>
-                        <p className="font-mono text-sm">{user.address}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Generated: {user.generated} • Successful: {user.used}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => confirmCleanup('delete_specific_user', user.address)}
-                      >
-                        <UserX className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         {/* Broadcast Tab */}
         {activeTab === 'broadcast' && (
@@ -2360,93 +1968,6 @@ export default function AdminInviteDashboard() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Cleanup Tab */}
-        {activeTab === 'cleanup' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <AlertTriangle className="w-5 h-5 mr-2 text-[hsl(var(--warning))]" />
-                  Cleanup Operations
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  These operations cannot be undone. Use with caution.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => confirmCleanup('delete_expired_codes')}
-                    disabled={loading}
-                  >
-                    <Clock className="w-4 h-4 mr-2" />
-                    Delete Expired Codes
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => confirmCleanup('delete_used_codes')}
-                    disabled={loading}
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Delete Used Codes
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => confirmCleanup('reset_daily_limits')}
-                    disabled={loading}
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Reset Daily Limits
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => confirmCleanup('reset_user_data')}
-                    disabled={loading}
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    Reset User Data
-                  </Button>
-                </div>
-
-                <div className="border-t border-border pt-4 space-y-4">
-                  <Button
-                    variant="destructive"
-                    onClick={() => confirmCleanup('delete_all_codes')}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete ALL Codes
-                  </Button>
-
-                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                    <div className="flex items-center mb-2">
-                      <AlertTriangle className="w-5 h-5 text-destructive mr-2" />
-                      <h4 className="font-semibold text-destructive">DANGER ZONE</h4>
-                    </div>
-                    <p className="text-sm text-destructive mb-3">
-                      This will delete <strong>EVERYTHING</strong> from the database including all codes, users, audit logs, and system data. This action cannot be undone!
-                    </p>
-                    <Button
-                      variant="destructive"
-                      onClick={() => confirmCleanup('delete_everything')}
-                      disabled={loading}
-                      className="w-full"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      🚨 DELETE EVERYTHING 🚨
-                    </Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>

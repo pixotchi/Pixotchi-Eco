@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { INVITE_CONFIG } from '@/lib/invite-utils';
 
 const CHAT_SESSION_COOKIE = 'pixotchi_chat_session';
 const EDGE_SESSION_REQUIRED_API_PATHS = new Set([
@@ -98,17 +97,6 @@ export async function proxy(request: NextRequest) {
     const url = new URL('/status', request.url);
     return NextResponse.rewrite(url);
   }
-  
-  // Server-side invite validation for protected routes (excluding API and auth routes)
-  if (INVITE_CONFIG.SYSTEM_ENABLED && !pathname.startsWith('/api/') && !pathname.startsWith('/_next') && pathname === '/') {
-    try {
-
-      console.log('[Middleware] Invite system active - client-side enforcement in place');
-    } catch (error) {
-      console.warn('[Middleware] Invite validation check failed:', error);
-    }
-  }
-  
   // Create response
   const response = NextResponse.next();
 
@@ -151,7 +139,7 @@ export async function proxy(request: NextRequest) {
     ]);
     
     // Special handling for admin routes - restrict to known origins
-    if (pathname.startsWith('/api/invite/admin/') || pathname.startsWith('/api/gamification/admin/') || pathname.startsWith('/api/admin/')) {
+    if (pathname.startsWith('/api/gamification/admin/') || pathname.startsWith('/api/admin/')) {
       const allowedAdminOrigins = parseOrigins(process.env.ALLOWED_ADMIN_ORIGINS);
       const adminOriginSet = new Set(
         allowedAdminOrigins.length > 0 ? allowedAdminOrigins : DEFAULT_ADMIN_ORIGINS,

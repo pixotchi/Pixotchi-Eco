@@ -105,8 +105,6 @@ async function main() {
     'app/api/chat/send/route.ts',
     'app/api/chat/ai/messages/route.ts',
     'app/api/chat/ai/send/route.ts',
-    'app/api/invite/generate/route.ts',
-    'app/api/invite/use/route.ts',
     'app/api/gamification/streak/route.ts',
     'app/api/gamification/missions/route.ts',
   ];

@@ -1,7 +1,6 @@
 "use client";
 
 import { ChatButton } from "@/components/chat";
-import InviteGate from "@/components/invite-gate";
 import StatusBar from "@/components/status-bar";
 import { useIsSolanaWallet } from "@/components/solana";
 import { ThemeSelector } from "@/components/theme-selector";
@@ -10,15 +9,14 @@ import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { WalletProfile } from "@/components/wallet-profile";
-import { INVITE_CONFIG,getLocalStorageKeys } from "@/lib/invite-utils";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
 import { sdk } from "@farcaster/miniapp-sdk";
-import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy } from "lucide-react";
+import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,type LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Activity,useCallback,useEffect,useRef,useState } from "react";
+import { Activity,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties } from "react";
 import toast from "react-hot-toast";
 
 // Import custom hooks
@@ -30,7 +28,6 @@ import { useAppAuthController } from "@/hooks/useAppAuthController";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import { useFarcaster } from "@/hooks/useFarcaster";
-import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { requestBalanceRefresh } from "@/lib/app-events";
 import type { AuthSurface } from "@/lib/auth-surface";
@@ -392,6 +389,125 @@ function SharedFarmMintMobileToggle({
   );
 }
 
+type AppTabDefinition = {
+  id: Tab;
+  label: string;
+  icon: LucideIcon;
+};
+
+function SlidingNavTabs({
+  activeTab,
+  mode,
+  onTabChange,
+  tabs,
+}: {
+  activeTab: Tab;
+  mode: "desktop" | "mobile";
+  onTabChange: (tab: Tab) => void;
+  tabs: AppTabDefinition[];
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = Math.max(0, tabs.findIndex((tab) => tab.id === activeTab));
+  const [indicatorStyle, setIndicatorStyle] = useState<CSSProperties>({
+    opacity: 0,
+  });
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const selectedTab = tabRefs.current[selectedIndex];
+    if (!container || !selectedTab) return;
+
+    const updateIndicator = () => {
+      setIndicatorStyle({
+        height: selectedTab.offsetHeight,
+        opacity: 1,
+        transform: `translate3d(${selectedTab.offsetLeft}px, ${selectedTab.offsetTop}px, 0)`,
+        width: selectedTab.offsetWidth,
+      });
+    };
+
+    updateIndicator();
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    resizeObserver.observe(container);
+    tabRefs.current.forEach((tab) => {
+      if (tab) resizeObserver.observe(tab);
+    });
+
+    return () => resizeObserver.disconnect();
+  }, [mode, selectedIndex, tabs.length]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative isolate",
+        mode === "desktop"
+          ? "flex flex-col gap-2"
+          : "grid w-full grid-cols-6 items-center gap-0.5",
+      )}
+      role="tablist"
+      aria-label="Application tabs"
+    >
+      <span
+        aria-hidden="true"
+        data-main-nav-indicator={mode}
+        className="surface-control-selected pointer-events-none absolute left-0 top-0 z-0 rounded-[var(--radius-nav)] border transition-[transform,width,height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
+        style={indicatorStyle}
+      />
+      {tabs.map((tab, index) => {
+        const isActive = activeTab === tab.id;
+        const Icon = tab.icon;
+
+        return (
+          <Button
+            key={tab.id}
+            variant="nav"
+            onClick={() => onTabChange(tab.id)}
+            data-active={isActive}
+            ref={(node) => {
+              tabRefs.current[index] = node;
+            }}
+            className={cn(
+              "relative z-10 bg-transparent shadow-none data-[active=true]:!border-transparent data-[active=true]:!bg-transparent data-[active=true]:!bg-none data-[active=true]:!shadow-none data-[active=true]:hover:!bg-transparent data-[active=true]:hover:!bg-none data-[active=true]:hover:!shadow-none",
+              mode === "desktop"
+                ? "flex h-[68px] w-full flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                : "flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5",
+            )}
+            role="tab"
+            id={`tab-${mode}-${tab.id}`}
+            aria-selected={isActive}
+            aria-controls={`tabpanel-${tab.id}`}
+            aria-label={`Switch to ${tab.label} tab`}
+            tabIndex={isActive ? 0 : -1}
+          >
+            <Icon
+              className={cn(
+                mode === "desktop"
+                  ? "h-5 w-5"
+                  : "h-5 w-5 shrink-0 max-[360px]:h-4 max-[360px]:w-4",
+                isActive && "text-primary",
+              )}
+              aria-hidden="true"
+            />
+            <span
+              className={cn(
+                "font-medium leading-tight",
+                mode === "mobile" && "max-w-full truncate text-[11px] max-[340px]:text-[10px]",
+              )}
+            >
+              {tab.label}
+            </span>
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const { theme } = useTheme();
   const { startIfFirstVisit } = useSlideshow();
@@ -428,9 +544,6 @@ export default function App() {
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const previousActiveTabRef = useRef<Tab>(activeTab);
   const lastDismissedRef = useRef<string | null>(null);
-  const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
-  const isLocalTestSession = localTestAuthAvailable && state.surface === "test";
-  const isInviteValidated = userValidated || isLocalTestSession;
 
   useTabPrefetching(activeTab, isConnected);
 
@@ -510,12 +623,12 @@ export default function App() {
   const miniAppContext = (fc?.context as UntypedValue) ?? null;
   const miniAppAdded = Boolean(miniAppContext?.client?.added);
 
-  // Start tutorial only after wallet connect (and invite gate passed)
+  // Start tutorial only after wallet connect
   useEffect(() => {
-    if (isConnected && isInviteValidated) {
+    if (isConnected) {
       startIfFirstVisit();
     }
-  }, [isConnected, isInviteValidated, startIfFirstVisit]);
+  }, [isConnected, startIfFirstVisit]);
 
   // Auto-prompt to add mini app when user opens in miniapp mode and hasn't added yet
   useEffect(() => {
@@ -596,16 +709,6 @@ export default function App() {
   // Balance refreshes after transactions are handled via events in balance-context.tsx
   // No need to refresh on every tab change - balances are already in context
 
-  const handleSkipInvite = () => {
-    // For development - allow skipping invite system
-    setUserValidated(true);
-    const keys = getLocalStorageKeys();
-    localStorage.setItem(keys.INVITE_VALIDATED, 'true');
-    if (address) {
-      localStorage.setItem(keys.USER_ADDRESS, address.toLowerCase());
-    }
-  };
-
   const handleAddFrame = useCallback(async () => {
     if (!fc?.isInMiniApp) {
       return;
@@ -652,29 +755,6 @@ export default function App() {
     dismissMessage(currentBroadcast.id);
     setCurrentBroadcast(null);
   };
-
-  // Show loading while checking validation (only if wallet is connected and invite system enabled)
-  if (checkingValidation && isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isLocalTestSession) {
-    return (
-      <div className="flex flex-col h-dvh bg-background items-center justify-center p-4">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi Logo" width={64} height={64} className="opacity-50" />
-          <BasePageLoader text="Checking wallet validation…" />
-        </div>
-      </div>
-    );
-  }
-
-  // Show invite gate if wallet is connected but not validated (and system is enabled)
-  if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isInviteValidated) {
-    return (
-      <InviteGate
-        onValidated={handleInviteValidated}
-        onSkip={handleSkipInvite}
-        showSkip={process.env.NODE_ENV === 'development'}
-      />
-    );
-  }
 
   return (
     <div
@@ -818,29 +898,12 @@ export default function App() {
           ) : (
             <>
               <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-[hsl(var(--divider)/0.62)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75" role="navigation" aria-label="Main navigation">
-                <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
-                  {tabs.map((tab) => (
-                    <Button
-                      key={tab.id}
-                      variant="nav"
-                      onClick={() => setActiveTab(tab.id)}
-                      data-active={activeTab === tab.id}
-                      className="flex h-[68px] w-full flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      role="tab"
-                      id={`tab-desktop-${tab.id}`}
-                      aria-selected={activeTab === tab.id}
-                      aria-controls={`tabpanel-${tab.id}`}
-                      aria-label={`Switch to ${tab.label} tab`}
-                      tabIndex={activeTab === tab.id ? 0 : -1}
-                    >
-                      <tab.icon
-                        className={`h-5 w-5 ${activeTab === tab.id ? "text-primary" : ""}`}
-                        aria-hidden="true"
-                      />
-                      <span className="font-medium leading-tight">{tab.label}</span>
-                    </Button>
-                  ))}
-                </div>
+                <SlidingNavTabs
+                  activeTab={activeTab}
+                  mode="desktop"
+                  onTabChange={setActiveTab}
+                  tabs={tabs}
+                />
               </nav>
 
               {/* Tab Content */}
@@ -908,29 +971,12 @@ export default function App() {
 
               {/* Bottom Navigation with safe area */}
               <nav data-viewport-shell="nav" className="surface-footer-divider rounded-t-[var(--radius-panel)] border-x border-t border-x-[hsl(var(--border-strong)/0.28)] border-t-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
-                <div className="grid w-full grid-cols-6 items-center gap-0.5" role="tablist" aria-label="Application tabs">
-                  {tabs.map((tab) => (
-                    <Button
-                      key={tab.id}
-                      variant="nav"
-                      onClick={() => setActiveTab(tab.id)}
-                      data-active={activeTab === tab.id}
-                      className="flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5"
-                      role="tab"
-                      id={`tab-mobile-${tab.id}`}
-                      aria-selected={activeTab === tab.id}
-                      aria-controls={`tabpanel-${tab.id}`}
-                      aria-label={`Switch to ${tab.label} tab`}
-                      tabIndex={activeTab === tab.id ? 0 : -1}
-                    >
-                      <tab.icon
-                        className={`h-5 w-5 shrink-0 max-[360px]:h-4 max-[360px]:w-4 ${activeTab === tab.id ? "text-primary" : ""
-                          }`}
-                      />
-                      <span className="max-w-full truncate text-[11px] font-medium leading-tight max-[340px]:text-[10px]">{tab.label}</span>
-                    </Button>
-                  ))}
-                </div>
+                <SlidingNavTabs
+                  activeTab={activeTab}
+                  mode="mobile"
+                  onTabChange={setActiveTab}
+                  tabs={tabs}
+                />
               </nav>
             </>
           )}

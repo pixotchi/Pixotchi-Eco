@@ -31,7 +31,6 @@ export const CLIENT_ENV = {
   STAKE_CONTRACT_ADDRESS: process.env.NEXT_PUBLIC_STAKE_CONTRACT_ADDRESS || '0xF15D93c3617525054aF05338CC6Ccf18886BD03A',
 
   // Feature flags
-  INVITE_SYSTEM_ENABLED: process.env.NEXT_PUBLIC_INVITE_SYSTEM_ENABLED === 'true',
   PAYMASTER_ENABLED: process.env.NEXT_PUBLIC_PAYMASTER_ENABLED === 'true',
   GAMIFICATION_DISABLED: process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED === 'true',
   // Deprecated: mini-app-only feature gating is ignored after the Base App web cutover.
@@ -126,8 +125,7 @@ export const SERVER_ENV = {
   REDIS_TOKEN: process.env.REDIS_TOKEN,
 
   // Admin configuration
-  ADMIN_INVITE_KEY: process.env.ADMIN_INVITE_KEY,
-  // Note: ADMIN_TOKEN was replaced with ADMIN_INVITE_KEY for consistency
+  ADMIN_TOKEN: process.env.ADMIN_TOKEN,
 
   // Environment info
   NODE_ENV: process.env.NODE_ENV,

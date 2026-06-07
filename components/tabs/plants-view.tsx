@@ -666,7 +666,7 @@ export default function PlantsView() {
                     </div>
                   </StandardContainer>
 
-                  <div className="rounded-lg border bg-card p-4 space-y-4">
+                  <div className="chromatic-white-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Revive cost</span>
                       <span className="font-semibold text-foreground">
