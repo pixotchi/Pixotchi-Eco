@@ -9,6 +9,8 @@ import {
   barracksGetLandStateV2,
   barracksPreviewRaidV2,
   BATCH_ROUTER_ADDRESS,
+  BOX_GAME_ABI,
+  blackjackGetActions,
   blackjackGetConfig,
   blackjackGetGameSnapshot,
   blackjackGetGameToken,
@@ -49,6 +51,7 @@ import {
   PIXOTCHI_NFT_ADDRESS,
   PIXOTCHI_TOKEN_ADDRESS,
   quoteFenceV2,
+  SPIN_GAME_ABI,
   STAKE_CONTRACT_ADDRESS,
   UNISWAP_ROUTER_ADDRESS,
   USDC_ADDRESS,
@@ -77,7 +80,7 @@ import { getFenceStatus } from './utils';
 import { VERIFY_CLAIM_LEAF_BONUS_LABEL, VERIFY_CLAIM_SEED_BONUS_AMOUNT, VERIFY_CLAIM_SEED_BONUS_LABEL } from './verify-claim-config';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import type { PixotchiReadClient } from './contracts';
-import type { ActivityEvent, BarracksLandStateV2, BarracksRaidPreviewV2, BuildingData, Land, NormalizedOnchainActivity, Plant } from './types';
+import type { ActivityEvent, BarracksLandStateV2, BarracksRaidPreviewV2, BarracksRaidReportV2, BuildingData, Land, NormalizedOnchainActivity, Plant } from './types';
 
 type ReadOnlyToolContext = {
   sourceAddress?: string | null;
@@ -103,6 +106,29 @@ type ToolResult<T> = {
   status: 'ok' | 'error';
   truncated?: boolean;
 };
+
+const TOOL_RESULT_OUTPUT_SCHEMA = z.object({
+  blockNumber: z.string().optional(),
+  cache: z.string().optional(),
+  confidence: z.enum(['high', 'medium', 'low']),
+  data: z.unknown().optional(),
+  error: z.string().optional(),
+  fetchedAt: z.string(),
+  freshness: z.object({
+    blockNumber: z.string().optional(),
+    cache: z.string().optional(),
+    fetchedAt: z.string(),
+  }),
+  limitations: z.array(z.string()),
+  source: z.string(),
+  status: z.enum(['ok', 'error']),
+  truncated: z.boolean().optional(),
+});
+
+const READ_TOOL_DEFAULTS = {
+  outputSchema: TOOL_RESULT_OUTPUT_SCHEMA,
+  strict: true,
+} as const;
 
 const ADDRESS_INPUT = z
   .string()
@@ -140,6 +166,14 @@ const AI_WALLET_ACTIVITY_LOG_CHUNK_CONCURRENCY = Math.max(
   1,
   Number.parseInt(process.env.AI_WALLET_ACTIVITY_LOG_CHUNK_CONCURRENCY || '', 10) || 4,
 );
+const AI_PLANT_CARE_AUDIT_MAX_PLANTS = Number.parseInt(process.env.AI_PLANT_CARE_AUDIT_MAX_PLANTS || '', 10) || 100;
+const AI_ARCADE_STATUS_MAX_PLANTS = Number.parseInt(process.env.AI_ARCADE_STATUS_MAX_PLANTS || '', 10) || 30;
+const AI_QUEST_READINESS_MAX_LANDS = Number.parseInt(process.env.AI_QUEST_READINESS_MAX_LANDS || '', 10) || 60;
+const AI_LAND_RAID_REPORT_MAX_LANDS = Number.parseInt(process.env.AI_LAND_RAID_REPORT_MAX_LANDS || '', 10) || 60;
+const AI_BLACKJACK_ACTION_MAX_LANDS = Number.parseInt(process.env.AI_BLACKJACK_ACTION_MAX_LANDS || '', 10) || 40;
+const QUEST_REWARDS_WALLET = getAddress('0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB');
+const MIN_QUEST_REWARDS_SEED_BALANCE = parseUnits('300', 18);
+const QUEST_BLOCK_SECONDS = 2;
 function buildCombatActivityQuery(direction: 'all' | 'incoming' | 'outgoing') {
   const plantWhere = direction === 'incoming'
     ? 'attacker_not_in: $plantIds, OR: [{ winner_in: $plantIds }, { loser_in: $plantIds }]'
@@ -894,6 +928,206 @@ function getLandBuildingProductionTotals(results: Array<{ landId: bigint; townBu
   };
 }
 
+function hasBuiltTownBuilding(entry: { townBuildings?: UntypedValue[] } | undefined, buildingId: number): boolean {
+  return (entry?.townBuildings || []).some((building) =>
+    Number(building?.id ?? building?.[0] ?? 0) === buildingId &&
+    Number(building?.level ?? building?.[1] ?? 0) > 0
+  );
+}
+
+function getBuiltTownBuildingLevel(entry: { townBuildings?: UntypedValue[] } | undefined, buildingId: number): number {
+  const building = (entry?.townBuildings || []).find((candidate) => Number(candidate?.id ?? candidate?.[0] ?? 0) === buildingId);
+  return Number(building?.level ?? building?.[1] ?? 0);
+}
+
+function formatSignedPts(raw: bigint | number | string | undefined): string {
+  try {
+    const value = BigInt(raw ?? 0);
+    if (value < BigInt(0)) {
+      return `-${formatPts(-value)}`;
+    }
+    return formatPts(value);
+  } catch {
+    return String(raw ?? '0');
+  }
+}
+
+function formatDurationCompact(seconds: number): string {
+  if (seconds <= 0) {
+    return '0s';
+  }
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${remainingSeconds}s`;
+}
+
+function normalizeQuestSlot(slot: UntypedValue, index: number, currentBlock: bigint) {
+  const startBlock = BigInt(slot?.startBlock ?? slot?.[1] ?? 0);
+  const endBlock = BigInt(slot?.endBlock ?? slot?.[2] ?? 0);
+  const pseudoRndBlock = BigInt(slot?.pseudoRndBlock ?? slot?.[3] ?? 0);
+  const coolDownBlock = BigInt(slot?.coolDownBlock ?? slot?.[4] ?? 0);
+  const difficulty = Number(slot?.difficulty ?? slot?.[0] ?? 0);
+  let status: 'available' | 'in_progress' | 'ready_to_commit' | 'committed' | 'cooldown' = 'available';
+  let targetBlock: bigint | null = null;
+  let action = 'Start a quest from the Farmer House UI.';
+
+  if (coolDownBlock !== BigInt(0) && currentBlock < coolDownBlock) {
+    status = 'cooldown';
+    targetBlock = coolDownBlock;
+    action = 'Wait for cooldown to finish.';
+  } else if (startBlock === BigInt(0)) {
+    status = 'available';
+    action = 'Start a new quest from the Farmer House UI.';
+  } else if (currentBlock >= startBlock && currentBlock <= endBlock) {
+    status = 'in_progress';
+    targetBlock = endBlock;
+    action = 'Wait until the quest is ready to return.';
+  } else if (currentBlock > endBlock && pseudoRndBlock === BigInt(0)) {
+    status = 'ready_to_commit';
+    action = 'Use Return now in the Farmer House UI.';
+  } else if (pseudoRndBlock !== BigInt(0)) {
+    status = 'committed';
+    action = 'Use Open now in the Farmer House UI.';
+  }
+
+  const blocksLeft = targetBlock && targetBlock > currentBlock ? Number(targetBlock - currentBlock) : 0;
+  const durationSecondsLeft = blocksLeft * QUEST_BLOCK_SECONDS;
+  const totalBlocks = endBlock > startBlock ? Number(endBlock - startBlock) : 0;
+  const progressBlocks = startBlock > BigInt(0) ? Math.max(0, Math.min(totalBlocks, Number(currentBlock - startBlock))) : 0;
+
+  return {
+    action,
+    blocksLeft,
+    cooldownBlock: coolDownBlock.toString(),
+    difficulty,
+    difficultyLabel: difficulty === 2 ? 'Hard' : difficulty === 1 ? 'Med' : 'Easy',
+    endBlock: endBlock.toString(),
+    etaSeconds: durationSecondsLeft,
+    etaText: formatDurationCompact(durationSecondsLeft),
+    index,
+    progressPct: totalBlocks <= 0 ? 0 : (progressBlocks / totalBlocks) * 100,
+    pseudoRndBlock: pseudoRndBlock.toString(),
+    startBlock: startBlock.toString(),
+    status,
+  };
+}
+
+function summarizeBarracksReport(report: BarracksRaidReportV2 | UntypedValue | null | undefined, perspective: 'incoming' | 'outgoing') {
+  const raidId = BigInt(report?.raidId ?? report?.[0] ?? 0);
+  if (!report || raidId === BigInt(0)) {
+    return null;
+  }
+
+  const timestamp = BigInt(report.timestamp ?? report[1] ?? 0);
+  const attackerWon = Boolean(report.attackerWon ?? report[4] ?? false);
+  const outcomeForUser = perspective === 'outgoing'
+    ? (attackerWon ? 'raid_won' : 'raid_lost')
+    : (attackerWon ? 'defense_lost' : 'defended_successfully');
+
+  return {
+    attackerLandId: String(report.attackerLandId ?? report[2] ?? '0'),
+    attackerPower: String(report.attackerPower ?? report[19] ?? '0'),
+    attackerWon,
+    defenderLandId: String(report.defenderLandId ?? report[3] ?? '0'),
+    defenderPower: String(report.defenderPower ?? report[20] ?? '0'),
+    lifetimeStolenHours: toNumber(report.lifetimeStolen ?? report[24]) / 3600,
+    lifetimeStolenSeconds: String(report.lifetimeStolen ?? report[24] ?? '0'),
+    outcomeForUser,
+    pendingLifetimeSettledHours: toNumber(report.pendingLifetimeSettled ?? report[22]) / 3600,
+    pendingLifetimeSettledSeconds: String(report.pendingLifetimeSettled ?? report[22] ?? '0'),
+    pendingPointsSettled: formatPts(report.pendingPointsSettled ?? report[21]),
+    perspective,
+    phalanx: {
+      sent: String(report.phalanxSent ?? report[6] ?? '0'),
+      attackerBefore: String(report.attackerPhalanxBefore ?? report[8] ?? '0'),
+      attackerLost: String(report.attackerPhalanxLost ?? report[12] ?? '0'),
+      defenderBefore: String(report.defenderPhalanxBefore ?? report[10] ?? '0'),
+      defenderLost: String(report.defenderPhalanxLost ?? report[14] ?? '0'),
+      survivingAttackers: String(report.survivingAttackerPhalanx ?? report[16] ?? '0'),
+      survivingDefenders: String(report.survivingDefenderPhalanx ?? report[18] ?? '0'),
+    },
+    pointsStolen: formatPts(report.pointsStolen ?? report[23]),
+    raidId: raidId.toString(),
+    swordsmen: {
+      sent: String(report.swordsmenSent ?? report[5] ?? '0'),
+      attackerBefore: String(report.attackerSwordsmenBefore ?? report[7] ?? '0'),
+      attackerLost: String(report.attackerSwordsmenLost ?? report[11] ?? '0'),
+      defenderBefore: String(report.defenderSwordsmenBefore ?? report[9] ?? '0'),
+      defenderLost: String(report.defenderSwordsmenLost ?? report[13] ?? '0'),
+      survivingAttackers: String(report.survivingAttackerSwordsmen ?? report[15] ?? '0'),
+      survivingDefenders: String(report.survivingDefenderSwordsmen ?? report[17] ?? '0'),
+    },
+    timestamp: timestamp.toString(),
+    timestampIso: timestamp > BigInt(0) ? new Date(Number(timestamp) * 1000).toISOString() : null,
+  };
+}
+
+async function readArcadeStatusForPlant(readClient: PixotchiReadClient, plant: ReturnType<typeof normalizePlant>, sharedSpin: {
+  globalCooldownSeconds: number;
+  starCost: number;
+}) {
+  const plantId = BigInt(plant.id);
+  const [boxNormal, boxStar, spinPerNft] = await Promise.allSettled([
+    readClient.readContract({
+      address: PIXOTCHI_NFT_ADDRESS,
+      abi: BOX_GAME_ABI,
+      functionName: 'boxGameGetCoolDownTimePerNFT',
+      args: [plantId],
+    }) as Promise<bigint>,
+    readClient.readContract({
+      address: PIXOTCHI_NFT_ADDRESS,
+      abi: BOX_GAME_ABI,
+      functionName: 'boxGameGetCoolDownTimeWithStar',
+      args: [plantId],
+    }) as Promise<bigint>,
+    readClient.readContract({
+      address: PIXOTCHI_NFT_ADDRESS,
+      abi: SPIN_GAME_ABI,
+      functionName: 'spinGameV2GetCoolDownTimePerNFT',
+      args: [plantId],
+    }) as Promise<bigint>,
+  ]);
+  const boxNormalSeconds = boxNormal.status === 'fulfilled' ? Number(boxNormal.value) : null;
+  const boxStarSeconds = boxStar.status === 'fulfilled' ? Number(boxStar.value) : null;
+  const spinSeconds = spinPerNft.status === 'fulfilled' ? Number(spinPerNft.value) : null;
+
+  return {
+    box: {
+      normal: {
+        ready: boxNormalSeconds === 0,
+        remainingSeconds: boxNormalSeconds,
+        remainingText: boxNormalSeconds == null ? null : formatDurationCompact(boxNormalSeconds),
+      },
+      withStar: {
+        ready: boxStarSeconds === 0 && plant.stars > 0,
+        remainingSeconds: boxStarSeconds,
+        remainingText: boxStarSeconds == null ? null : formatDurationCompact(boxStarSeconds),
+        requiresStar: true,
+      },
+    },
+    id: plant.id,
+    name: plant.name,
+    spin: {
+      globalCooldownSeconds: sharedSpin.globalCooldownSeconds,
+      ready: spinSeconds === 0 && plant.stars >= sharedSpin.starCost,
+      remainingSeconds: spinSeconds,
+      remainingText: spinSeconds == null ? null : formatDurationCompact(spinSeconds),
+      starCost: sharedSpin.starCost,
+    },
+    stars: plant.stars,
+    statusLabel: plant.statusLabel,
+    strainName: plant.strainName,
+  };
+}
+
 function normalizeLand(land: Land, details?: {
   barracks?: BarracksLandStateV2 | null;
   quests?: UntypedValue[];
@@ -1527,6 +1761,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
   return {
     get_game_action_guide: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Retrieve relevant safe Pixotchi knowledge topics: where actions live in the UI, what live data AI can read, and what transactions the user must do themselves. Use for how-to, onboarding, and action questions.',
       inputSchema: z.object({
         includeSafetyNotes: z.boolean().default(true),
@@ -1554,6 +1789,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_token_info: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read app-approved SEED, LEAF, and PIXOTCHI token utility, tokenomics, contract addresses, and caveats from the same knowledge source used by Swap -> Info. Use for token info, tokenomics, utility, contract address, LEAF marketplace, PIXOTCHI creator coin, SEED burn/tax/reward questions. Never use this for financial advice.',
       inputSchema: z.object({
         token: PIXOTCHI_TOKEN_INFO_ENUM.default('all'),
@@ -1581,6 +1817,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_seed_market_pulse: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read live-ish SEED market pulse data from the same DexScreener-backed source used by the Swap chart card: price, 24h volume, liquidity, market cap/FDV, price changes, txns, and 2% rewards estimate. Use for factual SEED market stats only, never financial advice.',
       inputSchema: z.object({}),
       execute: async () => withToolResult(
@@ -1607,6 +1844,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_wallet_token_balances: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read public known-token balances for a wallet on Base. Only checks ETH, SEED, LEAF, PIXOTCHI, JESSE, and USDC; never arbitrary tokens.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -1651,6 +1889,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_wallet_game_assets: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read public Pixotchi game assets for a wallet: plant NFTs, land NFTs, counts, current ownership, and urgent plant care state.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -1711,6 +1950,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_wallet_game_activity: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read recent public Pixotchi wallet activity from the indexer first, with a bounded Base RPC known-contract Transfer fallback for mints and transfers. Use rpcFallbackMode "always" for explicit mint/transfer history questions.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -1790,6 +2030,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_combat_activity: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read time-ranged Pixotchi combat history for a wallet, split between plant attacks and land Barracks raids. Use for "who attacked me", "who raided my land", "attacks in the last 4 hours/month", incoming/outgoing combat analysis, and distinguishing plant vs land combat systems. For month or broad history prompts, use limit 100.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -1876,6 +2117,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_transaction_status: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read a Base transaction receipt/status and summarize known Pixotchi logs. Never exposes calldata or prepares follow-up transactions.',
       inputSchema: z.object({
         txHash: TX_HASH_INPUT,
@@ -1933,6 +2175,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_activity: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read recent Pixotchi activity from the indexer. Use this for recent mints, attacks, quests, casino, building, and user activity questions.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -1958,6 +2201,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_game_prices: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read live Pixotchi prices and config: strain mint prices, land mint price, revive price, shop items, garden items, and fence pricing. Quote priceDisplay exactly because payment tokens can differ per item.',
       inputSchema: z.object({
         fenceDays: z.number().int().min(1).max(365).default(1),
@@ -2104,7 +2348,169 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_mint_availability: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Read plant and land mint availability for a wallet: live strain prices/supply, land price/supply, wallet payment-token balances, and known mint allowances. Use for "can I mint", "what can this wallet afford", and mint troubleshooting. Read-only; never mints or prepares approvals.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        includeLand: z.boolean().default(true),
+        includePlants: z.boolean().default(true),
+      }),
+      execute: async ({ address, includeLand, includePlants }) => withToolResult(
+        'get_mint_availability',
+        `Base contract reads for Pixotchi mint prices, supply, balances, and allowances via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Read-only availability mirrors public contract state and known Pixotchi payment tokens.',
+            'Minting, approvals, whitelist checks, and final gas/payment validation must happen in the Mint UI before signing.',
+            'Allowances can change at any time; refresh before approving or minting.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const errors: string[] = [];
+          const [strainsResult, landPriceResult, seedBalanceResult, landSupplyResult, landAccessResult] = await Promise.allSettled([
+            includePlants ? getStrainInfo(readClient) : Promise.resolve([]),
+            includeLand ? getLandMintPrice(readClient) : Promise.resolve(BigInt(0)),
+            getTokenBalance(target, readClient),
+            includeLand
+              ? Promise.all([
+                readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'totalSupply', args: [] }) as Promise<bigint>,
+                readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'maxSupply', args: [] }) as Promise<bigint>,
+              ])
+              : Promise.resolve([BigInt(0), BigInt(0)] as [bigint, bigint]),
+            includeLand
+              ? Promise.all([
+                readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'accessControlGetPaused', args: [] }) as Promise<boolean>,
+                readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'accessControlGetWhitelistOnly', args: [] }) as Promise<boolean>,
+                readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'accessControlGetWhitelistAddress', args: [target] }) as Promise<boolean>,
+              ])
+              : Promise.resolve([false, false, true] as [boolean, boolean, boolean]),
+          ]);
+          const strains = strainsResult.status === 'fulfilled' ? strainsResult.value : [];
+          const seedBalance = seedBalanceResult.status === 'fulfilled' ? seedBalanceResult.value : BigInt(0);
+          const tokenAddresses = new Set<`0x${string}`>([
+            PIXOTCHI_TOKEN_ADDRESS,
+            ...strains
+              .map((strain) => strain.paymentToken || PIXOTCHI_TOKEN_ADDRESS)
+              .filter((token): token is `0x${string}` => Boolean(token && isAddress(token))),
+          ]);
+          const tokenReads = await Promise.allSettled([...tokenAddresses].map(async (tokenAddress) => {
+            const [balance, plantAllowance, landAllowance] = await Promise.all([
+              getTokenBalanceForToken(target, tokenAddress, readClient),
+              readErc20Allowance(readClient, tokenAddress, target, PIXOTCHI_NFT_ADDRESS).catch(() => BigInt(0)),
+              includeLand ? readErc20Allowance(readClient, tokenAddress, target, LAND_CONTRACT_ADDRESS).catch(() => BigInt(0)) : Promise.resolve(BigInt(0)),
+            ]);
+            return {
+              allowanceToLandRaw: landAllowance,
+              allowanceToPlantRaw: plantAllowance,
+              balanceRaw: balance,
+              tokenAddress,
+              tokenSymbol: getAIPriceTokenSymbol(tokenAddress),
+            };
+          }));
+          const tokenState = new Map<string, UntypedValue>();
+
+          for (const result of tokenReads) {
+            if (result.status === 'fulfilled') {
+              tokenState.set(result.value.tokenAddress.toLowerCase(), result.value);
+            } else {
+              errors.push(`tokenState: ${errorMessage(result.reason)}`);
+            }
+          }
+
+          const plantStrains = includePlants
+            ? strains.map((strain) => {
+              const paymentToken = strain.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+              const rawPaymentPrice = strain.paymentPrice ?? parseUnits(String(strain.mintPrice), 18);
+              const token = tokenState.get(paymentToken.toLowerCase());
+              const price = formatPriceFields(rawPaymentPrice, paymentToken);
+              const remainingSupply = strain.getStrainTotalLeft;
+              const balanceRaw = BigInt(token?.balanceRaw ?? 0);
+              const allowanceRaw = BigInt(token?.allowanceToPlantRaw ?? 0);
+              const enoughBalance = balanceRaw >= rawPaymentPrice;
+              const enoughAllowance = allowanceRaw >= rawPaymentPrice;
+
+              return {
+                active: strain.isActive,
+                allowanceDisplay: `${formatKnownTokenAmount(allowanceRaw, paymentToken)} ${price.priceTokenSymbol}`,
+                allowanceEnough: enoughAllowance,
+                balanceDisplay: `${formatKnownTokenAmount(balanceRaw, paymentToken)} ${price.priceTokenSymbol}`,
+                enoughBalance,
+                id: strain.id,
+                isMintable: Boolean(strain.isActive && remainingSupply > 0 && enoughBalance && enoughAllowance),
+                maxSupply: strain.maxSupply,
+                name: strain.name,
+                priceDisplay: price.priceDisplay,
+                remainingSupply,
+                totalMinted: strain.totalMinted,
+              };
+            })
+            : [];
+          const [landTotalSupply, landMaxSupply] = landSupplyResult.status === 'fulfilled'
+            ? landSupplyResult.value
+            : [BigInt(0), BigInt(0)];
+          const [landPaused, landWhitelistOnly, landWhitelisted] = landAccessResult.status === 'fulfilled'
+            ? landAccessResult.value
+            : [false, false, true];
+          const landPrice = landPriceResult.status === 'fulfilled' ? landPriceResult.value : BigInt(0);
+          const seedState = tokenState.get(PIXOTCHI_TOKEN_ADDRESS.toLowerCase());
+          const landAllowance = BigInt(seedState?.allowanceToLandRaw ?? 0);
+          const enoughSeedForLand = seedBalance >= landPrice;
+          const enoughLandAllowance = landAllowance >= landPrice;
+          const landRemainingSupply = Number(landMaxSupply) > 0 ? Math.max(0, Number(landMaxSupply - landTotalSupply)) : null;
+          const landCanMint = includeLand
+            ? Boolean(!landPaused && (!landWhitelistOnly || landWhitelisted) && (landRemainingSupply == null || landRemainingSupply > 0) && enoughSeedForLand && enoughLandAllowance)
+            : false;
+
+          return {
+            address: target,
+            errors: [
+              strainsResult.status === 'rejected' ? `strains: ${errorMessage(strainsResult.reason)}` : null,
+              landPriceResult.status === 'rejected' ? `landPrice: ${errorMessage(landPriceResult.reason)}` : null,
+              seedBalanceResult.status === 'rejected' ? `seedBalance: ${errorMessage(seedBalanceResult.reason)}` : null,
+              landSupplyResult.status === 'rejected' ? `landSupply: ${errorMessage(landSupplyResult.reason)}` : null,
+              landAccessResult.status === 'rejected' ? `landMintAccess: ${errorMessage(landAccessResult.reason)}` : null,
+              ...errors,
+            ].filter(Boolean),
+            land: includeLand
+              ? {
+                allowanceDisplay: `${formatKnownTokenAmount(landAllowance, PIXOTCHI_TOKEN_ADDRESS)} SEED`,
+                allowanceEnough: enoughLandAllowance,
+                canMint: landCanMint,
+                enoughBalance: enoughSeedForLand,
+                maxSupply: Number(landMaxSupply),
+                mintPaused: Boolean(landPaused),
+                priceDisplay: `${formatToken(landPrice)} SEED`,
+                remainingSupply: landRemainingSupply,
+                totalSupply: Number(landTotalSupply),
+                userBalanceDisplay: `${formatToken(seedBalance)} SEED`,
+                whitelist: {
+                  isWhitelisted: Boolean(landWhitelisted),
+                  whitelistOnly: Boolean(landWhitelistOnly),
+                },
+              }
+              : null,
+            plantStrains,
+            summary: {
+              affordablePlantStrains: plantStrains.filter((strain) => strain.enoughBalance && strain.allowanceEnough && strain.active && strain.remainingSupply > 0).length,
+              mintablePlantStrains: plantStrains.filter((strain) => strain.isMintable).length,
+              plantStrainsChecked: plantStrains.length,
+              landCanMint,
+            },
+            ui: {
+              mintWhere: 'Open Mint, review the visible price and approval prompts, then sign only from the app UI.',
+            },
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_lands: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read Pixotchi land NFTs, buildings, production, warehouse balances, barracks, casino/building status, and quest slots.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2170,7 +2576,118 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_quest_readiness: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Read Farmer House quest readiness for owned or selected lands: Farmer House level, quest slot statuses, timers, rewards-pool pause state, and next in-app actions. Use for quests, Farmer House, "can I send a quest", or daily quest readiness.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        landIds: z.array(z.number().int().min(0)).max(50).optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      execute: async ({ address, landIds, limit }) => withToolResult(
+        'get_quest_readiness',
+        `Base contract reads for Farmer House quest slots and rewards-pool balance via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            `Scans at most ${AI_QUEST_READINESS_MAX_LANDS} lands per request unless narrowed by land IDs.`,
+            'Quest slot state can change after every block; refresh the Farmer House UI before signing.',
+            'Neural Seed cannot start, return, or finalize quests.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const allLands = await readLandsForInput(target, landIds, readClient);
+          const scannedLands = allLands.slice(0, Math.min(allLands.length, AI_QUEST_READINESS_MAX_LANDS));
+          const displayLimit = Math.min(limit, scannedLands.length);
+          const [currentBlock, rewardsBalance, buildingResults] = await Promise.all([
+            readClient.getBlockNumber(),
+            getTokenBalanceForToken(QUEST_REWARDS_WALLET, PIXOTCHI_TOKEN_ADDRESS, readClient).catch(() => BigInt(0)),
+            getLandBuildingsBatch(scannedLands.map((land) => land.tokenId), { readClient }),
+          ]);
+          const buildingMap = new Map(buildingResults.map((entry) => [entry.landId.toString(), entry]));
+          const rewardsPoolLow = rewardsBalance < MIN_QUEST_REWARDS_SEED_BALANCE;
+          const questLands = await Promise.all(scannedLands.slice(0, displayLimit).map(async (land) => {
+            const buildings = buildingMap.get(land.tokenId.toString());
+            const farmerHouseLevel = getBuiltTownBuildingLevel(buildings, 7);
+            const slots = farmerHouseLevel > 0
+              ? await getQuestSlotsByLandId(land.tokenId, readClient).catch(() => [])
+              : [];
+            const normalizedSlots = slots
+              .slice(0, Math.min(Math.max(farmerHouseLevel, 0), 3))
+              .map((slot, index) => normalizeQuestSlot(slot, index, currentBlock));
+            const availableSlots = normalizedSlots.filter((slot) => slot.status === 'available').length;
+            const actionableSlots = normalizedSlots.filter((slot) => slot.status === 'ready_to_commit' || slot.status === 'committed').length;
+
+            return {
+              coordinates: {
+                x: Number(land.coordinateX),
+                y: Number(land.coordinateY),
+              },
+              farmerHouse: {
+                built: farmerHouseLevel > 0,
+                level: farmerHouseLevel,
+                maxSlots: Math.min(Math.max(farmerHouseLevel, 0), 3),
+              },
+              id: land.tokenId.toString(),
+              name: land.name || `Land #${land.tokenId.toString()}`,
+              nextActions: [
+                farmerHouseLevel <= 0 ? 'Build Farmer House from the Town buildings panel to unlock quests.' : null,
+                rewardsPoolLow && availableSlots > 0 ? 'Wait for the Farmer House rewards wallet refill before starting new quests.' : null,
+                actionableSlots > 0 ? 'Open Farmer House and use Return now or Open now on ready slots.' : null,
+                !rewardsPoolLow && availableSlots > 0 ? 'Open Farmer House and start an Easy, Med, or Hard quest from an available slot.' : null,
+              ].filter(Boolean),
+              slots: normalizedSlots,
+              summary: {
+                actionableSlots,
+                availableSlots,
+                inProgressSlots: normalizedSlots.filter((slot) => slot.status === 'in_progress').length,
+                totalSlots: normalizedSlots.length,
+              },
+            };
+          }));
+          const totals = questLands.reduce(
+            (sum, land) => {
+              sum.actionableSlots += land.summary.actionableSlots;
+              sum.availableSlots += land.summary.availableSlots;
+              sum.farmerHouseLands += land.farmerHouse.built ? 1 : 0;
+              sum.inProgressSlots += land.summary.inProgressSlots;
+              sum.totalSlots += land.summary.totalSlots;
+              return sum;
+            },
+            {
+              actionableSlots: 0,
+              availableSlots: 0,
+              farmerHouseLands: 0,
+              inProgressSlots: 0,
+              totalSlots: 0,
+            },
+          );
+
+          return {
+            address: target,
+            currentBlock: currentBlock.toString(),
+            landFilterApplied: Boolean(landIds?.length),
+            lands: questLands,
+            ownedLandCount: landIds?.length ? undefined : allLands.length,
+            rewardsPool: {
+              low: rewardsPoolLow,
+              minimumSeedBalanceDisplay: `${formatToken(MIN_QUEST_REWARDS_SEED_BALANCE)} SEED`,
+              wallet: QUEST_REWARDS_WALLET,
+              walletBalanceDisplay: `${formatToken(rewardsBalance)} SEED`,
+            },
+            scannedLandCount: scannedLands.length,
+            totals,
+            truncated: allLands.length > scannedLands.length || scannedLands.length > questLands.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_leaderboards: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read Pixotchi leaderboards: plant PTS, land XP, staked SEED, mission points, and streaks. Use only when the user asks about rankings or leaderboard standings.',
       inputSchema: z.object({
         boards: z.array(z.enum(['plants', 'lands', 'stake', 'missions', 'streaks'])).default(['plants', 'lands']),
@@ -2231,6 +2748,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_attack_targets: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read current plant attack eligibility using the same Ranking UI guardrails: owned attackers, public leaderboard targets, attacker/target cooldowns, target fences, ownership, alive/dead state, and level rules. Use for "who can I attack right now" or eligible plant target questions.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2354,6 +2872,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_killable_plants: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read current dead-plant kill eligibility for collecting a star: dead targets, owned living killer plants, and the wallet kill cooldown. Use for "can I kill", "which plant can I kill", "collect a star by killing a plant", or dead leaderboard kill questions. This is separate from attacks.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2451,6 +2970,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_land_raid_targets: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read land Barracks raid eligibility for owned lands: built Barracks, troops, cooldowns, eligible defender land IDs, and optional read-only raid previews. Use for land raids, Barracks targets, troop readiness, or "who can I raid".',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2610,7 +3130,95 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_land_raid_reports: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Read the latest incoming and outgoing Barracks raid reports for owned or selected lands. Use for "who raided me", "what happened in my last raid", land raid history/report questions, and post-raid summaries. Read-only.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        landIds: z.array(z.number().int().min(0)).max(50).optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      execute: async ({ address, landIds, limit }) => withToolResult(
+        'get_land_raid_reports',
+        `Base contract reads for latest Barracks incoming/outgoing raid reports via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            `Scans at most ${AI_LAND_RAID_REPORT_MAX_LANDS} lands per request unless narrowed by land IDs.`,
+            'This returns the latest report stored onchain per land and direction, not a full historical event archive.',
+            'Use combat activity for time-ranged indexed raid history.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const allLands = await readLandsForInput(target, landIds, readClient);
+          const scannedLands = allLands.slice(0, Math.min(allLands.length, AI_LAND_RAID_REPORT_MAX_LANDS));
+          const lands = await Promise.all(scannedLands.slice(0, limit).map(async (land) => {
+            const [outgoing, incoming] = await Promise.allSettled([
+              readClient.readContract({
+                address: LAND_CONTRACT_ADDRESS,
+                abi: landAbi as UntypedValue,
+                functionName: 'barracksGetLastOutgoingReportV2',
+                args: [land.tokenId],
+              }) as Promise<BarracksRaidReportV2>,
+              readClient.readContract({
+                address: LAND_CONTRACT_ADDRESS,
+                abi: landAbi as UntypedValue,
+                functionName: 'barracksGetLastIncomingReportV2',
+                args: [land.tokenId],
+              }) as Promise<BarracksRaidReportV2>,
+            ]);
+
+            return {
+              coordinates: {
+                x: Number(land.coordinateX),
+                y: Number(land.coordinateY),
+              },
+              id: land.tokenId.toString(),
+              incoming: incoming.status === 'fulfilled'
+                ? summarizeBarracksReport(incoming.value, 'incoming')
+                : null,
+              name: land.name || `Land #${land.tokenId.toString()}`,
+              outgoing: outgoing.status === 'fulfilled'
+                ? summarizeBarracksReport(outgoing.value, 'outgoing')
+                : null,
+              readErrors: [
+                outgoing.status === 'rejected' ? `outgoing: ${errorMessage(outgoing.reason)}` : null,
+                incoming.status === 'rejected' ? `incoming: ${errorMessage(incoming.reason)}` : null,
+              ].filter(Boolean),
+            };
+          }));
+          const reports = lands.flatMap((land) => [
+            land.outgoing ? { landId: land.id, landName: land.name, report: land.outgoing } : null,
+            land.incoming ? { landId: land.id, landName: land.name, report: land.incoming } : null,
+          ]).filter(Boolean);
+          const latestReports = [...reports]
+            .sort((a: UntypedValue, b: UntypedValue) => Number(b.report?.timestamp || 0) - Number(a.report?.timestamp || 0))
+            .slice(0, limit);
+
+          return {
+            address: target,
+            landFilterApplied: Boolean(landIds?.length),
+            lands,
+            latestReports,
+            ownedLandCount: landIds?.length ? undefined : allLands.length,
+            scannedLandCount: scannedLands.length,
+            summary: {
+              incomingReports: lands.filter((land) => land.incoming).length,
+              latestReportTimestampIso: latestReports[0]?.report?.timestampIso ?? null,
+              outgoingReports: lands.filter((land) => land.outgoing).length,
+              totalReports: reports.length,
+            },
+            truncated: allLands.length > scannedLands.length || scannedLands.length > lands.length || reports.length > latestReports.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_land_production_audit: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Audit a wallet across many lands for Warehouse resources, unclaimed building production, daily PTS/TOD production, top claimable buildings, and land resource opportunities. Use for "total rewards across lands/plants", "what should I claim/apply", and large land-owner analysis.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2690,6 +3298,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_casino_status: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read Casino/Roulette and Blackjack status for owned or selected lands: feature flags, supported betting tokens, bet limits, active roulette bets, blackjack snapshots, and casino-built lands. Use for casino, roulette, blackjack, stuck game, or wager availability questions.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2840,7 +3449,103 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_blackjack_action_state: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Read current Blackjack action availability for casino lands: active snapshot, action hand, and hit/stand/double/split/surrender/insurance flags. Use for "can I hit", "can I stand", "what blackjack actions are available", or stuck blackjack games. Read-only; never advises gambling strategy or executes actions.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        handIndex: z.number().int().min(0).max(1).optional(),
+        landIds: z.array(z.number().int().min(0)).max(30).optional(),
+        limit: z.number().int().min(1).max(30).default(10),
+      }),
+      execute: async ({ address, handIndex, landIds, limit }) => withToolResult(
+        'get_blackjack_action_state',
+        `Base contract reads for Casino building and Blackjack action state via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            `Scans at most ${AI_BLACKJACK_ACTION_MAX_LANDS} lands unless specific land IDs are supplied.`,
+            'This reports available button states only. It is not gambling, odds, or strategy advice.',
+            'Neural Seed cannot hit, stand, double, split, surrender, place bets, or build transaction payloads.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const allLands = await readLandsForInput(target, landIds, readClient);
+          const scannedLands = allLands.slice(0, landIds?.length ? allLands.length : Math.min(allLands.length, AI_BLACKJACK_ACTION_MAX_LANDS));
+          const buildingResults = await getLandBuildingsBatch(scannedLands.map((land) => land.tokenId), { readClient });
+          const buildingMap = new Map(buildingResults.map((entry) => [entry.landId.toString(), entry]));
+          const casinoLands = scannedLands.filter((land) => hasBuiltTownBuilding(buildingMap.get(land.tokenId.toString()), 6));
+          const lands = await Promise.all(casinoLands.slice(0, limit).map(async (land) => {
+            const [available, token, snapshot, stats] = await Promise.all([
+              blackjackIsAvailable(land.tokenId),
+              blackjackGetGameToken(land.tokenId),
+              blackjackGetGameSnapshot(land.tokenId),
+              blackjackGetStats(land.tokenId).catch(() => null),
+            ]);
+            const normalizedSnapshot = normalizeBlackjackSnapshot(snapshot, token || undefined);
+            const selectedHandIndex = handIndex ?? normalizedSnapshot?.actionHandIndex ?? 0;
+            const actions = await blackjackGetActions(land.tokenId, selectedHandIndex).catch(() => null);
+            const availableActions = actions
+              ? {
+                canDouble: actions.canDouble,
+                canHit: actions.canHit,
+                canInsurance: actions.canInsurance,
+                canSplit: actions.canSplit,
+                canStand: actions.canStand,
+                canSurrender: actions.canSurrender,
+              }
+              : normalizedSnapshot?.availableActions ?? null;
+            const actionLabels = availableActions
+              ? Object.entries(availableActions)
+                .filter(([, value]) => Boolean(value))
+                .map(([key]) => key.replace(/^can/, '').toLowerCase())
+              : [];
+
+            return {
+              blackjackAvailability: available,
+              coordinates: {
+                x: Number(land.coordinateX),
+                y: Number(land.coordinateY),
+              },
+              gameToken: token,
+              gameTokenSymbol: getAIPriceTokenSymbol(token || undefined),
+              id: land.tokenId.toString(),
+              name: land.name || `Land #${land.tokenId.toString()}`,
+              selectedHandIndex,
+              snapshot: normalizedSnapshot,
+              stats: normalizeCasinoStats(stats, token || undefined),
+              ui: {
+                actionLabels,
+                nextStep: normalizedSnapshot?.isActive
+                  ? 'Open the Blackjack dialog for this land and use only the enabled action buttons shown there.'
+                  : 'No active blackjack hand was found for this land.',
+              },
+            };
+          }));
+
+          return {
+            address: target,
+            casinoLandCountInScan: casinoLands.length,
+            handIndexRequested: handIndex ?? null,
+            landFilterApplied: Boolean(landIds?.length),
+            lands,
+            ownedLandCount: landIds?.length ? undefined : allLands.length,
+            scannedLandCount: scannedLands.length,
+            summary: {
+              activeGames: lands.filter((land) => land.snapshot?.isActive).length,
+              landsWithAvailableActions: lands.filter((land) => land.ui.actionLabels.length > 0).length,
+            },
+            truncated: allLands.length > scannedLands.length || casinoLands.length > lands.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_marketplace_orders: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read the SEED/LEAF land marketplace order book and the wallet’s own public orders. Use for SEED/LEAF order book, best bid/ask, open order, or marketplace task questions. Read-only; never places or cancels orders.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2906,6 +3611,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_claim_eligibility: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read public/authenticated claim availability for Base Verify free plant and wallet airdrop cards. Use for "can I claim", "airdrop", "verify", "free plant", or why a claim card is not showing. Never signs or claims.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -2991,6 +3697,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_app_status: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read app/module health and public feature flags: app, RPC, indexer, database, notifications, Base status, casino, blackjack, barracks, swaps, verify, Solana bridge, and status staleness. Use when users ask if something is down or disabled.',
       inputSchema: z.object({
         forceRefresh: z.boolean().default(false),
@@ -3042,6 +3749,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_daily_task_plan: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read today’s Rocks/Farmer Tasks progress and combine it with live wallet state to suggest the most practical next incomplete tasks. Use for "what should I do next", "finish my daily", "Rocks", or onboarding task guidance.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -3173,6 +3881,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_known_allowances: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read current ERC-20 allowances for known Pixotchi tokens and known Pixotchi spenders only. Use for approval troubleshooting, "why can’t I stake/swap/place order", or checking stale approvals. Never builds revoke/approve calldata.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -3250,6 +3959,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_bridge_status: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read public Solana bridge/Twin status: enabled config, predicted Twin address, Twin deployment, wSOL/SEED balances, and adapter setup. Use for Solana bridge onboarding or "is my twin ready" questions. Never builds bridge transactions or uses debug endpoints.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -3316,6 +4026,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_missions: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read the authenticated user mission day, mission score, and streak data from gamification storage.',
       inputSchema: z.object({}),
       execute: async () => withToolResult(
@@ -3332,6 +4043,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_player_overview: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read the authenticated user wallet overview: plants, lands, balances, urgent plant care, and high-level totals. Use this first for broad personalized questions.',
       inputSchema: z.object({}),
       execute: async () => withToolResult(
@@ -3375,7 +4087,225 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_plant_care_audit: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Audit plant care for a wallet: urgent dry/dying/dead/low-TOD plants, fence status, live care prices, wallet balances, revive price, and land warehouse resources. Use for plant care, "what needs attention", "can I save my plants", or large-wallet plant triage.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        includePrices: z.boolean().default(true),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      execute: async ({ address, includePrices, limit }) => withToolResult(
+        'get_plant_care_audit',
+        `Base contract reads for Pixotchi plants, care prices, balances, and land warehouse resources via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            `Audits at most ${AI_PLANT_CARE_AUDIT_MAX_PLANTS} plants per request for large wallets.`,
+            'Care prices, balances, and plant timers can change; refresh Farm before signing any item, fence, revive, or resource transaction.',
+            'Neural Seed cannot purchase items, revive plants, or apply resources.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const [plants, lands, seedBalance, leafBalance, reviveResult, shopItemsResult, gardenItemsResult, fenceQuoteResult] = await Promise.allSettled([
+            readPlantsForAddress(target, readClient),
+            getLandsByOwner(target, readClient),
+            getTokenBalance(target, readClient),
+            getLeafBalance(target, readClient),
+            includePrices ? getRevivePrice(readClient) : Promise.resolve(BigInt(0)),
+            includePrices ? getShopItems(readClient) : Promise.resolve([]),
+            includePrices ? getAllGardenItems(readClient) : Promise.resolve([]),
+            includePrices ? quoteFenceV2(1, readClient) : Promise.resolve(BigInt(0)),
+          ]);
+          const normalizedPlants = plants.status === 'fulfilled'
+            ? plants.value.slice(0, AI_PLANT_CARE_AUDIT_MAX_PLANTS).map(normalizePlant)
+            : [];
+          const urgency = normalizedPlants.map((plant) => {
+            const reasons = [
+              plant.status === 4 ? 'dead' : null,
+              plant.status === 3 ? 'dying' : null,
+              plant.status === 2 ? 'dry' : null,
+              plant.timeUntilStarvingHours > 0 && plant.timeUntilStarvingHours < 10 ? 'under_10h_tod' : null,
+              !plant.fence.active ? 'no_active_fence' : null,
+              plant.fence.active && plant.fence.daysRemaining < 1 ? 'fence_expires_under_1d' : null,
+            ].filter(Boolean);
+            const priority = (plant.status === 4 ? 100 : 0) +
+              (plant.status === 3 ? 80 : 0) +
+              (plant.status === 2 ? 60 : 0) +
+              (plant.timeUntilStarvingHours > 0 && plant.timeUntilStarvingHours < 10 ? 40 : 0) +
+              (!plant.fence.active ? 10 : 0);
+
+            return {
+              ...plant,
+              careReasons: reasons,
+              carePriority: priority,
+            };
+          });
+          const urgentPlants = urgency
+            .filter((plant) => plant.careReasons.length > 0)
+            .sort((a, b) => b.carePriority - a.carePriority || a.timeUntilStarvingHours - b.timeUntilStarvingHours);
+          const revivePrice = reviveResult.status === 'fulfilled'
+            ? formatPriceFields(reviveResult.value, PIXOTCHI_TOKEN_ADDRESS)
+            : null;
+          const shopItems = shopItemsResult.status === 'fulfilled'
+            ? shopItemsResult.value.map((item) => ({
+              effectTimeSeconds: item.effectTime,
+              id: item.id,
+              name: item.name,
+              ...formatPriceFields(item.price, PIXOTCHI_TOKEN_ADDRESS),
+            }))
+            : [];
+          const gardenItems = gardenItemsResult.status === 'fulfilled'
+            ? gardenItemsResult.value.map((item) => ({
+              id: item.id,
+              name: item.name,
+              points: item.points,
+              timeExtensionSeconds: item.timeExtension,
+              ...formatPriceFields(item.price, PIXOTCHI_TOKEN_ADDRESS),
+            }))
+            : [];
+          const fenceQuote = fenceQuoteResult.status === 'fulfilled'
+            ? formatPriceFields(fenceQuoteResult.value, PIXOTCHI_TOKEN_ADDRESS)
+            : null;
+          const auditedLands = lands.status === 'fulfilled' ? lands.value : [];
+          const seed = seedBalance.status === 'fulfilled' ? seedBalance.value : BigInt(0);
+
+          return {
+            address: target,
+            balances: {
+              leaf: leafBalance.status === 'fulfilled' ? `${formatToken(leafBalance.value)} LEAF` : null,
+              seed: `${formatToken(seed)} SEED`,
+            },
+            careOptions: includePrices
+              ? {
+                fenceOneDay: fenceQuote?.priceDisplay ?? null,
+                gardenItems: gardenItems.slice(0, 12),
+                revivePrice: revivePrice?.priceDisplay ?? null,
+                shopItems: shopItems.slice(0, 12),
+              }
+              : null,
+            errors: [
+              plants.status === 'rejected' ? `plants: ${errorMessage(plants.reason)}` : null,
+              lands.status === 'rejected' ? `lands: ${errorMessage(lands.reason)}` : null,
+              seedBalance.status === 'rejected' ? `seedBalance: ${errorMessage(seedBalance.reason)}` : null,
+              leafBalance.status === 'rejected' ? `leafBalance: ${errorMessage(leafBalance.reason)}` : null,
+              reviveResult.status === 'rejected' ? `revivePrice: ${errorMessage(reviveResult.reason)}` : null,
+              shopItemsResult.status === 'rejected' ? `shopItems: ${errorMessage(shopItemsResult.reason)}` : null,
+              gardenItemsResult.status === 'rejected' ? `gardenItems: ${errorMessage(gardenItemsResult.reason)}` : null,
+              fenceQuoteResult.status === 'rejected' ? `fenceQuote: ${errorMessage(fenceQuoteResult.reason)}` : null,
+            ].filter(Boolean),
+            plantSummary: summarizePlants(normalizedPlants),
+            recommendedCare: urgentPlants.slice(0, limit).map((plant) => ({
+              careReasons: plant.careReasons,
+              fence: plant.fence,
+              id: plant.id,
+              level: plant.level,
+              name: plant.name,
+              statusLabel: plant.statusLabel,
+              timeUntilStarvingHours: plant.timeUntilStarvingHours,
+              uiNextStep: plant.status === 4
+                ? 'Open the plant in Farm and use the visible Revive flow if available.'
+                : 'Open the plant in Farm and use visible care, garden, item, or fence controls as needed.',
+            })),
+            truncated: (plants.status === 'fulfilled' && plants.value.length > normalizedPlants.length) || urgentPlants.length > limit,
+            urgentCareCount: urgentPlants.length,
+            urgentPlants: urgentPlants.slice(0, limit),
+            warehouseTotals: {
+              landCount: auditedLands.length,
+              storedLifetimeHours: auditedLands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantLifetime), 0) / 3600,
+              storedPts: auditedLands.reduce((sum, land) => sum + toNumber(land.accumulatedPlantPoints, 12), 0),
+            },
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_arcade_status: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Read Arcade readiness for owned or selected plants: stars, Box game cooldowns, SpinLeaf cooldowns, star cost, and current reward table. Use for arcade, stars, spin, box game, or "which plants can play". Read-only.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        limit: z.number().int().min(1).max(30).default(10),
+        plantIds: z.array(z.number().int().min(0)).max(30).optional(),
+      }),
+      execute: async ({ address, limit, plantIds }) => withToolResult(
+        'get_arcade_status',
+        `Base contract reads for Pixotchi Arcade Box and SpinLeaf cooldowns via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            `Scans at most ${AI_ARCADE_STATUS_MAX_PLANTS} plants per request unless specific plant IDs are supplied.`,
+            'Spin pending commit/reveal state may also depend on local browser state; the Arcade dialog is the final source for action buttons.',
+            'Neural Seed cannot play arcade games, spend stars, reveal spins, or claim rewards.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const rawPlants = plantIds?.length
+            ? await getPlantsInfoExtended(plantIds, readClient)
+            : await readPlantsForAddress(target, readClient);
+          const normalizedPlants = rawPlants
+            .slice(0, plantIds?.length ? rawPlants.length : Math.min(rawPlants.length, AI_ARCADE_STATUS_MAX_PLANTS))
+            .map(normalizePlant);
+          const [globalCooldown, starCost, rewards] = await Promise.all([
+            readClient.readContract({
+              address: PIXOTCHI_NFT_ADDRESS,
+              abi: SPIN_GAME_ABI,
+              functionName: 'getCoolDownTime',
+              args: [],
+            }) as Promise<bigint>,
+            readClient.readContract({
+              address: PIXOTCHI_NFT_ADDRESS,
+              abi: SPIN_GAME_ABI,
+              functionName: 'getStarCost',
+              args: [],
+            }) as Promise<bigint>,
+            Promise.all(Array.from({ length: 6 }, (_, index) =>
+              readClient.readContract({
+                address: PIXOTCHI_NFT_ADDRESS,
+                abi: SPIN_GAME_ABI,
+                functionName: 'getReward',
+                args: [BigInt(index)],
+              }) as Promise<[bigint, bigint, bigint]>
+            )),
+          ]);
+          const rewardTable = rewards.map(([pointsDelta, timeExtension, leafAmount], index) => ({
+            index,
+            leafDisplay: `${formatToken(leafAmount)} LEAF`,
+            pointsDelta: formatSignedPts(pointsDelta),
+            timeExtensionHours: Number(timeExtension) / 3600,
+            timeExtensionSeconds: timeExtension.toString(),
+          }));
+          const sharedSpin = {
+            globalCooldownSeconds: Number(globalCooldown),
+            starCost: Number(starCost),
+          };
+          const plants = await Promise.all(normalizedPlants.slice(0, limit).map((plant) => readArcadeStatusForPlant(readClient, plant, sharedSpin)));
+
+          return {
+            address: plantIds?.length ? undefined : target,
+            count: plants.length,
+            plants,
+            rewardTable,
+            summary: {
+              boxReadyPlants: plants.filter((plant) => plant.box.normal.ready || plant.box.withStar.ready).length,
+              spinReadyPlants: plants.filter((plant) => plant.spin.ready).length,
+              totalStars: normalizedPlants.reduce((sum, plant) => sum + plant.stars, 0),
+            },
+            totalOwned: plantIds?.length ? undefined : rawPlants.length,
+            truncated: rawPlants.length > normalizedPlants.length || normalizedPlants.length > plants.length,
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_plants: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read Pixotchi plant NFTs by authenticated wallet, public wallet address, or specific plant IDs. Includes status, PTS, rewards, stars, TOD, fences, and active items.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -3410,6 +4340,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_staking: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read authenticated or public wallet staking status: staked SEED, claimable rewards, total staked, reward ratio, time unit, and current allowance state. Read-only.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
@@ -3446,6 +4377,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
     }),
 
     get_swap_quote: tool({
+      ...READ_TOOL_DEFAULTS,
       description: 'Read an informational Pixotchi swap quote only. This never prepares or executes a swap and must not be presented as financial advice.',
       inputSchema: z.object({
         amount: z.string().trim().regex(/^\d+(\.\d+)?$/).describe('Human-readable amount in the sell token decimals.'),

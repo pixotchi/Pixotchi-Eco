@@ -151,7 +151,11 @@ function normalizeGoogleThinkingLevel(value: string | undefined): 'minimal' | 'l
     return value;
   }
 
-  return 'minimal';
+  if (value === 'minimal') {
+    return value;
+  }
+
+  return 'high';
 }
 
 // Provider instances
@@ -249,17 +253,30 @@ function isDirectGoogleGemini3Model(): boolean {
   return config.provider === 'google' && /^gemini-3/i.test(config.model);
 }
 
+function isGemini3ModelConfigured(): boolean {
+  const config = getCurrentModelConfig();
+  const models = [
+    config.model,
+    ...config.fallbackModels,
+  ];
+  return models.some((entry) => /(?:^|\/)gemini-3/i.test(entry));
+}
+
 function getModelRequestSettings() {
-  return isDirectGoogleGemini3Model()
+  return isGemini3ModelConfigured()
     ? {}
     : { temperature: AI_TEMPERATURE };
 }
 
 const TOOL_PROMPT_PRIORITY = [
   'get_player_overview',
+  'get_mint_availability',
+  'get_plant_care_audit',
   'get_daily_task_plan',
   'get_wallet_token_balances',
   'get_wallet_game_assets',
+  'get_arcade_status',
+  'get_quest_readiness',
   'get_land_production_audit',
   'get_wallet_game_activity',
   'get_combat_activity',
@@ -268,9 +285,11 @@ const TOOL_PROMPT_PRIORITY = [
   'get_killable_plants',
   'get_attack_targets',
   'get_land_raid_targets',
+  'get_land_raid_reports',
   'get_game_prices',
   'get_lands',
   'get_casino_status',
+  'get_blackjack_action_state',
   'get_marketplace_orders',
   'get_claim_eligibility',
   'get_known_allowances',
@@ -335,12 +354,81 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'get_mint_availability') {
+    return {
+      errors: data?.errors,
+      land: data?.land,
+      plantStrains: (data?.plantStrains || []).slice(0, 12).map((strain: UntypedValue) => ({
+        active: strain.active,
+        allowanceDisplay: strain.allowanceDisplay,
+        allowanceEnough: strain.allowanceEnough,
+        balanceDisplay: strain.balanceDisplay,
+        enoughBalance: strain.enoughBalance,
+        id: strain.id,
+        isMintable: strain.isMintable,
+        name: strain.name,
+        priceDisplay: strain.priceDisplay,
+        remainingSupply: strain.remainingSupply,
+      })),
+      summary: data?.summary,
+      ui: data?.ui,
+    };
+  }
+
   if (toolName === 'get_player_overview') {
     return {
       balances: data?.balances,
       landSummary: data?.landSummary,
       plantSummary: data?.plantSummary,
       urgentPlants: (data?.urgentPlants || []).slice(0, 6),
+    };
+  }
+
+  if (toolName === 'get_plant_care_audit') {
+    return {
+      balances: data?.balances,
+      careOptions: data?.careOptions
+        ? {
+          fenceOneDay: data.careOptions.fenceOneDay,
+          gardenItems: (data.careOptions.gardenItems || []).slice(0, 6),
+          revivePrice: data.careOptions.revivePrice,
+          shopItems: (data.careOptions.shopItems || []).slice(0, 6),
+        }
+        : null,
+      errors: data?.errors,
+      plantSummary: data?.plantSummary,
+      recommendedCare: (data?.recommendedCare || []).slice(0, 8),
+      urgentCareCount: data?.urgentCareCount,
+      urgentPlants: (data?.urgentPlants || []).slice(0, 8).map((plant: UntypedValue) => ({
+        careReasons: plant.careReasons,
+        fence: plant.fence,
+        id: plant.id,
+        level: plant.level,
+        name: plant.name,
+        statusLabel: plant.statusLabel,
+        timeUntilStarvingHours: plant.timeUntilStarvingHours,
+      })),
+      warehouseTotals: data?.warehouseTotals,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_arcade_status') {
+    return {
+      count: data?.count,
+      plants: (data?.plants || []).slice(0, 10).map((plant: UntypedValue) => ({
+        box: plant.box,
+        id: plant.id,
+        name: plant.name,
+        spin: plant.spin,
+        stars: plant.stars,
+        statusLabel: plant.statusLabel,
+        strainName: plant.strainName,
+      })),
+      rewardTable: data?.rewardTable,
+      summary: data?.summary,
+      totalOwned: data?.totalOwned,
+      truncated: data?.truncated,
     };
   }
 
@@ -528,6 +616,23 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'get_land_raid_reports') {
+    return {
+      latestReports: (data?.latestReports || []).slice(0, 10),
+      lands: (data?.lands || []).slice(0, 8).map((land: UntypedValue) => ({
+        id: land.id,
+        incoming: land.incoming,
+        name: land.name,
+        outgoing: land.outgoing,
+        readErrors: land.readErrors,
+      })),
+      ownedLandCount: data?.ownedLandCount,
+      scannedLandCount: data?.scannedLandCount,
+      summary: data?.summary,
+      truncated: data?.truncated,
+    };
+  }
+
   if (toolName === 'get_land_production_audit') {
     return {
       auditedLandCount: data?.auditedLandCount,
@@ -561,6 +666,25 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'get_quest_readiness') {
+    return {
+      currentBlock: data?.currentBlock,
+      lands: (data?.lands || []).slice(0, 10).map((land: UntypedValue) => ({
+        farmerHouse: land.farmerHouse,
+        id: land.id,
+        name: land.name,
+        nextActions: land.nextActions,
+        slots: (land.slots || []).slice(0, 3),
+        summary: land.summary,
+      })),
+      ownedLandCount: data?.ownedLandCount,
+      rewardsPool: data?.rewardsPool,
+      scannedLandCount: data?.scannedLandCount,
+      totals: data?.totals,
+      truncated: data?.truncated,
+    };
+  }
+
   if (toolName === 'get_casino_status') {
     return {
       configs: data?.configs,
@@ -574,6 +698,26 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
       ownedLandCount: data?.ownedLandCount,
       scannedLandCount: data?.scannedLandCount,
       totalCasinoLandsInScan: data?.totalCasinoLandsInScan,
+      truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_blackjack_action_state') {
+    return {
+      casinoLandCountInScan: data?.casinoLandCountInScan,
+      handIndexRequested: data?.handIndexRequested,
+      lands: (data?.lands || []).slice(0, 8).map((land: UntypedValue) => ({
+        blackjackAvailability: land.blackjackAvailability,
+        gameTokenSymbol: land.gameTokenSymbol,
+        id: land.id,
+        name: land.name,
+        selectedHandIndex: land.selectedHandIndex,
+        snapshot: land.snapshot,
+        ui: land.ui,
+      })),
+      ownedLandCount: data?.ownedLandCount,
+      scannedLandCount: data?.scannedLandCount,
+      summary: data?.summary,
       truncated: data?.truncated,
     };
   }
@@ -1321,6 +1465,193 @@ function buildPlainModelMessages(historyMessages: AIChatMessage[], currentMessag
   ];
 }
 
+type DeterministicToolRequest = {
+  input: Record<string, UntypedValue>;
+  toolName: string;
+};
+
+type DeterministicToolContext = {
+  toolCalls: AIToolCallTrace[];
+  toolContextText: string;
+};
+
+function extractAddressFromPrompt(message: string): string | undefined {
+  return message.match(/0x[a-fA-F0-9]{40}/)?.[0];
+}
+
+function addDeterministicToolRequest(
+  requests: DeterministicToolRequest[],
+  request: DeterministicToolRequest,
+) {
+  if (requests.some((entry) => entry.toolName === request.toolName)) {
+    return;
+  }
+  requests.push(request);
+}
+
+function getDeterministicToolRequests(currentMessage: string, userAddress: string): DeterministicToolRequest[] {
+  const promptAddress = extractAddressFromPrompt(currentMessage);
+  const addressInput = promptAddress ? { address: promptAddress } : {};
+  const requests: DeterministicToolRequest[] = [];
+  const isOwnWallet = !promptAddress || promptAddress.toLowerCase() === userAddress.toLowerCase();
+  const broadOnboarding = /\b(what should i do|what do i do|next step|start|begin|onboard|new player|overview|portfolio|wallet)\b/i.test(currentMessage);
+
+  if (broadOnboarding) {
+    if (isOwnWallet) {
+      addDeterministicToolRequest(requests, { input: {}, toolName: 'get_player_overview' });
+      addDeterministicToolRequest(requests, { input: { ...addressInput, suggestionLimit: 5 }, toolName: 'get_daily_task_plan' });
+    } else {
+      addDeterministicToolRequest(requests, { input: { ...addressInput, landLimit: 12, plantLimit: 12 }, toolName: 'get_wallet_game_assets' });
+      addDeterministicToolRequest(requests, { input: { ...addressInput, includeZeroBalances: false }, toolName: 'get_wallet_token_balances' });
+    }
+    addDeterministicToolRequest(requests, { input: { ...addressInput, includeLand: true, includePlants: true }, toolName: 'get_mint_availability' });
+    addDeterministicToolRequest(requests, {
+      input: {
+        includeSafetyNotes: true,
+        limit: 8,
+        query: currentMessage.slice(0, 160),
+      },
+      toolName: 'get_game_action_guide',
+    });
+  }
+
+  if (/\b(mint|afford|price|cost|supply|whitelist|allowance|approve)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, includeLand: true, includePlants: true }, toolName: 'get_mint_availability' });
+    addDeterministicToolRequest(requests, { input: { fenceDays: 1, includeGardenItems: true, includeShopItems: true }, toolName: 'get_game_prices' });
+  }
+
+  if (/\b(care|dry|dying|dead|starving|tod|water|feed|revive|fence|shield|save my plants)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, includePrices: true, limit: 12 }, toolName: 'get_plant_care_audit' });
+  }
+
+  if (/\b(arcade|spin|spinleaf|box game|stars?)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, limit: 12 }, toolName: 'get_arcade_status' });
+  }
+
+  if (/\b(quest|farmer house|return now|open now|loot bag)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, limit: 12 }, toolName: 'get_quest_readiness' });
+  }
+
+  if (/\b(raid report|raid history|last raid|who raided|raided me|incoming raid|outgoing raid)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, limit: 12 }, toolName: 'get_land_raid_reports' });
+  } else if (/\b(barracks|raid target|who can i raid|troops|swordsmen|phalanx)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, includePreviews: false, limit: 8, previewTargetLimit: 0 }, toolName: 'get_land_raid_targets' });
+  }
+
+  if (/\b(blackjack|hit|stand|double|split|surrender|insurance)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, limit: 8 }, toolName: 'get_blackjack_action_state' });
+  } else if (/\b(casino|roulette|wager|bet)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, includeBlackjack: true, includeRoulette: true, limit: 8 }, toolName: 'get_casino_status' });
+  }
+
+  return requests.slice(0, 6);
+}
+
+function appendToolContextMessage(messages: UntypedValue[], heading: string, toolContextText: string, requestBudget: AIRequestBudget): UntypedValue[] {
+  if (!toolContextText) {
+    return messages;
+  }
+
+  return [
+    ...messages,
+    {
+      content: [
+        heading,
+        toolContextText,
+        `${requestBudget.responseInstruction} Quote priceDisplay exactly. Stay read-only and concise.`,
+      ].join('\n\n'),
+      role: 'user',
+    },
+  ];
+}
+
+function combineToolContextText(...texts: string[]): string {
+  return capString(texts.filter((text) => text.trim() && text.trim() !== '[]').join('\n'), AI_TOOL_CONTEXT_MAX_CHARS);
+}
+
+function mergeToolCallTraces(traces: AIToolCallTrace[]): AIToolCallTrace[] {
+  const seen = new Set<string>();
+  const merged: AIToolCallTrace[] = [];
+
+  for (const trace of traces) {
+    const key = JSON.stringify({
+      input: trace.input,
+      status: trace.status,
+      toolName: trace.toolName,
+    });
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(trace);
+  }
+
+  return merged;
+}
+
+async function buildDeterministicToolContext(options: {
+  address: string;
+  currentMessage: string;
+  tools: UntypedValue;
+}): Promise<DeterministicToolContext> {
+  const requests = getDeterministicToolRequests(options.currentMessage, options.address);
+  if (requests.length === 0) {
+    return {
+      toolCalls: [],
+      toolContextText: '',
+    };
+  }
+
+  const rawResults: UntypedValue[] = [];
+  for (const request of requests) {
+    const selectedTool = options.tools?.[request.toolName];
+    if (typeof selectedTool?.execute !== 'function') {
+      continue;
+    }
+
+    try {
+      const output = await selectedTool.execute(request.input);
+      rawResults.push({
+        input: request.input,
+        output,
+        toolName: request.toolName,
+      });
+    } catch (error) {
+      rawResults.push({
+        error: error instanceof Error ? error.message : String(error),
+        input: request.input,
+        output: {
+          confidence: 'low',
+          error: error instanceof Error ? error.message : String(error),
+          fetchedAt: new Date().toISOString(),
+          freshness: {
+            fetchedAt: new Date().toISOString(),
+          },
+          limitations: ['Deterministic prefetch hit an unexpected tool execution error.'],
+          source: 'Deterministic read-only prefetch',
+          status: 'error',
+        },
+        toolName: request.toolName,
+      });
+    }
+  }
+
+  const summaries = rawResults.map((toolResult) => ({
+    input: sanitizeToolTraceValue(toolResult.input),
+    output: compactJson(compactToolPromptValue(toolResult.toolName, toolResult.output), AI_TOOL_CONTEXT_MAX_CHARS_PER_TOOL),
+    prefetch: true,
+    toolName: toolResult.toolName,
+  })).sort((a, b) => getToolPriority(a.toolName) - getToolPriority(b.toolName));
+  const traces = rawResults
+    .map((toolResult) => normalizeToolTrace(toolResult))
+    .filter((trace): trace is AIToolCallTrace => Boolean(trace));
+
+  return {
+    toolCalls: traces,
+    toolContextText: compactJson(summaries, AI_TOOL_CONTEXT_MAX_CHARS),
+  };
+}
+
 async function buildGemini3SingleRoundToolContext(options: {
   abortSignal?: AbortSignal;
   address: string;
@@ -1659,6 +1990,22 @@ export async function streamAIMessage(
   let continuations = 0;
   let recoveredFromLength = false;
   let toolContextText = '';
+  const deterministicToolContext = await buildDeterministicToolContext({
+    address,
+    currentMessage: message,
+    tools,
+  });
+
+  if (deterministicToolContext.toolContextText) {
+    generationMessages = appendToolContextMessage(
+      generationMessages,
+      'Deterministic read-only Pixotchi tool results pre-fetched for this request:',
+      deterministicToolContext.toolContextText,
+      requestBudget,
+    );
+    preflightToolContextText = deterministicToolContext.toolContextText;
+    preflightToolCalls = deterministicToolContext.toolCalls;
+  }
 
   if (isDirectGoogleGemini3Model()) {
     const planning = await buildGemini3SingleRoundToolContext({
@@ -1676,8 +2023,17 @@ export async function streamAIMessage(
     preflightOutputTokens = planning.outputTokens;
     preflightReasoningTokens = planning.reasoningTokens || 0;
     preflightTokensUsed = planning.tokensUsed;
-    preflightToolContextText = planning.toolContextText;
-    preflightToolCalls = planning.toolCalls;
+    preflightToolContextText = combineToolContextText(deterministicToolContext.toolContextText, planning.toolContextText);
+    preflightToolCalls = mergeToolCallTraces([...deterministicToolContext.toolCalls, ...planning.toolCalls]);
+
+    if (deterministicToolContext.toolContextText) {
+      generationMessages = appendToolContextMessage(
+        generationMessages,
+        'Deterministic read-only Pixotchi tool results pre-fetched for this request:',
+        deterministicToolContext.toolContextText,
+        requestBudget,
+      );
+    }
   }
 
   const result = streamText({
@@ -1692,8 +2048,8 @@ export async function streamAIMessage(
       tokensUsed = preflightTokensUsed + getTokenCount(usage);
       outputTokens = preflightOutputTokens + getOutputTokenCount(usage);
       reasoningTokens = preflightReasoningTokens + getReasoningTokenCount(usage);
-      toolCalls = preflightToolCalls.length ? preflightToolCalls : extractAIToolTraces(event);
-      toolContextText = preflightToolContextText || buildToolContextText(event);
+      toolCalls = mergeToolCallTraces([...preflightToolCalls, ...extractAIToolTraces(event)]);
+      toolContextText = combineToolContextText(preflightToolContextText, buildToolContextText(event));
 
       if (event.finishReason === 'length') {
         console.warn('[AI_LENGTH_FINISH]', {
@@ -1950,6 +2306,22 @@ export async function sendAIMessage(address: string, message: string, options: S
     let preflightTokensUsed = 0;
     let preflightToolContextText = '';
     let preflightToolCalls: AIToolCallTrace[] = [];
+    const deterministicToolContext = await buildDeterministicToolContext({
+      address,
+      currentMessage: message,
+      tools,
+    });
+
+    if (deterministicToolContext.toolContextText) {
+      generationMessages = appendToolContextMessage(
+        generationMessages,
+        'Deterministic read-only Pixotchi tool results pre-fetched for this request:',
+        deterministicToolContext.toolContextText,
+        requestBudget,
+      );
+      preflightToolContextText = deterministicToolContext.toolContextText;
+      preflightToolCalls = deterministicToolContext.toolCalls;
+    }
 
     if (isDirectGoogleGemini3Model()) {
       const planning = await buildGemini3SingleRoundToolContext({
@@ -1967,8 +2339,17 @@ export async function sendAIMessage(address: string, message: string, options: S
       preflightOutputTokens = planning.outputTokens;
       preflightReasoningTokens = planning.reasoningTokens || 0;
       preflightTokensUsed = planning.tokensUsed;
-      preflightToolContextText = planning.toolContextText;
-      preflightToolCalls = planning.toolCalls;
+      preflightToolContextText = combineToolContextText(deterministicToolContext.toolContextText, planning.toolContextText);
+      preflightToolCalls = mergeToolCallTraces([...deterministicToolContext.toolCalls, ...planning.toolCalls]);
+
+      if (deterministicToolContext.toolContextText) {
+        generationMessages = appendToolContextMessage(
+          generationMessages,
+          'Deterministic read-only Pixotchi tool results pre-fetched for this request:',
+          deterministicToolContext.toolContextText,
+          requestBudget,
+        );
+      }
     }
 
     // Use Vercel AI SDK generateText with messages array
@@ -1996,8 +2377,8 @@ export async function sendAIMessage(address: string, message: string, options: S
     let reasoningTokens = preflightReasoningTokens + getReasoningTokenCount(usage);
     let continuations = 0;
     let recoveredFromLength = false;
-    const toolCalls = preflightToolCalls.length ? preflightToolCalls : extractAIToolTraces(result);
-    const toolContextText = preflightToolContextText || buildToolContextText(result);
+    const toolCalls = mergeToolCallTraces([...preflightToolCalls, ...extractAIToolTraces(result)]);
+    const toolContextText = combineToolContextText(preflightToolContextText, buildToolContextText(result));
 
     if (result.finishReason === 'length') {
       console.warn('[AI_LENGTH_FINISH]', {

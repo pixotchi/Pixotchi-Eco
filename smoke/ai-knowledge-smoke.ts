@@ -37,9 +37,15 @@ const REQUIRED_READ_TOOLS = [
   'get_claim_eligibility',
   'get_daily_task_plan',
   'get_known_allowances',
+  'get_arcade_status',
+  'get_blackjack_action_state',
+  'get_land_raid_reports',
   'get_land_production_audit',
   'get_land_raid_targets',
   'get_marketplace_orders',
+  'get_mint_availability',
+  'get_plant_care_audit',
+  'get_quest_readiness',
 ] as const;
 
 function loadEnvFile(fileName: string) {
@@ -172,9 +178,15 @@ async function main() {
     assert(tools[toolName], `Missing read-only AI tool: ${toolName}.`);
   }
   assert(actionGuideImport.KNOWLEDGE_TOPICS.barracks_raids.liveDataSources.includes('get_land_raid_targets'), 'Barracks topic is not routed to land raid target tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.barracks_raids.liveDataSources.includes('get_land_raid_reports'), 'Barracks topic is not routed to land raid report tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.warehouse.liveDataSources.includes('get_land_production_audit'), 'Warehouse topic is not routed to production audit tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.mint_plants.liveDataSources.includes('get_mint_availability'), 'Mint plants topic is not routed to mint availability tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.plant_care.liveDataSources.includes('get_plant_care_audit'), 'Plant care topic is not routed to plant care audit tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.arcade.liveDataSources.includes('get_arcade_status'), 'Arcade topic is not routed to arcade status tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.quests.liveDataSources.includes('get_quest_readiness'), 'Quest topic is not routed to quest readiness tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.marketplace.liveDataSources.includes('get_marketplace_orders'), 'Marketplace topic is not routed to marketplace orders tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.casino.liveDataSources.includes('get_casino_status'), 'Casino topic is not routed to casino status tool.');
+  assert(actionGuideImport.KNOWLEDGE_TOPICS.casino.liveDataSources.includes('get_blackjack_action_state'), 'Casino topic is not routed to blackjack action state tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.verify_airdrop.liveDataSources.includes('get_claim_eligibility'), 'Verify/airdrop topic is not routed to claim eligibility tool.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.chat_social.cannotDo.some((entry: string) => /system\/developer prompts/i.test(entry)), 'Chat/social topic is missing AI prompt secrecy guidance.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.support.cannotDo.some((entry: string) => /internal tool names or schemas/i.test(entry)), 'Support topic is missing internal tool/config secrecy guidance.');

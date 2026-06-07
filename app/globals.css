@@ -194,6 +194,8 @@
     --ring: 211 82% 34%;
     --scene-glow: 190 84% 86%;
     --scene-floor: 166 58% 90%;
+    --chromatic-layer-surface: 210 62% 92%;
+    --chromatic-layer-highlight: 210 72% 95%;
     --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-solana: linear-gradient(135deg, hsl(265 70% 54%), hsl(184 76% 42%));
     --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
@@ -869,6 +871,7 @@
     letter-spacing: 0;
   }
 
+  :root:not(.dark):not(.green):not(.yellow):not(.red):not(.pink):not(.blue):not(.violet) :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
   .green :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
   .yellow :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
   .red :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
@@ -881,6 +884,7 @@
     box-shadow: var(--surface-highlight), var(--shadow-raised);
   }
 
+  :root:not(.dark):not(.green):not(.yellow):not(.red):not(.pink):not(.blue):not(.violet) .chromatic-white-inner-glow::before,
   .green .chromatic-white-inner-glow::before,
   .yellow .chromatic-white-inner-glow::before,
   .red .chromatic-white-inner-glow::before,

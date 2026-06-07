@@ -66,6 +66,8 @@ type ThemeColorMap = typeof LIGHT_BASE_COLORS & {
   ring: string;
   'scene-glow': string;
   'scene-floor': string;
+  'chromatic-layer-surface'?: string;
+  'chromatic-layer-highlight'?: string;
 };
 
 // Mirrors the final visual-refresh theme tokens in app/globals.css.
@@ -87,7 +89,9 @@ const THEME_COLORS = {
     input: '208 32% 50%',
     ring: '211 82% 34%',
     'scene-glow': '190 84% 86%',
-    'scene-floor': '166 58% 90%'
+    'scene-floor': '166 58% 90%',
+    'chromatic-layer-surface': '210 62% 92%',
+    'chromatic-layer-highlight': '210 72% 95%'
   },
   dark: {
     background: '216 30% 25%',
@@ -140,7 +144,9 @@ const THEME_COLORS = {
     input: '137 24% 48%',
     ring: '151 78% 24%',
     'scene-glow': '88 72% 82%',
-    'scene-floor': '151 52% 86%'
+    'scene-floor': '151 52% 86%',
+    'chromatic-layer-surface': '116 32% 89%',
+    'chromatic-layer-highlight': '112 36% 91%'
   },
   yellow: {
     ...COLORFUL_BASE_COLORS,
@@ -162,7 +168,9 @@ const THEME_COLORS = {
     input: '39 34% 46%',
     ring: '33 86% 29%',
     'scene-glow': '38 92% 80%',
-    'scene-floor': '48 78% 88%'
+    'scene-floor': '48 78% 88%',
+    'chromatic-layer-surface': '46 58% 89%',
+    'chromatic-layer-highlight': '48 66% 91%'
   },
   red: {
     ...COLORFUL_BASE_COLORS,
@@ -184,7 +192,9 @@ const THEME_COLORS = {
     input: '352 26% 48%',
     ring: '348 62% 36%',
     'scene-glow': '24 74% 82%',
-    'scene-floor': '354 48% 89%'
+    'scene-floor': '354 48% 89%',
+    'chromatic-layer-surface': '12 34% 90%',
+    'chromatic-layer-highlight': '8 40% 92%'
   },
   pink: {
     ...COLORFUL_BASE_COLORS,
@@ -204,7 +214,9 @@ const THEME_COLORS = {
     input: '326 28% 49%',
     ring: '328 68% 36%',
     'scene-glow': '276 66% 84%',
-    'scene-floor': '326 56% 90%'
+    'scene-floor': '326 56% 90%',
+    'chromatic-layer-surface': '326 36% 90%',
+    'chromatic-layer-highlight': '326 46% 92%'
   },
   blue: {
     ...COLORFUL_BASE_COLORS,
@@ -224,7 +236,9 @@ const THEME_COLORS = {
     input: '216 30% 48%',
     ring: '219 78% 36%',
     'scene-glow': '188 76% 84%',
-    'scene-floor': '216 60% 90%'
+    'scene-floor': '216 60% 90%',
+    'chromatic-layer-surface': '212 42% 90%',
+    'chromatic-layer-highlight': '210 54% 92%'
   },
   violet: {
     ...COLORFUL_BASE_COLORS,
@@ -244,7 +258,9 @@ const THEME_COLORS = {
     input: '260 28% 49%',
     ring: '263 72% 38%',
     'scene-glow': '294 62% 86%',
-    'scene-floor': '258 54% 91%'
+    'scene-floor': '258 54% 91%',
+    'chromatic-layer-surface': '260 36% 90%',
+    'chromatic-layer-highlight': '260 46% 92%'
   }
 } satisfies Record<Theme, ThemeColorMap>;
 

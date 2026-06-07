@@ -61,6 +61,20 @@ async function main() {
   assert(typeof raids.ownedLandCount === 'number' && raids.ownedLandCount > 0, 'Land raid targets missing owned land count.');
   assert(Array.isArray(raids.results), 'Land raid targets missing result array.');
 
+  const raidReports = getToolData(await (tools.get_land_raid_reports as UntypedValue).execute({
+    address,
+    limit: 5,
+  }), 'get_land_raid_reports');
+  assert(typeof raidReports.scannedLandCount === 'number', 'Land raid reports missing scanned land count.');
+  assert(typeof raidReports.summary?.totalReports === 'number', 'Land raid reports missing summary.');
+
+  const questReadiness = getToolData(await (tools.get_quest_readiness as UntypedValue).execute({
+    address,
+    limit: 5,
+  }), 'get_quest_readiness');
+  assert(typeof questReadiness.scannedLandCount === 'number', 'Quest readiness missing scanned land count.');
+  assert(questReadiness.rewardsPool, 'Quest readiness missing rewards pool status.');
+
   const casino = getToolData(await (tools.get_casino_status as UntypedValue).execute({
     address,
     includeBlackjack: true,
@@ -69,6 +83,13 @@ async function main() {
   }), 'get_casino_status');
   assert(typeof casino.scannedLandCount === 'number', 'Casino status missing scanned land count.');
   assert(casino.configs, 'Casino status missing config block.');
+
+  const blackjackActions = getToolData(await (tools.get_blackjack_action_state as UntypedValue).execute({
+    address,
+    limit: 5,
+  }), 'get_blackjack_action_state');
+  assert(typeof blackjackActions.scannedLandCount === 'number', 'Blackjack action state missing scanned land count.');
+  assert(blackjackActions.summary, 'Blackjack action state missing summary.');
 
   const marketplace = getToolData(await (tools.get_marketplace_orders as UntypedValue).execute({
     address,
@@ -94,6 +115,29 @@ async function main() {
   assert(allowances.knownOnly === true, 'Known allowances must be known-only.');
   assert(typeof allowances.tokenCount === 'number' && allowances.tokenCount >= 6, 'Known allowances missing token coverage.');
 
+  const mintAvailability = getToolData(await (tools.get_mint_availability as UntypedValue).execute({
+    address,
+    includeLand: true,
+    includePlants: true,
+  }), 'get_mint_availability');
+  assert(Array.isArray(mintAvailability.plantStrains), 'Mint availability missing plant strains.');
+  assert(mintAvailability.summary, 'Mint availability missing summary.');
+
+  const careAudit = getToolData(await (tools.get_plant_care_audit as UntypedValue).execute({
+    address,
+    includePrices: true,
+    limit: 5,
+  }), 'get_plant_care_audit');
+  assert(typeof careAudit.plantSummary?.totalPlants === 'number', 'Plant care audit missing plant summary.');
+  assert(careAudit.careOptions, 'Plant care audit missing care options.');
+
+  const arcadeStatus = getToolData(await (tools.get_arcade_status as UntypedValue).execute({
+    address,
+    limit: 5,
+  }), 'get_arcade_status');
+  assert(Array.isArray(arcadeStatus.rewardTable), 'Arcade status missing reward table.');
+  assert(arcadeStatus.summary, 'Arcade status missing summary.');
+
   const claims = getToolData(await (tools.get_claim_eligibility as UntypedValue).execute({
     address,
   }), 'get_claim_eligibility');
@@ -115,11 +159,17 @@ async function main() {
   console.log(JSON.stringify({
     address,
     auditedLandCount: production.auditedLandCount,
+    arcadePlantsChecked: arcadeStatus.count,
+    blackjackLandsChecked: blackjackActions.lands.length,
     casinoLandsInScan: casino.totalCasinoLandsInScan,
     dailySuggestions: daily.suggestedNext.length,
     marketplaceActiveOrders: marketplace.orderBook.activeOrderCount,
+    mintablePlantStrains: mintAvailability.summary.mintablePlantStrains,
     ok: true,
+    questLandsChecked: questReadiness.lands.length,
+    raidReports: raidReports.summary.totalReports,
     raidReadyAttackers: raids.readyAttackerCount,
+    urgentCareCount: careAudit.urgentCareCount,
   }, null, 2));
 }
 

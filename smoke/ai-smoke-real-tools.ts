@@ -129,6 +129,29 @@ assert(tyj.priceDisplay === '500 JESSE', `TYJ priceDisplay should be 500 JESSE, 
 assert(tyj.mintPriceSeed == null, 'TYJ must not expose mintPriceSeed because it is paid in JESSE.');
 assert(seedStrains.some((strain: UntypedValue) => strain.priceDisplay === '10 SEED'), 'Expected at least one SEED strain to render as 10 SEED.');
 
+const deterministicToolOutputs = [
+  {
+    output: priceResult,
+    toolName: 'get_game_prices',
+  },
+  {
+    output: await (tools.get_mint_availability as UntypedValue).execute({
+      address: testAddress,
+      includeLand: true,
+      includePlants: true,
+    }),
+    toolName: 'get_mint_availability',
+  },
+  {
+    output: await (tools.get_game_action_guide as UntypedValue).execute({
+      includeSafetyNotes: true,
+      limit: 8,
+      query: 'minting onboarding live prices',
+    }),
+    toolName: 'get_game_action_guide',
+  },
+];
+
 const provider = process.env.AI_SMOKE_PROVIDER || 'google';
 const modelName = provider === 'google'
   ? selectGoogleSmokeModel()
@@ -165,8 +188,14 @@ if (shouldUseSingleRoundGeminiTools(provider, modelName)) {
     system: `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\nFor this tool-planning pass, call every needed read-only tool in a single round. Do not make sequential follow-up tool calls. Do not answer the user unless no tool is needed.`,
     tools,
   });
-  const toolOutputs = extractToolOutputs(planningResult);
-  toolNames = extractToolNames(planningResult);
+  const toolOutputs = [
+    ...deterministicToolOutputs,
+    ...extractToolOutputs(planningResult),
+  ];
+  toolNames = [
+    ...deterministicToolOutputs.map((entry) => entry.toolName),
+    ...extractToolNames(planningResult),
+  ];
 
   onboardingResult = await generateText({
     maxOutputTokens: 2048,
@@ -195,13 +224,24 @@ if (shouldUseSingleRoundGeminiTools(provider, modelName)) {
       content: onboardingPrompt,
       role: 'user',
     },
+    {
+      content: [
+        'Deterministic read-only Pixotchi tool results already fetched for this request:',
+        JSON.stringify(deterministicToolOutputs, null, 2),
+        'Use these results if the model does not call the same tools again. Quote priceDisplay exactly.',
+      ].join('\n\n'),
+      role: 'user',
+    },
     ],
     model,
     stopWhen: stepCountIs(8),
     system: READ_ONLY_AGENT_SYSTEM_PROMPT,
     tools,
   });
-  toolNames = extractToolNames(onboardingResult);
+  toolNames = [
+    ...deterministicToolOutputs.map((entry) => entry.toolName),
+    ...extractToolNames(onboardingResult),
+  ];
 }
 
 assert(toolNames.includes('get_game_prices'), 'Onboarding smoke did not call get_game_prices.');

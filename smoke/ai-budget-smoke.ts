@@ -31,7 +31,7 @@ function applyBudgetSmokeDefaults() {
   process.env.AI_AUTO_CONTINUE_ON_LENGTH = 'true';
   process.env.AI_PLANNING_MAX_OUTPUT_TOKENS = process.env.AI_PLANNING_MAX_OUTPUT_TOKENS || '1024';
   process.env.AI_CONTINUATION_MAX_OUTPUT_TOKENS = process.env.AI_CONTINUATION_MAX_OUTPUT_TOKENS || '2048';
-  process.env.AI_GOOGLE_THINKING_LEVEL = process.env.AI_GOOGLE_THINKING_LEVEL || 'minimal';
+  process.env.AI_GOOGLE_THINKING_LEVEL = process.env.AI_GOOGLE_THINKING_LEVEL || 'high';
   process.env.AI_GOOGLE_THINKING_BUDGET = process.env.AI_GOOGLE_THINKING_BUDGET || '0';
 }
 
@@ -109,7 +109,7 @@ process.env.AI_MAX_TOKENS = '96';
 process.env.AI_MAX_TOKENS_PER_DAY = '1000000';
 process.env.AI_AUTO_CONTINUE_ON_LENGTH = 'true';
 process.env.AI_CONTINUATION_MAX_OUTPUT_TOKENS = '1024';
-process.env.AI_GOOGLE_THINKING_LEVEL = process.env.AI_GOOGLE_THINKING_LEVEL || 'minimal';
+process.env.AI_GOOGLE_THINKING_LEVEL = process.env.AI_GOOGLE_THINKING_LEVEL || 'high';
 process.env.AI_GOOGLE_THINKING_BUDGET = process.env.AI_GOOGLE_THINKING_BUDGET || '0';
 const serviceImport = await import('./lib/ai-service.ts');
 const service = serviceImport.default ?? serviceImport;
