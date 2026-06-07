@@ -275,7 +275,7 @@ export function LandMapModal({
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
-                            src={tappedLandId <= totalSupply ? "/icons/taken.png" : "/icons/cemetery.png"} 
+                            src={tappedLandId <= totalSupply ? "/icons/map/taken.webp" : "/icons/map/cemetery.webp"} 
                             alt="Land Thumbnail" 
                             fill 
                             className="object-contain p-1" 

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFrameContext } from "@/lib/frame-context";
 import { openExternalUrl } from "@/lib/open-external";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { useTabVisibility } from "@/lib/tab-visibility-context";
 import packageJson from '@/package.json';
 import { MessageCircle,PlayCircle,Radio } from "lucide-react";
 import Image from "next/image";
@@ -49,10 +50,10 @@ const ABOUT_SCENE_SPRITES = [
   { src: "/icons/solar-panels.svg", alt: "", width: 96, height: 96, className: "left-[48%] top-[2%] w-[15%]", animation: "about-scene-bob 6.8s ease-in-out infinite -1.1s" },
 ] as const;
 
-const AboutWorldScene = () => (
+const AboutWorldScene = ({ active }: { active: boolean }) => (
   <div className="hidden lg:flex lg:min-h-[390px] lg:items-center lg:justify-center" aria-hidden="true">
     <div className="relative aspect-square w-full max-w-[440px]">
-      {ABOUT_SCENE_SPRITES.map((sprite) => (
+      {active && ABOUT_SCENE_SPRITES.map((sprite) => (
         <Image
           key={sprite.src}
           src={sprite.src}
@@ -61,12 +62,7 @@ const AboutWorldScene = () => (
           height={sprite.height}
           className={`absolute h-auto select-none object-contain [image-rendering:pixelated] drop-shadow-[0_14px_22px_rgba(15,23,42,0.18)] ${sprite.className}`}
           style={{ animation: sprite.animation }}
-          loading="eager"
-          fetchPriority={
-            sprite.src === "/icons/plantGrowth4.gif" || sprite.src === "/icons/plantGrowth.gif"
-              ? "high"
-              : "auto"
-          }
+          loading="lazy"
           unoptimized={sprite.src.endsWith(".gif")}
         />
       ))}
@@ -80,10 +76,12 @@ export default function AboutTab() {
   const { address } = useAccount();
   const { start, enabled } = useSlideshow();
   const { walletType, isSmartWallet } = useSmartWallet();
+  const { isTabVisible } = useTabVisibility();
   const frameData = useFrameContext();
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const isVisible = isTabVisible('about');
 
   // Note: Gamification streak/missions now handled by TasksInfoDialog component
 
@@ -312,7 +310,7 @@ export default function AboutTab() {
         </div>
       </div>
       </div>
-      <AboutWorldScene />
+        <AboutWorldScene active={isVisible} />
     </div>
   );
 }

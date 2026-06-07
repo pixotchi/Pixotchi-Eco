@@ -955,7 +955,7 @@ export default function App() {
                     title="Open wallet profile"
                   >
                     <Image
-                      src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"}
+                      src={theme === "pink" ? "/icons/avatar1-icon.webp" : "/icons/avatar2-icon.webp"}
                       alt=""
                       width={24}
                       height={24}

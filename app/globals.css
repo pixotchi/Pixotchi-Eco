@@ -802,11 +802,11 @@
   }
 
   .casino-dialog-surface {
-    background-image: url("/icons/casino.png");
+    background-image: url("/icons/casino-bg.webp");
   }
 
   .blackjack-dialog-surface {
-    background-image: url("/icons/casinobj.png");
+    background-image: url("/icons/casinobj-bg.webp");
   }
 
   /* Base Loader Animations - Sequential Box Appearance */

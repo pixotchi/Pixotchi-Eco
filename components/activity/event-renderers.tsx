@@ -121,7 +121,7 @@ const EventIcon = React.memo(({
           altText: event?.attackerWon ? "Raid Won" : "Raid Lost"
         };
       case 'BarracksBuiltEvent':
-        return { iconSrc: "/icons/barracks.png", altText: "Barracks Built" };
+        return { iconSrc: "/icons/barracks.webp", altText: "Barracks Built" };
       case 'CasinoBuiltEvent':
         return { iconSrc: "/icons/casino.svg", altText: "Casino Built" };
       case 'RouletteSpinResultEvent':

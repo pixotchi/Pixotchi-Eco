@@ -369,7 +369,7 @@ const BUILDING_ICON_MAP: { [key: string]: string } = {
   "Marketplace": "/icons/marketplace.svg",
   "Casino": "/icons/casino.svg",
   "Farmer House": "/icons/farmer-house.svg",
-  "Barracks": "/icons/barracks.png",
+  "Barracks": "/icons/barracks.webp",
 };
 
 // Building name and icon caching

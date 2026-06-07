@@ -1271,8 +1271,6 @@ export default function BlackjackDialog({
         return gameState.currentHandIndex;
     }, [gameState.hasSplit, gameState.currentHandIndex]);
 
-    if (!open) return null;
-
     const showDealerHand =
         gameState.dealerCards.length > 0 ||
         (uiPhase === 'result' && gameState.result !== null);
@@ -1283,7 +1281,7 @@ export default function BlackjackDialog({
                 hideCloseButton
                 mobileMode="center"
                 surface="game"
-                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj.png')] bg-cover bg-center bg-no-repeat !p-0 text-white"
+                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"
             >
                 <DialogTitle className="sr-only">Blackjack</DialogTitle>
                 <DialogDescription className="sr-only">
@@ -1390,7 +1388,7 @@ export default function BlackjackDialog({
                         </div>
                     )}
 
-                    {/* Betting Phase - Combined Bet + Deal */}
+                    {/* Betting Phase */}
                     {uiPhase === 'betting' && (
                         <div className="space-y-4">
                             <div>
@@ -1429,7 +1427,11 @@ export default function BlackjackDialog({
                                 )}
                                 </div>
                             </div>
+                        </div>
+                    )}
 
+                    {uiPhase === 'betting' && (
+                        <div data-blackjack-action-footer className={BLACKJACK_STICKY_ACTIONS_CLASS}>
                             {config && !config.enabled ? (
                                 <Button className="w-full" disabled variant="secondary">
                                     Blackjack disabled
@@ -1672,13 +1674,15 @@ export default function BlackjackDialog({
 
                     {/* Play Again (Result phase) */}
                     {uiPhase === 'result' && (
-                        <Button
-                            onClick={handlePlayAgain}
-                            variant="warning"
-                            className="w-full font-bold"
-                        >
-                            Play Again
-                        </Button>
+                        <div data-blackjack-action-footer className={BLACKJACK_STICKY_ACTIONS_CLASS}>
+                            <Button
+                                onClick={handlePlayAgain}
+                                variant="warning"
+                                className="w-full font-bold"
+                            >
+                                Play Again
+                            </Button>
+                        </div>
                     )}
 
                 </div>

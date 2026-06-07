@@ -91,6 +91,33 @@ function delay(ms: number) {
   });
 }
 
+const PUBLIC_CHAT_MIN_FETCH_INTERVAL_MS = 4500;
+
+type PublicChatFetchGate = {
+  inFlight: boolean;
+  lastFetchStartedAt: number;
+};
+
+function getPublicChatFetchGate(): PublicChatFetchGate {
+  if (typeof window === 'undefined') {
+    return {
+      inFlight: false,
+      lastFetchStartedAt: 0,
+    };
+  }
+
+  const globalWindow = window as typeof window & {
+    __pixotchiPublicChatFetchGate?: PublicChatFetchGate;
+  };
+
+  globalWindow.__pixotchiPublicChatFetchGate ??= {
+    inFlight: false,
+    lastFetchStartedAt: 0,
+  };
+
+  return globalWindow.__pixotchiPublicChatFetchGate;
+}
+
 function getAIUIMessageText(message: AIUIMessage): string {
   return message.parts
     .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
@@ -191,6 +218,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   });
   const modeRef = useRef<ChatMode>('public');
   const abortControllerRef = useRef<AbortController | null>(null);
+  const fetchInFlightRef = useRef<Partial<Record<ChatMode, boolean>>>({});
   const bootstrapKeyRef = useRef<string | null>(null);
   const previousChatAddressRef = useRef<string | null>(null);
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
@@ -542,6 +570,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [aiChatStreaming]);
 
   const fetchHistory = useCallback(async (showLoading = false, requestedMode: ChatMode = modeRef.current) => {
+    if (requestedMode === 'public') {
+      const now = Date.now();
+      const publicFetchGate = getPublicChatFetchGate();
+
+      if (
+        publicFetchGate.inFlight ||
+        now - publicFetchGate.lastFetchStartedAt < PUBLIC_CHAT_MIN_FETCH_INTERVAL_MS
+      ) {
+        return;
+      }
+
+      publicFetchGate.inFlight = true;
+      publicFetchGate.lastFetchStartedAt = now;
+    } else if (fetchInFlightRef.current[requestedMode]) {
+      return;
+    }
+
+    fetchInFlightRef.current[requestedMode] = true;
+
     if (showLoading) {
       setLoadingModes((previous) => ({ ...previous, [requestedMode]: true }));
       if (modeRef.current === requestedMode) {
@@ -622,6 +669,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setError('Failed to fetch message history.');
       console.error(err);
     } finally {
+      if (requestedMode === 'public') {
+        getPublicChatFetchGate().inFlight = false;
+      }
+      fetchInFlightRef.current[requestedMode] = false;
       if (showLoading) {
         setLoadingModes((previous) => ({ ...previous, [requestedMode]: false }));
         if (modeRef.current === requestedMode) {
@@ -668,33 +719,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchPublicPreview = useCallback(async () => {
-    if (!publicChatAuthenticated) {
-      return;
-    }
-
-    try {
-      const authHeaders = await getMiniAppQuickAuthHeaders({
-        expectedAddress: publicChatAddress ?? chatAddress,
-      });
-      const response = await fetch('/api/chat/messages?limit=50', {
-        cache: 'no-store',
-        headers: authHeaders,
-      });
-      if (response.status === 401) {
-        await handleChatAuthFailure();
-        return;
-      }
-      if (!response.ok) {
-        throw new Error('Failed to fetch public preview');
-      }
-
-      const data = await response.json();
-      const next = data.messages || [];
-      updatePublicMessages(next);
-    } catch (err) {
-      console.error(err);
-    }
-  }, [chatAddress, handleChatAuthFailure, publicChatAddress, publicChatAuthenticated, updatePublicMessages]);
+    await fetchHistory(false, 'public');
+  }, [fetchHistory]);
 
   useEffect(() => {
     const currentSurface = getCurrentWebAuthSurface();

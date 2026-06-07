@@ -14,7 +14,7 @@ export default function NotFound() {
         <div className="flex flex-col items-center gap-6">
           <Image
             src="/PixotchiKit/Logonotext.svg"
-            alt="Pixotchi Mini logo"
+            alt="Pixotchi logo"
             width={96}
             height={96}
             preload

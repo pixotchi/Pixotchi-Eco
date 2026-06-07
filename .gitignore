@@ -32,6 +32,7 @@ v22/
 # Local/generated files
 .claude/
 .codex
+unused-assets/
 .github/
 bin/
 claimed-wallets.json

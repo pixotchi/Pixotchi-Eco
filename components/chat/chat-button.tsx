@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import Image from "next/image";
@@ -21,10 +21,15 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
   const isSolana = useIsSolanaWallet();
   const { solanaAddress } = useSolanaWallet();
   const [showChat, setShowChat] = useState(false);
+  const [hasOpenedChat, setHasOpenedChat] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { unreadCount, markAsRead, setChatOpen } = useChat();
 
   useEffect(() => {
     return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
       setChatOpen(false);
     };
   }, [setChatOpen]);
@@ -35,6 +40,11 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
   }
 
   const handleOpenChat = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setHasOpenedChat(true);
     setShowChat(true);
     setChatOpen(true);
     markAsRead();
@@ -58,7 +68,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
         aria-expanded={showChat}
       >
         <Image
-          src="/icons/chat.svg"
+          src="/icons/chat-icon.webp"
           alt=""
           width={24}
           height={24}
@@ -73,12 +83,24 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
         )}
       </Button>
 
-      {showChat && (
+      {hasOpenedChat && (
         <ChatDialog
           open={showChat}
           onOpenChange={(open) => {
             setShowChat(open);
-            setChatOpen(open);
+            if (open) {
+              if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+              }
+              setChatOpen(true);
+              return;
+            }
+
+            closeTimerRef.current = setTimeout(() => {
+              closeTimerRef.current = null;
+              setChatOpen(false);
+            }, 260);
           }}
         />
       )}

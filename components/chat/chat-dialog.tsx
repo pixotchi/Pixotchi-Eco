@@ -39,7 +39,7 @@ function DesktopChatPane({
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
       <div className="surface-header-divider dialog-header-surface flex items-center gap-2 px-3 py-2">
-        <Image src={icon} alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
+            <Image src={icon} alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -77,9 +77,9 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
             {mode === 'ai' ? (
               <Image src="/icons/neuralseed.png" alt="Neural Seed" width={20} height={20} className="xl:hidden" />
             ) : (
-              <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="xl:hidden" />
+              <Image src="/icons/chat-icon.webp" alt="Chat" width={20} height={20} className="xl:hidden" />
             )}
-            <Image src="/icons/chat.svg" alt="Chat" width={20} height={20} className="hidden xl:block" />
+            <Image src="/icons/chat-icon.webp" alt="Chat" width={20} height={20} className="hidden xl:block" />
             <span className="xl:hidden">{mode === 'ai' ? 'Neural Seed' : 'Chat'}</span>
             <span className="hidden xl:inline">Chat</span>
           </div>
@@ -109,7 +109,7 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
       </div>
 
       <div className="hidden min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden pt-3 xl:grid">
-        <DesktopChatPane mode="public" title="Public" icon="/icons/chat.svg" />
+        <DesktopChatPane mode="public" title="Public" icon="/icons/chat-icon.webp" />
         <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" />
       </div>
 

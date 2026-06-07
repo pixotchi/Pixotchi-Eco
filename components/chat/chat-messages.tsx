@@ -81,7 +81,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
             >
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[var(--radius-control)] bg-[hsl(var(--warning)/0.18)]">
-                  <Image src="/icons/chat.svg" alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
+                  <Image src="/icons/chat-icon.webp" alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
                   <h3 className="font-semibold text-foreground">
@@ -118,7 +118,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
                   />
                 ) : (
                   <Image
-                    src="/icons/chat.svg"
+                    src="/icons/chat-icon.webp"
                     alt="Chat"
                     width={48}
                     height={48}

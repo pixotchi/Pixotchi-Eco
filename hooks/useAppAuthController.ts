@@ -48,6 +48,22 @@ const AUTH_CACHE_PREFIXES = [
   "coinbase",
 ];
 
+function getPrivyLoginErrorMessage(error: string) {
+  switch (error) {
+    case "exited_auth_flow":
+      return "Login was cancelled before authentication completed.";
+    case "unable_to_sign":
+      return "Please sign the wallet message to continue.";
+    case "client_request_timeout":
+      return "Wallet login timed out. Please try again.";
+    case "generic_connect_wallet_error":
+    case "unknown_connect_wallet_error":
+      return "Could not connect the wallet. Please try again.";
+    default:
+      return "Privy login failed. Please try again.";
+  }
+}
+
 type AuthControllerAction =
   | { type: "hydrate-surface"; surface: AuthSurface }
   | { type: "set-surface"; surface: AuthSurface | null }
@@ -145,6 +161,7 @@ export function useAppAuthController() {
 
   const normalizedAddress = address?.toLowerCase() ?? null;
   const privySessionResetRef = useRef(false);
+  const privyLoginInProgressRef = useRef(false);
   const baseAutologinAttemptRef = useRef(false);
   const baseAuthInFlightRef = useRef(false);
   const baseSessionCheckRef = useRef<{
@@ -1015,6 +1032,7 @@ export function useAppAuthController() {
 
   const { login } = useLogin({
     onComplete: ({ loginAccount }) => {
+      privyLoginInProgressRef.current = false;
       const loginAddress =
         loginAccount?.type === "wallet" &&
         loginAccount.chainType === "ethereum" &&
@@ -1028,9 +1046,10 @@ export function useAppAuthController() {
         void persistPrivyAuthenticatedAddress(null);
       }
     },
-    onError: () => {
+    onError: (error) => {
+      privyLoginInProgressRef.current = false;
       if (state.surface === "privy" && !sessionStorageManager.hasRecentPrivyLogoutIntent()) {
-        void resetPrivySession("Privy login was cancelled. Please sign the message to continue.");
+        void resetPrivySession(getPrivyLoginErrorMessage(error));
       }
     },
   });
@@ -1338,7 +1357,14 @@ export function useAppAuthController() {
   ]);
 
   useEffect(() => {
-    if (!isWebPrivySurface || !privyReady || authenticated || !isEvmConnected || isPrivyModalOpen) {
+    if (
+      !isWebPrivySurface ||
+      !privyReady ||
+      authenticated ||
+      !isEvmConnected ||
+      isPrivyModalOpen ||
+      privyLoginInProgressRef.current
+    ) {
       return;
     }
 
@@ -1434,11 +1460,13 @@ export function useAppAuthController() {
         if (auto === "privy" && state.surface === "privy" && privyReady) {
           await sessionStorageManager.removeAutologin();
           if (mounted) {
+            privyLoginInProgressRef.current = true;
             login();
           }
         } else if (auto === "privysolana" && state.surface === "privysolana" && privyReady) {
           await sessionStorageManager.removeAutologin();
           if (mounted) {
+            privyLoginInProgressRef.current = true;
             login();
           }
         } else if (auto === "test") {

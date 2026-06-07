@@ -750,7 +750,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 surface="game"
                 size="full"
                 stickyFooter
-                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino.png')] bg-cover bg-center bg-no-repeat !p-3 sm:!p-4 md:!p-6"
+                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino-bg.webp')] bg-cover bg-center bg-no-repeat !p-3 sm:!p-4 md:!p-6"
             >
                 <DialogTitle className="sr-only">Roulette</DialogTitle>
                 <DialogDescription className="sr-only">

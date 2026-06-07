@@ -91,11 +91,11 @@ export function LandMapCanvas({
 
       try {
         const [taken, unminted, water, forest, mountain] = await Promise.all([
-          loadImage('/icons/taken.png'),
-          loadImage('/icons/cemetery.png'),
-          loadImage('/icons/lake.png'),
-          loadImage('/icons/jungle.png'),
-          loadImage('/icons/mountains.png')
+          loadImage('/icons/map/taken.webp'),
+          loadImage('/icons/map/cemetery.webp'),
+          loadImage('/icons/map/lake.webp'),
+          loadImage('/icons/map/jungle.webp'),
+          loadImage('/icons/map/mountains.webp')
         ]);
 
         loadedSprites.taken = taken;

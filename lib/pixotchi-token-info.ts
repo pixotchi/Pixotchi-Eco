@@ -132,7 +132,7 @@ const TOKEN_INFO = {
       {
         body: `Covers instant building upgrades, Casino plays, and batch claims of up to ${PIXOTCHI_BATCH_CLAIM_MAX_SIZE} buildings for ${PIXOTCHI_BATCH_CLAIM_BURN_AMOUNT} tokens.`,
         iconAlt: 'Wallet profile',
-        iconSrc: '/icons/Avatar2.svg',
+        iconSrc: '/icons/avatar2-icon.webp',
         key: 'pixotchi-utility',
         title: 'In-Game Utility Layer',
       },
