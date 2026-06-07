@@ -1886,6 +1886,55 @@ button.profile-follow-button.follow-button p {
   overflow: auto !important;
 }
 
+.login-theme-cycle {
+  position: relative;
+  isolation: isolate;
+  color: hsl(var(--foreground));
+  transition: color 1600ms ease-in-out;
+}
+
+.login-theme-cycle .app-shell-inner[data-connected="false"] {
+  max-width: 100%;
+}
+
+.login-theme-cycle :is(button, [role="alert"], div, p, h1, h2, span) {
+  transition-duration: 1600ms !important;
+  transition-property: background-color, border-color, box-shadow, color, opacity !important;
+  transition-timing-function: ease-in-out !important;
+}
+
+.login-theme-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: hsl(var(--background));
+}
+
+.login-theme-layer {
+  position: absolute;
+  inset: 0;
+  background-color: hsl(var(--background));
+  background-image: var(--gradient-content-well);
+  background-position: center top;
+  background-size: 160% 120%;
+  opacity: 0;
+  transition: opacity 1600ms ease-in-out;
+}
+
+.login-theme-layer.is-active {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-theme-cycle,
+  .login-theme-cycle :is(button, [role="alert"], div, p, h1, h2, span),
+  .login-theme-layer {
+    transition: none;
+  }
+}
+
 /* Fix for React 19 warning: Prevent mixing background shorthand with backgroundSize */
 /* This warning comes from Privy's internal components setting both background shorthand */
 /* and backgroundSize separately during rerenders. This is a known Privy library issue. */

@@ -115,6 +115,12 @@ const tabComponents = {
 };
 
 const TAB_VALUES: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
+const LOGIN_THEME_SEQUENCE = ["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"] as const;
+const LOGIN_THEME_LAYER_STYLE: CSSProperties = {
+  backgroundImage: "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--secondary)) 52%, hsl(var(--card)) 100%)",
+  backgroundPosition: "center top",
+  backgroundSize: "100% 100%",
+};
 const MANAGED_GAME_QUERY_KEYS = new Set([
   "tab",
   "dashboardView",
@@ -582,9 +588,15 @@ export default function App() {
   const [isDesktopShell, setIsDesktopShell] = useState(false);
   const [isHeaderStatusPlacement, setIsHeaderStatusPlacement] = useState(false);
   const [showStandaloneEthBalance, setShowStandaloneEthBalance] = useState(false);
+  const [loginThemeState, setLoginThemeState] = useState({
+    current: 0,
+    previous: 0,
+  });
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const previousActiveTabRef = useRef<Tab>(activeTab);
   const lastDismissedRef = useRef<string | null>(null);
+  const loginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.current];
+  const previousLoginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.previous];
 
   useTabPrefetching(activeTab, isConnected);
 
@@ -594,6 +606,25 @@ export default function App() {
   useEffect(() => {
     setLocalTestAuthAvailable(isLocalTestAuthAllowed());
   }, []);
+
+  useEffect(() => {
+    if (isConnected) {
+      return;
+    }
+
+    const advanceLoginTheme = () => {
+      setLoginThemeState(({ current }) => ({
+        current: (current + 1) % LOGIN_THEME_SEQUENCE.length,
+        previous: current,
+      }));
+    };
+
+    const intervalId = window.setInterval(() => {
+      advanceLoginTheme();
+    }, 7500);
+
+    return () => window.clearInterval(intervalId);
+  }, [isConnected]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
@@ -800,69 +831,83 @@ export default function App() {
   return (
     <div
       data-viewport-shell="outer"
-      className={`flex justify-center w-full min-h-dvh bg-background bg-[image:var(--gradient-content-well)] overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
-        } ${isKeyboardNavigation ? 'keyboard-navigation' : ''
-        }`}
+      className={cn(
+        "flex justify-center w-full min-h-dvh bg-background bg-[image:var(--gradient-content-well)] overscroll-none",
+        keyboardState.isVisible ? "keyboard-visible" : "keyboard-hidden",
+        isKeyboardNavigation && "keyboard-navigation",
+        !isConnected && "login-theme-cycle",
+        !isConnected && loginTheme,
+      )}
       aria-label="Pixotchi Mini Game"
     >
+      {!isConnected && (
+        <div className="login-theme-background" aria-hidden="true">
+          <div className={cn("login-theme-layer", previousLoginTheme)} style={LOGIN_THEME_LAYER_STYLE} />
+          <div className={cn("login-theme-layer is-active", loginTheme)} style={LOGIN_THEME_LAYER_STYLE} />
+        </div>
+      )}
       <div
         data-viewport-shell="inner"
         data-connected={isConnected ? "true" : "false"}
-        className="app-shell-inner w-full flex flex-col h-dvh bg-background bg-[image:var(--gradient-content-well)] overflow-hidden overscroll-none"
+        className={cn(
+          "app-shell-inner w-full flex flex-col h-dvh overflow-hidden overscroll-none",
+          !isConnected && "relative z-10",
+          isConnected ? "bg-background bg-[image:var(--gradient-content-well)]" : "bg-transparent"
+        )}
+        style={!isConnected ? { maxWidth: "100%" } : undefined}
       >
-        {/* Header wrapper with matching background and safe area */}
-        <div className="relative z-[var(--z-sticky)] overflow-hidden rounded-b-[var(--radius-panel)] border-x border-b border-x-[hsl(var(--border-strong)/0.28)] border-b-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
-          <header
-            data-viewport-shell="header"
-            className={cn(
-              "bg-transparent px-4 py-2 overscroll-none safe-area-top",
-              !(isConnected && !isHeaderStatusPlacement) && "surface-header-divider"
-            )}
-            role="banner"
-            aria-label="Application header"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1.5">
-                <Image
-                  src="/PixotchiKit/Logonotext.svg"
-                  alt="Pixotchi Mini Logo"
-                  width={24}
-                  height={24}
-                />
-                <h1 className="text-sm font-pixel text-foreground">
-                  {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
-                </h1>
-              </div>
+        {isConnected && (
+          <div className="relative z-[var(--z-sticky)] overflow-hidden rounded-b-[var(--radius-panel)] border-x border-b border-x-[hsl(var(--border-strong)/0.28)] border-b-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
+            <header
+              data-viewport-shell="header"
+              className={cn(
+                "bg-transparent px-4 py-2 overscroll-none safe-area-top",
+                isHeaderStatusPlacement && "surface-header-divider"
+              )}
+              role="banner"
+              aria-label="Application header"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5">
+                  <Image
+                    src="/PixotchiKit/Logonotext.svg"
+                    alt="Pixotchi Mini Logo"
+                    width={24}
+                    height={24}
+                  />
+                  <h1 className="text-sm font-pixel text-foreground">
+                    {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
+                  </h1>
+                </div>
 
-              <div className="flex items-center space-x-2">
-                {isConnected && isHeaderStatusPlacement && (
-                  <ErrorBoundary
-                    variant="inline"
-                    resetKeys={address ? [address] : []}
-                    onError={(error, errorInfo) => {
-                      console.error('Error in StatusBar:', { error, errorInfo });
-                    }}
-                  >
-                    <StatusBar placement="header" />
-                  </ErrorBoundary>
-                )}
+                <div className="flex items-center space-x-2">
+                  {isHeaderStatusPlacement && (
+                    <ErrorBoundary
+                      variant="inline"
+                      resetKeys={address ? [address] : []}
+                      onError={(error, errorInfo) => {
+                        console.error('Error in StatusBar:', { error, errorInfo });
+                      }}
+                    >
+                      <StatusBar placement="header" />
+                    </ErrorBoundary>
+                  )}
 
-                {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
-                  <Button
-                    type="button"
-                    variant="headerIcon"
-                    size="sm"
-                    onClick={handleAddFrame}
-                    aria-label="Add Pixotchi Mini to your app"
-                    title="Add Pixotchi Mini to your app"
-                  >
-                    <PlusCircle className="w-4 h-4" aria-hidden="true" />
-                  </Button>
-                )}
+                  {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
+                    <Button
+                      type="button"
+                      variant="headerIcon"
+                      size="sm"
+                      onClick={handleAddFrame}
+                      aria-label="Add Pixotchi Mini to your app"
+                      title="Add Pixotchi Mini to your app"
+                    >
+                      <PlusCircle className="w-4 h-4" aria-hidden="true" />
+                    </Button>
+                  )}
 
-                {isConnected ? <ChatButton /> : null}
+                  <ChatButton />
 
-                {isConnected ? (
                   <Button
                     type="button"
                     variant="headerIcon"
@@ -880,28 +925,36 @@ export default function App() {
                       aria-hidden="true"
                     />
                   </Button>
-                ) : null}
-                <ThemeSelector />
+                  <ThemeSelector />
+                </div>
               </div>
-            </div>
-          </header>
-          {isConnected && !isHeaderStatusPlacement && (
-            <ErrorBoundary
-              variant="inline"
-              resetKeys={address ? [address] : []}
-              onError={(error, errorInfo) => {
-                console.error('Error in StatusBar:', { error, errorInfo });
-              }}
-            >
-              <StatusBar showEthInStandalone={showStandaloneEthBalance} />
-            </ErrorBoundary>
-          )}
-        </div>
+            </header>
+            {!isHeaderStatusPlacement && (
+              <ErrorBoundary
+                variant="inline"
+                resetKeys={address ? [address] : []}
+                onError={(error, errorInfo) => {
+                  console.error('Error in StatusBar:', { error, errorInfo });
+                }}
+              >
+                <StatusBar showEthInStandalone={showStandaloneEthBalance} />
+              </ErrorBoundary>
+            )}
+          </div>
+        )}
 
         {/* Main Content */}
-        <main data-viewport-shell="main" className="flex-1 bg-muted/40 bg-[image:var(--gradient-content-well)] flex flex-col xl:flex-row overflow-hidden" role="main" aria-label="Main content area">
+        <main
+          data-viewport-shell="main"
+          className={cn(
+            "flex flex-1 flex-col overflow-hidden xl:flex-row",
+            isConnected ? "bg-muted/40 bg-[image:var(--gradient-content-well)]" : "bg-transparent",
+          )}
+          role="main"
+          aria-label="Main content area"
+        >
           {(!isConnected) ? (
-            <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
+            <div className="relative z-10 flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
               <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pt-5">
                 <div className="flex flex-col items-center space-y-3 mb-8">
                   <Image
