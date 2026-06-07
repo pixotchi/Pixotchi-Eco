@@ -261,7 +261,7 @@ function LoginAuthActions({
         <Info className="h-4 w-4" />
         <AlertTitle>Web App</AlertTitle>
         <AlertDescription>
-          You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
+          You are in web app mode. For the best experience, sign in with Base or open the game from Farcaster.
         </AlertDescription>
       </Alert>
       <Button

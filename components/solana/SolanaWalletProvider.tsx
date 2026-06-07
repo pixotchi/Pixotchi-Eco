@@ -27,9 +27,8 @@ interface SolanaProviderProps {
  * Wraps your app with Solana wallet context, automatically detecting
  * Solana wallets from Privy and resolving Twin addresses.
  * 
- * Uses Privy's user.linkedAccounts to find Solana wallets since
- * the useWallets hook from @privy-io/react-auth returns EVM wallets only.
- * For Solana wallets, we check the user's linked accounts.
+ * Uses Privy's Solana wallet hook first, then falls back to linkedAccounts
+ * only when the hook has settled without a connected Solana wallet object.
  * 
  * @example
  * ```tsx

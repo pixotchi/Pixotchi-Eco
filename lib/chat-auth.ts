@@ -79,6 +79,9 @@ interface FarcasterChatAuthPayload {
 const CHAT_SESSION_COOKIE_NAME = 'pixotchi_chat_session';
 const CHAT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const BASE_AUTH_NONCE_TTL_SECONDS = 60 * 10;
+const BASE_SIWE_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const BASE_SIWE_MAX_ISSUED_AT_AGE_MS =
+  BASE_AUTH_NONCE_TTL_SECONDS * 1000 + BASE_SIWE_MAX_CLOCK_SKEW_MS;
 const FARCASTER_AUTH_ADDRESS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 const FARCASTER_VERIFIED_ADDRESSES_CACHE_TTL_SECONDS = 60 * 10;
 const BASE_NONCE_CONSUME_SCRIPT = `
@@ -523,18 +526,15 @@ function parseBaseSiweMessage(message: string): ParsedBaseSiweMessage {
 
 function getExpectedBaseUrls(request: NextRequest): URL[] {
   const candidates: URL[] = [];
-  const originHeader = request.headers.get('origin');
   const hostHeader = request.headers.get('host');
   const forwardedHost = request.headers.get('x-forwarded-host');
   const forwardedProto = request.headers.get('x-forwarded-proto');
+  const explicitBaseUrl = process.env.NEXT_PUBLIC_URL?.trim();
 
-  pushUrlCandidate(candidates, originHeader);
+  pushUrlCandidate(candidates, explicitBaseUrl);
   pushUrlCandidate(candidates, request.nextUrl.origin);
   pushHostCandidate(candidates, forwardedHost, forwardedProto);
   pushHostCandidate(candidates, hostHeader, forwardedProto);
-
-  const explicitBaseUrl = process.env.NEXT_PUBLIC_URL?.trim();
-  pushUrlCandidate(candidates, explicitBaseUrl);
 
   const deduped = new Map<string, URL>();
   candidates.forEach((candidate) => {
@@ -542,6 +542,27 @@ function getExpectedBaseUrls(request: NextRequest): URL[] {
   });
 
   return Array.from(deduped.values());
+}
+
+function validateBaseSiweTemporalClaims(siweMessage: ParsedBaseSiweMessage): void {
+  const nowMs = Date.now();
+  const issuedAtMs = siweMessage.issuedAt.getTime();
+
+  if (issuedAtMs > nowMs + BASE_SIWE_MAX_CLOCK_SKEW_MS) {
+    throw new ChatAuthError('SIWE issued-at time is in the future.', 400);
+  }
+
+  if (nowMs - issuedAtMs > BASE_SIWE_MAX_ISSUED_AT_AGE_MS) {
+    throw new ChatAuthError('SIWE message is too old.', 400);
+  }
+
+  if (siweMessage.notBefore && nowMs + BASE_SIWE_MAX_CLOCK_SKEW_MS < siweMessage.notBefore.getTime()) {
+    throw new ChatAuthError('SIWE message is not valid yet.', 400);
+  }
+
+  if (siweMessage.expirationTime && nowMs - BASE_SIWE_MAX_CLOCK_SKEW_MS > siweMessage.expirationTime.getTime()) {
+    throw new ChatAuthError('SIWE message has expired.', 400);
+  }
 }
 
 function getConfiguredBaseUrl(request: NextRequest): URL {
@@ -1036,6 +1057,7 @@ export async function verifyBaseChatIdentity(
   }
 
   const siweMessage = parseBaseSiweMessage(payload.message);
+  validateBaseSiweTemporalClaims(siweMessage);
 
   const expectedUrls = getExpectedBaseUrls(request);
   const expectedDomains = getExpectedBaseDomains(expectedUrls);
