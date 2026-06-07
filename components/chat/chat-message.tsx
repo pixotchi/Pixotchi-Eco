@@ -76,9 +76,9 @@ export default function ChatMessageComponent({
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
   
-  const bgColor = isAIMessage ? 'chromatic-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]' :
+  const bgColor = isAIMessage ? 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]' :
                   isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)]' :
-                  'chromatic-white-surface border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
+                  'chat-white-surface border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';

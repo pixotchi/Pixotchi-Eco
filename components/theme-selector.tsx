@@ -17,7 +17,7 @@ const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
 
 const themes: Array<{ name: Theme; label: string; color: string }> = [
   { name: "light", label: "Light", color: "bg-slate-300" },
-  { name: "dark", label: "Dark", color: "bg-slate-800" },
+  { name: "dark", label: "Dark", color: "bg-[#2D3C53]" },
   { name: "green", label: "Green", color: "bg-green-500" },
   { name: "yellow", label: "Yellow", color: "bg-yellow-500" },
   { name: "red", label: "Red", color: "bg-red-500" },

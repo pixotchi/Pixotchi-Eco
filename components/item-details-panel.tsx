@@ -582,7 +582,7 @@ export default function ItemDetailsPanel({
                 />
                 <span className="text-xs text-muted-foreground">
                   {fenceV2Bounds.min === fenceV2Bounds.max
-                    ? `${fenceV2Bounds.min} day${fenceV2Bounds.min === 1 ? '' : 's'} required`
+                    ? `${fenceV2Bounds.min}d${fenceV2Bounds.min === 1 ? '' : 's'} minimum`
                     : `${fenceV2Bounds.min}-${fenceV2Bounds.max} days`}
                 </span>
               </div>
@@ -879,9 +879,11 @@ export default function ItemDetailsPanel({
 
         <div className="pt-2 border-t border-border">
           <p className="text-xs text-muted-foreground text-center">
-            {itemType === 'shop'
-              ? 'Shop items provide ongoing protective effects.'
-              : 'Garden items give immediate points and/or TOD.'
+            {isFenceItem
+              ? 'Fence protection keeps your PTS safe from attacks while it is active.'
+              : itemType === 'shop'
+                ? 'Protection items provide ongoing defensive effects.'
+                : 'Garden items give immediate points and/or TOD.'
             }
           </p>
         </div>

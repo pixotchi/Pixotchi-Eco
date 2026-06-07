@@ -684,7 +684,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
                   <div className={walletChromaticWhiteInnerGlowClassName}>
                     <div className="relative space-y-3 p-3">
-                      <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-primary/20 bg-primary/10 bg-[image:var(--gradient-selection)] p-3 shadow-[var(--shadow-hairline)]">
+                      <div className="chromatic-white-surface flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 shadow-[var(--shadow-control)]">
                           {address ? (
                             <WalletAvatar address={address} className="h-9 w-9" />
@@ -712,7 +712,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             size="compact"
                             className="shrink-0 border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] px-3 text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45"
                           >
-                            Get Name
+                            Get Basename
                           </Button>
                         ) : null}
                       </div>

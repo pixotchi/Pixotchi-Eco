@@ -32,6 +32,23 @@ const LIGHT_BASE_COLORS = {
   'info-foreground': '0 0% 98%'
 };
 
+const COLORFUL_BASE_COLORS = {
+  foreground: '240 10% 4%',
+  'card-foreground': '240 10% 4%',
+  'popover-foreground': '240 10% 4%',
+  'secondary-foreground': '240 10% 4%',
+  'muted-foreground': '240 4% 38%',
+  'primary-foreground': '0 0% 98%',
+  destructive: '356 28% 58%',
+  'destructive-foreground': '356 34% 16%',
+  success: '142 72% 36%',
+  'success-strong': '142 76% 28%',
+  'success-foreground': '0 0% 98%',
+  warning: '38 46% 58%',
+  'warning-foreground': '34 50% 13%',
+  'info-foreground': '0 0% 98%'
+};
+
 type ThemeColorMap = typeof LIGHT_BASE_COLORS & {
   background: string;
   card: string;
@@ -73,20 +90,20 @@ const THEME_COLORS = {
     'scene-floor': '166 58% 90%'
   },
   dark: {
-    background: '216 36% 19%',
+    background: '216 30% 25%',
     foreground: '210 45% 96%',
-    card: '218 34% 15%',
+    card: '216 30% 31%',
     'card-foreground': '210 45% 96%',
-    popover: '218 34% 14%',
+    popover: '216 31% 32%',
     'popover-foreground': '210 45% 96%',
-    secondary: '216 30% 25%',
+    secondary: '216 28% 28%',
     'secondary-foreground': '210 45% 96%',
-    muted: '216 26% 28%',
-    'muted-foreground': '214 20% 74%',
-    primary: '204 92% 72%',
+    muted: '216 26% 29%',
+    'muted-foreground': '214 22% 78%',
+    primary: '204 92% 74%',
     'primary-foreground': '218 45% 10%',
-    accent: '170 36% 30%',
-    'accent-foreground': '174 76% 84%',
+    accent: '170 32% 32%',
+    'accent-foreground': '174 76% 86%',
     destructive: '356 72% 50%',
     'destructive-foreground': '0 0% 98%',
     success: '148 68% 48%',
@@ -96,17 +113,17 @@ const THEME_COLORS = {
     'warning-foreground': '35 70% 10%',
     info: '198 92% 66%',
     'info-foreground': '218 45% 10%',
-    value: '188 88% 70%',
-    border: '216 20% 42%',
-    'border-strong': '216 20% 52%',
-    divider: '216 20% 48%',
-    input: '216 20% 44%',
-    ring: '204 92% 72%',
-    'scene-glow': '204 92% 58%',
-    'scene-floor': '216 38% 24%'
+    value: '188 88% 72%',
+    border: '216 20% 47%',
+    'border-strong': '216 20% 58%',
+    divider: '216 20% 52%',
+    input: '216 20% 50%',
+    ring: '204 92% 74%',
+    'scene-glow': '204 92% 62%',
+    'scene-floor': '216 30% 29%'
   },
   green: {
-    ...LIGHT_BASE_COLORS,
+    ...COLORFUL_BASE_COLORS,
     background: '137 44% 83%',
     card: '112 30% 93%',
     popover: '112 34% 94%',
@@ -126,7 +143,7 @@ const THEME_COLORS = {
     'scene-floor': '151 52% 86%'
   },
   yellow: {
-    ...LIGHT_BASE_COLORS,
+    ...COLORFUL_BASE_COLORS,
     background: '45 90% 82%',
     card: '46 46% 93%',
     popover: '46 50% 94%',
@@ -148,7 +165,7 @@ const THEME_COLORS = {
     'scene-floor': '48 78% 88%'
   },
   red: {
-    ...LIGHT_BASE_COLORS,
+    ...COLORFUL_BASE_COLORS,
     background: '356 42% 86%',
     card: '14 34% 93%',
     popover: '14 38% 94%',
@@ -170,7 +187,7 @@ const THEME_COLORS = {
     'scene-floor': '354 48% 89%'
   },
   pink: {
-    ...LIGHT_BASE_COLORS,
+    ...COLORFUL_BASE_COLORS,
     background: '326 54% 85%',
     card: '326 32% 94%',
     popover: '326 36% 95%',
@@ -190,7 +207,7 @@ const THEME_COLORS = {
     'scene-floor': '326 56% 90%'
   },
   blue: {
-    ...LIGHT_BASE_COLORS,
+    ...COLORFUL_BASE_COLORS,
     background: '213 66% 84%',
     card: '212 44% 94%',
     popover: '212 48% 95%',
@@ -210,7 +227,7 @@ const THEME_COLORS = {
     'scene-floor': '216 60% 90%'
   },
   violet: {
-    ...LIGHT_BASE_COLORS,
+    ...COLORFUL_BASE_COLORS,
     background: '260 44% 88%',
     card: '256 32% 94%',
     popover: '256 36% 95%',

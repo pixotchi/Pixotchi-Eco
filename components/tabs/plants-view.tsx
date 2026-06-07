@@ -21,7 +21,6 @@ import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import { Input } from "@/components/ui/input";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { StandardContainer } from "@/components/ui/pixel-container";
-import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { ITEM_ICONS } from "@/lib/constants";
 import {
@@ -36,8 +35,7 @@ import { GardenItem,Plant,ShopItem } from "@/lib/types";
 import { cn,formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
 import {
 ChevronDown,
-Flower2,
-Info
+Flower2
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
@@ -53,6 +51,16 @@ const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 
 const REWARD_VALUE_MAX_FONT_SIZE = 13;
 const REWARD_VALUE_MIN_FONT_SIZE = 8;
+
+type MarketplaceItemOption = {
+  item: GardenItem | ShopItem;
+  itemType: "garden" | "shop";
+};
+
+function isFenceShopItem(item: ShopItem) {
+  const name = item.name.toLowerCase();
+  return name.includes("fence") || name.includes("shield");
+}
 
 function FittedEthRewardValue({ amount }: { amount: string }) {
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -152,17 +160,6 @@ export default function PlantsView() {
 
   const hasActiveFence = fenceStatuses.length > 0;
 
-  const handleItemTypeChange = (type: 'garden' | 'shop') => {
-    setItemType(type);
-    if (type === 'garden' && gardenItems.length > 0) {
-      setSelectedItem(gardenItems[0]);
-    } else if (type === 'shop' && shopItems.length > 0) {
-      setSelectedItem(shopItems[0]);
-    } else {
-      setSelectedItem(null);
-    }
-  };
-
   const handleQuantityChange = (itemId: string, quantity: number) => {
     setItemQuantities(prev => ({
       ...prev,
@@ -248,8 +245,10 @@ export default function PlantsView() {
       if (gardenItems.length > 0) {
         setSelectedItem(gardenItems[0]);
         setItemType('garden');
-      } else if (shopItems.length > 0) {
-        setSelectedItem(shopItems[0]);
+      } else {
+        const fenceItem = shopItems.find(isFenceShopItem);
+        if (!fenceItem) return;
+        setSelectedItem(fenceItem);
         setItemType('shop');
       }
     }
@@ -724,150 +723,114 @@ export default function PlantsView() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Marketplace</CardTitle>
-                  <ToggleGroup
-                    value={itemType}
-                    onValueChange={(v) => handleItemTypeChange(v as 'garden' | 'shop')}
-                    options={[
-                      { value: 'garden', label: 'Garden' },
-                      { value: 'shop', label: 'Shop' },
-                    ]}
-                  />
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 gap-4 min-[54rem]:grid-cols-[minmax(220px,260px)_minmax(0,340px)] min-[54rem]:items-start min-[54rem]:justify-center">
-                  {/* Regular Wallet Info Message */}
-                  {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                    <StandardContainer className="p-3 bg-primary/10 min-[54rem]:col-span-2">
-                      <div className="flex items-start space-x-2">
-                        <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                        <div className="text-sm text-foreground">
-                          <div className="font-medium">Regular Wallet Mode</div>
-                          <div className="text-xs mt-1">Purchasing 1 item at a time. For bulk purchases, consider using a smart wallet.</div>
-                        </div>
-                      </div>
-                    </StandardContainer>
-                  )}
-
-
-                  {/* Item Selection with Quantity - Grouped by category for Garden items */}
+                  {/* Item Selection with Quantity - Grouped by category */}
                   <div className="space-y-2">
-                    {itemType === 'garden' ? (
-                      // Group garden items by category: TOD, PTS, Hybrid
-                      (() => {
-                        const todItems = gardenItems.filter((item: GardenItem) =>
-                          Number(item.timeExtension) > 0 && Number(item.points) === 0
-                        );
-                        const ptsItems = gardenItems.filter((item: GardenItem) =>
-                          Number(item.points) > 0 && Number(item.timeExtension) === 0
-                        );
-                        const hybridItems = gardenItems.filter((item: GardenItem) =>
-                          Number(item.points) > 0 && Number(item.timeExtension) > 0
-                        );
+                    {(() => {
+                      const todItems: MarketplaceItemOption[] = gardenItems
+                        .filter((item: GardenItem) => Number(item.timeExtension) > 0 && Number(item.points) === 0)
+                        .map((item) => ({ item, itemType: "garden" as const }));
+                      const ptsItems: MarketplaceItemOption[] = gardenItems
+                        .filter((item: GardenItem) => Number(item.points) > 0 && Number(item.timeExtension) === 0)
+                        .map((item) => ({ item, itemType: "garden" as const }));
+                      const hybridItems: MarketplaceItemOption[] = gardenItems
+                        .filter((item: GardenItem) => Number(item.points) > 0 && Number(item.timeExtension) > 0)
+                        .map((item) => ({ item, itemType: "garden" as const }));
+                      const fenceItem = shopItems.find(isFenceShopItem);
 
-                        const renderItemGroup = (items: GardenItem[], label: string) => {
-                          if (items.length === 0) return null;
-                          return (
-                            <div key={label} className="space-y-1.5">
-                              {/* Subtle group divider with label */}
-                              <div className="flex items-center justify-center gap-2">
-                                <div className="h-px w-14 shrink-0 bg-border/50" />
-                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-                                <div className="h-px w-14 shrink-0 bg-border/50" />
-                              </div>
-                              <div className={items.length === 4 ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-2"}>
-                                {items.map((item: GardenItem) => {
-                                  const quantity = getItemQuantity(item.id);
-                                  return (
-                                    <div key={item.id} className="space-y-1">
-                                      <div className="flex justify-center">
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => setSelectedItem(item)}
-                                          className={cn(
-                                            "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
-                                            selectedItem?.id === item.id
-                                              ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
-                                              : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]"
-                                          )}
-                                          aria-label={`Select ${item.name}`}
-                                          aria-pressed={selectedItem?.id === item.id}
-                                        >
-                                          <div className="flex h-12 w-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
-                                            <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                          </div>
-                                        </Button>
-                                      </div>
-                                      {isSmartWallet && (
-                                        <div className="flex justify-center">
-                                          <QuantitySelector
-                                            quantity={quantity}
-                                            onQuantityChange={(newQuantity) => {
-                                              handleQuantityChange(item.id, newQuantity);
-                                              setSelectedItem(item);
-                                            }}
-                                            max={80}
-                                            min={0}
-                                            size={items.length === 4 ? "xs" : "sm"}
-                                          />
-                                        </div>
-                                      )}
-                                      {!smartWalletLoading && !isSmartWallet && (
-                                        <div className="flex justify-center">
-                                          <div className="text-xs text-muted-foreground px-2 py-1">
-                                            Qty: 1
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        };
+                      if (fenceItem) {
+                        hybridItems.splice(Math.min(2, hybridItems.length), 0, {
+                          item: fenceItem,
+                          itemType: "shop" as const,
+                        });
+                      }
 
+                      const renderItemGroup = (items: MarketplaceItemOption[], label: string) => {
+                        if (items.length === 0) return null;
                         return (
-                          <div className="space-y-2">
-                            {renderItemGroup(todItems, 'Lifetime Hours (TOD)')}
-                            {renderItemGroup(ptsItems, 'Points (PTS)')}
-                            {renderItemGroup(hybridItems, 'Hybrid')}
+                          <div key={label} className="space-y-1.5">
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="h-px w-14 shrink-0 bg-border/50" />
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+                              <div className="h-px w-14 shrink-0 bg-border/50" />
+                            </div>
+                            <div className={items.length === 4 ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-2"}>
+                              {items.map(({ item, itemType: optionItemType }) => {
+                                const quantity = getItemQuantity(item.id);
+                                const isSelected = selectedItem?.id === item.id && itemType === optionItemType;
+                                return (
+                                  <div key={`${optionItemType}-${item.id}`} className="space-y-1">
+                                    <div className="flex justify-center">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setSelectedItem(item);
+                                          setItemType(optionItemType);
+                                        }}
+                                        className={cn(
+                                          "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
+                                          isSelected
+                                            ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
+                                            : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]"
+                                        )}
+                                        aria-label={`Select ${item.name}`}
+                                        aria-pressed={isSelected}
+                                      >
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
+                                          <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
+                                        </div>
+                                      </Button>
+                                    </div>
+                                    {optionItemType === "garden" && isSmartWallet && (
+                                      <div className="flex justify-center">
+                                        <QuantitySelector
+                                          quantity={quantity}
+                                          onQuantityChange={(newQuantity) => {
+                                            handleQuantityChange(item.id, newQuantity);
+                                            setSelectedItem(item);
+                                            setItemType("garden");
+                                          }}
+                                          max={80}
+                                          min={0}
+                                          size={items.length === 4 ? "xs" : "sm"}
+                                        />
+                                      </div>
+                                    )}
+                                    {optionItemType === "garden" && !smartWalletLoading && !isSmartWallet && (
+                                      <div className="flex justify-center">
+                                        <div className="text-xs text-muted-foreground px-2 py-1">
+                                          Qty: 1
+                                        </div>
+                                      </div>
+                                    )}
+                                    {optionItemType === "shop" && (
+                                      <div className="flex justify-center">
+                                        <div className="max-w-16 truncate px-2 py-1 text-center text-xs font-medium text-muted-foreground">
+                                          {item.name}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
-                      })()
-                    ) : (
-                      // Shop items - no grouping needed (all are protection items)
-                      <div className="grid grid-cols-3 gap-2">
-                        {shopItems.map((item: ShopItem) => {
-                          return (
-                            <div key={item.id} className="space-y-1">
-                              <div className="flex justify-center">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setSelectedItem(item)}
-                                  className={cn(
-                                    "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
-                                    selectedItem?.id === item.id
-                                      ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
-                                      : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]"
-                                  )}
-                                  aria-label={`Select ${item.name}`}
-                                  aria-pressed={selectedItem?.id === item.id}
-                                >
-                                  <div className="flex h-12 w-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
-                                    <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                  </div>
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      };
+
+                      return (
+                        <div className="space-y-2">
+                          {renderItemGroup(todItems, 'Lifetime Hours (TOD)')}
+                          {renderItemGroup(ptsItems, 'Points (PTS)')}
+                          {renderItemGroup(hybridItems, 'Hybrid')}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Item Details and Purchase */}

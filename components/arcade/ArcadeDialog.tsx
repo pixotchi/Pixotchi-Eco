@@ -92,11 +92,13 @@ function createCommitment(secret: Uint8Array, plantId: number, address: string):
 const GameSelector = ({
   selected,
   onSelect,
+  className,
 }: {
   selected: GameId;
   onSelect: (game: GameId) => void;
+  className?: string;
 }) => (
-  <div className="flex justify-center">
+  <div className={cn("flex justify-center", className)}>
     <ToggleGroup
       value={selected}
       onValueChange={(value) => onSelect(value as GameId)}
@@ -127,6 +129,18 @@ const GameSelector = ({
   </div>
 );
 
+type ArcadeTone = "default" | "primary" | "success" | "warning" | "danger";
+
+function getArcadeToneClassName(tone: ArcadeTone) {
+  return {
+    danger: "text-destructive",
+    default: "text-foreground",
+    primary: "text-primary",
+    success: "text-[hsl(var(--success-strong))]",
+    warning: "text-[hsl(var(--warning-foreground))]",
+  }[tone];
+}
+
 function ArcadeStatRow({
   label,
   value,
@@ -134,20 +148,31 @@ function ArcadeStatRow({
 }: {
   label: ReactNode;
   value: ReactNode;
-  tone?: "default" | "primary" | "success" | "warning" | "danger";
+  tone?: ArcadeTone;
 }) {
-  const toneClassName = {
-    danger: "text-destructive",
-    default: "text-foreground",
-    primary: "text-primary",
-    success: "text-[hsl(var(--success-strong))]",
-    warning: "text-[hsl(var(--warning-foreground))]",
-  }[tone];
-
   return (
     <div className="flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-border/45 bg-background/55 px-3 py-2 text-xs">
       <span className="min-w-0 text-muted-foreground">{label}</span>
-      <span className={cn("shrink-0 text-right font-semibold tabular-nums", toneClassName)}>
+      <span className={cn("shrink-0 text-right font-semibold tabular-nums", getArcadeToneClassName(tone))}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ArcadeStatLine({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  tone?: ArcadeTone;
+}) {
+  return (
+    <div className="flex min-h-8 items-center justify-between gap-3 py-1.5">
+      <span className="min-w-0 text-muted-foreground">{label}</span>
+      <span className={cn("shrink-0 text-right font-semibold tabular-nums", getArcadeToneClassName(tone))}>
         {value}
       </span>
     </div>
@@ -950,15 +975,16 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent surface="soft" className="max-w-md w-[min(94vw,28rem)]">
         <DialogHeader>
-          <DialogTitle>Arcade</DialogTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <DialogTitle>Arcade</DialogTitle>
+            <GameSelector selected={selectedGame} onSelect={setSelectedGame} className="justify-start sm:justify-end" />
+          </div>
           <DialogDescription>
             Pick a game, choose how you want to play, and use the bottom action when you are ready.
           </DialogDescription>
         </DialogHeader>
         <div className="surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1">
           <div className="space-y-4">
-            <GameSelector selected={selectedGame} onSelect={setSelectedGame} />
-
             {selectedGame === 'box' && (
               <div className="space-y-4">
                 <div className="text-sm font-medium">Choose a box</div>
@@ -1039,7 +1065,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-medium">Leaf Wheel</div>
+                    <div className="text-sm font-medium">SpinLeaf</div>
                     <p className="text-xs text-muted-foreground">
                       Spin for PTS, TOD, and LEAF rewards.
                     </p>
@@ -1109,23 +1135,34 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
                 <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
                   <div>
-                    <div className="text-sm font-medium">Star Spin</div>
+                    <div className="text-sm font-medium">Get a spin with a Star</div>
                     <p className="text-xs text-muted-foreground">
                       Use a star, wait for the wheel, then stop it to claim the result.
                     </p>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <ArcadeStatRow
+                  <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs shadow-[var(--shadow-hairline)]">
+                    <ArcadeStatLine
                       label="Status"
                       value={pending ? (canReveal ? "Ready to stop" : "Wheel spinning") : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown` : "Ready to spin"}
                       tone={pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
                     />
-                    <ArcadeStatRow label="Stars available" value={starsAvailable} tone={starsAvailable < spinStarCost && !pending ? "danger" : "default"} />
-                    <ArcadeStatRow label="Cost per spin" value={spinStarCost} tone="primary" />
+                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={starsAvailable < spinStarCost && !pending ? "danger" : "default"} />
+                    <ArcadeStatLine
+                      label="Cost per spin"
+                      value={(
+                        <span className="inline-flex items-center justify-end gap-1">
+                          <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} className="h-3.5 w-3.5 shrink-0" />
+                          <span>{spinStarCost}</span>
+                        </span>
+                      )}
+                      tone="primary"
+                    />
                   </div>
 
-                  {spinDisabledReason && <DisabledReason>{spinDisabledReason}</DisabledReason>}
+                  {spinDisabledReason && starsAvailable >= spinStarCost && (
+                    <DisabledReason>{spinDisabledReason}</DisabledReason>
+                  )}
 
                   <div className="space-y-2">
                     {/* Reset button for users stuck with lost secrets */}

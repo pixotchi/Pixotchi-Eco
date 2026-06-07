@@ -452,7 +452,7 @@ export default function AboutTab() {
           <div className="space-y-3 lg:flex lg:flex-wrap lg:gap-2 lg:space-y-0">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:contents">
               <Button
-                variant="secondary"
+                variant="outline"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
                 className="w-full lg:w-auto"
                 aria-label="Open Pixotchi status"
@@ -500,11 +500,11 @@ export default function AboutTab() {
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
-          <DialogContent mobileMode="sheet" surface="soft" className="p-4 sm:p-6">
+          <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md p-4 sm:p-6">
             <DialogHeader className="mb-6">
             <DialogTitle>Share Your Feedback</DialogTitle>
             <DialogDescription>
-              We&apos;d love to hear your thoughts on Pixotchi Mini!
+              We&apos;d love to hear your thoughts on Pixotchi!
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
