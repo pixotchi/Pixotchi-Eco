@@ -749,6 +749,20 @@
     box-shadow: inset 0 1px 0 hsl(var(--divider) / 0.58);
   }
 
+  .performance-mode .surface-header-divider {
+    border-bottom: 1px solid hsl(var(--divider) / 0.58);
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .performance-mode .surface-footer-divider {
+    border-top: 1px solid hsl(var(--divider) / 0.62);
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
   .dialog-header-surface {
     background-color: hsl(var(--popover) / 0.95);
     background-image:
