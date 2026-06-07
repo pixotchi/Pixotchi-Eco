@@ -131,6 +131,15 @@ async function main() {
   assert(typeof careAudit.plantSummary?.totalPlants === 'number', 'Plant care audit missing plant summary.');
   assert(careAudit.careOptions, 'Plant care audit missing care options.');
 
+  const lifecycleAudit = getToolData(await (tools.get_plant_lifecycle_audit as UntypedValue).execute({
+    address,
+    includeRecentTransferFallback: true,
+    limit: 10,
+  }), 'get_plant_lifecycle_audit');
+  assert(typeof lifecycleAudit.currentOwnership?.totalCurrentPlants === 'number', 'Plant lifecycle audit missing current ownership.');
+  assert(Array.isArray(lifecycleAudit.explanations), 'Plant lifecycle audit missing explanations.');
+  assert(lifecycleAudit.rewardRules?.automaticOnKillBurn === true, 'Plant lifecycle audit missing burn reward rule.');
+
   const arcadeStatus = getToolData(await (tools.get_arcade_status as UntypedValue).execute({
     address,
     limit: 5,
@@ -163,6 +172,7 @@ async function main() {
     blackjackLandsChecked: blackjackActions.lands.length,
     casinoLandsInScan: casino.totalCasinoLandsInScan,
     dailySuggestions: daily.suggestedNext.length,
+    lifecycleExplanations: lifecycleAudit.explanations.length,
     marketplaceActiveOrders: marketplace.orderBook.activeOrderCount,
     mintablePlantStrains: mintAvailability.summary.mintablePlantStrains,
     ok: true,

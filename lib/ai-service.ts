@@ -277,6 +277,7 @@ const TOOL_PROMPT_PRIORITY = [
   'get_wallet_game_assets',
   'get_arcade_status',
   'get_quest_readiness',
+  'get_plant_lifecycle_audit',
   'get_land_production_audit',
   'get_wallet_game_activity',
   'get_combat_activity',
@@ -481,8 +482,11 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
       blockNumber: entry.blockNumber,
       confidence: entry.confidence,
       counterparty: entry.counterparty,
+      deadPlantId: entry.deadPlantId,
       direction: entry.direction,
       kind: entry.kind,
+      killerPlantId: entry.killerPlantId,
+      rewardDisplay: entry.rewardDisplay,
       source: entry.source,
       timestamp: entry.timestamp,
       token: entry.token,
@@ -498,6 +502,67 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
       rpcFallback: data?.rpcFallback,
       rpcBlockRange: data?.rpcBlockRange,
       truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_plant_lifecycle_audit') {
+    const compactActivity = (entry: UntypedValue) => ({
+      amountDisplay: entry.amountDisplay,
+      assetType: entry.assetType,
+      blockNumber: entry.blockNumber,
+      counterparty: entry.counterparty,
+      deadPlantId: entry.deadPlantId,
+      direction: entry.direction,
+      kind: entry.kind,
+      killerPlantId: entry.killerPlantId,
+      plantId: entry.plantId,
+      rewardDisplay: entry.rewardDisplay,
+      timestampIso: entry.timestampIso,
+      tokenId: entry.tokenId,
+      txHash: entry.txHash,
+    });
+    return {
+      address: data?.address,
+      candidatePlantIdsChecked: (data?.candidatePlantIdsChecked || []).slice(0, 30),
+      currentOwnership: data?.currentOwnership
+        ? {
+          requestedPlantsOwnedNow: data.currentOwnership.requestedPlantsOwnedNow,
+          summary: data.currentOwnership.summary,
+          totalCurrentPlants: data.currentOwnership.totalCurrentPlants,
+        }
+        : null,
+      errors: data?.errors,
+      explanations: data?.explanations,
+      indexedLifecycle: {
+        killeds: (data?.indexedLifecycle?.killeds || []).slice(0, 8),
+        mints: (data?.indexedLifecycle?.mints || []).slice(0, 8),
+        truncatedCandidates: data?.indexedLifecycle?.truncatedCandidates,
+      },
+      recentWalletPlantTransfers: {
+        burnOrRemovalTransfers: (data?.recentWalletPlantTransfers?.burnOrRemovalTransfers || []).slice(0, 8).map(compactActivity),
+        mintsToWallet: (data?.recentWalletPlantTransfers?.mintsToWallet || []).slice(0, 8).map(compactActivity),
+        rpcBlockRange: data?.recentWalletPlantTransfers?.rpcBlockRange,
+        transfersOut: (data?.recentWalletPlantTransfers?.transfersOut || []).slice(0, 8).map(compactActivity),
+      },
+      requestedPlantIds: data?.requestedPlantIds,
+      requestedPlantStates: (data?.requestedPlantStates || []).slice(0, 8).map((plant: UntypedValue) => ({
+        id: plant.id,
+        name: plant.name,
+        owner: plant.owner,
+        rewardsEth: plant.rewardsEth,
+        statusLabel: plant.statusLabel,
+        timeUntilStarvingHours: plant.timeUntilStarvingHours,
+      })),
+      rewardRules: data?.rewardRules,
+      txEvidence: data?.txEvidence
+        ? {
+          blockNumber: data.txEvidence.blockNumber,
+          events: (data.txEvidence.events || []).slice(0, 8).map(compactActivity),
+          found: data.txEvidence.found,
+          status: data.txEvidence.status,
+          txHash: data.txEvidence.txHash,
+        }
+        : null,
     };
   }
 
@@ -529,12 +594,24 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
   }
 
   if (toolName === 'get_transaction_status') {
+    const compactTxEvent = (entry: UntypedValue) => ({
+      amountDisplay: entry.amountDisplay,
+      assetType: entry.assetType,
+      blockNumber: entry.blockNumber,
+      deadPlantId: entry.deadPlantId,
+      kind: entry.kind,
+      killerPlantId: entry.killerPlantId,
+      rewardDisplay: entry.rewardDisplay,
+      token: entry.token,
+      tokenId: entry.tokenId,
+      txHash: entry.txHash,
+    });
     return {
       blockNumber: data?.blockNumber,
       found: data?.found,
       from: data?.from,
       gasUsed: data?.gasUsed,
-      knownPixotchiEvents: (data?.knownPixotchiEvents || []).slice(0, 12),
+      knownPixotchiEvents: (data?.knownPixotchiEvents || []).slice(0, 12).map(compactTxEvent),
       pixotchiLogCount: data?.pixotchiLogCount,
       status: data?.status,
       timestamp: data?.timestamp,
@@ -1476,7 +1553,31 @@ type DeterministicToolContext = {
 };
 
 function extractAddressFromPrompt(message: string): string | undefined {
-  return message.match(/0x[a-fA-F0-9]{40}/)?.[0];
+  return message.match(/0x[a-fA-F0-9]{40}(?![a-fA-F0-9])/)?.[0];
+}
+
+function extractTxHashFromPrompt(message: string): string | undefined {
+  return message.match(/0x[a-fA-F0-9]{64}/)?.[0];
+}
+
+function extractPlantIdsFromPrompt(message: string): number[] {
+  const ids = new Set<number>();
+  const patterns = [
+    /\bplant\s*#?\s*(\d{1,8})\b/gi,
+    /\bplant\s+id\s*#?\s*(\d{1,8})\b/gi,
+    /\btoken\s*#?\s*(\d{1,8})\b/gi,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of message.matchAll(pattern)) {
+      const parsed = Number(match[1]);
+      if (Number.isInteger(parsed) && parsed >= 0) {
+        ids.add(parsed);
+      }
+    }
+  }
+
+  return [...ids].slice(0, 10);
 }
 
 function addDeterministicToolRequest(
@@ -1491,7 +1592,14 @@ function addDeterministicToolRequest(
 
 function getDeterministicToolRequests(currentMessage: string, userAddress: string): DeterministicToolRequest[] {
   const promptAddress = extractAddressFromPrompt(currentMessage);
+  const txHash = extractTxHashFromPrompt(currentMessage);
   const addressInput = promptAddress ? { address: promptAddress } : {};
+  const plantIds = extractPlantIdsFromPrompt(currentMessage);
+  const plantLifecycleInput = {
+    ...addressInput,
+    ...(plantIds.length > 0 ? { plantIds } : {}),
+    ...(txHash ? { txHash } : {}),
+  };
   const requests: DeterministicToolRequest[] = [];
   const isOwnWallet = !promptAddress || promptAddress.toLowerCase() === userAddress.toLowerCase();
   const broadOnboarding = /\b(what should i do|what do i do|next step|start|begin|onboard|new player|overview|portfolio|wallet)\b/i.test(currentMessage);
@@ -1522,6 +1630,18 @@ function getDeterministicToolRequests(currentMessage: string, userAddress: strin
 
   if (/\b(care|dry|dying|dead|starving|tod|water|feed|revive|fence|shield|save my plants)\b/i.test(currentMessage)) {
     addDeterministicToolRequest(requests, { input: { ...addressInput, includePrices: true, limit: 12 }, toolName: 'get_plant_care_audit' });
+  }
+
+  if (/\b(plant|plants|tod|minted|mint|killed|burned|burn|died|dead|gone|missing|disappeared|disappear|cannot see|can't see|not showing|where did)\b/i.test(currentMessage)
+    && /\b(disappeared|disappear|missing|gone|cannot see|can't see|not showing|minted|died|dead|killed|burned|burn|tod|reward|rewards)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, {
+      input: {
+        ...plantLifecycleInput,
+        includeRecentTransferFallback: true,
+        limit: 30,
+      },
+      toolName: 'get_plant_lifecycle_audit',
+    });
   }
 
   if (/\b(arcade|spin|spinleaf|box game|stars?)\b/i.test(currentMessage)) {

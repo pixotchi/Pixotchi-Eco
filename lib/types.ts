@@ -412,13 +412,19 @@ export type NormalizedOnchainActivity = {
   blockNumber?: string;
   confidence: 'high' | 'medium' | 'low';
   counterparty?: string;
+  deadPlantId?: string;
   direction?: 'in' | 'out' | 'self' | 'unknown';
+  killerPlantId?: string;
   kind: string;
+  loserName?: string;
+  rewardDisplay?: string;
+  rewardRaw?: string;
   source: string;
   timestamp?: string;
   token?: string;
   tokenId?: string;
   txHash?: string;
+  winnerName?: string;
 };
 
 export type AttackEvent = {
