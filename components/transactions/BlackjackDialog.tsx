@@ -1,8 +1,7 @@
 "use client";
 
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { Button } from '@/components/ui/button';
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Dialog,DialogContent,DialogDescription,DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { CardHand,calculateHandValue,getCardValue } from '@/components/ui/PlayingCard';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
@@ -18,16 +17,17 @@ blackjackGetGameToken,
 blackjackGetTokenConfig,
 checkCasinoApproval,
 } from '@/lib/contracts';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
 import { getResultText } from '@/public/abi/blackjack-abi';
+import { X } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { formatUnits,parseUnits } from 'viem';
 import { useAccount,useBalance } from 'wagmi';
 import ApproveTransaction from './approve-transaction';
 import BlackjackTransaction from './blackjack-transaction';
+import type { LifecycleStatus } from './transaction-kit';
 
 interface BlackjackDialogProps {
     open: boolean;
@@ -39,7 +39,29 @@ interface BlackjackDialogProps {
 
 const MAX_TOKEN_APPROVAL = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
 const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
+const BLACKJACK_FAILURE_STATUSES = new Set([
+    'error',
+    'failed',
+    'reverted',
+    'cancelled',
+    'canceled',
+    'rejected',
+    'transactionRejected',
+    'userRejected',
+    'buildError',
+]);
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const BLACKJACK_ACTION_BUTTON_BASE = "inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-[var(--radius-control)] px-3 py-2.5 text-sm font-semibold leading-none shadow-[var(--shadow-control)] transition-[background-color,border-color,color,filter,box-shadow] duration-[var(--motion-quick)]";
+const BLACKJACK_SMALL_ACTION_BUTTON_BASE = "inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-[var(--radius-control)] px-3 py-2.5 text-xs font-semibold leading-none shadow-[var(--shadow-hairline)] transition-[background-color,border-color,color,filter,box-shadow] duration-[var(--motion-quick)]";
+const BLACKJACK_WARNING_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] hover:brightness-[1.03]`;
+const BLACKJACK_PRIMARY_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-primary/30 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground hover:brightness-[1.03]`;
+const BLACKJACK_STAND_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-white/10 text-white hover:bg-white/15`;
+const BLACKJACK_DANGER_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-destructive/45 bg-destructive bg-[image:var(--gradient-danger)] text-destructive-foreground hover:brightness-[1.03]`;
+const BLACKJACK_WARNING_ACTION_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] hover:brightness-[1.03]`;
+const BLACKJACK_SPECIAL_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
+const BLACKJACK_SPECIAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
+const BLACKJACK_NEUTRAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/15 bg-white/10 text-white/90 hover:bg-white/15`;
+const BLACKJACK_STICKY_ACTIONS_CLASS = "surface-footer-divider dialog-footer-surface sticky bottom-0 z-10 -mx-3 mt-auto space-y-3 overflow-visible border-white/15 bg-black bg-[linear-gradient(180deg,rgb(0,0,0)_0%,rgb(0,0,0)_42%,rgb(0,0,0)_100%)] px-3 pb-[max(0.875rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 text-white sm:-mx-4 sm:px-4";
 
 /**
  * Simplified UI phase model for server-signed randomness flow
@@ -157,10 +179,10 @@ const deriveInitialPlayerActions = (cards: number[]) => {
 const areCardsPrefix = (prefix: number[], full: number[]): boolean =>
     prefix.length <= full.length && prefix.every((card, idx) => full[idx] === card);
 
-const isValidCardId = (value: unknown): value is number =>
+const isValidCardId = (value: UntypedValue): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < 52;
 
-const hasTrustedActionState = (snapshot: any): boolean => {
+const hasTrustedActionState = (snapshot: UntypedValue): boolean => {
     if (!snapshot || snapshot.phase !== BlackjackPhase.PLAYER_TURN) return false;
 
     const actionHandIndex = Number(snapshot.actionHandIndex ?? 0);
@@ -219,8 +241,8 @@ export default function BlackjackDialog({
     onGameComplete,
     selectedToken
 }: BlackjackDialogProps) {
+    const betAmountInputId = useId();
     const { address } = useAccount();
-    const { isSponsored } = usePaymaster();
     const casinoPolicy = getClientCasinoPolicy();
     const blackjackPlayable = casinoPolicy.playable && casinoPolicy.blackjackEnabled;
 
@@ -230,6 +252,7 @@ export default function BlackjackDialog({
 
     // Transaction in progress tracking - tracks specific action for hiding other buttons
     const [txInProgress, setTxInProgress] = useState<'deal' | BlackjackAction | null>(null);
+    const [walletTxPending, setWalletTxPending] = useState(false);
     // Action buttons are only shown when onchain action state is trusted.
     const [actionButtonsReady, setActionButtonsReady] = useState(false);
     const [actionButtonsSyncing, setActionButtonsSyncing] = useState(false);
@@ -321,7 +344,7 @@ export default function BlackjackDialog({
 
     // Fetch complete game state from contract
     const refreshGameState = useCallback(async (): Promise<boolean> => {
-        if (!open || !address || !blackjackPlayable) {
+        if (!open || !blackjackPlayable) {
             setActionButtonsReady(false);
             return false;
         }
@@ -343,10 +366,12 @@ export default function BlackjackDialog({
             }
 
             const normalizedPlayer = (snapshot.player || '').toLowerCase();
+            const normalizedAddress = address?.toLowerCase() ?? '';
             const isOurGame =
                 normalizedPlayer !== '' &&
                 normalizedPlayer !== ZERO_ADDRESS &&
-                normalizedPlayer === address.toLowerCase();
+                normalizedAddress !== '' &&
+                normalizedPlayer === normalizedAddress;
             const trustedActionState = isOurGame && hasTrustedActionState(snapshot);
             setActionButtonsReady(trustedActionState);
             if (trustedActionState) {
@@ -369,7 +394,7 @@ export default function BlackjackDialog({
                 const prevLikelyOurGame =
                     prevPlayer === '' ||
                     prevPlayer === ZERO_ADDRESS ||
-                    prevPlayer === address.toLowerCase();
+                    (normalizedAddress !== '' && prevPlayer === normalizedAddress);
 
                 // Guard against stale RPC regressions: keep active local game if chain snapshot
                 // momentarily reports empty state.
@@ -410,12 +435,12 @@ export default function BlackjackDialog({
                         };
                     }
 
-                    return {
-                        ...prev,
-                        contractPhase: snapshot.phase,
-                        isActive: false,
-                        player: snapshot.player,
-                        playerCards: [],
+                        return {
+                            ...prev,
+                            contractPhase: snapshot.phase,
+                            isActive: snapshot.isActive,
+                            player: snapshot.player,
+                            playerCards: [],
                         splitCards: [],
                         dealerCards: [],
                         playerValue: 0,
@@ -660,15 +685,41 @@ export default function BlackjackDialog({
             setActionButtonsReady(false);
             setActionButtonsSyncing(false);
             setActionButtonsSyncFailed(false);
+            setWalletTxPending(false);
         }
     }, [open, invalidatePendingRefreshes]);
 
+    const handleBlackjackStatusUpdate = useCallback((status: LifecycleStatus) => {
+        if (status.statusName === 'transactionPending') {
+            setWalletTxPending(true);
+            return;
+        }
+
+        if (status.statusName === 'success' || BLACKJACK_FAILURE_STATUSES.has(status.statusName ?? '')) {
+            setWalletTxPending(false);
+        }
+    }, []);
+
+    const handlePreparedCancel = useCallback((reason: "cancelled" | "expired") => {
+        setTxInProgress(prev => {
+            if (prev !== null && prev !== 'deal') return prev;
+            return null;
+        });
+        setWalletTxPending(false);
+        setError(
+            reason === "expired"
+                ? 'Prepared Blackjack action expired. Retry the same action to continue.'
+                : 'Prepared Blackjack action cancelled. Retry the same action and bet amount if the app asks you to.'
+        );
+    }, []);
+
     // Handle deal complete (combined bet + deal)
     // Handle deal complete (combined bet + deal)
-    const handleDealComplete = useCallback(async (result?: any) => {
+    const handleDealComplete = useCallback(async (result?: UntypedValue) => {
         try {
+            setWalletTxPending(false);
             if (!result) {
-                setError('Transaction failed. Please try again.');
+                setError('Deal did not confirm. Refresh and check the game before trying again.');
                 return;
             }
 
@@ -694,6 +745,7 @@ export default function BlackjackDialog({
                 setActionButtonsSyncFailed(false);
 
                 refetchBalance();
+                onGameComplete?.();
             } else if (result.cards && result.cards.length > 0) {
                 // Game Started Successfully (Optimistic Update)
                 // This ensures the UI shows cards immediately even if RPC is slow
@@ -736,21 +788,25 @@ export default function BlackjackDialog({
                 // Don't show actions until we have trusted onchain flags.
                 await syncActionButtonsWithRetries();
                 refetchBalance();
+                onGameComplete?.();
             } else {
-                // Fallback for unknown state or error
+                // Fallback for UntypedValue state or error
                 await refreshGameState();
                 refetchBalance();
+                onGameComplete?.();
             }
         } finally {
             setTxInProgress(null);
         }
-    }, [invalidatePendingRefreshes, refetchBalance, refreshGameState, syncActionButtonsWithRetries, gameState.betAmountInput, address, tokenDecimals]);
+    }, [invalidatePendingRefreshes, onGameComplete, refetchBalance, refreshGameState, syncActionButtonsWithRetries, gameState.betAmountInput, address, tokenDecimals]);
 
     // Handle action complete (immediate result with server randomness)
-    const handleActionComplete = useCallback(async (result?: any) => {
+    const handleActionComplete = useCallback(async (result?: UntypedValue) => {
         setTxInProgress(null);
+        setWalletTxPending(false);
         if (!result) {
             // Transaction failed, refresh state anyway
+            setError('Action did not confirm. Refresh and check the game before trying again.');
             await refreshGameState();
             return;
         }
@@ -813,6 +869,7 @@ export default function BlackjackDialog({
             // Don't call refreshGameState() - it will overwrite our preserved cards
             // with empty data from the cleared contract
             refetchBalance();
+            onGameComplete?.();
             return;
         }
 
@@ -905,7 +962,8 @@ export default function BlackjackDialog({
         // Still trigger a refresh in background to eventually sync fully
         await syncActionButtonsWithRetries();
         refetchBalance();
-    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries]);
+        onGameComplete?.();
+    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries, onGameComplete]);
 
     // Handle approval success
     const handleApproveSuccess = useCallback(async () => {
@@ -938,9 +996,13 @@ export default function BlackjackDialog({
 
     // Close handler - allow closing even mid-game (user may want to abandon)
     const handleClose = useCallback(() => {
-        if (txInProgress) {
-            toast.error('Transaction in progress, please wait');
+        if (walletTxPending) {
+            toast.error('Transaction submitted. Please wait for confirmation.');
             return;
+        }
+
+        if (txInProgress) {
+            toast('Prepared Blackjack action cancelled. Retry the same action if needed.');
         }
 
         // Warn if closing mid-game but allow it
@@ -952,7 +1014,7 @@ export default function BlackjackDialog({
         if (uiPhase === 'result' && onGameComplete) {
             onGameComplete();
         }
-    }, [txInProgress, gameState.isActive, uiPhase, onOpenChange, onGameComplete]);
+    }, [txInProgress, walletTxPending, gameState.isActive, uiPhase, onOpenChange, onGameComplete]);
 
     // Bet amount in wei
     const betAmountWei = useMemo(() => {
@@ -962,6 +1024,16 @@ export default function BlackjackDialog({
             return BigInt(0);
         }
     }, [gameState.betAmountInput, tokenDecimals]);
+    const dealAmountIssue = useMemo(() => {
+        if (!config) return 'Loading limits...';
+        if (!config.enabled) return 'Blackjack disabled';
+        if (betAmountWei <= BigInt(0)) return 'Enter bet amount';
+        if (betAmountWei < config.minBet) return `Min ${formattedMinBet} ${tokenSymbol}`;
+        if (betAmountWei > config.maxBet) return `Max ${formattedMaxBet} ${tokenSymbol}`;
+        if (!balanceData) return 'Loading balance...';
+        if (betAmountWei > currentBalanceWei) return 'Insufficient Balance';
+        return null;
+    }, [balanceData, betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol]);
 
     const currentActionHandIndex = gameState.hasSplit ? gameState.currentHandIndex : 0;
     const currentActionCards =
@@ -989,6 +1061,16 @@ export default function BlackjackDialog({
         !gameState.hasSplit &&
         currentHandIsMain &&
         currentHandHasTwoCards;
+    const blackjackPlayerAddress = (gameState.player || '').toLowerCase();
+    const blackjackGameBelongsToWallet =
+        !gameState.isActive ||
+        (!!address && blackjackPlayerAddress !== '' && blackjackPlayerAddress !== ZERO_ADDRESS && blackjackPlayerAddress === address.toLowerCase());
+    const blackjackGameActiveInAnotherWallet = gameState.isActive && !blackjackGameBelongsToWallet;
+    const blackjackTurnStatusText = walletTxPending
+        ? 'Confirm transaction in wallet...'
+        : txInProgress !== null
+            ? 'Retry the prepared action, or reopen after the lock clears.'
+            : (gameState.hasSplit ? `Playing Hand ${currentActionHandIndex + 1}` : 'Your Turn');
 
     const additionalActionBetWei = gameState.betAmount > BigInt(0) ? gameState.betAmount : BigInt(0);
     const hasBalanceForAdditionalAction = currentBalanceWei >= additionalActionBetWei;
@@ -1172,14 +1254,15 @@ export default function BlackjackDialog({
     // Handle transaction errors (specifically for Action Locking security feature)
     const handleTransactionError = useCallback((error: string) => {
         // If action is locked, specific message
-        if (error.includes('Action Locked')) {
-            toast.error("Action Locked! You must stick to your original decision for this hand.", { duration: 4000 });
+        if (error.toLowerCase().includes('action locked')) {
+            toast.error("Action locked. Retry the same Blackjack action for a short window.", { duration: 4000 });
         } else {
             toast.error(error);
         }
 
         // Reset progress state so user can choose the correct button
         setTxInProgress(null);
+        setWalletTxPending(false);
     }, []);
 
     // Get the current hand index for actions
@@ -1188,28 +1271,39 @@ export default function BlackjackDialog({
         return gameState.currentHandIndex;
     }, [gameState.hasSplit, gameState.currentHandIndex]);
 
-    if (!open) return null;
-
     const showDealerHand =
         gameState.dealerCards.length > 0 ||
         (uiPhase === 'result' && gameState.result !== null);
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-lg w-[min(92vw,32rem)] max-h-[90dvh] overflow-y-auto overscroll-contain bg-cover bg-center bg-no-repeat bg-[url('/icons/casinobj.png')] border-none text-white rounded-xl">
-                <DialogHeader>
-                    <DialogTitle className="font-pixel text-xl flex items-center justify-between text-white">
-                        ♦️ Blackjack
-                        <SponsoredBadge show={isSponsored} />
-                    </DialogTitle>
-                </DialogHeader>
+            <DialogContent
+                hideCloseButton
+                mobileMode="center"
+                surface="game"
+                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"
+            >
+                <DialogTitle className="sr-only">Blackjack</DialogTitle>
+                <DialogDescription className="sr-only">
+                    Blackjack game dialog with active hand state, onchain action controls, and transaction status.
+                </DialogDescription>
+                <Button
+                    type="button"
+                    variant="headerIcon"
+                    size="iconCompact"
+                    onClick={handleClose}
+                    aria-label="Close Blackjack dialog"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 sm:right-3 sm:top-3"
+                >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
 
-                <div className="space-y-6 py-4">
+                <div className="flex min-h-0 flex-1 flex-col gap-4 p-3 pb-0 pt-4 sm:gap-5 sm:p-4 sm:pb-0">
                     {/* Dealer Hand */}
                     {showDealerHand && (
                         <CardHand
                             cards={gameState.dealerCards}
-                            label="DEALER"
+                            label="Dealer"
                             value={uiPhase === 'result' && gameState.result !== null ? gameState.dealerValue : undefined}
                             hideHoleCard={uiPhase !== 'result' && gameState.dealerCards.length > 1}
                         />
@@ -1220,7 +1314,7 @@ export default function BlackjackDialog({
                         <div className="flex justify-center gap-8">
                             <CardHand
                                 cards={gameState.playerCards}
-                                label={gameState.hasSplit ? "HAND 1" : "YOUR HAND"}
+                                label={gameState.hasSplit ? "Hand 1" : "Your Hand"}
                                 value={gameState.playerValue}
                                 small={gameState.hasSplit} // Fix Bug 2: Use small cards for split to save space
                                 statusText={
@@ -1243,7 +1337,7 @@ export default function BlackjackDialog({
                             {gameState.hasSplit && gameState.splitCards.length > 0 && (
                                 <CardHand
                                     cards={gameState.splitCards}
-                                    label="HAND 2"
+                                    label="Hand 2"
                                     value={gameState.splitValue}
                                     small={true} // Fix Bug 2: Use small cards for split
                                     statusText={
@@ -1294,15 +1388,18 @@ export default function BlackjackDialog({
                         </div>
                     )}
 
-                    {/* Betting Phase - Combined Bet + Deal */}
+                    {/* Betting Phase */}
                     {uiPhase === 'betting' && (
                         <div className="space-y-4">
                             <div>
-                                <label className="text-sm text-white/80 mb-2 block">Bet Amount</label>
+                                <label htmlFor={betAmountInputId} className="text-sm text-white/80 mb-2 block">Bet Amount</label>
                                 <div className="flex gap-2">
                                     <Input
+                                        id={betAmountInputId}
+                                        name="blackjack-bet-amount"
                                         type="text"
                                         inputMode="decimal"
+                                        aria-label={`Blackjack bet amount in ${tokenSymbol}`}
                                         value={gameState.betAmountInput}
                                         onChange={(e) => setGameState(prev => ({ ...prev, betAmountInput: e.target.value }))}
                                         className="min-w-[6.5rem] w-auto flex-none px-2 tabular-nums bg-white/10 border-white/20 text-white"
@@ -1330,10 +1427,22 @@ export default function BlackjackDialog({
                                 )}
                                 </div>
                             </div>
+                        </div>
+                    )}
 
+                    {uiPhase === 'betting' && (
+                        <div data-blackjack-action-footer className={BLACKJACK_STICKY_ACTIONS_CLASS}>
                             {config && !config.enabled ? (
                                 <Button className="w-full" disabled variant="secondary">
                                     Blackjack disabled
+                                </Button>
+                            ) : dealAmountIssue ? (
+                                <Button
+                                    className="w-full"
+                                    disabled
+                                    variant={dealAmountIssue === 'Insufficient Balance' ? 'destructive' : 'secondary'}
+                                >
+                                    {dealAmountIssue}
                                 </Button>
                             ) : !hasApproval && config ? (
                                 <ApproveTransaction
@@ -1341,18 +1450,21 @@ export default function BlackjackDialog({
                                     tokenAddress={config.bettingToken as `0x${string}`}
                                     onSuccess={handleApproveSuccess}
                                     buttonText={`Approve ${tokenSymbol}`}
-                                    buttonClassName="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+                                    buttonClassName={BLACKJACK_WARNING_BUTTON}
                                 />
                             ) : (
                                 <BlackjackTransaction
                                     mode="deal"
                                     landId={landId}
                                     betAmount={betAmountWei}
-                                    disabled={!config || betAmountWei <= BigInt(0) || txInProgress !== null}
-                                    buttonText={txInProgress === 'deal' ? "Dealing..." : "DEAL"}
-                                    buttonClassName="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+                                    disabled={!!dealAmountIssue || txInProgress !== null}
+                                    buttonText={txInProgress === 'deal' ? "Dealing..." : "Deal"}
+                                    buttonAriaLabel="Deal Blackjack hand"
+                                    buttonClassName={BLACKJACK_WARNING_BUTTON}
                                     onButtonClick={handleDealClick}
+                                    onStatusUpdate={handleBlackjackStatusUpdate}
                                     onComplete={handleDealComplete}
+                                    onPreparedCancel={handlePreparedCancel}
                                     onError={handleTransactionError}
                                     tokenSymbol={tokenSymbol}
                                     tokenDecimals={tokenDecimals}
@@ -1362,15 +1474,25 @@ export default function BlackjackDialog({
                         </div>
                     )}
 
+                    {uiPhase === 'playing' && blackjackGameActiveInAnotherWallet && (
+                        <div className="rounded-lg border border-red-400/30 bg-black/40 p-3 text-center text-sm text-red-200">
+                            {address
+                                ? 'This Blackjack game was started by another wallet.'
+                                : 'Connect the wallet that started this Blackjack game.'}
+                        </div>
+                    )}
+
+                    {/* Error display */}
+                    {error && uiPhase !== 'betting' && (
+                        <p className="text-red-400 text-sm text-center">{error}</p>
+                    )}
+
                     {/* Playing Phase - Action Buttons */}
-                    {uiPhase === 'playing' && (
-                        <div className="space-y-4">
+                    {uiPhase === 'playing' && !blackjackGameActiveInAnotherWallet && (
+                        <div data-blackjack-action-footer className={BLACKJACK_STICKY_ACTIONS_CLASS}>
                             {/* Status text - changes based on action state */}
                             <p className="text-center text-white/60 text-sm min-h-[20px]">
-                                {txInProgress !== null
-                                    ? 'Confirm transaction in wallet...'
-                                    : (gameState.hasSplit ? `Playing Hand ${getCurrentHandIndex() + 1}` : 'Your Turn')
-                                }
+                                {blackjackTurnStatusText}
                             </p>
                             {txInProgress === null && !actionButtonsReady && (
                                 <p className="text-center text-yellow-300 text-xs">
@@ -1390,7 +1512,7 @@ export default function BlackjackDialog({
                             )}
 
                             {/* Primary action buttons - flex layout for proper centering */}
-                            <div className="flex flex-wrap justify-center gap-3">
+                            <div className="grid grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-2">
                                 {/* HIT */}
                                 {actionButtonsReady && (txInProgress === null || txInProgress === BlackjackAction.HIT) && canHitUi && (
                                     <BlackjackTransaction
@@ -1399,10 +1521,13 @@ export default function BlackjackDialog({
                                         handIndex={getCurrentHandIndex()}
                                         action={BlackjackAction.HIT}
                                         disabled={false}
-                                        buttonText="HIT"
-                                        buttonClassName="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                        buttonText="Hit"
+                                        buttonAriaLabel="Hit current Blackjack hand"
+                                        buttonClassName={BLACKJACK_PRIMARY_BUTTON}
                                         onButtonClick={() => handleActionClick(BlackjackAction.HIT)}
+                                        onStatusUpdate={handleBlackjackStatusUpdate}
                                         onComplete={handleActionComplete}
+                                        onPreparedCancel={handlePreparedCancel}
                                         onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
                                         tokenDecimals={tokenDecimals}
@@ -1417,10 +1542,13 @@ export default function BlackjackDialog({
                                         handIndex={getCurrentHandIndex()}
                                         action={BlackjackAction.STAND}
                                         disabled={false}
-                                        buttonText="STAND"
-                                        buttonClassName="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                        buttonText="Stand"
+                                        buttonAriaLabel="Stand on current Blackjack hand"
+                                        buttonClassName={BLACKJACK_STAND_BUTTON}
                                         onButtonClick={() => handleActionClick(BlackjackAction.STAND)}
+                                        onStatusUpdate={handleBlackjackStatusUpdate}
                                         onComplete={handleActionComplete}
+                                        onPreparedCancel={handlePreparedCancel}
                                         onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
                                         tokenDecimals={tokenDecimals}
@@ -1435,10 +1563,13 @@ export default function BlackjackDialog({
                                         handIndex={getCurrentHandIndex()}
                                         action={BlackjackAction.DOUBLE}
                                         disabled={disableDoubleForFunding}
-                                        buttonText="DOUBLE"
-                                        buttonClassName="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                        buttonText="Double"
+                                        buttonAriaLabel="Double current Blackjack hand"
+                                        buttonClassName={BLACKJACK_WARNING_ACTION_BUTTON}
                                         onButtonClick={() => handleActionClick(BlackjackAction.DOUBLE)}
+                                        onStatusUpdate={handleBlackjackStatusUpdate}
                                         onComplete={handleActionComplete}
+                                        onPreparedCancel={handlePreparedCancel}
                                         onError={handleTransactionError}
                                         tokenSymbol={tokenSymbol}
                                         tokenDecimals={tokenDecimals}
@@ -1449,7 +1580,7 @@ export default function BlackjackDialog({
 
                             {/* Secondary actions - SPLIT and SURRENDER (smaller, separate row) */}
                             {actionButtonsReady && txInProgress === null && (canSplitUi || canSurrenderUi) && (
-                                <div className="flex justify-center gap-3">
+                                <div className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
                                     {canSplitUi && (
                                         <BlackjackTransaction
                                             mode="action"
@@ -1457,10 +1588,13 @@ export default function BlackjackDialog({
                                             handIndex={getCurrentHandIndex()}
                                             action={BlackjackAction.SPLIT}
                                             disabled={disableSplitForFunding}
-                                            buttonText="SPLIT"
-                                            buttonClassName="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all"
+                                            buttonText="Split"
+                                            buttonAriaLabel="Split current Blackjack hand"
+                                            buttonClassName={BLACKJACK_SPECIAL_BUTTON_SM}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SPLIT)}
+                                            onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
+                                            onPreparedCancel={handlePreparedCancel}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                             tokenDecimals={tokenDecimals}
@@ -1474,10 +1608,13 @@ export default function BlackjackDialog({
                                             handIndex={getCurrentHandIndex()}
                                             action={BlackjackAction.SURRENDER}
                                             disabled={false}
-                                            buttonText="SURRENDER"
-                                            buttonClassName="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all"
+                                            buttonText="Surrender"
+                                            buttonAriaLabel="Surrender current Blackjack hand"
+                                            buttonClassName={BLACKJACK_NEUTRAL_BUTTON_SM}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SURRENDER)}
+                                            onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
+                                            onPreparedCancel={handlePreparedCancel}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                             tokenDecimals={tokenDecimals}
@@ -1497,10 +1634,13 @@ export default function BlackjackDialog({
                                             handIndex={getCurrentHandIndex()}
                                             action={BlackjackAction.SPLIT}
                                             disabled={disableSplitForFunding}
-                                            buttonText="SPLIT"
-                                            buttonClassName="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                            buttonText="Split"
+                                            buttonAriaLabel="Split current Blackjack hand"
+                                            buttonClassName={BLACKJACK_SPECIAL_BUTTON}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SPLIT)}
+                                            onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
+                                            onPreparedCancel={handlePreparedCancel}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                             tokenDecimals={tokenDecimals}
@@ -1514,10 +1654,13 @@ export default function BlackjackDialog({
                                             handIndex={getCurrentHandIndex()}
                                             action={BlackjackAction.SURRENDER}
                                             disabled={false}
-                                            buttonText="SURRENDER"
-                                            buttonClassName="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg min-w-[90px] transition-all shadow-lg"
+                                            buttonText="Surrender"
+                                            buttonAriaLabel="Surrender current Blackjack hand"
+                                            buttonClassName={BLACKJACK_DANGER_BUTTON}
                                             onButtonClick={() => handleActionClick(BlackjackAction.SURRENDER)}
+                                            onStatusUpdate={handleBlackjackStatusUpdate}
                                             onComplete={handleActionComplete}
+                                            onPreparedCancel={handlePreparedCancel}
                                             onError={handleTransactionError}
                                             tokenSymbol={tokenSymbol}
                                             tokenDecimals={tokenDecimals}
@@ -1531,18 +1674,17 @@ export default function BlackjackDialog({
 
                     {/* Play Again (Result phase) */}
                     {uiPhase === 'result' && (
-                        <Button
-                            onClick={handlePlayAgain}
-                            className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
-                        >
-                            PLAY AGAIN
-                        </Button>
+                        <div data-blackjack-action-footer className={BLACKJACK_STICKY_ACTIONS_CLASS}>
+                            <Button
+                                onClick={handlePlayAgain}
+                                variant="warning"
+                                className="w-full font-bold"
+                            >
+                                Play Again
+                            </Button>
+                        </div>
                     )}
 
-                    {/* Error display */}
-                    {error && uiPhase !== 'betting' && (
-                        <p className="text-red-400 text-sm text-center">{error}</p>
-                    )}
                 </div>
             </DialogContent>
         </Dialog>

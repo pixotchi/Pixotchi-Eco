@@ -10,9 +10,9 @@ const PER_FID_RATE_LIMIT = { limit: 5, windowSeconds: 60 };  // 5 requests per f
 
 async function incrementWithExpiry(key: string, windowSeconds: number) {
   if (!redis) return { current: 1 };
-  const current = await (redis as any)?.incr?.(key);
+  const current = await (redis as UntypedValue)?.incr?.(key);
   if (current === 1) {
-    await (redis as any)?.expire?.(key, windowSeconds);
+    await (redis as UntypedValue)?.expire?.(key, windowSeconds);
   }
   return { current };
 }
@@ -38,12 +38,12 @@ type ValidatedPayload = {
   type: string;
 };
 
-function validatePayload(body: unknown): ValidatedPayload {
+function validatePayload(body: UntypedValue): ValidatedPayload {
   if (typeof body !== "object" || body === null) {
     throw new Error("Invalid request body");
   }
 
-  const { fid, notification, type = "custom" } = body as Record<string, unknown>;
+  const { fid, notification, type = "custom" } = body as Record<string, UntypedValue>;
 
   if (typeof fid !== "number" || !Number.isFinite(fid)) {
     throw new Error("Invalid fid");
@@ -53,7 +53,7 @@ function validatePayload(body: unknown): ValidatedPayload {
     throw new Error("Invalid notification payload");
   }
 
-  const { title, body: messageBody, notificationDetails } = notification as Record<string, unknown>;
+  const { title, body: messageBody, notificationDetails } = notification as Record<string, UntypedValue>;
   if (typeof title !== "string" || title.trim().length === 0) {
     throw new Error("Notification title is required");
   }
@@ -67,7 +67,7 @@ function validatePayload(body: unknown): ValidatedPayload {
       throw new Error("Invalid notificationDetails");
     }
 
-    const { url, token } = notificationDetails as Record<string, unknown>;
+    const { url, token } = notificationDetails as Record<string, UntypedValue>;
     if (typeof url !== "string" || url.trim().length === 0) {
       throw new Error("notificationDetails.url must be a non-empty string");
     }
@@ -169,15 +169,15 @@ export async function POST(request: Request) {
     // Log for admin dashboards (global + per-type)
     try {
       const ts = Date.now();
-      await (redis as any)?.lpush?.("notif:global:log", JSON.stringify({ ts, fid, type }));
-      await (redis as any)?.ltrim?.("notif:global:log", 0, 199);
-      await (redis as any)?.hset?.("notif:global:last", { [fid]: String(ts) });
-      try { await (redis as any)?.incrby?.("notif:global:sentCount", 1); } catch {}
-      await (redis as any)?.lpush?.(`notif:type:${type}:log`, JSON.stringify({ ts, fid }));
-      await (redis as any)?.ltrim?.(`notif:type:${type}:log`, 0, 199);
-      await (redis as any)?.hset?.(`notif:type:${type}:last`, { [fid]: String(ts) });
-      try { await (redis as any)?.incrby?.(`notif:type:${type}:sentCount`, 1); } catch {}
-      await (redis as any)?.sadd?.("notif:eligible:fids", String(fid));
+      await (redis as UntypedValue)?.lpush?.("notif:global:log", JSON.stringify({ ts, fid, type }));
+      await (redis as UntypedValue)?.ltrim?.("notif:global:log", 0, 199);
+      await (redis as UntypedValue)?.hset?.("notif:global:last", { [fid]: String(ts) });
+      try { await (redis as UntypedValue)?.incrby?.("notif:global:sentCount", 1); } catch {}
+      await (redis as UntypedValue)?.lpush?.(`notif:type:${type}:log`, JSON.stringify({ ts, fid }));
+      await (redis as UntypedValue)?.ltrim?.(`notif:type:${type}:log`, 0, 199);
+      await (redis as UntypedValue)?.hset?.(`notif:type:${type}:last`, { [fid]: String(ts) });
+      try { await (redis as UntypedValue)?.incrby?.(`notif:type:${type}:sentCount`, 1); } catch {}
+      await (redis as UntypedValue)?.sadd?.("notif:eligible:fids", String(fid));
     } catch (error) {
       console.warn("[notify] Logging failed:", error);
     }

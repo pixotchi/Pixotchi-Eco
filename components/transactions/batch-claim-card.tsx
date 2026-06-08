@@ -7,7 +7,7 @@ import { postMissionProgress } from '@/lib/mission-tracking';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { Land } from '@/lib/types';
-import { formatLifetimeProduction,formatScore } from '@/lib/utils';
+import { cn,formatLifetimeProduction,formatScore } from '@/lib/utils';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { AlertTriangle,Loader2,Lock } from 'lucide-react';
 import Image from 'next/image';
@@ -20,6 +20,9 @@ import SmartWalletTransaction from './smart-wallet-transaction';
 interface BatchClaimCardProps {
   lands: Land[];
   onSuccess?: () => void;
+  variant?: 'card' | 'embedded';
+  showWhenEmpty?: boolean;
+  className?: string;
 }
 
 interface ClaimableItem {
@@ -68,7 +71,15 @@ const MIN_LIFETIME_TO_CLAIM = BigInt(15); // 15 seconds of TOD minimum (~1.3 min
 // Tune via NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE if simulation fails
 const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 150);
 
-export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps) {
+const embeddedSurfaceClassName = "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]";
+
+export default function BatchClaimCard({
+  lands,
+  onSuccess,
+  variant = 'card',
+  showWhenEmpty = false,
+  className
+}: BatchClaimCardProps) {
   const [loading, setLoading] = useState(false);
   const [claimableItems, setClaimableItems] = useState<ClaimableItem[]>([]);
   const [lastScannedLandIds, setLastScannedLandIds] = useState<string>("");
@@ -103,7 +114,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
       results.forEach(result => {
         // Check village buildings (0: Solar, 3: Soil, 5: Bee)
         // Note: building IDs in result are from contract, so we iterate what we got
-        result.villageBuildings.forEach((b: any) => {
+        result.villageBuildings.forEach((b: UntypedValue) => {
           const id = Number(b.id);
           const points = BigInt(b.accumulatedPoints || 0);
           const lifetime = BigInt(b.accumulatedLifetime || 0);
@@ -129,6 +140,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
       setLastScannedLandIds(landIdsHash);
     } catch (error) {
       console.error("Failed to batch scan lands:", error);
+      setLastScannedLandIds(landIdsHash);
     } finally {
       setLoading(false);
     }
@@ -201,12 +213,28 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
     return [burnCall, ...claimCalls];
   }, [currentBatchItems, burnAmountWei]);
 
-  if (loading && claimableItems.length === 0) {
+  const scanPending = lands.length > 0 && landIdsHash !== lastScannedLandIds;
+
+  if ((loading || (showWhenEmpty && scanPending)) && claimableItems.length === 0) {
+    const loadingContent = (
+      <div className="flex justify-center items-center text-muted-foreground gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm">Scanning accumulated production...</span>
+      </div>
+    );
+
+    if (variant === 'embedded') {
+      return (
+        <div className={cn(embeddedSurfaceClassName, "py-6", className)}>
+          {loadingContent}
+        </div>
+      );
+    }
+
     return (
-      <Card className="rounded-2xl border-dashed">
-        <CardContent className="py-6 flex justify-center items-center text-muted-foreground gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm">Scanning accumulated production...</span>
+      <Card className={cn("border-dashed", className)}>
+        <CardContent className="py-6">
+          {loadingContent}
         </CardContent>
       </Card>
     );
@@ -214,17 +242,46 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
   // Hide if nothing to claim
   if (claimableItems.length === 0) {
+    if (showWhenEmpty) {
+      const emptyContent = (
+        <>
+          <div className="flex justify-between items-center pb-2 border-b border-border/50">
+            <span className="font-semibold">Batch Claim</span>
+            <span className="text-xs text-muted-foreground">Nothing ready</span>
+          </div>
+          <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
+            No accumulated village production is ready to claim yet.
+          </div>
+        </>
+      );
+
+      if (variant === 'embedded') {
+        return (
+          <div className={cn(embeddedSurfaceClassName, "space-y-3", className)}>
+            {emptyContent}
+          </div>
+        );
+      }
+
+      return (
+        <Card className={cn("border-primary/20", className)}>
+          <CardContent className="p-4 space-y-3">
+            {emptyContent}
+          </CardContent>
+        </Card>
+      );
+    }
+
     return null;
   }
 
-  return (
-    <Card className="rounded-2xl border-2 border-primary/20">
-      <CardContent className="p-4 space-y-3">
+  const content = (
+    <>
         <div className="flex justify-between items-center pb-2 border-b border-border/50">
           <span className="font-semibold">Batch Claim</span>
           <div className="flex items-center gap-2 text-xs">
             {totalClaimedThisSession > 0 && (
-              <span className="text-green-700 dark:text-green-400 font-medium">
+              <span className="text-[hsl(var(--success-strong))] font-medium">
                 ✓ {totalClaimedThisSession} claimed
               </span>
             )}
@@ -252,8 +309,8 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
         {/* Multi-batch info */}
         {hasMultipleBatches && (
-          <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs">
+          <div className="rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.1)] p-2">
+            <div className="flex items-center gap-2 text-[hsl(var(--info))] text-xs">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>
                 Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}.
@@ -265,14 +322,14 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
         {/* Gating Logic */}
         {!isSmartWallet ? (
-          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg space-y-2">
+          <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
             <div className="flex items-center gap-2 text-primary font-bold text-xs">
               <Lock className="w-3 h-3" />
               Smart Wallet Required
             </div>
           </div>
         ) : !hasEnoughTokens ? (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-1">
+          <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
             <div className="flex items-center gap-2 text-value font-bold text-xs">
               <Lock className="w-3 h-3" />
               Insufficient PIXOTCHI Balance
@@ -293,7 +350,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
               key={txKey} // Force re-mount to reset button state after each batch
               calls={calls}
               buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
-              buttonClassName="w-full font-bold h-9 text-sm"
+              buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
               onSuccess={(tx) => {
                 const claimedCount = currentBatchItems.length;
                 const remainingCount = claimableItems.length - claimedCount;
@@ -315,7 +372,7 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
 
                 // Trigger claim production task for gamification
                 try {
-                  const payload: Record<string, unknown> = { address, taskId: 's3_claim_production' };
+                  const payload: Record<string, UntypedValue> = { address, taskId: 's3_claim_production' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };
@@ -327,6 +384,21 @@ export default function BatchClaimCard({ lands, onSuccess }: BatchClaimCardProps
             />
           </div>
         )}
+    </>
+  );
+
+  if (variant === 'embedded') {
+    return (
+      <div className={cn(embeddedSurfaceClassName, "space-y-3", className)}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Card className={cn("border-primary/20", className)}>
+      <CardContent className="p-4 space-y-3">
+        {content}
       </CardContent>
     </Card>
   );

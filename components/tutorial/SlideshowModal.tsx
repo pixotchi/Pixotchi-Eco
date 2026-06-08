@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useSlideshow } from "./SlideshowProvider";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
 import type { SyntheticEvent } from "react";
 
@@ -26,14 +26,14 @@ function Art({ type }: { type?: string }) {
   if (!art) return null;
   return (
     <div key={type} className="w-full flex items-center justify-center">
-      <div className="w-[90%] max-w-[360px] aspect-[16/10] rounded-xl bg-card/70 border border-border overflow-hidden shadow-md">
+      <div className="aspect-[16/10] w-[90%] max-w-[360px] overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/70 shadow-[var(--shadow-hairline)]">
         <Image
           key={art.src}
           src={art.src}
           alt={art.alt}
           width={720}
           height={450}
-          priority
+          preload
           className="w-full h-full object-cover transition-opacity duration-300"
           onError={(event: SyntheticEvent<HTMLImageElement>) => {
             try {
@@ -104,23 +104,27 @@ export default function SlideshowModal() {
       <DialogContent
         hideCloseButton
         useSafeAreaInset={false}
-        overlayClassName="bg-black/50 backdrop-blur-sm"
+        overlayClassName="bg-black/50 backdrop-blur-[var(--blur-overlay)]"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
-        className="max-h-[90dvh] w-full max-w-md rounded-t-2xl rounded-b-none border border-border p-0 shadow-xl sm:rounded-2xl"
+        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--border-strong)/0.42)] p-0 shadow-[var(--shadow-modal)]"
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
+        <DialogTitle className="sr-only">Pixotchi tutorial: {slide.title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Step-by-step Pixotchi tutorial slide with navigation controls.
+        </DialogDescription>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border bg-card/80 px-4 py-3 backdrop-blur-sm">
+        <div className="surface-header-divider dialog-header-surface flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi" width={20} height={20} />
-            <span className="font-pixel text-sm">TUTORIAL</span>
+            <span className="text-sm font-semibold">Tutorial</span>
           </div>
-          <button onClick={close} className="text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md px-2 py-1">Skip</button>
+          <Button variant="ghost" size="default" onClick={close} className="px-3 text-sm text-muted-foreground hover:text-foreground">Skip</Button>
         </div>
 
         {/* Body */}
-        <div className="max-h-[65vh] overflow-y-auto p-6 space-y-5">
+        <div className="surface-scroll-fade max-h-[65vh] overflow-y-auto p-6 space-y-5">
           <div className="flex items-start gap-3">
             {slide.icon}
             <h2 className="text-lg font-semibold leading-tight">{slide.title}</h2>
@@ -130,7 +134,7 @@ export default function SlideshowModal() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border bg-card/80 px-4 py-3 backdrop-blur-sm safe-area-bottom">
+        <div className="surface-footer-divider dialog-footer-surface px-4 py-3 safe-area-bottom">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               {slides.map((_, i) => (

@@ -4,9 +4,11 @@ import {
   clearChatSessionCookie,
   clearChatSessionForRequest,
   createChatAuthRequiredResponse,
+  createChatAuthErrorResponse,
   createChatSessionResponse,
   createChatUnavailableResponse,
-  getChatSessionFromRequest,
+  getChatSessionOrQuickAuthFromRequest,
+  getFarcasterQuickAuthTokenFromRequest,
   setChatSessionCookie,
   verifyBaseChatIdentity,
   verifyFarcasterChatIdentity,
@@ -22,14 +24,14 @@ const CHAT_AUTH_SESSION_POST_IP_LIMIT_PER_MINUTE = 20;
 const CHAT_AUTH_SESSION_POST_ADDRESS_LIMIT_PER_MINUTE = 10;
 const CHAT_AUTH_SESSION_DELETE_IP_LIMIT_PER_MINUTE = 20;
 
-function getStringField(body: Record<string, unknown>, key: string): string | undefined {
+function getStringField(body: Record<string, UntypedValue>, key: string): string | undefined {
   const value = body[key];
   return typeof value === 'string' ? value : undefined;
 }
 
 function getPrivyIdentityToken(
   request: NextRequest,
-  body: Record<string, unknown>,
+  body: Record<string, UntypedValue>,
 ): string | null {
   const headerValue = request.headers.get('privy-id-token');
   if (typeof headerValue === 'string' && headerValue.trim()) {
@@ -40,18 +42,22 @@ function getPrivyIdentityToken(
   return typeof bodyValue === 'string' && bodyValue.trim() ? bodyValue.trim() : null;
 }
 
-function getRequestedChatAuthAddress(body: unknown, provider: unknown): string | null {
+function getRequestedChatAuthAddress(body: UntypedValue, provider: UntypedValue): string | null {
   if (!body || typeof body !== 'object') {
     return null;
   }
 
-  const payload = body as Record<string, unknown>;
+  const payload = body as Record<string, UntypedValue>;
 
   if (provider === 'base' && typeof payload.address === 'string') {
     return payload.address;
   }
 
   if (provider === 'privy' && typeof payload.expectedAddress === 'string') {
+    return payload.expectedAddress;
+  }
+
+  if (provider === 'farcaster' && typeof payload.expectedAddress === 'string') {
     return payload.expectedAddress;
   }
 
@@ -75,7 +81,19 @@ export async function GET(request: NextRequest) {
     return ipRateLimitResponse;
   }
 
-  const { session, sessionId } = await getChatSessionFromRequest(request);
+  let authResult: Awaited<ReturnType<typeof getChatSessionOrQuickAuthFromRequest>>;
+  try {
+    authResult = await getChatSessionOrQuickAuthFromRequest(request);
+  } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
+    console.error('[chat-auth] Failed to read chat session:', error);
+    return createChatUnavailableResponse();
+  }
+
+  const { session, sessionId, viaQuickAuth } = authResult;
 
   if (session) {
     const addressRateLimitResponse = await enforceRateLimit(request, {
@@ -114,17 +132,21 @@ export async function GET(request: NextRequest) {
     },
   );
 
-  setChatSessionCookie(response, session.id);
+  if (viaQuickAuth && sessionId) {
+    clearChatSessionCookie(response);
+  } else if (!viaQuickAuth) {
+    setChatSessionCookie(response, session.id);
+  }
   return response;
 }
 
 export async function POST(request: NextRequest) {
-  let provider: unknown;
+  let provider: UntypedValue;
 
   try {
     const parsedBody = await request.json();
     const body = parsedBody && typeof parsedBody === 'object'
-      ? parsedBody as Record<string, unknown>
+      ? parsedBody as Record<string, UntypedValue>
       : {};
     provider = body?.provider;
 
@@ -161,9 +183,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (provider === 'farcaster') {
+      const bearerToken = getFarcasterQuickAuthTokenFromRequest(request);
       const identity = await verifyFarcasterChatIdentity(request, {
         expectedAddress: getStringField(body, 'expectedAddress') ?? null,
-        token: getStringField(body, 'token') ?? '',
+        token: bearerToken ?? getStringField(body, 'token') ?? '',
       });
       return createChatSessionResponse(request, identity);
     }

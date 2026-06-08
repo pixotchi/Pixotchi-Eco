@@ -3,11 +3,10 @@
 import ChatProfileDialog from "@/components/chat/chat-profile-dialog";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Button } from "@/components/ui/button";
-import { Dialog,DialogContent,DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
 import { LandLeaderboardEntry,getLandOwner } from "@/lib/contracts";
 import { contractToVisual,getCoordinateFromTokenId } from "@/lib/land-utils";
 import { Land } from "@/lib/types";
-import { useTransactions } from 'ethereum-identity-kit';
 import { Compass,Minus,Plus,User,X } from "lucide-react";
 import Image from "next/image";
 import { useEffect,useState } from 'react';
@@ -45,16 +44,6 @@ export function LandMapModal({
   const [fetchedOwner, setFetchedOwner] = useState<string | null>(null);
   const [isOwnerLoading, setIsOwnerLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  
-  // Get TransactionModal state to detect when it's open/closed
-  const { txModalOpen } = useTransactions();
-  
-  // Close map modal when TransactionModal opens (e.g. when following a user)
-  useEffect(() => {
-    if (txModalOpen && isOpen) {
-      onClose();
-    }
-  }, [txModalOpen, isOpen, onClose]);
   
   // Initialize center to selected land or (0,0)
   useEffect(() => {
@@ -103,6 +92,7 @@ export function LandMapModal({
 
   const neighbor = tappedLandId ? neighborData[tappedLandId] : null;
   const isUserOwned = tappedLandId ? userLands.some(l => Number(l.tokenId) === tappedLandId) : false;
+  const isTappedLandMinted = tappedLandId !== null && tappedLandId > 0 && tappedLandId < totalSupply;
   
   // Fetch owner on demand
   useEffect(() => {
@@ -145,13 +135,19 @@ export function LandMapModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-background/95 border-border flex flex-col gap-0 focus:outline-none">
+      <DialogContent
+        className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-card bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
+        hideCloseButton
+      >
         <DialogTitle className="sr-only">World Map</DialogTitle>
+        <DialogDescription className="sr-only">
+          Explore discovered land plots, inspect neighboring owners, and select one of your lands.
+        </DialogDescription>
         
         {/* Header overlay */}
         <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
-          <div className="bg-background/80 backdrop-blur-md px-3 py-2 rounded-lg border border-border shadow-sm pointer-events-auto">
-            <h2 className="font-pixel text-sm font-bold flex items-center gap-2">
+          <div className="pointer-events-auto rounded-[var(--radius-control)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Compass className="w-4 h-4 text-primary" />
               World Map
             </h2>
@@ -159,19 +155,20 @@ export function LandMapModal({
               {totalSupply.toLocaleString()} Plots Discovered
             </p>
           </div>
-          
-          <Button 
-            variant="outline" 
-            size="icon" 
+
+          <Button
+            variant="headerIcon"
+            size="icon"
             onClick={onClose}
-            className="bg-background/80 backdrop-blur-md pointer-events-auto h-8 w-8 rounded-full"
+            aria-label="Close world map"
+            className="pointer-events-auto"
           >
             <X className="w-4 h-4" />
           </Button>
         </div>
 
         {/* Map Canvas Area */}
-        <div className="flex-1 relative w-full h-full bg-[#a7c7e7] overflow-hidden touch-none">
+        <div className="relative h-full w-full flex-1 overflow-hidden bg-[hsl(var(--info)/0.18)] touch-none">
           <LandMapCanvas 
             center={center}
             zoom={zoom}
@@ -221,9 +218,9 @@ export function LandMapModal({
         {/* Wilderness Info Tooltip */}
         {tappedWilderness && (
             <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                <div className="bg-card/95 backdrop-blur-md p-4 rounded-xl border border-border shadow-lg flex gap-4 items-center">
+                <div className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-raised)]">
                     {/* Thumbnail */}
-                    <div className="relative w-16 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-muted/50 aspect-square">
+                    <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
                             src={`/icons/${
                                 tappedWilderness.type === 'water' ? 'lake' :
@@ -239,7 +236,7 @@ export function LandMapModal({
                     </div>
                     
                     <div className="flex-1">
-                        <h3 className="font-pixel font-bold text-lg capitalize">
+                        <h3 className="text-lg font-semibold capitalize">
                             {
                                 tappedWilderness.type === 'water' ? 'Lake' :
                                 tappedWilderness.type === 'none' ? 'Cemetery' : 
@@ -248,10 +245,11 @@ export function LandMapModal({
                         </h3>
                     </div>
 
-                    <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    <Button
+                        variant="headerIcon"
+                        size="iconCompact"
+                        aria-label="Dismiss terrain details"
+                        className="shrink-0"
                         onClick={() => setTappedWilderness(null)}
                     >
                         <X className="w-4 h-4" />
@@ -263,11 +261,11 @@ export function LandMapModal({
         {/* Neighbor Info Tooltip / Sheet */}
         {tappedLandId && (
             <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                <div className="bg-card/95 backdrop-blur-md p-3 rounded-xl border border-border shadow-lg flex gap-3 items-center">
+                <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-raised)]">
                     {/* Thumbnail */}
-                    <div className="relative w-16 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-muted/50 aspect-square">
+                    <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
-                            src={tappedLandId <= totalSupply ? "/icons/taken.png" : "/icons/cemetery.png"} 
+                            src={isTappedLandMinted ? "/icons/map/taken.webp" : "/icons/map/cemetery.webp"}
                             alt="Land Thumbnail" 
                             fill 
                             className="object-contain p-1" 
@@ -278,15 +276,15 @@ export function LandMapModal({
                         {/* Header Row */}
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                                <h3 className="font-pixel font-bold text-base truncate flex items-center gap-2">
-                                    {neighbor?.name || (tappedLandId <= totalSupply ? `Land #${tappedLandId}` : "Cemetery")}
+                                <h3 className="flex items-center gap-2 truncate text-base font-semibold">
+                                    {neighbor?.name || (isTappedLandMinted ? `Land #${tappedLandId}` : "Cemetery")}
                                     {isUserOwned && <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded">YOU</span>}
                                 </h3>
                                 <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
                                     <span className="font-mono">#{tappedLandId}</span>
-                                    {tappedLandId <= totalSupply && (
+                                    {isTappedLandMinted && (
                                         <>
-                                            <span className="mx-1">•</span>
+                                            <span className="mx-1">/</span>
                                             <span className="font-mono">
                                                 ({getCoordinateFromTokenId(tappedLandId).x}, {getCoordinateFromTokenId(tappedLandId).y})
                                             </span>
@@ -294,17 +292,18 @@ export function LandMapModal({
                                     )}
                                 </div>
                             </div>
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 text-muted-foreground hover:text-foreground -mt-1 -mr-1"
+                            <Button
+                                variant="headerIcon"
+                                size="iconCompact"
+                                aria-label="Dismiss land details"
+                                className="-mt-1 -mr-1 shrink-0"
                                 onClick={() => setTappedLandId(null)}
                             >
                                 <X className="w-3.5 h-3.5" />
                             </Button>
                         </div>
 
-                        {tappedLandId <= totalSupply ? (
+                        {isTappedLandMinted ? (
                              /* MINTED LAND STATS - Simplified */
                              <div className="flex items-center justify-between gap-2 mt-1">
                                  <div className="flex flex-col flex-1 min-w-0 gap-0.5">
@@ -319,14 +318,16 @@ export function LandMapModal({
                                 </div>
                                 
                                 {ownerAddress && (
-                                    <button
+                                    <Button
                                         type="button"
                                         onClick={() => setProfileOpen(true)}
-                                        className="inline-flex items-center justify-center gap-1 px-2 py-0.5 text-[10px] leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                                        variant="compactUtility"
+                                        size="compact"
+                                        className="h-7 min-h-7 gap-1.5 px-2 text-[11px]"
                                         aria-label="Open owner profile"
                                     >
                                         Profile <User className="w-3 h-3" />
-                                    </button>
+                                    </Button>
                                 )}
                              </div>
                         ) : (
@@ -345,17 +346,19 @@ export function LandMapModal({
                 address={ownerAddress}
                 open={profileOpen}
                 onOpenChange={setProfileOpen}
+                onTransactionOpen={onClose}
             />
         )}
 
         {/* Controls overlay */}
         <div className="absolute bottom-6 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-          <div className="flex flex-col bg-background/80 backdrop-blur-md rounded-lg border border-border shadow-sm overflow-hidden pointer-events-auto">
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-[var(--radius-control)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
             <Button 
               variant="ghost" 
               size="icon" 
               onClick={handleZoomIn}
-              className="h-10 w-10 rounded-none border-b border-border/50 active:bg-muted"
+              aria-label="Zoom in on map"
+              className="rounded-none border-b border-border/50 active:bg-muted"
             >
               <Plus className="w-5 h-5" />
             </Button>
@@ -363,7 +366,8 @@ export function LandMapModal({
               variant="ghost" 
               size="icon" 
               onClick={handleZoomOut}
-              className="h-10 w-10 rounded-none active:bg-muted"
+              aria-label="Zoom out on map"
+              className="rounded-none active:bg-muted"
             >
               <Minus className="w-5 h-5" />
             </Button>
@@ -373,7 +377,8 @@ export function LandMapModal({
             variant="outline" 
             size="icon"
             onClick={handleCenterOnUser} 
-            className="bg-background/80 backdrop-blur-md pointer-events-auto h-10 w-10 rounded-lg shadow-sm"
+            aria-label="Center map on selected land"
+            className="pointer-events-auto bg-card bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]"
           >
             <Image src="/icons/location.svg" alt="Center" width={20} height={20} className="w-5 h-5" />
           </Button>
@@ -382,7 +387,7 @@ export function LandMapModal({
         {/* Legend overlay (hidden if showing neighbor info) */}
         {!tappedLandId && (
             <div className="absolute bottom-6 left-4 z-10 pointer-events-none">
-            <div className="bg-background/80 backdrop-blur-md p-2 rounded-lg border border-border shadow-sm pointer-events-auto flex flex-col gap-1.5">
+            <div className="pointer-events-auto flex flex-col gap-1.5 rounded-[var(--radius-control)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]">
                 <div className="flex items-center gap-2 text-[10px]">
                 <div className="w-3 h-3 bg-primary rounded-[2px] border border-primary/50"></div>
                 <span>Your Land</span>

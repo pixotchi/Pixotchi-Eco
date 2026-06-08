@@ -12,6 +12,6 @@ export default function TutorialBundle({ children }: { children: React.ReactNode
 }
 
 // Re-export for dynamic import consumer
-TutorialBundle.SlideshowModal = SlideshowModal as any;
+TutorialBundle.SlideshowModal = SlideshowModal as UntypedValue;
 
 

@@ -1,9 +1,12 @@
-import { getTodayDateString } from '@/lib/invite-utils';
-import { redis,redisCompareAndSetJSON,redisGetJSON,redisKeys,redisScanKeys,redisSetJSON,withPrefix } from '@/lib/redis';
+import { redis,redisCompareAndSetJSON,redisGetJSON,redisScanKeys,redisSetJSON,withPrefix } from '@/lib/redis';
 import { isGamificationDisabled } from './gamification-feature';
 import type { GmDay,GmLeaderEntry,GmMissionDay,GmProgressProof,GmStreak,GmTaskId } from './gamification-types';
 
 const PX = 'pixotchi:gm:';
+
+function getTodayDateString(): string {
+  return new Date().toISOString().split('T')[0];
+}
 
 const keys = {
   streak: (address: string) => `${PX}streak:${address.toLowerCase()}`,
@@ -37,11 +40,11 @@ function createInitialMissionDay(day: GmDay): GmMissionDay {
   };
 }
 
-function hydrateMissionDay(data: any, day: GmDay): GmMissionDay {
+function hydrateMissionDay(data: UntypedValue, day: GmDay): GmMissionDay {
   if (!data) return createInitialMissionDay(day);
-  const normalizeNumber = (value: unknown, fallback = 0) =>
+  const normalizeNumber = (value: UntypedValue, fallback = 0) =>
     typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-  const normalizeBoolean = (value: unknown) => Boolean(value);
+  const normalizeBoolean = (value: UntypedValue) => Boolean(value);
   const legacyBuyElementsCount = Math.max(
     0,
     Math.floor(normalizeNumber(data?.s1?.buyElementsCount, normalizeBoolean(data?.s1?.buy5) ? 5 : 0)),
@@ -182,7 +185,7 @@ export async function trackDailyActivity(address: string): Promise<GmStreak> {
   // Add to activity set for analytics (best-effort, non-blocking)
   Promise.resolve().then(async () => {
     try {
-      await (redis as any)?.sadd?.(withPrefix(keys.todayActiveSet(day)), address.toLowerCase());
+      await (redis as UntypedValue)?.sadd?.(withPrefix(keys.todayActiveSet(day)), address.toLowerCase());
     } catch (error) {
       console.warn('Failed to update activity set:', error);
     }
@@ -190,7 +193,7 @@ export async function trackDailyActivity(address: string): Promise<GmStreak> {
   // Update monthly leaderboard (best-effort, non-blocking)
   Promise.resolve().then(async () => {
     try {
-      await (redis as any)?.zadd?.(withPrefix(keys.streakLeaderboard(toMonth(day))), { score: current, member: address.toLowerCase() });
+      await (redis as UntypedValue)?.zadd?.(withPrefix(keys.streakLeaderboard(toMonth(day))), { score: current, member: address.toLowerCase() });
     } catch (error) {
       console.warn('Failed to update streak leaderboard:', error);
     }
@@ -255,7 +258,7 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
     if (awarded > 0) {
       Promise.resolve().then(async () => {
         try {
-          await (redis as any)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), awarded, address.toLowerCase());
+          await (redis as UntypedValue)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), awarded, address.toLowerCase());
         } catch (error) {
           console.warn('Failed to update missions leaderboard:', error);
         }
@@ -266,11 +269,11 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
 
   const prefixedKey = withPrefix(k);
   const maxAttempts = 5;
-  let lastError: unknown = null;
+  let lastError: UntypedValue = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      let raw = await (redisClient as any)?.get?.(prefixedKey);
+      let raw = await (redisClient as UntypedValue)?.get?.(prefixedKey);
       if (raw && typeof raw !== 'string') {
         try {
           raw = JSON.stringify(raw);
@@ -279,7 +282,7 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
         }
       }
 
-      let parsed: any = null;
+      let parsed: UntypedValue = null;
       if (typeof raw === 'string') {
         try {
           parsed = JSON.parse(raw);
@@ -305,7 +308,7 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
       if (gained > 0) {
         Promise.resolve().then(async () => {
           try {
-            await (redis as any)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), gained, address.toLowerCase());
+            await (redis as UntypedValue)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), gained, address.toLowerCase());
           } catch (error) {
             console.warn('Failed to update missions leaderboard:', error);
           }
@@ -324,13 +327,13 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
 async function getCombinedMissionLeaderboard(limit: number = 50): Promise<GmLeaderEntry[]> {
   if (!redis) return [];
   const totals = new Map<string, number>();
-  const missionKeys = await redisKeys(`${PX}missions:leaderboard:*`);
+  const missionKeys = await redisScanKeys(`${PX}missions:leaderboard:*`);
   if (!missionKeys.length) return [];
 
   for (const rawKey of missionKeys) {
     const prefixedKey = rawKey.startsWith(PX) ? rawKey : withPrefix(rawKey);
     try {
-      const entries = (await (redis as any)?.zrange?.(prefixedKey, 0, -1, { withScores: true })) || [];
+      const entries = (await (redis as UntypedValue)?.zrange?.(prefixedKey, 0, -1, { withScores: true })) || [];
       if (!Array.isArray(entries)) continue;
       for (let i = 0; i < entries.length; i += 2) {
         const address = typeof entries[i] === 'string' ? entries[i].toLowerCase() : String(entries[i] || '').toLowerCase();
@@ -384,7 +387,7 @@ async function getCombinedStreakLeaderboard(limit: number = 50): Promise<GmLeade
     .slice(0, limit);
 }
 
-function convertZRangeResponse(arr: any[]): GmLeaderEntry[] {
+function convertZRangeResponse(arr: UntypedValue[]): GmLeaderEntry[] {
   if (!Array.isArray(arr)) return [];
   const out: GmLeaderEntry[] = [];
   for (let i = 0; i < arr.length; i += 2) {
@@ -399,14 +402,14 @@ function convertZRangeResponse(arr: any[]): GmLeaderEntry[] {
 
 async function getMonthlyMissionLeaderboard(yyyymm: string): Promise<GmLeaderEntry[]> {
   if (!redis) return [];
-  const raw = (await (redis as any)?.zrange?.(withPrefix(keys.missionsLeaderboard(yyyymm)), 0, 49, { rev: true, withScores: true })) || [];
-  return convertZRangeResponse(raw as any);
+  const raw = (await (redis as UntypedValue)?.zrange?.(withPrefix(keys.missionsLeaderboard(yyyymm)), 0, 49, { rev: true, withScores: true })) || [];
+  return convertZRangeResponse(raw as UntypedValue);
 }
 
 async function getCombinedMissionScore(address: string): Promise<number> {
   if (!redis || !address) return 0;
   const normalized = address.toLowerCase();
-  const missionKeys = await redisKeys(`${PX}missions:leaderboard:*`);
+  const missionKeys = await redisScanKeys(`${PX}missions:leaderboard:*`);
   if (!missionKeys.length) return 0;
 
   let total = 0;
@@ -414,7 +417,7 @@ async function getCombinedMissionScore(address: string): Promise<number> {
     missionKeys.map(async (rawKey) => {
       const prefixedKey = rawKey.startsWith(PX) ? rawKey : withPrefix(rawKey);
       try {
-        const rawScore = await (redis as any)?.zscore?.(prefixedKey, normalized);
+        const rawScore = await (redis as UntypedValue)?.zscore?.(prefixedKey, normalized);
         const score = Number(rawScore);
         if (Number.isFinite(score)) total += score;
       } catch (error) {
@@ -433,14 +436,20 @@ export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLe
   const streakPromise = isCombinedMonth(month)
     ? getCombinedStreakLeaderboard()
     : (async () => {
-      const raw = (await (redis as any)?.zrange?.(withPrefix(keys.streakLeaderboard(yyyymm)), 0, 49, { rev: true, withScores: true })) || [];
-      return convertZRangeResponse(raw as any);
+      const raw = (await (redis as UntypedValue)?.zrange?.(withPrefix(keys.streakLeaderboard(yyyymm)), 0, 49, { rev: true, withScores: true })) || [];
+      return convertZRangeResponse(raw as UntypedValue);
     })();
   const missionPromise = isCombinedMonth(month) ? getCombinedMissionLeaderboard() : getMonthlyMissionLeaderboard(yyyymm);
 
   const [streakTop, missionTop] = await Promise.all([streakPromise, missionPromise]);
 
   return { streakTop, missionTop };
+}
+
+export async function getMissionLeaderboard(month?: string): Promise<GmLeaderEntry[]> {
+  const d = getTodayDateString();
+  const yyyymm = month && !isCombinedMonth(month) ? month : toMonth(d);
+  return isCombinedMonth(month) ? getCombinedMissionLeaderboard() : getMonthlyMissionLeaderboard(yyyymm);
 }
 
 export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise<{ deleted: number }> {
@@ -469,7 +478,7 @@ export async function adminReset(scope: 'streaks' | 'missions' | 'all'): Promise
       // Delete in batches of 100 to avoid hitting limits
       for (let i = 0; i < keysList.length; i += 100) {
         const batch = keysList.slice(i, i + 100);
-        await redis?.del?.(...batch as any);
+        await redis?.del?.(...batch as UntypedValue);
       }
       deleted += keysList.length;
     }
@@ -488,7 +497,7 @@ export async function getMissionScore(address: string, month?: string): Promise<
   const yyyymm = month || toMonth(d);
   const key = withPrefix(keys.missionsLeaderboard(yyyymm));
   try {
-    const raw = await (redis as any)?.zscore?.(key, address.toLowerCase());
+    const raw = await (redis as UntypedValue)?.zscore?.(key, address.toLowerCase());
     if (raw == null) return 0;
     const num = Number(raw);
     return Number.isFinite(num) ? num : 0;

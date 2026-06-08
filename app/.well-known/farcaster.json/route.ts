@@ -26,52 +26,55 @@ export async function GET() {
     }
   })();
 
+  const miniAppManifest = withValidProperties({
+    version: "1",
+    name: "Pixotchi Mini",
+    iconUrl: `${URL}/icon1.png`,
+    subtitle: "Grow your farm, Earn rewards!",
+    description: "Plant, grow, compete - your onchain garden awaits with ETH rewards.",
+    splashImageUrl: `${URL}/splash.png`,
+    splashBackgroundColor: "#2d3c53",
+    buttonTitle: "Begin your journey!",
+    homeUrl: URL,
+    webhookUrl: WEBHOOK_URL,
+    primaryCategory: "games",
+    tags: ["p2e", "miniapp", "nft", "game", "base"],
+    heroImageUrl: `${URL}/og-image.png`,
+    tagline: "Grow your farm, Earn rewards!",
+    ogTitle: "Pixotchi Mini on Base",
+    ogDescription: "Plant, grow, compete - your onchain garden awaits with ETH rewards.",
+    ogImageUrl: `${URL}/og-image.png`,
+    screenshotUrls: [
+      `${URL}/screenshot1.png`,
+      `${URL}/screenshot2.png`,
+      `${URL}/screenshot3.png`,
+    ],
+    noindex: process.env.FARCASTER_FRAME_NOINDEX === 'true',
+    // Required chains/capabilities per Farcaster Mini App schema
+    requiredChains: ["eip155:8453"],
+    canonicalDomain: HOSTNAME,
+    // Explicitly allow iframe embedding in compatible hosts
+    embeds: [
+      "https://*.warpcast.com",
+      "https://*.farcaster.xyz",
+      "https://*.base.org",
+      "https://*.base.app",
+      "https://base.app",
+      "https://*.coinbase.com",
+      "https://mini.pixotchi.tech",
+      "https://*.pixotchi.tech",
+      "https://*.mini.pixotchi.tech",
+    ],
+  });
+
   return Response.json({
     accountAssociation: {
       header: process.env.FARCASTER_HEADER,
       payload: process.env.FARCASTER_PAYLOAD,
       signature: process.env.FARCASTER_SIGNATURE,
     },
-    frame: withValidProperties({
-      version: "1",
-      name: "Pixotchi Mini",
-      iconUrl: `${URL}/icon1.png`,
-      subtitle: "Grow your farm, Earn rewards!",
-      description: "Plant, grow, compete - your onchain garden awaits with ETH rewards.",
-      splashImageUrl: `${URL}/splash.png`,
-      splashBackgroundColor: "#2d3c53",
-      buttonTitle: "Begin your journey!",
-      homeUrl: URL,
-      webhookUrl: WEBHOOK_URL,
-      primaryCategory: "games",
-      tags: ["p2e", "miniapp", "nft", "game", "base"],
-      heroImageUrl: `${URL}/og-image.png`,
-      tagline: "Grow your farm, Earn rewards!",
-      ogTitle: "Pixotchi Mini on Base",
-      ogDescription: "Plant, grow, compete - your onchain garden awaits with ETH rewards.",
-      ogImageUrl: `${URL}/og-image.png`,
-      screenshotUrls: [
-        `${URL}/screenshot1.png`,
-        `${URL}/screenshot2.png`,
-        `${URL}/screenshot3.png`,
-      ],
-      noindex: process.env.FARCASTER_FRAME_NOINDEX === 'true',
-      // Required chains/capabilities per Farcaster Mini App schema
-      requiredChains: ["eip155:8453"],
-      canonicalDomain: HOSTNAME,
-      // Explicitly allow iframe embedding in compatible hosts
-      embeds: [
-        "https://*.warpcast.com",
-        "https://*.farcaster.xyz",
-        "https://*.base.org",
-        "https://*.base.app",
-        "https://base.app",
-        "https://*.coinbase.com",
-        "https://mini.pixotchi.tech",
-        "https://*.pixotchi.tech",
-        "https://*.mini.pixotchi.tech",
-      ],
-    }),
+    miniapp: miniAppManifest,
+    frame: miniAppManifest,
     baseBuilder: {
       allowedAddresses: [
         "0x2B0ff9e1311a3b7FC4E2250F03B354d6143B1E08",

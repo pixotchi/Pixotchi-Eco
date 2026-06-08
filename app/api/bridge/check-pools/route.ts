@@ -42,13 +42,13 @@ const POOL_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   try {
     const publicClient = getBaseReadClient();
 
-    const results: any = {
+    const results: UntypedValue = {
       pools: {},
       issues: [],
     };

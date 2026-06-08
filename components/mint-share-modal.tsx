@@ -216,11 +216,11 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md" hideCloseButton>
-        <DialogHeader>
-          <DialogTitle className="text-center">Share your mint</DialogTitle>
-          <DialogDescription className="text-center">
-            Celebrate your new plant with friends and become eligible for more rewards!!
+      <DialogContent className="max-w-md" surface="soft" hideCloseButton>
+        <DialogHeader className="pr-5 sm:pr-6">
+          <DialogTitle>Share your mint</DialogTitle>
+          <DialogDescription>
+            Celebrate your new plant with friends and become eligible for more rewards.
           </DialogDescription>
         </DialogHeader>
 
@@ -261,17 +261,18 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   width={128}
                   height={128}
                   className="object-contain relative z-10 animate-[bounce_1s_ease-in-out_3]"
-                  priority
+                  preload
                 />
               </div>
-              <div className="text-xl font-bold text-center font-pixel">{data.strainName}</div>
+              <div className="text-center text-xl font-semibold leading-tight">{data.strainName}</div>
             </div>
 
             {/* Share Buttons */}
             <div className="space-y-3">
               {isMiniApp ? (
                 <Button
-                  className="w-full"
+                  variant="special"
+                  fullWidth
                   onClick={handleMiniAppShare}
                   disabled={isSharing || isGeneratingUrl || !shareUrl}
                   aria-busy={isSharing || isGeneratingUrl}
@@ -282,7 +283,8 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 </Button>
               ) : (
                 <Button
-                  className="w-full"
+                  variant="special"
+                  fullWidth
                   onClick={handleTwitterShare}
                   disabled={isGeneratingUrl || !shareUrl}
                   aria-busy={isGeneratingUrl}
@@ -302,21 +304,24 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   value={shortUrl.replace('https://', '')}
                   data-share-url
                   onFocus={(e) => e.target.select()}
-                  className="w-full text-xs font-mono bg-muted text-muted-foreground p-3 pr-10 rounded border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-text"
+                  className="h-11 w-full cursor-text rounded border border-border/50 bg-muted p-3 pr-14 font-mono text-xs text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   aria-label="Share link - click to select"
                 />
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
                   onClick={handleCopyLink}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-background/80 rounded transition-colors"
+                  className="absolute right-0 top-0 text-muted-foreground hover:bg-background/80 hover:text-foreground"
                   aria-label="Copy share link to clipboard"
                   title="Copy link"
                 >
-                  <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                </button>
+                  <Copy className="h-4 w-4" />
+                </Button>
               </div>
             )}
 
-            <Button variant="ghost" className="w-full" onClick={() => handleOpenChange(false)}>
+            <Button variant="ghost" fullWidth onClick={() => handleOpenChange(false)}>
               Not now
             </Button>
           </div>

@@ -27,8 +27,8 @@ const miniAppBaseConfig = {
   transports: {
     [base.id]: baseTransport,
   },
-  // Reduce wagmi polling frequency (5 minutes) - ranking handles health checks
-  pollingInterval: 300_000,
+  // Keep wallet-driven receipt waits responsive without aggressive polling.
+  pollingInterval: 2_500,
   ssr: true,
 } as const;
 

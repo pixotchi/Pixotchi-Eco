@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info, AlertTriangle, CheckCircle, Megaphone, ExternalLink } from 'lucide-react';
@@ -17,27 +17,27 @@ interface BroadcastMessageModalProps {
 const typeConfig = {
   info: {
     icon: Info,
-    color: 'text-blue-600 dark:text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
+    color: 'text-[hsl(var(--info))]',
+    bg: 'bg-[hsl(var(--info)/0.12)]',
+    border: 'border-[hsl(var(--info)/0.24)]',
   },
   warning: {
     icon: AlertTriangle,
-    color: 'text-orange-600 dark:text-orange-400',
-    bg: 'bg-orange-500/10',
-    border: 'border-orange-500/20',
+    color: 'text-[hsl(var(--warning))]',
+    bg: 'bg-[hsl(var(--warning)/0.14)]',
+    border: 'border-[hsl(var(--warning)/0.28)]',
   },
   success: {
     icon: CheckCircle,
-    color: 'text-green-600 dark:text-green-400',
-    bg: 'bg-green-500/10',
-    border: 'border-green-500/20',
+    color: 'text-[hsl(var(--success-strong))]',
+    bg: 'bg-[hsl(var(--success)/0.12)]',
+    border: 'border-[hsl(var(--success)/0.24)]',
   },
   announcement: {
     icon: Megaphone,
-    color: 'text-purple-600 dark:text-purple-400',
-    bg: 'bg-purple-500/10',
-    border: 'border-purple-500/20',
+    color: 'text-violet-700 dark:text-violet-200',
+    bg: 'bg-violet-500/10',
+    border: 'border-violet-500/20',
   },
 };
 
@@ -97,6 +97,9 @@ export function BroadcastMessageModal({
                   {priorityLabel}
                 </span>
               )}
+              <DialogDescription className="sr-only">
+                Important Pixotchi message. Review the content and choose the available action.
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -147,4 +150,3 @@ export function BroadcastMessageModal({
     </Dialog>
   );
 }
-

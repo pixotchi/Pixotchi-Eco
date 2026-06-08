@@ -1,9 +1,10 @@
 "use client";
 
 import { ThemeSelector } from "@/components/theme-selector";
+import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { StatusService,StatusSnapshot } from "@/lib/status-checks";
-import { RefreshCcw } from "lucide-react";
+import { AlertTriangle,RefreshCcw } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useState,useTransition } from "react";
 import { StatusCard } from "./StatusCard";
@@ -29,7 +30,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
         }
         const data = (await response.json()) as StatusSnapshot;
         setSnapshot(data);
-      } catch (err: any) {
+      } catch (err: UntypedValue) {
         setError(err?.message || "Unable to refresh status");
       }
     });
@@ -67,30 +68,23 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/90 text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-card/90 px-4 py-3 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi logo" width={28} height={28} priority />
-            <p className="font-pixel text-base tracking-wide text-foreground">PIXOTCHI STATUS</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-            <div className="text-left text-sm text-muted-foreground sm:text-right">
-              <span className="block">Last updated</span>
-              <span className="font-medium text-foreground">
-                {new Date(snapshot.generatedAt).toLocaleString(undefined, {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </span>
-              <span className="block text-xs">Auto-refresh: every {refreshMinutes || 15} min</span>
+    <div className="min-h-dvh bg-background bg-[image:var(--gradient-content-well)] text-foreground">
+      <header className="sticky top-0 z-[var(--z-sticky)] overflow-hidden rounded-b-[var(--radius-panel)] border-x border-b border-x-[hsl(var(--border-strong)/0.28)] border-b-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75">
+        <div className="safe-area-top mx-auto flex w-full max-w-5xl items-start justify-between gap-3 px-4 pb-3 pt-3 sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi logo" width={28} height={28} preload />
+            <div className="min-w-0">
+              <p className="font-pixel text-base leading-tight tracking-wide text-foreground">PIXOTCHI STATUS</p>
+              <p className="text-xs font-medium leading-tight text-muted-foreground">Live ecosystem health</p>
             </div>
-            <div className="flex items-center gap-3">
-              <ThemeSelector />
+          </div>
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <div className="flex shrink-0 items-center gap-2">
+              <ThemeSelector enableSecretGardenProgress={false} showMusicToggle={false} />
               {showManualRefresh && (
-                <Button onClick={refresh} disabled={isPending} variant="outline" className="gap-2">
+                <Button onClick={refresh} disabled={isPending} variant="statusAction" size="status" className="gap-2">
                   <RefreshCcw className={isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-                  Refresh
+                  <span>{isPending ? "Refreshing" : "Refresh"}</span>
                 </Button>
               )}
             </div>
@@ -98,17 +92,21 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12 pb-24">
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 pb-[max(4rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] sm:gap-5 sm:py-8">
         {error && (
-          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-            {error}
-          </p>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            <AlertTitle>Refresh failed</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        <section className="grid gap-4 md:grid-cols-2">
+        <section>
+          <div className="grid gap-3 md:grid-cols-2">
           {snapshot.services.map((service: StatusService) => (
             <StatusCard key={service.id} service={service} />
           ))}
+          </div>
         </section>
       </main>
     </div>

@@ -12,10 +12,11 @@ pnpm-debug.log*
 out/
 bridge-main/
 contracts/
-pixotchi-onchain/
 scripts/
-v22/
 exports/
+pixotchi-onchain/
+tools/
+v22/
 
 # Environment variables
 .env
@@ -27,3 +28,26 @@ exports/
 
 # Vercel
 .vercel
+
+# Local/generated files
+.claude/
+.codex
+unused-assets/
+.github/
+bin/
+claimed-wallets.json
+compute_errors.js
+env.txt
+eslint.md
+farc.txt
+fetch-claims.js
+fetch-plant-holders.js
+landpoint.json
+llmbase.txt
+log.txt
+neynar.txt
+plant-holder-wallets.txt
+plant-holders.json
+reset-claims-log.json
+reset-claims.js
+tsconfig.tsbuildinfo

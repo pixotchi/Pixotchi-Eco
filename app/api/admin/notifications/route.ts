@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, createErrorResponse } from '@/lib/auth-utils';
 import { SERVER_ENV } from '@/lib/env-config';
 import {
   getBaseAudienceSyncState,
@@ -21,9 +21,8 @@ function parseList(raw: string[] | null) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     const provider = SERVER_ENV.NOTIFICATION_PROVIDER;
@@ -71,7 +70,7 @@ export async function GET(request: NextRequest) {
 
     const [eligibleSet, globalRecentRaw, globalSentCountRaw] = await Promise.all([
       redis?.smembers?.('notif:eligible:fids'),
-      (redis as any)?.lrange?.('notif:global:log', 0, 20),
+      (redis as UntypedValue)?.lrange?.('notif:global:log', 0, 20),
       redis?.get?.('notif:global:sentCount'),
     ]);
 

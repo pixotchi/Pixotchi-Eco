@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useAccount } from "wagmi";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { PaginationFooter } from "@/components/ui/pagination-footer";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-client";
-import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent, ShopItem, GardenItem } from "@/lib/types";
+import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
 import {
@@ -119,8 +119,6 @@ export default function ActivityTab() {
     parse: (rawValue) => (rawValue === "all" || rawValue === "my" ? rawValue : null),
     serialize: (value) => (value === "all" ? null : value),
   });
-  const [shopItemMap, setShopItemMap] = useState<ItemMap>({});
-  const [gardenItemMap, setGardenItemMap] = useState<ItemMap>({});
   const [currentPage, setCurrentPage] = useWebQueryState<number>({
     key: "activityPage",
     defaultValue: 1,
@@ -133,6 +131,20 @@ export default function ActivityTab() {
     serialize: (value) => (value <= 1 ? null : value.toString()),
   });
   const { shopItems, gardenItems } = useItemCatalogs();
+  const shopItemMap = useMemo<ItemMap>(() => {
+    const nextMap: ItemMap = {};
+    shopItems.forEach((item) => {
+      nextMap[item.id] = item.name;
+    });
+    return nextMap;
+  }, [shopItems]);
+  const gardenItemMap = useMemo<ItemMap>(() => {
+    const nextMap: ItemMap = {};
+    gardenItems.forEach((item) => {
+      nextMap[item.id] = item.name;
+    });
+    return nextMap;
+  }, [gardenItems]);
 
   // Request deduplication ref to prevent multiple simultaneous calls
   const fetchActivitiesPendingRef = useRef<string | null>(null);
@@ -225,20 +237,6 @@ export default function ActivityTab() {
     activitiesByViewRef.current = activitiesByView;
   }, [activitiesByView]);
 
-  useEffect(() => {
-    const newShopItemMap: ItemMap = {};
-    shopItems.forEach((item: ShopItem) => {
-      newShopItemMap[item.id] = item.name;
-    });
-    setShopItemMap(newShopItemMap);
-
-    const newGardenItemMap: ItemMap = {};
-    gardenItems.forEach((item: GardenItem) => {
-      newGardenItemMap[item.id] = item.name;
-    });
-    setGardenItemMap(newGardenItemMap);
-  }, [shopItems, gardenItems]);
-
   // Note: Removed auto-reset effect that caused race condition when switching to 'my' view
   // The UI now handles missing wallet/address gracefully in renderContent()
 
@@ -315,6 +313,36 @@ export default function ActivityTab() {
     }));
   }, []);
 
+  const scrollActivityToTop = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const feedScroll = document.querySelector<HTMLElement>('[data-activity-feed-scroll]');
+      const fallbackShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
+      (feedScroll ?? fallbackShell)?.scrollTo({
+        top: 0,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+  }, []);
+
+  const renderPaginationControls = useCallback((
+    activePage: number,
+    totalPages: number,
+    setPage: PaginationConfig["setPage"]
+  ) => (
+    <PaginationFooter
+      currentPage={activePage}
+      totalPages={totalPages}
+      onPrevious={() => {
+        setPage(prev => Math.max(prev - 1, 1));
+        scrollActivityToTop();
+      }}
+      onNext={() => {
+        setPage(prev => Math.min(prev + 1, totalPages));
+        scrollActivityToTop();
+      }}
+    />
+  ), [scrollActivityToTop]);
+
   useEffect(() => {
     if (selectedTotalPages === 0) {
       if (currentPage !== 1) {
@@ -358,17 +386,30 @@ export default function ActivityTab() {
     error: string | null,
     pagination?: PaginationConfig
   ) => {
+    const renderFeedState = (content: ReactNode) => (
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <div
+          data-activity-feed-scroll
+          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3"
+        >
+          <div className="flex min-h-full items-center justify-center py-8">
+            {content}
+          </div>
+        </div>
+      </div>
+    );
+
     if (loading && activities.length === 0) {
-      return (
-        <div className="flex items-center justify-center py-8">
+      return renderFeedState(
+        <div className="text-center">
           <BaseExpandedLoadingPageLoader text="Loading activities..." />
         </div>
       );
     }
 
     if (error) {
-      return (
-        <Alert variant="destructive" className="mt-4">
+      return renderFeedState(
+        <Alert variant="destructive" className="w-full">
           <Terminal className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -377,16 +418,16 @@ export default function ActivityTab() {
     }
 
     if (feedView === 'my' && !isWalletConnected) {
-      return (
-        <div className="text-center py-8 text-muted-foreground">
+      return renderFeedState(
+        <div className="text-center text-muted-foreground">
           <p>Connect your wallet to see your activity.</p>
         </div>
       );
     }
 
     if (activities.length === 0) {
-      return (
-        <div className="text-center py-8 text-muted-foreground">
+      return renderFeedState(
+        <div className="text-center text-muted-foreground">
           <p>No recent {feedView === 'my' ? 'personal' : ''} activity found in the last 24 hours.</p>
         </div>
       );
@@ -400,46 +441,26 @@ export default function ActivityTab() {
       : activities;
 
     return (
-      <div className="space-y-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0">
-        <div className="space-y-2 divide-y -mx-4 px-4 xl:mx-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:px-0 xl:pr-2">
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3">
           {visibleActivities.map(renderActivity)}
         </div>
 
         {pagination && totalPages > 1 && (
-          <div className="flex justify-center items-center pt-4 xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:pt-3">
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.setPage(prev => Math.max(prev - 1, 1))}
-                disabled={activePage === 1}
-              >
-                Back
-              </Button>
-              <span className="flex items-center px-3 text-sm">
-                Page {activePage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.setPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={activePage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          renderPaginationControls(activePage, totalPages, pagination.setPage)
         )}
       </div>
     );
   };
 
   return (
-    <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
-      <Card className="xl:hidden">
-        <CardHeader>
+    <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:hidden">
+        <CardHeader className="flex-none">
           <div className="flex justify-between items-center">
-            <CardTitle>Activity (Last 24h)</CardTitle>
+            <div className="min-w-0">
+              <CardTitle>Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
+            </div>
             <ToggleGroup
               value={view}
               onValueChange={(nextValue) => {
@@ -461,44 +482,42 @@ export default function ActivityTab() {
             />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-h-0 flex-1 overflow-visible">
           {renderFeedContent(view, selectedActivities, selectedLoading, selectedError, {
             page: currentPage,
             setPage: setCurrentPage,
           })}
         </CardContent>
-      </Card>
+      </TabCard>
 
-      <div className="hidden xl:grid xl:min-h-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:gap-5">
-        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col">
-          <CardHeader>
+      <div className="hidden min-[54rem]:grid min-[54rem]:min-h-0 min-[54rem]:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] min-[54rem]:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col min-[54rem]:overflow-hidden xl:h-[calc(100dvh-7rem)]">
+          <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>All Activity</CardTitle>
-              <span className="text-xs font-medium text-muted-foreground">{activitiesByView.all.length} events</span>
+              <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="xl:min-h-0 xl:flex-1">
+          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
             {renderFeedContent("all", activitiesByView.all, loadingByView.all, errorByView.all, {
               page: desktopPageByView.all,
               setPage: (nextPage) => setDesktopPage("all", nextPage),
             })}
           </CardContent>
-        </Card>
+        </TabCard>
 
-        <Card className="xl:flex xl:h-[calc(100dvh-7rem)] xl:flex-col">
-          <CardHeader>
+        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col min-[54rem]:overflow-hidden xl:h-[calc(100dvh-7rem)]">
+          <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>My Activity</CardTitle>
-              <span className="text-xs font-medium text-muted-foreground">{activitiesByView.my.length} events</span>
+              <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="xl:min-h-0 xl:flex-1">
+          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
             {renderFeedContent("my", activitiesByView.my, loadingByView.my, errorByView.my, {
               page: desktopPageByView.my,
               setPage: (nextPage) => setDesktopPage("my", nextPage),
             })}
           </CardContent>
-        </Card>
+        </TabCard>
       </div>
     </div>
   );

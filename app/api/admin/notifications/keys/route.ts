@@ -1,4 +1,4 @@
-import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
+import { createErrorResponse,requireAdmin } from '@/lib/auth-utils';
 import { redis } from '@/lib/redis';
 import { NextRequest,NextResponse } from 'next/server';
 
@@ -12,7 +12,7 @@ async function rawScanKeys(pattern: string, maxKeys: number = 1000): Promise<str
     try {
         let cursor = 0;
         do {
-            const resp: any = await (redis as any).scan(cursor, { match: pattern, count: 100 });
+            const resp: UntypedValue = await (redis as UntypedValue).scan(cursor, { match: pattern, count: 100 });
             if (Array.isArray(resp)) {
                 cursor = typeof resp[0] === 'string' ? parseInt(resp[0], 10) : resp[0];
                 const keys: string[] = (resp[1] || []) as string[];
@@ -57,10 +57,10 @@ type KeyInfo = {
 };
 
 async function getKeyInfo(key: string): Promise<KeyInfo> {
-    if (!redis) return { key, value: null, ttl: null, type: 'unknown' };
+    if (!redis) return { key, value: null, ttl: null, type: 'UntypedValue' };
 
     try {
-        const type = await (redis as any)?.type?.(key) || 'unknown';
+        const type = await (redis as UntypedValue)?.type?.(key) || 'UntypedValue';
         let value: string | number | object | null = null;
 
         switch (type) {
@@ -78,7 +78,7 @@ async function getKeyInfo(key: string): Promise<KeyInfo> {
                 }
                 break;
             case 'list':
-                const listVal = await (redis as any)?.lrange?.(key, 0, 10);
+                const listVal = await (redis as UntypedValue)?.lrange?.(key, 0, 10);
                 value = (listVal || []).map((item: string) => {
                     try { return JSON.parse(item); } catch { return item; }
                 });
@@ -88,7 +88,7 @@ async function getKeyInfo(key: string): Promise<KeyInfo> {
                 value = setVal?.slice(0, 50) || [];
                 break;
             case 'hash':
-                value = await (redis as any)?.hgetall?.(key) || {};
+                value = await (redis as UntypedValue)?.hgetall?.(key) || {};
                 break;
             default:
                 value = `<${type}>`;
@@ -104,17 +104,16 @@ async function getKeyInfo(key: string): Promise<KeyInfo> {
 
 /**
  * GET /api/admin/notifications/keys
- * 
+ *
  * List all notification-related Redis keys with their values and TTLs.
- * 
+ *
  * Query params:
  * - pattern: Optional pattern to filter keys (default: all notification patterns)
  * - limit: Max keys to return (default: 100, max: 500)
  */
 export async function GET(request: NextRequest) {
-    if (!validateAdminKey(request)) {
-        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-    }
+    const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
     if (!redis) {
         return NextResponse.json({ success: false, error: 'Redis not available' }, { status: 500 });
@@ -167,7 +166,7 @@ export async function GET(request: NextRequest) {
             grouped,
             keys: keyInfos,
         });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
         console.error('[keys] Error:', e);
         return NextResponse.json(createErrorResponse(e?.message || 'Failed', 500).body, { status: 500 });
     }
@@ -175,18 +174,17 @@ export async function GET(request: NextRequest) {
 
 /**
  * DELETE /api/admin/notifications/keys
- * 
+ *
  * Delete specific Redis keys.
- * 
+ *
  * Query params:
  * - key: Specific key to delete (can be repeated for multiple keys)
  * - pattern: Delete all keys matching pattern (use with caution!)
  * - confirm: Must be 'true' for pattern deletion
  */
 export async function DELETE(request: NextRequest) {
-    if (!validateAdminKey(request)) {
-        return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-    }
+    const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
     if (!redis) {
         return NextResponse.json({ success: false, error: 'Redis not available' }, { status: 500 });
@@ -259,7 +257,7 @@ export async function DELETE(request: NextRequest) {
             deletedCount: deletedKeys.length,
             deletedKeys,
         });
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
         console.error('[keys] Delete error:', e);
         return NextResponse.json(createErrorResponse(e?.message || 'Failed', 500).body, { status: 500 });
     }

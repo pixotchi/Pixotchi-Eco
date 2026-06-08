@@ -1,6 +1,7 @@
 "use client";
 
 import { SponsoredBadge } from "@/components/paymaster-toggle";
+import { EfpTransactionBoundary } from "@/components/efp-transaction-boundary";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
 import PlantImage from "@/components/PlantImage";
 import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
@@ -10,9 +11,17 @@ import ReviveTransaction from "@/components/transactions/revive-transaction";
 import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
+import { Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { PaginationFooter } from "@/components/ui/pagination-footer";
+import { DisabledReason, InlineBalanceNotice } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
@@ -28,7 +37,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { Skull,Sword,Terminal } from "lucide-react";
+import { ChevronDown,Skull,Terminal } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
@@ -74,9 +83,21 @@ const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const LAND_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
+const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the loser score
+const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
+const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
+const RANKING_ACTION_BUTTON_CLASS =
+  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-control-surface)] p-0 text-foreground shadow-[var(--shadow-control)] transition-[border-color,background-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]";
+const RANKING_ACTION_ICON_CLASS = "h-6 w-6 object-contain";
 
 function getTotalPages(itemCount: number, pageSize: number) {
   return Math.ceil(itemCount / pageSize) || 1;
+}
+
+function formatAttackScoreDelta(score: number, direction: "gain" | "loss") {
+  const formatted = formatScoreShort(score);
+  if (score <= 0 || formatted === "0") return formatted;
+  return `${direction === "gain" ? "+" : "-"}${formatted}`;
 }
 
 function getBoundedPage(page: number, itemCount: number, pageSize: number) {
@@ -143,6 +164,7 @@ export default function LeaderboardTab() {
   const [stakeLoading, setStakeLoading] = useState(false);
   const [rocksLoading, setRocksLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stakeError, setStakeError] = useState<string | null>(null);
   const [rocksError, setRocksError] = useState<string | null>(null);
   const [rocksDisabledNotice, setRocksDisabledNotice] = useState<string | null>(
     gamificationDisabled ? gamificationDisabledMessage : null,
@@ -242,47 +264,50 @@ export default function LeaderboardTab() {
 
   // Request deduplication refs to prevent multiple simultaneous calls
   const fetchLeaderboardDataPendingRef = useRef<boolean>(false);
+  const fetchStakeLeaderboardPendingRef = useRef<boolean>(false);
+  const fetchRocksLeaderboardPendingRef = useRef<boolean>(false);
   const fetchMyPlantsPendingRef = useRef<string | null>(null);
   const leaderboardDataLoadedRef = useRef(false);
   const stakeDataLoadedRef = useRef(false);
 
-  const showAttackOutcomeFromHash = useCallback(async (hash?: string | null) => {
-    if (!hash) return;
+  const showAttackOutcomeFromHash = useCallback(async (hash?: string | null): Promise<boolean> => {
+    if (!hash) return false;
     try {
       const receipt = await getBaseTransactionReceipt(hash as `0x${string}`);
-      const abi = (PixotchiNFT as any).abi || PixotchiNFT;
+      const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
       for (const log of receipt.logs) {
         try {
-          const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as any });
+          const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
           if (decoded.eventName === 'Attack') {
             const attacker = Number(decoded.args.attacker);
             const winner = Number(decoded.args.winner);
             const scoresWon = Number(decoded.args.scoresWon) / 1e12;
             const didWin = attacker === winner;
-            toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
-            return;
+            const message = `${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`;
+            (didWin ? toast.success : toast.error)(message, { id: 'attack-result' });
+            return true;
           }
         } catch { }
       }
-      // Fallback
-      toast.success('Attack confirmed', { id: 'attack-result' });
+      return false;
     } catch {
-      // Swallow decoding errors; keep UX smooth
+      return false;
     }
   }, []);
 
-  const showAttackOutcomeFromLogs = (logs: any[]) => {
+  const showAttackOutcomeFromLogs = (logs: UntypedValue[]) => {
     try {
-      const abi = (PixotchiNFT as any).abi || PixotchiNFT;
+      const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
       for (const log of logs) {
         try {
-          const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as any });
+          const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
           if (decoded.eventName === 'Attack') {
             const attacker = Number(decoded.args.attacker);
             const winner = Number(decoded.args.winner);
             const scoresWon = Number(decoded.args.scoresWon) / 1e12;
             const didWin = attacker === winner;
-            toast.success(`${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`, { id: 'attack-result' });
+            const message = `${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`;
+            (didWin ? toast.success : toast.error)(message, { id: 'attack-result' });
             return true;
           }
         } catch { }
@@ -336,9 +361,9 @@ export default function LeaderboardTab() {
             .sort((a, b) => Number(b.experiencePoints - a.experiencePoints))
             .map((l, idx) => ({
               rank: idx + 1,
-              landId: Number((l as any).landId ?? 0),
-              name: (l as any).name || `Land #${Number((l as any).landId ?? 0)}`,
-              exp: Number((l as any).experiencePoints ?? 0) / 1e18,
+              landId: Number((l as UntypedValue).landId ?? 0),
+              name: (l as UntypedValue).name || `Land #${Number((l as UntypedValue).landId ?? 0)}`,
+              exp: Number((l as UntypedValue).experiencePoints ?? 0) / 1e18,
             }));
           landDataCacheRef.current = { data: sortedLands, timestamp: now };
           setLandRows(sortedLands);
@@ -360,6 +385,10 @@ export default function LeaderboardTab() {
 
   // Fetch stake leaderboard separately when stake tab is selected
   const fetchStakeLeaderboard = useCallback(async () => {
+    if (fetchStakeLeaderboardPendingRef.current) {
+      return;
+    }
+
     const now = Date.now();
     const cacheAge = now - stakeDataCacheRef.current.timestamp;
 
@@ -371,23 +400,30 @@ export default function LeaderboardTab() {
       console.log(`📊 [Stake] Using cached data (age: ${Math.round(cacheAge / 1000)}s)`);
       setStakeRows(stakeDataCacheRef.current.data);
       stakeDataLoadedRef.current = true;
+      setStakeError(null);
       return;
     }
 
     // Fetch fresh data if cache expired or first load
     // Only show loading spinner if we have no existing data
+    fetchStakeLeaderboardPendingRef.current = true;
     if (!stakeDataLoadedRef.current) {
       setStakeLoading(true);
     }
+    setStakeError(null);
     try {
       console.log(`📊 [Stake] Fetching fresh data from API...`);
       const stakeResponse = await fetch('/api/leaderboard/stake');
+      if (!stakeResponse.ok) {
+        throw new Error(`Failed to fetch stake leaderboard (${stakeResponse.status})`);
+      }
       if (stakeResponse.ok) {
         const stakeData = await stakeResponse.json();
-        const sortedStakes = stakeData.leaderboard.map((entry: any) => ({
-          rank: entry.rank,
+        const entries = Array.isArray(stakeData.leaderboard) ? stakeData.leaderboard : [];
+        const sortedStakes = entries.map((entry: UntypedValue, index: number) => ({
+          rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
           address: entry.address,
-          stakedAmount: BigInt(entry.stakedAmount),
+          stakedAmount: BigInt(entry.stakedAmount ?? 0),
           ensName: entry.ensName || undefined
         }));
 
@@ -402,9 +438,11 @@ export default function LeaderboardTab() {
         console.log(`📊 [Stake] Cached fresh data (${sortedStakes.length} stakers)`);
       }
     } catch (error) {
+      setStakeError('Failed to load Stake leaderboard. Please try again.');
       console.error('❌ [Stake] Error fetching stake leaderboard:', error);
     } finally {
       setStakeLoading(false);
+      fetchStakeLeaderboardPendingRef.current = false;
     }
   }, []);
 
@@ -430,11 +468,18 @@ export default function LeaderboardTab() {
 
     if (rocksDataCacheRef.current.data && cacheAge < ROCKS_CACHE_DURATION) {
       setRocksRows(rocksDataCacheRef.current.data);
+      setRocksDisabledNotice(null);
+      setRocksError(null);
+      return;
+    }
+
+    if (fetchRocksLeaderboardPendingRef.current) {
       return;
     }
 
     // Only show loading spinner if we have no existing data
-    if (rocksRows.length === 0) {
+    fetchRocksLeaderboardPendingRef.current = true;
+    if (!rocksDataCacheRef.current.data) {
       setRocksLoading(true);
     }
     setRocksDisabledNotice(null);
@@ -455,7 +500,7 @@ export default function LeaderboardTab() {
         return;
       }
       const entries = Array.isArray(payload.leaderboard) ? payload.leaderboard : [];
-      const mapped: RocksLeaderboardEntry[] = entries.map((entry: any, index: number) => ({
+      const mapped: RocksLeaderboardEntry[] = entries.map((entry: UntypedValue, index: number) => ({
         rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
         address: entry.address,
         rocks: Number(entry.rocks) || 0,
@@ -469,8 +514,9 @@ export default function LeaderboardTab() {
       setRocksError('Failed to load Rocks leaderboard. Please try again.');
     } finally {
       setRocksLoading(false);
+      fetchRocksLeaderboardPendingRef.current = false;
     }
-  }, [gamificationDisabled, gamificationDisabledMessage, showRocksBoard, rocksRows.length]);
+  }, [gamificationDisabled, gamificationDisabledMessage, showRocksBoard]);
 
   // Fetch stake data when switching to stake tab
   useEffect(() => {
@@ -628,6 +674,56 @@ export default function LeaderboardTab() {
     return true;
   }, [attackerCooldownOver, targetCooldownOver]);
   const eligibleAttackers = useCallback((target: LeaderboardPlant): Plant[] => myPlants.filter((p) => canAttackWith(p, target)), [canAttackWith, myPlants]);
+  const attackDialogAttackers = useMemo(
+    () => (targetPlant ? eligibleAttackers(targetPlant) : []),
+    [eligibleAttackers, targetPlant]
+  );
+  const selectedAttacker = useMemo(
+    () => attackDialogAttackers.find((plant) => plant.id === selectedAttackerId) ?? null,
+    [attackDialogAttackers, selectedAttackerId]
+  );
+  const attackOutcomePreview = useMemo(() => {
+    if (!selectedAttacker || !targetPlant) return null;
+
+    return {
+      winScore: Math.max(0, Math.floor(targetPlant.score * ATTACK_SCORE_TRANSFER_RATE)),
+      loseScore: Math.max(0, Math.floor(selectedAttacker.score * ATTACK_SCORE_TRANSFER_RATE)),
+    };
+  }, [selectedAttacker, targetPlant]);
+  const livingKillerPlants = useMemo(
+    () => myPlants.filter((plant) => plant.status !== 4),
+    [myPlants]
+  );
+  const selectedKillerPlant = useMemo(
+    () => livingKillerPlants.find((plant) => plant.id === selectedKillerId) ?? null,
+    [livingKillerPlants, selectedKillerId]
+  );
+
+  useEffect(() => {
+    if (!attackDialogOpen || !targetPlant) return;
+
+    if (attackDialogAttackers.length === 0) {
+      setSelectedAttackerId(null);
+      return;
+    }
+
+    if (!attackDialogAttackers.some((plant) => plant.id === selectedAttackerId)) {
+      setSelectedAttackerId(attackDialogAttackers[0]?.id ?? null);
+    }
+  }, [attackDialogAttackers, attackDialogOpen, selectedAttackerId, targetPlant]);
+
+  useEffect(() => {
+    if (!killDialogOpen || !targetPlant) return;
+
+    if (livingKillerPlants.length === 0) {
+      setSelectedKillerId(null);
+      return;
+    }
+
+    if (!livingKillerPlants.some((plant) => plant.id === selectedKillerId)) {
+      setSelectedKillerId(livingKillerPlants[0]?.id ?? null);
+    }
+  }, [killDialogOpen, livingKillerPlants, selectedKillerId, targetPlant]);
 
   const handlePlantImageClick = (plant: LeaderboardPlant) => {
     setSelectedPlantForProfile(plant);
@@ -683,35 +779,36 @@ export default function LeaderboardTab() {
   const currentRocks = getPageRows(rocksRows, currentPage, ITEMS_PER_PAGE);
   const desktopRocks = getPageRows(rocksRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
+  function scrollLeaderboardToTop() {
+    window.requestAnimationFrame(() => {
+      const rankingScroll = document.querySelector<HTMLElement>('[data-ranking-scroll]');
+      const contentShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
+      (rankingScroll ?? contentShell)?.scrollTo({
+        top: 0,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+  }
+
   function renderPagination(totalPageCount: number, className?: string) {
     if (totalPageCount <= 1) return null;
 
     const activePage = getBoundedPage(currentPage, totalPageCount, 1);
 
     return (
-      <div className={cn("flex justify-center items-center pt-4", className)}>
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(Math.max(activePage - 1, 1))}
-            disabled={activePage === 1}
-          >
-            Back
-          </Button>
-          <span className="flex items-center px-3 text-sm">
-            Page {activePage} of {totalPageCount}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(Math.min(activePage + 1, totalPageCount))}
-            disabled={activePage === totalPageCount}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      <PaginationFooter
+        currentPage={activePage}
+        totalPages={totalPageCount}
+        onPrevious={() => {
+          setCurrentPage(Math.max(activePage - 1, 1));
+          scrollLeaderboardToTop();
+        }}
+        onNext={() => {
+          setCurrentPage(Math.min(activePage + 1, totalPageCount));
+          scrollLeaderboardToTop();
+        }}
+        className={className}
+      />
     );
   }
 
@@ -723,22 +820,22 @@ export default function LeaderboardTab() {
     const columns = splitDesktopRows(rows);
 
     return (
-      <div className={cn("hidden xl:grid xl:grid-cols-2 xl:gap-4", fillHeight && "xl:min-h-0 xl:flex-1")}>
+      <div className={cn("hidden min-[54rem]:grid min-[54rem]:grid-cols-2 min-[54rem]:gap-4", fillHeight && "min-[54rem]:min-h-0 min-[54rem]:flex-1")}>
         {columns.map((column, columnIndex) => (
           <div
             key={columnIndex}
             className={cn(
-              "xl:flex xl:flex-col xl:rounded-md xl:border xl:border-border/70 xl:bg-background/10 xl:px-3 xl:py-2",
-              fillHeight && "xl:min-h-0"
+              "min-[54rem]:flex min-[54rem]:flex-col min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-[hsl(var(--border-strong)/0.32)] min-[54rem]:bg-[image:var(--gradient-scroll-surface)] min-[54rem]:px-3 min-[54rem]:py-2 min-[54rem]:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
+              fillHeight && "min-[54rem]:min-h-0"
             )}
           >
-            <div className="flex h-8 flex-none items-center justify-between border-b border-border/60 text-xs font-semibold text-muted-foreground">
+            <div className="flex h-8 flex-none items-center justify-between border-b border-[hsl(var(--divider)/0.66)] text-xs font-semibold text-muted-foreground">
               <span>{getRankRangeLabel(column)}</span>
             </div>
             <div className={cn(
-              "divide-y divide-border",
+              "divide-y divide-[hsl(var(--divider)/0.62)]",
               fillHeight
-                ? "min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                ? "surface-scroll-fade min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 : "overflow-visible"
             )}>
               {column.length > 0 ? (
@@ -764,15 +861,30 @@ export default function LeaderboardTab() {
     fillDesktop = false
   ) {
     return (
-      <div className={cn("space-y-4", fillDesktop && "xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0")}>
-        <div className="space-y-2 divide-y divide-border -mx-4 px-4 xl:hidden">
+      <div className={cn("flex h-full min-h-0 flex-col gap-3", fillDesktop && "min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col")}>
+        <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
           {mobileRows.map((row) => renderRow(row))}
         </div>
 
         {renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
 
-        {renderPagination(mobilePageCount, "xl:hidden")}
-        {renderPagination(desktopPageCount, "hidden xl:flex xl:mt-3 xl:flex-none xl:border-t xl:border-border/60 xl:pt-3")}
+        {renderPagination(mobilePageCount, "min-[54rem]:hidden")}
+        {renderPagination(desktopPageCount, "hidden min-[54rem]:flex")}
+      </div>
+    );
+  }
+
+  function renderRankingState(content: React.ReactNode) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div
+          data-ranking-scroll
+          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3"
+        >
+          <div className="flex min-h-full items-center justify-center py-8">
+            {content}
+          </div>
+        </div>
       </div>
     );
   }
@@ -793,11 +905,11 @@ export default function LeaderboardTab() {
         key={plant.id}
         className={cn(
           compact ? "py-0.5 transition-all" : "py-3 transition-all",
-          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3",
+          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3",
           plant.isDead && "opacity-60"
         )}
       >
-        <div className={cn("flex items-center space-x-2", compact && "min-h-10")}>
+        <div className={cn("flex items-center space-x-2", compact && "min-h-11")}>
           <div className={cn("flex items-center justify-center", compact ? "w-6" : "w-8")}>
             <div className={`flex items-center ${getRankColor(plant.rank)}`}>
               {plant.rank <= 3 ? (
@@ -810,8 +922,8 @@ export default function LeaderboardTab() {
 
           <div
             className={cn(
-              "relative flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity",
-              compact && "flex h-8 w-8 items-center justify-center"
+              "relative flex-shrink-0 cursor-pointer rounded-[var(--radius-control)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              compact && "flex h-11 w-11 items-center justify-center"
             )}
             onClick={() => handlePlantImageClick(plant)}
             role="button"
@@ -832,30 +944,32 @@ export default function LeaderboardTab() {
             />
             {hasActiveFence(plant) && (
               <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
-                <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} />
+                <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} className="h-3 w-3" />
               </div>
             )}
             {plant.isDead && (
               <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
-                <Skull className="w-3 h-3 text-red-500" />
+                <Skull className="w-3 h-3 text-destructive" />
               </div>
             )}
           </div>
 
           <div className="flex-1 min-w-0">
             {compact ? (
-              <div className="flex min-w-0 items-baseline gap-2">
-                <h4 className="min-w-0 truncate pr-2 text-sm font-semibold">
+              <div className="min-w-0">
+                <h4 className="truncate font-pixel text-sm">
                   {plant.name || `Plant #${plant.id}`}
                   {isMine && <span className="ml-1 text-xs text-primary font-medium">(You)</span>}
                 </h4>
-                <span className="flex-none text-xs text-muted-foreground">LvL {plant.level}</span>
+                <span className="mt-0.5 block text-[11px] leading-none text-muted-foreground">
+                  LvL {plant.level}
+                </span>
               </div>
             ) : (
               <>
                 <div className="flex items-center space-x-2">
                   <div className="relative min-w-0">
-                    <h4 className="font-semibold text-base truncate pr-6">
+                    <h4 className="truncate pr-2 font-pixel text-base">
                       {plant.name || `Plant #${plant.id}`}
                       {isMine && (
                         <span className="ml-2 text-xs text-primary font-medium">(You)</span>
@@ -865,6 +979,20 @@ export default function LeaderboardTab() {
                 </div>
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
                   <span>LvL {plant.level}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-[520px]:hidden">
+                  <div className="flex items-center gap-1 text-foreground">
+                    <Image src="/icons/pts.svg" alt="Points" width={13} height={13} />
+                    <span className="font-bold">{formatScoreShort(plant.score)}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Image src="/icons/Star.svg" alt="Stars" width={12} height={12} />
+                    <span>{plant.stars}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={12} height={12} />
+                    <span>{formatEthShort(plant.rewards)}</span>
+                  </div>
                 </div>
               </>
             )}
@@ -887,7 +1015,7 @@ export default function LeaderboardTab() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-end space-y-1">
+              <div className="hidden flex-col items-end space-y-1 min-[520px]:flex">
                 <div className="flex items-center space-x-1">
                   <Image src="/icons/pts.svg" alt="Points" width={16} height={16} />
                   <span className="text-base font-bold">{formatScoreShort(plant.score)}</span>
@@ -905,77 +1033,67 @@ export default function LeaderboardTab() {
               </div>
             )}
             {canShowAttack && (
-              compact ? (
-                <button
-                  type="button"
-                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
-                  aria-label="Attack this plant"
-                  title="Attack"
-                >
-                  <Sword className="w-4 h-4" />
-                </button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-md"
-                  onClick={() => { setTargetPlant(plant); setSelectedAttackerId(null); setAttackDialogOpen(true); }}
-                  aria-label="Attack this plant"
-                  title="Attack"
-                >
-                  <Sword className="w-4 h-4" />
-                </Button>
-              )
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setTargetPlant(plant);
+                  setSelectedAttackerId(eligibleAttackers(plant)[0]?.id ?? null);
+                  setAttackDialogOpen(true);
+                }}
+                aria-label="Attack this plant"
+                title="Attack"
+                className={RANKING_ACTION_BUTTON_CLASS}
+              >
+                <Image
+                  src="/icons/Attackwon.svg"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className={RANKING_ACTION_ICON_CLASS}
+                  aria-hidden="true"
+                />
+              </Button>
             )}
             {canShowKill && (
-              compact ? (
-                <button
-                  type="button"
-                  className={cn(
-                    "btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    !killCooldown.canKill && "opacity-50"
-                  )}
-                  onClick={() => {
-                    if (!killCooldown.canKill) {
-                      setCooldownDialogOpen(true);
-                    } else {
-                      setTargetPlant(plant);
-                      setSelectedKillerId(null);
-                      setKillDialogOpen(true);
-                    }
-                  }}
-                  aria-label="Kill dead plant to collect star"
-                  title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
-                >
-                  <Skull className="w-4 h-4" />
-                </button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className={cn("rounded-md", !killCooldown.canKill && "opacity-50")}
-                  onClick={() => {
-                    if (!killCooldown.canKill) {
-                      setCooldownDialogOpen(true);
-                    } else {
-                      setTargetPlant(plant);
-                      setSelectedKillerId(null);
-                      setKillDialogOpen(true);
-                    }
-                  }}
-                  aria-label="Kill dead plant to collect star"
-                  title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
-                >
-                  <Skull className="w-4 h-4" />
-                </Button>
-              )
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  RANKING_ACTION_BUTTON_CLASS,
+                  !killCooldown.canKill && "opacity-55"
+                )}
+                onClick={() => {
+                  if (!killCooldown.canKill) {
+                    setCooldownDialogOpen(true);
+                  } else {
+                    setTargetPlant(plant);
+                    setSelectedKillerId(myPlants.find(p => p.status !== 4)?.id ?? null);
+                    setKillDialogOpen(true);
+                  }
+                }}
+                aria-label="Kill dead plant to collect star"
+                title={killCooldown.canKill ? "Kill to collect star" : "Kill available soon"}
+              >
+                <Image
+                  src="/icons/skull.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className={RANKING_ACTION_ICON_CLASS}
+                  aria-hidden="true"
+                />
+              </Button>
             )}
             {canShowRevive && (
               compact ? (
-                <button
+                <Button
                   type="button"
-                  className="btn-compact inline-flex h-6 w-11 items-center justify-center rounded-md border border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  variant="outline"
+                  size="icon"
+                  className="rounded-[var(--radius-control)]"
                   onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
                   aria-label="Revive your plant"
                   title="Revive"
@@ -987,12 +1105,12 @@ export default function LeaderboardTab() {
                     height={16}
                     className="h-4 w-4 object-contain"
                   />
-                </button>
+                </Button>
               ) : (
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-md"
+                  className="rounded-[var(--radius-control)]"
                   onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
                   aria-label="Revive your plant"
                   title="Revive"
@@ -1053,7 +1171,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1118,7 +1236,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address || `rock-${row.rank}`}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg xl:mx-0 xl:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1155,7 +1273,7 @@ export default function LeaderboardTab() {
           </div>
           <div className="flex items-center space-x-2 text-right">
             <div className="flex items-center space-x-1">
-              <Image src="/icons/Volcanic_Rock.svg" alt="Rocks" width={compact ? 14 : 16} height={compact ? 14 : 16} />
+              <Image src="/icons/Volcanic_Rock.svg" alt="" width={compact ? 16 : 18} height={compact ? 16 : 18} aria-hidden="true" />
               <span className={cn("font-bold", compact ? "text-sm" : "text-base")}>{row.rocks.toLocaleString()}</span>
             </div>
           </div>
@@ -1167,16 +1285,16 @@ export default function LeaderboardTab() {
   const renderContent = () => {
     // Only show full page loader if we have NO plants data and are loading
     if (loading && totalItems === 0) {
-      return (
-        <div className="flex items-center justify-center py-8">
+      return renderRankingState(
+        <div className="text-center">
           <BaseExpandedLoadingPageLoader text="Loading leaderboard..." />
         </div>
       );
     }
 
     if (error) {
-      return (
-        <Alert variant="destructive" className="mt-4">
+      return renderRankingState(
+        <Alert variant="destructive" className="w-full">
           <Terminal className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -1187,8 +1305,8 @@ export default function LeaderboardTab() {
     if (totalItems === 0) {
       // Check if user is in attackable mode and has no plants
       if (filterMode === 'attackable' && address && myPlants.length === 0) {
-        return (
-          <div className="text-center py-8 space-y-2">
+        return renderRankingState(
+          <div className="text-center space-y-2">
             <p className="text-muted-foreground">Mint a plant first to attack other plants with it.</p>
             <p className="text-sm text-muted-foreground">Go to the Mint tab to get started.</p>
           </div>
@@ -1197,8 +1315,8 @@ export default function LeaderboardTab() {
 
       // Check if user is in attackable mode but has plants (just no attackable targets)
       if (filterMode === 'attackable' && address && myPlants.length > 0) {
-        return (
-          <div className="text-center py-8 text-muted-foreground">
+        return renderRankingState(
+          <div className="text-center text-muted-foreground">
             <p>No attackable plants found. All plants are either yours, dead, or protected by fences.</p>
           </div>
         );
@@ -1206,34 +1324,34 @@ export default function LeaderboardTab() {
 
       // Check if user is in dead mode but no dead plants exist
       if (filterMode === 'dead') {
-        return (
-          <div className="text-center py-8 text-muted-foreground">
+        return renderRankingState(
+          <div className="text-center text-muted-foreground">
             <p>No dead plants found. All plants are currently alive!</p>
           </div>
         );
       }
 
       // Default message for 'all' mode or when not connected
-      return (
-        <div className="text-center py-8 text-muted-foreground">
+      return renderRankingState(
+        <div className="text-center text-muted-foreground">
           <p>No plants found in the leaderboard.</p>
         </div>
       );
     }
 
-    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow);
+    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow, true);
   };
 
   return (
-    <div className="space-y-4 xl:mx-auto xl:max-w-7xl">
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center gap-3 xl:grid xl:grid-cols-[auto_minmax(0,1fr)_auto]">
+    <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:h-[calc(100dvh-12rem)] xl:h-[calc(100dvh-7rem)]">
+        <CardHeader className="flex-none">
+          <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between min-[54rem]:grid min-[54rem]:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
             </CardTitle>
             {boardType === 'plants' && (
-              <div className="hidden items-center justify-center gap-4 xl:flex">
+              <div className="hidden items-center justify-center gap-4 min-[54rem]:flex">
                 <ToggleGroup
                   value={filterMode}
                   onValueChange={(v) => {
@@ -1254,7 +1372,7 @@ export default function LeaderboardTab() {
                   ]}
                 />
                 {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <label className="flex min-h-11 items-center gap-2 cursor-pointer rounded-[var(--radius-control)] px-1 text-sm">
                     <input
                       type="checkbox"
                       checked={showOnlyMyPlants}
@@ -1262,20 +1380,22 @@ export default function LeaderboardTab() {
                         setShowOnlyMyPlants(e.target.checked);
                         setCurrentPage(1);
                       }}
-                      className="w-4 h-4 rounded border-border accent-primary"
+                      className="h-5 w-5 rounded border-border accent-primary"
                     />
                     <span className="text-muted-foreground">My Plants</span>
                   </label>
                 )}
               </div>
             )}
-            <div className="xl:col-start-3 xl:justify-self-end">
+            <div className="w-full min-[380px]:w-auto min-[54rem]:col-start-3 min-[54rem]:justify-self-end">
               <ToggleGroup
                 value={boardType}
                 onValueChange={(nextValue) => {
                   setCurrentPage(1);
                   setBoardType((nextValue as typeof boardType) || 'plants');
                 }}
+                className="w-full min-[380px]:w-auto"
+                getButtonClassName={() => "min-w-0 flex-1 px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] min-[380px]:flex-none"}
                 options={[
                   { value: 'plants', label: 'Plants' },
                   { value: 'lands', label: 'Lands' },
@@ -1286,12 +1406,12 @@ export default function LeaderboardTab() {
             </div>
           </div>
           {boardType === 'plants' && (
-            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap xl:hidden">
+            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap min-[54rem]:hidden">
               <ToggleGroup
                 value={filterMode}
                 onValueChange={(v) => {
                   setCurrentPage(1);
-                  setFilterMode(v as any);
+                  setFilterMode(v as UntypedValue);
                   // Auto-uncheck "My Plants" when switching to attackable or dead
                   if (v === 'attackable' || v === 'dead') {
                     setShowOnlyMyPlants(false);
@@ -1304,7 +1424,7 @@ export default function LeaderboardTab() {
                 ]}
               />
               {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <label className="flex min-h-11 items-center gap-2 cursor-pointer rounded-[var(--radius-control)] px-1 text-sm">
                   <input
                     type="checkbox"
                     checked={showOnlyMyPlants}
@@ -1312,7 +1432,7 @@ export default function LeaderboardTab() {
                       setShowOnlyMyPlants(e.target.checked);
                       setCurrentPage(1);
                     }}
-                    className="w-4 h-4 rounded border-border accent-primary"
+                    className="h-5 w-5 rounded border-border accent-primary"
                   />
                   <span className="text-muted-foreground">My Plants</span>
                 </label>
@@ -1320,105 +1440,224 @@ export default function LeaderboardTab() {
             </div>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-h-0 flex-1 overflow-visible">
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (
             loading && totalLandItems === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
-              </div>
+              renderRankingState(
+                <div className="text-center">
+                  <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
+                </div>
+              )
             ) : totalLandItems === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No lands found.</div>
+              renderRankingState(
+                <div className="text-center text-muted-foreground">No lands found.</div>
+              )
             ) : (
-              renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow)
+              renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow, true)
             )
           ) : boardType === 'stake' ? (
             stakeLoading && totalStakeItems === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
-              </div>
+              renderRankingState(
+                <div className="text-center">
+                  <BaseExpandedLoadingPageLoader text="Loading stake leaderboard..." />
+                </div>
+              )
+            ) : stakeError && totalStakeItems === 0 ? (
+              renderRankingState(
+                <Alert variant="destructive" className="w-full">
+                  <Terminal className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{stakeError}</AlertDescription>
+                </Alert>
+              )
             ) : totalStakeItems === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No stakers found.</div>
+              renderRankingState(
+                <div className="text-center text-muted-foreground">No stakers found.</div>
+              )
             ) : (
-              renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow)
+              renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow, true)
             )
           ) : rocksDisabledNotice ? (
-            <Alert className="mt-4">
-              <Terminal className="h-4 w-4" />
-              <AlertTitle>Temporarily Disabled</AlertTitle>
-              <AlertDescription>{rocksDisabledNotice}</AlertDescription>
-            </Alert>
+            renderRankingState(
+              <Alert className="w-full">
+                <Terminal className="h-4 w-4" />
+                <AlertTitle>Temporarily Disabled</AlertTitle>
+                <AlertDescription>{rocksDisabledNotice}</AlertDescription>
+              </Alert>
+            )
           ) : (
             rocksLoading && totalRockItems === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
-              </div>
+              renderRankingState(
+                <div className="text-center">
+                  <BaseExpandedLoadingPageLoader text="Loading Rocks leaderboard..." />
+                </div>
+              )
             ) : rocksError ? (
-              <Alert variant="destructive" className="mt-4">
-                <Terminal className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{rocksError}</AlertDescription>
-              </Alert>
+              renderRankingState(
+                <Alert variant="destructive" className="w-full">
+                  <Terminal className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{rocksError}</AlertDescription>
+                </Alert>
+              )
             ) : totalRockItems === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No rock earners found.</div>
+              renderRankingState(
+                <div className="text-center text-muted-foreground">No rock earners found.</div>
+              )
             ) : (
-              renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow)
+              renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow, true)
             )
           )}
         </CardContent>
-      </Card>
+      </TabCard>
 
       {/* Attack dialog */}
       <Dialog open={attackDialogOpen} onOpenChange={setAttackDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select your attacker</DialogTitle>
+        <DialogContent mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="leading-tight">Attack plant</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              Choose one eligible lower-level plant. We will check cooldowns and protection before submitting.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            {/* Brief rules/eligibility panel */}
-            <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
-              <ul className="list-disc pl-5 space-y-1">
+
+          <DialogBody className="space-y-4 pb-4 pr-1">
+            {targetPlant && (
+              <div className="chat-white-surface flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-card/95 bg-[image:var(--gradient-surface)] p-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Target
+                    </div>
+                    <div className="truncate font-pixel text-sm">
+                      {targetPlant.name || `Plant #${targetPlant.id}`}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Level {targetPlant.level}</div>
+                  </div>
+                </div>
+                {attackOutcomePreview && (
+                  <div className="ml-auto shrink-0 space-y-1 text-right">
+                    <div className="rounded-[var(--radius-control)] border border-primary/25 bg-primary/10 px-2 py-1">
+                      <div className="text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
+                        If you win
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-end gap-1 text-xs font-bold text-primary">
+                        <span>{formatAttackScoreDelta(attackOutcomePreview.winScore, "gain")}</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">PTS</span>
+                      </div>
+                    </div>
+                    <div className="rounded-[var(--radius-control)] border border-destructive/25 bg-destructive/10 px-2 py-1">
+                      <div className="text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
+                        If you lose
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-end gap-1 text-xs font-bold text-destructive">
+                        <span>{formatAttackScoreDelta(attackOutcomePreview.loseScore, "loss")}</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">PTS</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-[var(--radius-panel)] border border-border/70 bg-muted/35 p-3 text-xs leading-relaxed text-muted-foreground">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                Attack rules
+              </div>
+              <ul className="list-disc space-y-1 pl-4">
                 <li>Each plant can attack once every 30 minutes.</li>
                 <li>Target can be attacked again after 60 minutes.</li>
                 <li>Attacker must be alive and a lower level than the target.</li>
+                <li>Your attacker has a {ATTACK_WIN_CHANCE_PERCENT}% win chance and a {ATTACK_LOSS_CHANCE_PERCENT}% loss chance.</li>
                 <li>Targets with an active fence cannot be attacked.</li>
                 <li>You cannot attack your own plant.</li>
               </ul>
             </div>
-            {targetPlant && (
-              <div className="text-sm text-muted-foreground">
-                Target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span> (Lvl {targetPlant.level})
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Eligible attackers</div>
+                {targetPlant && (
+                  <span className="text-xs text-muted-foreground">
+                    {attackDialogAttackers.length} available
+                  </span>
+                )}
               </div>
-            )}
 
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {targetPlant && eligibleAttackers(targetPlant).length === 0 && (
-                <div className="text-sm text-muted-foreground">
+              {attackDialogAttackers.length === 0 ? (
+                <DisabledReason>
                   No eligible plants to attack with right now. Each plant can attack once every 30 minutes.
-                </div>
+                </DisabledReason>
+              ) : (
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto min-h-11 w-full justify-between px-3 py-2 text-left"
+                    >
+                      {selectedAttacker ? (
+                        <div className="flex min-w-0 items-center gap-2">
+                          <PlantImage selectedPlant={selectedAttacker as UntypedValue} width={30} height={30} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {selectedAttacker.name || `Plant #${selectedAttacker.id}`}
+                            </div>
+                            <div className="text-xs font-normal text-muted-foreground">
+                              Level {selectedAttacker.level}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span>Select an attacker</span>
+                      )}
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto"
+                  >
+                    {attackDialogAttackers.map((attacker) => {
+                      const selected = selectedAttackerId === attacker.id;
+                      return (
+                        <DropdownMenuItem
+                          key={attacker.id}
+                          onSelect={() => setSelectedAttackerId(attacker.id)}
+                          className="min-h-12"
+                        >
+                          <div className="flex w-full min-w-0 items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <PlantImage selectedPlant={attacker as UntypedValue} width={28} height={28} />
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">
+                                  {attacker.name || `Plant #${attacker.id}`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Level {attacker.level}
+                                </div>
+                              </div>
+                            </div>
+                            {selected ? (
+                              <span className="shrink-0 text-xs font-semibold text-primary">Selected</span>
+                            ) : null}
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
-              {targetPlant && eligibleAttackers(targetPlant).map((p) => (
-                <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedAttackerId === p.id ? 'bg-accent' : 'bg-card'}`}>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="attacker"
-                      className="accent-primary"
-                      checked={selectedAttackerId === p.id}
-                      onChange={() => setSelectedAttackerId(p.id)}
-                    />
-                    <PlantImage selectedPlant={p as any} width={28} height={28} />
-                    <div className="text-sm">
-                      <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
-                      <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
-                    </div>
-                  </div>
-                </label>
-              ))}
             </div>
+          </DialogBody>
 
-            <div className="pt-2 space-y-2">
+          <DialogFooter sticky className="block flex-none">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm Attack</span>
                 <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
@@ -1464,29 +1703,32 @@ export default function LeaderboardTab() {
                       onError={() => { }}
                       buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
                       buttonClassName="w-full"
-                      showToast={true}
                       disabled={isSubmitting || !eligible}
-                      onStatusUpdate={(status: any) => {
-                        if (status.statusName === 'pending') {
+                      onStatusUpdate={(status: UntypedValue) => {
+                        if (status.statusName === 'pending' || status.statusName === 'transactionPending') {
                           setIsSubmitting(true);
                           try {
-                            const h = status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
+                            const h = status.statusData?.transactionHash || status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
                             if (h) setPendingHash(h);
                           } catch { }
-                          toast.loading('Submitting attack...', { id: 'attack-tx' });
                         }
                         if (status.statusName === 'success') {
                           setIsSubmitting(false);
-                          toast.success('Attack confirmed!', { id: 'attack-tx' });
                           try {
                             const receipt = status.statusData?.transactionReceipts?.[0];
                             const logs = receipt?.logs || [];
                             const shown = showAttackOutcomeFromLogs(logs);
                             if (!shown) {
-                              const h = receipt?.transactionHash || pendingHash;
-                              void showAttackOutcomeFromHash(h);
+                              const h = receipt?.transactionHash || status.statusData?.transactionHash || pendingHash;
+                              void showAttackOutcomeFromHash(h).then((hashShown) => {
+                                if (!hashShown) {
+                                  toast('Attack confirmed. Check Activity for the result.', { id: 'attack-result' });
+                                }
+                              });
                             }
-                          } catch { }
+                          } catch {
+                            toast('Attack confirmed. Check Activity for the result.', { id: 'attack-result' });
+                          }
                           // After a successful attack, refresh lists
                           fetchLeaderboardData();
                           void fetchMyPlants();
@@ -1494,7 +1736,7 @@ export default function LeaderboardTab() {
                         if (status.statusName === 'error') {
                           setIsSubmitting(false);
                           setPendingHash(null);
-                          toast.error('Attack failed', { id: 'attack-tx' });
+                          toast.error('Attack failed');
                         }
                       }}
                     />
@@ -1506,54 +1748,130 @@ export default function LeaderboardTab() {
                 </Button>
               )}
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Kill dialog */}
       <Dialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Collect a star by killing a dead plant</DialogTitle>
+        <DialogContent mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="leading-tight">Kill a plant</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              Select one living plant to collect a star from the dead target. This action has a wallet cooldown.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
-              Select one of your living plants to perform the kill. Target must be dead.
-              <br /><span className="text-xs">Note: You can only kill once per hour.</span>
-            </div>
-            {!killCooldown.canKill && (
-              <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
-                ⏳ Cooldown active. Close this dialog to see the timer.
-              </div>
-            )}
+
+          <DialogBody className="space-y-4 pb-4 pr-1">
             {targetPlant && (
-              <div className="text-sm text-muted-foreground">
-                Dead target: <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>
+              <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
+                <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Dead target
+                  </div>
+                  <div className="truncate font-pixel text-sm">
+                    {targetPlant.name || `Plant #${targetPlant.id}`}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Collects 1 star</div>
+                </div>
               </div>
             )}
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {myPlants.filter(p => p.status !== 4).map((p) => (
-                <label key={p.id} className={`flex items-center justify-between p-2 rounded-md border ${selectedKillerId === p.id ? 'bg-accent' : 'bg-card'}`}>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="killer"
-                      className="accent-primary"
-                      checked={selectedKillerId === p.id}
-                      onChange={() => setSelectedKillerId(p.id)}
-                    />
-                    <PlantImage selectedPlant={p as any} width={28} height={28} />
-                    <div className="text-sm">
-                      <div className="font-medium">{p.name || `Plant #${p.id}`}</div>
-                      <div className="text-xs text-muted-foreground">Lvl {p.level}</div>
-                    </div>
-                  </div>
-                </label>
-              ))}
+
+            <div className="rounded-[var(--radius-panel)] border border-border/70 bg-muted/35 p-3 text-xs leading-relaxed text-muted-foreground">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                Kill rules
+              </div>
+              Target must already be dead. You can only kill once per hour.
             </div>
-            <div className="pt-2 space-y-2">
+
+            {!killCooldown.canKill && (
+              <DisabledReason>
+                Cooldown active. Close this dialog to see the timer.
+              </DisabledReason>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Living plants</div>
+                <span className="text-xs text-muted-foreground">
+                  {livingKillerPlants.length} available
+                </span>
+              </div>
+
+              {livingKillerPlants.length === 0 ? (
+                <DisabledReason>
+                  You need a living plant to collect a star.
+                </DisabledReason>
+              ) : (
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto min-h-11 w-full justify-between px-3 py-2 text-left"
+                    >
+                      {selectedKillerPlant ? (
+                        <div className="flex min-w-0 items-center gap-2">
+                          <PlantImage selectedPlant={selectedKillerPlant as UntypedValue} width={30} height={30} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {selectedKillerPlant.name || `Plant #${selectedKillerPlant.id}`}
+                            </div>
+                            <div className="text-xs font-normal text-muted-foreground">
+                              Level {selectedKillerPlant.level}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span>Select your plant</span>
+                      )}
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto"
+                  >
+                    {livingKillerPlants.map((plant) => {
+                      const selected = selectedKillerId === plant.id;
+                      return (
+                        <DropdownMenuItem
+                          key={plant.id}
+                          onSelect={() => setSelectedKillerId(plant.id)}
+                          className="min-h-12"
+                        >
+                          <div className="flex w-full min-w-0 items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <PlantImage selectedPlant={plant as UntypedValue} width={28} height={28} />
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">
+                                  {plant.name || `Plant #${plant.id}`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Level {plant.level}
+                                </div>
+                              </div>
+                            </div>
+                            {selected ? (
+                              <span className="shrink-0 text-xs font-semibold text-primary">Selected</span>
+                            ) : null}
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </DialogBody>
+
+          <DialogFooter sticky className="block flex-none">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Confirm Kill</span>
+                <span className="text-sm font-medium">Confirm kill and earn one star</span>
                 <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
               </div>
               {isSolana ? (
@@ -1564,16 +1882,12 @@ export default function LeaderboardTab() {
                   tokenId={selectedKillerId}
                   buttonText="Confirm Kill"
                   buttonClassName="w-full"
-                  showToast={true}
-                  onStatusUpdate={(status: any) => {
-                    if (status.statusName === 'pending') {
-                      toast.loading('Submitting kill...', { id: 'kill-tx' });
-                    }
+                  onStatusUpdate={(status: UntypedValue) => {
                     if (status.statusName === 'success') {
-                      toast.success('Kill successful! You earned 1 star.', { id: 'kill-tx' });
+                      toast.success('Kill successful! You earned 1 star.');
                     }
                     if (status.statusName === 'error') {
-                      toast.error('Kill failed', { id: 'kill-tx' });
+                      toast.error('Kill failed');
                     }
                   }}
                   onSuccess={() => {
@@ -1593,17 +1907,18 @@ export default function LeaderboardTab() {
                 </Button>
               )}
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Revive dialog */}
       <Dialog open={reviveDialogOpen} onOpenChange={setReviveDialogOpen}>
-        {/* ... existing revive dialog content ... */}
-        {/* WE DO NOT EDIT REVIVE DIALOG HERE, JUST MATCHING CONTEXT IS HARD SO I WILL APPEND AT END OF FILE */}
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Revive your plant</DialogTitle>
+            <DialogDescription>
+              Confirm the revive cost before restoring this plant to active play.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             {targetPlant && (
@@ -1628,7 +1943,7 @@ export default function LeaderboardTab() {
                       buttonClassName="w-full"
                       showToast={true}
                       disabled={!targetPlant || !hasEnough}
-                      onStatusUpdate={(status: any) => {
+                      onStatusUpdate={(status: UntypedValue) => {
                         if (status.statusName === 'pending') {
                           toast.loading('Submitting revive...', { id: 'revive-tx' });
                         }
@@ -1646,7 +1961,9 @@ export default function LeaderboardTab() {
                       }}
                     />
                     {!hasEnough && (
-                      <div className="text-xs text-red-500">Insufficient SEED balance (requires {formatTokenAmount(revivePrice)} SEED)</div>
+                      <InlineBalanceNotice>
+                        Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}
+                      </InlineBalanceNotice>
                     )}
                   </>
                 );
@@ -1657,17 +1974,22 @@ export default function LeaderboardTab() {
       </Dialog>
 
       {/* Plant Profile Dialog */}
-      <PlantProfileDialog
-        open={profileDialogOpen}
-        onOpenChange={setProfileDialogOpen}
-        plant={selectedPlantForProfile}
-      />
+      <EfpTransactionBoundary open={profileDialogOpen}>
+        <PlantProfileDialog
+          open={profileDialogOpen}
+          onOpenChange={setProfileDialogOpen}
+          plant={selectedPlantForProfile}
+        />
+      </EfpTransactionBoundary>
 
       {/* Kill Cooldown Dialog */}
       <Dialog open={cooldownDialogOpen} onOpenChange={setCooldownDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cooldown Active</DialogTitle>
+            <DialogDescription>
+              Your attack action is cooling down. Wait until the timer reaches zero before attacking again.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-lg space-y-3">

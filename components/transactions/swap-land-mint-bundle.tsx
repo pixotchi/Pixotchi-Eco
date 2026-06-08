@@ -38,8 +38,8 @@ const ERC20_ABI = [
 interface SwapLandMintBundleProps {
     ethAmount: bigint; // ETH amount with 6% buffer already applied
     minSeedOut: bigint; // Minimum SEED to receive (land mint price)
-    onSuccess?: (tx: any) => void;
-    onError?: (error: any) => void;
+    onSuccess?: (tx: UntypedValue) => void;
+    onError?: (error: UntypedValue) => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;

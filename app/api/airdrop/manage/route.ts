@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { redis, redisScanKeysRaw } from '@/lib/redis';
-import { logAdminAction, validateAdminKey } from '@/lib/auth-utils';
-import { formatUnits } from 'viem';
+import { logAdminAction, requireAdmin } from '@/lib/auth-utils';
+import { formatUnits, isAddress } from 'viem';
 
 // Token addresses for reference
 const AIRDROP_TOKENS = {
@@ -37,6 +37,68 @@ function chunkArray<T>(items: T[], size: number): T[][] {
     return chunks;
 }
 
+function parseCsvRows(csv: string): string[][] {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < csv.length; index += 1) {
+        const char = csv[index];
+        const next = csv[index + 1];
+
+        if (char === '"') {
+            if (inQuotes && next === '"') {
+                field += '"';
+                index += 1;
+            } else {
+                inQuotes = !inQuotes;
+            }
+            continue;
+        }
+
+        if (char === ',' && !inQuotes) {
+            row.push(field.trim());
+            field = '';
+            continue;
+        }
+
+        if ((char === '\n' || char === '\r') && !inQuotes) {
+            if (char === '\r' && next === '\n') {
+                index += 1;
+            }
+            row.push(field.trim());
+            if (row.some((cell) => cell.length > 0)) {
+                rows.push(row);
+            }
+            row = [];
+            field = '';
+            continue;
+        }
+
+        field += char;
+    }
+
+    if (inQuotes) {
+        throw new Error('CSV contains an unterminated quoted field');
+    }
+
+    row.push(field.trim());
+    if (row.some((cell) => cell.length > 0)) {
+        rows.push(row);
+    }
+
+    return rows;
+}
+
+function normalizeDecimalAmount(value: string): string | null {
+    const trimmed = value.trim();
+    if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(trimmed)) {
+        return null;
+    }
+    return trimmed;
+}
+
 async function deleteRedisKeys(keys: string[]): Promise<number> {
     if (!redis || keys.length === 0) {
         return 0;
@@ -59,9 +121,10 @@ async function deleteRedisKeys(keys: string[]): Promise<number> {
  */
 export async function POST(req: NextRequest) {
     try {
-        if (!validateAdminKey(req)) {
+        const adminDenied = await requireAdmin(req);
+        if (adminDenied) {
             await logAdminAction('airdrop_manage_upload_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return adminDenied;
         }
 
         if (!redis) {
@@ -75,13 +138,18 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing csv field' }, { status: 400 });
         }
 
-        const lines = csv.trim().split('\n').filter(line => line.trim());
+        let rows: string[][];
+        try {
+            rows = parseCsvRows(csv);
+        } catch (error) {
+            return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid CSV' }, { status: 400 });
+        }
 
         // Skip header if present
-        const startIndex = lines[0]?.toLowerCase().includes('address') ? 1 : 0;
-        const dataLines = lines.slice(startIndex);
+        const startIndex = rows[0]?.some((cell) => cell.toLowerCase() === 'address') ? 1 : 0;
+        const dataRows = rows.slice(startIndex);
 
-        if (dataLines.length === 0) {
+        if (dataRows.length === 0) {
             return NextResponse.json({ error: 'No data rows found in CSV' }, { status: 400 });
         }
 
@@ -89,46 +157,41 @@ export async function POST(req: NextRequest) {
         const entries: Array<{ address: string; seed: string; leaf: string; pixotchi: string }> = [];
         const errors: string[] = [];
 
-        for (let i = 0; i < dataLines.length; i++) {
-            const line = dataLines[i].trim();
-            if (!line) continue;
-
-            const parts = line.split(',').map(p => p.trim());
-            if (parts.length < 4) {
+        for (let i = 0; i < dataRows.length; i++) {
+            const parts = dataRows[i];
+            if (parts.length !== 4) {
                 errors.push(`Line ${i + startIndex + 1}: Expected 4 columns, got ${parts.length}`);
                 continue;
             }
 
             const [address, seed, leaf, pixotchi] = parts;
 
-            if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+            if (!isAddress(address)) {
                 errors.push(`Line ${i + startIndex + 1}: Invalid address format`);
                 continue;
             }
 
-            // Validate amounts are non-negative numbers
-            const seedNum = parseFloat(seed);
-            const leafNum = parseFloat(leaf);
-            const pixotchiNum = parseFloat(pixotchi);
-
-            if (isNaN(seedNum) || seedNum < 0) {
+            const seedAmount = normalizeDecimalAmount(seed);
+            const leafAmount = normalizeDecimalAmount(leaf);
+            const pixotchiAmount = normalizeDecimalAmount(pixotchi);
+            if (!seedAmount) {
                 errors.push(`Line ${i + startIndex + 1}: Invalid SEED amount`);
                 continue;
             }
-            if (isNaN(leafNum) || leafNum < 0) {
+            if (!leafAmount) {
                 errors.push(`Line ${i + startIndex + 1}: Invalid LEAF amount`);
                 continue;
             }
-            if (isNaN(pixotchiNum) || pixotchiNum < 0) {
+            if (!pixotchiAmount) {
                 errors.push(`Line ${i + startIndex + 1}: Invalid PIXOTCHI amount`);
                 continue;
             }
 
             entries.push({
                 address: address.toLowerCase(),
-                seed: seed,
-                leaf: leaf,
-                pixotchi: pixotchi,
+                seed: seedAmount,
+                leaf: leafAmount,
+                pixotchi: pixotchiAmount,
             });
         }
 
@@ -154,6 +217,7 @@ export async function POST(req: NextRequest) {
                     leaf: entry.leaf,
                     pixotchi: entry.pixotchi,
                     claimed: false,
+                    status: 'eligible',
                     createdAt: Date.now(),
                 }));
             }
@@ -180,7 +244,7 @@ export async function POST(req: NextRequest) {
             validationErrors: errors.length > 0 ? errors : undefined,
         });
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_MANAGE] POST Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
@@ -192,9 +256,10 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
     try {
-        if (!validateAdminKey(req)) {
+        const adminDenied = await requireAdmin(req);
+        if (adminDenied) {
             await logAdminAction('airdrop_manage_read_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return adminDenied;
         }
 
         if (!redis) {
@@ -203,7 +268,7 @@ export async function GET(req: NextRequest) {
 
         // Get metadata
         const metaRaw = await redis.get('airdrop:meta');
-        let meta: any = null;
+        let meta: UntypedValue = null;
         if (metaRaw) {
             try {
                 meta = typeof metaRaw === 'string' ? JSON.parse(metaRaw) : metaRaw;
@@ -220,6 +285,7 @@ export async function GET(req: NextRequest) {
             leaf: string;
             pixotchi: string;
             claimed: boolean;
+            status?: string;
             claimedAt?: number;
             txHash?: string;
         }> = [];
@@ -235,7 +301,7 @@ export async function GET(req: NextRequest) {
                 const dataRaw = values[index];
                 if (!dataRaw) continue;
 
-                let data: any;
+                let data: UntypedValue;
                 try {
                     data = typeof dataRaw === 'string' ? JSON.parse(dataRaw) : dataRaw;
                 } catch {
@@ -248,6 +314,7 @@ export async function GET(req: NextRequest) {
                     leaf: data.leaf || '0',
                     pixotchi: data.pixotchi || '0',
                     claimed: data.claimed || false,
+                    status: data.status || (data.claimed ? 'claimed' : 'eligible'),
                     claimedAt: data.claimedAt,
                     txHash: data.txHash,
                 });
@@ -331,7 +398,7 @@ export async function GET(req: NextRequest) {
             recipients,
         });
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_MANAGE] GET Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
@@ -343,9 +410,10 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
     try {
-        if (!validateAdminKey(req)) {
+        const adminDenied = await requireAdmin(req);
+        if (adminDenied) {
             await logAdminAction('airdrop_manage_clear_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return adminDenied;
         }
 
         if (!redis) {
@@ -370,7 +438,7 @@ export async function DELETE(req: NextRequest) {
             deletedCount,
         });
 
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
         console.error('[AIRDROP_MANAGE] DELETE Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

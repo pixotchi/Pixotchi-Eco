@@ -58,8 +58,8 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
       symbol: symbol,
       theme: isDarkTheme ? 'dark' : 'light',
       timezone: 'Etc/UTC',
-      backgroundColor: isDarkTheme ? '#0F0F0F' : '#FFFFFF',
-      gridColor: isDarkTheme ? 'rgba(242, 242, 242, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+      backgroundColor: isDarkTheme ? '#1f2d42' : '#f6fbff',
+      gridColor: isDarkTheme ? 'rgba(246, 251, 255, 0.08)' : 'rgba(31, 45, 66, 0.08)',
       watchlist: [],
       withdateranges: false,
       compareSymbols: [],
@@ -73,7 +73,7 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
 
   if (!mounted) {
     return (
-      <div className="w-full h-full bg-card border border-border rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-card border border-border rounded-[var(--radius-panel)] flex items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading chart...</p>
       </div>
     );
@@ -81,23 +81,12 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
 
   return (
     <div
-      className="tradingview-widget-container bg-card rounded-lg overflow-hidden w-full h-full flex flex-col"
+      className="tradingview-widget-container bg-card rounded-[var(--radius-panel)] overflow-hidden w-full h-full flex flex-col border border-border/70 shadow-[var(--shadow-hairline)]"
       ref={container}
     >
       <div
         className="tradingview-widget-container__widget flex-1"
       />
-      <div className="tradingview-widget-copyright text-xs text-muted-foreground px-3 py-1 border-t border-border/50">
-        <a
-          href="https://www.tradingview.com/symbols/SEEDWETH_AA6A81.USD/?exchange=BASESWAP"
-          rel="noopener nofollow"
-          target="_blank"
-          className="text-primary hover:underline"
-        >
-          <span>SEED/WETH price</span>
-        </a>
-        <span className="text-muted-foreground"> by TradingView</span>
-      </div>
     </div>
   );
 }

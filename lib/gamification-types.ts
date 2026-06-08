@@ -61,8 +61,7 @@ export type GmStreak = {
 
 export type GmProgressProof = {
   txHash?: string;
-  meta?: Record<string, any>;
+  meta?: Record<string, UntypedValue>;
 };
 
 export type GmLeaderEntry = { address: string; value: number };
-

@@ -12,6 +12,8 @@ type UseWebQueryStateOptions<T> = {
   serialize: (value: T) => string | null;
 };
 
+const WEB_QUERY_STATE_EVENT = "pixotchi:web-query-state";
+
 export function useWebQueryState<T>({
   key,
   defaultValue,
@@ -50,9 +52,12 @@ export function useWebQueryState<T>({
     const params = new URLSearchParams(window.location.search);
     return parse(params.get(key)) ?? defaultValue;
   });
+  const valueRef = useRef(value);
 
   useEffect(() => {
-    setValueState(readValue());
+    const nextValue = readValue();
+    valueRef.current = nextValue;
+    setValueState(nextValue);
   }, [defaultValue, enabled, key, readValue]);
 
   useEffect(() => {
@@ -61,37 +66,48 @@ export function useWebQueryState<T>({
     }
 
     const syncFromLocation = () => {
-      setValueState(readValue());
+      const nextValue = readValue();
+      valueRef.current = nextValue;
+      setValueState(nextValue);
     };
 
     window.addEventListener("popstate", syncFromLocation);
-    return () => window.removeEventListener("popstate", syncFromLocation);
+    window.addEventListener(WEB_QUERY_STATE_EVENT, syncFromLocation);
+    return () => {
+      window.removeEventListener("popstate", syncFromLocation);
+      window.removeEventListener(WEB_QUERY_STATE_EVENT, syncFromLocation);
+    };
   }, [enabled, key, readValue]);
 
   const setValue = useCallback(
     (nextValue: SetStateAction<T>) => {
-      setValueState((previousValue) => {
-        const resolvedValue =
-          typeof nextValue === "function"
-            ? (nextValue as (previous: T) => T)(previousValue)
-            : nextValue;
+      const previousValue = valueRef.current;
+      const resolvedValue =
+        typeof nextValue === "function"
+          ? (nextValue as (previous: T) => T)(previousValue)
+          : nextValue;
 
-        if (enabledRef.current && typeof window !== "undefined") {
-          const url = new URL(window.location.href);
-          const serialized = serializeRef.current(resolvedValue);
+      valueRef.current = resolvedValue;
 
-          if (serialized === null || serialized === "") {
-            url.searchParams.delete(keyRef.current);
-          } else {
-            url.searchParams.set(keyRef.current, serialized);
-          }
+      if (enabledRef.current && typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        const serialized = serializeRef.current(resolvedValue);
 
-          const nextUrl = `${url.pathname}${url.search}${url.hash}`;
-          window.history.replaceState(window.history.state, "", nextUrl);
+        if (serialized === null || serialized === "") {
+          url.searchParams.delete(keyRef.current);
+        } else {
+          url.searchParams.set(keyRef.current, serialized);
         }
 
-        return resolvedValue;
-      });
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState(window.history.state, "", nextUrl);
+      }
+
+      setValueState(resolvedValue);
+
+      if (enabledRef.current && typeof window !== "undefined") {
+        window.dispatchEvent(new Event(WEB_QUERY_STATE_EVENT));
+      }
     },
     [],
   );

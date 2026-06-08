@@ -1,17 +1,22 @@
 "use client";
 
 import { requestBaseChatSessionRefresh } from '@/lib/base-chat-session-refresh';
+import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 import { sessionStorageManager } from '@/lib/session-storage-manager';
 
-export type MissionTrackingPayload = Record<string, unknown>;
+export type MissionTrackingPayload = Record<string, UntypedValue>;
 
 async function postMissionRequest(
   payload: MissionTrackingPayload,
 ): Promise<Response> {
+  const authHeaders = await getMiniAppQuickAuthHeaders();
   return fetch('/api/gamification/missions', {
     body: JSON.stringify(payload),
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+    },
     method: 'POST',
   });
 }

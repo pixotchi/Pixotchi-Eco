@@ -48,8 +48,8 @@ interface SwapMintBundleProps {
     strain: number;
     ethAmount: bigint; // ETH amount with 6% buffer already applied
     minSeedOut: bigint; // Minimum SEED to receive (mint price, acts as slippage protection)
-    onSuccess?: (tx: any) => void;
-    onError?: (error: any) => void;
+    onSuccess?: (tx: UntypedValue) => void;
+    onError?: (error: UntypedValue) => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;

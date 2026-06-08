@@ -7,19 +7,21 @@ import {
   TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
-import type { LifecycleStatus } from './transaction-kit';
+import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
 }
 
@@ -30,7 +32,7 @@ export default function SmartWalletTransaction({
   buttonText,
   buttonClassName = "",
   disabled = false,
-  showToast = true
+  feedbackMode
 }: SmartWalletTransactionProps) {
   const { isSponsored } = usePaymaster();
   const builderCapabilities = getBuilderCapabilities();
@@ -38,14 +40,13 @@ export default function SmartWalletTransaction({
   // Normalize to raw serializable calls for embedded-wallet compatibility.
   // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
+    transformCallsWithBuilderCode(calls as UntypedValue[]) as TransactionCall[],
     [calls]
   );
 
-  const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Smart wallet transaction successful:', tx);
+  const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
+    dispatchPostTransactionRefresh();
   }, [onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
@@ -53,9 +54,11 @@ export default function SmartWalletTransaction({
 
   // Wrap onError to ignore errors after success has been handled
   // This fixes OnchainKit race condition where onError can fire after successful tx
-  const handleOnError = useCallback((error: any) => {
+  const handleOnError = useCallback((error: UntypedValue) => {
     if (successHandledRef.current) {
-      console.log('Ignoring post-success error callback from OnchainKit:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Ignoring post-success error callback from OnchainKit:', error);
+      }
       return;
     }
     onError?.(error);
@@ -74,6 +77,9 @@ export default function SmartWalletTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess]);
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? "toast";
+  const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
+  const showGlobalToast = resolvedFeedbackMode !== "none";
 
   return (
     <Transaction
@@ -90,9 +96,9 @@ export default function SmartWalletTransaction({
         disabled={disabled}
       />
 
-      <TransactionStatus />
+      {showInlineStatus && <TransactionStatus />}
 
-      {showToast && <GlobalTransactionToast />}
+      {showGlobalToast && <GlobalTransactionToast />}
     </Transaction>
   );
 } 

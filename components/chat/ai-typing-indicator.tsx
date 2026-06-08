@@ -5,7 +5,7 @@ import { Bot } from "lucide-react";
 export default function AITypingIndicator() {
   return (
     <div className="flex items-center gap-2 text-muted-foreground">
-      <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+      <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-border/50 bg-card/85 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
         <Bot className="w-4 h-4" />
         <span className="text-sm">Neural Seed is typing</span>
         <div className="flex gap-1">

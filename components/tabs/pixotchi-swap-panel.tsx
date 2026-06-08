@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import {
@@ -27,6 +28,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { DisabledReason, StatusChip } from '@/components/ui/premium';
 import { ERC20_TOKEN_ABI } from '@/lib/swap/base-swap-abi';
 import {
   BASE_CHAIN_ID,
@@ -56,6 +59,7 @@ import {
   normalizeTransactionReceipt,
 } from '@/lib/transaction-utils';
 import { cn, formatTokenAmountRounded } from '@/lib/utils';
+import { CLIENT_ENV } from '@/lib/env-config';
 import { SWAP_PANEL_STRINGS as S } from './pixotchi-swap-panel.strings';
 
 type QuoteState =
@@ -96,20 +100,22 @@ const QUOTE_MAX_RETRIES = 2;
 const QUOTE_IDLE_REFRESH_MS = 5_000;
 const OCK_COMPAT_FONT = 'ock-compat-font';
 const SWAP_CARD_CLASS =
-  'my-0.5 box-border flex h-[148px] w-full flex-col items-start rounded-lg bg-secondary p-4';
+  'my-0.5 box-border flex min-h-[158px] w-full flex-col items-start rounded-[var(--radius-panel)] border border-border/55 bg-secondary/80 bg-[image:var(--gradient-panel)] p-4 shadow-[var(--surface-inset)]';
 const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-between text-sm text-muted-foreground`;
 const SWAP_TOKEN_TRIGGER_CLASS =
-  'flex w-fit shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 shadow-[0px_8px_12px_0px_rgba(91,97,110,0.12)] hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'flex min-h-11 min-w-[5.75rem] shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38] max-[360px]:min-w-[5.15rem] max-[360px]:gap-1.5 max-[360px]:px-2 max-[340px]:min-w-[4.75rem] max-[340px]:gap-1 max-[340px]:px-1.5';
 const SWAP_AMOUNT_INPUT_CLASS =
-  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate border-none bg-transparent text-[2.5rem] leading-none text-foreground outline-none placeholder:text-muted-foreground`;
+  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 border-none bg-transparent text-[clamp(1.85rem,10vw,2.5rem)] leading-none text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none max-[360px]:text-[1.55rem] max-[340px]:mr-1 max-[340px]:text-[1.4rem]`;
+const SWAP_AMOUNT_DISPLAY_CLASS =
+  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate bg-transparent text-[clamp(1.85rem,10vw,2.5rem)] leading-none text-foreground max-[360px]:text-[1.55rem] max-[340px]:mr-1 max-[340px]:text-[1.4rem]`;
 const SWAP_MAX_BUTTON_CLASS =
-  `${OCK_COMPAT_FONT} flex cursor-pointer items-center justify-center px-2 py-1 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-[0.38]`;
+  `${OCK_COMPAT_FONT} flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
-  'relative z-10 mx-auto -my-4 flex h-10 w-16 items-center justify-center rounded-xl border-4 border-solid border-background bg-card hover:bg-accent active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'relative z-10 mx-auto -my-5 flex h-11 min-h-11 w-16 items-center justify-center rounded-[var(--radius-control)] border-[3px] border-solid border-card/90 bg-card/95 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-control)] hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_PRIMARY_ACTION_CLASS =
-  `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
+  `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-primary bg-[image:var(--gradient-control-active)] px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
-const SWAP_BALANCE_ROW_CLASS = 'mt-4 flex h-7 w-full items-center justify-between';
+const SWAP_BALANCE_ROW_CLASS = 'mt-2 flex min-h-11 w-full items-center justify-between';
 
 function isTransientStatus(status: number | undefined): boolean {
   if (status === undefined) return true;
@@ -118,8 +124,8 @@ function isTransientStatus(status: number | undefined): boolean {
 
 // Turns wallet/viem errors into something a user can actually read.
 // Viem rejection errors include a pile of metadata (chain id, RPC url, version,
-// request args, contract selectors…) that we never want to toast verbatim.
-function humanizeSwapError(error: unknown): string {
+// request args, contract selectors...) that we never want to toast verbatim.
+function humanizeSwapError(error: UntypedValue): string {
   if (!(error instanceof Error)) return 'Swap failed.';
 
   const anyErr = error as Error & {
@@ -187,19 +193,21 @@ function TokenSelector({
           aria-haspopup="menu"
           aria-expanded={isOpen}
         >
-          <img
+          <Image
             src={token.image}
             alt=""
+            width={20}
+            height={20}
             aria-hidden="true"
-            className="h-5 w-5 shrink-0 overflow-hidden rounded-full object-contain"
+            className="h-5 w-5 shrink-0 overflow-hidden rounded-full object-contain max-[340px]:h-4 max-[340px]:w-4"
           />
           <span
-            className={cn(OCK_COMPAT_FONT, 'whitespace-nowrap font-semibold text-foreground')}
+            className={cn(OCK_COMPAT_FONT, 'whitespace-nowrap font-semibold text-foreground max-[340px]:text-xs')}
             data-testid="ockTokenSelectButton_Symbol"
           >
             {token.displaySymbol}
           </span>
-          {/* Single chevron-down SVG; rotate 180° when the menu is open so
+          {/* Single chevron-down SVG; rotate 180 degrees when the menu is open so
               the glyph transitions smoothly instead of swapping shapes. */}
           <svg
             role="img"
@@ -208,7 +216,7 @@ function TokenSelector({
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             className={cn(
-              'h-4 w-4 shrink-0 transition-transform duration-150',
+              'h-4 w-4 shrink-0 transition-transform duration-150 max-[340px]:h-3.5 max-[340px]:w-3.5',
               isOpen && 'rotate-180',
             )}
             >
@@ -223,7 +231,7 @@ function TokenSelector({
         align="end"
         sideOffset={6}
         collisionPadding={12}
-        className="w-max min-w-[10rem] max-w-[calc(100vw-2rem)] rounded-xl p-2"
+        className="w-max min-w-[10rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-panel)] p-2"
       >
         {options.map((option) => {
           const optionToken = SWAP_TOKEN_MAP[option];
@@ -231,12 +239,14 @@ function TokenSelector({
             <DropdownMenuItem
               key={option}
               onSelect={() => onSelect(option)}
-              className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2.5"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-control)] px-3 py-2.5"
             >
               <span className="flex items-center gap-3">
-                <img
+                <Image
                   src={optionToken.image}
                   alt=""
+                  width={20}
+                  height={20}
                   aria-hidden="true"
                   className="h-5 w-5 shrink-0 rounded-full object-contain"
                 />
@@ -469,6 +479,22 @@ export default function PixotchiSwapPanel() {
       parsedAmount > BigInt(0) &&
       parsedAmount > sellBalanceRaw,
   );
+  const usesSponsoredSmartWalletForSwap =
+    isSmartWallet &&
+    isSponsored &&
+    typeof (walletClient as UntypedValue)?.sendCalls === 'function';
+  const requiredEthForSwap = useMemo(() => {
+    const nativeValue = sellToken === 'ETH' && parsedAmount ? parsedAmount : BigInt(0);
+    return nativeValue + (usesSponsoredSmartWalletForSwap ? BigInt(0) : ETH_GAS_REQUIRED_WEI);
+  }, [parsedAmount, sellToken, usesSponsoredSmartWalletForSwap]);
+  const hasInsufficientGas = Boolean(
+    address &&
+      currentQuote &&
+      currentQuote.strategy !== 'blocked' &&
+      isAmountValid &&
+      ethBalanceData?.value !== undefined &&
+      ethBalanceData.value < requiredEthForSwap,
+  );
   const actionDisabled =
     isExecuting ||
     !currentQuote ||
@@ -477,7 +503,8 @@ export default function PixotchiSwapPanel() {
     isDeferredLagging ||
     chainId !== BASE_CHAIN_ID ||
     !walletClient?.account ||
-    hasInsufficientBalance;
+    hasInsufficientBalance ||
+    hasInsufficientGas;
 
   const markQuoteActivity = useCallback(() => {
     quoteActivityAtRef.current = Date.now();
@@ -505,6 +532,10 @@ export default function PixotchiSwapPanel() {
 
     if (hasInsufficientBalance) {
       return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    }
+
+    if (hasInsufficientGas) {
+      return '\u00A0';
     }
 
     if (!executionSteps?.[0]) {
@@ -537,6 +568,7 @@ export default function PixotchiSwapPanel() {
     currentQuote,
     executionSteps,
     hasInsufficientBalance,
+    hasInsufficientGas,
     isAmountValid,
     quoteState,
     sellAmount,
@@ -710,7 +742,7 @@ export default function PixotchiSwapPanel() {
       const txHash = extractTransactionHash(receipt);
       if (!txHash) return;
 
-      const payload: Record<string, unknown> = {
+      const payload: Record<string, UntypedValue> = {
         address,
         taskId: 's1_make_swap',
         proof: { txHash },
@@ -1202,6 +1234,70 @@ export default function PixotchiSwapPanel() {
 
   const isQuoteLoading = quoteState.status === 'loading';
   const showQuoteLoadingText = isQuoteLoading || isDeferredLagging;
+  const showQuoteSummary = CLIENT_ENV.SWAP_QUOTE_SUMMARY_ENABLED;
+  const quoteSummary = showQuoteSummary && currentQuote && currentQuote.strategy !== 'blocked'
+    ? {
+        minReceived: formatTokenAmountRounded(
+          BigInt(currentQuote.minOut),
+          SWAP_TOKEN_MAP[buyToken].decimals,
+          6,
+        ),
+        route: currentQuote.steps.map((step) => step.routeLabel).filter(Boolean).join(' -> '),
+        slippage: `${(currentQuote.marketSlippageBps / 100).toFixed(2)}%`,
+        tax: currentQuote.taxBps > 0 ? `${(currentQuote.taxBps / 100).toFixed(2)}%` : '0%',
+      }
+    : null;
+  const disabledReason = useMemo(() => {
+    if (isExecuting) return null;
+    if (chainId !== BASE_CHAIN_ID) return S.errors.switchToBase;
+    if (!walletClient?.account) return S.errors.walletClientUnavailable;
+    if (!sellAmount.trim()) return null;
+    if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    if (hasInsufficientGas) return null;
+    if (isDeferredLagging || isQuoteLoading) return S.quote.loading;
+    if (currentQuote?.strategy === 'blocked') return currentQuote.blockedReason || S.errors.blockedPairFallback;
+    if (!currentQuote) return 'Waiting for a swap quote.';
+    return null;
+  }, [
+    chainId,
+    currentQuote,
+    hasInsufficientBalance,
+    hasInsufficientGas,
+    isAmountValid,
+    isDeferredLagging,
+    isExecuting,
+    isQuoteLoading,
+    sellAmount,
+    sellToken,
+    walletClient?.account,
+  ]);
+  const actionButtonLabel = useMemo(() => {
+    if (!actionDisabled || isExecuting) return S.buttons.swap;
+    if (chainId !== BASE_CHAIN_ID) return 'Switch to Base';
+    if (!walletClient?.account) return 'Connect Wallet';
+    if (!sellAmount.trim()) return S.buttons.swap;
+    if (!isAmountValid) return 'Enter Valid Amount';
+    if (hasInsufficientBalance) return `Insufficient ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`;
+    if (hasInsufficientGas) return 'Need ETH for Gas';
+    if (isDeferredLagging || isQuoteLoading) return 'Fetching Quote...';
+    if (currentQuote?.strategy === 'blocked') return 'Pair Unavailable';
+    if (!currentQuote) return 'Waiting for Quote';
+    return S.buttons.swap;
+  }, [
+    actionDisabled,
+    chainId,
+    currentQuote,
+    hasInsufficientBalance,
+    hasInsufficientGas,
+    isAmountValid,
+    isDeferredLagging,
+    isExecuting,
+    isQuoteLoading,
+    sellAmount,
+    sellToken,
+    walletClient?.account,
+  ]);
 
   return (
     <div>
@@ -1221,7 +1317,7 @@ export default function PixotchiSwapPanel() {
             >
               {S.labels.sell}
             </label>
-            <div className="flex w-full items-center justify-between">
+            <div className="flex w-full min-w-0 items-center justify-between gap-2 max-[340px]:gap-1">
               <input
                 id="pixotchi-swap-sell-amount"
                 value={sellAmount}
@@ -1309,12 +1405,9 @@ export default function PixotchiSwapPanel() {
             <div className={SWAP_LABEL_CLASS}>
               {S.labels.buy}
             </div>
-            <div className="flex w-full items-center justify-between">
+            <div className="flex w-full min-w-0 items-center justify-between gap-2 max-[340px]:gap-1">
               <div
-                className={cn(
-                  OCK_COMPAT_FONT,
-                  'mr-2 w-full min-w-0 truncate bg-transparent text-[2.5rem] leading-none text-foreground',
-                )}
+                className={SWAP_AMOUNT_DISPLAY_CLASS}
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
@@ -1339,20 +1432,45 @@ export default function PixotchiSwapPanel() {
             </div>
           </div>
 
-          <button
+          {showQuoteSummary && quoteSummary && (
+            <div className="mt-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/55 p-3 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="font-semibold text-foreground">Quote summary</span>
+                <StatusChip tone="info">{quoteSummary.route || 'Direct route'}</StatusChip>
+              </div>
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span>Minimum received</span>
+                  <span className="font-semibold text-foreground">{quoteSummary.minReceived} {SWAP_TOKEN_MAP[buyToken].displaySymbol}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Market slippage</span>
+                  <span className="font-semibold text-foreground">{quoteSummary.slippage}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Token tax</span>
+                  <span className="font-semibold text-foreground">{quoteSummary.tax}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Button
             type="submit"
+            variant="transaction"
+            fullWidth
             className={SWAP_PRIMARY_ACTION_CLASS}
             disabled={actionDisabled}
+            loading={isExecuting}
+            loadingText={S.buttons.swapping}
           >
-            {isExecuting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <span>{S.buttons.swapping}</span>
-              </>
-            ) : (
-              S.buttons.swap
-            )}
-          </button>
+            {actionButtonLabel}
+          </Button>
+          {actionDisabled && disabledReason ? (
+            <DisabledReason className="mt-2">
+              {disabledReason}
+            </DisabledReason>
+          ) : null}
           <div
             id={messageId}
             className={cn(SWAP_STATUS_TEXT_CLASS, 'flex h-7 pt-2')}

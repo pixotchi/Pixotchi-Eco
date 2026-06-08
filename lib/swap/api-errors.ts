@@ -10,7 +10,7 @@ import {
 // HTTP responses. Both swap route handlers funnel their catch blocks
 // through this so status codes and message shapes stay consistent.
 export function swapErrorResponse(
-  error: unknown,
+  error: UntypedValue,
   fallbackMessage: string,
   logPrefix: string,
 ): NextResponse {

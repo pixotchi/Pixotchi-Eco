@@ -1,11 +1,13 @@
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { getCasinoPolicy } from '@/lib/casino-feature';
 import { BLACKJACK_DISABLED_MESSAGE } from '@/lib/casino-policy';
+import { blackjackRandomnessLockMismatch,normalizeBlackjackLockBetAmount } from '@/lib/blackjack-randomness-lock.mjs';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { redis,redisCompareAndSetJSON,redisDel,redisGetJSON } from '@/lib/redis';
 import { blackjackAbi } from '@/public/abi/blackjack-abi';
+import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { NextRequest,NextResponse } from 'next/server';
-import { encodePacked,keccak256,type Hex } from 'viem';
+import { encodePacked,isAddress,keccak256,type Hex } from 'viem';
 import { privateKeyToAccount,signMessage } from 'viem/accounts';
 
 /**
@@ -26,6 +28,9 @@ const SIGNER_PRIVATE_KEY = process.env.BLACKJACK_RANDOMNESS_SIGNER_KEY;
 const recentRequests = new Map<string, { count: number; timestamp: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // Max 30 requests per minute per address
+const RANDOMNESS_LIFETIME_SECONDS = 60;
+const ACTION_LOCK_TTL_SECONDS = RANDOMNESS_LIFETIME_SECONDS + 45;
+const ALLOW_MEMORY_RANDOMNESS_LOCKS = process.env.NODE_ENV !== 'production';
 
 interface CachedRandomness {
     randomSeed: Hex;
@@ -35,6 +40,8 @@ interface CachedRandomness {
     actionNum: number;
     handIndex: number;
     bettingToken: string;
+    playerAddress: string;
+    betAmountWei: string | null;
 }
 
 const ACTION_LOCK_KEY_PREFIX = 'blackjack:action-lock:';
@@ -44,12 +51,17 @@ const PHASE_PLAYER_TURN = 2;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 type BlackjackActionName = 'deal' | 'hit' | 'stand' | 'double' | 'split' | 'surrender';
+const BLACKJACK_ACTIONS = new Set<BlackjackActionName>(['deal', 'hit', 'stand', 'double', 'split', 'surrender']);
+
+function isBlackjackActionName(value: UntypedValue): value is BlackjackActionName {
+    return typeof value === 'string' && BLACKJACK_ACTIONS.has(value as BlackjackActionName);
+}
 
 function getActionLockKey(landId: string, nonce: bigint): string {
     return `${ACTION_LOCK_KEY_PREFIX}${landId}:${nonce.toString()}`;
 }
 
-function isCachedRandomness(value: unknown): value is CachedRandomness {
+function isCachedRandomness(value: UntypedValue): value is CachedRandomness {
     if (!value || typeof value !== 'object') return false;
     const candidate = value as Partial<CachedRandomness>;
     return (
@@ -60,20 +72,38 @@ function isCachedRandomness(value: unknown): value is CachedRandomness {
         typeof candidate.signerAddress === 'string' &&
         typeof candidate.actionNum === 'number' &&
         typeof candidate.handIndex === 'number' &&
-        typeof candidate.bettingToken === 'string'
+        typeof candidate.bettingToken === 'string' &&
+        typeof candidate.playerAddress === 'string' &&
+        (
+            candidate.betAmountWei === undefined ||
+            candidate.betAmountWei === null ||
+            typeof candidate.betAmountWei === 'string'
+        )
     );
+}
+
+function isExpiredActionLock(lock: CachedRandomness): boolean {
+    return Date.now() - lock.timestamp > ACTION_LOCK_TTL_SECONDS * 1000;
 }
 
 async function readActionLock(lockKey: string): Promise<{ data: CachedRandomness | null; source: 'redis' | 'memory' | 'none' }> {
     if (redis) {
         const redisLock = await redisGetJSON<CachedRandomness>(lockKey);
         if (isCachedRandomness(redisLock)) {
+            if (isExpiredActionLock(redisLock)) {
+                await redisDel(lockKey);
+                return { data: null, source: 'none' };
+            }
             return { data: redisLock, source: 'redis' };
         }
     }
 
     const memoryLock = nonceRandomnessCache.get(lockKey);
     if (isCachedRandomness(memoryLock)) {
+        if (isExpiredActionLock(memoryLock)) {
+            nonceRandomnessCache.delete(lockKey);
+            return { data: null, source: 'none' };
+        }
         return { data: memoryLock, source: 'memory' };
     }
 
@@ -83,7 +113,7 @@ async function readActionLock(lockKey: string): Promise<{ data: CachedRandomness
 async function createActionLockIfAbsent(lockKey: string, payload: CachedRandomness): Promise<{ created: boolean; data: CachedRandomness; source: 'redis' | 'memory' }> {
     if (redis) {
         const serialized = JSON.stringify(payload);
-        const created = await redisCompareAndSetJSON(lockKey, null, serialized);
+        const created = await redisCompareAndSetJSON(lockKey, null, serialized, ACTION_LOCK_TTL_SECONDS);
         if (created) {
             return { created: true, data: payload, source: 'redis' };
         }
@@ -117,12 +147,17 @@ function isLockMismatch(
     cached: CachedRandomness,
     actionNum: number,
     handIndexNum: number,
-    bettingToken: string
+    bettingToken: string,
+    playerAddress: string,
+    betAmountWei: string | null
 ): boolean {
-    return (
-        cached.actionNum !== actionNum ||
-        cached.handIndex !== handIndexNum ||
-        cached.bettingToken.toLowerCase() !== bettingToken.toLowerCase()
+    return blackjackRandomnessLockMismatch(
+        cached,
+        actionNum,
+        handIndexNum,
+        bettingToken,
+        playerAddress,
+        betAmountWei
     );
 }
 
@@ -146,12 +181,13 @@ function actionNameFromNum(actionNum: number): BlackjackActionName | null {
 }
 
 async function validateActionAgainstOnchainState(
-    publicClient: any,
+    publicClient: UntypedValue,
     landIdBigInt: bigint,
     action: BlackjackActionName,
     handIndexNum: number,
     playerAddress?: string,
-    bettingToken?: string
+    bettingToken?: string,
+    betAmountWei?: string | null
 ): Promise<{ allowed: boolean; reason?: string }> {
     const gameBasic = await publicClient.readContract({
         address: LAND_CONTRACT_ADDRESS as `0x${string}`,
@@ -177,8 +213,35 @@ async function validateActionAgainstOnchainState(
         if (phase !== PHASE_NONE) {
             return { allowed: false, reason: 'Game already in progress' };
         }
+        if (!playerAddress) {
+            return { allowed: false, reason: 'playerAddress is required for deal' };
+        }
+        const [landOwner, approvedAddress] = await Promise.all([
+            publicClient.readContract({
+                address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+                abi: landAbi,
+                functionName: 'ownerOf',
+                args: [landIdBigInt],
+            }) as Promise<string>,
+            publicClient.readContract({
+                address: LAND_CONTRACT_ADDRESS as `0x${string}`,
+                abi: landAbi,
+                functionName: 'getApproved',
+                args: [landIdBigInt],
+            }).catch(() => ZERO_ADDRESS) as Promise<string>,
+        ]);
+
+        if (
+            landOwner.toLowerCase() !== playerAddress.toLowerCase() &&
+            approvedAddress.toLowerCase() !== playerAddress.toLowerCase()
+        ) {
+            return { allowed: false, reason: 'Only the land owner or approved wallet can start Blackjack on this land' };
+        }
         if (!bettingToken) {
             return { allowed: false, reason: 'Betting token is required for deal' };
+        }
+        if (!betAmountWei) {
+            return { allowed: false, reason: 'Bet amount is required for deal' };
         }
 
         const tokenConfig = await publicClient.readContract({
@@ -190,6 +253,13 @@ async function validateActionAgainstOnchainState(
 
         if (!tokenConfig[0] || !tokenConfig[4]) {
             return { allowed: false, reason: 'Selected token is not enabled for Blackjack' };
+        }
+        const requestedAmount = BigInt(betAmountWei);
+        if (requestedAmount < tokenConfig[1]) {
+            return { allowed: false, reason: 'Bet amount is below the Blackjack minimum' };
+        }
+        if (requestedAmount > tokenConfig[2]) {
+            return { allowed: false, reason: 'Bet amount is above the Blackjack maximum' };
         }
         return { allowed: true };
     }
@@ -244,12 +314,13 @@ function generateRandomSeed(): Hex {
 /**
  * Rate limit check
  */
-function checkRateLimit(address: string): boolean {
+function checkRateLimit(key: string): boolean {
     const now = Date.now();
-    const recent = recentRequests.get(address.toLowerCase());
+    const normalizedKey = key.toLowerCase();
+    const recent = recentRequests.get(normalizedKey);
 
     if (!recent || (now - recent.timestamp) > RATE_LIMIT_WINDOW_MS) {
-        recentRequests.set(address.toLowerCase(), { count: 1, timestamp: now });
+        recentRequests.set(normalizedKey, { count: 1, timestamp: now });
         return true;
     }
 
@@ -261,6 +332,13 @@ function checkRateLimit(address: string): boolean {
     return true;
 }
 
+function getClientRateLimitKey(request: NextRequest): string | null {
+    const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+    const realIp = request.headers.get('x-real-ip')?.trim();
+    const ip = forwardedFor || realIp;
+    return ip ? `ip:${ip}` : null;
+}
+
 /**
  * Clean up old rate limit entries periodically
  */
@@ -269,6 +347,11 @@ function cleanupRateLimits() {
     for (const [address, data] of recentRequests.entries()) {
         if ((now - data.timestamp) > RATE_LIMIT_WINDOW_MS * 2) {
             recentRequests.delete(address);
+        }
+    }
+    for (const [lockKey, data] of nonceRandomnessCache.entries()) {
+        if (isExpiredActionLock(data)) {
+            nonceRandomnessCache.delete(lockKey);
         }
     }
 }
@@ -300,22 +383,48 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (!redis && !ALLOW_MEMORY_RANDOMNESS_LOCKS) {
+            console.error('Redis unavailable - blocking Blackjack randomness in production');
+            return NextResponse.json(
+                { error: 'Randomness lock service unavailable. Please try again shortly.' },
+                { status: 503 }
+            );
+        }
+
         // Parse request
-        const body = await request.json();
-        const { landId, action, playerAddress, handIndex, bettingToken } = body;
+        let body: UntypedValue;
+        try {
+            body = await request.json();
+        } catch {
+            return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+        }
+
+        if (!body || typeof body !== 'object') {
+            return NextResponse.json({ error: 'Request body must be an object' }, { status: 400 });
+        }
+
+        const { landId, action, playerAddress, handIndex, bettingToken, betAmountWei } = body as Record<string, UntypedValue>;
 
         // Validate inputs
-        if (!landId || typeof landId !== 'string') {
-            return NextResponse.json({ error: 'landId is required' }, { status: 400 });
+        if (typeof landId !== 'string' || !/^\d+$/.test(landId)) {
+            return NextResponse.json({ error: 'landId must be a decimal string' }, { status: 400 });
         }
-        if (!action || !['deal', 'hit', 'stand', 'double', 'split', 'surrender'].includes(action)) {
+        if (!isBlackjackActionName(action)) {
             return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }
-        if (handIndex !== undefined && (!Number.isInteger(handIndex) || handIndex < 0 || handIndex > 1)) {
+        if (typeof playerAddress !== 'string' || !isAddress(playerAddress)) {
+            return NextResponse.json({ error: 'playerAddress is required' }, { status: 400 });
+        }
+        const normalizedPlayerAddress = playerAddress.toLowerCase();
+        if (handIndex !== undefined && (typeof handIndex !== 'number' || !Number.isInteger(handIndex) || handIndex < 0 || handIndex > 1)) {
             return NextResponse.json({ error: 'Invalid handIndex' }, { status: 400 });
         }
-        if (action === 'deal' && (typeof bettingToken !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(bettingToken))) {
+        if (action === 'deal' && (typeof bettingToken !== 'string' || !isAddress(bettingToken))) {
             return NextResponse.json({ error: 'Invalid bettingToken' }, { status: 400 });
+        }
+        const effectiveBetAmountWei = normalizeBlackjackLockBetAmount(action, betAmountWei);
+        if (action === 'deal' && !effectiveBetAmountWei) {
+            return NextResponse.json({ error: 'betAmountWei must be a decimal string for deal' }, { status: 400 });
         }
 
         // Map action string to uint8
@@ -332,9 +441,10 @@ export async function POST(request: NextRequest) {
 
         const handIndexNum = typeof handIndex === 'number' ? handIndex : 0;
 
-        // Rate limiting by player address (if provided)
-        if (playerAddress) {
-            if (!checkRateLimit(playerAddress)) {
+        // Rate limiting by player address and the forwarded client IP when available.
+        const rateLimitKeys = [normalizedPlayerAddress, getClientRateLimitKey(request)].filter((key): key is string => Boolean(key));
+        for (const key of rateLimitKeys) {
+            if (!checkRateLimit(key)) {
                 return NextResponse.json(
                     { error: 'Rate limit exceeded. Please wait before making more requests.' },
                     { status: 429 }
@@ -368,7 +478,7 @@ export async function POST(request: NextRequest) {
 
         let effectiveBettingToken = '';
         if (action === 'deal') {
-            effectiveBettingToken = bettingToken;
+            effectiveBettingToken = bettingToken as string;
         } else {
             try {
                 effectiveBettingToken = await publicClient.readContract({
@@ -392,8 +502,9 @@ export async function POST(request: NextRequest) {
             landIdBigInt,
             action as BlackjackActionName,
             handIndexNum,
-            playerAddress,
-            effectiveBettingToken
+            normalizedPlayerAddress,
+            effectiveBettingToken,
+            effectiveBetAmountWei
         );
         if (!requestedActionValidation.allowed) {
             return NextResponse.json(
@@ -412,7 +523,7 @@ export async function POST(request: NextRequest) {
         let effectiveCachedData = cachedData;
         let effectiveCachedSource = cachedSource;
 
-        if (effectiveCachedData && isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken)) {
+        if (effectiveCachedData && isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress, effectiveBetAmountWei)) {
             const lockedActionName = actionNameFromNum(effectiveCachedData.actionNum);
             if (!lockedActionName) {
                 await deleteActionLock(lockKey);
@@ -424,8 +535,9 @@ export async function POST(request: NextRequest) {
                     landIdBigInt,
                     lockedActionName,
                     effectiveCachedData.handIndex,
-                    playerAddress,
-                    effectiveCachedData.bettingToken
+                    effectiveCachedData.playerAddress,
+                    effectiveCachedData.bettingToken,
+                    effectiveCachedData.betAmountWei ?? null
                 );
 
                 if (!lockedActionValidation.allowed) {
@@ -434,9 +546,9 @@ export async function POST(request: NextRequest) {
                     effectiveCachedData = null;
                     effectiveCachedSource = 'none';
                 } else {
-                    console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${effectiveCachedData.actionNum} requested=${actionNum}`);
+                    console.warn(`[Blackjack Locked Action] landId=${landId} nonce=${nonce} cachedAction=${effectiveCachedData.actionNum} requestedAction=${actionNum} cachedToken=${effectiveCachedData.bettingToken} requestedToken=${effectiveBettingToken} cachedAmount=${effectiveCachedData.betAmountWei ?? 'none'} requestedAmount=${effectiveBetAmountWei ?? 'none'}`);
                     return NextResponse.json(
-                        { error: 'Action Locked: You cannot change your decision for this turn.' },
+                        { error: 'Action locked. Retry the same Blackjack action and bet amount, or wait briefly for the previous preparation to expire.' },
                         { status: 400 }
                     );
                 }
@@ -445,16 +557,16 @@ export async function POST(request: NextRequest) {
 
         if (effectiveCachedData) {
             // STRICT ACTION LOCKING: Check if user is trying to switch action
-            if (isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken)) {
-                console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${effectiveCachedData.actionNum} requested=${actionNum}`);
+            if (isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress, effectiveBetAmountWei)) {
+                console.warn(`[Blackjack Locked Action] landId=${landId} nonce=${nonce} cachedAction=${effectiveCachedData.actionNum} requestedAction=${actionNum} cachedToken=${effectiveCachedData.bettingToken} requestedToken=${effectiveBettingToken} cachedAmount=${effectiveCachedData.betAmountWei ?? 'none'} requestedAmount=${effectiveBetAmountWei ?? 'none'}`);
                 return NextResponse.json(
-                    { error: 'Action Locked: You cannot change your decision for this turn.' },
+                    { error: 'Action locked. Retry the same Blackjack action and bet amount, or wait briefly for the previous preparation to expire.' },
                     { status: 400 }
                 );
             }
 
             // Return the SAME randomness - prevents shopping for favorable outcomes
-            console.log(`[Blackjack Random] CACHE HIT - landId=${landId} nonce=${nonce} source=${effectiveCachedSource} (same randomness returned)`);
+            console.log(`[Blackjack Random] CACHE HIT - landId=${landId} action=${action}(${actionNum}) hand=${handIndexNum} nonce=${nonce} token=${effectiveCachedData.bettingToken} source=${effectiveCachedSource} amount=${effectiveCachedData.betAmountWei ?? 'none'}`);
 
             return NextResponse.json({
                 randomSeed: effectiveCachedData.randomSeed,
@@ -463,6 +575,7 @@ export async function POST(request: NextRequest) {
                 expiresAt: Math.floor(Date.now() / 1000) + 60,
                 signerAddress: effectiveCachedData.signerAddress,
                 bettingToken: effectiveCachedData.bettingToken,
+                lockedBetAmountWei: effectiveCachedData.betAmountWei,
                 cached: true, // Flag for debugging
                 source: effectiveCachedSource,
             });
@@ -471,7 +584,8 @@ export async function POST(request: NextRequest) {
         // Generate NEW cryptographically secure randomness
         const randomSeed = generateRandomSeed();
 
-        // Create the message hash including action and handIndex
+        // Current Solidity only verifies this legacy payload. The app/API lock also
+        // binds deal amount and API expiry until a future contract upgrade can do it onchain.
         const messageHash = keccak256(
             encodePacked(
                 ['uint256', 'uint256', 'bytes32', 'uint8', 'uint8', 'address'],
@@ -494,16 +608,18 @@ export async function POST(request: NextRequest) {
             signerAddress: account.address,
             actionNum,   // Store locked action
             handIndex: handIndexNum,
-            bettingToken: effectiveBettingToken
+            bettingToken: effectiveBettingToken,
+            playerAddress: normalizedPlayerAddress,
+            betAmountWei: effectiveBetAmountWei
         };
         const lockResult = await createActionLockIfAbsent(lockKey, proposedLock);
 
         if (!lockResult.created) {
             // Another request won the race. Enforce action lock against stored decision.
-            if (isLockMismatch(lockResult.data, actionNum, handIndexNum, effectiveBettingToken)) {
-                console.warn(`[Blackjack Cheat Attempt] landId=${landId} nonce=${nonce} cached=${lockResult.data.actionNum} requested=${actionNum}`);
+            if (isLockMismatch(lockResult.data, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress, effectiveBetAmountWei)) {
+                console.warn(`[Blackjack Locked Action] landId=${landId} nonce=${nonce} cachedAction=${lockResult.data.actionNum} requestedAction=${actionNum} cachedToken=${lockResult.data.bettingToken} requestedToken=${effectiveBettingToken} cachedAmount=${lockResult.data.betAmountWei ?? 'none'} requestedAmount=${effectiveBetAmountWei ?? 'none'}`);
                 return NextResponse.json(
-                    { error: 'Action Locked: You cannot change your decision for this turn.' },
+                    { error: 'Action locked. Retry the same Blackjack action and bet amount, or wait briefly for the previous preparation to expire.' },
                     { status: 400 }
                 );
             }
@@ -515,16 +631,17 @@ export async function POST(request: NextRequest) {
                 expiresAt: Math.floor(Date.now() / 1000) + 60,
                 signerAddress: lockResult.data.signerAddress,
                 bettingToken: lockResult.data.bettingToken,
+                lockedBetAmountWei: lockResult.data.betAmountWei,
                 cached: true,
                 source: lockResult.source,
             });
         }
 
-        // Set expiry (signature valid for 60 seconds)
+        // Client-facing API lock expiry. The current contract signature has no expiry field.
         const expiresAt = Math.floor(Date.now() / 1000) + 60;
 
         // Log for auditing
-        console.log(`[Blackjack Random] NEW - landId=${landId} action=${action}(${actionNum}) hand=${handIndexNum} nonce=${nonce} source=${lockResult.source} seed=${randomSeed.slice(0, 10)}...`);
+        console.log(`[Blackjack Random] NEW - landId=${landId} action=${action}(${actionNum}) hand=${handIndexNum} nonce=${nonce} token=${effectiveBettingToken} source=${lockResult.source} amount=${effectiveBetAmountWei ?? 'none'}`);
 
         return NextResponse.json({
             randomSeed,
@@ -533,6 +650,7 @@ export async function POST(request: NextRequest) {
             expiresAt,
             signerAddress: account.address,
             bettingToken: effectiveBettingToken,
+            lockedBetAmountWei: effectiveBetAmountWei,
             cached: false,
             source: lockResult.source,
         });
@@ -557,13 +675,21 @@ export async function GET() {
         }, { status: 503 });
     }
 
+    if (!redis && !ALLOW_MEMORY_RANDOMNESS_LOCKS) {
+        return NextResponse.json({
+            status: 'unavailable',
+            message: 'Randomness lock service unavailable',
+            lockStore: 'unavailable',
+        }, { status: 503 });
+    }
+
     try {
         const account = privateKeyToAccount(SIGNER_PRIVATE_KEY as `0x${string}`);
         return NextResponse.json({
             status: 'available',
             signerAddress: account.address,
             cacheSize: nonceRandomnessCache.size, // In-memory fallback cache size
-            lockStore: redis ? 'redis' : 'memory',
+            lockStore: redis ? 'redis' : ALLOW_MEMORY_RANDOMNESS_LOCKS ? 'memory' : 'unavailable',
         });
     } catch {
         return NextResponse.json({

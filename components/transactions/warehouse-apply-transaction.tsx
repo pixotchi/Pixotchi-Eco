@@ -12,8 +12,8 @@ interface WarehouseApplyTransactionProps {
   plantId: number;
   amount: string; // human-friendly input
   mode: ApplyMode; // points (PTS) or lifetime (TOD)
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
@@ -27,7 +27,7 @@ export default function WarehouseApplyTransaction({
   onSuccess,
   onError,
   buttonText,
-  buttonClassName = "h-9 px-3 text-sm w-auto",
+  buttonClassName = "h-11 min-h-11 px-3 text-sm w-auto",
   disabled = false,
 }: WarehouseApplyTransactionProps) {
   // Contract expects:
@@ -79,5 +79,4 @@ export default function WarehouseApplyTransaction({
     />
   );
 }
-
 

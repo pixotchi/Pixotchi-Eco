@@ -2,31 +2,25 @@
 
 import { StatusLevel } from '@/lib/status-checks';
 import { cn } from '@/lib/utils';
+import { StatusChip } from '@/components/ui/premium';
 
 interface StatusBadgeProps {
   status: StatusLevel;
   className?: string;
 }
 
-const statusMap: Record<StatusLevel, { label: string; className: string }> = {
-  operational: { label: 'Operational', className: 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200' },
-  degraded: { label: 'Degraded', className: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200' },
-  outage: { label: 'Outage', className: 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200' },
-  unknown: { label: 'Unknown', className: 'bg-muted text-muted-foreground' },
+const statusMap: Record<StatusLevel, { label: string; tone: "neutral" | "success" | "warning" | "danger" }> = {
+  operational: { label: 'Operational', tone: 'success' },
+  degraded: { label: 'Degraded', tone: 'warning' },
+  outage: { label: 'Outage', tone: 'danger' },
+  UntypedValue: { label: 'Unknown', tone: 'neutral' },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const config = statusMap[status] ?? statusMap.unknown;
+  const config = statusMap[status] ?? statusMap.UntypedValue;
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium tracking-wide',
-        config.className,
-        className
-      )}
-    >
+    <StatusChip tone={config.tone} className={cn("shrink-0", className)}>
       {config.label}
-    </span>
+    </StatusChip>
   );
 }
-

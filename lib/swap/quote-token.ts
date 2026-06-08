@@ -11,7 +11,7 @@ import type { SwapStepKind, SwapTokenId, UserSwapTokenId } from './types';
 // enforcement (a token can be replayed to the build endpoint until it
 // expires), but that doesn't unlock any real attack: executing the swap
 // still requires the user's wallet signature, and Kyber's own deadline
-// bounds on-chain replay. Rate limits handle quota abuse.
+// bounds onchain replay. Rate limits handle quota abuse.
 
 const TOKEN_VERSION = 'v2';
 
@@ -39,10 +39,10 @@ export interface QuoteTokenPayload {
   jti: string;
 }
 
-function isQuoteTokenStep(value: unknown): value is QuoteTokenStep {
+function isQuoteTokenStep(value: UntypedValue): value is QuoteTokenStep {
   if (!value || typeof value !== 'object') return false;
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = value as Record<string, UntypedValue>;
   return (
     (candidate.key === 'step1' || candidate.key === 'step2') &&
     typeof candidate.kind === 'string' &&

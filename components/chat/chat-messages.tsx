@@ -4,6 +4,8 @@ import React, { useRef, useEffect, useState, useCallback } from "react";
 import ChatMessageComponent from "./chat-message";
 import { useChat } from "./chat-context";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
+import { Button } from "@/components/ui/button";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
 import Image from "next/image";
 import type { ChatMode } from "@/lib/types";
 
@@ -14,11 +16,33 @@ type ChatMessagesProps = {
 };
 
 export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
-  const { messages, loading, mode, getLoadingForMode, getMessagesForMode } = useChat();
+  const {
+    messages,
+    loading,
+    mode,
+    getLoadingForMode,
+    getMessagesForMode,
+    publicChatAuthenticated,
+    publicChatLoading,
+    publicChatState,
+    retryPublicChatSession,
+  } = useChat();
   const activeMode = modeOverride ?? mode;
   const activeMessages = modeOverride ? getMessagesForMode(modeOverride) : messages;
   const activeLoading = modeOverride ? getLoadingForMode(modeOverride) : loading;
-  const isAssistantMode = activeMode === 'ai' || activeMode === 'agent';
+  const isAssistantMode = activeMode === 'ai';
+  const publicChatUnavailable =
+    (activeMode === 'public' || activeMode === 'ai') && !publicChatAuthenticated;
+  const isRefreshingSession = publicChatLoading || publicChatState === 'booting';
+  const unavailableTitle = isAssistantMode ? 'Chat session unavailable' : 'Public chat unavailable';
+  const unavailableDetail =
+    publicChatLoading || publicChatState === 'booting'
+      ? 'Restoring your secure chat session...'
+      : publicChatState === 'error'
+        ? 'We could not verify your chat session. Refresh, then try again.'
+        : isAssistantMode
+          ? 'Connect or refresh your secure session to chat with Neural Seed.'
+          : 'Connect or refresh your secure session to join public chat.';
   const containerRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
@@ -37,7 +61,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
 
   if (activeLoading && activeMessages.length === 0) {
     return (
-      <div ref={containerRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
+      <div ref={containerRef} className="surface-scroll-fade h-full overflow-y-auto" onScroll={handleScroll}>
         <div className="flex items-center justify-center h-full">
           <BaseExpandedLoadingPageLoader text="Loading messages..." />
         </div>
@@ -47,35 +71,71 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
 
   if (activeMessages.length === 0) {
     return (
-      <div ref={containerRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
+      <div ref={containerRef} className="surface-scroll-fade h-full overflow-y-auto" onScroll={handleScroll}>
         <div className="flex flex-col items-center justify-center h-full text-center p-4">
-          <div className="mb-4">
-            {isAssistantMode ? (
-              <Image 
-                src="/icons/neuralseed.png" 
-                alt="Neural Seed" 
-                width={48} 
-                height={48} 
-                className="opacity-60"
-              />
-            ) : (
-              <Image 
-                src="/icons/chat.svg" 
-                alt="Chat" 
-                width={48} 
-                height={48} 
-                className="opacity-60"
-              />
-            )}
-          </div>
-          <h3 className="font-semibold text-foreground mb-1">
-            {isAssistantMode ? 'Ask the Neural Seed Agent or Assistant!' : 'Welcome to the chat!'}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {isAssistantMode 
-              ? 'I can help with minting, game mechanics, your stats, and more.' 
-              : 'Be the first to start the conversation!'}
-          </p>
+          {publicChatUnavailable ? (
+            <div
+              className="max-w-sm rounded-[var(--radius-panel)] border border-[hsl(var(--warning)/0.32)] bg-[hsl(var(--warning)/0.10)] px-4 py-4 text-left shadow-[var(--shadow-hairline)]"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[var(--radius-control)] bg-[hsl(var(--warning)/0.18)]">
+                  <Image src="/icons/chat-icon.webp" alt="" width={18} height={18} className="h-[18px] w-[18px]" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-foreground">
+                    {unavailableTitle}
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {unavailableDetail}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="warning"
+                    size="sm"
+                    className="mt-3"
+                    aria-busy={isRefreshingSession || undefined}
+                    disabled={isRefreshingSession}
+                    onClick={retryPublicChatSession}
+                  >
+                    <RefreshIcon refreshing={isRefreshingSession} className="h-4 w-4" />
+                    {isRefreshingSession ? 'Refreshing...' : 'Refresh session'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-4">
+                {isAssistantMode ? (
+                  <Image
+                    src="/icons/neuralseed.png"
+                    alt="Neural Seed"
+                    width={48}
+                    height={48}
+                    className="opacity-60"
+                  />
+                ) : (
+                  <Image
+                    src="/icons/chat-icon.webp"
+                    alt="Chat"
+                    width={48}
+                    height={48}
+                    className="opacity-60"
+                  />
+                )}
+              </div>
+              <h3 className="font-semibold text-foreground mb-1">
+                {isAssistantMode ? 'Ask Neural Seed!' : 'Welcome to the chat!'}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {isAssistantMode
+                  ? 'I can read live game data, explain mechanics, and help with your stats.'
+                  : 'Be the first to start the conversation!'}
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -85,7 +145,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="h-full overflow-y-auto"
+      className="surface-scroll-fade h-full overflow-y-auto"
     >
       <div
         className="p-4 space-y-4"

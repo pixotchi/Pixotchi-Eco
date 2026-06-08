@@ -2,9 +2,9 @@
 
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { SolanaNotSupported,useIsSolanaWallet } from '@/components/solana';
-import ApproveTransaction from '@/components/transactions/approve-transaction';
+import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
 import BundleBuyTransaction from '@/components/transactions/bundle-buy-transaction';
-import { BuyGardenItemTransaction,BuyShopItemTransaction } from '@/components/transactions/buy-item-transaction';
+import { BuyGardenItemTransaction,BuyShopItemTransaction,getBuyGardenItemCall,getBuyShopItemCall } from '@/components/transactions/buy-item-transaction';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
@@ -12,6 +12,7 @@ import SwapBuyItemBundle from '@/components/transactions/swap-buy-item-bundle';
 import SwapFencePurchaseBundle from '@/components/transactions/swap-fence-purchase-bundle';
 import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { InlineBalanceNotice } from '@/components/ui/premium';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FenceV2Config } from '@/lib/contracts';
 import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,getTokenBalance,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
@@ -21,7 +22,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { formatWsol } from '@/lib/solana-quote';
 import { extractTransactionHash } from '@/lib/transaction-utils';
-import { GardenItem,Plant,ShopItem } from '@/lib/types';
+import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
 import { formatDuration,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/utils';
 import Image from 'next/image';
 import { useEffect,useMemo,useState } from 'react';
@@ -67,7 +68,6 @@ export default function ItemDetailsPanel({
   const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
   const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
   const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
-
   // ETH Mode state - store per-unit ETH quote, calculate total by multiplication
   const [ethQuotePerUnit, setEthQuotePerUnit] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
   const [ethQuoteLoading, setEthQuoteLoading] = useState(false);
@@ -221,6 +221,17 @@ export default function ItemDetailsPanel({
     return [buildFenceV2PurchaseCall(selectedPlant.id, validFenceV2Days)];
   }, [selectedPlant, validFenceV2Days]);
 
+  const purchaseActionCalls = useMemo<TransactionCall[]>(() => {
+    if (!selectedPlant || !selectedItem) return [];
+    if (isFenceItem) return fenceV2Calls as TransactionCall[];
+    if (itemType === 'shop') {
+      return [getBuyShopItemCall(selectedPlant.id, selectedItem.id)];
+    }
+
+    const count = quantity > 0 ? quantity : 0;
+    return Array.from({ length: count }, () => getBuyGardenItemCall(selectedPlant.id, selectedItem.id));
+  }, [fenceV2Calls, isFenceItem, itemType, quantity, selectedItem, selectedPlant]);
+
   const fenceButtonText = fenceV2Active
     ? `Extend Fence (+${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'})`
     : `Buy Fence (${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'})`;
@@ -341,7 +352,7 @@ export default function ItemDetailsPanel({
   // Early return AFTER all hooks have been called
   if (!selectedItem || !selectedPlant) {
     return (
-      <Card>
+      <Card className="marketplace-detail-card">
         <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
             <span className="text-2xl">🛍️</span>
@@ -396,6 +407,8 @@ export default function ItemDetailsPanel({
   // });
 
   const getItemBenefits = () => {
+    if (!selectedItem) return 'Item effect';
+
     if (isFenceItem) {
       return `${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'} protection`;
     }
@@ -417,8 +430,61 @@ export default function ItemDetailsPanel({
     }
   };
 
+  const requiredSeedAllowance = isFenceItem ? (fenceV2Quote || BigInt(0)) : totalCost;
+  const needsSeedApproval =
+    !isSolana
+    && seedAllowance < requiredSeedAllowance
+    && !(isSmartWallet && isEthMode && ethQuote);
+  const approvalActionButtonText = isFenceItem
+    ? 'Approve + Buy Fence'
+    : itemType === 'garden' && quantity > 1
+      ? `Approve + Buy ${quantity}x`
+      : 'Approve + Buy Item';
+  const purchaseActionButtonText = isFenceItem
+    ? fenceButtonText
+    : itemType === 'garden' && quantity > 1
+      ? `Buy ${quantity}x ${selectedItem.name}`
+      : 'Buy Item';
+
+  const handlePurchaseSuccess = (tx: UntypedValue) => {
+    onPurchaseSuccess();
+
+    try {
+      if (itemType === 'shop') {
+        const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
+        const txHash = extractTransactionHash(tx);
+        if (txHash) {
+          payload.proof = { txHash };
+        }
+        void postMissionProgress(payload);
+      } else if (itemType === 'garden') {
+        const post = async (currentTx: UntypedValue, attempt = 0) => {
+          try {
+            const payload: Record<string, UntypedValue> = {
+              address,
+              taskId: 's4_buy10_elements',
+              count: quantity,
+            };
+            const txHash = extractTransactionHash(currentTx);
+            if (txHash) {
+              payload.proof = { txHash };
+            }
+            const res = await postMissionProgress(payload);
+            if (!res.ok) throw new Error('missions post failed');
+          } catch {
+            if (attempt < 2) {
+              const delay = 400 * Math.pow(2, attempt);
+              setTimeout(() => post(currentTx, attempt + 1), delay);
+            }
+          }
+        };
+        void post(tx);
+      }
+    } catch { }
+  };
+
   return (
-    <Card>
+    <Card className="marketplace-detail-card">
       <CardHeader>
         <CardTitle>{headerTitle}</CardTitle>
       </CardHeader>
@@ -507,7 +573,7 @@ export default function ItemDetailsPanel({
                 />
                 <span className="text-xs text-muted-foreground">
                   {fenceV2Bounds.min === fenceV2Bounds.max
-                    ? `${fenceV2Bounds.min} day${fenceV2Bounds.min === 1 ? '' : 's'} required`
+                    ? `${fenceV2Bounds.min}d${fenceV2Bounds.min === 1 ? '' : 's'} minimum`
                     : `${fenceV2Bounds.min}-${fenceV2Bounds.max} days`}
                 </span>
               </div>
@@ -528,7 +594,7 @@ export default function ItemDetailsPanel({
 
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">For Plant:</span>
-            <span className="font-medium">
+            <span className="font-pixel">
               {selectedPlant.name || `#${selectedPlant.id}`}
             </span>
           </div>
@@ -586,25 +652,6 @@ export default function ItemDetailsPanel({
                 toast.error(getFriendlyErrorMessage(message));
               }}
             />
-          ) : seedAllowance < (isFenceItem ? (fenceV2Quote || BigInt(0)) : totalCost) && !(isSmartWallet && isEthMode && ethQuote) ? (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground text-center">
-                Approve SEED spending once to unlock shop and garden purchases.
-              </p>
-              <ApproveTransaction
-                spenderAddress={PIXOTCHI_NFT_ADDRESS}
-                onSuccess={() => {
-                  toast.success('SEED approval successful!');
-                  // Refresh allowance
-                  if (address) {
-                    checkTokenApproval(address).then(setSeedAllowance);
-                  }
-                }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                buttonText="Approve SEED"
-                buttonClassName="w-full"
-              />
-            </div>
           ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && selectedPlant && selectedItem ? (
             // ETH Mode purchase - atomic swap + buy transaction
             <div className="flex flex-col space-y-2">
@@ -626,7 +673,7 @@ export default function ItemDetailsPanel({
                       ? "Insufficient ETH Balance"
                       : `Buy ${activeFenceV2Days} Day${activeFenceV2Days === 1 ? '' : 's'} Fence with ETH`
                   }
-                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
                   disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || fenceV2Bounds.todCapBreached || fenceV2BlockedByV1 || fenceV2InputInvalid}
                 />
               ) : (
@@ -651,14 +698,14 @@ export default function ItemDetailsPanel({
                         ? `Buy ${quantity}x with ETH`
                         : `Buy with ETH`
                   }
-                  buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+                  buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
                   disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || (!hasQuantitySelected && itemType === 'garden')}
                 />
               )}
               {ethBalance < ethQuote.ethAmountWithBuffer && (
-                <p className="text-xs text-value text-center">
-                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} ETH • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
-                </p>
+                <InlineBalanceNotice className="mt-0">
+                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+                </InlineBalanceNotice>
               )}
             </div>
           ) : disabledMessage ? (
@@ -666,6 +713,44 @@ export default function ItemDetailsPanel({
               buttonText={disabledMessage}
               buttonClassName="w-full"
             />
+          ) : needsSeedApproval ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground text-center">
+                Approve SEED spending once to unlock shop and garden purchases.
+              </p>
+              <ApprovalActionTransaction
+                actionCalls={purchaseActionCalls}
+                approvalSpender={PIXOTCHI_NFT_ADDRESS}
+                needsApproval={needsSeedApproval}
+                onApprovalSuccess={() => {
+                  toast.success('SEED approval successful!');
+                  if (address) {
+                    checkTokenApproval(address).then(setSeedAllowance);
+                  }
+                }}
+                onSuccess={(tx) => {
+                  toast.success(isSmartWallet ? 'Approved and purchased successfully!' : 'Purchase successful!');
+                  if (address) {
+                    checkTokenApproval(address).then(setSeedAllowance);
+                  }
+                  handlePurchaseSuccess(tx);
+                }}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
+                batchButtonText={approvalActionButtonText}
+                approvalButtonText="Approve SEED"
+                actionButtonText={purchaseActionButtonText}
+                buttonClassName="w-full"
+                disabled={
+                  selectedPlant.status === 4
+                  || fenceV2QuoteLoading
+                  || fenceV2BlockedByV1
+                  || fenceV2Bounds.todCapBreached
+                  || fenceV2InputInvalid
+                  || purchaseActionCalls.length === 0
+                }
+                resetKey={`${itemType}-${selectedPlant.id}-${selectedItem.id}-${quantity}-${activeFenceV2Days}`}
+              />
+            </div>
           ) : canBundle && isSmartWallet && selectedPlant && selectedItem ? (
             // Bundle Purchase for multiple garden items (Smart Wallet only)
             <BundleBuyTransaction
@@ -685,10 +770,10 @@ export default function ItemDetailsPanel({
               isFenceItem ? (
                 <SponsoredTransaction
                   calls={fenceV2Calls}
-                  onSuccess={(tx: any) => {
+                  onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();
                     try {
-                      const payload: Record<string, unknown> = { address, taskId: 's4_buy_shield' };
+                      const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
                       if (txHash) {
                         payload.proof = { txHash };
@@ -705,10 +790,10 @@ export default function ItemDetailsPanel({
                 <BuyShopItemTransaction
                   plantId={selectedPlant.id}
                   itemId={selectedItem.id}
-                  onSuccess={(tx: any) => {
+                  onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();
                     try {
-                      const payload: Record<string, unknown> = { address, taskId: 's4_buy_shield' };
+                      const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy_shield' };
                       const txHash = extractTransactionHash(tx);
                       if (txHash) {
                         payload.proof = { txHash };
@@ -726,12 +811,12 @@ export default function ItemDetailsPanel({
               <BuyGardenItemTransaction
                 plantId={selectedPlant.id}
                 itemId={selectedItem.id}
-                onSuccess={(tx: any) => {
+                onSuccess={(tx: UntypedValue) => {
                   onPurchaseSuccess();
                   try {
-                    const post = async (currentTx: any, attempt = 0) => {
+                    const post = async (currentTx: UntypedValue, attempt = 0) => {
                       try {
-                        const payload: Record<string, unknown> = { address, taskId: 's4_buy10_elements' };
+                        const payload: Record<string, UntypedValue> = { address, taskId: 's4_buy10_elements' };
                         const txHash = extractTransactionHash(currentTx);
                         if (txHash) {
                           payload.proof = { txHash };
@@ -762,15 +847,15 @@ export default function ItemDetailsPanel({
           )}
 
           {selectedPlant.status === 4 && (
-            <p className="text-xs text-value text-center mt-2">
+            <InlineBalanceNotice>
               Cannot buy items for dead plants.
-            </p>
+            </InlineBalanceNotice>
           )}
 
           {hasInsufficientFunds && !isEthMode && (
-            <p className="text-xs text-value text-center mt-2">
-              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} SEED • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)} SEED
-            </p>
+            <InlineBalanceNotice>
+              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)}
+            </InlineBalanceNotice>
           )}
 
 
@@ -778,9 +863,11 @@ export default function ItemDetailsPanel({
 
         <div className="pt-2 border-t border-border">
           <p className="text-xs text-muted-foreground text-center">
-            {itemType === 'shop'
-              ? 'Shop items provide ongoing protective effects.'
-              : 'Garden items give immediate points and/or TOD.'
+            {isFenceItem
+              ? 'Fence protection keeps your PTS safe from attacks while it is active.'
+              : itemType === 'shop'
+                ? 'Protection items provide ongoing defensive effects.'
+                : 'Garden items give immediate points and/or TOD.'
             }
           </p>
         </div>

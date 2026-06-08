@@ -1,6 +1,7 @@
 "use client";
 
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { ERC20_BALANCE_ABI,getQuestSlotsByLandId,LAND_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
@@ -21,6 +22,9 @@ interface FarmerHousePanelProps {
 // Rewards wallet that funds farmer quests
 const QUEST_REWARDS_WALLET = '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB' as const;
 const MIN_SEED_BALANCE = parseUnits('300', 18);
+const QUEST_SLOT_SURFACE_CLASS = 'chromatic-white-surface flex flex-col gap-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]';
+const QUEST_START_SURFACE_CLASS = 'building-subpanel-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2';
+const QUEST_STATUS_PILL_CLASS = 'chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]';
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
@@ -155,7 +159,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
           )}
           <div className="grid grid-cols-1 gap-2">
             {slots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
-              <div key={idx} className="flex flex-col gap-2 rounded-md border bg-card p-3">
+              <div key={idx} className={QUEST_SLOT_SURFACE_CLASS}>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">
                     <div className="font-medium">Slot {idx + 1}</div>
@@ -163,13 +167,13 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   </div>
                   <div className="flex items-center gap-2">
                     {statusOf(s) === 'Loading' && (
-                      <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">Loading…</div>
+                      <div className={QUEST_STATUS_PILL_CLASS}>Loading…</div>
                     )}
                     {statusOf(s) === 'Ready to commit' && (
                       <SponsoredTransaction
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                         buttonText="Return now"
-                        buttonClassName="h-8 px-3 text-xs"
+                        buttonClassName="h-11 min-h-11 px-3 text-xs"
                         hideStatus
                         onSuccess={() => handleSuccess({ slotIndex: idx, awaitCommitted: true })}
                       />
@@ -180,14 +184,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         <SponsoredTransaction
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                           buttonText="Open now"
-                          buttonClassName="h-8 px-3 text-xs"
+                          buttonClassName="h-11 min-h-11 px-3 text-xs"
                           hideStatus
                           onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess({ slotIndex: idx, awaitUncommitted: true }); }}
                         />
                       </div>
                     )}
                     {statusOf(s) === 'Cooldown' && (
-                      <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                      <div className={QUEST_STATUS_PILL_CLASS}>
                         ~{formatSeconds(blocksLeft(s.coolDownBlock) * 2)} left
                       </div>
                     )}
@@ -195,7 +199,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                 </div>
                 {statusOf(s) === 'Available' && (
                   <>
-                    <div className="grid gap-2 sm:grid-cols-[1fr,auto] items-center rounded-md border bg-background/50 p-2">
+                    <div className={`${QUEST_START_SURFACE_CLASS} grid gap-2 sm:grid-cols-[1fr,auto] items-center`}>
                       <div className="overflow-x-auto sm:overflow-visible">
                         <ToggleGroup
                           value={String(difficulty[idx] ?? 0)}
@@ -207,22 +211,22 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                           ]}
                           className="bg-muted/50 border-primary/20"
                           getButtonClassName={(val, selected) => (
-                            val === '0' ? (selected ? 'bg-green-600/20 text-green-700' : 'text-green-700') :
-                              val === '1' ? (selected ? 'bg-amber-600/20 text-amber-700' : 'text-amber-700') :
-                                (selected ? 'bg-red-600/20 text-red-700' : 'text-red-700')
+                            val === '0' ? (selected ? 'bg-[hsl(var(--success)/0.18)] text-[hsl(var(--success-strong))]' : 'text-[hsl(var(--success-strong))]') :
+                              val === '1' ? (selected ? 'bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning))]' : 'text-[hsl(var(--warning))]') :
+                                (selected ? 'bg-destructive/15 text-destructive' : 'text-destructive')
                           )}
                         />
                       </div>
                       <SponsoredTransaction
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
                         buttonText="Start"
-                        buttonClassName="h-8 px-3 text-xs w-full sm:w-auto shrink-0"
+                        buttonClassName="h-11 min-h-11 px-3 text-xs w-full sm:w-auto shrink-0"
                         hideStatus
                         disabled={isRewardsDepleted}
-                        onSuccess={(tx: any) => {
+                        onSuccess={(tx: UntypedValue) => {
                           handleSuccess({ slotIndex: idx, awaitInProgress: true });
                           try {
-                            const payload: Record<string, unknown> = { address, taskId: 's3_send_quest' };
+                            const payload: Record<string, UntypedValue> = { address, taskId: 's3_send_quest' };
                             const txHash = extractTransactionHash(tx);
                             if (txHash) {
                               payload.proof = { txHash };
@@ -241,16 +245,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                 )}
                 {statusOf(s) === 'In progress' && (
                   <div className="space-y-1">
-                    <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-2 bg-primary transition-all" style={{ width: `${Math.min(100, progressPct(s)).toFixed(1)}%` }} />
-                    </div>
+                    <ProgressBar label={`Quest ${idx + 1} progress`} value={progressPct(s)} />
                     <div className="text-xs text-muted-foreground">Ends in ~{formatSeconds(Math.max(0, Math.ceil(blocksLeft(s.endBlock) * 2)))}</div>
                   </div>
                 )}
               </div>
             ))}
             {slots.length === 0 && (
-              <div className="text-center text-sm text-muted-foreground">No quest slots available.</div>
+              <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 text-center text-sm text-muted-foreground shadow-[var(--shadow-hairline)]">No quest slots available.</div>
             )}
           </div>
         </>

@@ -7,18 +7,20 @@ import {
   TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
-import type { LifecycleStatus } from './transaction-kit';
+import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
   forceUnsponsored?: boolean; // Force transaction to be unsponsored (e.g., for swaps)
 }
@@ -30,7 +32,7 @@ export default function UniversalTransaction({
   buttonText,
   buttonClassName = "",
   disabled = false,
-  showToast = true,
+  feedbackMode,
   forceUnsponsored = false
 }: UniversalTransactionProps) {
   const { isSponsored: paymasterEnabled } = usePaymaster();
@@ -42,15 +44,13 @@ export default function UniversalTransaction({
   // Normalize to raw serializable calls for embedded-wallet compatibility.
   // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
+    transformCallsWithBuilderCode(calls as UntypedValue[]) as TransactionCall[],
     [calls]
   );
 
-  const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Universal transaction successful:', tx);
+  const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
-    // Notify status bar to refresh balances
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
+    dispatchPostTransactionRefresh();
   }, [onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
@@ -58,9 +58,11 @@ export default function UniversalTransaction({
 
   // Wrap onError to ignore errors after success has been handled
   // This fixes OnchainKit race condition where onError can fire after successful tx
-  const handleOnError = useCallback((error: any) => {
+  const handleOnError = useCallback((error: UntypedValue) => {
     if (successHandledRef.current) {
-      console.log('Ignoring post-success error callback from OnchainKit:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Ignoring post-success error callback from OnchainKit:', error);
+      }
       return;
     }
     onError?.(error);
@@ -76,6 +78,9 @@ export default function UniversalTransaction({
       handleOnSuccess(status.statusData.transactionReceipts[0]);
     }
   }, [handleOnSuccess]);
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? "toast";
+  const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
+  const showGlobalToast = resolvedFeedbackMode !== "none";
 
   return (
     <Transaction
@@ -92,9 +97,9 @@ export default function UniversalTransaction({
         disabled={disabled}
       />
 
-      <TransactionStatus />
+      {showInlineStatus && <TransactionStatus />}
 
-      {showToast && <GlobalTransactionToast />}
+      {showGlobalToast && <GlobalTransactionToast />}
     </Transaction>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { EfpTransactionBoundary } from "@/components/efp-transaction-boundary";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
 import type { Plant } from "@/lib/types";
 import { getPlantsByOwner } from "@/lib/contracts";
@@ -9,6 +10,7 @@ interface ChatProfileDialogProps {
   address: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onTransactionOpen?: () => void;
 }
 
 type PlantCache = {
@@ -22,6 +24,7 @@ export default function ChatProfileDialog({
   address,
   open,
   onOpenChange,
+  onTransactionOpen,
 }: ChatProfileDialogProps) {
   const cacheRef = useRef<Map<string, PlantCache>>(new Map());
   const [plant, setPlant] = useState<Plant | null>(null);
@@ -95,14 +98,16 @@ export default function ChatProfileDialog({
   }, [open, normalisedAddress]);
 
   return (
-    <PlantProfileDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      plant={plant}
-      variant="wallet"
-      walletAddressOverride={normalisedAddress}
-      primaryPlantLoading={loading}
-      walletNameOverride={null}
-    />
+    <EfpTransactionBoundary open={open} onTransactionOpen={onTransactionOpen}>
+      <PlantProfileDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        plant={plant}
+        variant="wallet"
+        walletAddressOverride={normalisedAddress}
+        primaryPlantLoading={loading}
+        walletNameOverride={null}
+      />
+    </EfpTransactionBoundary>
   );
 }

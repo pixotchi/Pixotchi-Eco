@@ -1,6 +1,6 @@
 {
-    "name": "Pixotchi Mini - Onchain Pocket Farm",
-    "short_name": "Pixotchi Mini",
+    "name": "Pixotchi - Onchain Pocket Farm",
+    "short_name": "Pixotchi",
     "description": "Mint, grow, and care for your onchain plants in this Tamagotchi-style game on Base blockchain.",
     "start_url": "/",
     "scope": "/",
@@ -35,10 +35,22 @@
     ],
     "screenshots": [
         {
-            "src": "/screenshot.png",
-            "sizes": "1280x720",
+            "src": "/screenshot1.png",
+            "sizes": "1284x2778",
             "type": "image/png",
-            "form_factor": "wide"
+            "form_factor": "narrow"
+        },
+        {
+            "src": "/screenshot2.png",
+            "sizes": "1284x2778",
+            "type": "image/png",
+            "form_factor": "narrow"
+        },
+        {
+            "src": "/screenshot3.png",
+            "sizes": "1284x2778",
+            "type": "image/png",
+            "form_factor": "narrow"
         }
     ],
     "lang": "en",

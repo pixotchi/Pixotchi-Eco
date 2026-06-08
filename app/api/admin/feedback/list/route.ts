@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin } from '@/lib/auth-utils';
 import { redis, redisGetJSON } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    if (!validateAdminKey(request)) {
-      const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-      return NextResponse.json(error.body, { status: error.status });
-    }
+    const adminDenied = await requireAdmin(request);
+    if (adminDenied) return adminDenied;
 
     if (!redis) {
       return NextResponse.json(

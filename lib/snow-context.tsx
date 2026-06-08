@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 
 /**
  * Snow context for managing user preference for winter/snow effect.
@@ -23,6 +24,7 @@ const STORAGE_KEY = "pixotchi:winter-mode";
 
 export function SnowProvider({ children }: { children: ReactNode }) {
     const isFeatureEnabled = process.env.NEXT_PUBLIC_SNOW_ENABLED === "true";
+    const { enabled: performanceModeEnabled } = usePerformanceMode();
     const [isEnabled, setIsEnabled] = useState(false);
     const [mounted, setMounted] = useState(false);
 
@@ -52,6 +54,19 @@ export function SnowProvider({ children }: { children: ReactNode }) {
             // Storage unavailable
         }
     };
+
+    useEffect(() => {
+        if (!performanceModeEnabled || !isEnabled) {
+            return;
+        }
+
+        setIsEnabled(false);
+        try {
+            localStorage.setItem(STORAGE_KEY, "false");
+        } catch {
+            // Storage unavailable
+        }
+    }, [isEnabled, performanceModeEnabled]);
 
     // Don't render children until mounted to avoid hydration mismatch
     if (!mounted) {

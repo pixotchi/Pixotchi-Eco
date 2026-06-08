@@ -3,11 +3,14 @@ import {
   getAIConversationForAddress,
   getAIConversationMessages,
   getOrCreateConversation,
+  stripAIMessageDebugMetadata,
 } from '@/lib/ai-service';
 import {
+  ChatAuthError,
   createChatAuthRequiredResponse,
+  createChatAuthErrorResponse,
   createChatUnavailableResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+  getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 
@@ -18,7 +21,7 @@ const AI_CHAT_READ_ADDRESS_LIMIT_PER_MINUTE = 240;
 
 export async function GET(request: NextRequest) {
   try {
-    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request);
+    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     if (!session) {
       return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
@@ -94,12 +97,13 @@ export async function GET(request: NextRequest) {
     }
 
     const messages = await getAIConversationMessages(finalConversationId, limit);
+    const publicMessages = messages.map(stripAIMessageDebugMetadata);
 
     return NextResponse.json(
       {
-        messages,
+        messages: publicMessages,
         conversationId: finalConversationId,
-        count: messages.length,
+        count: publicMessages.length,
         timestamp: Date.now(),
       },
       {
@@ -109,6 +113,10 @@ export async function GET(request: NextRequest) {
       },
     );
   } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
     console.error('Error fetching AI chat messages:', error);
     return createChatUnavailableResponse('Failed to fetch AI messages.');
   }

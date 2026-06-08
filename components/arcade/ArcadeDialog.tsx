@@ -5,7 +5,10 @@ import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BoxGameTransaction from "@/components/transactions/box-game-transaction";
 import SpinGameTransaction from "@/components/transactions/spin-game-transaction";
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { DisabledReason, InlineBalanceNotice, RewardResultPanel } from "@/components/ui/premium";
+import { ToggleGroup } from "@/components/ui/toggle-group";
 import { getBaseLogClient } from "@/lib/base-rpc";
 import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
 import { usePaymaster } from "@/lib/paymaster-context";
@@ -18,10 +21,10 @@ SPIN_GAME_V2_PLAYED_EVENT,
 import { Plant } from "@/lib/types";
 import { cn,formatDuration,formatScore,formatTokenAmount } from "@/lib/utils";
 import Image from "next/image";
-import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { type ReactNode,useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { encodePacked,hexToBytes,keccak256,toHex } from "viem";
-import { useAccount,usePublicClient } from "wagmi";
+import { useAccount,usePublicClient,useSignMessage } from "wagmi";
 
 type ArcadeDialogProps = {
   open: boolean;
@@ -74,6 +77,10 @@ const TRANSACTION_FAILURE_STATUSES = new Set([
   "buildError",
 ]);
 
+function buildCommitStateMessage(address: string, plantId: number, block: number): string {
+  return `Pixotchi spin commit state\nAddress: ${address.toLowerCase()}\nPlant ID: ${plantId}\nBlock: ${block}`;
+}
+
 function createCommitment(secret: Uint8Array, plantId: number, address: string): `0x${string}` {
   const encoded = encodePacked(
     ["address", "uint256", "bytes32"],
@@ -85,57 +92,77 @@ function createCommitment(secret: Uint8Array, plantId: number, address: string):
 const GameSelector = ({
   selected,
   onSelect,
+  className,
 }: {
   selected: GameId;
   onSelect: (game: GameId) => void;
+  className?: string;
 }) => (
-  <div className="grid grid-cols-2 gap-3">
-    {[
-      {
-        id: "box" as const,
-        title: "Box Game",
-        description: "Pick a box and win PTS/TOD",
-        icon: "/icons/box.png",
-      },
-      {
-        id: "spin" as const,
-        title: "SpinLeaf",
-        description: "Spin for PTS, TOD, and LEAF rewards",
-        icon: "/icons/spinleaf.svg",
-      },
-    ].map((game) => (
-      <button
-        key={game.id}
-        type="button"
-        onClick={() => onSelect(game.id)}
-        className={cn(
-          "relative aspect-square rounded-xl border transition-all flex flex-col items-center justify-center gap-3 bg-card/70",
-          selected === game.id
-            ? "border-primary shadow-[0_0_0_2px_rgba(var(--primary-rgb),0.15)]"
-            : "border-border hover:border-primary/40 hover:shadow-[0_4px_16px_-10px_rgba(0,0,0,.45)]",
-        )}
-      >
-        <div className="flex flex-col items-center gap-2 px-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Image src={game.icon} alt={game.title} width={32} height={32} />
-          </div>
-          <div className="space-y-1">
-            <div className="text-sm font-semibold text-foreground">{game.title}</div>
-            <p className="text-xs text-muted-foreground leading-snug">{game.description}</p>
-          </div>
-        </div>
-        {selected === game.id && (
-          <span className="absolute right-3 top-3 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-            Selected
-          </span>
-        )}
-      </button>
-    ))}
+  <div className={cn("flex justify-center", className)}>
+    <ToggleGroup
+      value={selected}
+      onValueChange={(value) => onSelect(value as GameId)}
+      options={[
+        {
+          value: "box",
+          ariaLabel: "Box Game",
+          label: (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Image src="/icons/box.png" alt="" width={16} height={16} className="h-4 w-4 shrink-0 object-contain" aria-hidden />
+              <span className="truncate">Box Game</span>
+            </span>
+          ),
+        },
+        {
+          value: "spin",
+          ariaLabel: "SpinLeaf",
+          label: (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Image src="/icons/spinleaf.svg" alt="" width={16} height={16} className="h-4 w-4 shrink-0 object-contain" aria-hidden />
+              <span className="truncate">SpinLeaf</span>
+            </span>
+          ),
+        },
+      ]}
+      size="default"
+    />
   </div>
 );
 
+type ArcadeTone = "default" | "primary" | "success" | "warning" | "danger";
+
+function getArcadeToneClassName(tone: ArcadeTone) {
+  return {
+    danger: "text-destructive",
+    default: "text-foreground",
+    primary: "text-primary",
+    success: "text-[hsl(var(--success-strong))]",
+    warning: "text-[hsl(var(--warning-foreground))]",
+  }[tone];
+}
+
+function ArcadeStatLine({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  tone?: ArcadeTone;
+}) {
+  return (
+    <div className="flex min-h-8 items-center justify-between gap-3 py-1.5">
+      <span className="min-w-0 text-muted-foreground">{label}</span>
+      <span className={cn("shrink-0 text-right font-semibold tabular-nums", getArcadeToneClassName(tone))}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
   const { address } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const publicClient = usePublicClient();
   const baseLogClient = useMemo(() => getBaseLogClient(), []);
   const { isSponsored } = usePaymaster();
@@ -152,6 +179,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [, setBlockCountdown] = useState(0);
   const [, setBlockSecondsRemaining] = useState(0);
   const [spinRefreshKey, setSpinRefreshKey] = useState(0);
+  const [boxResultDetails, setBoxResultDetails] = useState<{
+    pointsDelta: number;
+    timeAdded: number;
+  } | null>(null);
   const [wheelState, setWheelState] = useState<{
     spinning: boolean;
     revealReady: boolean;
@@ -241,16 +272,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       if (!address || Number.isNaN(block) || block <= 0) return;
       setLastSeenCommitBlock((prev) => (prev !== null ? Math.max(prev, block) : block));
       try {
+        const message = buildCommitStateMessage(address, plantId, block);
+        const signature = await signMessageAsync({ message });
         await fetch("/api/spin/commit-state", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ address, plantId, block }),
+          body: JSON.stringify({ address, plantId, block, message, signature }),
         });
       } catch (error) {
         console.warn("Failed to persist spin commit block", error);
       }
     },
-    [address, plantId]
+    [address, plantId, signMessageAsync]
   );
 
   // Generate a deterministic-ish default seed on open
@@ -344,7 +377,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         toBlock: currentBlock,
       } as const;
 
-      const isRangeTooLargeError = (err: unknown) => {
+      const isRangeTooLargeError = (err: UntypedValue) => {
         if (!err) return false;
         const maybe = err as { shortMessage?: string; message?: string } | undefined;
         const msg = (maybe?.shortMessage ?? maybe?.message ?? "").toLowerCase();
@@ -421,7 +454,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       }
 
       const commitBlock = lastCommit.blockNumber ?? BigInt("0");
-      const commitArgs = (lastCommit as unknown as { args?: { player?: string; commitHash?: `0x${string}` } }).args;
+      const commitArgs = (lastCommit as UntypedValue as { args?: { player?: string; commitHash?: `0x${string}` } }).args;
       const commitData: PendingCommit = {
         player: (commitArgs?.player ?? address) as string,
         commitment: (commitArgs?.commitHash ?? "0x") as `0x${string}`,
@@ -801,12 +834,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   const onStatus = useCallback((status: LifecycleStatus) => {
     if (status.statusName === "success") {
-      onOpenChange(false);
       try {
         window.dispatchEvent(new Event("balances:refresh"));
       } catch { }
     }
-  }, [onOpenChange]);
+  }, []);
 
   const spinCooldown = spinMeta?.cooldown ?? 0;
   const spinStarCost = spinMeta?.starCost ?? 1;
@@ -829,23 +861,78 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   );
 
   const BoxGrid = () => (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 gap-2.5">
       {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
-        <button
+        <Button
           key={n}
-          onClick={() => setSeed(n)}
-          className={`w-full h-16 sm:h-20 flex items-center justify-center rounded-lg border transition-colors ${seed === n ? "bg-primary/10 border-primary ring-2 ring-primary/30" : "bg-card hover:bg-accent border-border"
-            }`}
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setSeed(n);
+            setBoxResultDetails(null);
+          }}
+          className={cn(
+            "group relative h-16 min-h-16 w-full overflow-hidden rounded-[var(--radius-panel)] p-0 sm:h-20 sm:min-h-20",
+            "transition-[background-color,border-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)]",
+            seed === n
+              ? "border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary shadow-[var(--shadow-glow)] ring-2 ring-primary/25"
+              : "border-border/55 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[var(--shadow-control)] hover:brightness-[1.02]",
+          )}
           aria-label={`Select box ${n}`}
+          aria-pressed={seed === n}
         >
-          <Image src="/icons/box.png" alt={`Box ${n}`} width={32} height={32} className="w-8 h-8 object-contain" />
-        </button>
+          <span
+            className={cn(
+              "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-[var(--motion-standard)]",
+              "bg-[radial-gradient(circle_at_34%_18%,hsl(var(--primary)/0.2)_0%,transparent_42%),linear-gradient(180deg,hsl(var(--card)/0.2),hsl(var(--primary)/0.06))]",
+              seed === n ? "opacity-100" : "group-hover:opacity-80",
+            )}
+            aria-hidden="true"
+          />
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-border/40 bg-background/45 shadow-[var(--shadow-hairline)] sm:h-12 sm:w-12">
+            <Image src="/icons/box.png" alt="" width={34} height={34} className="h-8 w-8 object-contain drop-shadow-sm" aria-hidden />
+          </span>
+          <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/40 bg-card/80 px-1.5 py-0.5 text-[10px] font-bold leading-none text-muted-foreground">
+            {n}
+          </span>
+        </Button>
       ))}
     </div>
   );
 
   const currentCooldown = withStar ? cooldown.star : cooldown.normal;
   const disabled = !seed || !address || currentCooldown > 0;
+  const starsAvailable = plant?.stars ?? 0;
+  const boxStarCost = 1;
+  const boxPlayDisabled = disabled || (withStar && starsAvailable <= 0);
+  const spinPlayDisabled = pending ? !canReveal : !(commitmentHex && canCommit);
+  const boxHasInsufficientStars = withStar && starsAvailable < boxStarCost;
+  const spinHasInsufficientStars = !pending && starsAvailable < spinStarCost;
+  const boxDisabledReason = !address
+    ? "Connect a wallet before opening a box."
+    : !seed
+      ? "Choose a box to play."
+      : currentCooldown > 0
+        ? `Box cooldown clears in ${formatDuration(currentCooldown)}.`
+        : null;
+  const spinDisabledReason = pending
+    ? canReveal
+      ? null
+      : "The wheel is still preparing the result."
+    : !address
+      ? "Connect a wallet before spinning."
+      : spinCooldown > 0
+        ? `SpinLeaf cooldown clears in ${formatDuration(spinCooldown)}.`
+        : starsAvailable < spinStarCost
+          ? null
+          : !commitmentHex
+            ? "Preparing the spin commitment."
+            : null;
+  const hasSpinReward = resultDetails
+    ? (resultDetails.pointsDelta ?? 0) !== 0 ||
+      (resultDetails.timeAdded ?? 0) !== 0 ||
+      (resultDetails.leafAmount !== undefined && resultDetails.leafAmount !== BigInt("0"))
+    : false;
 
   // Gate arcade games for Solana users
   if (isSolana) {
@@ -854,6 +941,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         <DialogContent className="max-w-md w-[min(92vw,28rem)]">
           <DialogHeader>
             <DialogTitle>Arcade</DialogTitle>
+            <DialogDescription>
+              Arcade games are not available for Solana bridge wallets.
+            </DialogDescription>
           </DialogHeader>
           <div className="py-6">
             <SolanaNotSupported feature="Arcade games" />
@@ -865,61 +955,91 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md w-[min(92vw,28rem)]">
+      <DialogContent surface="soft" className="max-w-md w-[min(94vw,28rem)]">
         <DialogHeader>
-          <DialogTitle>Arcade</DialogTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <DialogTitle>Arcade</DialogTitle>
+            <GameSelector selected={selectedGame} onSelect={setSelectedGame} className="justify-start sm:justify-end" />
+          </div>
+          <DialogDescription>
+            Pick a game, choose how you want to play, and use the bottom action when you are ready.
+          </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto pr-1">
-          <div className="space-y-4 mt-4">
-            <GameSelector selected={selectedGame} onSelect={setSelectedGame} />
-
+        <div className="surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1">
+          <div className="space-y-4">
             {selectedGame === 'box' && (
               <div className="space-y-4">
                 <div className="text-sm font-medium">Choose a box</div>
                 <BoxGrid />
 
-                <div className="space-y-3 rounded-xl border bg-card/60 p-4">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="font-medium text-foreground">
-                      {withStar ? 'Playing with Stars' : 'Playing without Stars'}
+                <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground">Box play</div>
+                      <p className="text-xs text-muted-foreground">Pick a box, then choose whether to spend a star.</p>
                     </div>
-                    <button
-                      className="px-2 py-1 rounded-md border hover:bg-accent"
-                      onClick={() => setWithStar((v: boolean) => !v)}
-                    >
-                      {withStar ? 'Play without Stars' : 'Play with Stars'}
-                    </button>
+                    <div className="grid shrink-0 grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-border/55 bg-card/85 bg-[image:var(--gradient-control-track)] p-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
+                          !withStar
+                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
+                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
+                        )}
+                        onClick={() => setWithStar(false)}
+                        aria-pressed={!withStar}
+                      >
+                        No star
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
+                          withStar
+                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
+                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
+                        )}
+                        onClick={() => setWithStar(true)}
+                        aria-pressed={withStar}
+                      >
+                        Use star
+                      </Button>
+                    </div>
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Cooldown: <span className="font-medium text-foreground">
-                      {currentCooldown > 0 ? `${formatDuration(currentCooldown)} remaining` : 'Ready to play'}
-                    </span>
+                  <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs shadow-[var(--shadow-hairline)]">
+                    <ArcadeStatLine label="Selected box" value={seed ? `Box ${seed}` : "None"} tone={seed ? "primary" : "warning"} />
+                    <ArcadeStatLine label="Cooldown" value={currentCooldown > 0 ? formatDuration(currentCooldown) : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
+                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={boxHasInsufficientStars ? "danger" : "default"} />
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
-                    {withStar && (plant?.stars ?? 0) <= 0 && (
-                      <span className="ml-2 text-red-500">Not enough stars</span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Confirm Play</span>
-                    <SponsoredBadge show={isSponsored && isSmartWallet} />
-                  </div>
-
-                  <BoxGameTransaction
-                    plantId={plant.id}
-                    seed={seed as number}
-                    withStar={withStar}
-                    buttonText={withStar ? "Play (Use Star)" : "Play"}
-                    buttonClassName="w-full"
-                    disabled={disabled || (withStar && (plant?.stars ?? 0) <= 0)}
-                    onStatusUpdate={onStatus as any}
-                    showToast
-                  />
+                  {boxDisabledReason && <DisabledReason>{boxDisabledReason}</DisabledReason>}
                 </div>
+                {boxResultDetails && (
+                  <RewardResultPanel title="Box result" tone={(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? "success" : "warning"}>
+                    {(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? (
+                      <div className="space-y-1">
+                        {boxResultDetails.pointsDelta !== 0 && (
+                          <div>
+                            PTS: <span className="font-semibold text-foreground">{`+${formatScore(Math.abs(boxResultDetails.pointsDelta))}`}</span>
+                          </div>
+                        )}
+                        {boxResultDetails.timeAdded !== 0 && (
+                          <div>
+                            TOD: <span className="font-semibold text-foreground">{`${boxResultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(boxResultDetails.timeAdded))}`}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span>No reward this time. Pick another box when the cooldown clears.</span>
+                    )}
+                  </RewardResultPanel>
+                )}
               </div>
             )}
 
@@ -929,17 +1049,19 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   <div>
                     <div className="text-sm font-medium">SpinLeaf</div>
                     <p className="text-xs text-muted-foreground">
-                      Spin the wheel for a surprise reward.
+                      Spin for PTS, TOD, and LEAF rewards.
                     </p>
                   </div>
                 </div>
 
-                <div className="relative mx-auto mt-6 w-48 h-48 sm:w-56 sm:h-56">
+                <div className="relative mx-auto mt-6 flex h-56 w-56 items-center justify-center sm:h-60 sm:w-60">
+                  <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_32%,hsl(var(--scene-glow)/0.5)_0%,hsl(var(--scene-glow)/0.12)_48%,transparent_76%)] blur-xl" aria-hidden="true" />
+                  <div className="absolute inset-3 rounded-full border border-primary/15 bg-[conic-gradient(from_0deg,hsl(var(--primary)/0.16),hsl(var(--accent)/0.34),hsl(var(--scene-glow)/0.24),hsl(var(--primary)/0.16))] opacity-80 shadow-[var(--shadow-glow)]" aria-hidden="true" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="relative w-full h-full rounded-full bg-gradient-to-br from-primary/10 via-background to-card shadow-[0_20px_45px_-20px_rgba(0,0,0,0.35)]" aria-hidden>
+                    <div className="relative h-48 w-48 rounded-full border border-border/55 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[0_24px_54px_-28px_hsl(var(--foreground)/0.5)] sm:h-56 sm:w-56" aria-hidden>
                       <div
                         className={cn(
-                          "absolute inset-4 rounded-full border border-primary/30 flex items-center justify-center",
+                          "absolute inset-4 flex items-center justify-center rounded-full border border-primary/35 bg-background/25 shadow-inner",
                           targetRotation !== null ? "transition-transform duration-[2200ms] ease-out" : "",
                           wheelState.spinning && targetRotation === null ? "animate-[spin-slow_1.5s_linear_infinite]" : "",
                         )}
@@ -951,7 +1073,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                               : { transform: `rotate(${currentRotation}deg)` }
                         }
                       >
-                        <svg viewBox="0 0 200 200" className="w-full h-full">
+                        <svg viewBox="0 0 200 200" className="h-full w-full drop-shadow-sm">
+                          <circle cx="100" cy="100" r="88" fill="none" stroke="hsl(var(--primary) / 0.18)" strokeWidth="7" />
+                          <circle cx="100" cy="100" r="58" fill="none" stroke="hsl(var(--accent) / 0.22)" strokeWidth="2" />
                           {[...Array(6)].map((_, index) => {
                             const angle = index * 60;
                             const radius = 68;
@@ -973,116 +1097,74 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                           })}
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-4 h-4 bg-primary rounded-full shadow-inner" />
+                          <div className="h-5 w-5 rounded-full border border-primary/35 bg-primary shadow-[0_0_18px_hsl(var(--primary)/0.32)]" />
                         </div>
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-24 h-24 rounded-full border border-primary/20 bg-card/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-1">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
-                          <span className="text-xs font-semibold text-primary">Good luck!</span>
+                        <div className="flex h-24 w-24 flex-col items-center justify-center space-y-1 rounded-full border border-primary/25 bg-card/80 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-control)] backdrop-blur-[var(--blur-surface)]">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
+                          <span className="text-xs font-bold text-primary">{pending ? "In motion" : "Good luck"}</span>
                         </div>
                       </div>
-                      <div className="absolute inset-0 rounded-full border border-white/10" />
+                      <div className="absolute inset-0 rounded-full border border-white/15 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.25)]" />
                     </div>
                   </div>
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                    <div className="w-0 h-0 border-l-8 border-r-8 border-t-12 border-l-transparent border-r-transparent border-t-primary" />
+                  <div className="absolute top-2 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center">
+                    <div className="h-4 w-5 rounded-b-[var(--radius-nav)] bg-primary shadow-[0_8px_18px_-10px_hsl(var(--primary)/0.8)]" />
+                    <div className="h-0 w-0 border-l-[10px] border-r-[10px] border-t-[16px] border-l-transparent border-r-transparent border-t-primary drop-shadow-sm" />
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-xl border bg-card/60 p-4">
+                <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
                   <div>
-                    <div className="text-sm font-medium">Playing with Stars</div>
+                    <div className="text-sm font-medium">Get a spin with a Star</div>
                     <p className="text-xs text-muted-foreground">
-                      Spin (Commit) locks in your spin using stars; Stop, reveals your reward after the next block to claim the reward.
+                      Use a star, wait for the wheel, then stop it to claim the result.
                     </p>
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Status: <span className="font-medium text-foreground">
-                      {pending ? (canReveal ? "Ready - Click Stop Spin!" : "Waiting...") : spinCooldown > 0 ? formatDuration(spinCooldown) + " cooldown" : "Ready to play"}
-                    </span>
+                  <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs shadow-[var(--shadow-hairline)]">
+                    <ArcadeStatLine
+                      label="Status"
+                      value={pending ? (canReveal ? "Ready to stop" : "Wheel spinning") : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown` : "Ready to spin"}
+                      tone={pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
+                    />
+                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={starsAvailable < spinStarCost && !pending ? "danger" : "default"} />
+                    <ArcadeStatLine
+                      label="Cost per spin"
+                      value={(
+                        <span className="inline-flex items-center justify-end gap-1">
+                          <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} className="h-3.5 w-3.5 shrink-0" />
+                          <span>{spinStarCost}</span>
+                        </span>
+                      )}
+                      tone="primary"
+                    />
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Stars available: <span className="font-semibold text-foreground">{plant?.stars ?? 0}</span>
-                    {spinStarCost > 0 && (plant?.stars ?? 0) < spinStarCost && !pending && (
-                      <span className="ml-2 text-red-500">Not enough stars to spin</span>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    Cost per spin: <span className="font-semibold text-foreground">{spinStarCost}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Commit / Reveal</span>
-                    <SponsoredBadge show={isSponsored && isSmartWallet} />
-                  </div>
+                  {spinDisabledReason && starsAvailable >= spinStarCost && (
+                    <DisabledReason>{spinDisabledReason}</DisabledReason>
+                  )}
 
                   <div className="space-y-2">
-                    {!pending && (
-                      <SpinGameTransaction
-                        mode="commit"
-                        plantId={plant.id}
-                        commitment={commitmentHex ?? undefined}
-                        disabled={!(commitmentHex && canCommit)}
-                        buttonClassName="w-full"
-                        buttonText={spinStarCost > 0 ? `Spin! (${spinStarCost}★)` : "Spin!"}
-                        onStatusUpdate={handleSpinStatus("commit") as any}
-                        onButtonClick={() => {
-                          if (!(commitmentHex && canCommit)) return;
-                          setResultDetails(null);
-                          startWheelSpin();
-                        }}
-                        onRewardConfigUpdate={handleRewardUpdate}
-                      />
-                    )}
-
-                    {pending && (
-                      <SpinGameTransaction
-                        mode="reveal"
-                        plantId={plant.id}
-                        secret={secretHex}
-                        disabled={!canReveal}
-                        buttonClassName="w-full"
-                        buttonText="Stop Spin!"
-                        onStatusUpdate={handleSpinStatus("reveal") as any}
-                        onComplete={(result) => {
-                          handleRevealSuccess();
-                          finishWheelSpin(result?.rewardIndex);
-                          if (result) {
-                            setResultDetails({
-                              pointsDelta: result.pointsDelta,
-                              timeAdded: result.timeAdded,
-                              leafAmount: result.leafAmount,
-                            });
-                          }
-                        }}
-                        onButtonClick={() => {
-                          setWheelState((prev) => ({ ...prev, spinning: false, revealReady: true }));
-                        }}
-                        onRewardConfigUpdate={handleRewardUpdate}
-                      />
-                    )}
-
                     {/* Reset button for users stuck with lost secrets */}
                     {pending && !secretHex && (
-                      <button
+                      <Button
+                        type="button"
+                        variant="link"
                         onClick={handleForceReset}
-                        className="w-full text-xs text-muted-foreground underline hover:text-foreground mt-2"
+                        className="mt-2 h-auto min-h-0 w-full px-0 py-1 text-xs text-muted-foreground hover:text-foreground"
                       >
                         Stuck? Reset and start new spin
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
               </div>
             )}
             {selectedGame === "spin" && resultDetails && (
-              <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-                <div className="font-semibold text-primary">Spin Reward</div>
-                <ul className="mt-2 space-y-1">
+              <RewardResultPanel className="mt-4" title="Spin Reward" tone={hasSpinReward ? "success" : "warning"}>
+                <ul className="space-y-1">
                   {typeof resultDetails.pointsDelta === "number" && resultDetails.pointsDelta !== 0 && (
                     <li>
                       PTS: <span className="font-medium text-foreground">{`${resultDetails.pointsDelta > 0 ? "+" : ""}${formatScore(Math.abs(resultDetails.pointsDelta))}`}</span>
@@ -1103,10 +1185,103 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                       <li className="text-muted-foreground">No reward this time. Better luck next spin!</li>
                     )}
                 </ul>
-              </div>
+              </RewardResultPanel>
             )}
           </div>
         </div>
+        <DialogFooter sticky className="block space-y-3">
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-foreground">
+                {selectedGame === "box" ? "Open a Box" : pending ? "Stop the Wheel" : "Ready to Spin"}
+              </div>
+              <div className="truncate">
+                {selectedGame === "box"
+                  ? seed ? `Box ${seed}${withStar ? " with star" : ""}` : "Choose a box to play"
+                  : pending ? canReveal ? "Ready to claim the result" : "Waiting for the result" : spinStarCost > 0 ? `${spinStarCost} star per spin` : "Ready to spin"}
+              </div>
+            </div>
+            <SponsoredBadge show={isSponsored && isSmartWallet} />
+          </div>
+
+          {selectedGame === "box" && (
+            <BoxGameTransaction
+              plantId={plant.id}
+              seed={seed ?? 1}
+              withStar={withStar}
+              buttonText={withStar ? "Play with star" : "Play box"}
+              buttonClassName="w-full"
+              disabled={boxPlayDisabled}
+              feedbackMode="toast"
+              onStatusUpdate={(status: UntypedValue) => {
+                if (status?.statusName === "transactionPending") {
+                  setBoxResultDetails(null);
+                }
+                onStatus(status as LifecycleStatus);
+              }}
+              onResult={(result) => setBoxResultDetails(result)}
+            />
+          )}
+
+          {selectedGame === "spin" && !pending && (
+            <SpinGameTransaction
+              mode="commit"
+              plantId={plant.id}
+              commitment={commitmentHex ?? undefined}
+              disabled={spinPlayDisabled}
+              buttonClassName="w-full"
+              feedbackMode="toast"
+              buttonText={spinStarCost > 0 ? `Spin Leaf (${spinStarCost}★)` : "Spin Leaf"}
+              onStatusUpdate={handleSpinStatus("commit") as UntypedValue}
+              onButtonClick={() => {
+                if (!(commitmentHex && canCommit)) return;
+                setResultDetails(null);
+                startWheelSpin();
+              }}
+              onRewardConfigUpdate={handleRewardUpdate}
+            />
+          )}
+
+          {selectedGame === "spin" && pending && (
+            <SpinGameTransaction
+              mode="reveal"
+              plantId={plant.id}
+              secret={secretHex}
+              disabled={spinPlayDisabled}
+              buttonClassName="w-full"
+              feedbackMode="toast"
+              buttonText="Stop Wheel"
+              onStatusUpdate={handleSpinStatus("reveal") as UntypedValue}
+              onComplete={(result) => {
+                handleRevealSuccess();
+                finishWheelSpin(result?.rewardIndex);
+                if (result) {
+                  setResultDetails({
+                    pointsDelta: result.pointsDelta,
+                    timeAdded: result.timeAdded,
+                    leafAmount: result.leafAmount,
+                  });
+                }
+              }}
+              onButtonClick={() => {
+                setWheelState((prev) => ({ ...prev, spinning: false, revealReady: true }));
+              }}
+              onRewardConfigUpdate={handleRewardUpdate}
+            />
+          )}
+
+          {selectedGame === "box" && boxHasInsufficientStars && (
+            <InlineBalanceNotice>
+              Not enough Stars. Balance: {starsAvailable} • Required: {boxStarCost}
+            </InlineBalanceNotice>
+          )}
+
+          {selectedGame === "spin" && spinHasInsufficientStars && (
+            <InlineBalanceNotice>
+              Not enough Stars. Balance: {starsAvailable} • Required: {spinStarCost}
+            </InlineBalanceNotice>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

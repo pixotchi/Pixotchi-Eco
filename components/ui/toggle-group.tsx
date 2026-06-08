@@ -9,6 +9,7 @@ export type ToggleValue = string | number;
 export interface ToggleOption {
   value: ToggleValue;
   label: React.ReactNode;
+  ariaLabel?: string;
 }
 
 export interface ToggleGroupProps {
@@ -24,9 +25,9 @@ export interface ToggleGroupProps {
 }
 
 const sizeClassNames = {
-  sm: "h-7 px-2 text-xs",
-  default: "h-8 px-3 text-xs sm:text-sm",
-  lg: "h-9 px-4 text-sm",
+  sm: "h-auto min-h-10 px-2.5 py-1.5 text-xs",
+  default: "h-auto min-h-10 px-3 py-1.5 text-xs sm:text-sm",
+  lg: "h-auto min-h-11 px-3.5 py-2 text-sm",
 } as const;
 
 export function ToggleGroup({
@@ -40,8 +41,39 @@ export function ToggleGroup({
   ariaLabelledBy,
   orientation = "horizontal",
 }: ToggleGroupProps) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const selectedIndex = Math.max(0, options.findIndex((opt) => opt.value === value));
+  const [indicatorStyle, setIndicatorStyle] = React.useState<React.CSSProperties>({
+    opacity: 0,
+  });
+
+  React.useLayoutEffect(() => {
+    const container = containerRef.current;
+    const selectedOption = optionRefs.current[selectedIndex];
+    if (!container || !selectedOption) return;
+
+    const updateIndicator = () => {
+      setIndicatorStyle({
+        height: selectedOption.offsetHeight,
+        opacity: 1,
+        transform: `translate3d(${selectedOption.offsetLeft}px, ${selectedOption.offsetTop}px, 0)`,
+        width: selectedOption.offsetWidth,
+      });
+    };
+
+    updateIndicator();
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    resizeObserver.observe(container);
+    optionRefs.current.forEach((option) => {
+      if (option) resizeObserver.observe(option);
+    });
+
+    return () => resizeObserver.disconnect();
+  }, [options.length, orientation, selectedIndex, size]);
 
   const focusOption = (index: number) => {
     optionRefs.current[index]?.focus();
@@ -84,21 +116,31 @@ export function ToggleGroup({
 
   return (
     <div
-      className={cn("inline-flex items-center p-0.5 rounded-md border border-border bg-card shadow-sm", className)}
+      ref={containerRef}
+      className={cn(
+        "surface-control relative isolate inline-flex items-center rounded-[calc(var(--radius-nav)+0.125rem)] border p-0.5",
+        orientation === "vertical" && "flex-col",
+        className
+      )}
       role="radiogroup"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-orientation={orientation}
     >
+      <span
+        aria-hidden="true"
+        className="surface-control-selected pointer-events-none absolute left-0 top-0 z-0 rounded-[var(--radius-nav)] border transition-[transform,width,height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
+        style={indicatorStyle}
+      />
       {options.map((opt, index) => (
         <Button
           key={String(opt.value)}
           type="button"
           size="xs"
-          variant={value === opt.value ? "secondary" : "ghost"}
+          variant="ghost"
           role="radio"
           aria-checked={value === opt.value}
-          aria-label={typeof opt.label === "string" ? opt.label : String(opt.value)}
+          aria-label={opt.ariaLabel ?? (typeof opt.label === "string" ? opt.label : String(opt.value))}
           tabIndex={value === opt.value ? 0 : index === selectedIndex ? 0 : -1}
           onClick={() => selectOption(index)}
           onKeyDown={(event) => handleKeyDown(event, index)}
@@ -107,7 +149,10 @@ export function ToggleGroup({
           }}
           className={cn(
             sizeClassNames[size],
-            "flex items-center gap-1 rounded-md",
+            "relative z-10 flex min-w-11 items-center justify-center gap-1 !rounded-[var(--radius-nav)] bg-transparent shadow-none",
+            value === opt.value
+              ? "text-primary hover:bg-transparent hover:text-primary"
+              : "text-foreground/80 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
             getButtonClassName?.(opt.value, value === opt.value)
           )}
         >

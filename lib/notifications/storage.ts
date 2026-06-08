@@ -75,7 +75,7 @@ export type PlantCareRunSummary = {
   eligiblePlants: number;
   elapsedMs: number;
   debug?: boolean;
-  result?: unknown;
+  result?: UntypedValue;
 };
 
 export type NotificationCampaignAudienceMode = 'all' | 'selected';
@@ -105,9 +105,9 @@ export type NotificationCampaignProgress = {
   lastBatchAt?: string | null;
 };
 
-type JsonRecord = Record<string, unknown>;
+type JsonRecord = Record<string, UntypedValue>;
 
-function toJsonString(value: unknown): string {
+function toJsonString(value: UntypedValue): string {
   return JSON.stringify(value);
 }
 
@@ -125,14 +125,14 @@ async function readJsonRaw<T>(key: string): Promise<T | null> {
     try {
       return JSON.parse(raw) as T;
     } catch {
-      return raw as unknown as T;
+      return raw as UntypedValue as T;
     }
   }
 
   return raw as T;
 }
 
-async function writeJsonRaw(key: string, value: unknown): Promise<void> {
+async function writeJsonRaw(key: string, value: UntypedValue): Promise<void> {
   if (!redis) {
     return;
   }
@@ -140,13 +140,13 @@ async function writeJsonRaw(key: string, value: unknown): Promise<void> {
   await redis.set(key, toJsonString(value));
 }
 
-async function appendJsonList(key: string, value: unknown, limit: number): Promise<void> {
+async function appendJsonList(key: string, value: UntypedValue, limit: number): Promise<void> {
   if (!redis) {
     return;
   }
 
-  await (redis as any)?.lpush?.(key, toJsonString(value));
-  await (redis as any)?.ltrim?.(key, 0, limit - 1);
+  await (redis as UntypedValue)?.lpush?.(key, toJsonString(value));
+  await (redis as UntypedValue)?.ltrim?.(key, 0, limit - 1);
 }
 
 async function getSetMembersRaw(key: string): Promise<string[]> {
@@ -163,7 +163,7 @@ async function getSetCardRaw(key: string): Promise<number> {
     return 0;
   }
 
-  const scard = await (redis as any)?.scard?.(key);
+  const scard = await (redis as UntypedValue)?.scard?.(key);
   if (typeof scard === 'number') {
     return scard;
   }
@@ -189,7 +189,7 @@ export async function releaseBaseApiLock(owner: string): Promise<void> {
     return;
   }
 
-  await (redis as any)?.eval?.(
+  await (redis as UntypedValue)?.eval?.(
     'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0',
     [BASE_API_LOCK_KEY],
     [owner],
@@ -269,7 +269,7 @@ export async function addBaseAudienceAddresses(snapshotId: string, addresses: st
     return getSetCardRaw(getBaseAudienceSnapshotAddressesKey(snapshotId));
   }
 
-  await (redis as any)?.sadd?.(getBaseAudienceSnapshotAddressesKey(snapshotId), ...normalizedAddresses);
+  await (redis as UntypedValue)?.sadd?.(getBaseAudienceSnapshotAddressesKey(snapshotId), ...normalizedAddresses);
   return getSetCardRaw(getBaseAudienceSnapshotAddressesKey(snapshotId));
 }
 
@@ -335,7 +335,7 @@ export async function listBaseAudienceHistory(limit: number = 10): Promise<BaseA
     return [];
   }
 
-  const rows = await (redis as any)?.lrange?.(BASE_AUDIENCE_HISTORY_KEY, 0, limit - 1);
+  const rows = await (redis as UntypedValue)?.lrange?.(BASE_AUDIENCE_HISTORY_KEY, 0, limit - 1);
   if (!Array.isArray(rows)) {
     return [];
   }
@@ -376,7 +376,7 @@ export async function pruneBaseAudienceAddressesFromCurrentSnapshot(addresses: s
   }
 
   const addressesKey = getBaseAudienceSnapshotAddressesKey(snapshotId);
-  const removedRaw = await (redis as any)?.srem?.(addressesKey, ...normalizedAddresses);
+  const removedRaw = await (redis as UntypedValue)?.srem?.(addressesKey, ...normalizedAddresses);
   const removedCount = typeof removedRaw === 'number' ? removedRaw : Number.parseInt(String(removedRaw || '0'), 10) || 0;
   const remainingCount = await getSetCardRaw(addressesKey);
 
@@ -403,9 +403,9 @@ export async function recordPlantCareRun(summary: PlantCareRunSummary): Promise<
   await writeJsonRaw(getPlantCareLastKey(summary.provider), summary);
   await appendJsonList(getPlantCareLogKey(summary.provider), summary, PLANT_CARE_HISTORY_LIMIT);
   if (!summary.dryRun) {
-    await (redis as any)?.incrby?.(getPlantCareSentCountKey(summary.provider), summary.notified);
+    await (redis as UntypedValue)?.incrby?.(getPlantCareSentCountKey(summary.provider), summary.notified);
   }
-  await (redis as any)?.incr?.(getPlantCareRunsKey(summary.provider));
+  await (redis as UntypedValue)?.incr?.(getPlantCareRunsKey(summary.provider));
 }
 
 export async function getPlantCareStats(provider: NotificationProvider): Promise<{
@@ -427,7 +427,7 @@ export async function getPlantCareStats(provider: NotificationProvider): Promise
     redis.get(getPlantCareSentCountKey(provider)),
     redis.get(getPlantCareRunsKey(provider)),
     readJsonRaw<PlantCareRunSummary>(getPlantCareLastKey(provider)),
-    (redis as any)?.lrange?.(getPlantCareLogKey(provider), 0, 19),
+    (redis as UntypedValue)?.lrange?.(getPlantCareLogKey(provider), 0, 19),
   ]);
 
   const recent = Array.isArray(recentRaw)
@@ -469,8 +469,8 @@ export async function createCampaignMeta(
 
   if (redis) {
     await writeJsonRaw(getCampaignMetaKey(meta.id), meta);
-    await (redis as any)?.lpush?.(NOTIFICATION_CAMPAIGN_INDEX_KEY, meta.id);
-    await (redis as any)?.ltrim?.(NOTIFICATION_CAMPAIGN_INDEX_KEY, 0, BASE_CAMPAIGN_HISTORY_LIMIT - 1);
+    await (redis as UntypedValue)?.lpush?.(NOTIFICATION_CAMPAIGN_INDEX_KEY, meta.id);
+    await (redis as UntypedValue)?.ltrim?.(NOTIFICATION_CAMPAIGN_INDEX_KEY, 0, BASE_CAMPAIGN_HISTORY_LIMIT - 1);
   }
 
   return meta;
@@ -525,7 +525,7 @@ export async function listCampaigns(limit: number = 20): Promise<NotificationCam
     return [];
   }
 
-  const ids = await (redis as any)?.lrange?.(NOTIFICATION_CAMPAIGN_INDEX_KEY, 0, limit - 1);
+  const ids = await (redis as UntypedValue)?.lrange?.(NOTIFICATION_CAMPAIGN_INDEX_KEY, 0, limit - 1);
   if (!Array.isArray(ids)) {
     return [];
   }

@@ -71,7 +71,7 @@ export function AirdropClaimCard() {
             let signature: string;
             try {
                 signature = await signMessageAsync({ message });
-            } catch (signError: any) {
+            } catch (signError: UntypedValue) {
                 // User rejected the signature
                 if (signError?.name === 'UserRejectedRequestError' || signError?.code === 4001) {
                     toast.error('Signature rejected. Please sign to claim your airdrop.');
@@ -101,7 +101,7 @@ export function AirdropClaimCard() {
             } else {
                 toast.error(data.error || 'Claim failed');
             }
-        } catch (err: any) {
+        } catch (err: UntypedValue) {
             console.error('[AIRDROP] Claim error:', err);
             toast.error(err?.message || 'Failed to claim airdrop');
         } finally {
@@ -116,6 +116,19 @@ export function AirdropClaimCard() {
         return null;
     }
 
+    const panelClassName =
+        "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-0 shadow-[var(--shadow-raised)]";
+    const contentClassName =
+        "relative p-3 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
+    const featureCardClassName =
+        "relative flex items-center gap-3 rounded-[var(--radius-panel)] border border-primary/20 bg-primary/10 bg-[image:var(--gradient-selection)] p-3 shadow-[var(--shadow-hairline)]";
+    const airdropGiftIconClassName =
+        "h-9 w-9 shrink-0 text-primary drop-shadow-[0_6px_14px_hsl(var(--primary)/0.28)]";
+    const claimedIconClassName =
+        "h-8 w-8 shrink-0 text-value drop-shadow-[0_6px_14px_hsl(var(--success)/0.24)]";
+    const baseActionClassName =
+        "w-full border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45";
+
     // Don't render if loading or no address
     if (loading || !address || !status) {
         return null;
@@ -124,21 +137,21 @@ export function AirdropClaimCard() {
     // Not eligible state
     if (!status.eligible) {
         return (
-            <div className="space-y-3 mb-4">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                    Airdrop
-                </h3>
-                <StandardContainer className="p-4 rounded-md border bg-card">
-                    <div className="flex items-center gap-3">
-                        <Gift className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1">
-                            <p className="text-sm font-medium text-muted-foreground">No Allocation</p>
-                            <p className="text-xs text-muted-foreground">
-                                You are not eligible for any airdrop right now. Keep playing and staying active to qualify for future rewards!
-                            </p>
-                        </div>
+            <div className="space-y-3">
+                <div className="flex items-center">
+                    <h3 className="text-sm font-semibold text-foreground">
+                        Airdrop
+                    </h3>
+                </div>
+                <div className={featureCardClassName}>
+                    <Gift className={airdropGiftIconClassName} />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground">No Allocation</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                            You are not eligible for any airdrop right now. Keep playing and staying active to qualify for future rewards!
+                        </p>
                     </div>
-                </StandardContainer>
+                </div>
             </div>
         );
     }
@@ -192,71 +205,74 @@ export function AirdropClaimCard() {
     };
 
     return (
-        <div className="space-y-3 mb-4">
-            <h3 className="text-sm font-medium text-muted-foreground">
-                Airdrop
-            </h3>
-            <StandardContainer className="p-4 rounded-md border bg-card">
-                {status.claimed ? (
-                    // Already claimed state
-                    <div className="flex items-center gap-3">
-                        <CheckCircle className="w-5 h-5 text-value flex-shrink-0" />
-                        <div className="flex-1">
-                            <p className="text-sm font-medium text-value">
-                                Airdrop Claimed
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                Thanks for playing and helping Pixotchi grow🌱
-                            </p>
-                        </div>
-                    </div>
-                ) : (
-                    // Unclaimed state
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                            <Gift className="w-5 h-5 text-primary flex-shrink-0" />
-                            <div className="flex-1">
-                                <p className="text-sm font-medium">Claimable Tokens</p>
-                                <div className="flex flex-wrap gap-2 mt-1">
-                                    {tokens.map(t => {
-                                        let iconPath = '';
-                                        if (t.name === 'SEED') iconPath = '/PixotchiKit/COIN.svg';
-                                        else if (t.name === 'LEAF') iconPath = '/icons/leaf.png';
-                                        else if (t.name === 'PIXOTCHI') iconPath = '/icons/cc.png';
-
-                                        return (
-                                            <span
-                                                key={t.name}
-                                                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium border border-primary/20"
-                                            >
-                                                {iconPath && (
-                                                    <Image
-                                                        src={iconPath}
-                                                        alt={t.name}
-                                                        width={14}
-                                                        height={14}
-                                                        className="w-3.5 h-3.5 object-contain"
-                                                    />
-                                                )}
-                                                {t.amount} {t.name}
-                                            </span>
-                                        );
-                                    })}
-                                </div>
+        <div className="space-y-3">
+            <div className="flex items-center">
+                <h3 className="text-sm font-semibold text-foreground">
+                    Airdrop
+                </h3>
+            </div>
+            <StandardContainer padding="none" className={panelClassName}>
+                <div className={contentClassName}>
+                    {status.claimed ? (
+                        // Already claimed state
+                        <div className={featureCardClassName}>
+                            <CheckCircle className={claimedIconClassName} />
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-value">
+                                    Airdrop Claimed
+                                </p>
+                                <p className="text-xs leading-relaxed text-muted-foreground">
+                                    Thanks for playing and helping Pixotchi grow.
+                                </p>
                             </div>
                         </div>
-                        <Button
-                            onClick={handleClaim}
-                            disabled={claiming}
-                            className="w-full"
-                            size="sm"
-                        >
-                            {getButtonContent()}
-                        </Button>
-                    </div>
-                )}
+                    ) : (
+                        // Unclaimed state
+                        <div className="relative space-y-3">
+                            <div className={featureCardClassName}>
+                                <Gift className={airdropGiftIconClassName} />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold">Claimable Tokens</p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {tokens.map(t => {
+                                            let iconPath = '';
+                                            if (t.name === 'SEED') iconPath = '/PixotchiKit/COIN.svg';
+                                            else if (t.name === 'LEAF') iconPath = '/icons/leaf.png';
+                                            else if (t.name === 'PIXOTCHI') iconPath = '/icons/cc.png';
+
+                                            return (
+                                                <span
+                                                    key={t.name}
+                                                    className="flex min-h-7 items-center gap-1.5 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary shadow-[var(--shadow-hairline)]"
+                                                >
+                                                    {iconPath && (
+                                                        <Image
+                                                            src={iconPath}
+                                                            alt={t.name}
+                                                            width={14}
+                                                            height={14}
+                                                            className="h-3.5 w-3.5 object-contain"
+                                                        />
+                                                    )}
+                                                    {t.amount} {t.name}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                            <Button
+                                onClick={handleClaim}
+                                disabled={claiming}
+                                className={baseActionClassName}
+                                size="sm"
+                            >
+                                {getButtonContent()}
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </StandardContainer>
         </div>
     );
 }
-

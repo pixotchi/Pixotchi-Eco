@@ -58,9 +58,13 @@ export function formatScoreShort(score: number): string {
 // Format ETH with max 6 decimals for leaderboard
 export function formatEthShort(wei: number | bigint): string {
   const ether = Number(wei) / 1e18;
+  if (!Number.isFinite(ether) || ether === 0) return '0';
+  if (ether > 0 && ether < 0.000001) return '<0.000001';
+
+  const maximumFractionDigits = ether < 0.01 ? 6 : ether < 1 ? 5 : 4;
   return ether.toLocaleString(undefined, {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 6,
+    maximumFractionDigits,
   });
 }
 
@@ -291,7 +295,7 @@ export function getPlantStatusColor(status: number): string {
     case 2: return 'status-dry'; // Dry
     case 3: return 'status-dying'; // Dying
     case 4: return 'status-dead'; // Dead
-    default: return 'status-unknown';
+    default: return 'status-UntypedValue';
   }
 }
 
@@ -318,7 +322,7 @@ export function getStrainName(strainId: number): string {
   }
 }
 
-export function getFriendlyErrorMessage(error: any): string {
+export function getFriendlyErrorMessage(error: UntypedValue): string {
   if (error && typeof error.message === 'string') {
     const message = error.message.toLowerCase();
     if (message.includes('user rejected') || message.includes('request rejected')) {
@@ -365,7 +369,7 @@ const BUILDING_ICON_MAP: { [key: string]: string } = {
   "Marketplace": "/icons/marketplace.svg",
   "Casino": "/icons/casino.svg",
   "Farmer House": "/icons/farmer-house.svg",
-  "Barracks": "/icons/barracks.png",
+  "Barracks": "/icons/barracks.webp",
 };
 
 // Building name and icon caching
@@ -494,7 +498,7 @@ export function formatXP(xp: number | string | bigint): string {
 }
 
 // Building Management Utilities
-export function calculateUpgradeProgress(building: any, currentBlock: bigint): number {
+export function calculateUpgradeProgress(building: UntypedValue, currentBlock: bigint): number {
   if (!building.isUpgrading) return 0;
 
   const totalBlocks = building.blockHeightUntilUpgradeDone - building.blockHeightUpgradeInitiated;
@@ -504,7 +508,7 @@ export function calculateUpgradeProgress(building: any, currentBlock: bigint): n
   return Math.max(0, Math.min(100, progress));
 }
 
-export function calculateTimeLeft(building: any, currentBlock: bigint): string {
+export function calculateTimeLeft(building: UntypedValue, currentBlock: bigint): string {
   const SECONDS_PER_BLOCK = 2; // Base network: ~2 seconds per block
   const blocksLeft = building.blockHeightUntilUpgradeDone - currentBlock;
   const secondsLeft = Number(blocksLeft) * SECONDS_PER_BLOCK;
@@ -567,7 +571,7 @@ export function isValidEthereumAddress(address: string): boolean {
 }
 
 // Alternative validation using viem's isAddress for cases that need it
-export function isValidAddress(address: string | unknown): address is `0x${string}` {
+export function isValidAddress(address: string | UntypedValue): address is `0x${string}` {
   if (typeof address !== 'string') return false;
   return isValidEthereumAddress(address);
 }
@@ -600,9 +604,9 @@ export const getFenceStatus = (plant: Plant): {
   const fenceV2Mirroring = Boolean(fenceV2State?.isMirroringV1);
 
   // Check V1 status - but only if not mirrored by V2
-  const fenceV1Active = plant.extensions?.some((extension: any) => {
+  const fenceV1Active = plant.extensions?.some((extension: UntypedValue) => {
     const owned = extension?.shopItemOwned || [];
-    return owned.some((item: any) => {
+    return owned.some((item: UntypedValue) => {
       if (!item?.effectIsOngoingActive) return false;
       const lowerName = item?.name?.toLowerCase() || '';
       if (!lowerName.includes('fence') && !lowerName.includes('shield')) return false;

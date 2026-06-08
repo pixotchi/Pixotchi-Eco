@@ -4,7 +4,6 @@ import React, { useCallback, useMemo } from 'react';
 import {
   Transaction,
   TransactionButton,
-  TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from './transaction-kit';
@@ -25,8 +24,8 @@ const PIXOTCHI_NFT_ABI = [
 
 interface ClaimRewardsTransactionProps {
   plantId: number;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
@@ -54,11 +53,11 @@ export default function ClaimRewardsTransaction({
   // Normalize to raw serializable calls for embedded-wallet compatibility.
   // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[]),
+    transformCallsWithBuilderCode(calls as UntypedValue[]),
     [calls]
   );
 
-  const handleOnSuccess = useCallback((tx: any) => {
+  const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
   }, [onSuccess]);
 
@@ -89,10 +88,6 @@ export default function ClaimRewardsTransaction({
           className={buttonClassName}
           disabled={disabled}
         />
-
-        {!minimal && (
-          <TransactionStatus />
-        )}
 
         <GlobalTransactionToast />
       </Transaction>

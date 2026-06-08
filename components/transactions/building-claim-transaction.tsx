@@ -8,8 +8,8 @@ import { LAND_CONTRACT_ADDRESS } from "@/lib/contracts";
 interface BuildingClaimTransactionProps {
   landId: bigint;
   buildingId: number;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
@@ -21,7 +21,7 @@ export default function BuildingClaimTransaction({
   onSuccess,
   onError,
   buttonText = "Collect",
-  buttonClassName = "h-9 px-3 text-sm",
+  buttonClassName = "h-11 min-h-11 px-3 text-sm",
   disabled = false,
 }: BuildingClaimTransactionProps) {
   const calls = [
@@ -45,5 +45,4 @@ export default function BuildingClaimTransaction({
     />
   );
 }
-
 

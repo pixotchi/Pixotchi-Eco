@@ -16,13 +16,13 @@ const PIXOTCHI_NFT_ABI = [
 
 interface ReviveTransactionProps {
   plantId: number;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   showToast?: boolean;
-  onStatusUpdate?: (status: any) => void;
+  onStatusUpdate?: (status: UntypedValue) => void;
 }
 
 export default function ReviveTransaction({

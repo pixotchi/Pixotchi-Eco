@@ -3,9 +3,8 @@
 
 // Ensure TS knows about `process` in all environments for lint/type checks
 // (Next.js will still inline NEXT_PUBLIC_* at build time)
-declare const process: any;
+declare const process: UntypedValue;
 
-import { validateBaseRpcEndpointDiversity } from './base-rpc-policy';
 import {
 normalizeNotificationProvider,
 type NotificationProvider,
@@ -32,7 +31,6 @@ export const CLIENT_ENV = {
   STAKE_CONTRACT_ADDRESS: process.env.NEXT_PUBLIC_STAKE_CONTRACT_ADDRESS || '0xF15D93c3617525054aF05338CC6Ccf18886BD03A',
 
   // Feature flags
-  INVITE_SYSTEM_ENABLED: process.env.NEXT_PUBLIC_INVITE_SYSTEM_ENABLED === 'true',
   PAYMASTER_ENABLED: process.env.NEXT_PUBLIC_PAYMASTER_ENABLED === 'true',
   GAMIFICATION_DISABLED: process.env.NEXT_PUBLIC_GAMIFICATION_DISABLED === 'true',
   // Deprecated: mini-app-only feature gating is ignored after the Base App web cutover.
@@ -51,21 +49,19 @@ export const CLIENT_ENV = {
   VERIFY_CLAIM_LEAF_BONUS_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true',
   // When enabled, each free plant claim also sends SEED tokens (first-come-first-served)
   VERIFY_CLAIM_SEED_BONUS_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true',
-  // Agent tab in chat - allows AI to mint plants on behalf of user
-  // When false, the Agent tab is completely hidden and agent code is not loaded
-  AGENT_ENABLED: process.env.NEXT_PUBLIC_AGENT_ENABLED !== 'false', // Defaults to true
   SWAP_MODULE_DISABLED: process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED === 'true',
   SWAP_MODULE_DISABLED_MESSAGE:
     process.env.NEXT_PUBLIC_SWAP_MODULE_DISABLED_MESSAGE ||
     "In-Game swaps are temporarily disabled but it'll be back soon! \nThanks for your patience, and apologies for the inconvenience.",
+  SWAP_QUOTE_SUMMARY_ENABLED: process.env.NEXT_PUBLIC_SWAP_QUOTE_SUMMARY_ENABLED === 'true',
 
   // UI configuration
   ICON_URL: process.env.NEXT_PUBLIC_ICON_URL,
   HERO_IMAGE: process.env.NEXT_PUBLIC_APP_HERO_IMAGE,
   SPLASH_IMAGE: process.env.NEXT_PUBLIC_SPLASH_IMAGE,
-  SPLASH_BACKGROUND_COLOR: process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR || '#a7c7e7',
+  SPLASH_BACKGROUND_COLOR: process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR || '#a8d0f0',
 
-  // OnchainKit configuration (requires client access)
+  // CDP/paymaster configuration (requires client access)
   CDP_CLIENT_API_KEY: process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY,
   CDP_PAYMASTER_URL: process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL,
   ONCHAINKIT_PROJECT_NAME: process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME ?? 'minikit',
@@ -110,12 +106,6 @@ export const getRpcConfig = () => {
     throw new Error('Base RPC endpoints must be unique.');
   }
 
-  const allowDuplicateVendors = process.env.ALLOW_RPC_VENDOR_DUPLICATES === 'true';
-  validateBaseRpcEndpointDiversity(endpoints, {
-    maxEndpointsPerVendor: allowDuplicateVendors ? Number.POSITIVE_INFINITY : 2,
-    minUniqueVendors: 3,
-  });
-
   return { endpoints };
 };
 
@@ -135,8 +125,7 @@ export const SERVER_ENV = {
   REDIS_TOKEN: process.env.REDIS_TOKEN,
 
   // Admin configuration
-  ADMIN_INVITE_KEY: process.env.ADMIN_INVITE_KEY,
-  // Note: ADMIN_TOKEN was replaced with ADMIN_INVITE_KEY for consistency
+  ADMIN_TOKEN: process.env.ADMIN_TOKEN,
 
   // Environment info
   NODE_ENV: process.env.NODE_ENV,
@@ -222,10 +211,6 @@ if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
   const required: Array<{ key: string; present: boolean }> = [
     { key: 'NEXT_PUBLIC_URL', present: Boolean(process.env.NEXT_PUBLIC_URL) },
     { key: 'NEXT_PUBLIC_RPC_NODE', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_FALLBACK', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_FALLBACK) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_BACKUP_1', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_1) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_BACKUP_2', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_2) },
-    { key: 'NEXT_PUBLIC_RPC_NODE_BACKUP_3', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_3) },
     { key: 'INDEXER_UPSTREAM_URL', present: Boolean(process.env.INDEXER_UPSTREAM_URL || process.env.NEXT_PUBLIC_PONDER_API_URL) },
     { key: 'INDEXER_SHARED_SECRET', present: Boolean(process.env.INDEXER_SHARED_SECRET) },
     { key: 'NEXT_PUBLIC_CDP_CLIENT_API_KEY', present: Boolean(process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY) },
@@ -237,9 +222,5 @@ if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
     // Throwing here will surface during boot in Vercel/Node, preventing a broken prod deploy
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-
-  const { endpoints } = getRpcConfig();
-  if (endpoints.length !== 5) {
-    throw new Error(`Production requires exactly 5 unique Base RPC endpoints. Found ${endpoints.length}.`);
-  }
+  getRpcConfig();
 }

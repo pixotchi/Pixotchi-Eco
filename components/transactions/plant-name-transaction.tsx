@@ -4,7 +4,6 @@ import React, { useCallback, useMemo } from 'react';
 import {
   Transaction,
   TransactionButton,
-  TransactionStatus,
 } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import type { LifecycleStatus } from './transaction-kit';
@@ -30,11 +29,12 @@ const PIXOTCHI_NFT_ABI = [
 interface PlantNameTransactionProps {
   plantId: number;
   newName: string;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  hideLabel?: boolean;
 }
 
 export function PlantNameTransaction({
@@ -44,7 +44,8 @@ export function PlantNameTransaction({
   onError,
   buttonText = "Change Name (350 SEED)",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  hideLabel = false
 }: PlantNameTransactionProps) {
 
   const { isSponsored } = usePaymaster();
@@ -61,12 +62,11 @@ export function PlantNameTransaction({
   // Normalize to raw serializable calls for embedded-wallet compatibility.
   // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[]),
+    transformCallsWithBuilderCode(calls as UntypedValue[]),
     [calls]
   );
 
-  const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Plant name change transaction successful:', tx);
+  const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
   }, [onSuccess]);
 
@@ -78,10 +78,12 @@ export function PlantNameTransaction({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{buttonText}</span>
-        <SponsoredBadge show={isSponsored && isSmartWallet} />
-      </div>
+      {!hideLabel && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">{buttonText}</span>
+          <SponsoredBadge show={isSponsored && isSmartWallet} />
+        </div>
+      )}
 
       <Transaction
         calls={transformedCalls}
@@ -96,8 +98,6 @@ export function PlantNameTransaction({
           className={buttonClassName}
           disabled={disabled}
         />
-
-        <TransactionStatus />
 
         <GlobalTransactionToast />
       </Transaction>

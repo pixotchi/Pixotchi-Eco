@@ -11,7 +11,7 @@ interface BuildingUpgradeTransactionProps {
   landId: bigint;
   buildingType: BuildingType;
   onSuccess?: () => void;
-  onError?: (error: any) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;

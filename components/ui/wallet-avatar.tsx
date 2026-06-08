@@ -1,12 +1,13 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useEnsAvatar } from '@/components/hooks/useEnsAvatar';
 
 type WalletAvatarProps = {
   address?: string | null;
-  chain?: unknown;
+  chain?: UntypedValue;
   className?: string;
   style?: CSSProperties;
 };
@@ -64,12 +65,13 @@ export function WalletAvatar({
       style={style}
     >
       {avatar ? (
-        <img
+        <Image
           src={avatar}
           alt=""
-          className="h-full w-full object-cover"
-          loading="lazy"
-          decoding="async"
+          fill
+          sizes="40px"
+          unoptimized
+          className="object-cover"
         />
       ) : (
         <div

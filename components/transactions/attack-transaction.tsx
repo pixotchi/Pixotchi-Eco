@@ -3,6 +3,7 @@
 import React from 'react';
 import SponsoredTransaction from './sponsored-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import type { TransactionFeedbackMode } from './transaction-kit';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -20,13 +21,14 @@ const PIXOTCHI_NFT_ABI = [
 interface AttackTransactionProps {
   attackerId: number;
   targetId: number;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
-  onStatusUpdate?: (status: any) => void;
+  onStatusUpdate?: (status: UntypedValue) => void;
 }
 
 export default function AttackTransaction({
@@ -37,7 +39,8 @@ export default function AttackTransaction({
   buttonText = "Attack",
   buttonClassName,
   disabled = false,
-  showToast = false,
+  feedbackMode,
+  showToast = true,
   onStatusUpdate,
 }: AttackTransactionProps) {
   const calls = [{
@@ -57,9 +60,9 @@ export default function AttackTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      feedbackMode={feedbackMode}
       showToast={showToast}
       onStatusUpdate={onStatusUpdate}
     />
   );
 }
-

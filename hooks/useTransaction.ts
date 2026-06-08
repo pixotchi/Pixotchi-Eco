@@ -12,7 +12,7 @@ interface UseTransactionOptions<T> {
   errorMessage?: string;
 }
 
-export function useTransaction<T, P extends any[]>(
+export function useTransaction<T, P extends UntypedValue[]>(
   transactionFn: (...params: P) => Promise<T>,
   options: UseTransactionOptions<T> = {}
 ) {
@@ -48,9 +48,9 @@ export function useTransaction<T, P extends any[]>(
         opts.onSuccess(result);
       }
       return result;
-    } catch (err: unknown) {
+    } catch (err: UntypedValue) {
       if (!mountedRef.current) return;
-      const error = err instanceof Error ? err : new Error('An unknown error occurred');
+      const error = err instanceof Error ? err : new Error('An UntypedValue error occurred');
       console.error('Transaction failed:', error);
       setState({ status: 'error', error: getFriendlyErrorMessage(error) });
       

@@ -1,10 +1,10 @@
-// Plant strain definitions (mint prices in SEED units)
+// Plant strain definitions. TYJ is paid in JESSE; standard strains use SEED.
 export const PLANT_STRAINS = [
-  { id: 1, name: 'Flora', mintPriceSeed: 10 },
-  { id: 2, name: 'Taki', mintPriceSeed: 20 },
-  { id: 3, name: 'Rosa', mintPriceSeed: 40 },
-  { id: 4, name: 'Zest', mintPriceSeed: 10 },
-  { id: 5, name: 'TYJ', mintPriceSeed: 500 },
+  { id: 1, name: 'Flora', mintPriceSeed: 10, paymentTokenSymbol: 'SEED', priceDisplay: '10 SEED' },
+  { id: 2, name: 'Taki', mintPriceSeed: 20, paymentTokenSymbol: 'SEED', priceDisplay: '20 SEED' },
+  { id: 3, name: 'Rosa', mintPriceSeed: 40, paymentTokenSymbol: 'SEED', priceDisplay: '40 SEED' },
+  { id: 4, name: 'Zest', mintPriceSeed: 10, paymentTokenSymbol: 'SEED', priceDisplay: '10 SEED' },
+  { id: 5, name: 'TYJ', paymentTokenSymbol: 'JESSE', priceDisplay: '500 JESSE' },
 ] as const;
 
 // Plant strain index for quick lookups

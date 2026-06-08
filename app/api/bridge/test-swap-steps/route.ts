@@ -60,7 +60,7 @@ const ERC20_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   const searchParams = request.nextUrl.searchParams;
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     const publicClient = getBaseReadClient();
     const wsolAmountBn = BigInt(wsolAmount);
 
-    const results: any = {
+    const results: UntypedValue = {
       input: { wsolAmount: formatUnits(wsolAmountBn, 9) + ' SOL', raw: wsolAmount },
       steps: {},
     };

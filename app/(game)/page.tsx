@@ -1,22 +1,22 @@
 "use client";
 
 import { ChatButton } from "@/components/chat";
-import InviteGate from "@/components/invite-gate";
 import StatusBar from "@/components/status-bar";
+import { useIsSolanaWallet } from "@/components/solana";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
+import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { WalletProfile } from "@/components/wallet-profile";
-import { INVITE_CONFIG,getLocalStorageKeys } from "@/lib/invite-utils";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
 import { sdk } from "@farcaster/miniapp-sdk";
-import { History,Info,KeyRound,Leaf,PlusCircle,Repeat,Sparkles,Trophy } from "lucide-react";
+import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,type LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Activity,useCallback,useEffect,useRef,useState } from "react";
+import { Activity,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type KeyboardEvent } from "react";
 import toast from "react-hot-toast";
 
 // Import custom hooks
@@ -28,12 +28,14 @@ import { useAppAuthController } from "@/hooks/useAppAuthController";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import { useFarcaster } from "@/hooks/useFarcaster";
-import { useInviteValidation } from "@/hooks/useInviteValidation";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { requestBalanceRefresh } from "@/lib/app-events";
 import type { AuthSurface } from "@/lib/auth-surface";
 import { CLIENT_ENV } from "@/lib/env-config";
+import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
 import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
+import { isSolanaAuthAvailable } from "@/lib/solana-auth-availability";
+import { cn } from "@/lib/utils";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
@@ -66,7 +68,7 @@ function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => v
 
 // Factory function to create dynamic imports with error handling
 const createDynamicTab = (
-  importFn: () => Promise<any>,
+  importFn: () => Promise<UntypedValue>,
   tabName: string
 ) => {
   return dynamic(
@@ -111,8 +113,23 @@ const tabComponents = {
     "Ranking"
   ),
 };
+const tabPrefetchers: Record<Tab, () => Promise<unknown>> = {
+  dashboard: () => import("@/components/tabs/dashboard-tab"),
+  mint: () => import("@/components/tabs/mint-tab"),
+  about: () => import("@/components/tabs/about-tab"),
+  swap: () => import("@/components/tabs/swap-tab"),
+  activity: () => import("@/components/tabs/activity-tab"),
+  leaderboard: () => import("@/components/tabs/leaderboard-tab"),
+};
 
 const TAB_VALUES: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
+const LOGIN_THEME_SEQUENCE = ["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"] as const;
+const LOGIN_THEME_INTERVAL_MS = 4000;
+const LOGIN_THEME_LAYER_STYLE: CSSProperties = {
+  backgroundImage: "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--secondary)) 52%, hsl(var(--card)) 100%)",
+  backgroundPosition: "center top",
+  backgroundSize: "100% 100%",
+};
 const MANAGED_GAME_QUERY_KEYS = new Set([
   "tab",
   "dashboardView",
@@ -143,12 +160,17 @@ const TAB_QUERY_KEY_ALLOWLIST: Record<Tab, ReadonlySet<string>> = {
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
   const loadedTabs = useRef(new Set<string>());
   const prefetchingTabs = useRef(new Set<string>());
-  const prefetchPromises = useRef<Map<string, Promise<void>>>(new Map());
+  const prefetchPromises = useRef<Map<string, Promise<unknown>>>(new Map());
 
   useEffect(() => {
     if (!isConnected) return;
     const prefetchingTabsRef = prefetchingTabs.current;
     const prefetchPromisesRef = prefetchPromises.current;
+    const connection = (navigator as UntypedValue).connection;
+
+    if (connection?.saveData || connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") {
+      return;
+    }
 
     // Define tab navigation patterns for prefetching
     const currentIndex = TAB_VALUES.indexOf(activeTab);
@@ -164,37 +186,41 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
     const tabsToPrefetch = [...new Set([...prefetchTabs, ...frequentlyAccessedTabs])]
       .filter((tab): tab is Tab => tab !== activeTab);
 
-    // Use requestIdleCallback for non-blocking prefetching, avoid duplicates
-    if ('requestIdleCallback' in window) {
-      const idleCallbackId = (window as any).requestIdleCallback?.(() => {
-        tabsToPrefetch.forEach((tab) => {
-          const key = String(tab);
-          if (key === activeTab) return;
-          if (loadedTabs.current.has(key) || prefetchingTabsRef.has(key)) return;
-          prefetchingTabsRef.add(key);
+    const runPrefetch = () => {
+      tabsToPrefetch.forEach((tab) => {
+        const key = String(tab);
+        if (key === activeTab) return;
+        if (loadedTabs.current.has(key) || prefetchingTabsRef.has(key)) return;
+        prefetchingTabsRef.add(key);
 
-          const prefetchPromise = import(`@/components/tabs/${tab}-tab`)
-            .finally(() => {
-              prefetchingTabsRef.delete(key);
-              loadedTabs.current.add(key);
-              prefetchPromisesRef.delete(key);
-            });
+        const prefetchPromise = tabPrefetchers[tab]()
+          .finally(() => {
+            prefetchingTabsRef.delete(key);
+            loadedTabs.current.add(key);
+            prefetchPromisesRef.delete(key);
+          });
 
-          prefetchPromisesRef.set(key, prefetchPromise);
-        });
+        prefetchPromisesRef.set(key, prefetchPromise);
       });
+    };
 
-      // Cleanup function to clear pending prefetches on unmount
-      return () => {
-        if (idleCallbackId && typeof idleCallbackId === 'number') {
-          (window as any).cancelIdleCallback?.(idleCallbackId);
-        }
-        prefetchingTabsRef.clear();
-        prefetchPromisesRef.clear();
+    const requestIdleCallback = (window as UntypedValue).requestIdleCallback;
+    const scheduler = typeof requestIdleCallback === 'function'
+      ? {
+        kind: 'idle' as const,
+        id: requestIdleCallback(runPrefetch, { timeout: 2500 }) as number,
+      }
+      : {
+        kind: 'timeout' as const,
+        id: window.setTimeout(runPrefetch, 750),
       };
-    }
 
     return () => {
+      if (scheduler.kind === 'idle') {
+        (window as UntypedValue).cancelIdleCallback?.(scheduler.id);
+      } else {
+        window.clearTimeout(scheduler.id);
+      }
       prefetchingTabsRef.clear();
       prefetchPromisesRef.clear();
     };
@@ -204,6 +230,7 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { useKeyboardAware,useKeyboardNavigation,useViewportInsets } from "@/hooks/useKeyboardAware";
+import { useViewportShellMetrics } from "@/hooks/useViewportShellMetrics";
 
 type LoginAuthActionsProps = {
   className: string;
@@ -258,12 +285,12 @@ function LoginAuthActions({
         <Info className="h-4 w-4" />
         <AlertTitle>Web App</AlertTitle>
         <AlertDescription>
-          You are in the web app mode. For the best experience; sign in with base or use Farcaster to access the game in the mini app mode.
+          You are in web app mode. For the best experience, sign in with Base or open the game from Farcaster.
         </AlertDescription>
       </Alert>
       <Button
-        className="w-full rounded-md text-base font-semibold text-white h-11 bg-[#ff8170] hover:bg-[#ff6b56] active:bg-[#ff8170] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#ff8170] disabled:opacity-60 disabled:cursor-not-allowed"
-        variant="default"
+        className="w-full text-base"
+        variant="special"
         onClick={async () => {
           try {
             await switchAuthSurface('privy');
@@ -277,12 +304,12 @@ function LoginAuthActions({
         {privyReady ? 'Continue with Privy' : 'Loading Privy…'}
       </Button>
       <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
-      {process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true' && (
+      {isSolanaAuthAvailable() && (
         <>
           <div className="flex items-center gap-2 my-2">
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
             <span className="text-xs text-muted-foreground">or bridge from Solana</span>
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
           </div>
           <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
         </>
@@ -290,12 +317,12 @@ function LoginAuthActions({
       {localTestAuthAvailable && (
         <>
           <div className="flex items-center gap-2 my-2">
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
             <span className="text-xs text-muted-foreground">or local testing</span>
-            <div className="flex-1 h-px bg-border" />
+            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
           </div>
           <Button
-            className="w-full h-11 rounded-md text-base font-semibold"
+            className="h-11 w-full rounded-[var(--radius-control)] text-base font-semibold"
             variant="outline"
             onClick={async () => {
               try {
@@ -311,6 +338,237 @@ function LoginAuthActions({
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+function SharedFarmMintMobileToggle({
+  activeTab,
+  isMiniApp,
+}: {
+  activeTab: Tab;
+  isMiniApp: boolean;
+}) {
+  const isSolana = useIsSolanaWallet();
+  const [dashboardView, setDashboardView] = useWebQueryState<'plants' | 'lands'>({
+    key: 'dashboardView',
+    defaultValue: 'plants',
+    enabled: !isMiniApp,
+    parse: (rawValue) => (rawValue === 'plants' || rawValue === 'lands' ? rawValue : null),
+    serialize: (value) => (value === 'plants' ? null : value),
+  });
+  const [mintType, setMintType] = useWebQueryState<'plant' | 'land'>({
+    key: 'mintType',
+    defaultValue: 'plant',
+    enabled: !isMiniApp,
+    parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
+    serialize: (value) => (value === 'plant' ? null : value),
+  });
+
+  const isFarmOrMint = activeTab === 'dashboard' || activeTab === 'mint';
+  const showToggle = isFarmOrMint && !(activeTab === 'mint' && isSolana);
+  const value =
+    activeTab === 'mint'
+      ? (mintType === 'land' ? 'lands' : 'plants')
+      : dashboardView;
+
+  const handleValueChange = (nextValue: ToggleValue) => {
+    if (nextValue !== 'plants' && nextValue !== 'lands') {
+      return;
+    }
+
+    if (activeTab === 'mint') {
+      setMintType(nextValue === 'lands' ? 'land' : 'plant');
+      return;
+    }
+
+    setDashboardView(nextValue);
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex justify-center pb-3 min-[54rem]:hidden",
+        !showToggle && "hidden",
+      )}
+      data-shared-farm-mint-toggle
+    >
+      <ToggleGroup
+        value={value}
+        onValueChange={handleValueChange}
+        options={[
+          {
+            value: 'plants',
+            ariaLabel: 'Plants',
+            label: <span className="flex items-center gap-1"><Leaf className="h-4 w-4" /> Plants</span>,
+          },
+          {
+            value: 'lands',
+            ariaLabel: 'Lands',
+            label: <span className="flex items-center gap-1"><LandPlot className="h-4 w-4" /> Lands</span>,
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+type AppTabDefinition = {
+  id: Tab;
+  label: string;
+  icon: LucideIcon;
+};
+
+function SlidingNavTabs({
+  activeTab,
+  mode,
+  onTabChange,
+  tabs,
+}: {
+  activeTab: Tab;
+  mode: "desktop" | "mobile";
+  onTabChange: (tab: Tab) => void;
+  tabs: AppTabDefinition[];
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = Math.max(0, tabs.findIndex((tab) => tab.id === activeTab));
+  const [indicatorStyle, setIndicatorStyle] = useState<CSSProperties>({
+    opacity: 0,
+  });
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const selectedTab = tabRefs.current[selectedIndex];
+    if (!container || !selectedTab) return;
+
+    const updateIndicator = () => {
+      setIndicatorStyle({
+        height: selectedTab.offsetHeight,
+        opacity: 1,
+        transform: `translate3d(${selectedTab.offsetLeft}px, ${selectedTab.offsetTop}px, 0)`,
+        width: selectedTab.offsetWidth,
+      });
+    };
+
+    updateIndicator();
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    resizeObserver.observe(container);
+    tabRefs.current.forEach((tab) => {
+      if (tab) resizeObserver.observe(tab);
+    });
+
+    return () => resizeObserver.disconnect();
+  }, [mode, selectedIndex, tabs.length]);
+
+  const focusTab = (index: number) => {
+    tabRefs.current[index]?.focus();
+  };
+
+  const selectTab = (index: number) => {
+    const tab = tabs[index];
+    if (!tab) return;
+
+    onTabChange(tab.id);
+    focusTab(index);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (tabs.length === 0) return;
+
+    const isVertical = mode === "desktop";
+    const previousKey = isVertical ? "ArrowUp" : "ArrowLeft";
+    const nextKey = isVertical ? "ArrowDown" : "ArrowRight";
+    let nextIndex = index;
+
+    if (event.key === previousKey) {
+      event.preventDefault();
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (event.key === nextKey) {
+      event.preventDefault();
+      nextIndex = (index + 1) % tabs.length;
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      event.preventDefault();
+      nextIndex = tabs.length - 1;
+    } else {
+      return;
+    }
+
+    selectTab(nextIndex);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative isolate",
+        mode === "desktop"
+          ? "flex flex-col gap-2"
+          : "grid w-full grid-cols-6 items-center gap-0.5",
+      )}
+      role="tablist"
+      aria-label="Application tabs"
+      aria-orientation={mode === "desktop" ? "vertical" : "horizontal"}
+    >
+      <span
+        aria-hidden="true"
+        data-main-nav-indicator={mode}
+        className="surface-control-selected pointer-events-none absolute left-0 top-0 z-0 rounded-[var(--radius-nav)] border transition-[transform,width,height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
+        style={indicatorStyle}
+      />
+      {tabs.map((tab, index) => {
+        const isActive = activeTab === tab.id;
+        const Icon = tab.icon;
+
+        return (
+          <Button
+            key={tab.id}
+            variant="nav"
+            onClick={() => onTabChange(tab.id)}
+            data-active={isActive}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+            ref={(node) => {
+              tabRefs.current[index] = node;
+            }}
+            className={cn(
+              "relative z-10 bg-transparent shadow-none data-[active=true]:!border-transparent data-[active=true]:!bg-transparent data-[active=true]:!bg-none data-[active=true]:!shadow-none data-[active=true]:hover:!bg-transparent data-[active=true]:hover:!bg-none data-[active=true]:hover:!shadow-none",
+              mode === "desktop"
+                ? "flex h-[68px] w-full flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                : "flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5",
+            )}
+            role="tab"
+            id={`tab-${mode}-${tab.id}`}
+            aria-selected={isActive}
+            aria-controls={`tabpanel-${tab.id}`}
+            aria-label={`Switch to ${tab.label} tab`}
+            tabIndex={isActive ? 0 : -1}
+          >
+            <Icon
+              className={cn(
+                mode === "desktop"
+                  ? "h-5 w-5"
+                  : "h-5 w-5 shrink-0 max-[360px]:h-4 max-[360px]:w-4",
+                isActive && "text-primary",
+              )}
+              aria-hidden="true"
+            />
+            <span
+              className={cn(
+                "font-medium leading-tight",
+                mode === "mobile" && "max-w-full truncate text-[11px] max-[340px]:text-[10px]",
+              )}
+            >
+              {tab.label}
+            </span>
+          </Button>
+        );
+      })}
     </div>
   );
 }
@@ -345,20 +603,27 @@ export default function App() {
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
-  const [isDesktopHeader, setIsDesktopHeader] = useState(false);
+  const [isDesktopShell, setIsDesktopShell] = useState(false);
+  const [isHeaderStatusPlacement, setIsHeaderStatusPlacement] = useState(false);
+  const [showStandaloneEthBalance, setShowStandaloneEthBalance] = useState(false);
+  const [loginThemeState, setLoginThemeState] = useState({
+    current: 0,
+    previous: 0,
+    activeLayer: 0,
+  });
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const previousActiveTabRef = useRef<Tab>(activeTab);
   const lastDismissedRef = useRef<string | null>(null);
-  const { userValidated, checkingValidation, handleInviteValidated, setUserValidated } = useInviteValidation();
-  const isLocalTestSession = localTestAuthAvailable && state.surface === "test";
-  const isInviteValidated = userValidated || isLocalTestSession;
-  const readyBlocker =
-    isConnected &&
-    INVITE_CONFIG.SYSTEM_ENABLED &&
-    !isLocalTestSession &&
-    (checkingValidation || !userValidated);
+  const loginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.current];
+  const previousLoginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.previous];
+  const loginThemeLayers = [
+    loginThemeState.activeLayer === 0 ? loginTheme : previousLoginTheme,
+    loginThemeState.activeLayer === 1 ? loginTheme : previousLoginTheme,
+  ] as const;
 
   useTabPrefetching(activeTab, isConnected);
 
-  useFarcaster({ readyBlocker });
+  useFarcaster();
   useAutoConnect();
 
   useEffect(() => {
@@ -366,15 +631,47 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isConnected) {
+      return;
+    }
+
+    const advanceLoginTheme = () => {
+      setLoginThemeState(({ activeLayer, current }) => ({
+        activeLayer: activeLayer === 0 ? 1 : 0,
+        current: (current + 1) % LOGIN_THEME_SEQUENCE.length,
+        previous: current,
+      }));
+    };
+
+    const intervalId = window.setInterval(() => {
+      advanceLoginTheme();
+    }, LOGIN_THEME_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [isConnected]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
 
-    const mediaQuery = window.matchMedia("(min-width: 80rem)");
-    const syncDesktopHeader = () => setIsDesktopHeader(mediaQuery.matches);
+    const desktopQuery = window.matchMedia("(min-width: 80rem)");
+    const compactLandscapeQuery = window.matchMedia("(min-width: 54rem) and (max-height: 700px)");
+    const roomyPortraitQuery = window.matchMedia("(min-width: 54rem)");
+    const syncShellMode = () => {
+      setIsDesktopShell(desktopQuery.matches);
+      setIsHeaderStatusPlacement(desktopQuery.matches || compactLandscapeQuery.matches);
+      setShowStandaloneEthBalance(roomyPortraitQuery.matches && !desktopQuery.matches && !compactLandscapeQuery.matches);
+    };
 
-    syncDesktopHeader();
-    mediaQuery.addEventListener("change", syncDesktopHeader);
+    syncShellMode();
+    desktopQuery.addEventListener("change", syncShellMode);
+    compactLandscapeQuery.addEventListener("change", syncShellMode);
+    roomyPortraitQuery.addEventListener("change", syncShellMode);
 
-    return () => mediaQuery.removeEventListener("change", syncDesktopHeader);
+    return () => {
+      desktopQuery.removeEventListener("change", syncShellMode);
+      compactLandscapeQuery.removeEventListener("change", syncShellMode);
+      roomyPortraitQuery.removeEventListener("change", syncShellMode);
+    };
   }, []);
 
   useEffect(() => {
@@ -411,22 +708,23 @@ export default function App() {
 
   // Broadcast messages system
   const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
-  const [currentBroadcast, setCurrentBroadcast] = useState<any>(null);
+  const [currentBroadcast, setCurrentBroadcast] = useState<UntypedValue>(null);
 
   // Keyboard and viewport awareness
   const keyboardState = useKeyboardAware();
   useViewportInsets();
+  useViewportShellMetrics();
   const isKeyboardNavigation = useKeyboardNavigation();
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
-  const miniAppContext = (fc?.context as any) ?? null;
+  const miniAppContext = (fc?.context as UntypedValue) ?? null;
   const miniAppAdded = Boolean(miniAppContext?.client?.added);
 
-  // Start tutorial only after wallet connect (and invite gate passed)
+  // Start tutorial only after wallet connect
   useEffect(() => {
-    if (isConnected && isInviteValidated) {
+    if (isConnected) {
       startIfFirstVisit();
     }
-  }, [isConnected, isInviteValidated, startIfFirstVisit]);
+  }, [isConnected, startIfFirstVisit]);
 
   // Auto-prompt to add mini app when user opens in miniapp mode and hasn't added yet
   useEffect(() => {
@@ -459,15 +757,17 @@ export default function App() {
 
     (async () => {
       try {
-        const fid = typeof fc?.context === 'object' ? (fc?.context as any)?.user?.fid : undefined;
+        const fid = typeof fc?.context === 'object' ? (fc?.context as UntypedValue)?.user?.fid : undefined;
         if (!fid || !address || !mounted) return;
 
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 5000);
+        const authHeaders = await getMiniAppQuickAuthHeaders({ expectedAddress: address });
+        if (!authHeaders.Authorization || !mounted) return;
 
         await fetch('/api/notifications/map-fid', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ fid, address }),
           signal: controller.signal,
         });
@@ -493,18 +793,17 @@ export default function App() {
     }
   }, [isConnected]);
 
+  useEffect(() => {
+    if (previousActiveTabRef.current === activeTab) {
+      return;
+    }
+
+    previousActiveTabRef.current = activeTab;
+    contentScrollRef.current?.scrollTo({ left: 0, top: 0, behavior: "auto" });
+  }, [activeTab]);
+
   // Balance refreshes after transactions are handled via events in balance-context.tsx
   // No need to refresh on every tab change - balances are already in context
-
-  const handleSkipInvite = () => {
-    // For development - allow skipping invite system
-    setUserValidated(true);
-    const keys = getLocalStorageKeys();
-    localStorage.setItem(keys.INVITE_VALIDATED, 'true');
-    if (address) {
-      localStorage.setItem(keys.USER_ADDRESS, address.toLowerCase());
-    }
-  };
 
   const handleAddFrame = useCallback(async () => {
     if (!fc?.isInMiniApp) {
@@ -553,98 +852,110 @@ export default function App() {
     setCurrentBroadcast(null);
   };
 
-  // Show loading while checking validation (only if wallet is connected and invite system enabled)
-  if (checkingValidation && isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isLocalTestSession) {
-    return (
-      <div className="flex flex-col h-dvh bg-background items-center justify-center p-4">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi Logo" width={64} height={64} className="opacity-50" />
-          <BasePageLoader text="Checking wallet validation…" />
-        </div>
-      </div>
-    );
-  }
-
-  // Show invite gate if wallet is connected but not validated (and system is enabled)
-  if (isConnected && INVITE_CONFIG.SYSTEM_ENABLED && !isInviteValidated) {
-    return (
-      <InviteGate
-        onValidated={handleInviteValidated}
-        onSkip={handleSkipInvite}
-        showSkip={process.env.NODE_ENV === 'development'}
-      />
-    );
-  }
-
   return (
     <div
       data-viewport-shell="outer"
-      className={`flex justify-center w-full min-h-dvh bg-background overscroll-none ${keyboardState.isVisible ? 'keyboard-visible' : 'keyboard-hidden'
-        } ${isKeyboardNavigation ? 'keyboard-navigation' : ''
-        }`}
+      className={cn(
+        "flex justify-center w-full min-h-dvh bg-background bg-[image:var(--gradient-content-well)] overscroll-none",
+        keyboardState.isVisible ? "keyboard-visible" : "keyboard-hidden",
+        isKeyboardNavigation && "keyboard-navigation",
+        !isConnected && "login-theme-cycle",
+        !isConnected && loginTheme,
+      )}
       aria-label="Pixotchi Mini Game"
     >
+      {!isConnected && (
+        <div className="login-theme-background" aria-hidden="true">
+          <div
+            className={cn(
+              "login-theme-layer",
+              loginThemeLayers[0],
+              loginThemeState.activeLayer === 0 && "is-active",
+            )}
+            style={LOGIN_THEME_LAYER_STYLE}
+          />
+          <div
+            className={cn(
+              "login-theme-layer",
+              loginThemeLayers[1],
+              loginThemeState.activeLayer === 1 && "is-active",
+            )}
+            style={LOGIN_THEME_LAYER_STYLE}
+          />
+        </div>
+      )}
       <div
         data-viewport-shell="inner"
-        className={`w-full flex flex-col h-dvh bg-background overflow-hidden overscroll-none ${
-          isConnected ? "max-w-md xl:max-w-none xl:w-full" : "max-w-md md:max-w-none md:w-full"
-        }`}
+        data-connected={isConnected ? "true" : "false"}
+        className={cn(
+          "app-shell-inner w-full flex flex-col h-dvh overflow-hidden overscroll-none",
+          !isConnected && "relative z-10",
+          isConnected ? "bg-background bg-[image:var(--gradient-content-well)]" : "bg-transparent"
+        )}
+        style={!isConnected ? { maxWidth: "100%" } : undefined}
       >
-        {/* Header wrapper with matching background and safe area */}
-        <div className="bg-card/90 backdrop-blur-sm overscroll-none">
-          <header data-viewport-shell="header" className="bg-card/90 backdrop-blur-sm border-b border-border px-4 py-2 overscroll-none safe-area-top" role="banner" aria-label="Application header">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1.5">
-                <Image
-                  src="/PixotchiKit/Logonotext.svg"
-                  alt="Pixotchi Mini Logo"
-                  width={24}
-                  height={24}
-                />
-                <h1 className="text-sm font-pixel text-foreground">
-                  {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
-                </h1>
-              </div>
+        {isConnected && (
+          <div className="relative z-[var(--z-sticky)] overflow-hidden rounded-b-[var(--radius-panel)] border-x border-b border-x-[hsl(var(--border-strong)/0.28)] border-b-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none">
+            <header
+              data-viewport-shell="header"
+              className={cn(
+                "bg-transparent px-4 py-2 overscroll-none safe-area-top",
+                isHeaderStatusPlacement && "surface-header-divider"
+              )}
+              role="banner"
+              aria-label="Application header"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5">
+                  <Image
+                    src="/PixotchiKit/Logonotext.svg"
+                    alt="Pixotchi Mini Logo"
+                    width={24}
+                    height={24}
+                  />
+                  <h1 className="text-sm font-pixel text-foreground">
+                    {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
+                  </h1>
+                </div>
 
-              <div className="flex items-center space-x-2">
-                {isConnected && isDesktopHeader && (
-                  <ErrorBoundary
-                    variant="inline"
-                    resetKeys={address ? [address] : []}
-                    onError={(error, errorInfo) => {
-                      console.error('Error in StatusBar:', { error, errorInfo });
-                    }}
-                  >
-                    <StatusBar placement="header" />
-                  </ErrorBoundary>
-                )}
+                <div className="flex items-center space-x-2">
+                  {isHeaderStatusPlacement && (
+                    <ErrorBoundary
+                      variant="inline"
+                      resetKeys={address ? [address] : []}
+                      onError={(error, errorInfo) => {
+                        console.error('Error in StatusBar:', { error, errorInfo });
+                      }}
+                    >
+                      <StatusBar placement="header" />
+                    </ErrorBoundary>
+                  )}
 
-                {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
+                  {isNeynarNotifications && fc?.isInMiniApp && miniAppContext && !miniAppAdded && !frameAdded && (
+                    <Button
+                      type="button"
+                      variant="headerIcon"
+                      size="sm"
+                      onClick={handleAddFrame}
+                      aria-label="Add Pixotchi Mini to your app"
+                      title="Add Pixotchi Mini to your app"
+                    >
+                      <PlusCircle className="w-4 h-4" aria-hidden="true" />
+                    </Button>
+                  )}
+
+                  <ChatButton />
+
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddFrame}
-                    aria-label="Add Pixotchi Mini to your app"
-                    title="Add Pixotchi Mini to your app"
-                  >
-                    <PlusCircle className="w-4 h-4" aria-hidden="true" />
-                  </Button>
-                )}
-
-                {isConnected ? <ChatButton /> : null}
-
-                {isConnected ? (
-                  <Button
-                    type="button"
-                    variant="outline"
+                    variant="headerIcon"
                     size="icon"
                     onClick={() => setShowWalletProfile(true)}
                     aria-label="Open wallet profile"
                     title="Open wallet profile"
                   >
                     <Image
-                      src={theme === "pink" ? "/icons/Avatar1.svg" : "/icons/Avatar2.svg"}
+                      src={theme === "pink" ? "/icons/avatar1-icon.webp" : "/icons/avatar2-icon.webp"}
                       alt=""
                       width={24}
                       height={24}
@@ -652,40 +963,47 @@ export default function App() {
                       aria-hidden="true"
                     />
                   </Button>
-                ) : null}
-                <ThemeSelector />
+                  <ThemeSelector />
+                </div>
               </div>
-            </div>
-          </header>
-          {isConnected && !isDesktopHeader && (
-            <ErrorBoundary
-              variant="inline"
-              resetKeys={address ? [address] : []}
-              onError={(error, errorInfo) => {
-                console.error('Error in StatusBar:', { error, errorInfo });
-              }}
-            >
-              <StatusBar />
-            </ErrorBoundary>
-          )}
-        </div>
+            </header>
+            {!isHeaderStatusPlacement && (
+              <ErrorBoundary
+                variant="inline"
+                resetKeys={address ? [address] : []}
+                onError={(error, errorInfo) => {
+                  console.error('Error in StatusBar:', { error, errorInfo });
+                }}
+              >
+                <StatusBar showEthInStandalone={showStandaloneEthBalance} />
+              </ErrorBoundary>
+            )}
+          </div>
+        )}
 
         {/* Main Content */}
-        <main data-viewport-shell="main" className="flex-1 bg-muted/40 flex flex-col xl:flex-row overflow-hidden" role="main" aria-label="Main content area">
+        <main
+          data-viewport-shell="main"
+          className={cn(
+            "flex flex-1 flex-col overflow-hidden xl:flex-row",
+            isConnected ? "bg-muted/40 bg-[image:var(--gradient-content-well)]" : "bg-transparent",
+          )}
+          role="main"
+          aria-label="Main content area"
+        >
           {(!isConnected) ? (
-            <div className="flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
-              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-lg md:border md:border-b-0 md:border-border md:bg-card/80 md:px-5 md:pt-5">
+            <div className="relative z-10 flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
+              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pt-5">
                 <div className="flex flex-col items-center space-y-3 mb-8">
-                  <Image
-                    src="/PixotchiKit/Logonotext.svg"
-                    alt="Pixotchi Mini Logo"
-                    width={80}
-                    height={80}
-                    priority
-                    fetchPriority="high"
-                    sizes="80px"
-                    quality={90}
-                  />
+	                  <Image
+	                    src="/PixotchiKit/Logonotext.svg"
+	                    alt="Pixotchi Mini Logo"
+	                    width={80}
+	                    height={80}
+	                    preload
+	                    sizes="80px"
+	                    quality={90}
+	                  />
                   <h1 className="text-2xl font-pixel text-foreground">
                     {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
                   </h1>
@@ -698,7 +1016,7 @@ export default function App() {
                 </p>
               </div>
               <LoginAuthActions
-                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-lg md:border md:border-t-0 md:border-border md:bg-card/80 md:px-5 md:pb-5 md:shadow-sm"
+                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
                 handleMiniAppReconnect={handleMiniAppReconnect}
                 isInMiniApp={Boolean(fc?.isInMiniApp)}
                 isMiniConnectRetrying={state.isMiniConnectRetrying}
@@ -710,43 +1028,32 @@ export default function App() {
             </div>
           ) : (
             <>
-              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-border bg-card/80 p-3" role="navigation" aria-label="Main navigation">
-                <div className="flex flex-col gap-2" role="tablist" aria-label="Application tabs">
-                  {tabs.map((tab) => (
-                    <Button
-                      key={tab.id}
-                      variant="ghost"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                        activeTab === tab.id
-                          ? "bg-primary/10 text-primary border-primary/20"
-                          : "text-muted-foreground border-transparent hover:bg-background/80"
-                      }`}
-                      role="tab"
-                      aria-selected={activeTab === tab.id}
-                      aria-controls={`tabpanel-${tab.id}`}
-                      aria-label={`Switch to ${tab.label} tab`}
-                      tabIndex={activeTab === tab.id ? 0 : -1}
-                    >
-                      <tab.icon
-                        className={`h-5 w-5 ${activeTab === tab.id ? "text-primary" : ""}`}
-                        aria-hidden="true"
-                      />
-                      <span className="font-medium leading-tight">{tab.label}</span>
-                    </Button>
-                  ))}
-                </div>
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-[hsl(var(--divider)/0.62)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75" role="navigation" aria-label="Main navigation">
+                <SlidingNavTabs
+                  activeTab={activeTab}
+                  mode="desktop"
+                  onTabChange={setActiveTab}
+                  tabs={tabs}
+                />
               </nav>
 
               {/* Tab Content */}
               <div
+                ref={contentScrollRef}
                 data-viewport-shell="content"
-                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-4 pb-16 safe-area-inset xl:p-5 xl:pb-5 xl:safe-area-bottom"
+                className="app-content-shell flex-1 overflow-y-auto overscroll-contain touch-pan-y xl:safe-area-bottom"
+                style={{
+                  paddingTop: "var(--app-content-gutter)",
+                  paddingRight: "var(--app-content-gutter)",
+                  paddingBottom: "calc(var(--app-content-gutter) + var(--app-content-bottom-offset))",
+                  paddingLeft: "var(--app-content-gutter)",
+                }}
                 role="tabpanel"
                 id={`tabpanel-${activeTab}`}
-                aria-labelledby={`tab-${activeTab}`}
+                aria-labelledby={isDesktopShell ? `tab-desktop-${activeTab}` : `tab-mobile-${activeTab}`}
                 aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
               >
+                <SharedFarmMintMobileToggle activeTab={activeTab} isMiniApp={isMiniApp} />
                 <ErrorBoundary
                   key="tab-boundary"
                   resetKeys={address ? [address] : []}
@@ -758,14 +1065,33 @@ export default function App() {
                   <TabVisibilityProvider activeTab={activeTab}>
                     {tabs.map((tab) => {
                       const TabComponent = tabComponents[tab.id];
+                      const usesContainedTabLayout =
+                        tab.id === 'activity' || tab.id === 'leaderboard';
                       // Activity mode: 'visible' means mounted/active effects, 'hidden' means kept in memory but effects unmounted.
                       // This preserves scroll position and state (e.g. inputs) when switching tabs.
                       const activityMode = activeTab === tab.id ? 'visible' : 'hidden';
 
                       return (
                         <Activity key={tab.id} mode={activityMode}>
-                          <div className={activeTab === tab.id ? 'block h-full' : 'hidden'}>
-                            {TabComponent ? <TabComponent /> : null}
+                          <div
+                            className={
+                              activeTab === tab.id
+                                ? cn(
+                                    'block min-h-0 animate-tab-content-in',
+                                    usesContainedTabLayout && 'h-full'
+                                  )
+                                : 'hidden'
+                            }
+                          >
+                            <ErrorBoundary
+                              resetKeys={[tab.id, ...(address ? [address] : [])]}
+                              variant="card"
+                              onError={(error, errorInfo) => {
+                                console.error(`Error in ${tab.id} tab:`, { error, errorInfo });
+                              }}
+                            >
+                              {TabComponent ? <TabComponent /> : null}
+                            </ErrorBoundary>
                           </div>
                         </Activity>
                       );
@@ -775,32 +1101,13 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="bg-card border-t border-border px-4 py-1 overscroll-none touch-pan-x select-none safe-area-bottom rounded-t-2xl xl:hidden" role="navigation" aria-label="Main navigation">
-                <div className="flex justify-around items-center" role="tablist" aria-label="Application tabs">
-                  {tabs.map((tab) => (
-                    <Button
-                      key={tab.id}
-                      variant="ghost"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex flex-col items-center space-y-0.5 h-auto w-16 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${activeTab === tab.id
-                        ? "bg-primary/10 text-primary border border-primary/20"
-                        : "text-muted-foreground border border-transparent"
-                        }`}
-                      role="tab"
-                      id={`tab-${tab.id}`}
-                      aria-selected={activeTab === tab.id}
-                      aria-controls={`tabpanel-${tab.id}`}
-                      aria-label={`Switch to ${tab.label} tab`}
-                      tabIndex={activeTab === tab.id ? 0 : -1}
-                    >
-                      <tab.icon
-                        className={`w-5 h-5 ${activeTab === tab.id ? "text-primary" : ""
-                          }`}
-                      />
-                      <span className="text-xs font-medium">{tab.label}</span>
-                    </Button>
-                  ))}
-                </div>
+              <nav data-viewport-shell="nav" className="surface-footer-divider rounded-t-[var(--radius-panel)] border-x border-t border-x-[hsl(var(--border-strong)/0.28)] border-t-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
+                <SlidingNavTabs
+                  activeTab={activeTab}
+                  mode="mobile"
+                  onTabChange={setActiveTab}
+                  tabs={tabs}
+                />
               </nav>
             </>
           )}

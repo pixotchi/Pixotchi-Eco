@@ -60,8 +60,14 @@ class ErrorBoundary extends Component<Props, State> {
     const { resetKeys: prevResetKeys } = prevProps;
 
     // Reset error boundary if resetKeys have changed
-    if (resetKeys && prevResetKeys &&
-        resetKeys.some((key, index) => key !== prevResetKeys[index])) {
+    if (
+      resetKeys &&
+      prevResetKeys &&
+      (
+        resetKeys.length !== prevResetKeys.length ||
+        resetKeys.some((key, index) => key !== prevResetKeys[index])
+      )
+    ) {
       this.handleReset();
     }
   }
@@ -97,7 +103,7 @@ class ErrorBoundary extends Component<Props, State> {
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between">
           <div id={`error-title-${errorId}`}>
-            <strong>Something went wrong:</strong> {error?.message || 'An unexpected error occurred'}
+            <strong>This section hit an error:</strong> {error?.message || 'Try again or refresh the page.'}
           </div>
           <Button
             variant="outline"
@@ -123,7 +129,7 @@ class ErrorBoundary extends Component<Props, State> {
         <CardHeader>
           <CardTitle id={`error-title-${errorId}`} className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            Something went wrong
+            This section hit an error
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -168,12 +174,12 @@ class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="h-6 w-6 text-destructive" />
             </div>
             <CardTitle id={`error-title-${errorId}`} className="text-xl">
-              Oops! Something went wrong
+              We hit a temporary app error
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 text-center">
             <p className="text-muted-foreground">
-              We encountered an unexpected error. Don't worry, your data is safe.
+              We encountered an unexpected error. Don&apos;t worry, your data is safe.
             </p>
 
             {error && (

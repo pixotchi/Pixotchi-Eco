@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-// Use native <img> for small icons to reduce overhead
+import Image from "next/image";
 import StakingDialog from "@/components/staking/staking-dialog";
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
@@ -10,23 +10,106 @@ import { useAccount, useBalance } from "wagmi";
 import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/components/solana";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onStakingDialogOpen, openTasksDialog } from "@/lib/app-events";
+import { Button } from "./ui/button";
+
+function TasksRockIcon() {
+  return (
+    <Image
+      src="/icons/Volcanic_Rock.svg"
+      alt=""
+      width={16}
+      height={16}
+      className="h-4 w-4 object-contain max-[340px]:h-3.5 max-[340px]:w-3.5"
+      aria-hidden="true"
+    />
+  );
+}
+
+function StakeTokenCycleIcon() {
+  return (
+    <span className="status-token-cycle" aria-hidden="true">
+      <Image
+        src="/PixotchiKit/COIN.svg"
+        alt=""
+        width={16}
+        height={16}
+        className="stake-token-cycle-seed absolute inset-0 h-4 w-4 object-contain"
+      />
+      <Image
+        src="/icons/leaf.png"
+        alt=""
+        width={16}
+        height={16}
+        className="stake-token-cycle-leaf absolute inset-0 h-4 w-4 object-contain"
+      />
+    </span>
+  );
+}
+
+function trimCompactNumber(value: number, fractionDigits: number): string {
+  return value.toFixed(fractionDigits).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+}
 
 function formatTokenShort(amount: bigint, decimals: number = 18): string {
   const num = parseFloat(formatUnits(amount, decimals));
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1') + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1') + "K";
-  return num.toFixed(4).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  if (!Number.isFinite(num) || num <= 0) return "0";
+  if (num >= 1_000_000_000) return `${trimCompactNumber(num / 1_000_000_000, num >= 10_000_000_000 ? 0 : 1)}B`;
+  if (num >= 1_000_000) return `${trimCompactNumber(num / 1_000_000, num >= 10_000_000 ? 0 : 1)}M`;
+  if (num >= 100_000) return `${trimCompactNumber(num / 1_000, 0)}K`;
+  if (num >= 1_000) return `${trimCompactNumber(num / 1_000, 1)}K`;
+  if (num >= 999.5) return "1K";
+  if (num >= 100) return trimCompactNumber(num, 0);
+  if (num >= 10) return trimCompactNumber(num, 1);
+  if (num >= 1) return trimCompactNumber(num, 2);
+  if (num >= 0.01) return trimCompactNumber(num, 2);
+  return "<.01";
+}
+
+function formatTokenDetailed(
+  amount: bigint,
+  decimals: number = 18,
+  options: { maxFractionDigits?: number; smallValueDigits?: number } = {},
+): string {
+  const num = parseFloat(formatUnits(amount, decimals));
+  if (!Number.isFinite(num) || num <= 0) return "0";
+
+  const maxFractionDigits = options.maxFractionDigits ?? 2;
+  const smallValueDigits = options.smallValueDigits ?? 4;
+  const fractionDigits = num > 0 && num < 1 ? smallValueDigits : maxFractionDigits;
+  const threshold = 1 / (10 ** fractionDigits);
+
+  if (num > 0 && num < threshold) {
+    return `<${threshold.toLocaleString("en-US", {
+      maximumFractionDigits: fractionDigits,
+      minimumFractionDigits: fractionDigits,
+    })}`;
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: fractionDigits,
+  }).format(num);
 }
 
 type StatusBarPlacement = "standalone" | "header";
 
-export default function StatusBar({ placement = "standalone" }: { placement?: StatusBarPlacement }) {
+export default function StatusBar({
+  placement = "standalone",
+  showEthInStandalone = false,
+}: {
+  placement?: StatusBarPlacement;
+  showEthInStandalone?: boolean;
+}) {
   const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading } = useBalances();
   const { address } = useAccount();
   const isSolana = useIsSolanaWallet();
   const { solBalance } = useSolanaWallet();
   const isHeaderPlacement = placement === "header";
-  const showEthBalance = isHeaderPlacement && !isSolana;
+  const statusRootRef = React.useRef<HTMLDivElement>(null);
+  const [useCompactStandaloneStatus, setUseCompactStandaloneStatus] = useState(true);
+  const showEthBalance = (
+    isHeaderPlacement ||
+    (showEthInStandalone && !useCompactStandaloneStatus)
+  ) && !isSolana;
   const { data: ethBalance, isLoading: ethLoading } = useBalance({
     address,
     query: {
@@ -50,18 +133,56 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
     return onStakingDialogOpen(() => setStakingOpen(true));
   }, []);
 
-  const seedValue = formatTokenShort(seed);
-  const leafValue = formatTokenShort(leaf);
-  const pixotchiValue = formatTokenShort(pixotchi);
-  const ethValue = ethBalance ? formatTokenShort(ethBalance.value, ethBalance.decimals) : "0";
-  const seedText = loading ? <Skeleton className="h-5 w-20" /> : seedValue;
-  const leafText = loading ? <Skeleton className="h-5 w-20" /> : leafValue;
-  const pixotchiText = loading ? <Skeleton className="h-5 w-20" /> : pixotchiValue;
-  const ethText = ethLoading ? <Skeleton className="h-5 w-16" /> : ethValue;
+  useEffect(() => {
+    if (isHeaderPlacement || typeof window === "undefined") {
+      setUseCompactStandaloneStatus(false);
+      return;
+    }
+
+    const syncCompactStatus = () => {
+      const statusWidth = statusRootRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+      const isBelowTabletLayout = !window.matchMedia("(min-width: 54rem)").matches;
+      const isPortraitLayout = window.matchMedia("(orientation: portrait)").matches;
+      setUseCompactStandaloneStatus(isBelowTabletLayout || isPortraitLayout || statusWidth < 520);
+    };
+
+    syncCompactStatus();
+
+    const resizeObserver = typeof ResizeObserver !== "undefined" && statusRootRef.current
+      ? new ResizeObserver(syncCompactStatus)
+      : null;
+
+    resizeObserver?.observe(statusRootRef.current as Element);
+    window.addEventListener("resize", syncCompactStatus);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", syncCompactStatus);
+    };
+  }, [isHeaderPlacement]);
+
+  const useDetailedBalances = showEthBalance;
+  const seedValue = useDetailedBalances ? formatTokenDetailed(seed, 18, { maxFractionDigits: 2 }) : formatTokenShort(seed);
+  const leafValue = useDetailedBalances ? formatTokenDetailed(leaf, 18, { maxFractionDigits: 2 }) : formatTokenShort(leaf);
+  const pixotchiValue = useDetailedBalances ? formatTokenDetailed(pixotchi, 18, { maxFractionDigits: 2 }) : formatTokenShort(pixotchi);
+  const ethValue = ethBalance
+    ? useDetailedBalances
+      ? formatTokenDetailed(ethBalance.value, ethBalance.decimals, { maxFractionDigits: 5, smallValueDigits: 6 })
+      : formatTokenShort(ethBalance.value, ethBalance.decimals)
+    : "0";
+  const balanceSkeletonClassName = "h-4 w-10 max-[340px]:h-3.5 max-[340px]:w-8";
+  const seedText = loading ? <Skeleton className={balanceSkeletonClassName} /> : seedValue;
+  const leafText = loading ? <Skeleton className={balanceSkeletonClassName} /> : leafValue;
+  const pixotchiText = loading ? <Skeleton className={balanceSkeletonClassName} /> : pixotchiValue;
+  const ethText = ethLoading ? <Skeleton className={balanceSkeletonClassName} /> : ethValue;
   const seedAriaLabel = loading ? "Seed balance loading" : `Seed balance: ${seedValue} SEED`;
   const leafAriaLabel = loading ? "Leaf balance loading" : `Leaf balance: ${leafValue} LEAF`;
   const pixotchiAriaLabel = loading ? "PIXOTCHI balance loading" : `PIXOTCHI balance: ${pixotchiValue}`;
   const ethAriaLabel = ethLoading ? "ETH balance loading" : `ETH balance: ${ethValue} ETH`;
+  const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1.5 max-[360px]:gap-1";
+  const balanceTextClassName = "shrink-0 whitespace-nowrap text-[13px] font-bold leading-none tabular-nums max-[380px]:text-[11px] max-[340px]:text-[10px]";
+  const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[380px]:h-4 max-[380px]:w-4 max-[340px]:h-3.5 max-[340px]:w-3.5";
+  const statusActionButtonClassName = "max-[380px]:h-8 max-[380px]:min-h-8 max-[380px]:px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] max-[340px]:!gap-1";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
 
@@ -71,75 +192,83 @@ export default function StatusBar({ placement = "standalone" }: { placement?: St
 
   return (
     <div
-      className={isHeaderPlacement ? "shrink-0" : "w-full bg-background xl:flex xl:justify-end xl:bg-transparent"}
+      ref={statusRootRef}
+      data-viewport-shell={!isHeaderPlacement ? "status" : undefined}
+      className={isHeaderPlacement ? "shrink-0" : "w-full bg-transparent xl:flex xl:justify-end"}
       role="region"
       aria-label="Account balance and staking"
     >
       <div
         className={
           isHeaderPlacement
-            ? "w-fit max-w-full rounded-lg border border-border/70 bg-background/60 px-3 py-1 shadow-none backdrop-blur-md"
-            : "rounded-b-2xl border border-border/70 bg-card/95 px-4 py-1.5 shadow-sm backdrop-blur-md xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-lg xl:bg-background/60 xl:shadow-none"
+            ? "w-fit max-w-full px-0 py-0"
+            : "app-status-scroll bg-transparent px-4 pb-2 pt-1.5 max-[380px]:px-2 max-[340px]:px-1.5 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-[var(--radius-panel)] xl:border xl:border-[hsl(var(--border-strong)/0.28)] xl:bg-secondary/70"
         }
       >
-        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex items-center justify-between gap-3 xl:justify-start"}>
-          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex items-center gap-2 min-w-0 xl:gap-3"} role="group" aria-label="Token balances">
+        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex w-full min-w-0 items-center justify-between gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:justify-start"}>
+          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex min-w-0 flex-1 items-center gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:gap-3"} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label={`SOL balance: ${solText} SOL`}>
-                <img src="/icons/solana.svg" alt="" width={16} height={16} aria-hidden="true" />
-                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{solText}</span>
+              <div className={balanceItemClassName} aria-label={`SOL balance: ${solText} SOL`}>
+                <Image src="/icons/solana.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                <span className={balanceTextClassName} aria-hidden="true">{solText}</span>
               </div>
             )}
             {showEthBalance && (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label={ethAriaLabel}>
-                <img src="/icons/ethlogo.svg" alt="" width={16} height={16} aria-hidden="true" />
-                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{ethText}</span>
+              <div className={balanceItemClassName} aria-label={ethAriaLabel}>
+                <Image src="/icons/ethlogo.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                <span className={balanceTextClassName} aria-hidden="true">{ethText}</span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 min-w-0" aria-label={seedAriaLabel}>
-              <img src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} aria-hidden="true" />
-              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{seedText}</span>
+            <div className={balanceItemClassName} aria-label={seedAriaLabel}>
+              <Image src="/PixotchiKit/COIN.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+              <span className={balanceTextClassName} aria-hidden="true">{seedText}</span>
             </div>
             {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
             {!isSolana && (
-              <div className="flex items-center gap-1.5 min-w-0" aria-label={leafAriaLabel}>
-                <img src="/icons/leaf.png" alt="" width={16} height={16} aria-hidden="true" />
-                <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{leafText}</span>
+              <div className={balanceItemClassName} aria-label={leafAriaLabel}>
+                <Image src="/icons/leaf.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                <span className={balanceTextClassName} aria-hidden="true">{leafText}</span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 min-w-0" aria-label={pixotchiAriaLabel}>
-              <img src="/icons/cc.png" alt="" width={16} height={16} aria-hidden="true" />
-              <span className="text-sm font-semibold tabular-nums truncate" aria-hidden="true">{pixotchiText}</span>
+            <div className={balanceItemClassName} aria-label={pixotchiAriaLabel}>
+              <Image src="/icons/cc.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+              <span className={balanceTextClassName} aria-hidden="true">{pixotchiText}</span>
             </div>
           </div>
-          <div className={isHeaderPlacement ? "h-5 w-px bg-border/70" : "hidden h-5 w-px bg-border/70 xl:block"} aria-hidden="true" />
-          <div className="shrink-0 flex items-center gap-2">
+          <div className={isHeaderPlacement ? "h-5 w-px bg-[hsl(var(--divider)/0.72)]" : "hidden h-5 w-px bg-[hsl(var(--divider)/0.72)] xl:block"} aria-hidden="true" />
+          <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-[380px]:gap-1">
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}
             {showTasksButton && (
-              <button
+              <Button
                 type="button"
                 onClick={handleTasksClick}
-                className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-amber-600 text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                variant="statusAction"
+                size="status"
+                leadingIcon={<TasksRockIcon />}
+                className={statusActionButtonClassName}
                 aria-label="Open tasks"
                 aria-haspopup="dialog"
               >
                 Tasks
-              </button>
+              </Button>
             )}
             {/* Hide staking for Solana wallet users (not supported via bridge) */}
             {!isSolana && (
-              <button
+              <Button
                 type="button"
                 onClick={() => setStakingOpen(true)}
-                className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+                variant="statusAction"
+                size="status"
+                leadingIcon={<StakeTokenCycleIcon />}
+                className={statusActionButtonClassName}
                 aria-label="Open staking dialog"
                 aria-expanded={stakingOpen}
                 aria-haspopup="dialog"
               >
                 Stake
-              </button>
+              </Button>
             )}
           </div>
         </div>

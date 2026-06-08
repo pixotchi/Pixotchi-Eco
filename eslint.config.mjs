@@ -3,7 +3,7 @@ import nextTypeScript from "eslint-config-next/typescript";
 import reactPlugin from "eslint-plugin-react";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
 
-export default [
+const eslintConfig = [
   ...nextCoreWebVitals,
   ...nextTypeScript,
   {
@@ -98,3 +98,5 @@ export default [
     },
   },
 ];
+
+export default eslintConfig;

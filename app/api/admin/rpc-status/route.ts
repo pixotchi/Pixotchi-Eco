@@ -1,11 +1,10 @@
-import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
+import { createErrorResponse,requireAdmin } from '@/lib/auth-utils';
 import { getBaseRpcStatusSnapshot } from '@/lib/base-rpc';
 import { NextRequest,NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     const snapshot = await getBaseRpcStatusSnapshot({ refreshProbe: true });

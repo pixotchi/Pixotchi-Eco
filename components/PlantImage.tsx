@@ -62,28 +62,30 @@ const PlantImage = React.memo(({
   const handleImageLoad = () => {
     setImageLoaded(true);
   };
+  const resolvedSrc = imageError ? fallbackSrc : imageSrc;
+  const useBlurPlaceholder = width >= 40 && height >= 40 && !resolvedSrc.endsWith(".svg");
 
   return (
     <div className={`relative ${className}`}>
       {/* Loading placeholder */}
       {!imageLoaded && !imageError && (
         <div
-          className="absolute inset-0 bg-muted animate-pulse rounded-lg"
+          className="absolute inset-0 animate-pulse rounded-[var(--radius-control)] bg-muted"
           style={{ width, height }}
           aria-hidden="true"
         />
       )}
 
       <Image
-        src={imageError ? fallbackSrc : imageSrc}
+        src={resolvedSrc}
         alt={altText}
         width={width}
         height={height}
         sizes={sizes}
-        priority={priority}
-        loading={lazy && !priority ? "lazy" : "eager"}
+        preload={priority}
+        loading={priority ? undefined : lazy ? "lazy" : "eager"}
         quality={quality}
-        {...(width >= 40 && height >= 40 ? {
+        {...(useBlurPlaceholder ? {
           placeholder: "blur",
           blurDataURL: `data:image/svg+xml;base64,${(typeof window !== 'undefined' ? btoa : (s: string) => Buffer.from(s).toString('base64'))(`
             <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
@@ -101,7 +103,7 @@ const PlantImage = React.memo(({
 
       {/* Error state indicator */}
       {imageError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded-lg">
+        <div className="absolute inset-0 flex items-center justify-center rounded-[var(--radius-control)] bg-muted/50">
           <div className="text-xs text-muted-foreground text-center">
             <div>🌱</div>
             <div>Plant #{selectedPlant.id}</div>

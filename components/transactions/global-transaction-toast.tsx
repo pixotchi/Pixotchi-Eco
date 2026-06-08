@@ -15,7 +15,7 @@ interface GlobalTransactionToastProps {
 }
 
 export default function GlobalTransactionToast({
-  className = '!z-[10000] safe-area-bottom-margin',
+  className = 'safe-area-bottom-margin',
   position = 'bottom-center',
 }: GlobalTransactionToastProps) {
   if (typeof document === 'undefined') return null;

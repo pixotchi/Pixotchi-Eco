@@ -18,7 +18,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { extractTransactionHash, normalizeTransactionReceipt } from "@/lib/transaction-utils";
 import { cn } from "@/lib/utils";
 
-type TransactionReceiptLike = any;
+type TransactionReceiptLike = UntypedValue;
 
 type StatusName =
   | "idle"
@@ -38,7 +38,7 @@ type StatusName =
 export type LifecycleStatus = {
   statusName: StatusName;
   statusData: {
-    error?: unknown;
+    error?: UntypedValue;
     transactionHash?: Hex;
     transactionId?: string;
     transactionReceipts: TransactionReceiptLike[];
@@ -54,10 +54,10 @@ type RawTransactionCall = {
 
 type TransactionProps = {
   calls: RawTransactionCall[];
-  onError?: (error: unknown) => void;
+  onError?: (error: UntypedValue) => void;
   onStatus?: (status: LifecycleStatus) => void;
   isSponsored?: boolean;
-  capabilities?: Record<string, unknown>;
+  capabilities?: Record<string, UntypedValue>;
   resetAfter?: number;
   children: React.ReactNode;
 };
@@ -86,6 +86,7 @@ type TransactionButtonRenderProps = {
 };
 
 type TransactionButtonProps = {
+  ariaLabel?: string;
   className?: string;
   disabled?: boolean;
   onClick?: () => void;
@@ -112,6 +113,8 @@ type TransactionToastProps = {
   duration?: number;
   position?: "bottom-center" | "bottom-right" | "top-center" | "top-right";
 };
+
+export type TransactionFeedbackMode = "inline" | "toast" | "both" | "none";
 
 type TransactionToastActionProps = {
   className?: string;
@@ -144,20 +147,24 @@ const TERMINAL_STATUSES = new Set<StatusName>([
   "userRejected",
   "buildError",
 ]);
+const CALLS_STATUS_TIMEOUT_MS = 120_000;
+const DIRECT_RECEIPT_TIMEOUT_MS = 240_000;
+const RECEIPT_TIMEOUT_MESSAGE =
+  "Transaction was not confirmed after several minutes. Refresh and check the game before trying again.";
 
 const PRESSABLE_PRIMARY =
-  "cursor-pointer bg-[var(--ock-compat-primary)] hover:bg-[var(--ock-compat-primary-hover)] active:bg-[var(--ock-compat-primary-active)] focus:bg-[var(--ock-compat-primary-active)]";
+  "cursor-pointer bg-primary bg-[image:var(--gradient-control-active)] hover:brightness-[1.03] active:brightness-[0.98] focus:brightness-[0.98]";
 const PRESSABLE_DISABLED = "opacity-[0.38] pointer-events-none";
 const TEXT_HEADLINE = "ock-compat-font font-semibold";
 const TEXT_LABEL1 = "ock-compat-font text-sm font-semibold";
 const TEXT_LABEL2 = "ock-compat-font text-sm";
 const TEXT_DEFAULT = "text-[var(--ock-compat-foreground)]";
 const TEXT_MUTED = "text-[var(--ock-compat-foreground-muted)]";
-const TEXT_INVERSE = "text-[var(--ock-compat-foreground-inverse)]";
+const TEXT_INVERSE = "text-primary-foreground";
 const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
 const TEXT_ERROR = "text-[var(--ock-compat-error)]";
-const BG_SURFACE = "bg-[var(--ock-compat-background)]";
-const TOAST_SHADOW = "shadow-[0px_8px_24px_0px_rgba(0,0,0,0.12)]";
+const BG_SURFACE = "chat-white-surface bg-card bg-[image:var(--gradient-surface)]";
+const TOAST_SHADOW = "shadow-[var(--shadow-hairline)]";
 const unsupportedSendCallsKeys = new Set<string>();
 
 function Spinner({ className }: { className?: string }) {
@@ -168,7 +175,7 @@ function Spinner({ className }: { className?: string }) {
     >
       <div
         className={cn(
-          "animate-spin rounded-full border-2 border-gray-200 border-t-[3px] border-t-gray-400 px-2.5 py-2.5",
+          "h-4 w-4 animate-spin rounded-full border-2 border-current/25 border-t-current",
           className,
         )}
       />
@@ -176,7 +183,7 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
-function SuccessSvg({ className = "fill-[#65A30D]" }: { className?: string }) {
+function SuccessSvg({ className = "fill-[hsl(var(--success))]" }: { className?: string }) {
   return (
     <svg
       aria-label="ock-successSvg"
@@ -196,7 +203,7 @@ function SuccessSvg({ className = "fill-[#65A30D]" }: { className?: string }) {
   );
 }
 
-function ErrorSvg({ className = "fill-[#E11D48]" }: { className?: string }) {
+function ErrorSvg({ className = "fill-[hsl(var(--destructive))]" }: { className?: string }) {
   return (
     <svg
       aria-label="ock-errorSvg"
@@ -233,7 +240,7 @@ function CloseSvg({ className = TEXT_DEFAULT }: { className?: string }) {
   );
 }
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(error: UntypedValue): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -242,8 +249,8 @@ function getErrorMessage(error: unknown): string {
   }
   if (error && typeof error === "object") {
     const message =
-      (error as { shortMessage?: unknown; message?: unknown }).shortMessage
-      ?? (error as { message?: unknown }).message;
+      (error as { shortMessage?: UntypedValue; message?: UntypedValue }).shortMessage
+      ?? (error as { message?: UntypedValue }).message;
     if (typeof message === "string" && message.trim() !== "") {
       return message;
     }
@@ -251,10 +258,10 @@ function getErrorMessage(error: unknown): string {
   return "Transaction failed.";
 }
 
-function getErrorStatusName(error: unknown): StatusName {
+function getErrorStatusName(error: UntypedValue): StatusName {
   const message = getErrorMessage(error).toLowerCase();
   const code =
-    typeof (error as { code?: unknown })?.code === "number"
+    typeof (error as { code?: UntypedValue })?.code === "number"
       ? Number((error as { code?: number }).code)
       : null;
 
@@ -274,6 +281,7 @@ function getErrorStatusName(error: unknown): StatusName {
     || message.includes("no transaction calls")
     || message.includes("failed to prepare")
     || message.includes("provider unavailable")
+    || message.includes("atomic bundled transactions")
   ) {
     return "buildError";
   }
@@ -283,6 +291,51 @@ function getErrorStatusName(error: unknown): StatusName {
   }
 
   return "error";
+}
+
+function getFriendlyTransactionMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("user rejected") || normalized.includes("rejected the request")) {
+    return "Transaction cancelled. You can try again when ready.";
+  }
+
+  if (normalized.includes("wallet client unavailable") || normalized.includes("wallet not connected")) {
+    return "Connect your wallet, then try again.";
+  }
+
+  if (normalized.includes("insufficient") && normalized.includes("balance")) {
+    return "Not enough balance for this action.";
+  }
+
+  if (normalized.includes("revert")) {
+    return "Transaction reverted. Check the requirements and try again.";
+  }
+
+  if (normalized.includes("timed out") || normalized.includes("not confirmed")) {
+    return RECEIPT_TIMEOUT_MESSAGE;
+  }
+
+  if (!message || message === "Transaction failed.") {
+    return "Transaction failed. Check the details and try again.";
+  }
+
+  return message.length > 96 ? "Transaction failed. Check the details and try again." : message;
+}
+
+function getPendingButtonText(idleText: string) {
+  const normalized = idleText.trim().toLowerCase();
+
+  if (normalized.includes("mint")) return "Minting...";
+  if (normalized.includes("claim")) return "Claiming...";
+  if (normalized.includes("stake")) return "Staking...";
+  if (normalized.includes("buy") || normalized.includes("purchase")) return "Purchasing...";
+  if (normalized.includes("approve")) return "Approving...";
+  if (normalized.includes("transfer")) return "Transferring...";
+  if (normalized.includes("spin")) return "Spinning...";
+  if (normalized.includes("deal")) return "Dealing...";
+
+  return "Processing...";
 }
 
 function getExplorerHref(hash?: string | null, chainUrl?: string | null) {
@@ -302,12 +355,12 @@ function getSendCallsSupportKey({
   connectorId?: string | null;
 }) {
   if (!accountAddress) return null;
-  return `${connectorId || "unknown"}:${chainId || "unknown"}:${accountAddress.toLowerCase()}`;
+  return `${connectorId || "UntypedValue"}:${chainId || "UntypedValue"}:${accountAddress.toLowerCase()}`;
 }
 
-function isUnsupportedSendCallsError(error: unknown) {
+function isUnsupportedSendCallsError(error: UntypedValue) {
   const code =
-    typeof (error as { code?: unknown })?.code === "number"
+    typeof (error as { code?: UntypedValue })?.code === "number"
       ? Number((error as { code?: number }).code)
       : null;
   const message = getErrorMessage(error).toLowerCase();
@@ -321,6 +374,32 @@ function isUnsupportedSendCallsError(error: unknown) {
     || message.includes("corresponding handler")
     || message.includes("unsupported method")
   );
+}
+
+function createAtomicBundleUnsupportedError() {
+  return new Error(
+    "Your wallet does not support atomic bundled transactions. Please use a smart wallet or a wallet that supports wallet_sendCalls for this multi-step action.",
+  );
+}
+
+function isReceiptTimeoutError(error: UntypedValue) {
+  return getErrorMessage(error) === RECEIPT_TIMEOUT_MESSAGE;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutRef: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutRef = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutRef !== null) {
+      clearTimeout(timeoutRef);
+    }
+  }) as Promise<T>;
 }
 
 function getStatusLabelData({
@@ -358,7 +437,7 @@ function getStatusLabelData({
   }
 
   if (errorMessage) {
-    label = errorMessage;
+    label = getFriendlyTransactionMessage(errorMessage);
     labelClassName = TEXT_ERROR;
   }
 
@@ -396,7 +475,7 @@ function getToastLabelData({
   }
 
   if (errorMessage) {
-    label = "Something went wrong";
+    label = getFriendlyTransactionMessage(errorMessage);
     labelClassName = TEXT_ERROR;
   }
 
@@ -560,15 +639,16 @@ export function Transaction({
       connectorId: connector?.id ?? null,
     });
     const canBatch =
-      typeof (walletClient as any).sendCalls === "function"
-      && typeof (walletClient as any).waitForCallsStatus === "function";
+      typeof (walletClient as UntypedValue).sendCalls === "function"
+      && typeof (walletClient as UntypedValue).waitForCallsStatus === "function";
+    const requiresAtomicBundle = normalizedCalls.length > 1;
     const shouldUseBatchedExecution =
       canBatch
       && !(
         sendCallsSupportKey
         && unsupportedSendCallsKeys.has(sendCallsSupportKey)
       )
-      && (normalizedCalls.length > 1 || isSponsored || isSmartWallet);
+      && (requiresAtomicBundle || isSponsored || isSmartWallet);
     const paymasterUrl =
       process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL
       || process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL
@@ -606,7 +686,11 @@ export function Transaction({
           statusName: "transactionPending",
         });
 
-        const confirmedReceipt = await waitForBaseReceipt(hash);
+        const confirmedReceipt = await withTimeout(
+          waitForBaseReceipt(hash),
+          DIRECT_RECEIPT_TIMEOUT_MS,
+          RECEIPT_TIMEOUT_MESSAGE,
+        );
         const receipt = normalizeTransactionReceipt(confirmedReceipt);
         const receiptHash = extractTransactionHash(receipt) as Hex | undefined;
 
@@ -633,7 +717,7 @@ export function Transaction({
     try {
       if (shouldUseBatchedExecution) {
         try {
-          const batch = await (walletClient as any).sendCalls({
+          const batch = await (walletClient as UntypedValue).sendCalls({
             account: walletClient.account,
             ...(Object.keys(mergedCapabilities).length > 0 ? { capabilities: mergedCapabilities } : {}),
             chain,
@@ -659,16 +743,41 @@ export function Transaction({
             statusName: "transactionPending",
           });
 
-          const result = await (walletClient as any).waitForCallsStatus({
-            id: batch.id,
-            throwOnFailure: false,
-            timeout: 120_000,
-          });
+          const result = await withTimeout<UntypedValue>(
+            (walletClient as UntypedValue).waitForCallsStatus({
+              id: batch.id,
+              throwOnFailure: false,
+              timeout: CALLS_STATUS_TIMEOUT_MS,
+            }) as Promise<UntypedValue>,
+            CALLS_STATUS_TIMEOUT_MS + 5_000,
+            "Timed out waiting for wallet transaction status.",
+          );
 
-          const receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
+          let receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
             normalizeTransactionReceipt(receipt),
           );
-          const nextTransactionHash = extractTransactionHash(receipts[0]) as Hex | undefined;
+          const statusTransactionHash = extractTransactionHash(result) as Hex | undefined;
+          let nextTransactionHash = (extractTransactionHash(receipts[0]) ?? statusTransactionHash) as Hex | undefined;
+
+          const firstReceiptLogs = Array.isArray(receipts[0]?.logs) ? receipts[0].logs : [];
+          if (nextTransactionHash && firstReceiptLogs.length === 0) {
+            try {
+              const fetchedReceipt = normalizeTransactionReceipt(
+                await withTimeout(
+                  waitForBaseReceipt(nextTransactionHash),
+                  DIRECT_RECEIPT_TIMEOUT_MS,
+                  RECEIPT_TIMEOUT_MESSAGE,
+                ),
+              );
+              receipts = [fetchedReceipt, ...receipts];
+              nextTransactionHash = (extractTransactionHash(fetchedReceipt) ?? nextTransactionHash) as Hex;
+            } catch (receiptError) {
+              if (isReceiptTimeoutError(receiptError)) {
+                throw receiptError;
+              }
+              console.warn("Failed to fetch full transaction receipt from RPC:", receiptError);
+            }
+          }
 
           transactionHashRef.current = nextTransactionHash;
           if (mountedRef.current) {
@@ -709,9 +818,17 @@ export function Transaction({
           }
 
           clearTransactionArtifacts();
+          if (requiresAtomicBundle) {
+            throw createAtomicBundleUnsupportedError();
+          }
+
           await executeDirectTransactions();
           return;
         }
+      }
+
+      if (requiresAtomicBundle) {
+        throw createAtomicBundleUnsupportedError();
       }
 
       await executeDirectTransactions();
@@ -807,6 +924,7 @@ export function Transaction({
 }
 
 export function TransactionButton({
+  ariaLabel,
   className,
   disabled = false,
   onClick,
@@ -872,7 +990,12 @@ export function TransactionButton({
       return "Try again";
     }
     if (isExecuting) {
-      return <Spinner />;
+      return (
+        <>
+          <Spinner />
+          <span>{getPendingButtonText(idleText)}</span>
+        </>
+      );
     }
     return idleText;
   }, [errorMessage, idleText, isExecuting, receipt]);
@@ -905,6 +1028,15 @@ export function TransactionButton({
     return "default";
   }, [errorMessage, isExecuting, receipt]);
 
+  const resolvedAriaLabel = ariaLabel
+    ?? (receipt
+      ? "View transaction"
+      : errorMessage
+        ? "Try again"
+        : isExecuting
+          ? getPendingButtonText(idleText)
+          : idleText);
+
   if (render) {
     return render({
       context,
@@ -919,7 +1051,7 @@ export function TransactionButton({
     <button
       className={cn(
         PRESSABLE_PRIMARY,
-        "w-full rounded-xl px-4 py-3 font-medium leading-6",
+        "flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] px-4 py-3 text-sm font-semibold leading-none shadow-[var(--shadow-control)] transition-[background-color,color,box-shadow,opacity,transform] duration-[var(--motion-quick)]",
         isDisabled && PRESSABLE_DISABLED,
         TEXT_HEADLINE,
         TEXT_INVERSE,
@@ -928,6 +1060,8 @@ export function TransactionButton({
       onClick={handleSubmit}
       type="button"
       disabled={isDisabled}
+      aria-label={resolvedAriaLabel}
+      aria-live="polite"
       data-testid="ockTransactionButton_Button"
     >
       {buttonContent}
@@ -1081,7 +1215,7 @@ export function TransactionToast({
     <div
       aria-live="polite"
       className={cn(
-        "fixed z-[10000] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-lg p-2 sm:max-w-sm",
+        "fixed z-[var(--z-toast)] flex max-w-[calc(100vw-2rem)] items-center justify-between rounded-[var(--radius-control)] border border-border/60 p-2 sm:max-w-sm",
         BG_SURFACE,
         TEXT_DEFAULT,
         TOAST_SHADOW,
@@ -1092,7 +1226,7 @@ export function TransactionToast({
       role="status"
       data-testid="ockToast"
     >
-      <div className="flex items-center gap-4 p-2">
+      <div className="flex min-w-0 items-center gap-3 p-2">
         {children ?? (
           <>
             <TransactionToastIcon />
@@ -1102,10 +1236,11 @@ export function TransactionToast({
         )}
       </div>
       <button
-        className="p-2"
+        className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] p-2 text-muted-foreground hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         onClick={dismissToast}
         type="button"
         data-testid="ockCloseButton"
+        aria-label="Dismiss transaction status"
       >
         <CloseSvg />
       </button>
@@ -1127,7 +1262,7 @@ export function TransactionToastIcon({ className }: TransactionToastIconProps) {
       return <ErrorSvg />;
     }
     if (isInProgress) {
-      return <Spinner className="px-1.5 py-1.5" />;
+      return <Spinner className="h-4 w-4" />;
     }
     return null;
   }, [errorMessage, isInProgress, receipt]);
@@ -1158,7 +1293,7 @@ export function TransactionToastLabel({
   }
 
   return (
-    <div className={cn(TEXT_LABEL1, "text-nowrap", className)}>
+    <div className={cn(TEXT_LABEL1, "min-w-0 max-w-[16rem]", className)}>
       <p className={labelClassName === TEXT_ERROR ? labelClassName : TEXT_DEFAULT}>
         {label}
       </p>
@@ -1218,7 +1353,7 @@ export function TransactionToastAction({
   }
 
   return (
-    <div className={cn(TEXT_LABEL1, "text-nowrap", className)}>
+    <div className={cn(TEXT_LABEL1, "shrink-0 text-nowrap", className)}>
       {actionElement}
     </div>
   );

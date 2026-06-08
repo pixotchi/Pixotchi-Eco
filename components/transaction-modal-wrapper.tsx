@@ -63,6 +63,9 @@ export function TransactionModalWrapper({ className }: { className?: string }) {
     };
   }, [txModalOpen, setTxModalOpen]);
 
+  if (!txModalOpen) {
+    return null;
+  }
+
   return <TransactionModal className={className} />;
 }
-

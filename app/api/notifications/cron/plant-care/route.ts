@@ -73,7 +73,7 @@ async function getThrottleState(key: string): Promise<boolean> {
     return false;
   }
 
-  return Boolean(await (redis as any)?.get?.(key));
+  return Boolean(await (redis as UntypedValue)?.get?.(key));
 }
 
 async function markThrottle(key: string): Promise<void> {
@@ -81,7 +81,7 @@ async function markThrottle(key: string): Promise<void> {
     return;
   }
 
-  await (redis as any)?.set?.(key, '1', { ex: PLANT_CARE_THROTTLE_SECONDS });
+  await (redis as UntypedValue)?.set?.(key, '1', { ex: PLANT_CARE_THROTTLE_SECONDS });
 }
 
 async function clearThrottle(key: string): Promise<void> {
@@ -89,7 +89,7 @@ async function clearThrottle(key: string): Promise<void> {
     return;
   }
 
-  await (redis as any)?.del?.(key);
+  await (redis as UntypedValue)?.del?.(key);
 }
 
 async function fetchAllEnabledFids(): Promise<number[]> {
@@ -98,7 +98,7 @@ async function fetchAllEnabledFids(): Promise<number[]> {
 
   if (redis) {
     try {
-      const cached = await (redis as any)?.get?.(NEYNAR_ENABLED_FIDS_CACHE_KEY);
+      const cached = await (redis as UntypedValue)?.get?.(NEYNAR_ENABLED_FIDS_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(typeof cached === 'string' ? cached : JSON.stringify(cached));
         if (Array.isArray(parsed)) {
@@ -146,7 +146,7 @@ async function fetchAllEnabledFids(): Promise<number[]> {
   } while (cursor && pageCount < 100);
 
   if (redis && allFids.length > 0) {
-    await (redis as any)?.set?.(NEYNAR_ENABLED_FIDS_CACHE_KEY, JSON.stringify(allFids), {
+    await (redis as UntypedValue)?.set?.(NEYNAR_ENABLED_FIDS_CACHE_KEY, JSON.stringify(allFids), {
       ex: NEYNAR_ENABLED_FIDS_CACHE_TTL_SECONDS,
     });
   }
@@ -185,9 +185,10 @@ async function publishToFids(fids: number[], title: string, body: string) {
 
 async function resolveFidAddress(fid: number): Promise<string | null> {
   try {
-    const cached = await (redis as any)?.get?.(`fidmap:${fid}`);
-    if (cached) {
-      return String(cached).toLowerCase();
+    const cached = await (redis as UntypedValue)?.get?.(`fidmap:${fid}`);
+    const cachedAddress = normalizeWalletAddress(cached);
+    if (cachedAddress) {
+      return cachedAddress;
     }
 
     const response = await fetch(`https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`, {
@@ -200,7 +201,7 @@ async function resolveFidAddress(fid: number): Promise<string | null> {
     const payload = await response.json();
     const address = normalizeWalletAddress(payload?.result?.address?.address);
     if (address) {
-      await (redis as any)?.set?.(`fidmap:${fid}`, address);
+      await (redis as UntypedValue)?.set?.(`fidmap:${fid}`, address, { ex: 7 * 24 * 60 * 60 });
     }
     return address;
   } catch {
@@ -317,7 +318,7 @@ async function handleNeynarPlantCare(req: NextRequest, debug: boolean, dryRun: b
     }
   }
 
-  let publishResult: unknown = null;
+  let publishResult: UntypedValue = null;
   if (!dryRun && fidsToNotify.length > 0) {
     const response = await publishToFids(
       fidsToNotify,
@@ -504,7 +505,7 @@ async function handleBasePlantCare(req: NextRequest, debug: boolean, dryRun: boo
     }
   }
 
-  let publishResult: unknown = null;
+  let publishResult: UntypedValue = null;
   if (!dryRun && addressesToNotify.length > 0) {
     const lockOwner = `base-plant-care:${Date.now()}`;
     const lockAcquired = await acquireBaseApiLock(lockOwner, BASE_REQUEST_LOCK_TTL_SECONDS);

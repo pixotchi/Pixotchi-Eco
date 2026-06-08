@@ -1,15 +1,15 @@
 /**
  * Batch Limits Diagnostic API
- * 
+ *
  * Tests the practical limits for batch transactions by estimating gas
  * for different batch sizes of villageClaimProduction calls.
- * 
+ *
  * GET /api/admin/batch-limits?address=0x...&maxBatch=50
- * 
+ *
  * Returns gas estimates for batch sizes from 1 to maxBatch
  */
 
-import { createErrorResponse,validateAdminKey } from '@/lib/auth-utils';
+import { requireAdmin } from '@/lib/auth-utils';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { LAND_CONTRACT_ADDRESS,getLandBuildingsBatch,getLandsByOwner } from '@/lib/contracts';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
@@ -43,10 +43,8 @@ const KNOWN_LIMITS = {
 };
 
 export async function GET(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-    return NextResponse.json(error.body, { status: error.status });
-  }
+  const adminDenied = await requireAdmin(request);
+    if (adminDenied) return adminDenied;
 
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');
@@ -66,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     // Get user's lands and their claimable buildings
     const lands = await getLandsByOwner(address);
-    
+
     if (lands.length === 0) {
       return NextResponse.json({
         error: 'No lands found for address',
@@ -86,14 +84,14 @@ export async function GET(request: NextRequest) {
       points: bigint;
       lifetime: bigint;
     }
-    
+
     const claimableItems: ClaimableItem[] = [];
     buildingResults.forEach(result => {
-      result.villageBuildings.forEach((b: any) => {
+      result.villageBuildings.forEach((b: UntypedValue) => {
         const id = Number(b.id);
         const points = BigInt(b.accumulatedPoints || 0);
         const lifetime = BigInt(b.accumulatedLifetime || 0);
-        
+
         // Production buildings only (0: Solar, 3: Soil, 5: Bee)
         if ((id === 0 || id === 3 || id === 5) && (points > BigInt(0) || lifetime > BigInt(0))) {
           claimableItems.push({
@@ -117,7 +115,7 @@ export async function GET(request: NextRequest) {
 
     // Test different batch sizes
     const batchSizesToTest = [1, 5, 10, 15, 20, 25, 30, 40, 50].filter(n => n <= maxBatch && n <= claimableItems.length);
-    
+
     const results: {
       batchSize: number;
       gasEstimate: string;
@@ -129,7 +127,7 @@ export async function GET(request: NextRequest) {
 
     for (const batchSize of batchSizesToTest) {
       const batchItems = claimableItems.slice(0, batchSize);
-      
+
       // Encode calls for gas estimation
       const calls = batchItems.map(item => ({
         to: LAND_CONTRACT_ADDRESS as `0x${string}`,
@@ -145,7 +143,7 @@ export async function GET(request: NextRequest) {
         // Note: For smart wallet batching, gas is estimated differently,
         // but this gives us a baseline for each call's complexity
         let totalGas = BigInt(0);
-        
+
         for (const call of calls) {
           try {
             const gas = await client.estimateGas({
@@ -162,7 +160,7 @@ export async function GET(request: NextRequest) {
 
         const gasPerCall = totalGas / BigInt(batchSize);
         const fitsInTxLimit = totalGas < PER_TX_GAS_LIMIT;
-        
+
         // Calculate recommended max based on gas per call
         // Leave 20% headroom for smart wallet bundler overhead
         const recommendedMax = Number((PER_TX_GAS_LIMIT * BigInt(80) / BigInt(100)) / gasPerCall);
@@ -174,7 +172,7 @@ export async function GET(request: NextRequest) {
           fitsInTxLimit,
           recommendedMax: Math.min(recommendedMax, 100), // Cap at 100 for safety
         });
-      } catch (error: any) {
+      } catch (error: UntypedValue) {
         results.push({
           batchSize,
           gasEstimate: 'FAILED',
@@ -236,7 +234,7 @@ export async function GET(request: NextRequest) {
           : `Split into ${Math.ceil(claimableItems.length / finalRecommendation)} batches of ${finalRecommendation}`,
       },
     });
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     return NextResponse.json({
       error: 'Failed to analyze batch limits',
       details: error.message,

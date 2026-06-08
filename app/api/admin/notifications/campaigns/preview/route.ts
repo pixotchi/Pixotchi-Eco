@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, createErrorResponse } from '@/lib/auth-utils';
 import { previewBaseCampaign } from '@/lib/notifications/campaigns';
 
 export const runtime = 'nodejs';
@@ -16,9 +16,8 @@ const CampaignRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     const body = CampaignRequestSchema.parse(await request.json());

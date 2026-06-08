@@ -4,8 +4,12 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import { Leaf, LandPlot } from "lucide-react";
 import { useFrameContext } from "@/lib/frame-context";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
+import dynamic from "next/dynamic";
 import PlantsView from "./plants-view";
-import LandsView from "./lands-view";
+
+const LandsView = dynamic(() => import("./lands-view"), {
+  ssr: false,
+});
 
 export default function DashboardTab() {
   const frame = useFrameContext();
@@ -21,13 +25,13 @@ export default function DashboardTab() {
   return (
     <div className="space-y-4">
       {/* Switch Toggle */}
-      <div className="flex justify-center">
+      <div className="hidden justify-center min-[54rem]:flex">
         <ToggleGroup
           value={dashboardView}
           onValueChange={(v) => setDashboardView(v as 'plants' | 'lands')}
           options={[
-            { value: 'plants', label: (<span className="flex items-center gap-1"><Leaf className="w-4 h-4" /> Plants</span>) },
-            { value: 'lands', label: (<span className="flex items-center gap-1"><LandPlot className="w-4 h-4" /> Lands</span>) },
+            { value: 'plants', ariaLabel: 'Plants', label: (<span className="flex items-center gap-1"><Leaf className="w-4 h-4" /> Plants</span>) },
+            { value: 'lands', ariaLabel: 'Lands', label: (<span className="flex items-center gap-1"><LandPlot className="w-4 h-4" /> Lands</span>) },
           ]}
         />
       </div>

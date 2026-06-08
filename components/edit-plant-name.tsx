@@ -6,25 +6,27 @@ import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import SwapPlantNameBundle from '@/components/transactions/swap-plant-name-bundle';
 import { Button } from '@/components/ui/button';
 import {
-Dialog,
-DialogContent,
-DialogDescription,
-DialogHeader,
-DialogTitle,
-DialogTrigger,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InlineBalanceNotice } from '@/components/ui/premium';
+import { ASSET_NAME_RULES, DEFAULT_PLANT_NAME_CHANGE_COST_SEED, getAssetNameInvalidReason, getAssetNameValidation, truncateUtf8ToMaxBytes } from '@/lib/asset-name-rules';
 import { useBalances } from '@/lib/balance-context';
-import { getEthQuoteForSeedAmount } from '@/lib/contracts';
+import { getEthQuoteForSeedAmount, getPlantNameChangePrice } from '@/lib/contracts';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { formatWsol } from '@/lib/solana-quote';
 import { Plant } from '@/lib/types';
+import { formatTokenAmount } from '@/lib/utils';
 import Image from 'next/image';
 import { useEffect,useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { formatUnits } from "viem";
 import { useAccount,useBalance } from 'wagmi';
 
 interface EditPlantNameProps {
@@ -34,8 +36,11 @@ interface EditPlantNameProps {
   iconSize?: number;
 }
 
-const NAME_CHANGE_COST = 350; // SEED tokens required
-const MAX_NAME_LENGTH = 9; // Under 10 characters as requested
+const PLANT_NAME_RULE = ASSET_NAME_RULES.plant;
+const WEI_PER_TOKEN = BigInt('1000000000000000000');
+const FALLBACK_NAME_CHANGE_COST_WEI = BigInt(DEFAULT_PLANT_NAME_CHANGE_COST_SEED) * WEI_PER_TOKEN;
+const renamePanelClassName =
+  "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
 
 export function EditPlantName({
   plant,
@@ -48,10 +53,11 @@ export function EditPlantName({
   const isSolana = useIsSolanaWallet();
   const { isSmartWallet } = useSmartWallet();
   const { isEthMode } = useEthModeSafe();
-  const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
+  const [, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [newName, setNewName] = useState(plant.name || '');
   const [isTransactionPending, setIsTransactionPending] = useState(false);
+  const [nameChangeCostWei, setNameChangeCostWei] = useState<bigint>(FALLBACK_NAME_CHANGE_COST_WEI);
 
   // ETH Mode state
   const [ethQuote, setEthQuote] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
@@ -69,23 +75,39 @@ export function EditPlantName({
     }
   }, [isOpen, plant.name]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+
+    getPlantNameChangePrice()
+      .then((price) => {
+        if (!cancelled && price !== null) {
+          setNameChangeCostWei(price);
+        } else if (!cancelled) {
+          setNameChangeCostWei(FALLBACK_NAME_CHANGE_COST_WEI);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setNameChangeCostWei(FALLBACK_NAME_CHANGE_COST_WEI);
+      });
+
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
   const handleNameChange = (value: string) => {
-    // Strictly limit to MAX_NAME_LENGTH characters
-    const truncatedValue = value.slice(0, MAX_NAME_LENGTH);
-    setNewName(truncatedValue);
+    setNewName(truncateUtf8ToMaxBytes(value, PLANT_NAME_RULE.maxBytes));
   };
 
   const canAffordNameChange = isSmartWallet && isEthMode && ethQuote
     ? ethBalance >= ethQuote.ethAmountWithBuffer
-    : seedBalance >= BigInt(NAME_CHANGE_COST * 1e18);
+    : seedBalance >= nameChangeCostWei;
   const trimmedName = newName.trim();
-  const isNameValid = trimmedName.length > 0 &&
-    trimmedName.length <= MAX_NAME_LENGTH &&
+  const nameValidation = getAssetNameValidation('plant', newName);
+  const nameInvalidReason = getAssetNameInvalidReason('plant', newName);
+  const isNameValid = nameValidation.validFormat &&
     trimmedName !== (plant.name || '').trim();
   const canSubmit = canAffordNameChange && isNameValid && !isTransactionPending;
-
-  // SEED cost in wei for ETH quote
-  const nameChangeCostWei = BigInt(NAME_CHANGE_COST) * BigInt(1e18);
 
   // Fetch ETH quote when dialog opens and ETH mode is active
   useEffect(() => {
@@ -139,7 +161,7 @@ export function EditPlantName({
     }, 1000);
   };
 
-  const handleError = (error: any) => {
+  const handleError = (error: UntypedValue) => {
     console.error('Name change transaction failed:', error);
     toast.error('Failed to change plant name. Please try again.');
     setIsTransactionPending(false);
@@ -159,9 +181,10 @@ export function EditPlantName({
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          size="sm"
-          className={`p-1 h-auto hover:bg-muted ${className}`}
+          size="icon-sm"
+          className={`hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary ${className}`}
           title="Change plant name"
+          aria-label="Change plant name"
         >
           <Image
             src="/icons/pencil.svg"
@@ -173,7 +196,7 @@ export function EditPlantName({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-md">
+      <DialogContent surface="soft" className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Change Plant Name</DialogTitle>
           <DialogDescription>
@@ -181,101 +204,36 @@ export function EditPlantName({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-
-          {/* Name input */}
-          <div className="space-y-3">
-            <label htmlFor="plant-name" className="text-sm font-medium">
-              New Name
-            </label>
+        <DialogBody className="pt-4">
+          <section className={renamePanelClassName}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <label htmlFor="plant-name" className="text-sm font-semibold text-foreground">
+                New Name
+              </label>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Plant #{plant.id}
+              </span>
+            </div>
             <Input
               id="plant-name"
               value={newName}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Enter new name..."
-              maxLength={MAX_NAME_LENGTH}
-              className="w-full"
+              className="w-full font-pixel"
             />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
-              {newName.length === MAX_NAME_LENGTH && (
-                <span className="text-red-500">Maximum length reached</span>
+            <div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
+              <span>{nameValidation.rawByteLength}/{PLANT_NAME_RULE.maxBytes} bytes</span>
+              {nameValidation.rawByteLength === PLANT_NAME_RULE.maxBytes && (
+                <span className="text-destructive">Byte limit reached</span>
               )}
             </div>
-          </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Emoji and accented letters can use more than 1 byte.
+            </p>
+          </section>
+        </DialogBody>
 
-          {/* Balance and cost info */}
-          <div className="space-y-3">
-            {/* ETH Mode: show ETH balance/cost */}
-            {isSmartWallet && isEthMode && !isSolana ? (
-              <>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Your ETH Balance:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                    <span>{(Number(ethBalance) / 1e18).toFixed(6)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <span>Cost:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                    <span className="font-medium">
-                      {ethQuoteLoading ? <Skeleton className="h-4 w-20" />
-                        : ethQuote ? `${(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH`
-                          : '...'}
-                    </span>
-                  </div>
-                </div>
-
-                {!canAffordNameChange && ethQuote && (
-                  <p className="text-sm text-red-500">
-                    Insufficient ETH. Need {((Number(ethQuote.ethAmountWithBuffer) - Number(ethBalance)) / 1e18).toFixed(6)} more ETH.
-                  </p>
-                )}
-              </>
-            ) : !isSolana ? (
-              <>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Your SEED Balance:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                    <span className={isLoadingBalance ? 'animate-pulse' : ''}>
-                      {isLoadingBalance ? '...' : parseFloat(formatUnits(seedBalance, 18)).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <span>Cost:</span>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
-                    <span className="font-medium">{NAME_CHANGE_COST.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {!canAffordNameChange && !isLoadingBalance && (
-                  <p className="text-sm text-red-500">
-                    Insufficient SEED tokens. You need {NAME_CHANGE_COST - parseFloat(formatUnits(seedBalance, 18))} more.
-                  </p>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-between text-sm">
-                <span>Est. cost (SOL):</span>
-                <div className="font-medium">
-                  {solanaQuote
-                    ? solanaQuote.error
-                      ? <span className="text-amber-500">Quote error</span>
-                      : `${formatWsol(solanaQuote.wsolAmount)} SOL`
-                    : '...'}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Transaction Button */}
+        <DialogFooter sticky className="block space-y-2">
           {isSolana ? (
             // Solana bridge transaction for name change
             <SolanaBridgeButton
@@ -317,7 +275,7 @@ export function EditPlantName({
                   ? 'Insufficient ETH'
                   : `Change Name with ETH`
               }
-              buttonClassName="w-full bg-green-600 hover:bg-green-700 text-white"
+              buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
               disabled={!isNameValid || isTransactionPending || !canAffordNameChange}
             />
           ) : canSubmit ? (
@@ -327,9 +285,10 @@ export function EditPlantName({
                 newName={newName.trim()}
                 onSuccess={handleSuccess}
                 onError={handleError}
-                buttonText={`Change Name (${NAME_CHANGE_COST} SEED)`}
+                buttonText={nameChangeCostWei > BigInt(0) ? `Change Name (${formatTokenAmount(nameChangeCostWei)} SEED)` : 'Change Name (free)'}
                 buttonClassName="w-full"
                 disabled={!canSubmit}
+                hideLabel
               />
             </div>
           ) : (
@@ -339,13 +298,21 @@ export function EditPlantName({
             >
               {isSmartWallet && isEthMode && ethQuoteLoading ? 'Loading ETH quote...' :
                 !canAffordNameChange ? (isSmartWallet && isEthMode ? 'Insufficient ETH' : 'Insufficient SEED') :
-                  trimmedName.length === 0 ? 'Enter a name' :
-                    trimmedName.length > MAX_NAME_LENGTH ? 'Name too long' :
+                  nameInvalidReason ? nameInvalidReason :
                       trimmedName === (plant.name || '').trim() ? 'Name unchanged' :
                         'Change Name'}
             </Button>
           )}
-        </div>
+          {isSmartWallet && isEthMode && !isSolana && !canAffordNameChange && ethQuote ? (
+            <InlineBalanceNotice>
+              Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+            </InlineBalanceNotice>
+          ) : !isSolana && !canAffordNameChange && !isLoadingBalance ? (
+	            <InlineBalanceNotice>
+	              Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(nameChangeCostWei)}
+	            </InlineBalanceNotice>
+          ) : null}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

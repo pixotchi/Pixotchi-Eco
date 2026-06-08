@@ -10,6 +10,7 @@ import { formatDuration, formatScore } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import type { TransactionFeedbackMode } from './transaction-kit';
 
 const BOX_GAME_ABI = [
   {
@@ -58,13 +59,15 @@ interface BoxGameTransactionProps {
   plantId: number;
   seed: number;
   withStar: boolean;
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
-  onStatusUpdate?: (status: any) => void;
+  onStatusUpdate?: (status: UntypedValue) => void;
+  onResult?: (result: { pointsDelta: number; timeAdded: number }) => void;
 }
 
 export default function BoxGameTransaction({
@@ -76,8 +79,10 @@ export default function BoxGameTransaction({
   buttonText = 'Play',
   buttonClassName,
   disabled = false,
+  feedbackMode,
   showToast = true,
   onStatusUpdate,
+  onResult,
 }: BoxGameTransactionProps) {
   const { address } = useAccount();
   const functionName = withStar ? 'boxGamePlayWithStar' : 'boxGamePlay';
@@ -88,7 +93,7 @@ export default function BoxGameTransaction({
     args: [BigInt(plantId), BigInt(seed)],
   }];
 
-  const handleSuccess = (tx: any) => {
+  const handleSuccess = (tx: UntypedValue) => {
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {
@@ -106,32 +111,36 @@ export default function BoxGameTransaction({
 
   return (
     <SponsoredTransaction
-      calls={calls as any}
+      calls={calls as UntypedValue}
       onSuccess={handleSuccess}
       onError={onError}
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      feedbackMode={feedbackMode}
       showToast={showToast}
-      onStatusUpdate={(status: any) => {
+      onStatusUpdate={(status: UntypedValue) => {
         try { onStatusUpdate?.(status); } catch {}
         if (status?.statusName === 'success') {
           try {
-            const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
-            const abi = (PixotchiNFT as any).abi || PixotchiNFT;
+            const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
+            const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
             let shown = false;
             for (const r of receipts) {
               const logs = r?.logs || [];
               for (const log of logs) {
                 try {
-                  const decoded: any = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as any });
+                  const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
                   if (decoded.eventName === 'Played' || decoded.eventName === 'PlayedV2') {
                     const rawPoints = Number(decoded.args.points ?? decoded.args.pointsAdjustment ?? 0);
                     const rawTime = Number(decoded.args.timeExtension ?? decoded.args.timeAdjustment ?? 0);
+                    onResult?.({ pointsDelta: rawPoints, timeAdded: rawTime });
                     const ptsText = formatScore(rawPoints);
                     const timeText = rawTime !== 0 ? `${rawTime > 0 ? '+' : '-'}${formatDuration(Math.abs(rawTime))} TOD` : '';
                     const msg = timeText ? `You got +${ptsText} PTS and ${timeText}` : `You got +${ptsText} PTS`;
-                    toast.success(msg, { id: 'box-result' });
+                    if (!onResult) {
+                      toast.success(msg, { id: 'box-result' });
+                    }
                     shown = true;
                     break;
                   }
@@ -139,13 +148,16 @@ export default function BoxGameTransaction({
               }
               if (shown) break;
             }
-            if (!shown) toast.success('Play confirmed!', { id: 'box-result' });
+            if (!shown) {
+              onResult?.({ pointsDelta: 0, timeAdded: 0 });
+              if (!onResult) toast.success('Play confirmed!', { id: 'box-result' });
+            }
           } catch {
-            toast.success('Play confirmed!', { id: 'box-result' });
+            onResult?.({ pointsDelta: 0, timeAdded: 0 });
+            if (!onResult) toast.success('Play confirmed!', { id: 'box-result' });
           }
         }
       }}
     />
   );
 }
-

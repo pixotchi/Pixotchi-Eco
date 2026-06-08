@@ -1,19 +1,71 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onTasksDialogOpen } from "@/lib/app-events";
+import type { GmMissionDay } from "@/lib/gamification-types";
+import { CheckCircle2, Circle } from "lucide-react";
+import { ProgressBar } from "@/components/ui/progress-bar";
+
+type MissionTask = {
+  done?: boolean;
+  label: string;
+};
+
+type MissionSection = {
+  reward: number;
+  tasks: MissionTask[];
+  title: string;
+};
+
+function MissionCard({ section }: { section: MissionSection }) {
+  const completed = section.tasks.filter((task) => task.done).length;
+  const progress = section.tasks.length > 0 ? (completed / section.tasks.length) * 100 : 0;
+
+  return (
+    <section className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold leading-tight">{section.title}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{section.reward} Rocks available</p>
+        </div>
+        <div className="shrink-0 rounded-[var(--radius-control)] border border-border/60 bg-card/80 px-2 py-1 text-xs font-semibold tabular-nums">
+          {completed}/{section.tasks.length}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <ProgressBar label={`${section.title} progress`} value={progress} />
+      </div>
+
+      <ul className="mt-3 space-y-2">
+        {section.tasks.map((task) => {
+          const StatusIcon = task.done ? CheckCircle2 : Circle;
+          return (
+            <li key={task.label} className="flex items-start gap-2 text-sm leading-snug">
+              <StatusIcon
+                className={task.done ? "mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--success))]" : "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50"}
+                aria-hidden="true"
+              />
+              <span className={task.done ? "text-foreground" : "text-muted-foreground"}>{task.label}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 export default function TasksInfoDialog() {
   const { address } = useAccount();
   const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
   const gamificationPolicy = getClientGamificationPolicy();
   const [open, setOpen] = useState(false);
-  const [missionDay, setMissionDay] = useState<any | null>(null);
+  const [missionDay, setMissionDay] = useState<GmMissionDay | null>(null);
   const [missionPts, setMissionPts] = useState<number>(0);
   const [missionTotal, setMissionTotal] = useState<number>(0);
   const [streak, setStreak] = useState<{ current: number; best: number } | null>(null);
@@ -71,88 +123,125 @@ export default function TasksInfoDialog() {
     return null;
   }
 
+  const missionSections: MissionSection[] = [
+    {
+      reward: 30,
+      title: "General",
+      tasks: [
+        { done: missionDay?.s1?.makeSwap, label: "Make a SEED swap" },
+        { done: missionDay?.s1?.stakeSeed, label: "Stake SEED" },
+        { done: missionDay?.s1?.claimStake, label: "Claim stake rewards" },
+        { done: missionDay?.s1?.placeOrder, label: "Place a SEED/LEAF order" },
+      ],
+    },
+    {
+      reward: 20,
+      title: "Social",
+      tasks: [
+        { done: missionDay?.s2?.followPlayer, label: "Follow a player" },
+        { done: missionDay?.s2?.chatMessage, label: "Send a message in public chat" },
+        { done: missionDay?.s2?.visitProfile, label: "Visit a profile" },
+      ],
+    },
+    {
+      reward: 25,
+      title: "Land",
+      tasks: [
+        { done: missionDay?.s3?.applyResources, label: "Apply resources or production to a plant" },
+        { done: missionDay?.s3?.sendQuest, label: "Send a farmer on a quest" },
+        { done: missionDay?.s3?.claimProduction, label: "Claim production from any building" },
+        { done: missionDay?.s3?.playCasinoGame, label: "Play roulette or blackjack" },
+      ],
+    },
+    {
+      reward: 25,
+      title: "Plant",
+      tasks: [
+        { done: missionDay?.s4?.buy10, label: "Buy at least 10 elements" },
+        { done: missionDay?.s4?.buyShield, label: "Buy a shield or fence" },
+        { done: missionDay?.s4?.collectStar, label: "Collect a star by killing a plant" },
+        { done: missionDay?.s4?.playArcade, label: "Play Box or Spin in the arcade" },
+      ],
+    },
+  ];
+  const completedTaskCount = missionSections.reduce(
+    (total, section) => total + section.tasks.filter((task) => task.done).length,
+    0
+  );
+  const totalTaskCount = missionSections.reduce((total, section) => total + section.tasks.length, 0);
+  const dailyProgress = Math.max(0, Math.min(100, missionPts));
+  const summaryCard = (
+    <div
+      className="chromatic-white-surface mr-[-2.75rem] space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)] sm:mr-[-2.5rem]"
+      data-task-summary-card
+    >
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <span className="text-xs font-semibold text-muted-foreground">Streak</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-bold leading-none tabular-nums">{streak?.current ?? 0}</span>
+            <span className="text-xs text-muted-foreground">days</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Best {streak?.best ?? 0}</p>
+        </div>
+
+        <div>
+          <span className="text-xs font-semibold text-muted-foreground">Today</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-bold leading-none tabular-nums">{missionPts}</span>
+            <span className="text-xs text-muted-foreground">/100</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Rocks</p>
+        </div>
+
+        <div>
+          <span className="text-xs font-semibold text-muted-foreground">Tasks</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-bold leading-none tabular-nums">{completedTaskCount}</span>
+            <span className="text-xs text-muted-foreground">/{totalTaskCount}</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Done</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>Daily progress</span>
+          <span className="font-medium tabular-nums">Total {missionTotal}</span>
+        </div>
+        <ProgressBar label="Daily task reward progress" value={dailyProgress} />
+      </div>
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Farmer's Tasks</DialogTitle>
-          <DialogDescription>
-            Earn up to 100 Rock per day by completing 4 sections. Daily reset at 00:00 UTC.
+      <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
+        <DialogHeader className="space-y-2">
+          <DialogTitle className="flex items-center gap-2">
+            <Image src="/icons/Volcanic_Rock.svg" alt="" width={20} height={20} className="h-5 w-5" aria-hidden="true" />
+            Farmer&apos;s Tasks
+          </DialogTitle>
+          <DialogDescription className="leading-relaxed">
+            Earn up to 100 Rocks per day. Daily reset is 00:00 UTC.
           </DialogDescription>
+          {!effectiveDisabled && summaryCard}
         </DialogHeader>
 
-        {effectiveDisabled ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-            <p className="text-sm font-semibold">Temporarily Disabled</p>
-            <p className="text-xs text-muted-foreground mt-1">{effectiveDisabledMessage}</p>
-          </div>
-        ) : (
-          <>
-            {/* Progress Card - Streak & Rocks */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {/* Streak */}
-              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Streak</span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" className="animate-streak-colors" aria-hidden="true">
-                    <rect x="2" y="2" width="20" height="20" rx="3" />
-                  </svg>
-                </div>
-                <p className="text-xl font-bold">{streak?.current ?? 0}</p>
-                <p className="text-[10px] text-muted-foreground">Best: {streak?.best ?? 0}</p>
-              </div>
-
-              {/* Today's Rock */}
-              <div className="p-3 rounded-lg bg-muted">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Today</span>
-                  <Image src="/icons/Volcanic_Rock.svg" alt="Rock" width={16} height={16} />
-                </div>
-                <p className="text-xl font-bold">{missionPts} / 100</p>
-                <p className="text-[10px] text-muted-foreground">Lifetime: {missionTotal}</p>
-              </div>
+        <DialogBody className="space-y-4 pr-1">
+          {effectiveDisabled ? (
+            <div className="rounded-[var(--radius-panel)] border border-amber-500/30 bg-amber-500/10 p-3.5">
+              <p className="text-sm font-semibold">Temporarily Disabled</p>
+              <p className="text-xs text-muted-foreground mt-1">{effectiveDisabledMessage}</p>
             </div>
-
-            {/* Task Sections */}
-            <div className="space-y-3 text-sm">
-              <div>
-                <div className="font-medium">Section 1 - General (30 Rocks)</div>
-                <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.makeSwap ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Make a SEED swap</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.stakeSeed ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Stake SEED</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.claimStake ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim stake rewards</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s1?.placeOrder ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Place a SEED/LEAF order</li>
-                </ul>
-              </div>
-              <div>
-                <div className="font-medium">Section 2 - Social (20 Rocks)</div>
-                <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.followPlayer ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Follow a player</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.chatMessage ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a message in public chat</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s2?.visitProfile ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Visit a profile</li>
-                </ul>
-              </div>
-              <div>
-                <div className="font-medium">Section 3 - Land (25 Rocks)</div>
-                <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.applyResources ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Apply resources/production to a plant</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.sendQuest ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Send a farmer on a quest</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.claimProduction ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Claim production from any building</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s3?.playCasinoGame ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play a casino game (roulette/blackjack)</li>
-                </ul>
-              </div>
-              <div>
-                <div className="font-medium">Section 4 - Plant (25 Rocks)</div>
-                <ul className="list-disc pl-5 text-muted-foreground text-xs space-y-1 mt-1">
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.buy10 ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy at least 10 elements</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.buyShield ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Buy a shield/fence</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.collectStar ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Collect a star by killing a plant</li>
-                  <li className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${missionDay?.s4?.playArcade ? 'bg-green-500' : 'bg-muted-foreground/40'}`}></span> Play an arcade game (Box or Spin)</li>
-                </ul>
-              </div>
+          ) : (
+            <div className="grid gap-3 pb-1 sm:grid-cols-2">
+              {missionSections.map((section) => (
+                <MissionCard key={section.title} section={section} />
+              ))}
             </div>
-          </>
-        )}
+          )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

@@ -22,7 +22,7 @@ const LOCALSTORAGE_KEY_PREFIXES = [
   // Privy
   "privy",
   "@privy",
-  // OnchainKit / Coinbase
+  // Legacy wallet / Coinbase
   "ock",
   "coinbase",
   // App specific
@@ -108,5 +108,4 @@ export function needsCacheMigration(version: string): boolean {
     return true;
   }
 }
-
 

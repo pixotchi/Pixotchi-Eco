@@ -11,9 +11,13 @@ export const dynamic = 'force-dynamic';
  * Called by QStash scheduler to keep cache always hot.
  */
 export async function GET(request: Request) {
-  // Optional: Verify CRON_SECRET for security
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
+  const isProductionLike = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL_ENV);
+
+  if (!cronSecret && isProductionLike) {
+    return NextResponse.json({ error: 'CRON_SECRET is required' }, { status: 503 });
+  }
   
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -47,4 +51,3 @@ export async function GET(request: Request) {
     );
   }
 }
-

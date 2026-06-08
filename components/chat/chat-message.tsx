@@ -8,25 +8,17 @@ import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Bot, User, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { postMissionProgress } from "@/lib/mission-tracking";
+import { Button } from "@/components/ui/button";
 import ChatProfileDialog from "./chat-profile-dialog";
+import dynamic from "next/dynamic";
 
-// Function to format AI messages with bold syntax **text**
-function formatAIMessage(text: string) {
-  const parts = text.split(/(\*\*.*?\*\*)/g);
-  
-  return parts.map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      // Remove the ** markers and make bold
-      const boldText = part.slice(2, -2);
-      return (
-        <strong key={index} className="font-semibold">
-          {boldText}
-        </strong>
-      );
-    }
-    return part;
-  });
-}
+const MessageResponse = dynamic(
+  () => import("@/components/ai-elements/message").then((mod) => mod.MessageResponse),
+  {
+    loading: () => <span className="text-sm leading-6 text-current">Loading response...</span>,
+    ssr: false,
+  }
+);
 
 function formatRelativeShort(date: Date) {
   const now = new Date();
@@ -69,8 +61,8 @@ export default function ChatMessageComponent({
 }: ChatMessageProps) {
   const { address } = useAccount();
   
-  const isAIMessage = isAIMode && (('type' in message && message.type === 'assistant') || (message as any).displayName === 'Agent');
-  const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || (message as any).displayName === 'You');
+  const isAIMessage = isAIMode && 'type' in message && message.type === 'assistant';
+  const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || (message as UntypedValue).displayName === 'You');
   const isOwnPublicMessage = !isAIMode && address?.toLowerCase() === message.address.toLowerCase();
   
   const { name } = usePrimaryName(message.address);
@@ -83,7 +75,7 @@ export default function ChatMessageComponent({
   
   let displayName = '';
   if (isAIMessage) {
-    displayName = (message as any).displayName === 'Agent' ? 'Agent' : 'Neural Seed';
+    displayName = 'Neural Seed';
   } else if (isOwnPublicMessage || isUserAIMessage) {
     displayName = 'You';
   } else {
@@ -92,10 +84,16 @@ export default function ChatMessageComponent({
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
   
-  const bgColor = isAIMessage ? 'bg-blue-100 dark:bg-blue-900/30' :
-                  isOwnPublicMessage || isUserAIMessage ? 'bg-primary text-primary-foreground' :
-                  'bg-muted';
+  const bgColor = isAIMessage ? 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]' :
+                  isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)]' :
+                  'chat-white-surface border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
+  const bubbleSize = isAIMessage
+    ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
+    : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
   const canOpenProfile = !isAIMessage && !isUserAIMessage && !isOwnPublicMessage;
+  const timestampColor = isOwnPublicMessage || isUserAIMessage
+    ? 'text-primary-foreground/80'
+    : 'text-muted-foreground';
 
   const displayNameNode = (
     <span className="text-xs font-semibold">
@@ -104,17 +102,19 @@ export default function ChatMessageComponent({
   );
 
   const profileTrigger = canOpenProfile ? (
-    <button
+    <Button
       type="button"
       onClick={() => {
         setProfileOpen(true);
         trackProfileVisit();
       }}
-      className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] leading-none whitespace-nowrap rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
+      variant="compactUtility"
+      size="compact"
+      className="h-6 min-h-6 rounded-md border-primary/25 bg-primary/5 px-2 py-0 text-[10px] text-primary shadow-none hover:bg-primary/10 active:translate-y-0 active:scale-100"
       aria-label={`Open profile for ${displayName}`}
     >
       Profile
-    </button>
+    </Button>
   ) : null;
 
   return (
@@ -122,7 +122,8 @@ export default function ChatMessageComponent({
       <div className={cn("flex", alignment)}>
         <div
           className={cn(
-            "rounded-lg px-3 py-2 max-w-[85%] sm:max-w-[75%]",
+            "min-w-0 rounded-[var(--radius-control)] [overflow-wrap:anywhere]",
+            bubbleSize,
             bgColor
           )}
           role="article"
@@ -132,23 +133,46 @@ export default function ChatMessageComponent({
         >
           <div className="flex items-start justify-between gap-2 mb-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              {isAIMessage && <Bot className="w-4 h-4 text-blue-500" />}
+              {isAIMessage && <Bot className="w-4 h-4 text-[hsl(var(--info))]" />}
               {(isUserAIMessage || isOwnPublicMessage) && <User className="w-4 h-4" />}
               {displayNameNode}
               {!isAIMessage && !isUserAIMessage && !isOwnPublicMessage && name && (
-                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(var(--info))] flex-shrink-0" />
               )}
               {profileTrigger}
             </div>
-            <span className="text-xs text-muted-foreground whitespace-nowrap self-start">
+            <span className={cn("text-xs whitespace-nowrap self-start", timestampColor)}>
               {formatRelativeShort(new Date(message.timestamp))}
             </span>
           </div>
           
-          <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-            {isAIMessage ? formatAIMessage(message.message) : message.message}
+          <div
+            className={cn(
+              "text-sm leading-relaxed break-words [overflow-wrap:anywhere]",
+              !isAIMessage && "whitespace-pre-wrap"
+            )}
+          >
+            {isAIMessage ? (
+              <MessageResponse
+                className={cn(
+                  "max-w-none text-sm leading-6 text-current [overflow-wrap:anywhere]",
+                  "[&_*]:max-w-full",
+                  "[&>p]:my-1.5 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0",
+                  "[&_h1]:mb-2 [&_h1]:mt-3 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:leading-6",
+                  "[&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-bold [&_h2]:leading-6",
+                  "[&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:leading-5",
+                  "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5",
+                  "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5",
+                  "[&_li]:pl-0 [&_li]:marker:text-current [&_li>p]:my-0",
+                  "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-current/30 [&_blockquote]:pl-3",
+                  "[&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:p-2",
+                  "[&_a]:break-words [&_code]:break-words [&_strong]:font-bold"
+                )}
+              >
+                {message.message}
+              </MessageResponse>
+            ) : message.message}
           </div>
-          
         </div>
       </div>
 

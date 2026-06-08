@@ -50,7 +50,7 @@ export const slides: TutorialSlide[] = [
     art: "ptstod",
     content: (
       <div className="space-y-2 text-sm">
-        <p>Use Farm and Marketplace items to increase your plant's stats:</p>
+        <p>Use Farm and Marketplace items to increase your plant&apos;s stats:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>TOD (Time of Death):</strong> Keeps your plant alive.</li>
           <li><strong>PTS (Points):</strong> Determines your share of future ETH rewards.</li>
@@ -158,7 +158,7 @@ export const slides: TutorialSlide[] = [
       <div className="space-y-2 text-sm">
         <p>Everyone plays differently, so find the strategy that fits you.</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li>Use a <strong>Smart Wallet</strong> for the best experience (sponsored gas).</li>
+          <li>Use a <strong>Smart Wallet</strong> for the smoothest onchain experience.</li>
           <li>Good luck, and enjoy your journey in Pixotchi! 🌱</li>
         </ul>
       </div>

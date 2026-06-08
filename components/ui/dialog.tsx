@@ -20,10 +20,10 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     data-viewport-debug-dialog-overlay=""
     className={cn(
-       "fixed inset-0 z-[1200] bg-black/60",
-      "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
+      "fixed inset-0 bg-black/60 backdrop-blur-[var(--blur-overlay)]",
+      "supports-[backdrop-filter]:bg-black/50 motion-reduce:bg-black/75 motion-reduce:backdrop-blur-none",
+      "duration-[var(--motion-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      "motion-off:bg-black/75",
       className
     )}
     aria-hidden="true"
@@ -32,28 +32,80 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
+type DialogSurface = "default" | "soft" | "game" | "danger";
+type DialogMobileMode = "auto" | "center" | "sheet";
+type DialogLayer = "default" | "nested";
+
+const dialogSizeClassName: Record<DialogSize, string> = {
+  sm: "max-w-sm",
+  md: "max-w-md",
+  lg: "max-w-lg",
+  xl: "max-w-2xl",
+  full: "w-[min(96vw,64rem)] max-w-none",
+};
+
+const dialogSurfaceClassName: Record<DialogSurface, string> = {
+  default: "border-border/65 !bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
+  soft: "border-border/65 !bg-popover bg-[image:var(--gradient-dialog)] text-popover-foreground",
+  game: "border-white/15 !bg-slate-950 text-white shadow-[var(--shadow-modal)]",
+  danger: "border-destructive/30 !bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
+};
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    danger?: boolean;
     frameClassName?: string;
     hideCloseButton?: boolean;
+    layer?: DialogLayer;
+    mobileMode?: DialogMobileMode;
     overlayClassName?: string;
+    size?: DialogSize;
+    stickyFooter?: boolean;
+    surface?: DialogSurface;
     useSafeAreaInset?: boolean;
   }
->(({ className, children, frameClassName, hideCloseButton, overlayClassName, useSafeAreaInset = true, ...props }, ref) => (
+>(({
+  children,
+  className,
+  danger = false,
+  frameClassName,
+  hideCloseButton,
+  layer = "default",
+  mobileMode = "auto",
+  overlayClassName,
+  size = "md",
+  stickyFooter = false,
+  surface = "default",
+  useSafeAreaInset = true,
+  ...props
+}, ref) => (
   <DialogPortal>
-    <DialogOverlay className={overlayClassName} />
+    <DialogOverlay
+      className={cn(
+        layer === "nested"
+          ? "z-[calc(var(--z-modal-nested)-1)]"
+          : "z-[var(--z-overlay)]",
+        overlayClassName
+      )}
+    />
     <DialogPrimitive.Content
       ref={ref}
       data-viewport-debug-dialog-frame=""
+      data-sticky-footer={stickyFooter ? "true" : undefined}
       className={cn(
-        // Full-viewport centering container (avoids translate issues)
-        "fixed inset-0 z-[1201] flex items-center justify-center",
+        "fixed inset-0 flex justify-center",
+        layer === "nested"
+          ? "z-[var(--z-modal-nested)]"
+          : "z-[var(--z-modal)]",
+        mobileMode === "sheet" ? "items-end sm:items-center" : "items-center",
         useSafeAreaInset && "safe-area-inset",
-        // Animations disabled on mobile via global .motion-off override; keep classes for desktop
-        "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "duration-[var(--motion-modal)] data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        mobileMode === "sheet"
+          ? "data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:slide-in-from-bottom-4 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
+          : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         frameClassName
       )}
       {...props}
@@ -61,8 +113,11 @@ const DialogContent = React.forwardRef<
       <div
         data-viewport-debug-dialog-surface=""
         className={cn(
-       "relative w-full max-w-md rounded-2xl border border-border bg-background p-6 shadow-[0_32px_64px_-24px_rgba(15,23,42,0.45)]",
-          "max-h-full sm:max-h-[90dvh] flex flex-col overflow-hidden",
+          "relative flex w-[min(94vw,100%)] flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
+          "max-h-[90dvh]",
+          "rounded-[var(--radius-dialog)]",
+          dialogSizeClassName[size],
+          dialogSurfaceClassName[danger ? "danger" : surface],
           className
         )}
       >
@@ -72,17 +127,18 @@ const DialogContent = React.forwardRef<
             aria-label="Close dialog"
             className={cn(
               // Position
-              "absolute top-3 right-3 md:top-4 md:right-4 z-[1]",
+              "absolute top-3 right-3 md:top-4 md:right-4 z-10",
               // Size and alignment
-              "inline-flex h-8 w-8 items-center justify-center md:h-9 md:w-9",
-              // Visuals: avoid borders, provide hover background only
-              "rounded-md bg-transparent text-muted-foreground hover:bg-muted/60",
-              // Accessibility focus style (no persistent ring/border)
+              "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
+              // Visuals: match header/task/stake icon controls
+              "rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] !bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)]",
+              "hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]",
+              // Accessibility focus style
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               // Ensure ring offset blends with dialog background
               "ring-offset-background",
               // Behavior
-              "transition-colors disabled:pointer-events-none"
+              "transition-[border-color,background-color,color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] disabled:pointer-events-none"
             )}
           >
             <X className="h-4 w-4" />
@@ -101,7 +157,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 pr-12 text-left",
+      "surface-header-divider dialog-header-surface -mx-5 -mt-5 mb-0 flex flex-col space-y-2 px-5 pb-3 pt-5 pr-16 text-left sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 sm:pr-16",
       className
     )}
     {...props}
@@ -110,18 +166,31 @@ const DialogHeader = ({
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({
+  sticky = false,
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+}: React.HTMLAttributes<HTMLDivElement> & { sticky?: boolean }) => (
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 overflow-visible px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6",
       className
     )}
     {...props}
   />
 );
 DialogFooter.displayName = "DialogFooter";
+
+const DialogBody = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("surface-scroll-fade -mx-1.5 min-h-0 flex-1 overflow-y-auto px-1.5 py-3", className)}
+    {...props}
+  />
+);
+DialogBody.displayName = "DialogBody";
 
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
@@ -144,7 +213,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm leading-relaxed text-muted-foreground", className)}
     {...props}
   />
 ));
@@ -156,6 +225,7 @@ export {
   DialogContent,
   DialogHeader,
   DialogFooter,
+  DialogBody,
   DialogTitle,
   DialogDescription,
 }; 

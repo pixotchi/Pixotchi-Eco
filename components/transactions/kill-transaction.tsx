@@ -6,6 +6,7 @@ import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import type { TransactionFeedbackMode } from "./transaction-kit";
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -23,13 +24,14 @@ const PIXOTCHI_NFT_ABI = [
 interface KillTransactionProps {
   deadId: number; // target dead plant id
   tokenId: number; // your alive plant id
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
-  onStatusUpdate?: (status: any) => void;
+  onStatusUpdate?: (status: UntypedValue) => void;
 }
 
 export default function KillTransaction({
@@ -40,6 +42,7 @@ export default function KillTransaction({
   buttonText = "Confirm Kill",
   buttonClassName,
   disabled = false,
+  feedbackMode,
   showToast = true,
   onStatusUpdate,
 }: KillTransactionProps) {
@@ -53,7 +56,7 @@ export default function KillTransaction({
     },
   ];
 
-  const handleSuccess = (tx: any) => {
+  const handleSuccess = (tx: UntypedValue) => {
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {
@@ -77,9 +80,9 @@ export default function KillTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      feedbackMode={feedbackMode}
       showToast={showToast}
       onStatusUpdate={onStatusUpdate}
     />
   );
 }
-

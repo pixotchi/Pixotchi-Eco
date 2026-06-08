@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import SponsoredTransaction from "./sponsored-transaction";
 import { PIXOTCHI_NFT_ADDRESS, SPIN_GAME_ABI } from "@/lib/contracts";
 import { toast } from "react-hot-toast";
-import type { LifecycleStatus } from "./transaction-kit";
+import type { LifecycleStatus, TransactionFeedbackMode } from "./transaction-kit";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -24,6 +24,7 @@ interface SpinGameTransactionProps {
   disabled?: boolean;
   buttonText?: string;
   buttonClassName?: string;
+  feedbackMode?: TransactionFeedbackMode;
   onStatusUpdate?: (status: LifecycleStatus) => void;
   onComplete?: (result?: {
     rewardIndex?: number;
@@ -47,6 +48,7 @@ export default function SpinGameTransaction({
   disabled = false,
   buttonText,
   buttonClassName,
+  feedbackMode,
   onStatusUpdate,
   onComplete,
   onButtonClick,
@@ -102,7 +104,7 @@ export default function SpinGameTransaction({
         id: "spin-leaf-commit",
       });
       } else if (mode === "reveal") {
-        const receipts: any[] = (status?.statusData?.transactionReceipts as any[]) || [];
+        const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
         if (address) {
         const txHash = extractTransactionHash(receipts[0]);
         if (txHash) {
@@ -189,11 +191,12 @@ export default function SpinGameTransaction({
 
   return (
     <SponsoredTransaction
-      calls={calls as any}
+      calls={calls as UntypedValue}
       buttonText={buttonText ?? defaultText}
       buttonClassName={buttonClassName}
       disabled={finalDisabled}
-      onStatusUpdate={handleStatus as any}
+      feedbackMode={feedbackMode}
+      onStatusUpdate={handleStatus as UntypedValue}
       onButtonClick={onButtonClick}
     />
   );

@@ -8,7 +8,7 @@ import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 interface LandNameTransactionProps {
   landId: bigint;
   newName: string;
-  onSuccess?: (data: any) => void;
+  onSuccess?: (data: UntypedValue) => void;
   onError?: (error: Error) => void;
   disabled?: boolean;
   buttonText?: string;

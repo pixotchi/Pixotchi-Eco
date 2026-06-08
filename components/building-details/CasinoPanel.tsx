@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, ChevronDown } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import {
   blackjackGetGameSnapshot,
   blackjackGetGameToken,
@@ -30,8 +30,10 @@ import {
 import { formatTokenAmount, getCasinoTokenImage } from "@/lib/utils";
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
+import DisabledTransaction from "@/components/transactions/disabled-transaction";
 import CasinoDialog from "@/components/transactions/CasinoDialog";
 import BlackjackDialog from "@/components/transactions/BlackjackDialog";
+import { InlineBalanceNotice } from "@/components/ui/premium";
 import { toast } from "react-hot-toast";
 import { useWalletClient, useAccount, useBalance } from "wagmi";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
@@ -75,7 +77,7 @@ function CasinoTokenLabel({
         className="h-5 w-5 rounded-full"
       />
       <span className="truncate text-sm font-medium">{label}</span>
-      {selected && <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Selected</span>}
+      {selected && <span className="text-xs uppercase text-muted-foreground">Selected</span>}
     </div>
   );
 }
@@ -294,6 +296,11 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
   const handleSpinComplete = useCallback(async () => {
     await Promise.all([loadCasinoState(), loadSelectedTokenStats()]);
+    for (const delayMs of [1500, 4000]) {
+      window.setTimeout(() => {
+        void Promise.all([loadCasinoState(), loadSelectedTokenStats()]);
+      }, delayMs);
+    }
     if (onSpinComplete) onSpinComplete();
   }, [loadCasinoState, loadSelectedTokenStats, onSpinComplete]);
 
@@ -376,9 +383,12 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
                 Checking balance...
               </Button>
             ) : buildingConfig && !hasSufficientBalance ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Insufficient balance
-              </Button>
+              <>
+                <DisabledTransaction buttonText={`Insufficient ${buildTokenSymbol} Balance`} buttonClassName="w-full" />
+                <InlineBalanceNotice>
+                  Not enough {buildTokenSymbol}. Balance: {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."} • Required: {buildCostDisplay}
+                </InlineBalanceNotice>
+              </>
             ) : !hasApproval && buildingConfig ? (
               <ApproveTransaction
                 spenderAddress={LAND_CONTRACT_ADDRESS}
@@ -410,7 +420,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
   return (
     <div className="text-center py-4 space-y-3">
       <div className="text-muted-foreground text-sm">
-        Play Roulette or Blackjack with fair onchain randomness!
+        Roulette uses block reveal; Blackjack uses verified signed randomness.
         <div className="mt-2 text-xs text-primary font-medium bg-primary/10 p-2 rounded border border-primary/20 text-left">
           Active bets expire after 256 blocks (~10 mins). Expired bets are forfeited.
         </div>
@@ -418,14 +428,15 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
       {supportedTokens.length > 0 ? (
         <div className="space-y-2 pt-1">
-          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Betting Token</div>
+          <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Betting Token</div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
-                className="mx-auto flex h-10 min-w-[220px] justify-between gap-3"
+                className="mx-auto flex h-11 min-h-11 min-w-[220px] justify-between gap-3"
                 disabled={supportedTokens.length === 0}
+                aria-label="Select casino betting token"
               >
                 {selectedToken ? (
                   <CasinoTokenLabel tokenAddress={selectedToken} />
@@ -477,21 +488,26 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         </div>
       )}
 
-      <div className="pt-2 flex justify-center gap-2">
+      <div className="flex flex-col gap-2 pt-2">
         <Button
-          className="h-9 px-3 text-sm"
+          className="w-full justify-center px-3 text-sm"
           onClick={() => handleOpenCasinoGame("roulette")}
           disabled={rouletteButtonDisabled}
+          aria-label={hasActiveRouletteGame ? "Resume Roulette game" : "Play Roulette"}
+          leadingIcon={<span className="text-base leading-none" aria-hidden="true">🎰</span>}
         >
-          {hasActiveRouletteGame ? "🎰 Resume Roulette" : "🎰 Play Roulette"}
+          {hasActiveRouletteGame ? "Resume Roulette" : "Play Roulette"}
         </Button>
         {casinoPolicy.blackjackEnabled && (
           <Button
-            className="h-9 px-3 text-sm bg-green-700 hover:bg-green-800"
+            variant="success"
+            className="w-full justify-center px-3 text-sm"
             onClick={() => handleOpenCasinoGame("blackjack")}
             disabled={blackjackButtonDisabled}
+            aria-label={hasActiveBlackjackGame ? "Resume Blackjack game" : "Play Blackjack"}
+            leadingIcon={<span className="text-base leading-none" aria-hidden="true">♦️</span>}
           >
-            {hasActiveBlackjackGame ? "♦️ Resume Blackjack" : "♦️ Play Blackjack"}
+            {hasActiveBlackjackGame ? "Resume Blackjack" : "Play Blackjack"}
           </Button>
         )}
       </div>

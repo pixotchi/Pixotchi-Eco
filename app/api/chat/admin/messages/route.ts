@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllMessagesForAdmin, getChatStats } from '@/lib/chat-service';
-import { validateAdminKey, logAdminAction, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin, logAdminAction } from '@/lib/auth-utils';
 
 export async function GET(request: NextRequest) {
   try {
     // Validate admin authentication using consistent auth utility
-    if (!validateAdminKey(request)) {
+    const adminDenied = await requireAdmin(request);
+    if (adminDenied) {
       await logAdminAction('chat_admin_messages_failed', 'invalid_key', { reason: 'invalid_admin_key' }, false);
-      const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-      return NextResponse.json(error.body, { status: error.status });
+      return adminDenied;
     }
 
     const [messages, stats] = await Promise.all([

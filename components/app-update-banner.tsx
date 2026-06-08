@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
 import { CLIENT_ENV } from "@/lib/env-config";
-import { cn } from "@/lib/utils";
 
 type VersionPayload = {
   buildId?: string;
@@ -117,8 +117,8 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
   }
 
   return (
-    <div className="pointer-events-none fixed left-1/2 top-[calc(max(0.75rem,env(safe-area-inset-top),var(--safe-area-inset-top),var(--browser-safe-area-top))+4.75rem)] z-[1200] w-[calc(100%-1rem)] max-w-md -translate-x-1/2 px-2">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border/80 bg-card/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/90">
+    <div className="pointer-events-none fixed left-1/2 top-[calc(max(0.75rem,env(safe-area-inset-top),var(--safe-area-inset-top),var(--browser-safe-area-top))+4.75rem)] z-[var(--z-overlay)] w-[calc(100%-1rem)] max-w-md -translate-x-1/2 px-2">
+      <div className="pointer-events-auto flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.38)] bg-card bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-raised)]">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <div className="mt-0.5 rounded-full bg-primary/10 p-1">
             <Info className="h-3.5 w-3.5 text-primary" />
@@ -131,7 +131,7 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
           </div>
         </div>
         <Button size="xs" onClick={handleRefresh} disabled={refreshing} className="shrink-0">
-          <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", refreshing && "animate-spin")} />
+          <RefreshIcon refreshing={refreshing} className="mr-1.5 h-3.5 w-3.5" />
           {refreshing ? "Refreshing..." : "Refresh"}
         </Button>
       </div>

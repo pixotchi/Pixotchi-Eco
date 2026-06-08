@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { Info } from 'lucide-react';
@@ -66,7 +67,7 @@ function BuildingDetailsPanel({
 
   if (!selectedBuilding) {
     return (
-      <Card>
+      <Card className="building-detail-surface">
         <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
             <span className="text-2xl">🏗️</span>
@@ -101,7 +102,7 @@ function BuildingDetailsPanel({
       if (selectedBuilding.level === 0) {
         return (
           <div className="text-center py-8 text-muted-foreground text-sm">
-            Building hasn't been constructed yet. Upgrade to level 1 to start.
+            Building hasn&apos;t been constructed yet. Upgrade to level 1 to start.
           </div>
         )
       }
@@ -125,7 +126,7 @@ function BuildingDetailsPanel({
           if (selectedBuilding.level === 0) {
             return (
               <div className="text-center py-8 text-muted-foreground text-sm">
-                Building hasn't been constructed yet. Upgrade to level 1 to start.
+                Building hasn&apos;t been constructed yet. Upgrade to level 1 to start.
               </div>
             );
           }
@@ -137,7 +138,7 @@ function BuildingDetailsPanel({
           if (selectedBuilding.level === 0) {
             return (
               <div className="text-center py-8 text-muted-foreground text-sm">
-                Building hasn't been constructed yet. Upgrade to level 1 to start.
+                Building hasn&apos;t been constructed yet. Upgrade to level 1 to start.
               </div>
             );
           }
@@ -171,7 +172,7 @@ function BuildingDetailsPanel({
   };
 
   return (
-    <Card>
+    <Card className="building-detail-surface">
       <CardHeader>
         <div className="flex items-center space-x-3">
           <Image
@@ -179,19 +180,21 @@ function BuildingDetailsPanel({
             alt={buildingName}
             width={48}
             height={48}
-            className="rounded-md"
-            style={{ height: 'auto' }}
+            className="h-12 w-12 shrink-0 rounded-md object-contain"
           />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <CardTitle className="font-pixel">{buildingName}</CardTitle>
-              <button
+              <CardTitle>{buildingName}</CardTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => setShowInfoDialog(true)}
-                className="flex items-center justify-center w-6 h-6 hover:bg-muted rounded transition-colors"
+                aria-label={`Info about ${buildingName}`}
                 title={`Info about ${buildingName}`}
               >
-                <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-              </button>
+                <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              </Button>
             </div>
             <p className="text-sm text-muted-foreground">
               {isCasino

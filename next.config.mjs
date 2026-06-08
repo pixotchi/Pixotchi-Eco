@@ -1,3 +1,7 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
 const rawAppBuildId =
   process.env.NEXT_PUBLIC_APP_BUILD_ID ||
   process.env.VERCEL_DEPLOYMENT_ID ||
@@ -29,7 +33,8 @@ const nextConfig = {
     // Resolve @solana/kit to a single version to avoid nested dependency issues
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@solana/kit": require.resolve("@solana/kit"),
+      "@solana/kit$": require.resolve("@solana/kit"),
+      "@solana/kit/program-client-core$": require.resolve("@solana/kit/program-client-core"),
     };
     return config;
   },

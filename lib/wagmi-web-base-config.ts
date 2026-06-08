@@ -36,7 +36,7 @@ export const wagmiWebBaseConfig = createConfig({
   },
   ...(dataSuffix ? { dataSuffix } : {}),
   connectors,
-  // Reduce wagmi polling frequency (5 minutes) - ranking handles health checks
-  pollingInterval: 300_000,
+  // Keep wallet-driven receipt waits responsive without aggressive polling.
+  pollingInterval: 2_500,
   ssr: true,
 });

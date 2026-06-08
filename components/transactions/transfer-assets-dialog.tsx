@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogBody,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuItem,DropdownMenuSeparator,DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,26 +22,26 @@ interface TransferAssetsDialogProps {
 }
 
 type WalletErrorLike = {
-  code?: unknown;
-  cause?: { code?: unknown } | null;
-  name?: unknown;
-  shortMessage?: unknown;
-  message?: unknown;
+  code?: UntypedValue;
+  cause?: { code?: UntypedValue } | null;
+  name?: UntypedValue;
+  shortMessage?: UntypedValue;
+  message?: UntypedValue;
 };
 
-const getWalletErrorDetails = (error: unknown): WalletErrorLike => {
+const getWalletErrorDetails = (error: UntypedValue): WalletErrorLike => {
   if (!error || typeof error !== "object") return {};
   return error as WalletErrorLike;
 };
 
-const getWalletErrorMessage = (error: unknown) => {
+const getWalletErrorMessage = (error: UntypedValue) => {
   if (typeof error === "string") return error;
   const details = getWalletErrorDetails(error);
   const message = details.shortMessage ?? details.message;
   return typeof message === "string" ? message : "";
 };
 
-const isUserRejectedError = (error: unknown) => {
+const isUserRejectedError = (error: UntypedValue) => {
   const details = getWalletErrorDetails(error);
   const message = getWalletErrorMessage(error).toLowerCase();
   return (
@@ -354,6 +354,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="pr-1">
         {!confirmStep ? (
         <div className="space-y-4">
           <div className="space-y-2">
@@ -366,7 +367,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
               autoComplete="off"
             />
             {!isValidRecipient && !resolvingEns && destination.length > 0 && (
-              <p className="text-xs text-red-500">Invalid address or ENS name</p>
+              <p className="text-xs text-destructive">Invalid address or ENS name</p>
             )}
           </div>
 
@@ -382,7 +383,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </div>
 
           {(plantsList.length > 0 || landsList.length > 0) && (
-            <div className="space-y-3 rounded-lg border border-border/60 p-3">
+            <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
               <p className="text-xs text-muted-foreground">Choose which assets to send.</p>
               {plantsList.length > 0 && (
                 <div className="space-y-2 text-sm">
@@ -401,7 +402,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                         <ChevronDown className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                    <DropdownMenuContent className="z-[var(--z-modal-nested)] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
                       <div className="grid grid-cols-2 gap-1 p-1">
                         <DropdownMenuItem
                           className="justify-center"
@@ -434,7 +435,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                             onCheckedChange={(nextChecked) => setPlantSelected(plant.id, nextChecked === true)}
                             onSelect={(event) => event.preventDefault()}
                           >
-                            <span className="min-w-0 flex-1 truncate">{plant.name || `Plant #${plant.id}`}</span>
+                            <span className="min-w-0 flex-1 truncate font-pixel">{plant.name || `Plant #${plant.id}`}</span>
                             {plant.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{plant.id}</span>}
                           </DropdownMenuCheckboxItem>
                         );
@@ -461,7 +462,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                         <ChevronDown className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="z-[1305] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                    <DropdownMenuContent className="z-[var(--z-modal-nested)] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
                       <div className="grid grid-cols-2 gap-1 p-1">
                         <DropdownMenuItem
                           className="justify-center"
@@ -495,7 +496,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                             onCheckedChange={(nextChecked) => setLandSelected(id, nextChecked === true)}
                             onSelect={(event) => event.preventDefault()}
                           >
-                            <span className="min-w-0 flex-1 truncate">{land.name || `Land #${id}`}</span>
+                            <span className="min-w-0 flex-1 truncate font-pixel">{land.name || `Land #${id}`}</span>
                             {land.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{id}</span>}
                           </DropdownMenuCheckboxItem>
                         );
@@ -518,7 +519,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                 </div>
               )}
               {!resolvingEns && ensError && (
-                <span className="text-red-500">{ensError}</span>
+                <span className="text-destructive">{ensError}</span>
               )}
             </div>
           )}
@@ -637,10 +638,10 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
               <span className="font-medium">{selectedLandsCount} / {counts.lands}</span>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-3 rounded-[var(--radius-control)] border border-border/60 bg-card/70 px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
             <input
               type="checkbox"
-              className="accent-current"
+              className="h-5 w-5 rounded border-border accent-current"
               checked={ack}
               onChange={(e) => setAck(e.target.checked)}
               disabled={loading}
@@ -653,6 +654,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </div>
         </div>
         )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
     </>

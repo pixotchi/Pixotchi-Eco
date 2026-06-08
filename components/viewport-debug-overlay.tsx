@@ -132,7 +132,7 @@ export function ViewportDebugOverlay() {
   ];
 
   return (
-    <div className="fixed left-2 top-2 z-[4000] max-w-[min(22rem,calc(100vw-1rem))] rounded-lg border border-black/20 bg-black/85 p-2 text-[11px] leading-tight text-white shadow-lg">
+    <div className="fixed left-2 top-2 z-[var(--z-tooltip)] max-w-[min(22rem,calc(100vw-1rem))] rounded-lg border border-black/20 bg-black/85 p-2 text-[11px] leading-tight text-white shadow-lg">
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="font-semibold">Viewport debug</span>
         <button

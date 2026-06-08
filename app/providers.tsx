@@ -2,12 +2,12 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { base } from "wagmi/chains";
-import { Toaster } from "react-hot-toast";
 import { PaymasterProvider } from "@/lib/paymaster-context";
 import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { sdk } from "@farcaster/miniapp-sdk";
 import { WagmiProvider as CoreWagmiProvider } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { wagmiWebBaseConfig } from "@/lib/wagmi-web-base-config";
@@ -31,11 +31,12 @@ import { SnowEffect } from "@/components/ui/snow-effect";
 import { SnowProvider } from "@/lib/snow-context";
 import { AmbientAudioProvider } from "@/lib/ambient-audio-context";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
-import { TransactionProvider } from 'ethereum-identity-kit';
-import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { AppUpdateBanner } from "@/components/app-update-banner";
+import { AppToaster } from "@/components/ui/app-toaster";
+import { PerformanceModeController } from "@/components/ui/performance-mode";
+import { ScrollFadeController } from "@/components/ui/scroll-fade-controller";
 import { usePathname } from "next/navigation";
 import {
   AuthSurface,
@@ -44,12 +45,8 @@ import {
 } from "@/lib/auth-surface";
 import {
   clearConfirmedMiniAppSession,
-  useConfirmedMiniAppSession,
 } from "@/lib/confirmed-miniapp-session";
-import {
-  clearMiniAppBypassCookies,
-  setMiniAppBypassCookies,
-} from "@/lib/miniapp-bypass";
+import { getPrivySolanaConnectors, hasUsableSolanaConnectors } from "@/lib/solana-auth-availability";
 
 const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
 const DESKTOP_EVM_WALLET_LIST = [
@@ -131,26 +128,6 @@ const getSolanaRpcConfig = () => {
   }
 };
 
-// Get Solana connectors for Privy
-// Using dynamic import to avoid build issues when Solana is not enabled
-const getSolanaConnectors = () => {
-  if (!isSolanaEnabled()) return undefined;
-
-  try {
-    // Import Solana wallet connectors from Privy
-    const privySolana = require('@privy-io/react-auth/solana');
-    if (privySolana?.toSolanaWalletConnectors) {
-      return privySolana.toSolanaWalletConnectors({
-        shouldAutoConnect: true
-      });
-    }
-    return undefined;
-  } catch (error) {
-    console.warn('[Providers] Failed to load Solana connectors:', error);
-    return undefined;
-  }
-};
-
 const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
 const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
 const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
@@ -200,13 +177,7 @@ function WagmiRouter({
   if (isMiniApp) {
     return (
       <CoreWagmiProvider config={wagmiMiniAppConfig}>
-        <TransactionProvider
-          defaultChainId={8453}
-          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-        >
-          {children}
-          <TransactionModalWrapper className="!z-[1300]" />
-        </TransactionProvider>
+        {children}
       </CoreWagmiProvider>
     );
   }
@@ -214,13 +185,7 @@ function WagmiRouter({
   if (surface === 'base') {
     return (
       <CoreWagmiProvider config={wagmiWebBaseConfig}>
-        <TransactionProvider
-          defaultChainId={8453}
-          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-        >
-          {children}
-          <TransactionModalWrapper className="!z-[1300]" />
-        </TransactionProvider>
+        {children}
       </CoreWagmiProvider>
     );
   }
@@ -228,26 +193,14 @@ function WagmiRouter({
   if (surface === 'test') {
     return (
       <CoreWagmiProvider config={wagmiLocalTestConfig}>
-        <TransactionProvider
-          defaultChainId={8453}
-          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-        >
-          {children}
-          <TransactionModalWrapper className="!z-[1300]" />
-        </TransactionProvider>
+        {children}
       </CoreWagmiProvider>
     );
   }
 
   return (
     <PrivyWagmiProvider config={wagmiPrivyConfig}>
-      <TransactionProvider
-        defaultChainId={8453}
-        paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-      >
-        {children}
-        <TransactionModalWrapper className="!z-[1300]" />
-      </TransactionProvider>
+      {children}
     </PrivyWagmiProvider>
   );
 }
@@ -312,8 +265,8 @@ export function Providers(props: { children: ReactNode }) {
       return () => mql.removeEventListener('change', apply);
     } catch {
       // Safari fallback
-      mql.addListener?.(apply as any);
-      return () => mql.removeListener?.(apply as any);
+      mql.addListener?.(apply as UntypedValue);
+      return () => mql.removeListener?.(apply as UntypedValue);
     }
   }, []);
 
@@ -325,20 +278,20 @@ export function Providers(props: { children: ReactNode }) {
       isMobilePrivyBrowser
         ? MOBILE_EVM_WALLET_LIST
         : DESKTOP_EVM_WALLET_LIST
-    ) as any;
+    ) as UntypedValue;
     const solanaWalletList = (
       isMobilePrivyBrowser
         ? MOBILE_SOLANA_WALLET_LIST
         : DESKTOP_SOLANA_WALLET_LIST
-    ) as any;
+    ) as UntypedValue;
+    const solanaConnectors = solanaEnabled ? getPrivySolanaConnectors() : undefined;
 
     // Solana-only mode: only show Solana wallets
     if (isSolanaMode && solanaEnabled) {
-      const solanaConnectors = getSolanaConnectors();
       const solanaRpcs = getSolanaRpcConfig();
 
       // Safety check: connectors must be present for Solana mode
-      if (solanaConnectors) {
+      if (hasUsableSolanaConnectors(solanaConnectors)) {
         return {
           embeddedWallets: {
             ethereum: { createOnLogin: 'off' as const },
@@ -371,7 +324,13 @@ export function Providers(props: { children: ReactNode }) {
       walletChainType: 'ethereum-only' as const,
       // Explicit wallets keep Privy usable on mobile, while detected wallets + QR cover desktop.
       walletList: evmWalletList,
-      externalWallets: undefined,
+      externalWallets: solanaConnectors
+        ? {
+          solana: {
+            connectors: solanaConnectors,
+          },
+        }
+        : undefined,
       solana: undefined,
     };
   }, [authSurface, isMobilePrivyBrowser]);
@@ -442,6 +401,42 @@ function RouteAwareChatProvider({ children }: { children: ReactNode }) {
   return <ChatProvider>{children}</ChatProvider>;
 }
 
+function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
+  const readySignalledRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || readySignalledRef.current) {
+      return;
+    }
+
+    if (!hostEnvironment.initialized) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await sdk.actions.ready();
+        if (!cancelled) {
+          readySignalledRef.current = true;
+        }
+      } catch (error) {
+        if (hostEnvironment.isMiniApp) {
+          console.warn('[Providers] Failed to signal sdk.actions.ready():', error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hostEnvironment.initialized,
+    hostEnvironment.isMiniApp,
+  ]);
+}
+
 function ProvidersContent({
   authSurface,
   children,
@@ -452,11 +447,12 @@ function ProvidersContent({
   surfaceInitialized: boolean;
 }) {
   const hostEnvironment = useHostEnvironment();
-  const confirmedMiniAppSession = useConfirmedMiniAppSession();
   const [hostEnvironmentReady, setHostEnvironmentReady] = useState(
     typeof window === 'undefined',
   );
   const didBootstrapSanitizeRef = useRef(typeof window === 'undefined');
+
+  useMiniAppReadySignal(hostEnvironment);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -484,7 +480,6 @@ function ProvidersContent({
     }
 
     if (!didBootstrapSanitizeRef.current) {
-      clearMiniAppBypassCookies();
       clearConfirmedMiniAppSession('host-bootstrap');
       didBootstrapSanitizeRef.current = true;
       setHostEnvironmentReady(true);
@@ -492,34 +487,11 @@ function ProvidersContent({
     }
 
     if (!hostEnvironment.isMiniApp) {
-      clearMiniAppBypassCookies();
       clearConfirmedMiniAppSession('host-downgrade');
     }
   }, [
     hostEnvironment.initialized,
     hostEnvironment.isMiniApp,
-  ]);
-
-  useEffect(() => {
-    if (!hostEnvironmentReady) {
-      return;
-    }
-
-    if (
-      hostEnvironment.isMiniApp &&
-      confirmedMiniAppSession.confirmed &&
-      confirmedMiniAppSession.address
-    ) {
-      setMiniAppBypassCookies(confirmedMiniAppSession.address);
-      return;
-    }
-
-    clearMiniAppBypassCookies();
-  }, [
-    confirmedMiniAppSession.address,
-    confirmedMiniAppSession.confirmed,
-    hostEnvironment.isMiniApp,
-    hostEnvironmentReady,
   ]);
 
   if (!surfaceInitialized || !hostEnvironment.initialized || !hostEnvironmentReady) {
@@ -544,34 +516,9 @@ function ProvidersContent({
                       {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
                       {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
                       {/** added provider wrapper **/}
-                      <Toaster
-                        position="top-center"
-                        toastOptions={{
-                          duration: 4000,
-                          style: {
-                            backgroundColor: "hsl(var(--background))",
-                            color: "hsl(var(--foreground))",
-                            border: "1px solid hsl(var(--border))",
-                            zIndex: 9999,
-                          },
-                          success: {
-                            iconTheme: {
-                              primary: "hsl(var(--primary))",
-                              secondary: "hsl(var(--primary-foreground))",
-                            },
-                          },
-                          error: {
-                            iconTheme: {
-                              primary: "hsl(var(--destructive))",
-                              secondary: "hsl(var(--destructive-foreground))",
-                            },
-                          },
-                        }}
-                        containerStyle={{
-                          top: "max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top))",
-                          zIndex: 9999,
-                        }}
-                      />
+                      <AppToaster />
+                      <PerformanceModeController />
+                      <ScrollFadeController />
                       {children}
                       <SlideshowModal />
                     </TutorialBundle>

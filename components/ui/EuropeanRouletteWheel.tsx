@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 // European roulette wheel numbers in order (37 pockets: 0 and 1-36)
 const EUROPEAN_WHEEL_NUMBERS = [
@@ -25,7 +25,7 @@ export default function EuropeanRouletteWheel({
     const [ballAngle, setBallAngle] = useState(0);
     const [isAnimating, setIsAnimating] = useState(false);
     const animationRef = useRef<number | null>(null);
-    const spinStartTimeRef = useRef<number | null>(null);
+    const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Get pocket color
     const getPocketColor = (num: number): string => {
@@ -40,47 +40,62 @@ export default function EuropeanRouletteWheel({
         return (index / 37) * 360;
     };
 
+    const cancelContinuousSpin = useCallback(() => {
+        if (animationRef.current !== null) {
+            cancelAnimationFrame(animationRef.current);
+            animationRef.current = null;
+        }
+    }, []);
+
+    const clearSettleTimer = useCallback(() => {
+        if (settleTimeoutRef.current !== null) {
+            clearTimeout(settleTimeoutRef.current);
+            settleTimeoutRef.current = null;
+        }
+    }, []);
+
     // Animate wheel spin
     useEffect(() => {
-        if (spinning && !isAnimating) {
-            setIsAnimating(true);
-            spinStartTimeRef.current = Date.now();
+        if (!spinning || animationRef.current !== null) return;
 
-            const animate = () => {
-                // Continuous fast spin while waiting for result
-                setRotation(prev => (prev + 12) % 360);
-                // Ball spins opposite
-                setBallAngle(prev => (prev - 12) % 360);
+        clearSettleTimer();
+        setIsAnimating(true);
 
-                animationRef.current = requestAnimationFrame(animate);
-            };
+        const animate = () => {
+            // Continuous fast spin while waiting for result
+            setRotation(prev => (prev + 12) % 360);
+            // Ball spins opposite
+            setBallAngle(prev => (prev - 12) % 360);
 
             animationRef.current = requestAnimationFrame(animate);
-        }
-
-        return () => {
-            // Only cancel if spinning becomes false or unmount
-            // We do NOT want to cancel just because isAnimating changed state
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [spinning]);
+
+        animationRef.current = requestAnimationFrame(animate);
+    }, [clearSettleTimer, spinning]);
 
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
-            }
+            cancelContinuousSpin();
+            clearSettleTimer();
         };
-    }, []);
+    }, [cancelContinuousSpin, clearSettleTimer]);
+
+    useEffect(() => {
+        if (spinning || winningNumber !== null) return;
+
+        cancelContinuousSpin();
+        clearSettleTimer();
+        setIsAnimating(false);
+    }, [cancelContinuousSpin, clearSettleTimer, spinning, winningNumber]);
 
     // Handle landing on winning number
     useEffect(() => {
-        if (winningNumber !== null && isAnimating) {
-            // Stop animation
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
-            }
+        if (winningNumber !== null) {
+            // Stop continuous animation before settling on the winning pocket.
+            cancelContinuousSpin();
+            clearSettleTimer();
+            setIsAnimating(true);
 
             // Calculate final position to land on winning number
             const targetAngle = getNumberAngle(winningNumber);
@@ -98,12 +113,13 @@ export default function EuropeanRouletteWheel({
             setBallAngle(-ballSpins);
 
             // Notify completion after animation
-            setTimeout(() => {
+            settleTimeoutRef.current = setTimeout(() => {
                 setIsAnimating(false);
+                settleTimeoutRef.current = null;
                 onSpinComplete?.();
             }, 3000);
         }
-    }, [winningNumber, isAnimating, onSpinComplete]);
+    }, [cancelContinuousSpin, clearSettleTimer, winningNumber, onSpinComplete]);
 
     // Reset when not spinning
     useEffect(() => {

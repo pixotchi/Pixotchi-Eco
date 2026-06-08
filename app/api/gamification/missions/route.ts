@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ChatAuthError,
   createChatAuthRequiredResponse,
-  getChatSessionOrMiniAppBypassFromRequest,
+  createChatAuthErrorResponse,
+  getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
 import { getMissionDay, markMissionTask, getMissionScore } from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
@@ -85,7 +87,7 @@ async function getTransactionReceiptWithRetry(
     try {
       const receipt = await getBaseTransactionReceipt(txHash);
       if (receipt) return receipt;
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
       // Check if it's a "not found" or "indexing in progress" error
       const isTimingError =
         error?.shortMessage?.includes('could not be found') ||
@@ -185,10 +187,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { taskId, proof, count } = body || {};
-    const fallbackAddress = typeof body?.address === 'string' ? body.address : null;
-    const { session, sessionId } = await getChatSessionOrMiniAppBypassFromRequest(request, {
-      fallbackAddress,
-    });
+    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     const gamificationPolicy = getGamificationPolicy();
     if (!gamificationPolicy.enabled) {
@@ -239,6 +238,10 @@ export async function POST(request: NextRequest) {
     const updated = await markMissionTask(address, missionTaskId, proof, safeCount);
     return NextResponse.json({ success: true, day: updated });
   } catch (error) {
+    if (error instanceof ChatAuthError) {
+      return createChatAuthErrorResponse(error);
+    }
+
     console.error('Error updating mission:', error);
     const message = error instanceof Error ? error.message : 'Failed to update mission';
     const status = /proof|origin|sender|transaction/i.test(message) ? 403 : 500;

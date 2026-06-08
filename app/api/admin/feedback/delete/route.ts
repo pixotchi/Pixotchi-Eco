@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin } from '@/lib/auth-utils';
 import { redis, redisDel } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
-    if (!validateAdminKey(request)) {
-      const error = createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED');
-      return NextResponse.json(error.body, { status: error.status });
-    }
+    const adminDenied = await requireAdmin(request);
+    if (adminDenied) return adminDenied;
 
     if (!redis) {
       return NextResponse.json(
@@ -23,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (deleteAll) {
       // Delete all feedback
       const feedbackIds = (await redis.zrange('pixotchi:feedback:list', 0, -1)) as string[];
-      
+
       if (feedbackIds && feedbackIds.length > 0) {
         const keysToDelete = feedbackIds.map(id => `pixotchi:feedback:${id}`);
         await redis.del(...keysToDelete);

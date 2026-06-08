@@ -152,7 +152,7 @@ export function BaseAnimatedLogo({ className }: BaseAnimatedLogoProps) {
               {/* Single blue square for non-hovered state */}
               {!isHovered && (
                 <div 
-                  className="aspect-square h-full w-full rounded-md transition-all duration-300"
+                  className="base-logo-corner aspect-square h-full w-full transition-all duration-300"
                   style={{ backgroundColor: '#0000FF' }}
                 />
               )}
@@ -164,4 +164,4 @@ export function BaseAnimatedLogo({ className }: BaseAnimatedLogoProps) {
       </div>
     </div>
   )
-} 
+}

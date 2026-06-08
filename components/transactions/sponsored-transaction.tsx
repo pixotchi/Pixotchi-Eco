@@ -6,21 +6,24 @@ import {
   TransactionButton,
   TransactionStatus,
 } from './transaction-kit';
-import type { LifecycleStatus } from './transaction-kit';
+import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit';
 import GlobalTransactionToast from './global-transaction-toast';
 import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { useAccount } from 'wagmi';
 import { normalizeTransactionReceipt } from '@/lib/transaction-utils';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface SponsoredTransactionProps {
   calls: TransactionCall[];
-  onSuccess?: (tx: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (tx: UntypedValue) => void;
+  onError?: (error: UntypedValue) => void;
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
+  feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
   onStatusUpdate?: (status: LifecycleStatus) => void;
   hideStatus?: boolean;
@@ -34,8 +37,8 @@ export default function SponsoredTransaction({
   buttonText,
   buttonClassName = "",
   disabled = false,
-  showToast = true
-  , onStatusUpdate,
+  feedbackMode,
+  onStatusUpdate,
   hideStatus = false,
   onButtonClick
 }: SponsoredTransactionProps) {
@@ -46,21 +49,25 @@ export default function SponsoredTransaction({
   // Normalize to raw serializable calls for embedded-wallet compatibility.
   // Builder attribution is appended by transform helper + wallet_sendCalls capability.
   const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as any[]) as TransactionCall[],
+    transformCallsWithBuilderCode(calls as UntypedValue[]) as TransactionCall[],
     [calls]
   );
 
-  const handleOnSuccess = useCallback((tx: any) => {
-    console.log('Sponsored transaction successful');
+  const handleOnSuccess = useCallback((tx: UntypedValue) => {
     onSuccess?.(tx);
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
+    dispatchPostTransactionRefresh();
     // Gamification: track daily activity (non-blocking)
     if (address) {
-      fetch('/api/gamification/streak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address })
-      }).catch(err => console.warn('Streak tracking failed (non-critical):', err));
+      void (async () => {
+        const authHeaders = await getMiniAppQuickAuthHeaders();
+        await fetch('/api/gamification/streak', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
+        });
+      })().catch(err => console.warn('Streak tracking failed (non-critical):', err));
     }
   }, [address, onSuccess]);
 
@@ -69,9 +76,11 @@ export default function SponsoredTransaction({
 
   // Wrap onError to ignore errors after success has been handled
   // This fixes OnchainKit race condition where onError can fire after successful tx
-  const handleOnError = useCallback((error: any) => {
+  const handleOnError = useCallback((error: UntypedValue) => {
     if (successHandledRef.current) {
-      console.log('Ignoring post-success error callback from OnchainKit:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Ignoring post-success error callback from OnchainKit:', error);
+      }
       return;
     }
     onError?.(error);
@@ -91,6 +100,9 @@ export default function SponsoredTransaction({
       handleOnSuccess(normalizedReceipt);
     }
   }, [handleOnSuccess, onStatusUpdate]);
+  const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? "toast";
+  const showInlineStatus = !hideStatus && (resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both");
+  const showGlobalToast = resolvedFeedbackMode !== "none";
 
   return (
     <Transaction
@@ -114,11 +126,9 @@ export default function SponsoredTransaction({
           }
         }}
       />
-      {!hideStatus && (
-        <TransactionStatus />
-      )}
+      {showInlineStatus && <TransactionStatus />}
 
-      {showToast && <GlobalTransactionToast />}
+      {showGlobalToast && <GlobalTransactionToast />}
     </Transaction>
   );
 } 

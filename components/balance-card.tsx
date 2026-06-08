@@ -3,17 +3,19 @@
 import { useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import { getLandsByOwner,getPlantsByOwner,getStakeInfo } from "@/lib/contracts";
 import { formatSolAmount } from "@/lib/solana-bridge-executor";
-import { formatLargeNumber } from "@/lib/utils";
-import { RefreshCw } from "lucide-react";
+import { cn,formatLargeNumber } from "@/lib/utils";
 import Image from "next/image";
-import { useEffect,useState } from "react";
+import { type ReactNode,useEffect,useState } from "react";
 import { useAccount,useBalance } from "wagmi";
 
 import { StandardContainer } from "./ui/pixel-container";
+
+const MIN_REFRESH_FEEDBACK_MS = 650;
 
 interface BalanceCardProps {
   className?: string;
@@ -32,6 +34,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
   } = useBalances();
   const isSolana = useIsSolanaWallet();
   const { solBalance, twinInfo, isLoading: solanaLoading } = useSolanaWallet();
+  const [manualRefreshing, setManualRefreshing] = useState(false);
 
   // ETH balance for wallet profile variant (EVM only)
   const {
@@ -97,191 +100,185 @@ export default function BalanceCard({ className = "", variant = "default", onRef
   }, [address, variant]);
 
   const handleRefresh = async () => {
-    if (variant === "wallet-profile" && !isSolana) {
-      refetchEthBalance();
+    if (manualRefreshing) return;
+
+    const startedAt = Date.now();
+    setManualRefreshing(true);
+
+    try {
+      if (variant === "wallet-profile" && !isSolana) {
+        await refetchEthBalance();
+      }
+      await refreshBalances();
+      await onRefresh?.();
+    } finally {
+      const remainingFeedbackMs = MIN_REFRESH_FEEDBACK_MS - (Date.now() - startedAt);
+      if (remainingFeedbackMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingFeedbackMs));
+      }
+      setManualRefreshing(false);
     }
-    await refreshBalances();
-    if (onRefresh) onRefresh();
   };
 
   if (!address && !isSolana) return null;
 
   if (variant === "wallet-profile") {
+    const walletRowClassName =
+      "flex min-h-11 items-center justify-between gap-3 py-2.5";
+    const walletLabelClassName = "flex min-w-0 items-center gap-2.5";
+    const walletValueClassName = "text-xs font-semibold tabular-nums text-foreground";
+    const walletIconClassName = "h-5 w-5 shrink-0 object-contain";
+    const walletGroupLabelClassName =
+      "px-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
+    const renderBalanceRow = ({
+      label,
+      iconSrc,
+      iconAlt,
+      value,
+      isLoading = false,
+      skeletonClassName = "h-4 w-20",
+      subLabel,
+      subValue,
+    }: {
+      label: string;
+      iconSrc: string;
+      iconAlt: string;
+      value: ReactNode;
+      isLoading?: boolean;
+      skeletonClassName?: string;
+      subLabel?: string;
+      subValue?: ReactNode;
+    }) => {
+      const hasSubValue = Boolean(subLabel && subValue);
+
+      return (
+        <div className={cn(walletRowClassName, !hasSubValue && "min-h-9 py-1.5")}>
+          <div className={walletLabelClassName}>
+            <Image src={iconSrc} alt={iconAlt} width={20} height={20} className={walletIconClassName} />
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-semibold text-foreground">{label}</span>
+              {hasSubValue ? (
+                <span className="mt-0.5 block truncate text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  {subLabel}
+                </span>
+              ) : null}
+            </span>
+          </div>
+          <div className={cn("flex min-w-0 max-w-[48%] flex-col items-end text-right", hasSubValue ? "gap-0.5" : "justify-center")}>
+            {isLoading ? (
+              <Skeleton className={cn(skeletonClassName, "rounded-[var(--radius-control)]")} />
+            ) : (
+              <span className={walletValueClassName}>{value}</span>
+            )}
+            {hasSubValue ? (
+              <span className="max-w-full truncate text-[10px] font-semibold leading-none text-muted-foreground tabular-nums">
+                {subValue}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      );
+    };
+
     return (
-      <div className="space-y-2">
+      <div className={cn("space-y-3", className)}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-muted-foreground">
-            Balances
-          </h3>
+          <div className="flex min-w-0 items-center">
+            <h3 className="truncate text-sm font-semibold text-foreground">
+              Balances
+            </h3>
+          </div>
           <Button
-            variant="ghost"
-            size="icon"
+            variant="surfaceControl"
+            size="iconCompact"
             onClick={handleRefresh}
-            disabled={ethLoading || loading}
+            disabled={ethLoading || loading || manualRefreshing}
             aria-label="Refresh balances"
-            style={{ width: '16px', height: '16px', minWidth: '16px', minHeight: '16px', padding: 0 }}
-            className="p-0"
+            aria-busy={ethLoading || loading || manualRefreshing || undefined}
+            className="h-8 min-h-8 w-8 min-w-8 p-0"
           >
-            <RefreshCw
-              className={`w-3 h-3 ${ethLoading || loading ? "animate-spin" : ""
-                }`}
-            />
+            <RefreshIcon refreshing={ethLoading || loading || manualRefreshing} className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Consolidated container matching Connection card styling */}
-        <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
-          {/* Network-specific balances */}
-          {isSolana ? (
-            <>
-              {/* Native SOL */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium">Solana</span>
-                <div className="flex items-center space-x-1">
-                  {solanaLoading ? (
-                    <Skeleton className="h-4 w-20" />
-                  ) : (
-                    <>
-                      <span className="text-xs font-semibold">
-                        {solBalance !== undefined ? formatSolAmount(solBalance) : "0"}
-                      </span>
-                      <Image src="/icons/solana.svg" alt="SOL" width={12} height={12} />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* wSOL on Base (Twin) */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium">SOL (Base)</span>
-                <div className="flex items-center space-x-1">
-                  {solanaLoading ? (
-                    <Skeleton className="h-4 w-20" />
-                  ) : (
-                    <>
-                      <span className="text-xs font-semibold">
-                        {twinInfo?.wsolBalance !== undefined ? formatSolAmount(twinInfo.wsolBalance) : "0"}
-                      </span>
-                      <Image src="/icons/solana.svg" alt="wSOL" width={12} height={12} />
-                    </>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Ethereum */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium">Ethereum</span>
-                <div className="flex items-center space-x-1">
-                  {ethLoading ? (
-                    <Skeleton className="h-4 w-20" />
-                  ) : (
-                    <>
-                      <span className="text-xs font-semibold">
-                        {ethBalance ? parseFloat(ethBalance.formatted).toFixed(6) : "0.000000"}
-                      </span>
-                      <Image src="/icons/ethlogo.svg" alt="ETH" width={12} height={12} />
-                    </>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* SEED */}
-          <div className="flex flex-col space-y-0.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">SEED</span>
-              <div className="flex items-center space-x-1">
-                {loading ? (
-                  <Skeleton className="h-4 w-20" />
-                ) : (
-                  <>
-                    <span className="text-xs font-semibold">{formatLargeNumber(tokenBalance)}</span>
-                    <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={12} height={12} />
-                  </>
-                )}
-              </div>
-            </div>
-            {/* Staked SEED sub-line */}
-            {stakeInfo && stakeInfo.staked > BigInt(0) && (
-              <div className="flex items-center justify-between pl-2">
-                <span className="text-[10px] text-muted-foreground">Staked</span>
-                <span className="text-[10px] text-muted-foreground">{formatLargeNumber(stakeInfo.staked)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* LEAF */}
-          <div className="flex flex-col space-y-0.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">LEAF</span>
-              <div className="flex items-center space-x-1">
-                {loading ? (
-                  <Skeleton className="h-4 w-20" />
-                ) : (
-                  <>
-                    <span className="text-xs font-semibold">{formatLargeNumber(leafBalance)}</span>
-                    <Image src="/icons/leaf.png" alt="LEAF" width={12} height={12} />
-                  </>
-                )}
-              </div>
-            </div>
-            {/* Claimable LEAF sub-line */}
-            {stakeInfo && stakeInfo.rewards > BigInt(0) && (
-              <div className="flex items-center justify-between pl-2">
-                <span className="text-[10px] text-muted-foreground">Claimable</span>
-                <span className="text-[10px] text-muted-foreground">{formatLargeNumber(stakeInfo.rewards)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* PIXOTCHI */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium">PIXOTCHI</span>
-            <div className="flex items-center space-x-1">
-              {loading ? (
-                <Skeleton className="h-4 w-20" />
-              ) : (
+        <StandardContainer className="chromatic-white-surface space-y-3 overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-3 shadow-[var(--shadow-raised)]">
+          <div className="space-y-1">
+            <div className={walletGroupLabelClassName}>Tokens</div>
+            <div className="divide-y divide-border/55 border-b border-border/55">
+              {isSolana ? (
                 <>
-                  <span className="text-xs font-semibold">{formatLargeNumber(pixotchiBalance)}</span>
-                  <Image src="/icons/cc.png" alt="PIXOTCHI" width={12} height={12} />
+                {renderBalanceRow({
+                  label: "Solana",
+                  iconSrc: "/icons/solana.svg",
+                  iconAlt: "SOL",
+                  value: solBalance !== undefined ? formatSolAmount(solBalance) : "0",
+                  isLoading: solanaLoading,
+                })}
+                {renderBalanceRow({
+                  label: "SOL (Base)",
+                  iconSrc: "/icons/solana.svg",
+                  iconAlt: "wSOL",
+                  value: twinInfo?.wsolBalance !== undefined ? formatSolAmount(twinInfo.wsolBalance) : "0",
+                  isLoading: solanaLoading,
+                })}
                 </>
+              ) : (
+                renderBalanceRow({
+                  label: "Ethereum",
+                  iconSrc: "/icons/ethlogo.svg",
+                  iconAlt: "ETH",
+                  value: ethBalance ? parseFloat(ethBalance.formatted).toFixed(6) : "0.000000",
+                  isLoading: ethLoading,
+                })
               )}
+
+              {renderBalanceRow({
+                label: "SEED",
+                iconSrc: "/PixotchiKit/COIN.svg",
+                iconAlt: "SEED",
+                value: formatLargeNumber(tokenBalance),
+                isLoading: loading,
+                subLabel: stakeInfo && stakeInfo.staked > BigInt(0) ? "Staked" : undefined,
+                subValue: stakeInfo && stakeInfo.staked > BigInt(0) ? formatLargeNumber(stakeInfo.staked) : undefined,
+              })}
+              {renderBalanceRow({
+                label: "LEAF",
+                iconSrc: "/icons/leaf.png",
+                iconAlt: "LEAF",
+                value: formatLargeNumber(leafBalance),
+                isLoading: loading,
+                subLabel: stakeInfo && stakeInfo.rewards > BigInt(0) ? "Claimable" : undefined,
+                subValue: stakeInfo && stakeInfo.rewards > BigInt(0) ? formatLargeNumber(stakeInfo.rewards) : undefined,
+              })}
+              {renderBalanceRow({
+                label: "PIXOTCHI",
+                iconSrc: "/icons/cc.png",
+                iconAlt: "PIXOTCHI",
+                value: formatLargeNumber(pixotchiBalance),
+                isLoading: loading,
+              })}
             </div>
           </div>
 
-          {/* Separator before NFTs */}
-          <div className="border-t border-muted my-2" />
-
-          {/* Plants NFT Count */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium">Plants</span>
-            <div className="flex items-center space-x-1">
-              {nftLoading ? (
-                <Skeleton className="h-4 w-12" />
-              ) : (
-                <>
-                  <span className="text-xs font-semibold">{plantCount}</span>
-                  <Image src="/icons/plant1.svg" alt="Plants" width={12} height={12} />
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Lands NFT Count */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium">Lands</span>
-            <div className="flex items-center space-x-1">
-              {nftLoading ? (
-                <Skeleton className="h-4 w-12" />
-              ) : (
-                <>
-                  <span className="text-xs font-semibold">{landCount}</span>
-                  <Image src="/icons/landIcon.png" alt="Lands" width={12} height={12} />
-                </>
-              )}
+          <div className="space-y-1 pt-2">
+            <div className={walletGroupLabelClassName}>NFTs</div>
+            <div className="divide-y divide-border/55">
+              {renderBalanceRow({
+                label: "Plants",
+                iconSrc: "/icons/plant1.svg",
+                iconAlt: "Plants",
+                value: plantCount,
+                isLoading: nftLoading,
+                skeletonClassName: "h-4 w-12",
+              })}
+              {renderBalanceRow({
+                label: "Lands",
+                iconSrc: "/icons/landIcon.png",
+                iconAlt: "Lands",
+                value: landCount,
+                isLoading: nftLoading,
+                skeletonClassName: "h-4 w-12",
+              })}
             </div>
           </div>
         </StandardContainer>

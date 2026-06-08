@@ -25,6 +25,6 @@ export const wagmiLocalTestConfig = createConfig({
   },
   ...(dataSuffix ? { dataSuffix } : {}),
   connectors: [localTestConnector()],
-  pollingInterval: 300_000,
+  pollingInterval: 2_500,
   ssr: true,
 });

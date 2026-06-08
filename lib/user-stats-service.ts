@@ -242,7 +242,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
     let unclaimedPTS = 0;
     let unclaimedTOD = 0;
  
-    const landBuildingMap = new Map<string, { village: any[]; town: any[] }>();
+    const landBuildingMap = new Map<string, { village: UntypedValue[]; town: UntypedValue[] }>();
     if (lands.length > 0) {
       try {
         const batchedBuildings = await getLandBuildingsBatch(
@@ -299,8 +299,8 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
 
     for (const land of lands) {
       try {
-        let villageData: any[] = [];
-        let townData: any[] = [];
+        let villageData: UntypedValue[] = [];
+        let townData: UntypedValue[] = [];
         let barracksState: Awaited<ReturnType<typeof barracksGetLandStateV2>> = null;
         const landKey = land.tokenId.toString();
         const preloaded = landBuildingMap.get(landKey);
@@ -336,7 +336,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         }> = [];
 
         // Process village buildings
-        villageData.forEach((building: any) => {
+        villageData.forEach((building: UntypedValue) => {
           if (building.level > 0) { // Only include built buildings
             const dailyPTS = Number(building.productionRatePlantPointsPerDay) / 1e12; // Production rates use 12 decimals
             const dailyTOD = Number(building.productionRatePlantLifetimePerDay); // TOD values are already in seconds
@@ -375,7 +375,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           { id: 1, level: 1 }, // Stake House
           { id: 3, level: 1 }  // Warehouse
         ];
-        const casinoBuilt = townData.some((building: any) => building.id === 6 && building.level > 0);
+        const casinoBuilt = townData.some((building: UntypedValue) => building.id === 6 && building.level > 0);
         const barracksBuilt = Boolean(barracksState?.isBuilt);
         const homeDefenseBonusBps = getHomeDefenseBonusBps(villageData as BuildingData[]);
         const barracksInfo = barracksBuilt
@@ -412,7 +412,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         });
         
         // Process additional town buildings from contract
-        townData.forEach((building: any) => {
+        townData.forEach((building: UntypedValue) => {
           if (building.level > 0 && building.id !== 1 && building.id !== 3) { // Exclude prebuilt buildings
             const dailyPTS = Number(building.productionRatePlantPointsPerDay) / 1e12; // Production rates use 12 decimals
             const dailyTOD = Number(building.productionRatePlantLifetimePerDay); // TOD values are already in seconds
@@ -588,10 +588,10 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       const hasActiveFence = fenceInfo.hasActiveFence;
 
       // Get active items (dedupe mirrored V1 when V2 is active)
-      const activeItems = (p.extensions?.flatMap((extension: any) =>
-        extension.shopItemOwned?.filter((item: any) => item.effectIsOngoingActive) || []
+      const activeItems = (p.extensions?.flatMap((extension: UntypedValue) =>
+        extension.shopItemOwned?.filter((item: UntypedValue) => item.effectIsOngoingActive) || []
       ) || [])
-        .filter((item: any) => {
+        .filter((item: UntypedValue) => {
           const lowerName = item?.name?.toLowerCase() || '';
           if (!lowerName.includes('fence') && !lowerName.includes('shield')) return true;
           const effectUntil = Number(item?.effectUntil || 0);
@@ -601,7 +601,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
           }
           return true;
         })
-        .map((item: any) => ({
+        .map((item: UntypedValue) => ({
           name: item.name,
           effectIsOngoingActive: item.effectIsOngoingActive
         }));

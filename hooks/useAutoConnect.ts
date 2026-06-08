@@ -17,7 +17,7 @@ export function useAutoConnect() {
       return;
     }
     
-    const farcasterConnector = connectors.find((c: any) => {
+    const farcasterConnector = connectors.find((c: UntypedValue) => {
       const id = (c?.id ?? "").toString().toLowerCase();
       const name = (c?.name ?? "").toString().toLowerCase();
       return id.includes("farcaster") || name.includes("farcaster");
@@ -25,7 +25,7 @@ export function useAutoConnect() {
 
     if (farcasterConnector) {
         try {
-            connect({ connector: farcasterConnector as any });
+            connect({ connector: farcasterConnector as UntypedValue });
         } catch (error) {
             console.warn("Farcaster auto-connect failed", error)
         }

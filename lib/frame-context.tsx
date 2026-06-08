@@ -4,7 +4,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { type MiniAppContext, useHostEnvironment } from '@/lib/host-environment';
 
 type FrameContextValue = {
-  context: MiniAppContext | Record<string, unknown> | null;
+  context: MiniAppContext | Record<string, UntypedValue> | null;
   isInMiniApp: boolean;
 } | null;
 

@@ -7,7 +7,7 @@ import {
   type TransactionReceipt,
   type Transport,
 } from 'viem';
-import { base } from 'viem/chains';
+import { base, mainnet } from 'viem/chains';
 import { getRpcConfig } from './env-config';
 import {
   type BaseRpcEndpointDescriptor,
@@ -122,7 +122,7 @@ const POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = {
     timeoutMs: 2_500,
     fallbackRetryCount: 0,
     hedgeDelayMs: RECEIPT_HEDGE_DELAY_MS,
-    pollingIntervalMs: 1_500,
+    pollingIntervalMs: 1_000,
     rankIntervalMs: 15_000,
     rankTimeoutMs: 800,
     retryDelayMs: 150,
@@ -619,9 +619,9 @@ const ensureProbeMetrics = async () => {
 
 class BaseRpcInvocationError extends Error {
   attemptedUrls: string[];
-  lastError: unknown;
+  lastError: UntypedValue;
 
-  constructor(message: string, attemptedUrls: string[], lastError: unknown) {
+  constructor(message: string, attemptedUrls: string[], lastError: UntypedValue) {
     super(message);
     this.name = 'BaseRpcInvocationError';
     this.attemptedUrls = attemptedUrls;
@@ -633,7 +633,7 @@ const invokeEndpoint = async (
   policy: BaseRpcPolicy,
   url: string,
   method: string,
-  params: unknown[],
+  params: UntypedValue[],
 ) => {
   const started = Date.now();
 
@@ -663,14 +663,14 @@ type BaseRpcInvokeFn = (
   policy: BaseRpcPolicy,
   url: string,
   method: string,
-  params: unknown[],
-) => Promise<unknown>;
+  params: UntypedValue[],
+) => Promise<UntypedValue>;
 
 const executeSingleWaveWithInvoker = async (
   policy: BaseRpcPolicy,
   wave: BaseRpcExecutionWave,
   method: string,
-  params: unknown[],
+  params: UntypedValue[],
   attemptedUrls: string[],
   {
     invoke = invokeEndpoint,
@@ -731,7 +731,7 @@ const executeSingleWave = async (
   policy: BaseRpcPolicy,
   wave: BaseRpcExecutionWave,
   method: string,
-  params: unknown[],
+  params: UntypedValue[],
   attemptedUrls: string[],
 ) =>
   executeSingleWaveWithInvoker(policy, wave, method, params, attemptedUrls);
@@ -739,7 +739,7 @@ const executeSingleWave = async (
 const executePolicyRequest = async (
   policy: BaseRpcPolicy,
   method: string,
-  params: unknown[] = [],
+  params: UntypedValue[] = [],
   inputUrls?: readonly string[],
 ) => {
   if (!inputUrls) {
@@ -754,7 +754,7 @@ const executePolicyRequest = async (
     hedgeDelayMs: POLICY_CONFIG[policy].hedgeDelayMs,
   });
 
-  let lastError: unknown = new Error('Base RPC request failed before execution');
+  let lastError: UntypedValue = new Error('Base RPC request failed before execution');
   let previousWaveSignature: string | null = null;
 
   for (const wave of executionPlan) {
@@ -796,7 +796,7 @@ const createBaseTransport = (
             return (await executePolicyRequest(
               policy,
               method,
-              (params ?? []) as unknown[],
+              (params ?? []) as UntypedValue[],
               inputUrls,
             )) as never;
           } catch (error) {
@@ -835,11 +835,25 @@ const getServerBaseReadClient = cache(() => createBaseClient('read'));
 const getServerBaseReceiptClient = cache(() => createBaseClient('receipt'));
 const getServerBaseLogClient = cache(() => createBaseClient('log'));
 
+const ETHEREUM_ENS_RPC_URL =
+  process.env.ETHEREUM_RPC_URL ||
+  process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL ||
+  'https://ethereum-rpc.publicnode.com';
+
+const createEthereumEnsClient = () =>
+  createPublicClient({
+    chain: mainnet,
+    transport: http(ETHEREUM_ENS_RPC_URL),
+  });
+
+const getServerEthereumEnsClient = cache(() => createEthereumEnsClient());
+
 let browserBaseReadClient: ReturnType<typeof createBaseClient> | null = null;
 let browserBaseReceiptClient: ReturnType<typeof createBaseClient> | null = null;
 let browserBaseLogClient: ReturnType<typeof createBaseClient> | null = null;
+let browserEthereumEnsClient: ReturnType<typeof createEthereumEnsClient> | null = null;
 
-const getRetryableFlag = (error: unknown): boolean => {
+const getRetryableFlag = (error: UntypedValue): boolean => {
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
@@ -859,7 +873,7 @@ export class BaseRpcError extends Error {
   retryable: boolean;
   endpointsTried: string[];
 
-  constructor(operation: string, error: unknown) {
+  constructor(operation: string, error: UntypedValue) {
     const invocationError =
       error instanceof BaseRpcInvocationError ? error : null;
     const rootError = invocationError?.lastError ?? error;
@@ -879,7 +893,7 @@ export class BaseRpcError extends Error {
         : listBaseRpcEndpoints();
 
     if (rootError instanceof Error) {
-      (this as Error & { cause?: unknown }).cause = rootError;
+      (this as Error & { cause?: UntypedValue }).cause = rootError;
     }
   }
 }
@@ -920,7 +934,7 @@ const buildPolicyStatus = (
 export const listBaseRpcEndpoints = (): string[] => getRpcConfig().endpoints;
 
 export const getPrimaryRpcEndpoint = (): string =>
-  listBaseRpcEndpoints()[0] || 'https://mainnet.base.org';
+  listBaseRpcEndpoints()[0] || 'https://base-rpc.publicnode.com';
 
 export const createBaseRpcTransport = (
   policy: BaseRpcPolicy = 'read',
@@ -952,6 +966,15 @@ export const getBaseLogClient = () => {
   }
 
   return getServerBaseLogClient();
+};
+
+export const getEthereumEnsClient = () => {
+  if (typeof window !== 'undefined') {
+    browserEthereumEnsClient ??= createEthereumEnsClient();
+    return browserEthereumEnsClient;
+  }
+
+  return getServerEthereumEnsClient();
 };
 
 export const getBaseTransactionReceipt = async (

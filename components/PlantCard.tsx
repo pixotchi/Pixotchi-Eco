@@ -37,12 +37,12 @@ const PlantCard = React.memo(function PlantCard({
 
   // Memoize expensive computations
   const { hasActiveShopItems, activeShopItems } = React.useMemo(() => {
-    const hasActive = plant.extensions?.some((extension: any) =>
-      extension.shopItemOwned?.some((item: any) => item.effectIsOngoingActive)
+    const hasActive = plant.extensions?.some((extension: UntypedValue) =>
+      extension.shopItemOwned?.some((item: UntypedValue) => item.effectIsOngoingActive)
     );
 
-    const active = plant.extensions?.flatMap((extension: any) =>
-      extension.shopItemOwned?.filter((item: any) => item.effectIsOngoingActive) || []
+    const active = plant.extensions?.flatMap((extension: UntypedValue) =>
+      extension.shopItemOwned?.filter((item: UntypedValue) => item.effectIsOngoingActive) || []
     ) || [];
 
     return { hasActiveShopItems: hasActive, activeShopItems: active };
@@ -67,13 +67,13 @@ const PlantCard = React.memo(function PlantCard({
 
   return (
     <Card 
-      className={`cursor-pointer transition-all hover:shadow-md group ${className}`}
+      className={`group cursor-pointer transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-[var(--shadow-raised)] ${className}`}
       onClick={onClick}
     >
       <CardContent className="p-4">
         <div className="flex items-center space-x-3">
           {/* Plant Image with Shop Item Overlay */}
-          <div className="relative w-16 h-16 rounded-lg overflow-hidden">
+          <div className="relative h-16 w-16 overflow-hidden rounded-[var(--radius-control)]">
             <PlantImage
               selectedPlant={plant}
               width={64}
@@ -86,7 +86,7 @@ const PlantCard = React.memo(function PlantCard({
             {/* Active Shop Item Indicator */}
             {showShopItems && showProtectionIndicator && (
               <div className="absolute top-1 right-1">
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                <div className="w-5 h-5 rounded-full bg-[hsl(var(--info))] flex items-center justify-center shadow-[var(--shadow-hairline)]">
                   <Image src="/icons/Fence.png" alt="Shield" width={12} height={12} />
                 </div>
               </div>
@@ -96,7 +96,7 @@ const PlantCard = React.memo(function PlantCard({
           {/* Plant Details */}
           <div className="flex-1 min-w-0">
             <div className="relative">
-              <h3 className="font-semibold text-foreground truncate pr-6">
+              <h3 className="truncate pr-6 font-pixel text-foreground">
                 {plant.name || `Plant #${plant.id}`}
               </h3>
               <EditPlantName 
@@ -120,7 +120,7 @@ const PlantCard = React.memo(function PlantCard({
           {/* Active Shop Items Icons */}
           {showShopItems && activeShopItems.length > 0 && (
             <div className="flex flex-col space-y-1">
-              {activeShopItems.slice(0, 3).map((item: any, index: number) => (
+              {activeShopItems.slice(0, 3).map((item: UntypedValue, index: number) => (
                 <div 
                   key={`${item.id}-${index}`}
                   className="w-6 h-6 rounded-sm bg-muted flex items-center justify-center"

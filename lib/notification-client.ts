@@ -2,7 +2,10 @@ import {
   type SendNotificationRequest,
   sendNotificationResponseSchema,
 } from "@farcaster/miniapp-sdk";
-import { getUserNotificationDetails } from "@/lib/notification";
+import {
+  deleteUserNotificationDetails,
+  getUserNotificationDetails,
+} from "@/lib/notification";
 import type { FrameNotificationDetails } from "@/lib/types";
 
 const appUrl = process.env.NEXT_PUBLIC_URL || "";
@@ -10,7 +13,7 @@ const appUrl = process.env.NEXT_PUBLIC_URL || "";
 type SendFrameNotificationResult =
   | {
       state: "error";
-      error: unknown;
+      error: UntypedValue;
     }
   | { state: "no_token" }
   | { state: "rate_limit" }
@@ -56,7 +59,14 @@ export async function sendFrameNotification({
       return { state: "error", error: responseBody.error.issues };
     }
 
-    if (responseBody.data.result.rateLimitedTokens.length) {
+    const { invalidTokens, rateLimitedTokens } = responseBody.data.result;
+
+    if (invalidTokens.includes(notificationDetails.token)) {
+      await deleteUserNotificationDetails(fid);
+      return { state: "no_token" };
+    }
+
+    if (rateLimitedTokens.length) {
       return { state: "rate_limit" };
     }
 

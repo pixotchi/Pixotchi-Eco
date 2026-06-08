@@ -6,6 +6,7 @@ import Image from "next/image";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { AuthSurface } from "@/lib/auth-surface";
+import { isSolanaAuthAvailable } from "@/lib/solana-auth-availability";
 
 type SurfaceSwitchButtonProps = {
   onSwitchSurface: (surface: AuthSurface) => Promise<void>;
@@ -47,9 +48,8 @@ export function SolanaSurfaceButton({
   onSwitchSurface,
 }: SurfaceSwitchButtonProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const isSolanaEnabled = process.env.NEXT_PUBLIC_SOLANA_ENABLED === "true";
 
-  if (!isSolanaEnabled) {
+  if (!isSolanaAuthAvailable()) {
     return null;
   }
 
@@ -72,10 +72,12 @@ export function SolanaSurfaceButton({
 
   return (
     <Button
-      className="w-full rounded-md text-base font-semibold text-white h-11 bg-gradient-to-r from-[#9945FF] to-[#14F195] hover:from-[#8833EE] hover:to-[#0DE084] active:from-[#9945FF] active:to-[#14F195] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
-      variant="default"
+      fullWidth
+      variant="special"
       onClick={handleClick}
       disabled={isProcessing}
+      loading={isProcessing}
+      loadingText="Loading..."
     >
       {isProcessing ? (
         "Loading…"

@@ -3,7 +3,7 @@ import { CoreProviders } from '../core-providers';
 
 export const metadata: Metadata = {
   title: 'Pixotchi Admin Dashboard',
-  description: 'Administrative interface for Pixotchi invite system management',
+  description: 'Administrative interface for Pixotchi operations',
   robots: 'noindex, nofollow', // Prevent search engine indexing
 };
 

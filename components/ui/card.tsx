@@ -2,25 +2,35 @@ import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  density?: 'compact' | 'regular' | 'spacious';
   hover?: boolean;
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  surface?: 'default' | 'raised' | 'inset' | 'promo' | 'game';
 }
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, hover = false, padding = 'md', children, ...props }, ref) => {
+  ({ className, density = 'regular', hover = false, padding = 'md', surface = 'default', children, ...props }, ref) => {
     const paddingStyles = {
       none: 'p-0',
-      sm: 'p-3',
-      md: 'p-4',
-      lg: 'p-6',
+      sm: density === 'compact' ? 'p-2.5' : 'p-3',
+      md: density === 'compact' ? 'p-3' : density === 'spacious' ? 'p-5' : 'p-4',
+      lg: density === 'compact' ? 'p-4' : density === 'spacious' ? 'p-7' : 'p-6',
+    };
+    const surfaceStyles = {
+      default: 'border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface)] text-card-foreground surface-shadow backdrop-blur-md',
+      raised: 'border-[hsl(var(--border-strong)/0.4)] bg-card bg-[image:var(--gradient-surface-strong)] text-card-foreground surface-shadow-raised backdrop-blur-md',
+      inset: 'border-[hsl(var(--border-strong)/0.32)] bg-secondary/80 bg-[image:var(--gradient-panel)] text-foreground surface-inset',
+      promo: 'border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-foreground surface-shadow',
+      game: 'border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface)] text-card-foreground surface-shadow',
     };
 
     return (
       <div
         ref={ref}
         className={cn(
-          'rounded-lg border border-border bg-card text-card-foreground shadow-sm',
-          hover && 'transition-all duration-200 hover:shadow-md',
+          'rounded-[var(--radius-panel)] border',
+          surfaceStyles[surface],
+          hover && 'transition-[border-color,background-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:shadow-[var(--shadow-raised)]',
           className
         )}
         {...props}
@@ -35,12 +45,24 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
 
 Card.displayName = 'Card';
 
+type TabCardProps = Omit<CardProps, 'surface'>;
+
+const TabCard = forwardRef<HTMLDivElement, TabCardProps>(
+  ({ children, ...props }, ref) => (
+    <Card ref={ref} surface="raised" {...props}>
+      {children}
+    </Card>
+  )
+);
+
+TabCard.displayName = 'TabCard';
+
 const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
     return (
       <div
         ref={ref}
-        className={cn('flex flex-col space-y-1.5 pb-3', className)}
+        className={cn('mb-3 flex flex-col space-y-1.5', className)}
         {...props}
       >
         {children}
@@ -115,4 +137,4 @@ const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
 
 CardFooter.displayName = 'CardFooter';
 
-export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }; 
+export { Card, TabCard, CardHeader, CardTitle, CardDescription, CardContent, CardFooter };

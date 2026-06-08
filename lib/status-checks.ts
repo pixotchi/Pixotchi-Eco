@@ -5,7 +5,7 @@ import { fetchIndexerGraphQL } from './indexer-client';
 import { fetchBaseNotificationUsers } from './notifications/base-api';
 import { getNotificationProviderLabel } from './notifications/provider';
 
-type StatusLevel = 'operational' | 'degraded' | 'outage' | 'unknown';
+type StatusLevel = 'operational' | 'degraded' | 'outage' | 'UntypedValue';
 
 export interface StatusService {
   id: string;
@@ -13,7 +13,7 @@ export interface StatusService {
   status: StatusLevel;
   latencyMs?: number;
   details?: string;
-  metrics?: Record<string, unknown>;
+  metrics?: Record<string, UntypedValue>;
 }
 
 export interface StatusSnapshot {
@@ -27,7 +27,7 @@ const APP_HEALTH_PATH = '/api/health';
 const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
 const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
 const BASE_STATUS_URL = process.env.STATUS_BASE_STATUS_URL || 'https://status.base.org/api/v2/summary.json';
-const STATUS_CACHE_KEY = 'status:checks:snapshot:v1';
+const STATUS_CACHE_KEY = `status:checks:snapshot:${SERVER_ENV.NOTIFICATION_PROVIDER}:v1`;
 const DEFAULT_STATUS_CACHE_TTL_SECONDS = Number(process.env.STATUS_SNAPSHOT_TTL_SECONDS || 300);
 
 let inFlightSnapshot: Promise<StatusSnapshot> | null = null;
@@ -76,13 +76,13 @@ const measure = async <T>(fn: () => Promise<T>) => {
   try {
     const result = await fn();
     return { result, ms: Date.now() - start };
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     return { error, ms: Date.now() - start };
   }
 };
 
 const deriveStatus = (healthy: number, total: number): StatusLevel => {
-  if (total === 0) return 'unknown';
+  if (total === 0) return 'UntypedValue';
   if (healthy === 0) return 'outage';
   if (healthy < total) return 'degraded';
   return 'operational';
@@ -139,7 +139,7 @@ async function checkAppReachability(): Promise<StatusService> {
     return {
       id: 'app',
       label: 'Mini App',
-      status: 'unknown',
+      status: 'UntypedValue',
       details: 'App URL not configured',
     };
   }
@@ -204,7 +204,7 @@ async function checkRedis(): Promise<StatusService> {
     return {
       id: 'redis',
       label: 'Database',
-      status: 'unknown',
+      status: 'UntypedValue',
       details: 'Redis not configured',
     };
   }
@@ -217,7 +217,7 @@ async function checkRedis(): Promise<StatusService> {
         new Promise((_, reject) => {
           signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true });
         }),
-      ]) as Promise<unknown>;
+      ]) as Promise<UntypedValue>;
     }, DEFAULT_TIMEOUT_MS);
   });
 
@@ -240,7 +240,7 @@ async function checkNotifications(): Promise<StatusService> {
       return {
         id: 'notifications',
         label: `Notifications (${getNotificationProviderLabel('base')})`,
-        status: 'unknown',
+        status: 'UntypedValue',
         details: 'API key missing',
       };
     }
@@ -267,7 +267,7 @@ async function checkNotifications(): Promise<StatusService> {
     return {
       id: 'notifications',
       label: `Notifications (${getNotificationProviderLabel('neynar')})`,
-      status: 'unknown',
+      status: 'UntypedValue',
       details: 'API key missing',
     };
   }
@@ -307,7 +307,7 @@ async function checkFarcasterMiniApp(): Promise<StatusService> {
     return {
       id: 'miniapp',
       label: 'Farcaster Mini App',
-      status: 'unknown',
+      status: 'UntypedValue',
       details: 'Mini App health URL not configured',
     };
   }
@@ -342,7 +342,7 @@ async function checkStakeApp(): Promise<StatusService> {
     return {
       id: 'stake-app',
       label: 'Staking App',
-      status: 'unknown',
+      status: 'UntypedValue',
       details: 'Stake app URL not configured',
     };
   }
@@ -384,7 +384,7 @@ const statuspageToStatusLevel = (status?: string): StatusLevel => {
     case 'under_maintenance':
       return 'degraded';
     default:
-      return 'unknown';
+      return 'UntypedValue';
   }
 };
 
@@ -394,7 +394,7 @@ async function checkBaseMainnet(): Promise<StatusService> {
     return {
       id: 'base-mainnet',
       label: 'Base Mainnet',
-      status: 'unknown',
+      status: 'UntypedValue',
       details: 'Base status URL not configured',
     };
   }
@@ -422,7 +422,7 @@ async function checkBaseMainnet(): Promise<StatusService> {
   }
 
   const components = Array.isArray(result?.components) ? result.components : [];
-  const mainnetComponent = components.find((component: any) =>
+  const mainnetComponent = components.find((component: UntypedValue) =>
     typeof component?.name === 'string' &&
     component.name.toLowerCase().includes('mainnet') &&
     !component.name.toLowerCase().includes('testnet')
@@ -459,11 +459,11 @@ export const runStatusChecks = async (): Promise<StatusSnapshot> => {
   const services: StatusService[] = await Promise.all(checks.map(async (fn) => {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
       return {
         id: fn.name,
         label: fn.name,
-        status: 'unknown' as StatusLevel,
+        status: 'UntypedValue' as StatusLevel,
         details: error?.message || 'Failed to run check',
       };
     }
@@ -473,7 +473,7 @@ export const runStatusChecks = async (): Promise<StatusSnapshot> => {
     if (services.some(s => s.status === 'outage')) return 'outage';
     if (services.some(s => s.status === 'degraded')) return 'degraded';
     if (services.every(s => s.status === 'operational')) return 'operational';
-    return 'unknown';
+    return 'UntypedValue';
   })();
 
   return {
@@ -494,16 +494,26 @@ function rememberSnapshot(snapshot: StatusSnapshot) {
   memorySnapshotExpiresAt = Date.now() + (getStatusCacheTtlSeconds() * 1000);
 }
 
+function snapshotMatchesCurrentNotificationProvider(snapshot: StatusSnapshot): boolean {
+  const notifications = snapshot.services.find((service) => service.id === 'notifications');
+  return notifications?.label === `Notifications (${getNotificationProviderLabel(SERVER_ENV.NOTIFICATION_PROVIDER)})`;
+}
+
 export async function getCachedStatusSnapshot(forceRefresh: boolean = false): Promise<StatusSnapshot> {
   const now = Date.now();
 
-  if (!forceRefresh && memorySnapshot && memorySnapshotExpiresAt > now) {
+  if (
+    !forceRefresh &&
+    memorySnapshot &&
+    memorySnapshotExpiresAt > now &&
+    snapshotMatchesCurrentNotificationProvider(memorySnapshot)
+  ) {
     return memorySnapshot;
   }
 
   if (!forceRefresh) {
     const cached = await redisGetJSON<StatusSnapshot>(STATUS_CACHE_KEY);
-    if (cached) {
+    if (cached && snapshotMatchesCurrentNotificationProvider(cached)) {
       rememberSnapshot(cached);
       return cached;
     }

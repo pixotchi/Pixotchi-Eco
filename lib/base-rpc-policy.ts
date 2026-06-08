@@ -31,14 +31,6 @@ export type BaseRpcExecutionWave = {
   hedgeDelayMs: number | null;
 };
 
-export type BaseRpcVendorDiversityReport = {
-  descriptors: BaseRpcEndpointDescriptor[];
-  duplicateHosts: string[];
-  duplicateVendors: string[];
-  uniqueHostCount: number;
-  uniqueVendorCount: number;
-};
-
 const DEFAULT_RANK_WEIGHTS: BaseRpcRankWeights = {
   latency: 0.3,
   stability: 0.7,
@@ -74,64 +66,6 @@ export const buildBaseRpcEndpointDescriptors = (
     host: normalizeRpcHost(url),
     vendor: deriveBaseRpcVendor(url),
   }));
-
-export const validateBaseRpcEndpointDiversity = (
-  urls: string[],
-  {
-    maxEndpointsPerVendor = 2,
-    minUniqueVendors = 3,
-  }: {
-    maxEndpointsPerVendor?: number;
-    minUniqueVendors?: number;
-  } = {},
-): BaseRpcVendorDiversityReport => {
-  const descriptors = buildBaseRpcEndpointDescriptors(urls);
-  const hostCounts = new Map<string, number>();
-  const vendorCounts = new Map<string, number>();
-
-  for (const descriptor of descriptors) {
-    hostCounts.set(descriptor.host, (hostCounts.get(descriptor.host) ?? 0) + 1);
-    vendorCounts.set(
-      descriptor.vendor,
-      (vendorCounts.get(descriptor.vendor) ?? 0) + 1,
-    );
-  }
-
-  const duplicateHostEntries = [...hostCounts.entries()].filter(
-    ([, count]) => count > 1,
-  );
-  const duplicateVendorEntries = [...vendorCounts.entries()].filter(
-    ([, count]) => count > 1,
-  );
-  const duplicateHosts = duplicateHostEntries.map(([host]) => host);
-  const duplicateVendors = duplicateVendorEntries.map(([vendor]) => vendor);
-
-  const vendorOverLimitEntries = duplicateVendorEntries.filter(
-    ([, count]) => count > maxEndpointsPerVendor,
-  );
-
-  if (vendorOverLimitEntries.length > 0) {
-    throw new Error(
-      `Base RPC endpoints may use at most ${maxEndpointsPerVendor} endpoints per vendor. Over-limit vendors detected: ${vendorOverLimitEntries
-        .map(([vendor, count]) => `${vendor} (${count}x)`)
-        .join(', ')}`,
-    );
-  }
-
-  if (vendorCounts.size < minUniqueVendors) {
-    throw new Error(
-      `Base RPC endpoints must include at least ${minUniqueVendors} unique vendors. Found ${vendorCounts.size}.`,
-    );
-  }
-
-  return {
-    descriptors,
-    duplicateHosts,
-    duplicateVendors,
-    uniqueHostCount: hostCounts.size,
-    uniqueVendorCount: vendorCounts.size,
-  };
-};
 
 const computeAverageLatency = (samples: BaseRpcRankSample[]): number => {
   const successful = samples.filter((sample) => sample.success);

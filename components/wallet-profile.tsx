@@ -5,8 +5,10 @@ import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { SolanaBridgeBadge,useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 import {
 Dialog,
+DialogBody,
 DialogContent,
 DialogDescription,
 DialogFooter,
@@ -19,18 +21,16 @@ import { clearAppCaches } from "@/lib/cache-utils";
 import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { useFrameContext } from "@/lib/frame-context";
-import { clearMiniAppBypassCookies } from "@/lib/miniapp-bypass";
 import { openExternalUrl } from "@/lib/open-external";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { isSolanaEnabled } from "@/lib/solana-constants";
-import { formatAddress } from "@/lib/utils";
+import { cn,formatAddress } from "@/lib/utils";
 import { sdk } from "@farcaster/miniapp-sdk";
 import type { WalletWithMetadata } from "@privy-io/react-auth";
 import { useLogin,useLogout,usePrivy } from "@privy-io/react-auth";
 import { useWallets as useSolanaPrivyWallets } from "@privy-io/react-auth/solana";
 import {
-CheckCircle,
 ChevronRight,
 Copy,
 Info,
@@ -41,7 +41,6 @@ RefreshCw,
 ShieldAlert,
 Wallet,
 X,
-XCircle
 } from "lucide-react";
 import React,{ useEffect,useMemo,useState } from "react";
 import toast from "react-hot-toast";
@@ -62,6 +61,130 @@ const AUTH_CACHE_PREFIXES = [
   "coinbase",
 ];
 
+const walletCardSurfaceClassName =
+  "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-0 shadow-[var(--shadow-raised)]";
+
+const walletChromaticWhiteSurfaceClassName = `${walletCardSurfaceClassName} chromatic-white-surface`;
+
+const walletInnerGlowClassName =
+  "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
+
+const walletChromaticWhiteInnerGlowClassName = `${walletInnerGlowClassName} chromatic-white-inner-glow`;
+
+function WalletSectionHeader({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        {icon ? (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 text-primary shadow-[var(--shadow-hairline)]">
+            {icon}
+          </span>
+        ) : null}
+        <h3 className="truncate text-sm font-semibold text-foreground">
+          {title}
+        </h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function WalletCopyButton({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.26)] bg-background/55 text-muted-foreground shadow-[var(--shadow-hairline)] transition-[border-color,background-color,color,box-shadow,transform] duration-[var(--motion-quick)] hover:-translate-y-0.5 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+      aria-label={label}
+    >
+      <Copy className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+function WalletStatusPill({
+  children,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  tone?: "default" | "success" | "info" | "warning" | "muted" | "base";
+}) {
+  const toneClassName = {
+    default: "border-[hsl(var(--border-strong)/0.28)] bg-background/55 text-foreground",
+    success: "border-[hsl(var(--success)/0.26)] bg-[hsl(var(--success)/0.12)] text-value",
+    info: "border-[hsl(var(--info)/0.26)] bg-[hsl(var(--info)/0.10)] text-[hsl(var(--info))]",
+    warning: "border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.13)] text-[hsl(var(--warning-foreground))]",
+    muted: "border-border/55 bg-muted/65 text-muted-foreground",
+    base: "border-[#0000ff]/55 bg-[#0000ff] bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] text-white shadow-[0_8px_18px_-14px_rgba(0,0,255,0.9)]",
+  }[tone];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 py-1 text-[11px] font-semibold leading-none shadow-[var(--shadow-hairline)]",
+        toneClassName
+      )}
+    >
+      {tone === "base" ? (
+        <span
+          aria-hidden="true"
+          className="h-2.5 w-2.5 shrink-0 rounded-[5%] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.88),0_1px_3px_rgba(0,0,0,0.16)]"
+        />
+      ) : null}
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
+
+function WalletInfoRow({
+  label,
+  children,
+  description,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  description?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-11 items-center justify-between gap-3 py-2.5",
+        className
+      )}
+    >
+      <div className="min-w-0">
+        <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {label}
+        </span>
+        {description ? (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground/80">
+            {description}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex min-w-0 max-w-[66%] items-center justify-end gap-1.5 text-right text-xs font-semibold text-foreground">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // Compact ETH Mode toggle row for Connection card
 const EthModeToggleRow = () => {
   const { isEthMode, toggleEthMode, isFeatureEnabled } = useEthMode();
@@ -70,25 +193,61 @@ const EthModeToggleRow = () => {
   if (!isFeatureEnabled) return null;
 
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium">ETH Mode (Beta)</span>
+    <WalletInfoRow
+      label="ETH Mode"
+      description="Spend ETH in-game instead of SEED"
+    >
       <button
         type="button"
         onClick={toggleEthMode}
-        style={{ width: '28px', height: '16px', minWidth: '28px', minHeight: '16px', padding: 0 }}
-        className={`relative inline-flex items-center rounded-full transition-colors p-0 ${isEthMode ? 'bg-value' : 'bg-muted'
-          }`}
-        aria-pressed={isEthMode}
+        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         role="switch"
-        aria-label={`Toggle ETH mode ${isEthMode ? 'off' : 'on'}`}
+        aria-checked={isEthMode}
+        aria-label="ETH Mode"
       >
         <span
-          style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
-          className={`inline-block transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[14px]' : 'translate-x-[2px]'
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isEthMode ? 'bg-[hsl(var(--success))]' : 'bg-muted'
             }`}
-        />
+          aria-hidden="true"
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[22px]' : 'translate-x-[4px]'
+              }`}
+          />
+        </span>
       </button>
-    </div>
+    </WalletInfoRow>
+  );
+};
+
+const PerformanceModeToggleRow = () => {
+  const { enabled, setEnabled } = usePerformanceMode();
+
+  return (
+    <WalletInfoRow
+      label="Performance Mode"
+      description="Disable effects and animations"
+    >
+      <button
+        type="button"
+        onClick={() => setEnabled((current) => !current)}
+        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Performance Mode"
+      >
+        <span
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${enabled ? 'bg-[hsl(var(--success))]' : 'bg-muted'
+            }`}
+          aria-hidden="true"
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-[22px]' : 'translate-x-[4px]'
+              }`}
+          />
+        </span>
+      </button>
+    </WalletInfoRow>
   );
 };
 
@@ -148,7 +307,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   // Farcaster / Mini App state (evaluate before export gating)
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const isFrameContextResolved = fc !== null;
-  const fcContext = (fc?.context as any) ?? null;
+  const fcContext = (fc?.context as UntypedValue) ?? null;
   const isInFrame = isMiniApp; // alias for clarity
   const isPrivySurface = authSurface === "privy" || authSurface === "privysolana";
 
@@ -279,7 +438,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       await performExport();
       toast.success("Export window opened. Follow the instructions to copy your key.");
       setExportDialogOpen(false);
-    } catch (error: any) {
+    } catch (error: UntypedValue) {
       console.error("Embedded wallet export failed", error);
       const rawMessage = (error?.message || "").toString();
       const needsReauth = /access token/i.test(rawMessage) || /mfa/i.test(rawMessage);
@@ -305,7 +464,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   useEffect(() => {
     const loc = fcContext?.location;
     if (loc && typeof loc === 'object') {
-      const ref = (loc as any).referrerDomain || (loc as any).referrer || null;
+      const ref = (loc as UntypedValue).referrerDomain || (loc as UntypedValue).referrer || null;
       setReferrerDomain(ref ?? null);
     } else {
       setReferrerDomain(null);
@@ -326,27 +485,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     }
   };
 
-  const getNetworkStatusIcon = (chainId: number) => {
-    const isBase = chainId === 8453;
-    const isTestnet = chainId === 84532;
-
-    if (isBase) {
-      // Blue rounded square for Base mainnet (Base logo style)
-      return <div className="w-4 h-4 bg-blue-500 rounded-sm" />;
-    }
-
-    const color = isTestnet ? "text-yellow-500" : "text-red-500";
-    return <CheckCircle className={`w-4 h-4 ${color}`} />;
-  };
-
   // Wallet provider info with MiniKit awareness and Solana support
   const getWalletProviderName = () => {
     if (isSolana) {
       const solWallet = solanaPrivyWallets?.[0];
       const solName =
-        (solWallet as any)?.name ||
-        (solWallet as any)?.standardWallet?.name ||
-        (solWallet as any)?.walletClientType;
+        (solWallet as UntypedValue)?.name ||
+        (solWallet as UntypedValue)?.standardWallet?.name ||
+        (solWallet as UntypedValue)?.walletClientType;
       return solName || "Solana Wallet";
     }
     if (!connector) return "Unknown";
@@ -434,8 +580,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         console.warn('Failed to clear public chat session:', chatSessionError);
       }
 
-      clearMiniAppBypassCookies();
-
       // Clear URL query parameters and redirect to root
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
@@ -483,8 +627,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       console.warn('Failed to clear public chat session before closing mini app:', chatSessionError);
     }
 
-    clearMiniAppBypassCookies();
-
     await clearAppCaches({
       onlyPrefixes: AUTH_CACHE_PREFIXES,
       preserveLocalStorageKeys: ["pixotchi:tutorial", "pixotchi:cache_version"],
@@ -508,7 +650,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   return (
     <React.Fragment>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl w-[min(92vw,32rem)]">
+        <DialogContent size="lg" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
           <DialogHeader>
             <div className="flex items-center space-x-2">
               {/* Profile Avatar or Wallet icon - with 5-tap debug mode trigger */}
@@ -552,8 +694,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-1">
-            <div className="p-4 space-y-6">
+          <DialogBody className="pr-1">
+            <div className="space-y-4 p-1.5">
               {/* MiniKit Context Info - only shown in debug mode */}
               {debugMode && isInFrame && (
                 <div className="flex items-center space-x-2">
@@ -570,286 +712,229 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               <AirdropClaimCard />
 
               <div className="space-y-3">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  Account
-                </h3>
-                <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Provider</span>
-                    <span className="text-xs font-semibold">
-                      {getWalletProviderName()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Network</span>
-                    <div className="flex items-center space-x-1">
-                      {getNetworkStatusIcon(chainId)}
-                      <span className="text-xs font-semibold">
-                        {getNetworkName(chainId)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Basename</span>
-                    <div className="flex items-center space-x-1">
-                      {isNameLoading ? (
-                        <Skeleton className="h-4 w-32" />
-                      ) : name ? (
-                        <span className="text-xs font-semibold">{name}</span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openExternalUrl("https://base.org/names")}
-                          className="inline-flex items-center justify-center px-2 py-0.5 text-xs leading-none whitespace-nowrap rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 btn-compact"
-                          style={{ backgroundColor: '#0000FF', color: '#FFFFFF' }}
-                        >
-                          Get a Basename!
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Wallet Address with copy icon */}
-                  {address && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Address</span>
-                      <div className="flex items-center space-x-1">
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {formatAddress(address)}
-                        </span>
-                        <button
-                          onClick={() => copyToClipboard(address, "Wallet address")}
-                          className="p-0 hover:opacity-70 transition-opacity"
-                          style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px' }}
-                          aria-label="Copy wallet address"
-                        >
-                          <Copy className="w-3 h-3 text-muted-foreground" />
-                        </button>
+                <WalletSectionHeader title="Account" />
+                <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
+                  <div className={walletChromaticWhiteInnerGlowClassName}>
+                    <div className="relative space-y-3 p-3">
+                      <div className="chromatic-white-surface flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 shadow-[var(--shadow-control)]">
+                          {address ? (
+                            <WalletAvatar address={address} className="h-9 w-9" />
+                          ) : (
+                            <Wallet className="h-6 w-6 text-primary" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          {isNameLoading ? (
+                            <Skeleton className="h-5 w-36 rounded-[var(--radius-control)]" />
+                          ) : (
+                            <p className="truncate text-[13px] font-bold text-foreground sm:text-sm">
+                              {name || (address ? formatAddress(address) : getWalletProviderName())}
+                            </p>
+                          )}
+                          <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                            {name && address ? formatAddress(address) : getWalletProviderName()}
+                          </p>
+                        </div>
+                        {!isNameLoading && !name ? (
+                          <Button
+                            type="button"
+                            onClick={() => openExternalUrl("https://base.org/names")}
+                            variant="compactUtility"
+                            size="compact"
+                            className="shrink-0 border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] px-3 text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45"
+                          >
+                            Get Basename
+                          </Button>
+                        ) : null}
                       </div>
-                    </div>
-                  )}
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Mini App</span>
-                    <div className="flex items-center space-x-1">
-                      {isMiniApp ? (
-                        <React.Fragment>
-                          <CheckCircle className="w-3 h-3 text-value" />
-                          <span className="text-xs font-semibold text-value">Yes</span>
-                        </React.Fragment>
-                      ) : (
-                        <React.Fragment>
-                          <XCircle className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">No</span>
-                        </React.Fragment>
-                      )}
-                    </div>
-                  </div>
+                      <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-3">
+                        <WalletInfoRow
+                          label="Provider"
+                        >
+                          <span className="truncate">{getWalletProviderName()}</span>
+                        </WalletInfoRow>
 
-                  {/* Smart Wallet Indicator */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Wallet Type</span>
-                    <div className="flex items-center space-x-1">
-                      {smartWalletLoading ? (
-                        <Skeleton className="h-4 w-32" />
-                      ) : isSolana ? (
-                        <div className="flex items-center space-x-1">
-                          <Wallet className="w-3 h-3 text-purple-500" />
-                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
-                            {getWalletTypeLabel()}
-                          </span>
-                        </div>
-                      ) : isSmartWallet ? (
-                        <div className="flex items-center space-x-1">
-                          <CheckCircle className="w-3 h-3 text-value" />
-                          <span className="text-xs font-semibold text-value">
-                            {getWalletTypeLabel()}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1">
-                          <Wallet className="w-3 h-3 text-blue-500" />
-                          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                            {getWalletTypeLabel()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                        <WalletInfoRow
+                          label="Network"
+                        >
+                          <WalletStatusPill
+                            tone={chainId === 8453 ? "base" : chainId === 84532 ? "warning" : "muted"}
+                          >
+                            {getNetworkName(chainId)}
+                          </WalletStatusPill>
+                        </WalletInfoRow>
 
-                  {/* Gas Fees Indicator */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Gas Fees</span>
-                    <div className="flex items-center space-x-1">
-                      {smartWalletLoading ? (
-                        <Skeleton className="h-4 w-16" />
-                      ) : isSmartWallet || isSolana ? (
-                        <div className="flex items-center space-x-1">
-                          <CheckCircle className="w-3 h-3 text-value" />
-                          <span className="text-xs font-semibold text-value">
-                            Sponsored
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1">
-                          <XCircle className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">
-                            No
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* ETH Mode Toggle - only for smart wallet users */}
-                  {(isSmartWallet || isSolana) && (
-                    <EthModeToggleRow />
-                  )}
-
-                  {/* Farcaster Mini App Context (collapsible) - only shown in debug mode */}
-                  {debugMode && isMiniApp && fcContext && (
-                    <div className="pt-2 mt-2 border-t border-border">
-                      <button
-                        type="button"
-                        onClick={() => setShowFcDetails((v) => !v)}
-                        className="w-full flex items-center justify-between text-left py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background rounded-md"
-                        aria-expanded={showFcDetails}
-                        aria-controls="fc-context-details"
-                      >
-                        <span className="text-xs font-medium">Farcaster Context</span>
-                        <ChevronRight
-                          className={`h-3 w-3 text-muted-foreground transition-transform ${showFcDetails ? 'rotate-90' : ''}`}
-                          aria-hidden="true"
-                        />
-                      </button>
-                      {showFcDetails && (
-                        <div id="fc-context-details" className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Context Type</span>
-                            <span className="text-xs font-semibold">{fcContext?.location?.type ?? '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Referrer</span>
-                            <span className="text-xs font-semibold">{referrerDomain ?? '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Client</span>
-                            <span className="text-xs font-semibold">
-                              {fcContext?.client?.name ? `${fcContext.client.name}${fcContext?.client?.version ? ` v${fcContext.client.version}` : ''}` : '—'}
+                        {address && (
+                          <WalletInfoRow
+                            label="Address"
+                          >
+                            <span className="truncate font-mono text-muted-foreground">
+                              {formatAddress(address)}
                             </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Added</span>
-                            <span className="text-xs font-semibold">{String(fcContext?.client?.added ?? '—')}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">FID</span>
-                            <span className="text-xs font-semibold">{fcContext?.user?.fid ?? '—'}</span>
-                          </div>
+                            <WalletCopyButton
+                              onClick={() => copyToClipboard(address, "Wallet address")}
+                              label="Copy wallet address"
+                            />
+                          </WalletInfoRow>
+                        )}
+
+                        <WalletInfoRow
+                          label="Mini App"
+                        >
+                          <WalletStatusPill
+                            tone={isMiniApp ? "success" : "muted"}
+                          >
+                            {isMiniApp ? "Yes" : "No"}
+                          </WalletStatusPill>
+                        </WalletInfoRow>
+
+                        <WalletInfoRow
+                          label="Wallet Type"
+                        >
+                          {smartWalletLoading ? (
+                            <Skeleton className="h-7 w-32 rounded-[var(--radius-control)]" />
+                          ) : (
+                            <WalletStatusPill
+                              tone={isSolana ? "info" : isSmartWallet ? "success" : "info"}
+                            >
+                              {getWalletTypeLabel()}
+                            </WalletStatusPill>
+                          )}
+                        </WalletInfoRow>
+
+                        {(isSmartWallet || isSolana) && (
+                          <EthModeToggleRow />
+                        )}
+
+                        <PerformanceModeToggleRow />
+                      </div>
+
+                      {debugMode && isMiniApp && fcContext && (
+                        <div className="overflow-hidden rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.24)] bg-background/40 shadow-[var(--shadow-hairline)]">
+                          <button
+                            type="button"
+                            onClick={() => setShowFcDetails((v) => !v)}
+                            className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-[hsl(var(--nav-hover-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                            aria-expanded={showFcDetails}
+                            aria-controls="fc-context-details"
+                          >
+                            <span className="text-xs font-semibold">Farcaster Context</span>
+                            <ChevronRight
+                              className={`h-4 w-4 text-muted-foreground transition-transform ${showFcDetails ? 'rotate-90' : ''}`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                          {showFcDetails && (
+                            <div id="fc-context-details" className="grid gap-2 border-t border-border/55 p-2">
+                              <WalletInfoRow label="Context Type">
+                                <span>{fcContext?.location?.type ?? '—'}</span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="Referrer">
+                                <span>{referrerDomain ?? '—'}</span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="Client">
+                                <span className="truncate">
+                                  {fcContext?.client?.name ? `${fcContext.client.name}${fcContext?.client?.version ? ` v${fcContext.client.version}` : ''}` : '—'}
+                                </span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="Added">
+                                <span>{String(fcContext?.client?.added ?? '—')}</span>
+                              </WalletInfoRow>
+                              <WalletInfoRow label="FID">
+                                <span>{fcContext?.user?.fid ?? '—'}</span>
+                              </WalletInfoRow>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {!smartWalletLoading && !isSmartWallet && !isSolana && (
+                        <div className="flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 text-[hsl(var(--info))] shadow-[var(--shadow-hairline)]">
+                          <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span className="text-xs leading-relaxed text-muted-foreground">
+                            For best experience, consider using a smart wallet
+                          </span>
                         </div>
                       )}
                     </div>
-                  )}
-
-                  {/* Smart Wallet Recommendation for Regular Wallets */}
-                  {!smartWalletLoading && !isSmartWallet && !isSolana && (
-                    <div className="flex items-start space-x-2">
-                      <Lightbulb className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground">
-                        For best experience, consider using a smart wallet
-                      </span>
-                    </div>
-                  )}
+                  </div>
                 </StandardContainer>
               </div>
 
               {/* Solana Bridge Info (only shown for Solana wallets) */}
               {isSolana && isSolanaEnabled() && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-medium text-muted-foreground">
-                      Solana Bridge
-                    </h3>
+                  <WalletSectionHeader title="Solana Bridge" icon={<Wallet className="h-3.5 w-3.5" />}>
                     <SolanaBridgeBadge />
-                  </div>
-                  <StandardContainer className="p-4 space-y-2 rounded-md border bg-card">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Solana Address</span>
-                      <div className="flex items-center gap-1">
-                        {solanaLoading ? (
-                          <Skeleton className="h-4 w-24" />
-                        ) : solanaAddress ? (
-                          <>
-                            <span className="text-xs font-mono">
-                              {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => copyToClipboard(solanaAddress, "Solana address")}
-                              aria-label="Copy Solana address"
-                              title="Copy Solana address"
+                  </WalletSectionHeader>
+                  <StandardContainer padding="none" className={walletCardSurfaceClassName}>
+                    <div className={walletInnerGlowClassName}>
+                      <div className="relative p-3">
+                        <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-3">
+                        <WalletInfoRow
+                          label="Solana Address"
+                        >
+                          {solanaLoading ? (
+                            <Skeleton className="h-7 w-24 rounded-[var(--radius-control)]" />
+                          ) : solanaAddress ? (
+                            <>
+                              <span className="truncate font-mono text-muted-foreground">
+                                {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
+                              </span>
+                              <WalletCopyButton
+                                onClick={() => copyToClipboard(solanaAddress, "Solana address")}
+                                label="Copy Solana address"
+                              />
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </WalletInfoRow>
+
+                        <WalletInfoRow
+                          label="Twin Address"
+                          description="Base ownership address"
+                        >
+                          {solanaLoading ? (
+                            <Skeleton className="h-7 w-24 rounded-[var(--radius-control)]" />
+                          ) : twinAddress ? (
+                            <>
+                              <span className="truncate font-mono text-muted-foreground">
+                                {twinAddress.slice(0, 6)}...{twinAddress.slice(-4)}
+                              </span>
+                              <WalletCopyButton
+                                onClick={() => copyToClipboard(twinAddress, "Twin address")}
+                                label="Copy twin address"
+                              />
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </WalletInfoRow>
+
+                        <WalletInfoRow
+                          label="Bridge Setup"
+                        >
+                          {solanaLoading ? (
+                            <Skeleton className="h-7 w-20 rounded-[var(--radius-control)]" />
+                          ) : (
+                            <WalletStatusPill
+                              tone={isTwinSetup ? "success" : "warning"}
                             >
-                              <Copy className="w-3 h-3" />
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Twin Address (Base)</span>
-                      <div className="flex items-center gap-1">
-                        {solanaLoading ? (
-                          <Skeleton className="h-4 w-24" />
-                        ) : twinAddress ? (
-                          <>
-                            <span className="text-xs font-mono">
-                              {twinAddress.slice(0, 6)}...{twinAddress.slice(-4)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => copyToClipboard(twinAddress, "Twin address")}
-                              aria-label="Copy twin address"
-                              title="Copy twin address"
-                            >
-                              <Copy className="w-3 h-3" />
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">Bridge Setup</span>
-                      <div className="flex items-center space-x-1">
-                        {solanaLoading ? (
-                          <Skeleton className="h-4 w-16" />
-                        ) : isTwinSetup ? (
-                          <>
-                            <CheckCircle className="w-3 h-3 text-value" />
-                            <span className="text-xs font-semibold text-value">Ready</span>
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-3 h-3 text-yellow-500" />
-                            <span className="text-xs font-semibold text-yellow-600 dark:text-yellow-400">Setup Required</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="pt-2 mt-2 border-t border-border">
-                      <div className="flex items-start space-x-2">
-                        <Info className="w-3 h-3 text-purple-400 mt-0.5 flex-shrink-0" />
-                        <span className="text-xs text-muted-foreground">
-                          Your plants are owned by your Twin address on Base. Some features like Land NFTs are not available with Solana wallets.
-                        </span>
+                              {isTwinSetup ? "Ready" : "Setup Required"}
+                            </WalletStatusPill>
+                          )}
+                        </WalletInfoRow>
+                        </div>
+
+                        <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 shadow-[var(--shadow-hairline)]">
+                          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--info))]" />
+                          <span className="text-xs leading-relaxed text-muted-foreground">
+                            Your plants are owned by your Twin address on Base. Some features like Land NFTs are not available with Solana wallets.
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </StandardContainer>
@@ -860,68 +945,64 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
               {/* Balances (consolidated) */}
               <BalanceCard variant="wallet-profile" />
-
-              {/* Actions */}
-              <div className="pt-4 border-t border-border">
-                <div className="grid gap-2 mb-3">
-                  {canExportEmbeddedWallet && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleOpenExportDialog}
-                      className="w-full"
-                    >
-                      <Key className="w-4 h-4 mr-2" />
-                      {exportWalletLabel}
-                    </Button>
-                  )}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => { setTransferOpen(true); onOpenChange(false); }}
-                    className="w-full"
-                  >
-                    Transfer Assets
-                  </Button>
-                </div>
-                {!isFrameContextResolved ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled
-                    className="w-full"
-                  >
-                    Loading session controls…
-                  </Button>
-                ) : isMiniApp ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleCloseMiniApp}
-                    className="w-full"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Close Mini App
-                  </Button>
-                ) : (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDisconnect}
-                    className="w-full"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Disconnect Wallet
-                  </Button>
-                )}
-              </div>
             </div>
-          </div>
+          </DialogBody>
+          <DialogFooter sticky className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:space-x-0">
+            {canExportEmbeddedWallet && (
+              <Button
+                variant="outline"
+                size="default"
+                onClick={handleOpenExportDialog}
+                className="w-full sm:col-span-2"
+              >
+                <Key className="w-4 h-4 mr-2" />
+                {exportWalletLabel}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="default"
+              onClick={() => { setTransferOpen(true); onOpenChange(false); }}
+              className="w-full"
+            >
+              Transfer Assets
+            </Button>
+            {!isFrameContextResolved ? (
+              <Button
+                variant="secondary"
+                size="default"
+                disabled
+                className="w-full"
+              >
+                Loading session controls...
+              </Button>
+            ) : isMiniApp ? (
+              <Button
+                variant="secondary"
+                size="default"
+                onClick={handleCloseMiniApp}
+                className="w-full"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Close Mini App
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                size="default"
+                onClick={handleDisconnect}
+                className="w-full border border-red-500/60 !bg-[#dc2626] !bg-[image:linear-gradient(180deg,#ef4444_0%,#dc2626_48%,#b91c1c_100%)] !text-white shadow-[0_10px_22px_-14px_rgba(185,28,28,0.85)] hover:!brightness-[1.04] hover:shadow-[0_12px_26px_-14px_rgba(185,28,28,0.95)] focus-visible:ring-red-500/45"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Disconnect Wallet
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent className="max-w-lg" hideCloseButton={isExporting}>
+        <DialogContent className="w-[min(94vw,28rem)] max-w-md" hideCloseButton={isExporting}>
           <DialogHeader>
             <div className="flex items-center space-x-2">
               <Key className="w-5 h-5 text-primary" />
@@ -950,7 +1031,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                   {embeddedWallets.map((wallet) => (
                     <label
                       key={wallet.address}
-                      className="flex items-center space-x-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+                      className="flex min-h-11 items-center space-x-3 rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 text-sm hover:border-primary/50 hover:bg-[hsl(var(--nav-hover-bg))] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
                     >
                       <input
                         type="radio"
@@ -958,7 +1039,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         value={wallet.address}
                         checked={selectedEmbeddedAddress === wallet.address}
                         onChange={handleEmbeddedWalletAddressChange}
-                        className="h-4 w-4 border-border text-primary focus:ring-primary"
+                        className="h-5 w-5 border-border text-primary focus:ring-primary"
                         disabled={isExporting}
                       />
                       <span className="font-mono text-xs break-all">

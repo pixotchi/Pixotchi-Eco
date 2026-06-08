@@ -18,6 +18,7 @@ interface BuildingGridProps {
   onBuildingSelect: (building: BuildingData) => void;
   currentBlock: bigint;
   landId: bigint;
+  extraItems?: React.ReactNode;
   gridClassName?: string;
   denseLabels?: boolean;
 }
@@ -59,11 +60,10 @@ const BuildingItem = React.memo(({
           onClick={() => onBuildingSelect(building)}
           aria-label={`Select ${buildingName}`}
           aria-pressed={isSelected}
-          className={`building-button p-0.5 transition-all rounded-md building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:cursor-default disabled:opacity-100 ${isSelected ? 'bg-primary' : 'bg-transparent'
+          className={`building-button rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow] building-element focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:cursor-default disabled:opacity-100 ${isSelected ? 'border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] shadow-[var(--shadow-glow)]' : 'border-border/45 bg-card/75 surface-shadow hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]'
             }`}
         >
-          <div className={`building-element flex items-center justify-center p-2 transition-all rounded-md w-16 h-16 relative ${isSelected ? 'bg-primary/10' : 'bg-card hover:bg-accent'
-            }`}>
+          <div className="building-element relative flex h-16 w-16 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
             <Image
               src={buildingIcon}
               alt={buildingName}
@@ -76,8 +76,8 @@ const BuildingItem = React.memo(({
 
             {/* Max Level Badge */}
             {isMaxLevel && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-sm flex items-center justify-center">
-                <span className="text-xs font-bold text-black">★</span>
+              <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-sm bg-[hsl(var(--warning))]">
+                <span className="text-xs font-bold text-[hsl(var(--warning-foreground))]">★</span>
               </div>
             )}
           </div>
@@ -119,6 +119,7 @@ export default function BuildingGrid({
   selectedBuildingType = buildingType,
   onBuildingSelect,
   landId,
+  extraItems,
   gridClassName,
   denseLabels = false
 }: BuildingGridProps) {
@@ -178,6 +179,7 @@ export default function BuildingGrid({
           />
         );
       })}
+      {extraItems}
     </div>
   );
 }

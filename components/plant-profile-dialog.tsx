@@ -16,7 +16,13 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
-import { FollowButton, fetchFollowState, useTransactions } from 'ethereum-identity-kit';
+import {
+  FollowButton,
+  fetchFollowState,
+  fetchProfileLists,
+  type ForceFollowingState,
+  useTransactions,
+} from 'ethereum-identity-kit';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { WalletAvatar } from '@/components/ui/wallet-avatar';
@@ -77,7 +83,7 @@ export default function PlantProfileDialog({
   const ownerName = walletNameOverride ?? ownerNameDerived ?? null;
 
   // React Query for Owner Stats
-  const { data: ownerStats, isLoading: loading } = useQuery({
+  const { data: ownerStats, isFetching: ownerStatsFetching, isLoading: loading } = useQuery({
     queryKey: ['ownerStats', ownerAddress, plantId],
     queryFn: async () => {
       if (!ownerAddress) return null;
@@ -130,6 +136,21 @@ export default function PlantProfileDialog({
         probes.push(primaryListForProbe);
       }
 
+      if (fresh) {
+        try {
+          const freshLists = await fetchProfileLists(connectedAddress, true);
+          const freshPrimaryList = freshLists?.primary_list ?? undefined;
+          if (freshPrimaryList !== undefined && !probes.includes(freshPrimaryList)) {
+            probes.push(freshPrimaryList);
+          }
+          for (const listId of freshLists?.lists ?? []) {
+            if (listId !== undefined && !probes.includes(listId)) {
+              probes.push(listId);
+            }
+          }
+        } catch { }
+      }
+
       for (const listProbe of probes) {
         try {
           const status = await fetchFollowState({
@@ -147,6 +168,43 @@ export default function PlantProfileDialog({
     },
     [connectedAddress, efpSelectedList, efpLists?.primary_list],
   );
+
+  const canFollowOwner =
+    !!connectedAddress &&
+    !!ownerAddress &&
+    connectedAddress.toLowerCase() !== ownerAddress.toLowerCase();
+
+  const { data: isFollowingOwnerFresh, isFetching: isFollowingOwnerFetching } = useQuery({
+    queryKey: [
+      'profileFollowingStateFresh',
+      connectedAddress,
+      ownerAddress,
+      efpSelectedList,
+      efpLists?.primary_list,
+      efpRefreshKey,
+    ],
+    queryFn: async () => {
+      if (!ownerAddress) return false;
+      return fetchIsFollowingOwner(ownerAddress.toLowerCase(), true);
+    },
+    enabled: open && canFollowOwner,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  const forcedFollowState = useMemo<ForceFollowingState | undefined>(() => {
+    if (!canFollowOwner) return undefined;
+    if (typeof isFollowingOwnerFresh !== 'boolean') return undefined;
+
+    return {
+      isLoading: isFollowingOwnerFetching,
+      state: {
+        block: false,
+        follow: isFollowingOwnerFresh,
+        mute: false,
+      },
+    };
+  }, [canFollowOwner, isFollowingOwnerFresh, isFollowingOwnerFetching]);
 
   const postFollowMissionProgress = useCallback(async (): Promise<boolean> => {
     if (!connectedAddress) return false;
@@ -212,7 +270,7 @@ export default function PlantProfileDialog({
       // If already following, this action is likely Unfollow/Block/Mute. Do not count mission.
       if (wasFollowingBeforeClick) return;
 
-      await verifyFollowAndTrackMission(lookupAddress, { attempts: 24, delayMs: 1500, token });
+      await verifyFollowAndTrackMission(lookupAddress, { attempts: 80, delayMs: 1500, token });
     };
 
     void run();
@@ -220,11 +278,6 @@ export default function PlantProfileDialog({
 
   // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
   useEffect(() => {
-    const canFollowOwner =
-      !!connectedAddress &&
-      !!ownerAddress &&
-      connectedAddress.toLowerCase() !== ownerAddress.toLowerCase();
-
     // Capture follow target when tx modal opens. Do not depend on dialog open state.
     if (!prevTxModalOpenRef.current && txModalOpen && canFollowOwner && !followTxTargetRef.current) {
       followTxTargetRef.current = ownerAddress.toLowerCase();
@@ -238,13 +291,13 @@ export default function PlantProfileDialog({
       // Tx close fallback: verify follow state and award mission when follow succeeded.
       if (canFollowOwner) {
         const lookupAddress = followTxTargetRef.current ?? ownerAddress.toLowerCase();
-        void verifyFollowAndTrackMission(lookupAddress, { attempts: 18, delayMs: 1500 });
+        void verifyFollowAndTrackMission(lookupAddress, { attempts: 60, delayMs: 1500 });
       }
 
       followTxTargetRef.current = null;
     }
     prevTxModalOpenRef.current = txModalOpen;
-  }, [txModalOpen, connectedAddress, ownerAddress, queryClient, refreshEfpStats, verifyFollowAndTrackMission]);
+  }, [txModalOpen, canFollowOwner, ownerAddress, queryClient, refreshEfpStats, verifyFollowAndTrackMission]);
 
   if (!ownerAddress) return null;
 
@@ -259,6 +312,7 @@ export default function PlantProfileDialog({
   const displaySubtitle = !isWalletVariant && hasPlant && plant
     ? `Level ${plant.level}${plant.rank ? ` · Rank #${plant.rank}` : ''}`
     : undefined;
+  const ownerStatsPending = loading || (ownerStatsFetching && !ownerStats);
 
   const handleCopyAddress = () => {
     if (!ownerAddress) return;
@@ -274,22 +328,27 @@ export default function PlantProfileDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-[440px] p-0">
-          <div className="flex flex-col overflow-y-auto overflow-x-hidden">
-            <div className="relative">
-              <div className="h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
-              <div className="absolute inset-x-6 top-8 flex items-start justify-between text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span className="pt-1">Powered by:</span>
+        <DialogContent
+          layer={isWalletVariant ? "nested" : "default"}
+          surface="soft"
+          className="w-[min(94vw,27.5rem)] max-w-[27.5rem] !p-0"
+        >
+          <div className="surface-scroll-fade flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
+            <div className="relative min-h-36 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent" aria-hidden="true" />
+              <div className="relative z-[1] flex items-start justify-between gap-3 px-6 pb-12 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="shrink-0 pt-2">Powered by:</span>
                 <button
                   type="button"
                   onClick={() => openExternalUrl('https://efp.app')}
-                  className="flex items-center gap-2 transition hover:text-foreground normal-case text-xs font-medium"
+                  className="inline-flex min-h-10 min-w-0 items-center justify-end gap-2 rounded-[var(--radius-control)] px-1 text-right text-xs font-semibold normal-case tracking-[0.14em] text-foreground/85 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                  aria-label="Open Ethereum Follow Protocol"
                 >
                   <Image src="/icons/efp-logo.svg" alt="EFP" width={16} height={16} />
-                  Ethereum Follow Protocol
+                  <span className="min-w-0 truncate">Ethereum Follow Protocol</span>
                 </button>
               </div>
-              <div className="absolute -bottom-8 left-6">
+              <div className="absolute -bottom-8 left-6 z-[2]">
                 <div className="relative">
                   <div
                     className={`w-24 h-24 border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center ${isWalletVariant ? 'rounded-full' : 'rounded-xl'
@@ -320,11 +379,11 @@ export default function PlantProfileDialog({
                 </div>
               </div>
             </div>
-            <div className="flex flex-col gap-1 px-6 pb-5 pt-6">
+            <div className="relative z-[1] flex flex-col gap-1 px-6 pb-5 pt-6">
               {/* Plant Info */}
               <div className="mt-6 mb-2 flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <DialogTitle className="text-2xl font-bold truncate">
+                  <DialogTitle className={`truncate text-2xl ${isWalletVariant ? 'font-bold' : 'font-pixel'}`}>
                     {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
                   </DialogTitle>
                   {displaySubtitle && !showPrimaryLoading && (
@@ -357,20 +416,20 @@ export default function PlantProfileDialog({
                       </div>
                     </>
                   )}
-                  {loading ? (
+                  {ownerStatsPending ? (
                     <>
-                      <div className="flex items-center gap-1.5">
-                        <Skeleton className="h-4 w-4 rounded" />
+                      <div className="flex items-center gap-1.5" aria-label="Loading plant count">
+                        <Image src="/icons/plant1.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-8" />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Skeleton className="h-4 w-4 rounded" />
+                      <div className="flex items-center gap-1.5" aria-label="Loading land count">
+                        <Image src="/icons/bee-house.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-8" />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Skeleton className="h-4 w-4 rounded" />
+                      <div className="flex items-center gap-1.5" aria-label="Loading staked SEED">
+                        <Image src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-12" />
-                        <Skeleton className="h-3 w-12" />
+                        <span className="text-xs text-muted-foreground uppercase">Staked</span>
                       </div>
                     </>
                   ) : ownerStats ? (
@@ -413,7 +472,7 @@ export default function PlantProfileDialog({
                     variant="outline"
                     size="sm"
                     onClick={handleCopyAddress}
-                    className="flex-1 h-10 font-mono text-sm justify-between"
+                    className="h-11 min-h-11 flex-1 justify-between font-mono text-sm"
                     disabled={!ownerAddress}
                   >
                     <span className="truncate">{ownerAddress ? formatAddress(ownerAddress, 6, 4) : '—'}</span>
@@ -421,10 +480,10 @@ export default function PlantProfileDialog({
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={handleViewOnBlockscout}
-                    className="h-10 w-10 p-0"
                     disabled={!ownerAddress}
+                    aria-label="View profile address on Blockscout"
                   >
                     <ExternalLink className="w-4 h-4" />
                   </Button>
@@ -472,10 +531,11 @@ export default function PlantProfileDialog({
                         <FollowButton
                           lookupAddress={ownerAddress as `0x${string}`}
                           connectedAddress={connectedAddress}
+                          forceState={forcedFollowState}
                           onDisconnectedClick={() => {
                             toast.error('Please connect your wallet to follow users');
                           }}
-                          className="w-full h-10 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                          className="profile-follow-button h-11 min-h-11 w-full rounded-[var(--radius-control)] bg-primary bg-[image:var(--gradient-control-active)] px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-control)] transition-[filter,box-shadow] hover:brightness-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                         />
                       </div>
                     </div>

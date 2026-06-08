@@ -1,29 +1,36 @@
 "use client";
 
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import type { LifecycleStatus } from '@/components/transactions/transaction-kit';
 import EuropeanRouletteWheel from '@/components/ui/EuropeanRouletteWheel';
 import { Button } from '@/components/ui/button';
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
+import { dispatchPostTransactionRefresh,POST_TRANSACTION_REFRESH_DELAYS_MS } from '@/lib/transaction-refresh';
 import {
+rouletteBetWins,
+rouletteCanReveal,
+rouletteHasUnsupportedZeroCombo,
+rouletteRevealBlocksRemaining,
+} from '@/lib/casino-hardening-rules.mjs';
+import {
+casinoGetBetDetails,
 casinoGetActiveBetV2,
 casinoGetTokenConfig,
 checkCasinoApproval,
 LAND_CONTRACT_ADDRESS,
+type CasinoActiveBetV2,
 } from '@/lib/contracts';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
-import { CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
+import { BET_TYPE_NAMES,CASINO_PAYOUT_MULTIPLIERS,CasinoBetType,RED_NUMBERS } from '@/public/abi/casino-abi';
 import { Loader2,Trash2,X } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback,useEffect,useMemo,useState } from 'react';
+import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { formatUnits,parseUnits } from 'viem';
-import { useAccount,useBalance } from 'wagmi';
+import { useAccount,useBalance,useBlockNumber } from 'wagmi';
 import ApproveTransaction from './approve-transaction';
 import CasinoTransaction from './casino-transaction';
 
@@ -46,12 +53,54 @@ interface PlacedBet {
 
 const MAX_TOKEN_APPROVAL = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
 const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
+const ACTIVE_BET_REFRESH_DELAYS_MS = [0, 1500, 4000] as const;
+const ROULETTE_NUMBER_BUTTON_CLASS =
+    "flex h-12 w-full items-center justify-center rounded-sm border border-white/10 text-xs font-bold text-white transition-all md:h-14 md:text-sm";
+const ROULETTE_COLUMN_BUTTON_CLASS =
+    "flex h-full w-full items-center justify-center rounded-r-sm border border-white/20 bg-black/40 text-xs font-bold text-white hover:bg-black/60";
+const ROULETTE_OUTSIDE_BUTTON_CLASS =
+    "flex h-11 min-h-11 items-center justify-center rounded-sm border border-white/20 bg-black/40 px-1 text-xs font-bold text-white hover:bg-black/60";
+const ROULETTE_SELECTED_AREA_CLASS = "ring-2 inset-1 ring-primary bg-primary/40";
+const ROULETTE_FAILURE_STATUSES = new Set([
+    'error',
+    'failed',
+    'reverted',
+    'cancelled',
+    'canceled',
+    'rejected',
+    'transactionRejected',
+    'userRejected',
+    'buildError',
+]);
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function getRouletteBetLabel(type: CasinoBetType, numbers: number[]): string {
+    const sortedNumbers = [...numbers].sort((a, b) => a - b);
+
+    switch (type) {
+        case CasinoBetType.STRAIGHT:
+            return `${sortedNumbers[0] ?? 0}`;
+        case CasinoBetType.SPLIT:
+            return `Split ${sortedNumbers.join('-')}`;
+        case CasinoBetType.STREET:
+            return `Street ${sortedNumbers[0] ?? ''}-${sortedNumbers[sortedNumbers.length - 1] ?? ''}`;
+        case CasinoBetType.CORNER:
+            return `Corner ${sortedNumbers.join(',')}`;
+        case CasinoBetType.SIX_LINE:
+            return `6-Line ${sortedNumbers[0] ?? ''}-${sortedNumbers[sortedNumbers.length - 1] ?? ''}`;
+        case CasinoBetType.DOZEN:
+            return sortedNumbers[0] === 1 ? '1st 12' : sortedNumbers[0] === 2 ? '2nd 12' : '3rd 12';
+        case CasinoBetType.COLUMN:
+            return sortedNumbers[0] === 1 ? '1st Col' : sortedNumbers[0] === 2 ? '2nd Col' : '3rd Col';
+        default:
+            return BET_TYPE_NAMES[type] ?? 'Bet';
+    }
+}
 
 export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplete, selectedToken }: CasinoDialogProps) {
     const { address } = useAccount();
-    const { isSponsored } = usePaymaster();
     const casinoPolicy = getClientCasinoPolicy();
+    const betAmountInputId = useId();
 
     const [placedBets, setPlacedBets] = useState<PlacedBet[]>([]);
     const [currentBetAmount, setCurrentBetAmount] = useState('10');
@@ -61,10 +110,14 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     // European wheel state
     const [wheelSpinning, setWheelSpinning] = useState(false);
     const [wheelWinningNumber, setWheelWinningNumber] = useState<number | null>(null);
+    const [expiredResult, setExpiredResult] = useState<{ forfeitedAmount: string } | null>(null);
     const [config, setConfig] = useState<{ minBet: bigint; maxBet: bigint; bettingToken: string; enabled: boolean; maxBetsPerGame: number } | null>(null);
     const [allowanceWei, setAllowanceWei] = useState(BigInt(0));
     const [error, setError] = useState<string | null>(null);
     const [pendingGame, setPendingGame] = useState<boolean>(false);
+    const [activeBet, setActiveBet] = useState<CasinoActiveBetV2 | null>(null);
+    const [walletTxPending, setWalletTxPending] = useState(false);
+    const revealAttemptRef = useRef(false);
 
     const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
     const tokenSymbol = tokenSymbolRaw || 'TOKEN';
@@ -85,6 +138,23 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         token: config?.bettingToken as `0x${string}` | undefined,
         query: { enabled: !!address && !!config?.bettingToken }
     });
+    const refetchBalanceAfterTx = useCallback(() => {
+        dispatchPostTransactionRefresh();
+        for (const delay of POST_TRANSACTION_REFRESH_DELAYS_MS) {
+            if (delay <= 0) {
+                void refetchBalance();
+            } else {
+                window.setTimeout(() => void refetchBalance(), delay);
+            }
+        }
+    }, [refetchBalance]);
+    const { data: liveBlock } = useBlockNumber({
+        watch: open && pendingGame,
+        query: {
+            enabled: open && pendingGame,
+            refetchInterval: open && pendingGame ? 3000 : false,
+        },
+    });
 
     const totalBetAmount = useMemo(() => {
         return placedBets.reduce((sum, bet) => sum + parseFloat(bet.amount || '0'), 0);
@@ -104,53 +174,16 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     }, [config, pendingGame, spinPhase, totalBetWei]);
     const hasApproval = allowanceWei >= requiredApprovalWei;
 
-    // Calculate CORRECT max win by simulating all 37 possible outcomes
+    // Calculate max win using the same zero handling as the contract.
     const bestPossibleWin = useMemo(() => {
         if (placedBets.length === 0) return 0;
-
-        const doesBetWin = (bet: PlacedBet, winningNumber: number): boolean => {
-            const { type, numbers } = bet;
-            if (winningNumber === 0) {
-                if (type === CasinoBetType.STRAIGHT && numbers.includes(0)) return true;
-                if ([CasinoBetType.SPLIT, CasinoBetType.CORNER, CasinoBetType.STREET, CasinoBetType.SIX_LINE].includes(type)) {
-                    return numbers.includes(0);
-                }
-                return false;
-            }
-            switch (type) {
-                case CasinoBetType.STRAIGHT:
-                case CasinoBetType.SPLIT:
-                case CasinoBetType.CORNER:
-                case CasinoBetType.STREET:
-                case CasinoBetType.SIX_LINE:
-                    return numbers.includes(winningNumber);
-                case CasinoBetType.DOZEN: {
-                    const dozen = numbers[0];
-                    if (dozen === 1) return winningNumber >= 1 && winningNumber <= 12;
-                    if (dozen === 2) return winningNumber >= 13 && winningNumber <= 24;
-                    if (dozen === 3) return winningNumber >= 25 && winningNumber <= 36;
-                    return false;
-                }
-                case CasinoBetType.COLUMN: {
-                    const column = numbers[0];
-                    return (winningNumber % 3) === (column % 3);
-                }
-                case CasinoBetType.RED: return RED_NUMBERS.includes(winningNumber);
-                case CasinoBetType.BLACK: return !RED_NUMBERS.includes(winningNumber) && winningNumber !== 0;
-                case CasinoBetType.ODD: return winningNumber % 2 === 1;
-                case CasinoBetType.EVEN: return winningNumber % 2 === 0 && winningNumber !== 0;
-                case CasinoBetType.LOW: return winningNumber >= 1 && winningNumber <= 18;
-                case CasinoBetType.HIGH: return winningNumber >= 19 && winningNumber <= 36;
-                default: return false;
-            }
-        };
 
         let maxPayout = 0;
         for (let num = 0; num <= 36; num++) {
             let payoutForThisNumber = 0;
             for (const bet of placedBets) {
                 const amount = parseFloat(bet.amount || '0');
-                if (doesBetWin(bet, num)) {
+                if (rouletteBetWins(bet.type, bet.numbers, num)) {
                     const multiplier = CASINO_PAYOUT_MULTIPLIERS[bet.type];
                     payoutForThisNumber += amount + (amount * multiplier);
                 }
@@ -164,6 +197,16 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const isInsufficientBalance = totalBetAmount > balanceVal;
     const maxBets = config?.maxBetsPerGame || 2;
     const canAddMoreBets = placedBets.length < maxBets;
+    const bettingLocked = pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' || isSpinning;
+    const activeBetBelongsToWallet = !activeBet?.isActive || (!!address && activeBet.player.toLowerCase() === address.toLowerCase());
+    const canRevealActiveBet = activeBetBelongsToWallet && rouletteCanReveal(activeBet, liveBlock);
+    const revealBlocksRemaining = useMemo(() => {
+        return rouletteRevealBlocksRemaining(activeBet, liveBlock);
+    }, [activeBet, liveBlock]);
+    const hasUnsupportedZeroCombo = useMemo(
+        () => placedBets.some((bet) => rouletteHasUnsupportedZeroCombo(bet.type, bet.numbers)),
+        [placedBets]
+    );
 
     useEffect(() => {
         if (!open || casinoPolicy.playable) return;
@@ -171,51 +214,112 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         toast.error(casinoPolicy.message || 'Casino is currently unavailable.');
     }, [casinoPolicy.message, casinoPolicy.playable, onOpenChange, open]);
 
-    useEffect(() => {
-        const loadConfig = async () => {
-            if (!casinoPolicy.playable) return;
-            try {
-                const activeGame = landId ? await casinoGetActiveBetV2(landId) : null;
-                const effectiveToken = activeGame?.isActive ? activeGame.bettingToken : selectedToken;
+    const refreshCasinoState = useCallback(async (options?: { keepPendingWhenMissing?: boolean }) => {
+        if (!casinoPolicy.playable) return null;
+        try {
+            const activeGame = landId ? await casinoGetActiveBetV2(landId) : null;
+            const effectiveToken = activeGame?.isActive ? activeGame.bettingToken : selectedToken;
 
-                if (!effectiveToken) {
-                    setConfig(null);
-                    setPendingGame(false);
-                    setAllowanceWei(BigInt(0));
-                    return;
-                }
+            if (!effectiveToken) {
+                setConfig(null);
+                setPendingGame(false);
+                setActiveBet(null);
+                setAllowanceWei(BigInt(0));
+                return activeGame;
+            }
 
-                const tokenConfig = await casinoGetTokenConfig(effectiveToken);
-                if (tokenConfig?.supported || activeGame?.isActive) {
-                    setConfig({
-                        minBet: tokenConfig?.minBet ?? BigInt(0),
-                        maxBet: tokenConfig?.maxBet ?? BigInt(0),
-                        bettingToken: effectiveToken,
-                        enabled: tokenConfig?.enabled ?? false,
-                        maxBetsPerGame: Number(tokenConfig?.maxBetsPerGame ?? BigInt(2)) || 2,
+            const tokenConfig = await casinoGetTokenConfig(effectiveToken);
+            if (tokenConfig?.supported || activeGame?.isActive) {
+                setConfig({
+                    minBet: tokenConfig?.minBet ?? BigInt(0),
+                    maxBet: tokenConfig?.maxBet ?? BigInt(0),
+                    bettingToken: effectiveToken,
+                    enabled: tokenConfig?.enabled ?? false,
+                    maxBetsPerGame: Number(tokenConfig?.maxBetsPerGame ?? BigInt(2)) || 2,
+                });
+            } else {
+                setConfig(null);
+            }
+
+            if (activeGame?.isActive) {
+                setPendingGame(true);
+                setActiveBet(activeGame);
+                setSpinPhase(activeGame.canReveal || activeGame.isExpired ? 'revealing' : 'waiting');
+                const activeBetCount = Number(activeGame.numBets);
+                if (activeBetCount > 0) {
+                    const details = await Promise.all(
+                        Array.from({ length: activeBetCount }, (_, index) => casinoGetBetDetails(landId, index))
+                    );
+                    const hydratedBets = details.flatMap((detail, index): PlacedBet[] => {
+                        if (!detail) return [];
+                        const type = Number(detail.betType) as CasinoBetType;
+                        const numbers = detail.betNumbers.map(Number);
+                        return [{
+                            id: `active-${landId.toString()}-${index}`,
+                            type,
+                            label: getRouletteBetLabel(type, numbers),
+                            numbers,
+                            amount: formatTokenAmountRounded(detail.betAmount, tokenDecimals),
+                            payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1`,
+                        }];
                     });
-                } else {
-                    setConfig(null);
+                    if (hydratedBets.length > 0) {
+                        setPlacedBets(hydratedBets);
+                        setCurrentBetAmount(hydratedBets[0].amount);
+                    }
                 }
+            } else if (options?.keepPendingWhenMissing) {
+                setPendingGame(true);
+                setActiveBet(null);
+                setSpinPhase('waiting');
+            } else {
+                setPendingGame(false);
+                setActiveBet(null);
+                setSpinPhase('idle');
+            }
 
-                if (activeGame?.isActive) {
-                    setPendingGame(true);
-                    setSpinPhase('revealing');
-                } else {
-                    setPendingGame(false);
-                    setSpinPhase('idle');
-                }
+            if (address) {
+                const approval = await checkCasinoApproval(address, effectiveToken);
+                setAllowanceWei(approval);
+            } else {
+                setAllowanceWei(BigInt(0));
+            }
 
-                if (address) {
-                    const approval = await checkCasinoApproval(address, effectiveToken);
-                    setAllowanceWei(approval);
-                } else {
-                    setAllowanceWei(BigInt(0));
-                }
-            } catch (e) { console.error('Failed to load casino config:', e); }
-        };
-        if (open) loadConfig();
-    }, [open, address, landId, selectedToken, casinoPolicy.playable]);
+            return activeGame;
+        } catch (e) {
+            console.error('Failed to load casino config:', e);
+            return null;
+        }
+    }, [address, casinoPolicy.playable, landId, selectedToken, tokenDecimals]);
+
+    useEffect(() => {
+        if (open) void refreshCasinoState();
+    }, [open, refreshCasinoState]);
+
+    useEffect(() => {
+        if (!open || !pendingGame || activeBet?.isActive || isSpinning) return;
+
+        const intervalId = window.setInterval(() => {
+            void refreshCasinoState({ keepPendingWhenMissing: true });
+        }, 4000);
+
+        return () => window.clearInterval(intervalId);
+    }, [activeBet?.isActive, isSpinning, open, pendingGame, refreshCasinoState]);
+
+    useEffect(() => {
+        if (!open || !pendingGame || !activeBet?.isActive || isSpinning) return;
+
+        const intervalId = window.setInterval(() => {
+            void refreshCasinoState();
+        }, 4000);
+
+        return () => window.clearInterval(intervalId);
+    }, [activeBet?.isActive, isSpinning, open, pendingGame, refreshCasinoState]);
+
+    useEffect(() => {
+        if (!pendingGame || !activeBet?.isActive || isSpinning) return;
+        setSpinPhase(canRevealActiveBet ? 'revealing' : 'waiting');
+    }, [activeBet?.isActive, canRevealActiveBet, isSpinning, pendingGame]);
 
     const configBettingToken = config?.bettingToken ?? null;
     const configMinBet = config?.minBet ?? null;
@@ -225,7 +329,6 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     useEffect(() => {
         if (!open || pendingGame || !configBettingToken) return;
         setPlacedBets([]);
-        setResult(null);
         setError(null);
     }, [configBettingToken, configMinBet, configMaxBet, configMaxBetsPerGame, open, pendingGame]);
 
@@ -252,11 +355,19 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     }, []);
 
     const addBet = useCallback((type: CasinoBetType, label: string, numbers: number[]) => {
+        if (bettingLocked) {
+            toast.error('Finish the current spin before changing bets');
+            return;
+        }
         if (config && !config.enabled && !pendingGame) {
             toast.error('Roulette is currently disabled');
             return;
         }
         if (!canAddMoreBets) { toast.error(`Maximum ${maxBets} bets per spin`); return; }
+        if (rouletteHasUnsupportedZeroCombo(type, numbers)) {
+            toast.error('Only straight bets can include 0.');
+            return;
+        }
 
         // Validate Min/Max Bet
         if (config) {
@@ -287,9 +398,12 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         const exists = placedBets.some(b => b.type === type && JSON.stringify([...b.numbers].sort()) === JSON.stringify([...numbers].sort()));
         if (exists) { toast.error('Bet already placed'); return; }
         const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
+        setResult(null);
+        setExpiredResult(null);
+        setError(null);
         setPlacedBets(prev => [...prev, newBet]);
         toast.success(`Added ${label} bet`);
-    }, [canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet]);
+    }, [bettingLocked, canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet]);
 
     const removeBet = useCallback((id: string) => { setPlacedBets(prev => prev.filter(b => b.id !== id)); }, []);
     const clearBets = useCallback(() => { setPlacedBets([]); }, []);
@@ -304,13 +418,29 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const betAmounts = useMemo(() => placedBets.map(b => parseUnits(b.amount, tokenDecimals)), [placedBets, tokenDecimals]);
 
     // Handle place bets completion
-    const handlePlaceBetsComplete = useCallback((result?: {}) => {
+    const syncPlacedRouletteState = useCallback(async () => {
+        for (const delayMs of ACTIVE_BET_REFRESH_DELAYS_MS) {
+            if (delayMs > 0) await wait(delayMs);
+            const latestActiveBet = await refreshCasinoState({ keepPendingWhenMissing: true });
+            if (latestActiveBet?.isActive) {
+                setError(null);
+                return;
+            }
+        }
+
+        setError('Bet was submitted. Waiting for the onchain game state to catch up...');
+    }, [refreshCasinoState]);
+
+    const handlePlaceBetsComplete = useCallback((result?: object) => {
+        setWalletTxPending(false);
         if (result === undefined) {
             // Transaction failed
             setError('Failed to place bets');
             setIsSpinning(false);
             setSpinPhase('idle');
             setWheelSpinning(false);
+            setActiveBet(null);
+            setPendingGame(false);
             return;
         }
         // Bets placed successfully, transition to waiting/reveal phase
@@ -318,65 +448,154 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         setIsSpinning(false); // Stop the spinning state from placeBets
         setSpinPhase('waiting');
         setPendingGame(true);
-        // After short delay, enable reveal
-        setTimeout(() => {
-            setSpinPhase('revealing');
-        }, 5000);
-    }, []);
+        setActiveBet(null);
+        refetchBalanceAfterTx();
+        void syncPlacedRouletteState();
+    }, [refetchBalanceAfterTx, syncPlacedRouletteState]);
 
     // Handle reveal completion
-    const handleRevealComplete = useCallback((result?: { winningNumber?: number; won?: boolean; payout?: string }) => {
-        // Only process if we're actually in a reveal phase
-        // This prevents false errors from OnchainKit status callbacks on initial render
-        if (spinPhase !== 'revealing' && !isSpinning) {
-            return; // Ignore callbacks when not actively revealing
-        }
+    const handleRevealComplete = useCallback((result?: { winningNumber?: number; won?: boolean; payout?: string; expired?: boolean; forfeitedAmount?: string; receiptIncomplete?: boolean; transactionHash?: string }) => {
+        const shouldProcess = revealAttemptRef.current || pendingGame || spinPhase === 'revealing' || isSpinning;
+        if (!shouldProcess) return;
 
+        setWalletTxPending(false);
+        revealAttemptRef.current = false;
         setIsSpinning(false);
         setSpinPhase('idle');
 
         if (result === undefined) {
-            // Transaction failed - but only show error if we were actually trying
             setError('Reveal failed');
             setWheelSpinning(false);
+            void refreshCasinoState();
+            return;
+        }
+
+        if (result.expired) {
+            setError(null);
+            setResult(null);
+            setExpiredResult({ forfeitedAmount: result.forfeitedAmount ?? '0' });
+            setWheelSpinning(false);
+            refetchBalanceAfterTx();
+            setPendingGame(false);
+            setActiveBet(null);
+            setPlacedBets([]);
+            onSpinComplete?.();
             return;
         }
 
         if (result.winningNumber !== undefined) {
             setError(null); // Clear any errors on success
+            setExpiredResult(null);
             setResult({
                 number: result.winningNumber,
                 won: result.won ?? false,
                 payout: result.payout ?? '0'
             });
             setWheelWinningNumber(result.winningNumber);
-            refetchBalance();
+            refetchBalanceAfterTx();
+            setPendingGame(false);
+            setActiveBet(null);
+            setPlacedBets([]);
+            onSpinComplete?.();
+            return;
         } else {
-            setError('Could not verify result');
             setWheelSpinning(false);
+            setError(result.receiptIncomplete
+                ? 'Spin completed, but the wallet did not return the result. Refreshing game state...'
+                : 'Could not verify result');
         }
 
-        setPendingGame(false);
-        setPlacedBets([]);
-        onSpinComplete?.();
-    }, [onSpinComplete, refetchBalance, spinPhase, isSpinning]);
+        void (async () => {
+            for (const delayMs of ACTIVE_BET_REFRESH_DELAYS_MS) {
+                if (delayMs > 0) await wait(delayMs);
+                const latestActiveBet = await casinoGetActiveBetV2(landId);
+
+                if (!latestActiveBet?.isActive) {
+                    setPendingGame(false);
+                    setActiveBet(null);
+                    setPlacedBets([]);
+                    setSpinPhase('idle');
+                    setError('Spin completed. Check recent activity for the result.');
+                    refetchBalanceAfterTx();
+                    onSpinComplete?.();
+                    return;
+                }
+
+                setPendingGame(true);
+                setActiveBet(latestActiveBet);
+                setSpinPhase(latestActiveBet.canReveal || latestActiveBet.isExpired ? 'revealing' : 'waiting');
+            }
+
+            setError('Reveal was submitted, but the game still appears active. Try revealing again after the next refresh.');
+        })();
+    }, [isSpinning, landId, onSpinComplete, pendingGame, refetchBalanceAfterTx, refreshCasinoState, spinPhase]);
 
     // Handle transaction status updates for UI feedback
     const handleStatusUpdate = useCallback((status: LifecycleStatus) => {
         if (status.statusName === 'transactionPending') {
+            setWalletTxPending(true);
+            if (pendingGame || spinPhase === 'revealing') {
+                revealAttemptRef.current = true;
+            }
             setError(null);
             setIsSpinning(true);
             setResult(null);
+            setExpiredResult(null);
             setWheelWinningNumber(null);
             setWheelSpinning(true);
         }
-    }, []);
+        if (ROULETTE_FAILURE_STATUSES.has(status.statusName ?? '')) {
+            setWalletTxPending(false);
+            setIsSpinning(false);
+            setWheelSpinning(false);
+            setSpinPhase(pendingGame ? 'waiting' : 'idle');
+        }
+        if (status.statusName === 'success') {
+            setWalletTxPending(false);
+        }
+    }, [pendingGame, spinPhase]);
+
+    const handleClose = useCallback((nextOpen: boolean) => {
+        if (nextOpen) {
+            onOpenChange(true);
+            return;
+        }
+
+        if (walletTxPending) {
+            toast.error('Transaction submitted. Please wait for confirmation.');
+            return;
+        }
+
+        if (pendingGame) {
+            toast('Roulette game remains active onchain. Reopen Casino to reveal or settle it.');
+        }
+
+        setIsSpinning(false);
+        setWheelSpinning(false);
+        setSpinPhase(pendingGame ? 'waiting' : 'idle');
+        onOpenChange(false);
+    }, [onOpenChange, pendingGame, walletTxPending]);
 
     // Button click handler to start spinning immediately
     const handleSpinButtonClick = useCallback(() => {
+        if (hasUnsupportedZeroCombo) {
+            setError('Only straight bets can include 0.');
+            return;
+        }
         setSpinPhase('betting');
         setError(null);
         setResult(null);
+        setExpiredResult(null);
+        setWheelWinningNumber(null);
+        setWheelSpinning(true);
+    }, [hasUnsupportedZeroCombo]);
+
+    const handleRevealButtonClick = useCallback(() => {
+        revealAttemptRef.current = true;
+        setSpinPhase('revealing');
+        setError(null);
+        setResult(null);
+        setExpiredResult(null);
         setWheelWinningNumber(null);
         setWheelSpinning(true);
     }, []);
@@ -431,8 +650,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             <div key={num} className="relative w-full h-full">
                 {/* Main number button - Fill container */}
                 <button
+                    type="button"
                     onClick={() => addBet(CasinoBetType.STRAIGHT, `${num}`, [num])}
-                    className={`w-full h-10 md:h-14 flex items-center justify-center rounded-sm text-[10px] md:text-sm font-bold text-white transition-all border border-white/10 
+                    aria-label={`Bet straight on ${num}`}
+                    className={`${ROULETTE_NUMBER_BUTTON_CLASS}
                         ${hasBet(CasinoBetType.STRAIGHT, [num]) ? 'ring-2 ring-amber-400 z-10' : 'hover:brightness-110'}
                         ${isRed ? 'bg-red-600' : 'bg-gray-900'}`}
                 >
@@ -441,38 +662,46 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
                 {/* Street bet hitbox - Top Edge Center */}
                 {isTop && (
-                    <div
-                        className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 cursor-pointer z-20 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet street ${streetNums[0]} to ${streetNums[2]}`}
+                        className="absolute top-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, `Street ${streetNums[0]}-${streetNums[2]}`, streetNums); }}
                     >
                         <div className={`w-6 h-2 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.STREET, streetNums) ? 'bg-purple-500 ring-1 ring-white' : 'hover:bg-purple-400/70'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Horizontal split hitbox - Bottom Edge Center */}
                 {!isBottom && (
-                    <div
-                        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-6 cursor-pointer z-20 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet split ${numBelow} and ${num}`}
+                        className="absolute bottom-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SPLIT, `Split ${numBelow}-${num}`, [numBelow, num]); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SPLIT, [numBelow, num]) ? 'bg-amber-400 ring-1 ring-white' : 'hover:bg-white/60'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Vertical split hitbox - Right Edge Center */}
                 {!isLastCol && (
-                    <div
-                        className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-8 cursor-pointer z-20 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet split ${num} and ${numRight}`}
+                        className="absolute right-0 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SPLIT, `Split ${num}-${numRight}`, [num, numRight]); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SPLIT, [num, numRight]) ? 'bg-amber-400 ring-1 ring-white' : 'hover:bg-white/60'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Corner hitbox - Bottom Right Corner */}
                 {!isBottom && !isLastCol && (
-                    <div
-                        className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-6 h-6 cursor-pointer z-30 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet corner ${[numBelow, num, numBelow + 3, numRight].join(', ')}`}
+                        className="absolute bottom-0 right-0 z-30 flex h-11 w-11 translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => {
                             e.stopPropagation();
                             const cornerSet = [numBelow, num, numBelow + 3, numRight];
@@ -480,40 +709,69 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                         }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.CORNER, [numBelow, num, numBelow + 3, numRight]) ? 'bg-blue-400 ring-1 ring-white' : 'hover:bg-blue-400/70'}`} />
-                    </div>
+                    </button>
                 )}
 
                 {/* Six-line hitbox - Top Right Corner */}
                 {isTop && !isLastCol && (
-                    <div
-                        className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 cursor-pointer z-30 flex items-center justify-center group"
+                    <button
+                        type="button"
+                        aria-label={`Bet six line ${streetNums[0]} to ${streetNums[2] + 3}`}
+                        className="absolute right-0 top-0 z-30 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SIX_LINE, `6-Line ${streetNums[0]}-${streetNums[2] + 3}`, sixLineNums); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SIX_LINE, sixLineNums) ? 'bg-orange-400 ring-1 ring-white' : 'hover:bg-orange-400/70'}`} />
-                    </div>
+                    </button>
                 )}
             </div>
         );
     };
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent
-                className="max-w-4xl max-h-[90vh] overflow-y-auto p-3 md:p-6 w-[95vw] md:w-full rounded-xl bg-cover bg-center bg-no-repeat bg-[url('/icons/casino.png')]"
-            >
-                <DialogHeader>
-                    <DialogTitle className="font-pixel text-xl flex items-center gap-2 text-white">
-                        Roulette
-                        <span className="text-xs font-normal text-white/80 ml-2">(Beta)</span>
-                        <SponsoredBadge show={isSponsored} className="ml-auto" />
-                    </DialogTitle>
-                </DialogHeader>
+    const revealModeActive = pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing';
+    const revealButtonDisabled = isSpinning || !activeBetBelongsToWallet || (revealModeActive && !canRevealActiveBet);
+    const revealButtonText = isSpinning
+        ? (spinPhase === 'waiting' ? 'Waiting...' : 'Revealing...')
+        : !activeBetBelongsToWallet
+            ? 'Game active in another wallet'
+            : pendingGame && activeBet?.isExpired
+                ? 'Settle expired game'
+                : revealModeActive && !canRevealActiveBet
+                ? (revealBlocksRemaining > 0 ? `Waiting ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}` : 'Waiting for block...')
+                : 'Reveal Result';
+    const wheelSettling = wheelSpinning && wheelWinningNumber !== null;
+    const showRoundResult = !!result && !isSpinning && !wheelSpinning;
+    const showExpiredRoundResult = !!expiredResult && !isSpinning && !wheelSpinning;
 
-                <div className="space-y-4 relative mt-4">
+    return (
+        <Dialog open={open} onOpenChange={handleClose}>
+            <DialogContent
+                hideCloseButton
+                mobileMode="center"
+                surface="game"
+                size="full"
+                stickyFooter
+                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino-bg.webp')] bg-cover bg-center bg-no-repeat !p-3 sm:!p-4 md:!p-6"
+            >
+                <DialogTitle className="sr-only">Roulette</DialogTitle>
+                <DialogDescription className="sr-only">
+                    Roulette game dialog with betting controls, active spin state, reveal controls, and transaction status.
+                </DialogDescription>
+                <Button
+                    type="button"
+                    variant="headerIcon"
+                    size="iconCompact"
+                    onClick={() => handleClose(false)}
+                    aria-label="Close Roulette dialog"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 sm:right-3 sm:top-3"
+                >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+
+                <div className="relative space-y-3 sm:space-y-4">
                     {/* Wheel + Bets Panel Side by Side */}
-                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                    <div className="grid gap-3 md:grid-cols-[minmax(11rem,13.5rem)_minmax(0,1fr)] md:items-stretch md:gap-4">
                         {/* European Roulette Wheel - Left Side */}
-                        <div className="flex flex-col items-center gap-2 shrink-0">
+                        <div className="mx-auto flex flex-col items-center justify-center gap-2">
                             <div className="w-40 h-40 md:w-48 md:h-48">
                                 <EuropeanRouletteWheel
                                     spinning={wheelSpinning}
@@ -528,72 +786,136 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 </div>
                             )}
                             {/* Spin Status */}
-                            {isSpinning && (
+                            {(isSpinning || wheelSettling) && (
                                 <div className="text-center text-sm text-white/90">
                                     <Loader2 className="inline h-4 w-4 animate-spin mr-2" />
-                                    {spinPhase === 'betting' && 'Placing bets...'}{spinPhase === 'waiting' && 'Waiting for block...'}{spinPhase === 'revealing' && 'Revealing...'}
+                                    {wheelSettling
+                                        ? 'Settling result...'
+                                        : <>{spinPhase === 'betting' && 'Placing bets...'}{spinPhase === 'waiting' && 'Waiting for block...'}{spinPhase === 'revealing' && 'Revealing...'}</>}
                                 </div>
                             )}
                         </div>
 
                         {/* Bets Panel - Right Side */}
-                        <div className="flex-1 w-full md:w-auto">
-                            <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-white/10 h-full text-white">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-sm font-semibold">Your Bets ({placedBets.length}/{maxBets})</span>
-                                    {placedBets.length > 0 && <Button variant="ghost" size="sm" onClick={clearBets} className="h-6 text-xs px-2"><Trash2 className="h-3 w-3 mr-1" />Clear</Button>}
+                        <div className="w-full min-w-0">
+                            <div className="h-full rounded-md border border-white/10 bg-black/35 p-2 text-white backdrop-blur-[var(--blur-surface)] sm:p-2.5">
+                                <div className="mb-1.5 flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold uppercase tracking-wide text-white/85">Bets {placedBets.length}/{maxBets}</span>
+                                    {placedBets.length > 0 && (
+                                        <Button
+                                            variant="ghost"
+                                            size="compact"
+                                            onClick={clearBets}
+                                            disabled={bettingLocked}
+                                            className="h-7 min-h-7 px-2 text-xs text-white/80 hover:bg-white/10 hover:text-white"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Clear
+                                        </Button>
+                                    )}
                                 </div>
                                 {placedBets.length === 0 ? (
-                                    <p className="text-xs text-white/60 text-center py-4">Click on table below to add bets</p>
+                                    <p className="rounded border border-dashed border-white/15 bg-black/20 py-2 text-center text-xs text-white/60">Tap the table to add bets</p>
                                 ) : (
-                                    <div className="flex flex-wrap gap-1">
+                                    <div className="flex max-h-16 flex-wrap gap-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
                                         {placedBets.map(bet => (
-                                            <div key={bet.id} className="inline-flex items-center gap-1 bg-black/60 rounded pl-1.5 pr-1 py-0.5 text-[10px] border border-white/20 shrink-0">
-                                                <span className="font-medium whitespace-nowrap text-white">{bet.label}</span>
-                                                <span className="text-white/70 opacity-80">({bet.amount})</span>
-                                                <button onClick={() => removeBet(bet.id)} className="!w-3 !h-3 !min-w-0 !min-h-0 !p-0 text-red-500 hover:text-red-600 transition-colors opacity-70 hover:opacity-100 flex items-center justify-center shrink-0">
-                                                    <X className="!h-3 !w-3" />
+                                            <div key={bet.id} className="inline-flex min-w-0 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-black/60 py-0.5 pl-2 pr-0.5 text-[11px] leading-none">
+                                                <span className="max-w-[7rem] truncate font-medium text-white">{bet.label}</span>
+                                                <span className="rounded-full bg-white/10 px-1.5 py-0.5 tabular-nums text-white/75">{bet.amount}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeBet(bet.id)}
+                                                    disabled={bettingLocked}
+                                                    aria-label={`Remove ${bet.label} bet`}
+                                                    className="inline-flex h-5 min-h-5 w-5 min-w-5 shrink-0 items-center justify-center rounded-full text-red-300/80 transition-colors hover:bg-red-500/20 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-30"
+                                                >
+                                                    <X className="h-3 w-3" aria-hidden="true" />
                                                 </button>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                                 {placedBets.length > 0 && (
-                                    <div className="flex justify-between mt-2 pt-2 border-t border-border text-xs">
-                                        <span>Total: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmount.toFixed(2)} {tokenSymbol}</strong></span>
-                                        <span className="text-green-500">Max Payout: <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)} {tokenSymbol}</strong></span>
+                                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2 text-[11px]">
+                                        <span>Total <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmount.toFixed(2)}</strong></span>
+                                        <span className="text-right text-green-300">Max <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)}</strong></span>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Result Banner */}
-                            {result && !isSpinning && (
-                                <div className={`mt-3 text-center p-2 rounded-lg text-sm border font-medium ${result.won ? 'bg-green-600/90 text-white border-green-400' : 'bg-black/60 text-white/90 border-white/20'}`}>
-                                    {result.won ? (
-                                        <span className="inline-flex items-center gap-1 font-bold">
-                                            <span>🎉 Payout</span>
-                                            <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
-                                            <span>{parseFloat(result.payout).toFixed(2)} {tokenSymbol}!</span>
-                                        </span>
-                                    ) : (
-                                        <span className="font-bold">No win</span>
-                                    )}
-                                </div>
-                            )}
                         </div>
                     </div>
 
+                    {/* Round Result */}
+                    {showRoundResult && result && (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className={`relative z-0 rounded-[var(--radius-panel)] border p-3 text-sm shadow-[0_12px_32px_rgba(0,0,0,0.32)] backdrop-blur-md ${result.won
+                                ? 'border-green-300/45 bg-green-950/75 text-green-50'
+                                : 'border-white/15 bg-black/70 text-white'
+                                }`}
+                        >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-white shadow-lg ${getNumberColor(result.number)}`}>
+                                        {result.number}
+                                    </span>
+                                    <div className="min-w-0">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-white/60">Round result</div>
+                                        <div className="text-base font-bold leading-tight">
+                                            {result.won ? 'Winning spin' : 'No win this spin'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {result.won ? (
+                                    <div className="inline-flex items-center gap-1.5 rounded-full border border-green-200/30 bg-green-400/15 px-3 py-1.5 font-bold text-green-100">
+                                        <span>Payout</span>
+                                        <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                                        <span>{parseFloat(result.payout).toFixed(2)} {tokenSymbol}</span>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/75">
+                                        Better luck next spin
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {showExpiredRoundResult && expiredResult && (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className="relative z-0 rounded-[var(--radius-panel)] border border-yellow-300/40 bg-black/70 p-3 text-sm text-white shadow-[0_12px_32px_rgba(0,0,0,0.32)] backdrop-blur-md"
+                        >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-yellow-200/70">Round result</div>
+                                    <div className="text-base font-bold leading-tight text-yellow-100">Bet expired</div>
+                                </div>
+                                <div className="inline-flex items-center gap-1.5 rounded-full border border-yellow-200/25 bg-yellow-400/10 px-3 py-1.5 font-bold text-yellow-100">
+                                    <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
+                                    <span>{parseFloat(expiredResult.forfeitedAmount).toFixed(2)} {tokenSymbol} forfeited</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Bet Amount */}
                     <div className="flex flex-wrap items-center gap-2">
-                        <label className="text-xs text-white font-medium">Bet:</label>
+                        <label htmlFor={betAmountInputId} className="text-xs font-medium text-white">Bet:</label>
                         <Input
+                            id={betAmountInputId}
                             type="text"
                             inputMode="decimal"
                             value={currentBetAmount}
                             onChange={(e) => setCurrentBetAmount(e.target.value)}
-                            className="h-7 min-w-[5.5rem] w-auto flex-none px-2 text-xs tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50"
+                            className="h-11 min-h-11 min-w-[5.5rem] w-auto flex-none px-3 text-sm tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50"
                             min={formattedMinBet}
                             step="any"
+                            disabled={bettingLocked}
                             style={{ width: betInputWidth }}
                         />
                         <span className="inline-flex items-center gap-1 text-xs text-white/90 font-bold">
@@ -601,7 +923,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             {tokenSymbol}
                         </span>
                         {config && (
-                            <span className="text-[11px] text-white/60">
+                            <span className="text-xs text-white/60">
                                 Min: {formattedMinBet} | Max: {formattedMaxBet} {tokenSymbol}
                             </span>
                         )}
@@ -615,44 +937,30 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     </div>
 
                     {/* BETTING TABLE - Fully Responsive Fit */}
-                    <div className="select-none w-full overflow-x-auto pb-4">
-                        <div className="min-w-[320px] md:min-w-0 mx-auto max-w-[800px]">
+                    <div className="w-full select-none overflow-x-auto overscroll-x-contain pb-4 [scrollbar-width:thin]" aria-label="Roulette betting table">
+                        <div className="mx-auto min-w-[520px] max-w-[820px] md:min-w-0">
                             {/* Numbers Grid */}
-                            <div className="grid grid-cols-[30px_repeat(12,1fr)_30px] md:grid-cols-[48px_repeat(12,1fr)_48px] gap-[1px] md:gap-[2px] w-full bg-border p-[1px] rounded-lg">
+                            <div className="grid w-full grid-cols-[44px_repeat(12,minmax(32px,1fr))_44px] gap-[2px] rounded-lg bg-border p-[1px] md:grid-cols-[48px_repeat(12,1fr)_48px]">
                                 {/* Zero - Spans 3 rows */}
                                 <div className="row-span-3 h-full relative">
                                     <button
+                                        type="button"
                                         onClick={() => addBet(CasinoBetType.STRAIGHT, '0', [0])}
-                                        className={`w-full h-full flex items-center justify-center rounded-l-md text-xs md:text-sm font-bold text-white bg-green-600 border border-white/10
+                                        aria-label="Bet straight on 0"
+                                        className={`flex h-full w-full items-center justify-center rounded-l-md border border-white/10 bg-green-600 text-xs font-bold text-white md:text-sm
                                             ${hasBet(CasinoBetType.STRAIGHT, [0]) ? 'ring-2 inset-2 ring-amber-400 z-10' : 'hover:brightness-110'}`}
                                     ><span className="-rotate-90">0</span></button>
 
-                                    {/* Trio 0-2-3 (Top intersection) */}
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, 'Trio 0-2-3', [0, 2, 3]); }}
-                                        className="absolute top-[33.33%] right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 z-20 flex items-center justify-center group"
-                                        title="Bet on 0, 2, 3"
-                                    >
-                                        <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.STREET, [0, 2, 3]) ? 'bg-teal-400 ring-1 ring-white' : 'hover:bg-teal-400/70 bg-transparent'}`} />
-                                    </button>
-
-                                    {/* Trio 0-1-2 (Bottom intersection) */}
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, 'Trio 0-1-2', [0, 1, 2]); }}
-                                        className="absolute top-[66.66%] right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 z-20 flex items-center justify-center group"
-                                        title="Bet on 0, 1, 2"
-                                    >
-                                        <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.STREET, [0, 1, 2]) ? 'bg-teal-400 ring-1 ring-white' : 'hover:bg-teal-400/70 bg-transparent'}`} />
-                                    </button>
                                 </div>
 
                                 {/* Row 3 (Top): 3, 6, 9... 36 */}
                                 {[...Array(12)].map((_, i) => renderNumberCell((i * 3) + 3, 0, i))}
 
                                 {/* 2to1 Column 3 */}
-                                <button onClick={() => addBet(CasinoBetType.COLUMN, '3rd Col', [3])}
-                                    className={`w-full h-full flex items-center justify-center rounded-r-sm text-[8px] md:text-[10px] font-bold border border-white/20 bg-black/40 text-white
-                                        ${hasBet(CasinoBetType.COLUMN, [3]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>
+                                <button type="button" onClick={() => addBet(CasinoBetType.COLUMN, '3rd Col', [3])}
+                                    aria-label="Bet third column"
+                                    className={`${ROULETTE_COLUMN_BUTTON_CLASS}
+                                        ${hasBet(CasinoBetType.COLUMN, [3]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>
                                     <span className="-rotate-90">2:1</span>
                                 </button>
 
@@ -660,9 +968,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 {[...Array(12)].map((_, i) => renderNumberCell((i * 3) + 2, 1, i))}
 
                                 {/* 2to1 Column 2 */}
-                                <button onClick={() => addBet(CasinoBetType.COLUMN, '2nd Col', [2])}
-                                    className={`w-full h-full flex items-center justify-center rounded-r-sm text-[8px] md:text-[10px] font-bold border border-white/20 bg-black/40 text-white
-                                        ${hasBet(CasinoBetType.COLUMN, [2]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>
+                                <button type="button" onClick={() => addBet(CasinoBetType.COLUMN, '2nd Col', [2])}
+                                    aria-label="Bet second column"
+                                    className={`${ROULETTE_COLUMN_BUTTON_CLASS}
+                                        ${hasBet(CasinoBetType.COLUMN, [2]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>
                                     <span className="-rotate-90">2:1</span>
                                 </button>
 
@@ -670,38 +979,39 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 {[...Array(12)].map((_, i) => renderNumberCell((i * 3) + 1, 2, i))}
 
                                 {/* 2to1 Column 1 */}
-                                <button onClick={() => addBet(CasinoBetType.COLUMN, '1st Col', [1])}
-                                    className={`w-full h-full flex items-center justify-center rounded-r-sm text-[8px] md:text-[10px] font-bold border border-white/20 bg-black/40 text-white
-                                        ${hasBet(CasinoBetType.COLUMN, [1]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>
+                                <button type="button" onClick={() => addBet(CasinoBetType.COLUMN, '1st Col', [1])}
+                                    aria-label="Bet first column"
+                                    className={`${ROULETTE_COLUMN_BUTTON_CLASS}
+                                        ${hasBet(CasinoBetType.COLUMN, [1]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>
                                     <span className="-rotate-90">2:1</span>
                                 </button>
                             </div>
 
                             {/* Dozens */}
-                            <div className="grid grid-cols-[30px_repeat(3,1fr)_30px] md:grid-cols-[48px_repeat(3,1fr)_48px] gap-[1px] md:gap-[2px] mt-[1px] md:mt-[2px] w-full">
+                            <div className="mt-[2px] grid w-full grid-cols-[44px_repeat(3,1fr)_44px] gap-[2px] md:grid-cols-[48px_repeat(3,1fr)_48px]">
                                 <div />
-                                <button onClick={() => addBet(CasinoBetType.DOZEN, '1st 12', [1])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[9px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.DOZEN, [1]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>1st 12</button>
-                                <button onClick={() => addBet(CasinoBetType.DOZEN, '2nd 12', [2])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[9px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.DOZEN, [2]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>2nd 12</button>
-                                <button onClick={() => addBet(CasinoBetType.DOZEN, '3rd 12', [3])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[9px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.DOZEN, [3]) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>3rd 12</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.DOZEN, '1st 12', [1])} aria-label="Bet first twelve" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.DOZEN, [1]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>1st 12</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.DOZEN, '2nd 12', [2])} aria-label="Bet second twelve" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.DOZEN, [2]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>2nd 12</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.DOZEN, '3rd 12', [3])} aria-label="Bet third twelve" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.DOZEN, [3]) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>3rd 12</button>
                                 <div />
                             </div>
 
                             {/* Outside Bets */}
-                            <div className="grid grid-cols-[30px_repeat(6,1fr)_30px] md:grid-cols-[48px_repeat(6,1fr)_48px] gap-[1px] md:gap-[2px] mt-[1px] md:mt-[2px] w-full">
+                            <div className="mt-[2px] grid w-full grid-cols-[44px_repeat(6,1fr)_44px] gap-[2px] md:grid-cols-[48px_repeat(6,1fr)_48px]">
                                 <div />
-                                <button onClick={() => addBet(CasinoBetType.LOW, '1-18', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.LOW, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>1-18</button>
-                                <button onClick={() => addBet(CasinoBetType.EVEN, 'EVEN', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.EVEN, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>EVEN</button>
-                                <button onClick={() => addBet(CasinoBetType.RED, 'RED', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold text-white bg-red-600 border border-white/10 ${hasBet(CasinoBetType.RED, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>RED</button>
-                                <button onClick={() => addBet(CasinoBetType.BLACK, 'BLACK', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold text-white bg-gray-900 border border-white/10 ${hasBet(CasinoBetType.BLACK, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>BLACK</button>
-                                <button onClick={() => addBet(CasinoBetType.ODD, 'ODD', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.ODD, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>ODD</button>
-                                <button onClick={() => addBet(CasinoBetType.HIGH, '19-36', [])} className={`h-8 md:h-10 flex items-center justify-center rounded-sm text-[8px] md:text-xs font-bold border border-white/20 bg-black/40 text-white ${hasBet(CasinoBetType.HIGH, []) ? 'ring-2 inset-1 ring-primary bg-primary/40' : 'hover:bg-black/60'}`}>19-36</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.LOW, '1-18', [])} aria-label="Bet one to eighteen" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.LOW, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>1-18</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.EVEN, 'EVEN', [])} aria-label="Bet even numbers" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.EVEN, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>EVEN</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.RED, 'RED', [])} aria-label="Bet red numbers" className={`flex h-11 min-h-11 items-center justify-center rounded-sm border border-white/10 bg-red-600 px-1 text-xs font-bold text-white ${hasBet(CasinoBetType.RED, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>RED</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.BLACK, 'BLACK', [])} aria-label="Bet black numbers" className={`flex h-11 min-h-11 items-center justify-center rounded-sm border border-white/10 bg-gray-900 px-1 text-xs font-bold text-white ${hasBet(CasinoBetType.BLACK, []) ? 'ring-2 inset-1 ring-amber-400' : 'hover:brightness-110'}`}>BLACK</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.ODD, 'ODD', [])} aria-label="Bet odd numbers" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.ODD, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>ODD</button>
+                                <button type="button" onClick={() => addBet(CasinoBetType.HIGH, '19-36', [])} aria-label="Bet nineteen to thirty-six" className={`${ROULETTE_OUTSIDE_BUTTON_CLASS} ${hasBet(CasinoBetType.HIGH, []) ? ROULETTE_SELECTED_AREA_CLASS : ''}`}>19-36</button>
                                 <div />
                             </div>
                         </div>
                     </div>
 
                     {/* Bet Legend */}
-                    <div className="flex flex-wrap gap-2 text-[9px] text-white/80 justify-center font-medium bg-black/20 p-1 rounded-full">
+                    <div className="flex flex-wrap justify-center gap-2 rounded-[var(--radius-control)] bg-black/20 p-2 text-xs font-medium text-white/80">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" />Street</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-400" />Trio</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/60" />Split</span>
@@ -709,55 +1019,74 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />6-Line</span>
                     </div>
 
-                    {/* Action */}
-                    <div className="space-y-2">
-                        {!pendingGame && config && !config.enabled ? (
-                            <Button className="w-full" disabled variant="secondary">
-                                Roulette disabled
-                            </Button>
-                        ) : !hasApproval ? (
-                            <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={config?.bettingToken as `0x${string}`} onSuccess={() => refreshApproval(true)} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
-                        ) : isInsufficientBalance && !pendingGame ? (
-                            <Button className="w-full" disabled variant="destructive">
-                                Insufficient Balance
-                            </Button>
-                        ) : pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' ? (
-                            <CasinoTransaction
-                                mode="reveal"
-                                landId={landId}
-                                buttonText={isSpinning ? (spinPhase === 'waiting' ? 'Waiting...' : 'Revealing...') : 'Resume (Reveal)'}
-                                buttonClassName="w-full"
-                                disabled={isSpinning && spinPhase === 'waiting'}
-                                onStatusUpdate={handleStatusUpdate}
-                                onComplete={handleRevealComplete}
-                                tokenSymbol={tokenSymbol}
-                                tokenDecimals={tokenDecimals}
-                            />
-                        ) : placedBets.length === 0 ? (
-                            <Button className="w-full" disabled>
-                                Select bets
-                            </Button>
-                        ) : (
-                            <CasinoTransaction
-                                mode="placeBets"
-                                landId={landId}
-                                betTypes={betTypes}
-                                betNumbersArray={betNumbersArray}
-                                betAmounts={betAmounts}
-                                buttonText={isSpinning ? 'Placing...' : `🎲 Spin (${totalBetAmount.toFixed(2)} ${tokenSymbol})`}
-                                buttonClassName="w-full"
-                                disabled={isSpinning}
-                                onStatusUpdate={handleStatusUpdate}
-                                onComplete={handlePlaceBetsComplete}
-                                onButtonClick={handleSpinButtonClick}
-                                tokenSymbol={tokenSymbol}
-                                tokenDecimals={tokenDecimals}
-                                bettingToken={config?.bettingToken ?? null}
-                            />
-                        )}
-                        {error && <p className="text-xs text-destructive text-center">{error}</p>}
-                    </div>
                 </div>
+                <DialogFooter sticky className="block space-y-2 !-bottom-3 !-mx-3 !-mb-3 mt-auto border-white/15 bg-black bg-[linear-gradient(180deg,rgb(0,0,0)_0%,rgb(0,0,0)_42%,rgb(0,0,0)_100%)] px-3 pt-3 text-white sm:!-bottom-4 sm:!-mx-4 sm:!-mb-4 sm:px-4 md:!-bottom-6 md:!-mx-6 md:!-mb-6 md:px-6">
+                    {!pendingGame && config && !config.enabled ? (
+                        <Button className="w-full" disabled variant="secondary">
+                            Roulette disabled
+                        </Button>
+                    ) : !hasApproval ? (
+                        <ApproveTransaction spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={config?.bettingToken as `0x${string}`} onSuccess={() => refreshApproval(true)} buttonText={`Approve ${tokenSymbol}`} buttonClassName="w-full" />
+                    ) : isInsufficientBalance && !pendingGame ? (
+                        <Button className="w-full" disabled variant="destructive">
+                            Insufficient Balance
+                        </Button>
+                    ) : pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' ? (
+                        <CasinoTransaction
+                            mode="reveal"
+                            landId={landId}
+                            buttonText={revealButtonText}
+                            buttonClassName="w-full"
+                            disabled={revealButtonDisabled}
+                            onStatusUpdate={handleStatusUpdate}
+                            onComplete={handleRevealComplete}
+                            onButtonClick={handleRevealButtonClick}
+                            tokenSymbol={tokenSymbol}
+                            tokenDecimals={tokenDecimals}
+                        />
+                    ) : placedBets.length === 0 ? (
+                        <Button className="w-full" disabled>
+                            Select bets
+                        </Button>
+                    ) : (
+                        <CasinoTransaction
+                            mode="placeBets"
+                            landId={landId}
+                            betTypes={betTypes}
+                            betNumbersArray={betNumbersArray}
+                            betAmounts={betAmounts}
+                            buttonText={isSpinning ? 'Placing...' : `Spin (${totalBetAmount.toFixed(2)} ${tokenSymbol})`}
+                            buttonClassName="w-full"
+                            disabled={isSpinning || hasUnsupportedZeroCombo}
+                            onStatusUpdate={handleStatusUpdate}
+                            onComplete={handlePlaceBetsComplete}
+                            onButtonClick={handleSpinButtonClick}
+                            tokenSymbol={tokenSymbol}
+                            tokenDecimals={tokenDecimals}
+                            bettingToken={config?.bettingToken ?? null}
+                        />
+                    )}
+                    {hasUnsupportedZeroCombo && !pendingGame && (
+                        <p className="text-center text-xs text-destructive">
+                            Only straight bets can include 0.
+                        </p>
+                    )}
+                    {pendingGame && !isSpinning && !canRevealActiveBet && activeBetBelongsToWallet && (
+                        <p className="text-center text-xs text-white/70">
+                            {revealBlocksRemaining > 0
+                                ? `Reveal unlocks in ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? '' : 's'}.`
+                                : 'Waiting for the reveal block to be indexed.'}
+                        </p>
+                    )}
+                    {pendingGame && !activeBetBelongsToWallet && (
+                        <p className="text-center text-xs text-destructive">
+                            {address
+                                ? 'This roulette game was started by another wallet.'
+                                : 'Connect the wallet that started this roulette game.'}
+                        </p>
+                    )}
+                    {error && <p className="text-center text-xs text-destructive">{error}</p>}
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

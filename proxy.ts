@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { INVITE_CONFIG } from '@/lib/invite-utils';
 
 const CHAT_SESSION_COOKIE = 'pixotchi_chat_session';
-const MINIAPP_BYPASS_COOKIE = 'pixotchi_miniapp';
-const MINIAPP_BYPASS_ADDRESS_COOKIE = 'pixotchi_miniapp_address';
-const MINIAPP_BYPASS_HEADER = 'x-pixotchi-miniapp';
-const MINIAPP_BYPASS_ADDRESS_HEADER = 'x-pixotchi-address';
 const EDGE_SESSION_REQUIRED_API_PATHS = new Set([
   '/api/chat/messages',
   '/api/chat/send',
@@ -30,12 +25,24 @@ const DEFAULT_ADMIN_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ];
+const DEFAULT_PUBLIC_API_ORIGINS = [
+  'https://mini.pixotchi.tech',
+  'https://beta.mini.pixotchi.tech',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
 const DEFAULT_FRAME_ANCESTORS = [
   "'self'",
   'https://mini.pixotchi.tech',
   'https://beta.mini.pixotchi.tech',
+  'https://farcaster.xyz',
   'https://*.farcaster.xyz',
+  'https://warpcast.com',
   'https://*.warpcast.com',
+  'https://base.app',
+  'https://*.base.app',
+  'https://*.base.org',
+  'https://*.coinbase.com',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ];
@@ -64,26 +71,12 @@ function isEdgeSameOriginOnlyApiPath(pathname: string): boolean {
   return EDGE_SAME_ORIGIN_ONLY_API_PATHS.has(pathname);
 }
 
-function hasChatAuthArtifacts(request: NextRequest): boolean {
-  return Boolean(
-    request.cookies.get(CHAT_SESSION_COOKIE)?.value ||
-    (
-      request.cookies.get(MINIAPP_BYPASS_COOKIE)?.value === '1' &&
-      request.cookies.get(MINIAPP_BYPASS_ADDRESS_COOKIE)?.value
-    ) ||
-    (
-      request.headers.get(MINIAPP_BYPASS_HEADER) === '1' &&
-      request.headers.get(MINIAPP_BYPASS_ADDRESS_HEADER)
-    ),
-  );
+function hasBearerAuth(request: NextRequest): boolean {
+  return /^Bearer\s+\S+/i.test(request.headers.get('authorization') ?? '');
 }
 
-function isMiniAppChatRequest(request: NextRequest, pathname: string): boolean {
-  if (!pathname.startsWith('/api/chat/')) {
-    return false;
-  }
-
-  return request.headers.get(MINIAPP_BYPASS_HEADER) === '1';
+function hasChatAuthArtifacts(request: NextRequest): boolean {
+  return Boolean(request.cookies.get(CHAT_SESSION_COOKIE)?.value || hasBearerAuth(request));
 }
 
 function isCrossSiteBrowserRequest(request: NextRequest): boolean {
@@ -92,7 +85,7 @@ function isCrossSiteBrowserRequest(request: NextRequest): boolean {
     return false;
   }
 
-  return secFetchSite !== 'same-origin';
+  return secFetchSite === 'cross-site';
 }
 
 export async function proxy(request: NextRequest) {
@@ -104,22 +97,11 @@ export async function proxy(request: NextRequest) {
     const url = new URL('/status', request.url);
     return NextResponse.rewrite(url);
   }
-  
-  // Server-side invite validation for protected routes (excluding API and auth routes)
-  if (INVITE_CONFIG.SYSTEM_ENABLED && !pathname.startsWith('/api/') && !pathname.startsWith('/_next') && pathname === '/') {
-    try {
-
-      console.log('[Middleware] Invite system active - client-side enforcement in place');
-    } catch (error) {
-      console.warn('[Middleware] Invite validation check failed:', error);
-    }
-  }
-  
   // Create response
   const response = NextResponse.next();
 
   if (isEdgeSessionRequiredApiPath(pathname) || isEdgeSameOriginOnlyApiPath(pathname)) {
-    if (isCrossSiteBrowserRequest(request) && !isMiniAppChatRequest(request, pathname)) {
+    if (isCrossSiteBrowserRequest(request)) {
       return NextResponse.json(
         { error: 'Cross-site browser access is not allowed for this endpoint.' },
         {
@@ -152,11 +134,12 @@ export async function proxy(request: NextRequest) {
     const requestOrigin = request.nextUrl.origin;
     const allowedPublicApiOrigins = new Set([
       requestOrigin,
+      ...DEFAULT_PUBLIC_API_ORIGINS,
       ...parseOrigins(process.env.ALLOWED_PUBLIC_API_ORIGINS),
     ]);
     
     // Special handling for admin routes - restrict to known origins
-    if (pathname.startsWith('/api/invite/admin/') || pathname.startsWith('/api/gamification/admin/') || pathname.startsWith('/api/admin/')) {
+    if (pathname.startsWith('/api/gamification/admin/') || pathname.startsWith('/api/admin/')) {
       const allowedAdminOrigins = parseOrigins(process.env.ALLOWED_ADMIN_ORIGINS);
       const adminOriginSet = new Set(
         allowedAdminOrigins.length > 0 ? allowedAdminOrigins : DEFAULT_ADMIN_ORIGINS,
@@ -187,7 +170,7 @@ export async function proxy(request: NextRequest) {
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         response.headers.set(
           'Access-Control-Allow-Headers',
-          'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp, x-pixotchi-miniapp, x-pixotchi-address',
+          'Content-Type, Authorization, x-webhook-signature, x-webhook-timestamp',
         );
         response.headers.set('Access-Control-Max-Age', '86400');
         response.headers.append('Vary', 'Origin');
@@ -214,7 +197,7 @@ export async function proxy(request: NextRequest) {
     form-action 'self';
     frame-ancestors ${frameAncestors};
     child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org;
-    frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://*.farcaster.xyz https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.tradingview-widget.com;
+    frame-src 'self' https://*.coinbase.com https://vercel.live https://*.base.org https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://*.privy.io https://auth.privy.io https://privy.pixotchi.tech https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.tradingview-widget.com;
     connect-src 'self' https://auth.privy.io https://*.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://cca-lite.coinbase.com https://*.base.org https: wss:;
     worker-src 'self';
     manifest-src 'self';

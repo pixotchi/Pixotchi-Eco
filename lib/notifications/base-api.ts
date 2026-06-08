@@ -15,7 +15,7 @@ export type BaseNotificationUser = {
 export type BaseNotificationUsersPage = {
   users: BaseNotificationUser[];
   nextCursor: string | null;
-  raw: unknown;
+  raw: UntypedValue;
 };
 
 export type BaseNotificationSendResult = {
@@ -29,7 +29,7 @@ export type BaseNotificationSendResponse = {
   sentCount: number;
   failedCount: number;
   results: BaseNotificationSendResult[];
-  raw: unknown;
+  raw: UntypedValue;
 };
 
 export type BaseNotificationBatchResult = {
@@ -93,7 +93,7 @@ function getBaseHeaders(): HeadersInit {
   };
 }
 
-async function parseJsonSafe(response: Response): Promise<unknown> {
+async function parseJsonSafe(response: Response): Promise<UntypedValue> {
   try {
     return await response.json();
   } catch {
@@ -101,15 +101,15 @@ async function parseJsonSafe(response: Response): Promise<unknown> {
   }
 }
 
-function buildBaseApiError(status: number, payload: unknown, fallback: string): Error {
+function buildBaseApiError(status: number, payload: UntypedValue, fallback: string): Error {
   const message =
     (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string' && payload.error) ||
     (payload && typeof payload === 'object' && 'message' in payload && typeof payload.message === 'string' && payload.message) ||
     fallback;
 
   const error = new Error(`Base notifications API error (${status}): ${message}`);
-  (error as Error & { status?: number; payload?: unknown }).status = status;
-  (error as Error & { status?: number; payload?: unknown }).payload = payload;
+  (error as Error & { status?: number; payload?: UntypedValue }).status = status;
+  (error as Error & { status?: number; payload?: UntypedValue }).payload = payload;
   return error;
 }
 
@@ -163,7 +163,7 @@ export async function fetchBaseNotificationUsers(
     throw buildBaseApiError(response.status, payload, 'Failed to fetch Base notification users');
   }
 
-  const rawUsers =
+  const rawUsers: UntypedValue[] =
     payload && typeof payload === 'object' && 'users' in payload && Array.isArray(payload.users)
       ? payload.users
       : [];
@@ -294,7 +294,7 @@ export async function sendBaseNotificationsInChunks(
     }
 
     let response: BaseNotificationSendResponse | null = null;
-    let lastError: unknown = null;
+    let lastError: UntypedValue = null;
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {

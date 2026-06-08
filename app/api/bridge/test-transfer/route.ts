@@ -21,7 +21,7 @@ const ERC20_ABI = [
 ] as const;
 
 export async function GET(request: NextRequest) {
-  const accessDenied = requireBridgeDebugAccess(request);
+  const accessDenied = await requireBridgeDebugAccess(request);
   if (accessDenied) return accessDenied;
 
   const searchParams = request.nextUrl.searchParams;
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       args: [twin, ADAPTER, amountBn],
     });
 
-    let transferFromResult: any;
+    let transferFromResult: UntypedValue;
     try {
       // Simulate as adapter calling transferFrom
       await publicClient.call({
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
         data: transferFromData,
       });
       transferFromResult = { success: true, message: '✅ transferFrom would succeed when called by adapter' };
-    } catch (e: any) {
+    } catch (e: UntypedValue) {
       transferFromResult = { 
         success: false, 
         error: e.shortMessage || e.message,
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Test 2: Check if it's a proxy and get implementation
-    let proxyInfo: any = {};
+    let proxyInfo: UntypedValue = {};
     try {
       // Try to read implementation slot (EIP-1967)
       const implSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Test 3: Direct balance check at proxy vs implementation level
-    let deepCheck: any = {};
+    let deepCheck: UntypedValue = {};
     try {
       // Check if the balance is stored at the proxy or implementation
       // For CrossChainERC20, balances should be at the proxy address

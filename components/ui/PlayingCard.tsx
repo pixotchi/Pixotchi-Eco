@@ -81,7 +81,7 @@ export default function PlayingCard({ value, hidden = false, small = false, clas
     if (hidden) {
         return (
             <div
-                className={`${sizeClasses} rounded-lg border-2 border-white/10 
+                className={`${sizeClasses} rounded-[3px] border-2 border-white/10
                     relative overflow-hidden shadow-lg ${className}`}
             >
                 {/* Use the custom card back image */}
@@ -97,7 +97,7 @@ export default function PlayingCard({ value, hidden = false, small = false, clas
 
     return (
         <div
-            className={`${sizeClasses} rounded-lg border-2 border-white/10
+            className={`${sizeClasses} rounded-[3px] border-2 border-white/10
                   flex flex-col items-center justify-center shadow-lg bg-cover bg-center bg-no-repeat ${className}`}
             style={{ backgroundImage: "url('/icons/cardbjfront.png')" }}
         >
@@ -132,8 +132,8 @@ export function CardHand({
     statusClassName?: string;
 }) {
     return (
-        <div className="flex flex-col items-center gap-2">
-            <span className="text-white/80 text-sm font-medium">{label}</span>
+        <div className="flex min-w-0 flex-col items-center gap-2 rounded-[var(--radius-control)] border border-white/10 bg-black/25 px-3 py-3 shadow-[var(--shadow-hairline)]">
+            <span className="text-xs font-semibold tracking-normal text-white/75">{label}</span>
             <div className={`flex ${small ? '-space-x-4' : '-space-x-6'} pl-2`}>
                 {cards.map((card, index) => (
                     <div
@@ -155,7 +155,7 @@ export function CardHand({
             </div>
             {value !== undefined && !hideHoleCard && (
                 <div className="flex flex-col items-center gap-0.5">
-                    <span className={`text-lg font-bold transition-all duration-300 ${value > 21 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                    <span className={`text-lg font-semibold transition-all duration-300 ${value > 21 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
                         {value > 21 ? 'BUST!' : value}
                     </span>
                     {statusText && (

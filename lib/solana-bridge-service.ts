@@ -71,6 +71,24 @@ export interface BridgeTransaction {
 // 0.003 SOL = 3,000,000 lamports
 const BRIDGE_FEE_LAMPORTS = BigInt(3_000_000);
 
+function generateGameSeed(): number {
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('Secure randomness is not available in this environment');
+  }
+
+  const maxExclusive = 1_000_000;
+  const randomValues = new Uint32Array(1);
+  const rejectionLimit = Math.floor(0x100000000 / maxExclusive) * maxExclusive;
+
+  let value = 0;
+  do {
+    crypto.getRandomValues(randomValues);
+    value = randomValues[0];
+  } while (value >= rejectionLimit);
+
+  return value % maxExclusive;
+}
+
 // ============ Transaction Builders ============
 // V2: onchain swaps - no external swap calldata needed
 
@@ -316,8 +334,7 @@ export async function buildBoxGameTransaction(
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
 
-  // Generate random seed
-  const seed = Math.floor(Math.random() * 1000000);
+  const seed = generateGameSeed();
 
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,
@@ -356,7 +373,7 @@ export async function buildSpinGameTransaction(
     throw new Error('SolanaTwinAdapter address not configured. Set NEXT_PUBLIC_SOLANA_TWIN_ADAPTER.');
   }
 
-  const seed = Math.floor(Math.random() * 1000000);
+  const seed = generateGameSeed();
 
   const callData = encodeFunctionData({
     abi: SOLANA_TWIN_ADAPTER_ABI,

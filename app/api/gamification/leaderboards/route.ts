@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeaderboards } from '@/lib/gamification-service';
-import { validateAdminKey, createErrorResponse } from '@/lib/auth-utils';
+import { requireAdmin } from '@/lib/auth-utils';
 
 export async function GET(request: NextRequest) {
   // Require admin authentication to view leaderboards
-  if (!validateAdminKey(request)) {
-    return NextResponse.json(createErrorResponse('Unauthorized', 401, 'UNAUTHORIZED').body, { status: 401 });
-  }
+  const adminDenied = await requireAdmin(request);
+  if (adminDenied) return adminDenied;
 
   try {
     const { searchParams } = new URL(request.url);

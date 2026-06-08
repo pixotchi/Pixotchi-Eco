@@ -6,11 +6,11 @@
  * to deterministically map Token IDs to (x, y) coordinates.
  * 
  * Mental Model:
- * - Token ID 0: No coordinates (minted to deployer)
- * - Token ID 1: (0, 0) - Center
- * - Token ID 2: (1, 0) - Right
- * - Token ID 3: (1, 1) - Up Right
- * - ... spiraling outwards counter-clockwise
+ * - Token ID 0: (0, 0) reserved/special deployer token
+ * - Token ID 1: (0, 1)
+ * - Token ID 2: (1, 1)
+ * - Token ID 3: (1, 0)
+ * - ... spiraling outwards in the same order as LibLand.sol
  */
 
 export interface Coordinate {
@@ -27,53 +27,26 @@ export const MIN_COORDINATE = -112;
  * Matches the logic in LibLand.sol's landCalculateCoordinatesQuadrantSpiral.
  */
 export function getCoordinateFromTokenId(tokenId: number): Coordinate {
-  // Token ID 0 has no coordinates
   if (tokenId <= 0) return { x: 0, y: 0 };
-  
-  // Adjust tokenId since spiral starts at 1 (0,0)
-  // The contract starts "production" mints at 1.
-  // Let's assume ID 1 is (0,0).
-  
-  // Formula for square spiral mapping:
-  // n = index in spiral (starting at 0 for center)
-  const n = tokenId - 1;
-  
-  if (n === 0) return { x: 0, y: 0 };
 
-  // Calculate the ring (layer) 'k'
-  // The max number in ring k is (2k+1)^2 - 1
-  // We find k such that (2k-1)^2 <= n < (2k+1)^2
-  const k = Math.ceil((Math.sqrt(n + 1) - 1) / 2);
-  
-  // Base of the ring
-  const t = 2 * k;
-  
-  // Max value in the previous ring
-  const m = Math.pow(t - 1, 2);
-  
-  let x = 0;
-  let y = 0;
-  
-  // Determine position within the ring
-  if (n >= m && n < m + t) {
-    // Right side
-    x = k;
-    y = -(k - 1) + (n - m);
-  } else if (n >= m + t && n < m + 2 * t) {
-    // Top side
-    x = k - 1 - (n - (m + t));
-    y = k;
-  } else if (n >= m + 2 * t && n < m + 3 * t) {
-    // Left side
-    x = -k;
-    y = k - 1 - (n - (m + 2 * t));
-  } else {
-    // Bottom side
-    x = -k + 1 + (n - (m + 3 * t));
-    y = -k;
+  const k = Math.ceil((Math.sqrt(tokenId + 1) - 1) / 2);
+  const sideLength = 2 * k;
+  const ringStart = Math.pow(2 * k - 1, 2);
+  const offset = tokenId - ringStart;
+
+  if (offset < sideLength) {
+    return { x: -(k - 1) + offset, y: k };
   }
-  
-  return { x, y };
+
+  if (offset < sideLength * 2) {
+    return { x: k, y: k - 1 - (offset - sideLength) };
+  }
+
+  if (offset < sideLength * 3) {
+    return { x: k - 1 - (offset - sideLength * 2), y: -k };
+  }
+
+  return { x: -k, y: -k + 1 + (offset - sideLength * 3) };
 }
 
 /**
@@ -81,46 +54,27 @@ export function getCoordinateFromTokenId(tokenId: number): Coordinate {
  * Useful for finding which token is at a specific grid location.
  */
 export function getTokenIdFromCoordinate(x: number, y: number): number {
-  if (x === 0 && y === 0) return 1;
+  if (x === 0 && y === 0) return 0;
 
   // Determine the ring 'k'
   // k is the maximum absolute value of x or y
   const k = Math.max(Math.abs(x), Math.abs(y));
-  
-  // Calculate the start of the ring
-  const t = 2 * k;
-  const m = Math.pow(t - 1, 2); // Last number of previous ring
-  
-  let offset = 0;
-  
-  if (x === k && y > -k && y <= k) {
-    // Right side: y ranges from -(k-1) to k
-    // Actually, based on forward logic:
-    // Right: x=k, y from -(k-1) to k? 
-    // Let's re-trace forward logic carefully:
-    // Right side: x = k, y goes from -(k-1) up to k?
-    // forward: y = -(k-1) + (n - m) -> n - m = y + k - 1
-    // offset = y + k - 1
-    offset = y + (k - 1);
-  } else if (y === k && x > -k && x < k) {
-    // Top side: y=k, x goes from (k-1) down to -k
-    // forward: x = k - 1 - (n - (m + t)) -> n - (m+t) = k - 1 - x
-    // offset = t + (k - 1 - x)
-    offset = t + (k - 1 - x);
-  } else if (x === -k && y >= -k && y < k) {
-    // Left side: x=-k, y goes from (k-1) down to -k
-    // forward: y = k - 1 - (n - (m + 2t)) -> n - (m+2t) = k - 1 - y
-    // offset = 2*t + (k - 1 - y)
-    offset = 2 * t + (k - 1 - y);
-  } else {
-    // Bottom side: y=-k, x goes from -k+1 up to k
-    // forward: x = -k + 1 + (n - (m + 3t)) -> n - (m+3t) = x + k - 1
-    // offset = 3*t + (x + k - 1)
-    offset = 3 * t + (x + k - 1);
+  const sideLength = 2 * k;
+  const ringStart = Math.pow(2 * k - 1, 2);
+
+  if (y === k && x > -k && x <= k) {
+    return ringStart + (x + k - 1);
   }
-  
-  // Final ID = start of ring (m) + offset + 1 (since n is 0-indexed but ID is 1-indexed)
-  return m + offset + 1;
+
+  if (x === k && y >= -k && y < k) {
+    return ringStart + sideLength + (k - 1 - y);
+  }
+
+  if (y === -k && x >= -k && x < k) {
+    return ringStart + sideLength * 2 + (k - 1 - x);
+  }
+
+  return ringStart + sideLength * 3 + (y + k - 1);
 }
 
 /**
@@ -225,4 +179,3 @@ export function getVisualTerrainType(vx: number, vy: number): 'water' | 'forest'
   if (noise < 0.65) return 'forest'; // 40% Forest
   return 'mountain'; // 35% Mountain
 }
-

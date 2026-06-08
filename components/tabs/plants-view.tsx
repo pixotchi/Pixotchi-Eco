@@ -1,26 +1,23 @@
 "use client";
 
-import ArcadeDialog from "@/components/arcade/ArcadeDialog";
 import EditPlantName from "@/components/edit-plant-name";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import QuantitySelector from "@/components/quantity-selector";
 import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
-import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
-import ReviveTransaction from "@/components/transactions/revive-transaction";
-import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
 import { Button } from "@/components/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import {
 DropdownMenu,
 DropdownMenuContent,
 DropdownMenuItem,
 DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import { Input } from "@/components/ui/input";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { StandardContainer } from "@/components/ui/pixel-container";
-import { ToggleGroup } from "@/components/ui/toggle-group";
+import { InlineBalanceNotice } from "@/components/ui/premium";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { ITEM_ICONS } from "@/lib/constants";
 import {
@@ -32,25 +29,109 @@ import { usePaymaster } from "@/lib/paymaster-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { GardenItem,Plant,ShopItem } from "@/lib/types";
-import { formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
+import { cn,formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
 import {
 ChevronDown,
-ChevronLeft,
-ChevronRight,
-Flower,
-Info
+Flower2
 } from "lucide-react";
 import Image from "next/image";
-import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import dynamic from "next/dynamic";
+import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
 import PlantImage from "../PlantImage";
 import CountdownTimer from "../countdown-timer";
 import FenceTimer from "../fence-timer";
-import ItemDetailsPanel from "../item-details-panel";
+
+const ArcadeDialog = dynamic(() => import("@/components/arcade/ArcadeDialog"), {
+  ssr: false,
+});
+const ClaimRewardsTransaction = dynamic(() => import("@/components/transactions/claim-rewards-transaction"), {
+  loading: () => <Button className="w-full" disabled>Loading...</Button>,
+  ssr: false,
+});
+const ReviveTransaction = dynamic(() => import("@/components/transactions/revive-transaction"), {
+  loading: () => <Button className="w-full" disabled>Loading...</Button>,
+  ssr: false,
+});
+const SolanaBridgeButton = dynamic(() => import("@/components/transactions/solana-bridge-button"), {
+  loading: () => <Button className="w-full" disabled>Loading...</Button>,
+  ssr: false,
+});
+const ItemDetailsPanel = dynamic(() => import("@/components/item-details-panel"), {
+  loading: () => (
+    <div className="flex min-h-[16rem] items-center justify-center rounded-[var(--radius-panel)] border border-border/60 bg-card/80">
+      <BaseExpandedLoadingPageLoader text="Loading marketplace..." />
+    </div>
+  ),
+  ssr: false,
+});
 
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 // Removed BalanceCard from tabs; status bar now shows balances globally
+
+const REWARD_VALUE_MAX_FONT_SIZE = 13;
+const REWARD_VALUE_MIN_FONT_SIZE = 8;
+
+type MarketplaceItemOption = {
+  item: GardenItem | ShopItem;
+  itemType: "garden" | "shop";
+};
+
+function isFenceShopItem(item: ShopItem) {
+  const name = item.name.toLowerCase();
+  return name.includes("fence") || name.includes("shield");
+}
+
+function FittedEthRewardValue({ amount }: { amount: string }) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const valueRef = useRef<HTMLSpanElement | null>(null);
+  const [fontSize, setFontSize] = useState(REWARD_VALUE_MAX_FONT_SIZE);
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    const value = valueRef.current;
+    if (!frame || !value) return;
+
+    let frameId = 0;
+    const measure = () => {
+      const currentFontSize = Number.parseFloat(window.getComputedStyle(value).fontSize) || REWARD_VALUE_MAX_FONT_SIZE;
+      const naturalWidth = value.scrollWidth * (REWARD_VALUE_MAX_FONT_SIZE / currentFontSize);
+      const availableWidth = Math.max(0, frame.clientWidth - 8);
+      const nextFontSize = Math.max(
+        REWARD_VALUE_MIN_FONT_SIZE,
+        Math.min(REWARD_VALUE_MAX_FONT_SIZE, (availableWidth / Math.max(naturalWidth, 1)) * REWARD_VALUE_MAX_FONT_SIZE)
+      );
+      setFontSize(Math.floor(nextFontSize * 10) / 10);
+    };
+    const scheduleMeasure = () => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    const observer = new ResizeObserver(scheduleMeasure);
+    observer.observe(frame);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
+  }, [amount]);
+
+  return (
+    <div ref={frameRef} className="w-full min-w-0 overflow-hidden text-center" title={`${amount} ETH`}>
+      <span
+        ref={valueRef}
+        style={{ fontSize }}
+        className="inline-flex max-w-full items-center justify-center gap-0.5 whitespace-nowrap font-bold leading-none tabular-nums"
+      >
+        <Image src="/icons/ethlogo.svg" alt="" aria-hidden="true" width={14} height={14} className="h-[1em] w-[1em] shrink-0" />
+        <span>{amount} ETH</span>
+      </span>
+    </div>
+  );
+}
 
 export default function PlantsView() {
   const { address: evmAddress } = useAccount();
@@ -99,17 +180,6 @@ export default function PlantsView() {
   }, [selectedPlant]);
 
   const hasActiveFence = fenceStatuses.length > 0;
-
-  const handleItemTypeChange = (type: 'garden' | 'shop') => {
-    setItemType(type);
-    if (type === 'garden' && gardenItems.length > 0) {
-      setSelectedItem(gardenItems[0]);
-    } else if (type === 'shop' && shopItems.length > 0) {
-      setSelectedItem(shopItems[0]);
-    } else {
-      setSelectedItem(null);
-    }
-  };
 
   const handleQuantityChange = (itemId: string, quantity: number) => {
     setItemQuantities(prev => ({
@@ -196,8 +266,10 @@ export default function PlantsView() {
       if (gardenItems.length > 0) {
         setSelectedItem(gardenItems[0]);
         setItemType('garden');
-      } else if (shopItems.length > 0) {
-        setSelectedItem(shopItems[0]);
+      } else {
+        const fenceItem = shopItems.find(isFenceShopItem);
+        if (!fenceItem) return;
+        setSelectedItem(fenceItem);
         setItemType('shop');
       }
     }
@@ -247,7 +319,6 @@ export default function PlantsView() {
   }, [isVisible, address, fetchData]);
 
   const onPurchaseSuccess = useCallback(() => {
-    console.log("Purchase successful, refetching data...");
     toast.success("Purchase successful! Updating plant data...");
     fetchData(); // Refetch all data
     // Manually trigger a balance refresh across the app
@@ -257,13 +328,13 @@ export default function PlantsView() {
   const renderNoPlantsView = () => (
     <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">
       <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
-        <Flower className="w-12 h-12 text-muted-foreground" />
+        <Flower2 className="w-12 h-12 text-muted-foreground" />
       </div>
       <h3 className="text-lg font-semibold text-foreground mb-2">
         No Plants Yet!
       </h3>
       <p className="text-muted-foreground">
-        Head over to the 'Mint' tab to grow your first plant.
+        Head over to the &apos;Mint&apos; tab to grow your first plant.
       </p>
     </div>
   );
@@ -283,79 +354,61 @@ export default function PlantsView() {
 
   return (
     <div className="space-y-4">
-      {/* Top Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* StatusBar replaces BalanceCard globally under header */}
-
-        {plants.length > 1 && (
-          <Card>
-            <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
-            <CardContent>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between">
-                    {selectedPlant ? (
-                      <div className="flex items-center space-x-2">
-                        <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
-                        <span>{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
-                      </div>
-                    ) : "Select a Plant"}
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
-                  {plants.map((plant) => (
-                    <DropdownMenuItem key={plant.id} onSelect={() => setSelectedPlant(plant)}>
-                      <div className="flex items-center space-x-2">
-                        <PlantImage selectedPlant={plant} width={24} height={24} />
-                        <span>{plant.name || `Plant #${plant.id}`} (Lvl {plant.level})</span>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
       {selectedPlant && (
         <div
           className={
             selectedPlant.status === 4
-              ? "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[980px] xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
-              : "space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1100px] xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0"
+              ? "space-y-4 min-[54rem]:mx-auto min-[54rem]:grid min-[54rem]:w-full min-[54rem]:max-w-[980px] min-[54rem]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] min-[54rem]:items-start min-[54rem]:justify-center min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)]"
+              : "space-y-4 min-[54rem]:mx-auto min-[54rem]:grid min-[54rem]:w-full min-[54rem]:max-w-[1100px] min-[54rem]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] min-[54rem]:items-start min-[54rem]:justify-center min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
           }
         >
-          <div className="space-y-4 xl:sticky xl:top-0">
+          <div className="space-y-4 min-[54rem]:sticky min-[54rem]:top-0">
+          {plants.length > 1 && (
+            <TabCard>
+              <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
+              <CardContent>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {selectedPlant ? (
+                        <div className="flex min-w-0 items-center space-x-2">
+                          <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
+                          <span className="truncate font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
+                        </div>
+                      ) : "Select a Plant"}
+                      <ChevronDown className="h-4 w-4 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                    {plants.map((plant) => (
+                      <DropdownMenuItem key={plant.id} onSelect={() => setSelectedPlant(plant)}>
+                        <div className="flex min-w-0 items-center space-x-2">
+                          <PlantImage selectedPlant={plant} width={24} height={24} />
+                          <span className="truncate"><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Lvl {plant.level})</span>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardContent>
+            </TabCard>
+          )}
           {/* Plant "Screen" Display */}
-          <Card>
+          <TabCard>
             <CardContent className="p-4 space-y-3">
               {/* Main image container with stats overlay */}
-              <div className="relative w-full aspect-square bg-muted/50 overflow-hidden rounded-xl">
+              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
+                <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
 
-                {/* Top Stats Bar - LVL, PTS, STARS */}
-                <div className="absolute top-3 left-3 right-3 grid grid-cols-3 gap-2 text-sm font-bold text-foreground/80 z-20">
-                  {/* Left: Level */}
-                  <div className="flex justify-start">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                      <Image src="/icons/level.svg" alt="Level" width={16} height={16} className="w-4 h-4" />
-                      <span>LVL {selectedPlant.level}</span>
-                    </div>
+                {/* Top corners: points and stars */}
+                <div className="absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2 text-[11px] font-bold text-foreground/80 sm:text-sm">
+                  <div className="flex min-h-7 max-w-[48%] items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                    <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{formatScore(selectedPlant.score)} PTS</span>
                   </div>
-                  {/* Center: Points */}
-                  <div className="flex justify-center">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                      <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4 text-yellow-500" />
-                      <span>{formatScore(selectedPlant.score)} PTS</span>
-                    </div>
-                  </div>
-                  {/* Right: Stars */}
-                  <div className="flex justify-end">
-                    <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                      <Image src="/icons/Star.svg" alt="Star" width={16} height={16} className="w-4 h-4 text-amber-400" />
-                      <span>{selectedPlant.stars}</span>
-                    </div>
+                  <div className="flex min-h-7 max-w-[48%] items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                    <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{selectedPlant.stars}</span>
                   </div>
                 </div>
 
@@ -365,7 +418,7 @@ export default function PlantsView() {
                     <PlantImage selectedPlant={selectedPlant} width={180} height={180} priority={true} />
                     {hasActiveFence && (
                       <div className="absolute top-0 right-0 z-10">
-                        <Image src="/icons/Shield.svg" alt="Shield" width={28} height={28} title="Fence protection active" />
+                        <Image src="/icons/Shield.svg" alt="Shield" width={28} height={28} className="h-7 w-7" title="Fence protection active" />
                       </div>
                     )}
                   </div>
@@ -374,8 +427,7 @@ export default function PlantsView() {
                 {/* Next/Previous controls for multiple plants */}
                 {plants.length > 1 && (
                   <>
-                    <button
-                      type="button"
+                    <AssetCarouselButton
                       onClick={() => {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
                         if (idx >= 0) {
@@ -383,14 +435,11 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
-                      aria-label="Previous plant"
+                      direction="previous"
+                      label="Previous plant"
                       title="Previous"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <button
-                      type="button"
+                    />
+                    <AssetCarouselButton
                       onClick={() => {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
                         if (idx >= 0) {
@@ -398,12 +447,10 @@ export default function PlantsView() {
                           setSelectedPlant(plants[nextIndex]);
                         }
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 z-20 inline-flex items-center justify-center h-9 w-9 rounded-full bg-background/70 backdrop-blur-sm border border-border shadow-sm hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
-                      aria-label="Next plant"
+                      direction="next"
+                      label="Next plant"
                       title="Next"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
+                    />
                   </>
                 )}
 
@@ -416,20 +463,20 @@ export default function PlantsView() {
                       {hasActiveFence && (
                         <div className="flex flex-col gap-1">
                           {fenceStatuses.map((fence) => (
-                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                            <div key={`${fence.type}-${fence.effectUntil}`} className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                               <FenceTimer effectUntil={fence.effectUntil} noBackground={true} className="text-sm" label={fence.type} />
                             </div>
                           ))}
                         </div>
                       )}
                       {/* TOD Timer */}
-                      <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <div className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                         <CountdownTimer timeUntilStarving={selectedPlant.timeUntilStarving} noBackground={true} className="text-sm" />
                       </div>
                     </div>
                     {/* Bottom-right: Health Status */}
                     <div className="flex justify-end">
-                      <div className="flex items-center gap-1 bg-background/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <div className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                         <Image
                           src={selectedPlant.status === 4 ? "/icons/skull.png" : "/icons/HEART.svg"}
                           alt={selectedPlant.status === 4 ? "Dead" : "Health"}
@@ -446,8 +493,9 @@ export default function PlantsView() {
 
               {/* Plant Name and Strain */}
               <div className="text-center">
-                <div className="relative inline-block">
-                  <h3 className="text-lg font-bold font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
+                <div className="inline-flex max-w-full items-center justify-center gap-1">
+                  <span className="w-7 shrink-0" aria-hidden="true" />
+                  <h3 className="min-w-0 truncate font-pixel text-lg">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
                   <EditPlantName
                     plant={selectedPlant}
                     onNameChanged={(plantId, newName) => {
@@ -458,24 +506,34 @@ export default function PlantsView() {
                         p.id === plantId ? { ...p, name: newName } : p
                       ));
                     }}
-                    iconSize={16}
-                    className="absolute top-0 left-full ml-1"
+                    iconSize={18}
+                    className="h-11 min-h-11 w-11 min-w-11 shrink-0"
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">{getStrainName(selectedPlant.strain)}</p>
-                {selectedPlant.timePlantBorn && (
-                  <p className="text-xs text-muted-foreground">
-                    Planted on {new Date(Number(selectedPlant.timePlantBorn) * 1000).toLocaleDateString()}
-                  </p>
-                )}
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 font-semibold text-foreground/80">
+                    <Image src="/icons/level.svg" alt="" width={14} height={14} className="h-3.5 w-3.5" aria-hidden="true" />
+                    LVL {selectedPlant.level}
+                  </span>
+                  <span aria-hidden="true">•</span>
+                  <span>{getStrainName(selectedPlant.strain)}</span>
+                  {selectedPlant.timePlantBorn && (
+                    <>
+                      <span aria-hidden="true">•</span>
+                      <span>Planted {new Date(Number(selectedPlant.timePlantBorn) * 1000).toLocaleDateString()}</span>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Actions Section: Unclaimed Rewards + Arcade */}
               <div className="pt-3 border-t border-border">
                 <div className="grid grid-cols-2 gap-2">
                   {/* Claim Rewards (half width) */}
-                  <button
-                    className="w-full"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="group h-auto min-h-0 w-full justify-stretch rounded-[var(--radius-panel)] bg-transparent p-0 text-left hover:bg-transparent"
                     onClick={() => {
                       if (!selectedPlant || Number(selectedPlant.rewards) <= 0) {
                         toast.error('No rewards to claim');
@@ -483,131 +541,139 @@ export default function PlantsView() {
                       }
                       setClaimOpen(true);
                     }}
-                    title="Claim ETH rewards"
+                    title={`${formatEth(selectedPlant.rewards)} ETH rewards`}
+                    aria-label={`Claim ${formatEth(selectedPlant.rewards)} ETH rewards`}
                   >
-                    <StandardContainer className="flex items-center justify-center space-x-2 bg-primary/10 text-foreground p-2 rounded-md border border-border hover:bg-primary/15 transition-colors">
-                      <Image src="/icons/ethlogo.svg" alt="ETH" width={18} height={18} />
-                      <div>
-                        <p className="text-xs font-semibold leading-tight">Rewards</p>
-                        <p className="text-sm font-bold">{formatEth(selectedPlant.rewards)} ETH</p>
-                      </div>
+                    <StandardContainer className="surface-control flex min-h-[3.25rem] w-full min-w-0 flex-col items-center justify-center gap-1 overflow-hidden px-2 py-1.5 text-center transition-[filter] group-hover:brightness-105 sm:min-h-[3.5rem]">
+                      <p className="text-xs font-semibold leading-tight">Rewards</p>
+                      <FittedEthRewardValue amount={formatEth(selectedPlant.rewards)} />
                     </StandardContainer>
-                  </button>
+                  </Button>
 
                   {/* Arcade Games (half width) */}
-                  <button
-                    className="w-full"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="group h-auto min-h-0 w-full justify-stretch rounded-[var(--radius-panel)] bg-transparent p-0 text-left hover:bg-transparent"
                     onClick={() => setArcadeOpen(true)}
                     title="Arcade games"
+                    aria-label="Open arcade games"
                   >
-                    <StandardContainer className="flex items-center justify-center space-x-2 bg-accent/15 text-foreground p-2 rounded-md border border-border hover:bg-accent transition-colors">
-                      <Image src="/icons/GAME.png" alt="Arcade" width={18} height={18} />
-                      <div>
+                    <StandardContainer className="surface-control flex min-h-[3.25rem] w-full min-w-0 items-center justify-center gap-1.5 px-1.5 py-1.5 transition-[filter] group-hover:brightness-105 min-[360px]:gap-2 min-[360px]:px-2 sm:min-h-[3.5rem]">
+                      <Image src="/icons/GAME.png" alt="Arcade" width={22} height={22} className="h-5 w-5 shrink-0 min-[360px]:h-[22px] min-[360px]:w-[22px]" />
+                      <div className="min-w-0 max-w-full">
                         <p className="text-xs font-semibold leading-tight">Arcade</p>
-                        <p className="text-sm font-bold">Play games</p>
+                        <p className="whitespace-normal text-[11px] font-bold leading-tight min-[360px]:text-xs">Play games</p>
                       </div>
                     </StandardContainer>
-                  </button>
+                  </Button>
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </TabCard>
 
           {/* Claim Rewards Dialog */}
-          <Dialog open={claimOpen} onOpenChange={(open) => {
-            setClaimOpen(open);
-            if (!open) {
-              setClaimConfirmationText(""); // Reset confirmation text when dialog closes
-            }
-          }}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Claim ETH Rewards?</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>Claiming rewards will burn your current points and reset this plant's level to 0.</p>
-                <div className="flex items-center gap-2 font-medium text-foreground">
-                  <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                  <span>{formatEth(selectedPlant.rewards)} ETH</span>
-                </div>
-                <div className="space-y-2 pt-2">
-                  <p className="text-sm font-medium text-foreground">Type <strong>CONFIRM</strong> to claim:</p>
-                  <Input
-                    value={claimConfirmationText}
-                    onChange={(e) => setClaimConfirmationText(e.target.value)}
-                    placeholder="CONFIRM"
-                    className="font-mono"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-3 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => {
-                  setClaimOpen(false);
-                  setClaimConfirmationText("");
-                }}>Cancel</Button>
-                <div className="flex-1">
-                  {isSolana ? (
-                    <SolanaBridgeButton
-                      actionType="claimRewards"
-                      plantId={selectedPlant.id}
-                      buttonText="Yes, Claim"
-                      buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
-                      onSuccess={() => {
-                        setClaimOpen(false);
-                        setClaimConfirmationText("");
-                        toast.success('Rewards claimed via bridge!');
-                        fetchData();
-                        window.dispatchEvent(new Event('balances:refresh'));
-                      }}
-                      onError={() => {
-                        toast.error('Claim failed');
-                      }}
+          {claimOpen && (
+            <Dialog open={claimOpen} onOpenChange={(open) => {
+              setClaimOpen(open);
+              if (!open) {
+                setClaimConfirmationText(""); // Reset confirmation text when dialog closes
+              }
+            }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Claim ETH Rewards?</DialogTitle>
+                  <DialogDescription>
+                    Confirm this irreversible claim. Your current points will be burned and this plant will reset to level 0.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <p>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                    <span>{formatEth(selectedPlant.rewards)} ETH</span>
+                  </div>
+                  <div className="space-y-2 pt-2">
+                    <p className="text-sm font-medium text-foreground">Type <strong>CONFIRM</strong> to claim:</p>
+                    <Input
+                      value={claimConfirmationText}
+                      onChange={(e) => setClaimConfirmationText(e.target.value)}
+                      placeholder="CONFIRM"
+                      className="font-mono"
+                      autoFocus
                     />
-                  ) : (
-                    <ClaimRewardsTransaction
-                      plantId={selectedPlant.id}
-                      buttonText="Yes, Claim"
-                      buttonClassName="w-full"
-                      disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
-                      minimal
-                      onSuccess={() => {
-                        setClaimOpen(false);
-                        setClaimConfirmationText("");
-                        toast.success('Rewards claimed!');
-                        fetchData();
-                        window.dispatchEvent(new Event('balances:refresh'));
-                      }}
-                      onError={() => {
-                        toast.error('Claim failed');
-                      }}
-                    />
-                  )}
+                  </div>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+                <div className="flex items-center gap-3 pt-2">
+                  <Button variant="outline" className="flex-1" onClick={() => {
+                    setClaimOpen(false);
+                    setClaimConfirmationText("");
+                  }}>Cancel</Button>
+                  <div className="flex-1">
+                    {isSolana ? (
+                      <SolanaBridgeButton
+                        actionType="claimRewards"
+                        plantId={selectedPlant.id}
+                        buttonText="Yes, Claim"
+                        buttonClassName="w-full"
+                        disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
+                        onSuccess={() => {
+                          setClaimOpen(false);
+                          setClaimConfirmationText("");
+                          toast.success('Rewards claimed via bridge!');
+                          fetchData();
+                          window.dispatchEvent(new Event('balances:refresh'));
+                        }}
+                        onError={() => {
+                          toast.error('Claim failed');
+                        }}
+                      />
+                    ) : (
+                      <ClaimRewardsTransaction
+                        plantId={selectedPlant.id}
+                        buttonText="Yes, Claim"
+                        buttonClassName="w-full"
+                        disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
+                        minimal
+                        onSuccess={() => {
+                          setClaimOpen(false);
+                          setClaimConfirmationText("");
+                          toast.success('Rewards claimed!');
+                          fetchData();
+                          window.dispatchEvent(new Event('balances:refresh'));
+                        }}
+                        onError={() => {
+                          toast.error('Claim failed');
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Arcade Dialog */}
-          <ArcadeDialog
-            open={arcadeOpen}
-            onOpenChange={setArcadeOpen}
-            plant={selectedPlant}
-          />
+          {arcadeOpen && (
+            <ArcadeDialog
+              open={arcadeOpen}
+              onOpenChange={setArcadeOpen}
+              plant={selectedPlant}
+            />
+          )}
 
           </div>
 
-          <div className="min-w-0 xl:w-full">
+          <div className="min-w-0 min-[54rem]:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <Card className="xl:w-full">
+            <TabCard className="min-[54rem]:w-full">
               <CardHeader>
-                <CardTitle className="font-pixel">Revive Plant</CardTitle>
+                <CardTitle>Revive Plant</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-1">
                 <div className="grid grid-cols-1 gap-4">
-                  <StandardContainer className="p-3 rounded-md border bg-destructive/10">
+                  <StandardContainer className="p-3 bg-destructive/10">
                     <div className="flex items-start space-x-2">
                       <Image
                         src="/icons/skull.png"
@@ -625,7 +691,7 @@ export default function PlantsView() {
                     </div>
                   </StandardContainer>
 
-                  <div className="rounded-lg border bg-card p-4 space-y-4">
+                  <div className="chromatic-white-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Revive cost</span>
                       <span className="font-semibold text-foreground">
@@ -648,7 +714,13 @@ export default function PlantsView() {
                       <>
                         <ReviveTransaction
                           plantId={selectedPlant.id}
-                          buttonText="Revive Plant"
+                          buttonText={
+                            reviveDataLoading
+                              ? "Checking Revive Cost"
+                              : seedBalance < revivePrice
+                                ? "Insufficient SEED"
+                                : "Revive Plant"
+                          }
                           buttonClassName="w-full"
                           disabled={reviveDataLoading || seedBalance < revivePrice}
                           onSuccess={() => {
@@ -661,145 +733,129 @@ export default function PlantsView() {
                           }}
                         />
                         {seedBalance < revivePrice && !reviveDataLoading && (
-                          <p className="text-xs text-destructive text-center">
-                            Insufficient SEED balance. You need {formatTokenAmount(revivePrice)} SEED to revive this plant.
-                          </p>
+                          <InlineBalanceNotice>
+                            Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}
+                          </InlineBalanceNotice>
                         )}
                       </>
                     )}
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </TabCard>
           ) : (
-            <Card className="xl:h-fit xl:w-full">
+            <TabCard className="min-[54rem]:h-fit min-[54rem]:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle className="font-pixel">Marketplace</CardTitle>
-                  <ToggleGroup
-                    value={itemType}
-                    onValueChange={(v) => handleItemTypeChange(v as 'garden' | 'shop')}
-                    options={[
-                      { value: 'garden', label: 'Garden' },
-                      { value: 'shop', label: 'Shop' },
-                    ]}
-                  />
+                  <CardTitle>Marketplace</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(220px,260px)_minmax(280px,340px)] xl:items-start xl:justify-center">
-                  {/* Regular Wallet Info Message */}
-                  {itemType === 'garden' && !smartWalletLoading && !isSmartWallet && (
-                    <StandardContainer className="p-3 rounded-md border bg-primary/10 xl:col-span-2">
-                      <div className="flex items-start space-x-2">
-                        <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                        <div className="text-sm text-foreground">
-                          <div className="font-medium">Regular Wallet Mode</div>
-                          <div className="text-xs mt-1">Purchasing 1 item at a time. For bulk purchases, consider using a smart wallet.</div>
-                        </div>
-                      </div>
-                    </StandardContainer>
-                  )}
-
-
-                  {/* Item Selection with Quantity - Grouped by category for Garden items */}
+                <div className="grid grid-cols-1 gap-4 min-[54rem]:grid-cols-[minmax(220px,260px)_minmax(0,340px)] min-[54rem]:items-start min-[54rem]:justify-center">
+                  {/* Item Selection with Quantity - Grouped by category */}
                   <div className="space-y-2">
-                    {itemType === 'garden' ? (
-                      // Group garden items by category: TOD, PTS, Hybrid
-                      (() => {
-                        const todItems = gardenItems.filter((item: GardenItem) =>
-                          Number(item.timeExtension) > 0 && Number(item.points) === 0
-                        );
-                        const ptsItems = gardenItems.filter((item: GardenItem) =>
-                          Number(item.points) > 0 && Number(item.timeExtension) === 0
-                        );
-                        const hybridItems = gardenItems.filter((item: GardenItem) =>
-                          Number(item.points) > 0 && Number(item.timeExtension) > 0
-                        );
+                    {(() => {
+                      const todItems: MarketplaceItemOption[] = gardenItems
+                        .filter((item: GardenItem) => Number(item.timeExtension) > 0 && Number(item.points) === 0)
+                        .map((item) => ({ item, itemType: "garden" as const }));
+                      const ptsItems: MarketplaceItemOption[] = gardenItems
+                        .filter((item: GardenItem) => Number(item.points) > 0 && Number(item.timeExtension) === 0)
+                        .map((item) => ({ item, itemType: "garden" as const }));
+                      const hybridItems: MarketplaceItemOption[] = gardenItems
+                        .filter((item: GardenItem) => Number(item.points) > 0 && Number(item.timeExtension) > 0)
+                        .map((item) => ({ item, itemType: "garden" as const }));
+                      const fenceItem = shopItems.find(isFenceShopItem);
 
-                        const renderItemGroup = (items: GardenItem[], label: string) => {
-                          if (items.length === 0) return null;
-                          return (
-                            <div key={label} className="space-y-1.5">
-                              {/* Subtle group divider with label */}
-                              <div className="flex items-center gap-2">
-                                <div className="h-px flex-1 bg-border/50" />
-                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-                                <div className="h-px flex-1 bg-border/50" />
-                              </div>
-                              <div className="grid grid-cols-3 gap-2">
-                                {items.map((item: GardenItem) => {
-                                  const quantity = getItemQuantity(item.id);
-                                  return (
-                                    <div key={item.id} className="space-y-1">
-                                      <div className="flex justify-center">
-                                        <button
-                                          onClick={() => setSelectedItem(item)}
-                                          className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
-                                        >
-                                          <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
-                                            <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                          </div>
-                                        </button>
-                                      </div>
-                                      {isSmartWallet && (
-                                        <div className="flex justify-center">
-                                          <QuantitySelector
-                                            quantity={quantity}
-                                            onQuantityChange={(newQuantity) => {
-                                              handleQuantityChange(item.id, newQuantity);
-                                              setSelectedItem(item);
-                                            }}
-                                            max={80}
-                                            min={0}
-                                            size="sm"
-                                          />
-                                        </div>
-                                      )}
-                                      {!smartWalletLoading && !isSmartWallet && (
-                                        <div className="flex justify-center">
-                                          <div className="text-xs text-muted-foreground px-2 py-1">
-                                            Qty: 1
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        };
+                      if (fenceItem) {
+                        hybridItems.splice(Math.min(2, hybridItems.length), 0, {
+                          item: fenceItem,
+                          itemType: "shop" as const,
+                        });
+                      }
 
+                      const renderItemGroup = (items: MarketplaceItemOption[], label: string) => {
+                        if (items.length === 0) return null;
                         return (
-                          <div className="space-y-2">
-                            {renderItemGroup(todItems, 'TOD')}
-                            {renderItemGroup(ptsItems, 'PTS')}
-                            {renderItemGroup(hybridItems, 'Hybrid')}
+                          <div key={label} className="space-y-1.5">
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="h-px w-14 shrink-0 bg-border/50" />
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+                              <div className="h-px w-14 shrink-0 bg-border/50" />
+                            </div>
+                            <div className={items.length === 4 ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-2"}>
+                              {items.map(({ item, itemType: optionItemType }) => {
+                                const quantity = getItemQuantity(item.id);
+                                const isSelected = selectedItem?.id === item.id && itemType === optionItemType;
+                                return (
+                                  <div key={`${optionItemType}-${item.id}`} className="space-y-1">
+                                    <div className="flex justify-center">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setSelectedItem(item);
+                                          setItemType(optionItemType);
+                                        }}
+                                        className={cn(
+                                          "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
+                                          isSelected
+                                            ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
+                                            : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]"
+                                        )}
+                                        aria-label={`Select ${item.name}`}
+                                        aria-pressed={isSelected}
+                                      >
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
+                                          <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
+                                        </div>
+                                      </Button>
+                                    </div>
+                                    {optionItemType === "garden" && isSmartWallet && (
+                                      <div className="flex justify-center">
+                                        <QuantitySelector
+                                          quantity={quantity}
+                                          onQuantityChange={(newQuantity) => {
+                                            handleQuantityChange(item.id, newQuantity);
+                                            setSelectedItem(item);
+                                            setItemType("garden");
+                                          }}
+                                          max={80}
+                                          min={0}
+                                          size={items.length === 4 ? "xs" : "sm"}
+                                        />
+                                      </div>
+                                    )}
+                                    {optionItemType === "garden" && !smartWalletLoading && !isSmartWallet && (
+                                      <div className="flex justify-center">
+                                        <div className="text-xs text-muted-foreground px-2 py-1">
+                                          Qty: 1
+                                        </div>
+                                      </div>
+                                    )}
+                                    {optionItemType === "shop" && (
+                                      <div className="flex justify-center">
+                                        <div className="max-w-16 truncate px-2 py-1 text-center text-xs font-medium text-muted-foreground">
+                                          {item.name}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
-                      })()
-                    ) : (
-                      // Shop items - no grouping needed (all are protection items)
-                      <div className="grid grid-cols-3 gap-2">
-                        {shopItems.map((item: ShopItem) => {
-                          return (
-                            <div key={item.id} className="space-y-1">
-                              <div className="flex justify-center">
-                                <button
-                                  onClick={() => setSelectedItem(item)}
-                                  className={`p-0.5 transition-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selectedItem?.id === item.id ? 'bg-primary' : 'bg-transparent'}`}
-                                >
-                                  <div className={`flex items-center justify-center p-2 transition-all rounded-md w-12 h-12 ${selectedItem?.id === item.id ? 'bg-primary/10' : 'bg-card hover:bg-accent'}`}>
-                                    <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                  </div>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      };
+
+                      return (
+                        <div className="space-y-2">
+                          {renderItemGroup(todItems, 'Lifetime Hours (TOD)')}
+                          {renderItemGroup(ptsItems, 'Points (PTS)')}
+                          {renderItemGroup(hybridItems, 'Hybrid')}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Item Details and Purchase */}
@@ -812,7 +868,7 @@ export default function PlantsView() {
                   />
                 </div>
               </CardContent>
-            </Card>
+            </TabCard>
           )}
           </div>
         </div>

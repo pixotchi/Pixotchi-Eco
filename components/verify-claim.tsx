@@ -154,7 +154,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         throw new Error(data.error || 'Verification failed');
       }
 
-    } catch (err: any) {
+    } catch (err: UntypedValue) {
       console.error('Verify error:', err);
       setError(err.message || 'Failed to verify');
       setStep('idle');
@@ -199,7 +199,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       } else {
         throw new Error(data.error || 'Claim failed');
       }
-    } catch (err: any) {
+    } catch (err: UntypedValue) {
       console.error('Claim error:', err);
       setError(err.message || 'Failed to claim');
       setStep('verifying'); // Go back to verified state so they can retry claim
@@ -234,10 +234,10 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
   if (step === 'success') {
     return (
-      <Card className="bg-green-500/10 border-green-500/50">
+      <Card className="border-[hsl(var(--success)/0.32)] bg-[hsl(var(--success)/0.12)]">
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
-          <CheckCircle2 className="w-12 h-12 text-green-500 mb-2" />
-          <h3 className="text-lg font-bold text-green-700 dark:text-green-400">Claimed!</h3>
+          <CheckCircle2 className="w-12 h-12 text-[hsl(var(--success))] mb-2" />
+          <h3 className="text-lg font-bold text-[hsl(var(--success-strong))]">Claimed!</h3>
           <p className="text-sm text-muted-foreground">Your {rewardDescription} {bonuses.leaf || bonuses.seed ? 'are' : 'is'} on the way.</p>
         </CardContent>
       </Card>
@@ -271,7 +271,9 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           </CardHeader>
           <CardContent className="space-y-3">
             <Button
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-sans font-medium"
+              variant="imageCardPrimary"
+              fullWidth
+              className="font-sans"
               onClick={() => openExternalUrl('https://verify.base.dev')}
             >
               Open Base Verify
@@ -316,14 +318,16 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded p-3 text-sm text-white/90 font-sans flex gap-2 items-start">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-300" />
+            <div className="rounded border border-destructive/30 bg-destructive/15 p-3 text-sm text-white/90 font-sans flex gap-2 items-start">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-white" />
               <span>{error}</span>
             </div>
           )}
 
           <Button 
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-sans font-medium" 
+            variant="imageCardPrimary"
+            fullWidth
+            className="font-sans" 
             onClick={handleVerify}
             disabled={loading}
           >
@@ -337,7 +341,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
             )}
           </Button>
           <p className="text-xs text-white/80 text-center font-sans">
-            Powered by Base Verify. No gas required.
+            Powered by Base Verify.
           </p>
         </CardContent>
       </div>

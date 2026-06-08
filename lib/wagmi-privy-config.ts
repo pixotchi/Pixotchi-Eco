@@ -32,10 +32,10 @@ export const wagmiPrivyConfig = createConfig({
     [base.id]: baseTransport,
   },
   ...(dataSuffix ? { dataSuffix } : {}),
-  // Expose common external connectors so OnchainKit ConnectWallet can attach in web mode
+  // Expose common external connectors so web wallet flows can attach in web mode
   connectors,
   // Match production behavior: rely on viem defaults for chain RPC list and keep modest polling
-  // Reduce wagmi polling frequency (5 minutes) - ranking handles health checks
-  pollingInterval: 300_000,
+  // Keep wallet-driven receipt waits responsive without aggressive polling.
+  pollingInterval: 2_500,
   ssr: true,
 });

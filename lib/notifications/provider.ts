@@ -1,9 +1,11 @@
 export type NotificationProvider = 'neynar' | 'base';
 
-export const DEFAULT_NOTIFICATION_PROVIDER: NotificationProvider = 'neynar';
+export const DEFAULT_NOTIFICATION_PROVIDER: NotificationProvider = 'base';
 
 export function normalizeNotificationProvider(value?: string | null): NotificationProvider {
-  return String(value || '').trim().toLowerCase() === 'base' ? 'base' : DEFAULT_NOTIFICATION_PROVIDER;
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'base') return 'base';
+  return normalized === 'neynar' ? 'neynar' : DEFAULT_NOTIFICATION_PROVIDER;
 }
 
 export function getNotificationProviderLabel(provider: NotificationProvider): string {

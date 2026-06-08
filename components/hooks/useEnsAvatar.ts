@@ -5,7 +5,17 @@ import { isAddress } from 'viem';
 
 const cache = new Map<string, string | null>();
 const queue = new Set<string>();
+const subscribers = new Map<string, Set<(value: string | null) => void>>();
 let flushTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function notifySubscribers(address: string) {
+  const callbacks = subscribers.get(address);
+  if (!callbacks) return;
+
+  const value = cache.get(address) ?? null;
+  callbacks.forEach((callback) => callback(value));
+  subscribers.delete(address);
+}
 
 async function flushQueue() {
   if (queue.size === 0) {
@@ -31,12 +41,14 @@ async function flushQueue() {
 
     addresses.forEach((address) => {
       cache.set(address, avatars[address] ?? null);
+      notifySubscribers(address);
     });
   } catch (error) {
     addresses.forEach((address) => {
       cache.set(address, null);
+      notifySubscribers(address);
     });
-    console.error('[useEnsAvatar] Failed to resolve avatars', error);
+    console.warn('[useEnsAvatar] Failed to resolve avatars', error);
   }
 }
 
@@ -52,18 +64,24 @@ function enqueue(address: string) {
 }
 
 function waitForResult(address: string, callback: (value: string | null) => void) {
-  let frameId: number;
+  if (cache.has(address)) {
+    callback(cache.get(address) ?? null);
+    return () => {};
+  }
 
-  const check = () => {
-    if (cache.has(address)) {
-      callback(cache.get(address) ?? null);
-      return;
+  let callbacks = subscribers.get(address);
+  if (!callbacks) {
+    callbacks = new Set();
+    subscribers.set(address, callbacks);
+  }
+  callbacks.add(callback);
+
+  return () => {
+    callbacks?.delete(callback);
+    if (callbacks?.size === 0) {
+      subscribers.delete(address);
     }
-    frameId = requestAnimationFrame(check);
   };
-
-  frameId = requestAnimationFrame(check);
-  return () => cancelAnimationFrame(frameId);
 }
 
 type EnsAvatarState = {

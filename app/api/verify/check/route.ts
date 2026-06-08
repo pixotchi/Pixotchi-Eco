@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
+import { redisGetJSONRaw, redisSetJSONRaw } from '@/lib/redis';
 import { validateAction, type ExpectedTraits, validateTraits } from '@/lib/trait-validator';
+import {
+  getVerifyClaimKey,
+  getVerifyPendingKey,
+  getVerifyWalletClaimKey,
+  normalizeVerifyWalletAddress,
+  VERIFY_PENDING_TTL_SECONDS,
+  type VerifyPendingRecord,
+} from '@/lib/verify-claim-records';
 
 /**
  * Feature toggle for Base Verify claims.
@@ -47,6 +55,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    if (typeof address !== 'string' || typeof provider !== 'string') {
+      return NextResponse.json({ error: 'Invalid request fields' }, { status: 400 });
+    }
+
+    const normalizedAddress = normalizeVerifyWalletAddress(address);
+    if (!normalizedAddress) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
     // 1. SECURITY: Validate trait requirements in SIWE message match backend expectations
     // This prevents users from modifying frontend to sign weaker requirements
     const validation = Object.keys(EXPECTED_TRAITS).length > 0
@@ -55,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     if (!validation.valid) {
       console.warn('[VERIFY] Trait validation failed:', {
-        address,
+        address: normalizedAddress,
         provider,
         error: validation.error,
         parsedTraits: validation.parsedTraits,
@@ -68,7 +85,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('[VERIFY] Trait validation passed:', {
-      address,
+      address: normalizedAddress,
       provider,
       action: validation.parsedAction,
       traits: validation.parsedTraits,
@@ -83,7 +100,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
-    console.log('[VERIFY] Calling Base Verify for:', { address, provider });
+    console.log('[VERIFY] Calling Base Verify for:', { address: normalizedAddress, provider });
 
     const response = await fetch(verifyUrl, {
       method: 'POST',
@@ -111,18 +128,37 @@ export async function POST(req: NextRequest) {
 
     if (response.ok) {
       const verificationToken = data.token;
+      if (typeof verificationToken !== 'string' || verificationToken.length === 0) {
+        return NextResponse.json({ error: 'Invalid verification response' }, { status: 500 });
+      }
 
       // Check if this token has already claimed a free plant
-      const claimKey = `verified_claims:${verificationToken}`;
-      const existingClaim = await redis?.get(claimKey);
+      const claimKey = getVerifyClaimKey(verificationToken);
+      const walletClaimKey = getVerifyWalletClaimKey(normalizedAddress);
+      const [existingClaim, existingWalletClaim] = await Promise.all([
+        redisGetJSONRaw<UntypedValue>(claimKey),
+        redisGetJSONRaw<UntypedValue>(walletClaimKey),
+      ]);
 
-      if (existingClaim) {
+      if (existingClaim || existingWalletClaim) {
         return NextResponse.json({ 
           verified: true, 
           token: verificationToken,
           alreadyClaimed: true 
         }, { status: 200 });
       }
+
+      const now = Date.now();
+      const pendingRecord: VerifyPendingRecord = {
+        status: 'verified_pending',
+        token: verificationToken,
+        address: normalizedAddress,
+        provider,
+        action: EXPECTED_ACTION,
+        createdAt: now,
+        expiresAt: now + VERIFY_PENDING_TTL_SECONDS * 1000,
+      };
+      await redisSetJSONRaw(getVerifyPendingKey(verificationToken), pendingRecord, VERIFY_PENDING_TTL_SECONDS);
 
       return NextResponse.json({ 
         verified: true, 
@@ -142,7 +178,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Verification check failed upstream' }, { status: 500 });
     }
 
-  } catch (error: any) {
+  } catch (error: UntypedValue) {
     console.error('Check verification error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

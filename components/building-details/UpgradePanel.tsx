@@ -11,10 +11,12 @@ import BuildingSpeedUpTransaction from '@/components/transactions/building-speed
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import LeafApproveTransaction from '@/components/transactions/leaf-approve-transaction';
 import { toast } from 'react-hot-toast';
-import { StandardContainer } from '@/components/ui/pixel-container';
+import { InlineBalanceNotice } from '@/components/ui/premium';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { useBalances } from '@/lib/balance-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
 import { LAND_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS } from '@/lib/contracts';
+import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
 
 interface UpgradePanelProps {
   building: BuildingData;
@@ -56,128 +58,125 @@ export default function UpgradePanel({
   const isMaxLevel = building.level >= building.maxLevel;
 
   return (
-    <div className="space-y-4 pt-4 border-t border-border">
-      {building.isUpgrading && (
-        <StandardContainer className="space-y-2 p-3 rounded-lg border bg-card">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Upgrade Progress:</span>
-            <span className="font-semibold">{upgradeProgress.toFixed(1)}%</span>
+    <div className="border-t border-border/55 pt-4">
+      <div className="chromatic-white-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+        {building.isUpgrading && (
+          <div className="chromatic-white-surface space-y-2 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Upgrade Progress:</span>
+              <span className="font-semibold">{upgradeProgress.toFixed(1)}%</span>
+            </div>
+            <ProgressBar label="Building upgrade progress" value={upgradeProgress} />
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground">Time left:</span>
+              <span className="font-semibold">{timeLeft}</span>
+            </div>
           </div>
-          <div className="w-full bg-muted rounded-md overflow-hidden">
-            <div
-              className="h-2 bg-primary transition-all duration-300"
-              style={{ width: `${Math.min(100, upgradeProgress)}%` }}
-            />
-          </div>
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-muted-foreground">Time left:</span>
-            <span className="font-semibold">{timeLeft}</span>
-          </div>
-        </StandardContainer>
-      )}
+        )}
 
-      {!isMaxLevel && (
+        {!isMaxLevel && (
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm">Upgrade Costs</h4>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Normal</span>
+              <span className={`font-semibold ${hasInsufficientLeaf ? 'text-value' : ''}`}>
+                {formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Speed up</span>
+              <span className={`font-semibold ${hasInsufficientPixotchi ? 'text-value' : ''}`}>
+                {formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
-          <h4 className="font-semibold text-sm">Upgrade Costs:</h4>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Normal:</span>
-            <span className={`font-semibold ${hasInsufficientLeaf ? 'text-value' : ''}`}>
-              {formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">
+              {isMaxLevel ? 'Building at Max Level' :
+                building.isUpgrading ? 'Upgrade Actions' : 'Upgrade Building'}
             </span>
+            <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Speed up with:</span>
-            <span className={`font-semibold ${hasInsufficientPixotchi ? 'text-value' : ''}`}>
-              {formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">
-            {isMaxLevel ? 'Building at Max Level' :
-              building.isUpgrading ? 'Upgrade Actions' : 'Upgrade Building'}
-          </span>
-          <SponsoredBadge show={isSponsored && isSmartWallet} />
-        </div>
-        {isMaxLevel ? (
-          <DisabledTransaction buttonText="Max Level Reached" buttonClassName="w-full" />
-        ) : building.isUpgrading ? (
-          needsSeedApproval ? (
-            <div className="space-y-2">
-              <div className="text-sm text-center text-muted-foreground">Approve PIXOTCHI spending to use speed ups</div>
-              <ApproveTransaction
-                spenderAddress={LAND_CONTRACT_ADDRESS}
-                tokenAddress={CREATOR_TOKEN_ADDRESS} // PIXOTCHI token
+          {isMaxLevel ? (
+            <DisabledTransaction buttonText="Max Level Reached" buttonClassName="w-full" />
+          ) : building.isUpgrading ? (
+            needsSeedApproval ? (
+              <div className="space-y-2">
+                <div className="text-sm text-center text-muted-foreground">Approve PIXOTCHI spending to use speed ups</div>
+                <ApproveTransaction
+                  spenderAddress={LAND_CONTRACT_ADDRESS}
+                  tokenAddress={CREATOR_TOKEN_ADDRESS} // PIXOTCHI token
+                  onSuccess={() => {
+                    toast.success('PIXOTCHI approval successful!');
+                    onSeedApprovalSuccess();
+                  }}
+                  onError={(error) => toast.error(`Approval failed: ${error.message}`)}
+                  buttonText="Approve PIXOTCHI"
+                  buttonClassName="w-full"
+                />
+              </div>
+            ) : hasInsufficientPixotchi ? (
+              <DisabledTransaction buttonText="Insufficient PIXOTCHI Balance" buttonClassName="w-full" />
+            ) : (
+              <BuildingSpeedUpTransaction
+                building={building}
+                landId={landId}
+                buildingType={buildingType}
                 onSuccess={() => {
-                  toast.success('PIXOTCHI approval successful!');
-                  onSeedApprovalSuccess();
+                  toast.success('Building upgrade sped up!', { id: `speedup-${landId}-${building.id}` });
+                  onUpgradeSuccess();
+                  dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
                 }}
+                onError={(error) => toast.error(`Speed up failed: ${error.message}`)}
+                buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI)`}
+                buttonClassName="w-full"
+                disabled={hasInsufficientPixotchi}
+              />
+            )
+          ) : needsLeafApproval ? (
+            <div className="space-y-2">
+              <div className="text-sm text-center text-muted-foreground">Step 1: Approve LEAF spending</div>
+              <LeafApproveTransaction
+                onSuccess={() => { toast.success('LEAF approval successful!'); onLeafApprovalSuccess(); }}
                 onError={(error) => toast.error(`Approval failed: ${error.message}`)}
-                buttonText="Approve PIXOTCHI"
+                buttonText="Approve LEAF"
                 buttonClassName="w-full"
               />
             </div>
-          ) : hasInsufficientPixotchi ? (
-            <DisabledTransaction buttonText="Insufficient PIXOTCHI Balance" buttonClassName="w-full" />
           ) : (
-            <BuildingSpeedUpTransaction
-              building={building}
-              landId={landId}
-              buildingType={buildingType}
-              onSuccess={() => {
-                toast.success('Building upgrade sped up!', { id: `speedup-${landId}-${building.id}` });
-                onUpgradeSuccess();
-                // Refresh both balances and buildings immediately
-                window.dispatchEvent(new Event('balances:refresh'));
-                window.dispatchEvent(new Event('buildings:refresh'));
-              }}
-              onError={(error) => toast.error(`Speed up failed: ${error.message}`)}
-              buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI)`}
-              buttonClassName="w-full"
-              disabled={hasInsufficientPixotchi}
-            />
-          )
-        ) : needsLeafApproval ? (
-          <div className="space-y-2">
-            <div className="text-sm text-center text-muted-foreground">Step 1: Approve LEAF spending</div>
-            <LeafApproveTransaction
-              onSuccess={() => { toast.success('LEAF approval successful!'); onLeafApprovalSuccess(); }}
-              onError={(error) => toast.error(`Approval failed: ${error.message}`)}
-              buttonText="Approve LEAF"
-              buttonClassName="w-full"
-            />
-          </div>
-        ) : (
-          hasInsufficientLeaf ? (
-            <DisabledTransaction buttonText="Insufficient LEAF Balance" buttonClassName="w-full" />
-          ) : (
-            <BuildingUpgradeTransaction
-              building={building}
-              landId={landId}
-              buildingType={buildingType}
-              onSuccess={() => {
-                toast.success('Building upgrade started!', { id: `upgrade-${landId}-${building.id}` });
-                onUpgradeSuccess();
-                // Refresh both balances and buildings immediately
-                window.dispatchEvent(new Event('balances:refresh'));
-                window.dispatchEvent(new Event('buildings:refresh'));
-              }}
-              onError={(error) => toast.error(`Upgrade failed: ${error.message}`)}
-              buttonText={`${needsLeafApproval ? 'Step 2: ' : ''}Upgrade (${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF)`}
-              buttonClassName="w-full"
-              disabled={hasInsufficientLeaf || needsLeafApproval}
-            />
-          )
-        )}
-        {hasInsufficientLeaf && !building.isUpgrading && !isMaxLevel && (
-          <p className="text-xs text-value text-center mt-2">Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} LEAF</p>
-        )}
-        {hasInsufficientPixotchi && building.isUpgrading && (
-          <p className="text-xs text-value text-center mt-2">Not enough PIXOTCHI for speed up. Balance: {formatTokenAmount(userPixotchiBalance)} PIXOTCHI</p>
-        )}
+            hasInsufficientLeaf ? (
+              <DisabledTransaction buttonText="Insufficient LEAF Balance" buttonClassName="w-full" />
+            ) : (
+              <BuildingUpgradeTransaction
+                building={building}
+                landId={landId}
+                buildingType={buildingType}
+                onSuccess={() => {
+                  toast.success('Building upgrade started!', { id: `upgrade-${landId}-${building.id}` });
+                  onUpgradeSuccess();
+                  dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
+                }}
+                onError={(error) => toast.error(`Upgrade failed: ${error.message}`)}
+                buttonText={`${needsLeafApproval ? 'Step 2: ' : ''}Upgrade (${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF)`}
+                buttonClassName="w-full"
+                disabled={hasInsufficientLeaf || needsLeafApproval}
+              />
+            )
+          )}
+          {hasInsufficientLeaf && !building.isUpgrading && !isMaxLevel && (
+            <InlineBalanceNotice>
+              Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} • Required: {formatTokenAmount(building.levelUpgradeCostLeaf)}
+            </InlineBalanceNotice>
+          )}
+          {hasInsufficientPixotchi && building.isUpgrading && (
+            <InlineBalanceNotice>
+              Not enough PIXOTCHI. Balance: {formatTokenAmount(userPixotchiBalance)} • Required: {formatTokenAmount(building.levelUpgradeCostSeedInstant)}
+            </InlineBalanceNotice>
+          )}
+        </div>
       </div>
     </div>
   );

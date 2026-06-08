@@ -9,6 +9,7 @@ import {
     useCallback,
     type ReactNode,
 } from "react";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 
 /**
  * Ambient Audio context for managing background music playback.
@@ -31,6 +32,7 @@ const STORAGE_KEY = "pixotchi:ambient-audio";
 const AUDIO_SRC = "/PixotchiST.mp3";
 
 export function AmbientAudioProvider({ children }: { children: ReactNode }) {
+    const { enabled: performanceModeEnabled } = usePerformanceMode();
     const [isEnabled, setIsEnabled] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -160,6 +162,20 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
             // Storage unavailable
         }
     }, [isEnabled]);
+
+    useEffect(() => {
+        if (!performanceModeEnabled || !isEnabled) {
+            return;
+        }
+
+        setIsEnabled(false);
+        audioRef.current?.pause();
+        try {
+            localStorage.setItem(STORAGE_KEY, "false");
+        } catch {
+            // Storage unavailable
+        }
+    }, [isEnabled, performanceModeEnabled]);
 
     // Don't render children until mounted to avoid hydration mismatch
     if (!mounted) {
