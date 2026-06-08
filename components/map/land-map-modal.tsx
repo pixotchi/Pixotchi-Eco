@@ -7,7 +7,6 @@ import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components
 import { LandLeaderboardEntry,getLandOwner } from "@/lib/contracts";
 import { contractToVisual,getCoordinateFromTokenId } from "@/lib/land-utils";
 import { Land } from "@/lib/types";
-import { useTransactions } from 'ethereum-identity-kit';
 import { Compass,Minus,Plus,User,X } from "lucide-react";
 import Image from "next/image";
 import { useEffect,useState } from 'react';
@@ -45,16 +44,6 @@ export function LandMapModal({
   const [fetchedOwner, setFetchedOwner] = useState<string | null>(null);
   const [isOwnerLoading, setIsOwnerLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  
-  // Get TransactionModal state to detect when it's open/closed
-  const { txModalOpen } = useTransactions();
-  
-  // Close map modal when TransactionModal opens (e.g. when following a user)
-  useEffect(() => {
-    if (txModalOpen && isOpen) {
-      onClose();
-    }
-  }, [txModalOpen, isOpen, onClose]);
   
   // Initialize center to selected land or (0,0)
   useEffect(() => {
@@ -357,6 +346,7 @@ export function LandMapModal({
                 address={ownerAddress}
                 open={profileOpen}
                 onOpenChange={setProfileOpen}
+                onTransactionOpen={onClose}
             />
         )}
 

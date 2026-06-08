@@ -4,7 +4,7 @@ import { createPublicClient, fallback, http } from 'viem';
 import { base } from 'viem/chains';
 import type { PixotchiReadClient } from './contracts';
 
-const DEFAULT_AI_PUBLIC_RPC_URL = 'https://mainnet.base.org';
+const DEFAULT_AI_PUBLIC_RPC_URL = 'https://base-rpc.publicnode.com';
 const AI_RPC_TIMEOUT_MS = Number.parseInt(process.env.AI_RPC_TIMEOUT_MS || '', 10) || 8_000;
 const AI_MULTICALL_BATCH_SIZE = Number.parseInt(process.env.AI_RPC_MULTICALL_BATCH_SIZE || '', 10) || 1_024;
 const AI_MULTICALL_WAIT_MS = Number.parseInt(process.env.AI_RPC_MULTICALL_WAIT_MS || '', 10) || 16;

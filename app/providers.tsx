@@ -31,8 +31,6 @@ import { SnowEffect } from "@/components/ui/snow-effect";
 import { SnowProvider } from "@/lib/snow-context";
 import { AmbientAudioProvider } from "@/lib/ambient-audio-context";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
-import { TransactionProvider } from 'ethereum-identity-kit';
-import { TransactionModalWrapper } from '@/components/transaction-modal-wrapper';
 import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { AppUpdateBanner } from "@/components/app-update-banner";
@@ -179,13 +177,7 @@ function WagmiRouter({
   if (isMiniApp) {
     return (
       <CoreWagmiProvider config={wagmiMiniAppConfig}>
-        <TransactionProvider
-          defaultChainId={8453}
-          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-        >
-          {children}
-          <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
-        </TransactionProvider>
+        {children}
       </CoreWagmiProvider>
     );
   }
@@ -193,13 +185,7 @@ function WagmiRouter({
   if (surface === 'base') {
     return (
       <CoreWagmiProvider config={wagmiWebBaseConfig}>
-        <TransactionProvider
-          defaultChainId={8453}
-          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-        >
-          {children}
-          <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
-        </TransactionProvider>
+        {children}
       </CoreWagmiProvider>
     );
   }
@@ -207,26 +193,14 @@ function WagmiRouter({
   if (surface === 'test') {
     return (
       <CoreWagmiProvider config={wagmiLocalTestConfig}>
-        <TransactionProvider
-          defaultChainId={8453}
-          paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-        >
-          {children}
-          <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
-        </TransactionProvider>
+        {children}
       </CoreWagmiProvider>
     );
   }
 
   return (
     <PrivyWagmiProvider config={wagmiPrivyConfig}>
-      <TransactionProvider
-        defaultChainId={8453}
-        paymasterService={process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL}
-      >
-        {children}
-        <TransactionModalWrapper className="!z-[var(--z-transaction)]" />
-      </TransactionProvider>
+      {children}
     </PrivyWagmiProvider>
   );
 }

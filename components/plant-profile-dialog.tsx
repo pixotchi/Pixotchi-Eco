@@ -16,7 +16,13 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
-import { FollowButton, fetchFollowState, fetchProfileLists, useTransactions } from 'ethereum-identity-kit';
+import {
+  FollowButton,
+  fetchFollowState,
+  fetchProfileLists,
+  type ForceFollowingState,
+  useTransactions,
+} from 'ethereum-identity-kit';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { WalletAvatar } from '@/components/ui/wallet-avatar';
@@ -163,6 +169,43 @@ export default function PlantProfileDialog({
     [connectedAddress, efpSelectedList, efpLists?.primary_list],
   );
 
+  const canFollowOwner =
+    !!connectedAddress &&
+    !!ownerAddress &&
+    connectedAddress.toLowerCase() !== ownerAddress.toLowerCase();
+
+  const { data: isFollowingOwnerFresh, isFetching: isFollowingOwnerFetching } = useQuery({
+    queryKey: [
+      'profileFollowingStateFresh',
+      connectedAddress,
+      ownerAddress,
+      efpSelectedList,
+      efpLists?.primary_list,
+      efpRefreshKey,
+    ],
+    queryFn: async () => {
+      if (!ownerAddress) return false;
+      return fetchIsFollowingOwner(ownerAddress.toLowerCase(), true);
+    },
+    enabled: open && canFollowOwner,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  const forcedFollowState = useMemo<ForceFollowingState | undefined>(() => {
+    if (!canFollowOwner) return undefined;
+    if (typeof isFollowingOwnerFresh !== 'boolean') return undefined;
+
+    return {
+      isLoading: isFollowingOwnerFetching,
+      state: {
+        block: false,
+        follow: isFollowingOwnerFresh,
+        mute: false,
+      },
+    };
+  }, [canFollowOwner, isFollowingOwnerFresh, isFollowingOwnerFetching]);
+
   const postFollowMissionProgress = useCallback(async (): Promise<boolean> => {
     if (!connectedAddress) return false;
     try {
@@ -235,11 +278,6 @@ export default function PlantProfileDialog({
 
   // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
   useEffect(() => {
-    const canFollowOwner =
-      !!connectedAddress &&
-      !!ownerAddress &&
-      connectedAddress.toLowerCase() !== ownerAddress.toLowerCase();
-
     // Capture follow target when tx modal opens. Do not depend on dialog open state.
     if (!prevTxModalOpenRef.current && txModalOpen && canFollowOwner && !followTxTargetRef.current) {
       followTxTargetRef.current = ownerAddress.toLowerCase();
@@ -259,7 +297,7 @@ export default function PlantProfileDialog({
       followTxTargetRef.current = null;
     }
     prevTxModalOpenRef.current = txModalOpen;
-  }, [txModalOpen, connectedAddress, ownerAddress, queryClient, refreshEfpStats, verifyFollowAndTrackMission]);
+  }, [txModalOpen, canFollowOwner, ownerAddress, queryClient, refreshEfpStats, verifyFollowAndTrackMission]);
 
   if (!ownerAddress) return null;
 
@@ -493,6 +531,7 @@ export default function PlantProfileDialog({
                         <FollowButton
                           lookupAddress={ownerAddress as `0x${string}`}
                           connectedAddress={connectedAddress}
+                          forceState={forcedFollowState}
                           onDisconnectedClick={() => {
                             toast.error('Please connect your wallet to follow users');
                           }}

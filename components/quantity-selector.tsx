@@ -31,15 +31,15 @@ export default function QuantitySelector({
     }
   };
 
-  const buttonSize = size === 'xs'
-    ? '!h-8 !min-h-8 !w-8 !min-w-8 p-0'
-    : '!h-11 !min-h-11 !w-11 !min-w-11 p-0';
-  const iconSize = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
-  const textSize = size === 'xs' ? 'text-[11px]' : size === 'sm' ? 'text-xs' : 'text-sm';
-  const gapSize = size === 'xs' ? 'gap-1' : 'gap-1.5';
+  const compact = size === 'xs' || size === 'sm';
+  const buttonSize = compact
+    ? '!h-5 !min-h-5 !w-5 !min-w-5 p-0'
+    : '!h-7 !min-h-7 !w-7 !min-w-7 p-0';
+  const iconSize = compact ? 'h-2.5 w-2.5' : 'h-3.5 w-3.5';
+  const textSize = compact ? 'text-xs' : 'text-sm';
 
   return (
-    <div className={`flex items-center ${gapSize}`}>
+    <div className="flex items-center gap-1">
       <Button
         variant="outline"
         size="icon-sm"

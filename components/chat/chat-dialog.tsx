@@ -8,8 +8,6 @@ import ChatInput from './chat-input';
 import AITypingIndicator from './ai-typing-indicator';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import Image from 'next/image';
-import { useTransactions } from 'ethereum-identity-kit';
-import { createPortal } from 'react-dom';
 import type { ChatMode } from '@/lib/types';
 
 interface ChatDialogProps {
@@ -55,21 +53,14 @@ function DesktopChatPane({
   );
 }
 
-function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
+function ChatDialogContent() {
   const { mode, setMode, isAITyping } = useChat();
 
   return (
     <DialogContent
       size="full"
       surface="soft"
-      className={`flex h-[min(86dvh,42rem)] w-[min(94vw,28rem)] max-w-md flex-col rounded-[var(--radius-dialog)] border sm:h-[82dvh] sm:w-[calc(100vw-2rem)] xl:w-[min(92vw,56rem)] xl:max-w-[56rem] ${txModalOpen ? 'pointer-events-none select-none' : ''}`}
-      aria-hidden={txModalOpen || undefined}
-      onInteractOutside={(event) => {
-        if (txModalOpen) event.preventDefault();
-      }}
-      onPointerDownOutside={(event) => {
-        if (txModalOpen) event.preventDefault();
-      }}
+      className="flex h-[min(86dvh,42rem)] w-[min(94vw,28rem)] max-w-md flex-col rounded-[var(--radius-dialog)] border sm:h-[82dvh] sm:w-[calc(100vw-2rem)] xl:w-[min(92vw,56rem)] xl:max-w-[56rem]"
     >
       <DialogHeader>
         <DialogTitle className="flex items-center justify-between">
@@ -124,23 +115,9 @@ function ChatDialogContent({ txModalOpen }: { txModalOpen: boolean }) {
 }
 
 export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
-  const { txModalOpen } = useTransactions();
-
   return (
-    <>
-      {open && txModalOpen && typeof document !== 'undefined'
-        ? createPortal(
-          <div
-            className="fixed inset-0 z-[calc(var(--z-transaction)-1)] bg-black/60 backdrop-blur-[var(--blur-overlay)] pointer-events-none"
-            aria-hidden="true"
-          />,
-          document.body
-        )
-        : null}
-
-      <Dialog open={open} onOpenChange={onOpenChange} modal={!txModalOpen}>
-        <ChatDialogContent txModalOpen={txModalOpen} />
-      </Dialog>
-    </>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <ChatDialogContent />
+    </Dialog>
   );
 }

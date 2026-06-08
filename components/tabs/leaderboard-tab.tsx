@@ -1,6 +1,7 @@
 "use client";
 
 import { SponsoredBadge } from "@/components/paymaster-toggle";
+import { EfpTransactionBoundary } from "@/components/efp-transaction-boundary";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
 import PlantImage from "@/components/PlantImage";
 import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
@@ -1973,11 +1974,13 @@ export default function LeaderboardTab() {
       </Dialog>
 
       {/* Plant Profile Dialog */}
-      <PlantProfileDialog
-        open={profileDialogOpen}
-        onOpenChange={setProfileDialogOpen}
-        plant={selectedPlantForProfile}
-      />
+      <EfpTransactionBoundary open={profileDialogOpen}>
+        <PlantProfileDialog
+          open={profileDialogOpen}
+          onOpenChange={setProfileDialogOpen}
+          plant={selectedPlantForProfile}
+        />
+      </EfpTransactionBoundary>
 
       {/* Kill Cooldown Dialog */}
       <Dialog open={cooldownDialogOpen} onOpenChange={setCooldownDialogOpen}>

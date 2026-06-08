@@ -22,7 +22,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.81",
     "@ai-sdk/google": "3.0.80",
-    "@ai-sdk/openai": "3.0.67",
+    "@ai-sdk/openai": "3.0.68",
     "@ai-sdk/react": "3.0.199",
     "@base-org/account": "2.5.6",
     "@base-org/account-ui": "1.0.1",

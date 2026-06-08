@@ -122,7 +122,7 @@ const POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = {
     timeoutMs: 2_500,
     fallbackRetryCount: 0,
     hedgeDelayMs: RECEIPT_HEDGE_DELAY_MS,
-    pollingIntervalMs: 1_500,
+    pollingIntervalMs: 1_000,
     rankIntervalMs: 15_000,
     rankTimeoutMs: 800,
     retryDelayMs: 150,
@@ -934,7 +934,7 @@ const buildPolicyStatus = (
 export const listBaseRpcEndpoints = (): string[] => getRpcConfig().endpoints;
 
 export const getPrimaryRpcEndpoint = (): string =>
-  listBaseRpcEndpoints()[0] || 'https://mainnet.base.org';
+  listBaseRpcEndpoints()[0] || 'https://base-rpc.publicnode.com';
 
 export const createBaseRpcTransport = (
   policy: BaseRpcPolicy = 'read',

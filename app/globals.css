@@ -1423,14 +1423,71 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   scale: 1;
 }
 
-button.profile-follow-button.follow-button,
-button.profile-follow-button.follow-button-follow,
-button.profile-follow-button.follow-button-follow *,
-button.profile-follow-button.follow-button svg,
-button.profile-follow-button.follow-button p {
+button.profile-follow-button.follow-button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid hsl(var(--primary) / 0.5) !important;
+  background-color: hsl(var(--primary)) !important;
+  background-image: var(--gradient-control-active) !important;
   color: hsl(var(--primary-foreground)) !important;
+  box-shadow: var(--shadow-control) !important;
+}
+
+button.profile-follow-button.follow-button-following,
+button.profile-follow-button.follow-button[aria-pressed="true"] {
+  border-color: hsl(var(--success) / 0.58) !important;
+  background-color: hsl(var(--success)) !important;
+  background-image:
+    linear-gradient(180deg,
+      color-mix(in hsl, hsl(var(--success)) 84%, white) 0%,
+      hsl(var(--success)) 52%,
+      color-mix(in hsl, hsl(var(--success)) 88%, black) 100%) !important;
+  color: hsl(var(--success-foreground)) !important;
+}
+
+button.profile-follow-button.follow-button.pending {
+  border-color: hsl(var(--info) / 0.58) !important;
+  background-color: hsl(var(--info)) !important;
+  background-image:
+    linear-gradient(180deg,
+      color-mix(in hsl, hsl(var(--info)) 84%, white) 0%,
+      hsl(var(--info)) 52%,
+      color-mix(in hsl, hsl(var(--info)) 88%, black) 100%) !important;
+  color: hsl(var(--info-foreground)) !important;
+}
+
+button.profile-follow-button.follow-button-block,
+button.profile-follow-button.follow-button-blocked {
+  border-color: hsl(var(--destructive) / 0.58) !important;
+  background-color: hsl(var(--destructive)) !important;
+  background-image: var(--gradient-danger) !important;
+  color: hsl(var(--destructive-foreground)) !important;
+}
+
+button.profile-follow-button.follow-button-mute,
+button.profile-follow-button.follow-button-muted {
+  border-color: hsl(var(--accent-foreground) / 0.24) !important;
+  background-color: hsl(var(--accent)) !important;
+  background-image: none !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+button.profile-follow-button.follow-button:hover {
+  filter: brightness(1.03);
+}
+
+button.profile-follow-button.follow-button p,
+button.profile-follow-button.follow-button svg,
+button.profile-follow-button.follow-button svg * {
+  color: currentColor !important;
   fill: currentColor;
   stroke: currentColor;
+}
+
+button.profile-follow-button.follow-button p {
+  margin: 0;
 }
 
 /* Tutorial art subtle float */
