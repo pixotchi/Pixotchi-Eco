@@ -281,7 +281,7 @@ function LoginAuthActions({
 
   return (
     <div className={className}>
-      <Alert>
+      <Alert className="login-web-app-alert !bg-[hsl(var(--card)/0.86)] !bg-none">
         <Info className="h-4 w-4" />
         <AlertTitle>Web App</AlertTitle>
         <AlertDescription>

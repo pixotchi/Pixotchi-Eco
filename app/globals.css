@@ -2040,6 +2040,12 @@ button.profile-follow-button.follow-button p {
   background-image: none !important;
 }
 
+.login-theme-cycle .login-web-app-alert {
+  background-color: hsl(var(--card) / 0.86);
+  background-image: none !important;
+  border-color: hsl(var(--border-strong) / 0.34);
+}
+
 .login-theme-background {
   position: absolute;
   inset: 0;
