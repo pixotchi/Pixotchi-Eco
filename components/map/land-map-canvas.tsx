@@ -16,6 +16,10 @@ interface LandMapCanvasProps {
   onCenterChange: (center: { x: number; y: number }) => void;
 }
 
+function isNormalMintedLandId(tokenId: number, totalSupply: number): boolean {
+  return tokenId > 0 && tokenId < totalSupply;
+}
+
 export function LandMapCanvas({
   center,
   zoom,
@@ -222,7 +226,7 @@ export function LandMapCanvas({
           const tokenId = getTokenIdFromCoordinate(cx, cy);
 
           // Determine Status
-          const isMinted = tokenId <= totalSupply;
+          const isMinted = isNormalMintedLandId(tokenId, totalSupply);
           const isUserOwned = ownedTokenIds.has(tokenId);
           const isSelected = selectedLand && Number(selectedLand.tokenId) === tokenId;
           // Terrain Generation (Deterministic Noise) for variety
@@ -422,7 +426,11 @@ export function LandMapCanvas({
     if (cx !== null && cy !== null) {
       // CLICKED ON LAND SLOT (Minted or Unminted)
       const tokenId = getTokenIdFromCoordinate(cx, cy);
-      onLandClick(tokenId);
+      if (tokenId > 0) {
+        onLandClick(tokenId);
+      } else {
+        onLandClick(null, { x, y, type: 'none' });
+      }
     } else {
       // CLICKED ON WILDERNESS GAP
       const terrainType = getVisualTerrainType(x, y);

@@ -1,6 +1,8 @@
+import { CUSTODY_DATA_REFUSAL, isCustodyWalletDataRequest } from './ai-custody-privacy';
+
 type AIRequestSafety =
   | { allowed: true }
-  | { allowed: false; reason: 'financial_advice' | 'private_data' | 'off_topic' | 'transaction_request'; response: string };
+  | { allowed: false; reason: 'custody_data' | 'financial_advice' | 'private_data' | 'off_topic' | 'transaction_request'; response: string };
 
 const GAME_TERMS = [
   'pixotchi',
@@ -139,6 +141,14 @@ function includesAnyTerm(message: string, terms: string[]) {
 
 export function classifyAIUserMessage(message: string): AIRequestSafety {
   const normalized = message.toLowerCase();
+
+  if (isCustodyWalletDataRequest(message)) {
+    return {
+      allowed: false,
+      reason: 'custody_data',
+      response: CUSTODY_DATA_REFUSAL,
+    };
+  }
 
   if (PRIVATE_DATA_PATTERNS.some((pattern) => pattern.test(message))) {
     return {

@@ -270,11 +270,15 @@ function getModelRequestSettings() {
 
 const TOOL_PROMPT_PRIORITY = [
   'get_player_overview',
+  'get_wallet_capabilities',
   'get_mint_availability',
   'get_plant_care_audit',
   'get_daily_task_plan',
+  'get_task_proof_guide',
   'get_wallet_token_balances',
   'get_wallet_game_assets',
+  'get_name_change_readiness',
+  'get_land_map_context',
   'get_arcade_status',
   'get_quest_readiness',
   'get_plant_lifecycle_audit',
@@ -294,8 +298,11 @@ const TOOL_PROMPT_PRIORITY = [
   'get_marketplace_orders',
   'get_claim_eligibility',
   'get_known_allowances',
+  'explain_game_error',
   'get_bridge_status',
+  'get_notification_readiness',
   'get_app_status',
+  'get_support_links',
   'get_game_action_guide',
   'get_token_info',
   'get_seed_market_pulse',
@@ -472,6 +479,57 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
       })),
       truncated: data?.truncated,
       urgentPlants: (data?.urgentPlants || []).slice(0, 6),
+    };
+  }
+
+  if (toolName === 'get_wallet_capabilities') {
+    return {
+      address: data?.address,
+      base: data?.base,
+      featureFlags: data?.featureFlags,
+      gameplayCapabilities: data?.gameplayCapabilities,
+      solana: data?.solana,
+      uiGuidance: data?.uiGuidance,
+    };
+  }
+
+  if (toolName === 'get_name_change_readiness') {
+    return {
+      address: data?.address,
+      ambiguousAutoLookup: data?.ambiguousAutoLookup,
+      proposedName: data?.proposedName,
+      requestedAssets: (data?.requestedAssets || []).slice(0, 4).map((asset: UntypedValue) => ({
+        assetType: asset.assetType,
+        canAfford: asset.canAfford,
+        canSubmit: asset.canSubmit,
+        cost: asset.cost,
+        currentName: asset.currentName,
+        id: asset.id,
+        ownedByAddress: asset.ownedByAddress,
+        sameName: asset.sameName,
+      })),
+      rules: data?.rules,
+      seedBalanceDisplay: data?.seedBalanceDisplay,
+    };
+  }
+
+  if (toolName === 'get_land_map_context') {
+    return {
+      bounds: data?.bounds,
+      input: data?.input,
+      maxSupply: data?.maxSupply,
+      neighbors: (data?.neighbors || []).slice(0, 4).map((slot: UntypedValue) => ({
+        coordinates: slot.coordinates,
+        direction: slot.direction,
+        isMintedBySupply: slot.isMintedBySupply,
+        landId: slot.landId,
+        landName: slot.land?.name,
+        owner: slot.owner,
+        ownerKnown: slot.ownerKnown,
+      })),
+      selected: data?.selected,
+      totalSupply: data?.totalSupply,
+      ui: data?.ui,
     };
   }
 
@@ -872,15 +930,43 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'get_notification_readiness') {
+    return {
+      plantCareReminders: {
+        lastRun: data?.plantCareReminders?.lastRun,
+        sentCount: data?.plantCareReminders?.sentCount,
+        thresholdHours: data?.plantCareReminders?.thresholdHours,
+        throttleHours: data?.plantCareReminders?.throttleHours,
+        totalRuns: data?.plantCareReminders?.totalRuns,
+      },
+      provider: data?.provider,
+      readinessChecklist: data?.readinessChecklist,
+      status: data?.status,
+      ui: data?.ui,
+    };
+  }
+
   if (toolName === 'get_daily_task_plan') {
     return {
       mission: data?.mission,
       missionScore: data?.missionScore,
+      proofTroubleshooting: data?.proofTroubleshooting,
       readinessContext: data?.readinessContext,
       suggestedNext: (data?.suggestedNext || []).slice(0, 6),
       taskCounts: data?.taskCounts,
+      taskProofGuide: (data?.taskProofGuide || []).slice(0, 8),
       streak: data?.streak,
       truncated: data?.truncated,
+    };
+  }
+
+  if (toolName === 'get_task_proof_guide') {
+    return {
+      guide: (data?.guide || []).slice(0, 12),
+      knownTaskIds: data?.knownTaskIds,
+      proofIndexingNotes: data?.proofIndexingNotes,
+      requestedTaskId: data?.requestedTaskId,
+      taskFound: data?.taskFound,
     };
   }
 
@@ -902,12 +988,31 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'explain_game_error') {
+    return {
+      actionHint: data?.actionHint,
+      matches: (data?.matches || []).slice(0, 5),
+      recommendedLiveChecks: data?.recommendedLiveChecks,
+      safeNextSteps: data?.safeNextSteps,
+      txHash: data?.txHash,
+    };
+  }
+
   if (toolName === 'get_bridge_status') {
     return {
       baseAddress: data?.baseAddress,
       bridge: data?.bridge,
       twin: data?.twin,
       ui: data?.ui,
+    };
+  }
+
+  if (toolName === 'get_support_links') {
+    return {
+      appUrl: data?.appUrl,
+      inAppActions: data?.inAppActions,
+      links: data?.links,
+      safety: data?.safety,
     };
   }
 
@@ -1612,6 +1717,31 @@ function extractPlantIdsFromPrompt(message: string): number[] {
   return [...ids].slice(0, 10);
 }
 
+function extractLandIdFromPrompt(message: string): number | undefined {
+  const patterns = [
+    /\bland\s*#?\s*(\d{1,8})\b/i,
+    /\bland\s+id\s*#?\s*(\d{1,8})\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (!match) continue;
+    const parsed = Number(match[1]);
+    if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  }
+  return undefined;
+}
+
+function extractCoordinateFromPrompt(message: string): { coordinateX: number; coordinateY: number } | undefined {
+  const match = message.match(/\(\s*(-?\d{1,4})\s*,\s*(-?\d{1,4})\s*\)|\bx\s*[:=]\s*(-?\d{1,4})\s*(?:,|\s)\s*y\s*[:=]\s*(-?\d{1,4})/i);
+  if (!match) return undefined;
+  const xRaw = match[1] ?? match[3];
+  const yRaw = match[2] ?? match[4];
+  const coordinateX = Number(xRaw);
+  const coordinateY = Number(yRaw);
+  if (!Number.isInteger(coordinateX) || !Number.isInteger(coordinateY)) return undefined;
+  return { coordinateX, coordinateY };
+}
+
 function addDeterministicToolRequest(
   requests: DeterministicToolRequest[],
   request: DeterministicToolRequest,
@@ -1627,6 +1757,8 @@ function getDeterministicToolRequests(currentMessage: string, userAddress: strin
   const txHash = extractTxHashFromPrompt(currentMessage);
   const addressInput = promptAddress ? { address: promptAddress } : {};
   const plantIds = extractPlantIdsFromPrompt(currentMessage);
+  const landId = extractLandIdFromPrompt(currentMessage);
+  const coordinate = extractCoordinateFromPrompt(currentMessage);
   const plantLifecycleInput = {
     ...addressInput,
     ...(plantIds.length > 0 ? { plantIds } : {}),
@@ -1658,6 +1790,64 @@ function getDeterministicToolRequests(currentMessage: string, userAddress: strin
   if (/\b(mint|afford|price|cost|supply|whitelist|allowance|approve)\b/i.test(currentMessage)) {
     addDeterministicToolRequest(requests, { input: { ...addressInput, includeLand: true, includePlants: true }, toolName: 'get_mint_availability' });
     addDeterministicToolRequest(requests, { input: { fenceDays: 1, includeGardenItems: true, includeShopItems: true }, toolName: 'get_game_prices' });
+  }
+
+  if (/\b(rename|name change|change name|edit name|nickname)\b/i.test(currentMessage)) {
+    const assetId = plantIds[0] ?? landId;
+    addDeterministicToolRequest(requests, {
+      input: {
+        ...addressInput,
+        ...(assetId != null ? { assetId } : {}),
+        assetType: /\bland\b/i.test(currentMessage) && !/\bplant\b/i.test(currentMessage) ? 'land' : /\bplant\b/i.test(currentMessage) ? 'plant' : 'auto',
+      },
+      toolName: 'get_name_change_readiness',
+    });
+  }
+
+  if (/\b(smart wallet|base account|eoa|eth mode|sponsored|paymaster|wallet_sendcalls|sendcalls|atomic|bundle|solana wallet)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput }, toolName: 'get_wallet_capabilities' });
+  }
+
+  if (/\b(error|failed|revert|reverted|disabled|greyed|grayed|not working|wallet_sendcalls|sendcalls|unsupported|timeout)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, {
+      input: {
+        actionHint: currentMessage.slice(0, 120),
+        errorText: currentMessage.slice(0, 600),
+        ...(txHash ? { txHash } : {}),
+      },
+      toolName: 'explain_game_error',
+    });
+    if (txHash) {
+      addDeterministicToolRequest(requests, { input: { txHash }, toolName: 'get_transaction_status' });
+    }
+  }
+
+  if (/\b(land map|coordinates?|neighbor|neighbour|north|south|east|west|where is land|map slot)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, {
+      input: {
+        ...addressInput,
+        ...(landId != null ? { landId } : {}),
+        ...(coordinate || {}),
+        includeNeighbors: true,
+        includeOwner: true,
+      },
+      toolName: 'get_land_map_context',
+    });
+  }
+
+  if (/\b(task did not count|mission did not count|rocks not updating|streak not updating|proof|finish my daily|daily task|rocks|tasks?)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, suggestionLimit: 6 }, toolName: 'get_daily_task_plan' });
+    if (/\bproof|did not count|not updating|why\b/i.test(currentMessage)) {
+      addDeterministicToolRequest(requests, { input: {}, toolName: 'get_task_proof_guide' });
+    }
+  }
+
+  if (/\b(notification|notifications|reminder|plant reminder|care reminder|push)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { forceRefreshStatus: false }, toolName: 'get_notification_readiness' });
+  }
+
+  if (/\b(support links?|docs?|documentation|telegram|feedback|tutorial|community|x.com|farcaster)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { includeSocials: true }, toolName: 'get_support_links' });
   }
 
   if (/\b(care|dry|dying|dead|starving|tod|water|feed|revive|fence|shield|save my plants)\b/i.test(currentMessage)) {

@@ -17,8 +17,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { InlineBalanceNotice } from '@/components/ui/premium';
+import { ASSET_NAME_RULES, DEFAULT_PLANT_NAME_CHANGE_COST_SEED, getAssetNameInvalidReason, getAssetNameValidation, truncateUtf8ToMaxBytes } from '@/lib/asset-name-rules';
 import { useBalances } from '@/lib/balance-context';
-import { getEthQuoteForSeedAmount } from '@/lib/contracts';
+import { getEthQuoteForSeedAmount, getPlantNameChangePrice } from '@/lib/contracts';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { Plant } from '@/lib/types';
@@ -35,8 +36,9 @@ interface EditPlantNameProps {
   iconSize?: number;
 }
 
-const NAME_CHANGE_COST = 350; // SEED tokens required
-const MAX_NAME_LENGTH = 9; // Under 10 characters as requested
+const PLANT_NAME_RULE = ASSET_NAME_RULES.plant;
+const WEI_PER_TOKEN = BigInt('1000000000000000000');
+const FALLBACK_NAME_CHANGE_COST_WEI = BigInt(DEFAULT_PLANT_NAME_CHANGE_COST_SEED) * WEI_PER_TOKEN;
 const renamePanelClassName =
   "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
 
@@ -55,6 +57,7 @@ export function EditPlantName({
   const [isOpen, setIsOpen] = useState(false);
   const [newName, setNewName] = useState(plant.name || '');
   const [isTransactionPending, setIsTransactionPending] = useState(false);
+  const [nameChangeCostWei, setNameChangeCostWei] = useState<bigint>(FALLBACK_NAME_CHANGE_COST_WEI);
 
   // ETH Mode state
   const [ethQuote, setEthQuote] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
@@ -72,23 +75,39 @@ export function EditPlantName({
     }
   }, [isOpen, plant.name]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+
+    getPlantNameChangePrice()
+      .then((price) => {
+        if (!cancelled && price !== null) {
+          setNameChangeCostWei(price);
+        } else if (!cancelled) {
+          setNameChangeCostWei(FALLBACK_NAME_CHANGE_COST_WEI);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setNameChangeCostWei(FALLBACK_NAME_CHANGE_COST_WEI);
+      });
+
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
   const handleNameChange = (value: string) => {
-    // Strictly limit to MAX_NAME_LENGTH characters
-    const truncatedValue = value.slice(0, MAX_NAME_LENGTH);
-    setNewName(truncatedValue);
+    setNewName(truncateUtf8ToMaxBytes(value, PLANT_NAME_RULE.maxBytes));
   };
 
   const canAffordNameChange = isSmartWallet && isEthMode && ethQuote
     ? ethBalance >= ethQuote.ethAmountWithBuffer
-    : seedBalance >= BigInt(NAME_CHANGE_COST * 1e18);
+    : seedBalance >= nameChangeCostWei;
   const trimmedName = newName.trim();
-  const isNameValid = trimmedName.length > 0 &&
-    trimmedName.length <= MAX_NAME_LENGTH &&
+  const nameValidation = getAssetNameValidation('plant', newName);
+  const nameInvalidReason = getAssetNameInvalidReason('plant', newName);
+  const isNameValid = nameValidation.validFormat &&
     trimmedName !== (plant.name || '').trim();
   const canSubmit = canAffordNameChange && isNameValid && !isTransactionPending;
-
-  // SEED cost in wei for ETH quote
-  const nameChangeCostWei = BigInt(NAME_CHANGE_COST) * BigInt(1e18);
 
   // Fetch ETH quote when dialog opens and ETH mode is active
   useEffect(() => {
@@ -200,15 +219,17 @@ export function EditPlantName({
               value={newName}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Enter new name..."
-              maxLength={MAX_NAME_LENGTH}
               className="w-full font-pixel"
             />
             <div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
-              <span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
-              {newName.length === MAX_NAME_LENGTH && (
-                <span className="text-destructive">Maximum length reached</span>
+              <span>{nameValidation.rawByteLength}/{PLANT_NAME_RULE.maxBytes} bytes</span>
+              {nameValidation.rawByteLength === PLANT_NAME_RULE.maxBytes && (
+                <span className="text-destructive">Byte limit reached</span>
               )}
             </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Emoji and accented letters can use more than 1 byte.
+            </p>
           </section>
         </DialogBody>
 
@@ -264,7 +285,7 @@ export function EditPlantName({
                 newName={newName.trim()}
                 onSuccess={handleSuccess}
                 onError={handleError}
-                buttonText={`Change Name (${NAME_CHANGE_COST} SEED)`}
+                buttonText={nameChangeCostWei > BigInt(0) ? `Change Name (${formatTokenAmount(nameChangeCostWei)} SEED)` : 'Change Name (free)'}
                 buttonClassName="w-full"
                 disabled={!canSubmit}
                 hideLabel
@@ -277,8 +298,7 @@ export function EditPlantName({
             >
               {isSmartWallet && isEthMode && ethQuoteLoading ? 'Loading ETH quote...' :
                 !canAffordNameChange ? (isSmartWallet && isEthMode ? 'Insufficient ETH' : 'Insufficient SEED') :
-                  trimmedName.length === 0 ? 'Enter a name' :
-                    trimmedName.length > MAX_NAME_LENGTH ? 'Name too long' :
+                  nameInvalidReason ? nameInvalidReason :
                       trimmedName === (plant.name || '').trim() ? 'Name unchanged' :
                         'Change Name'}
             </Button>
@@ -288,9 +308,9 @@ export function EditPlantName({
               Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
             </InlineBalanceNotice>
           ) : !isSolana && !canAffordNameChange && !isLoadingBalance ? (
-            <InlineBalanceNotice>
-              Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(nameChangeCostWei)}
-            </InlineBalanceNotice>
+	            <InlineBalanceNotice>
+	              Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(nameChangeCostWei)}
+	            </InlineBalanceNotice>
           ) : null}
         </DialogFooter>
       </DialogContent>

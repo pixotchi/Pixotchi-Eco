@@ -18,6 +18,7 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { Land } from '@/lib/types';
 import { LandNameTransaction } from '@/components/transactions/land-name-transaction';
+import { ASSET_NAME_RULES, getAssetNameInvalidReason, getAssetNameValidation, truncateUtf8ToMaxBytes } from '@/lib/asset-name-rules';
 
 interface EditLandNameProps {
 	land: Land;
@@ -26,7 +27,7 @@ interface EditLandNameProps {
 	iconSize?: number;
 }
 
-const MAX_NAME_LENGTH = 9; // match plant constraints
+const LAND_NAME_RULE = ASSET_NAME_RULES.land;
 const renamePanelClassName =
 	"chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
 
@@ -43,12 +44,13 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 	}, [isOpen, land.name]);
 
 	const handleNameChange = (value: string) => {
-		const truncated = value.slice(0, MAX_NAME_LENGTH);
-		setNewName(truncated);
+		setNewName(truncateUtf8ToMaxBytes(value, LAND_NAME_RULE.maxBytes));
 	};
 
 	const trimmedName = newName.trim();
-	const isNameValid = trimmedName.length > 0 && trimmedName.length <= MAX_NAME_LENGTH && trimmedName !== (land.name || '').trim();
+	const nameValidation = getAssetNameValidation('land', newName);
+	const nameInvalidReason = getAssetNameInvalidReason('land', newName);
+	const isNameValid = nameValidation.validFormat && trimmedName !== (land.name || '').trim();
 	const canSubmit = isNameValid && !isTransactionPending; // free action
 
 	const handleSuccess = () => {
@@ -96,12 +98,13 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 								Land #{land.tokenId.toString()}
 							</span>
 						</div>
-						<Input id="land-name" value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Enter new name..." maxLength={MAX_NAME_LENGTH} className="w-full font-pixel" />
-						<div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
-							<span>{newName.length}/{MAX_NAME_LENGTH} characters</span>
-							{newName.length === MAX_NAME_LENGTH && <span className="text-destructive">Maximum length reached</span>}
-						</div>
-					</section>
+							<Input id="land-name" value={newName} onChange={(e) => handleNameChange(e.target.value)} placeholder="Enter new name..." className="w-full font-pixel" />
+							<div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
+								<span>{nameValidation.rawByteLength}/{LAND_NAME_RULE.maxBytes} bytes</span>
+								{nameValidation.rawByteLength === LAND_NAME_RULE.maxBytes && <span className="text-destructive">Byte limit reached</span>}
+							</div>
+							<p className="mt-1 text-[11px] text-muted-foreground">Emoji and accented letters can use more than 1 byte.</p>
+						</section>
 				</DialogBody>
 
 				<DialogFooter sticky className="block space-y-2">
@@ -118,8 +121,8 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 						/>
 					) : (
 						<Button disabled className="w-full">
-							{trimmedName.length === 0 ? 'Enter a name' : trimmedName.length > MAX_NAME_LENGTH ? 'Name too long' : trimmedName === (land.name || '').trim() ? 'Name unchanged' : 'Change Name'}
-						</Button>
+								{nameInvalidReason || (trimmedName === (land.name || '').trim() ? 'Name unchanged' : 'Change Name')}
+							</Button>
 					)}
 				</DialogFooter>
 			</DialogContent>

@@ -8,6 +8,7 @@ import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { BaseRpcError,getBaseReadClient,waitForBaseReceipt } from './base-rpc';
 import { appendBuilderSuffix } from './builder-code';
 import { CLIENT_ENV } from './env-config';
+import { PIXOTCHI_SOLANA_CONFIG, SOLANA_TWIN_ADAPTER_ABI } from './solana-constants';
 import {
 BarracksConfig,
 BarracksConfigV2,
@@ -38,6 +39,24 @@ export const BATCH_ROUTER_ADDRESS = CLIENT_ENV.BATCH_ROUTER_ADDRESS ? getAddress
 export const UNISWAP_ROUTER_ADDRESS = getAddress('0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'); // BaseSwap Router (Uniswap V2 Fork)
 export const WETH_ADDRESS = getAddress('0x4200000000000000000000000000000000000006');
 export const FENCE_V2_EXTENSION_ADDRESS = PIXOTCHI_NFT_ADDRESS;
+
+export const getPlantNameChangePrice = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<bigint | null> => {
+  if (!PIXOTCHI_SOLANA_CONFIG.twinAdapter) return null;
+
+  try {
+    return await readClient.readContract({
+      address: getAddress(PIXOTCHI_SOLANA_CONFIG.twinAdapter),
+      abi: SOLANA_TWIN_ADAPTER_ABI,
+      functionName: 'getNameChangePriceInSeed',
+      args: [],
+    }) as bigint;
+  } catch (error) {
+    console.warn('getPlantNameChangePrice failed:', error);
+    return null;
+  }
+};
 
 const isFenceItemName = (name: UntypedValue): boolean => {
   if (typeof name !== 'string') return false;

@@ -52,7 +52,7 @@ const solLog = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.log(...a
 const solWarn = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.warn(...args); };
 const solError = (...args: UntypedValue[]) => { if (SOLANA_DEBUG) console.error(...args); };
 
-const PLANT_MINT_DESCRIPTION = 'Choose a strain and mint your Plant onchain. Each Plant starts with 24 hours of lifetime, and its PTS define your share of ETH rewards.';
+const PLANT_MINT_DESCRIPTION = 'Choose a strain and mint your Plant onchain. Each strain has its own starting lifetime, and PTS define your share of ETH rewards.';
 const LAND_MINT_DESCRIPTION = 'Mint a Land to produce PTS and TOD passively by staking SEED instead of spending it, helping grow your Plant and ETH rewards over the long term.';
 const SUCCESS_TRANSACTION_BUTTON_CLASS = 'w-full bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground hover:brightness-[1.03] shadow-[var(--shadow-control)]';
 const SOLANA_SPECIAL_BUTTON_CLASS = 'w-full bg-[image:var(--gradient-solana)] text-white hover:brightness-105 disabled:opacity-55';

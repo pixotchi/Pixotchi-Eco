@@ -103,6 +103,7 @@ export function LandMapModal({
 
   const neighbor = tappedLandId ? neighborData[tappedLandId] : null;
   const isUserOwned = tappedLandId ? userLands.some(l => Number(l.tokenId) === tappedLandId) : false;
+  const isTappedLandMinted = tappedLandId !== null && tappedLandId > 0 && tappedLandId < totalSupply;
   
   // Fetch owner on demand
   useEffect(() => {
@@ -275,7 +276,7 @@ export function LandMapModal({
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
-                            src={tappedLandId <= totalSupply ? "/icons/map/taken.webp" : "/icons/map/cemetery.webp"} 
+                            src={isTappedLandMinted ? "/icons/map/taken.webp" : "/icons/map/cemetery.webp"}
                             alt="Land Thumbnail" 
                             fill 
                             className="object-contain p-1" 
@@ -287,12 +288,12 @@ export function LandMapModal({
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
                                 <h3 className="flex items-center gap-2 truncate text-base font-semibold">
-                                    {neighbor?.name || (tappedLandId <= totalSupply ? `Land #${tappedLandId}` : "Cemetery")}
+                                    {neighbor?.name || (isTappedLandMinted ? `Land #${tappedLandId}` : "Cemetery")}
                                     {isUserOwned && <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded">YOU</span>}
                                 </h3>
                                 <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
                                     <span className="font-mono">#{tappedLandId}</span>
-                                    {tappedLandId <= totalSupply && (
+                                    {isTappedLandMinted && (
                                         <>
                                             <span className="mx-1">/</span>
                                             <span className="font-mono">
@@ -313,7 +314,7 @@ export function LandMapModal({
                             </Button>
                         </div>
 
-                        {tappedLandId <= totalSupply ? (
+                        {isTappedLandMinted ? (
                              /* MINTED LAND STATS - Simplified */
                              <div className="flex items-center justify-between gap-2 mt-1">
                                  <div className="flex flex-col flex-1 min-w-0 gap-0.5">

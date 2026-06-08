@@ -34,6 +34,7 @@ import {
   getLandsByIds,
   getLandsByOwner,
   getLeafBalance,
+  getPlantNameChangePrice,
   getPlantsByOwner,
   getPlantsInfoExtended,
   KILL_COOLDOWN_ABI,
@@ -67,11 +68,16 @@ import { getSwapQuoteForUserPair } from './swap/engine';
 import { getSwapToken, isUserSwapTokenId, USER_SWAP_TOKEN_IDS } from './swap/constants';
 import type { UserSwapTokenId } from './swap/types';
 import { GAME_ACTION_TOPICS, getGameActionGuide } from './ai-action-guide';
+import { createCustodyRedaction, isKnownCustodyWalletAddress } from './ai-custody-privacy';
 import { fetchSeedMarketPulse, SEED_PAIR_DEXSCREENER_URL } from './seed-market';
 import { getAllPixotchiTokenInfo, getPixotchiTokenInfo } from './pixotchi-token-info';
 import { fetchIndexerGraphQL } from './indexer-client';
 import { PLANT_STRAINS_BY_ID, TOWN_BUILDING_NAMES, VILLAGE_BUILDING_NAMES } from './constants';
-import { CLIENT_ENV } from './env-config';
+import { CLIENT_ENV, SERVER_ENV } from './env-config';
+import { ASSET_NAME_RULES, DEFAULT_PLANT_NAME_CHANGE_COST_SEED, getAssetNameValidation } from './asset-name-rules';
+import { PLANT_CARE_THRESHOLD_SECONDS, PLANT_CARE_THROTTLE_SECONDS } from './notifications/constants';
+import { getNotificationProviderLabel } from './notifications/provider';
+import { getPlantCareStats } from './notifications/storage';
 import { redis } from './redis';
 import { getCachedStatusSnapshot } from './status-checks';
 import { getBridgeConfig, getPixotchiSolanaConfig, isSolanaEnabled, validateSolanaConfig } from './solana-constants';
@@ -135,7 +141,7 @@ const ADDRESS_INPUT = z
   .trim()
   .regex(/^0x[a-fA-F0-9]{40}$/)
   .optional()
-  .describe('Optional public wallet address. Omit this to use the authenticated user.');
+  .describe('Optional public non-custody wallet address. Omit this to use the authenticated user.');
 const SOLANA_ADDRESS_INPUT = z
   .string()
   .trim()
@@ -174,6 +180,154 @@ const AI_BLACKJACK_ACTION_MAX_LANDS = Number.parseInt(process.env.AI_BLACKJACK_A
 const QUEST_REWARDS_WALLET = getAddress('0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB');
 const MIN_QUEST_REWARDS_SEED_BALANCE = parseUnits('300', 18);
 const QUEST_BLOCK_SECONDS = 2;
+const COORDINATE_INPUT_LIMIT = 1_000_000;
+
+const TASK_PROOF_GUIDE: Record<string, {
+  actionPanel: string;
+  proofType: 'transaction' | 'ui_event' | 'mixed';
+  whatCounts: string;
+  delayAdvice: string;
+}> = {
+  s1_make_swap: {
+    actionPanel: 'Swap',
+    proofType: 'transaction',
+    whatCounts: 'A completed in-app SEED swap with a transaction hash.',
+    delayAdvice: 'Wait for the swap transaction to confirm and for mission tracking to store the proof.',
+  },
+  s1_stake_seed: {
+    actionPanel: 'Staking',
+    proofType: 'transaction',
+    whatCounts: 'A completed in-app SEED stake transaction.',
+    delayAdvice: 'Refresh Staking and Tasks after confirmation; smart-wallet proof extraction can lag.',
+  },
+  s1_claim_stake: {
+    actionPanel: 'Staking',
+    proofType: 'transaction',
+    whatCounts: 'A completed in-app staking reward claim.',
+    delayAdvice: 'The task needs a finished claim flow; no claimable LEAF means the action may not be available.',
+  },
+  s1_place_order: {
+    actionPanel: 'Farm -> Lands -> Marketplace',
+    proofType: 'transaction',
+    whatCounts: 'A completed SEED/LEAF marketplace order transaction.',
+    delayAdvice: 'Wait for the order transaction to confirm, then reopen Tasks.',
+  },
+  s2_follow_player: {
+    actionPanel: 'Profile/Social',
+    proofType: 'ui_event',
+    whatCounts: 'Following another visible player through the profile/social UI.',
+    delayAdvice: 'Reopen the profile/task UI after the follow state updates.',
+  },
+  s2_chat_message: {
+    actionPanel: 'Public Chat',
+    proofType: 'ui_event',
+    whatCounts: 'Sending a public chat message from the app.',
+    delayAdvice: 'Chat task progress is tracked by the app after the message posts.',
+  },
+  s2_visit_profile: {
+    actionPanel: 'Profile/Social',
+    proofType: 'ui_event',
+    whatCounts: 'Opening a visible player profile.',
+    delayAdvice: 'Profile visits are UI-tracked; reopen Tasks if the dialog was already open.',
+  },
+  s3_apply_resources: {
+    actionPanel: 'Farm -> Lands -> Warehouse',
+    proofType: 'transaction',
+    whatCounts: 'Applying Warehouse PTS or TOD resources to a plant.',
+    delayAdvice: 'Wait for the apply transaction hash to confirm and then reopen Tasks.',
+  },
+  s3_send_quest: {
+    actionPanel: 'Farm -> Lands -> Farmer House',
+    proofType: 'transaction',
+    whatCounts: 'Starting a Farmer House quest.',
+    delayAdvice: 'The task tracks quest start proof, not quest completion.',
+  },
+  s3_claim_production: {
+    actionPanel: 'Farm -> Lands -> Buildings or Batch Claim',
+    proofType: 'transaction',
+    whatCounts: 'Collecting production from any eligible land building.',
+    delayAdvice: 'A building with no unclaimed production cannot complete this task.',
+  },
+  s3_play_casino_game: {
+    actionPanel: 'Farm -> Lands -> Casino',
+    proofType: 'transaction',
+    whatCounts: 'Playing roulette or blackjack through the Casino building.',
+    delayAdvice: 'The casino action needs to finish onchain before Rocks progress appears.',
+  },
+  s4_buy10_elements: {
+    actionPanel: 'Farm -> Plants -> Shop/Garden',
+    proofType: 'transaction',
+    whatCounts: 'Buying at least 10 plant elements/items during the mission day.',
+    delayAdvice: 'Partial item counts can require multiple purchases; reopen Tasks to see the count.',
+  },
+  s4_buy_shield: {
+    actionPanel: 'Farm -> Plants -> Fence/Shield',
+    proofType: 'transaction',
+    whatCounts: 'Buying a shield/fence for a plant.',
+    delayAdvice: 'The task tracks the purchase transaction, not merely opening the fence dialog.',
+  },
+  s4_collect_star: {
+    actionPanel: 'Ranking -> Dead',
+    proofType: 'transaction',
+    whatCounts: 'Killing an already-dead plant to award one star to a living plant.',
+    delayAdvice: 'Regular plant attacks do not count; use the Dead ranking kill flow.',
+  },
+  s4_play_arcade: {
+    actionPanel: 'Farm -> Plants -> Arcade',
+    proofType: 'transaction',
+    whatCounts: 'Playing Box or Spin through Arcade.',
+    delayAdvice: 'Cooldowns and star costs can block the action even when the task is incomplete.',
+  },
+};
+
+const QUEST_PHASE_GUIDE = [
+  {
+    action: 'Start',
+    contractFunction: 'questStart',
+    requirements: ['Farmer slot exists for the Farmer House level.', 'Slot cooldown has passed.', 'No quest is already in progress.'],
+    uiLabel: 'Start',
+  },
+  {
+    action: 'Commit',
+    contractFunction: 'questCommit',
+    requirements: ['Quest exists.', 'Quest duration has ended.', 'Quest was not already committed.'],
+    uiLabel: 'Return now',
+  },
+  {
+    action: 'Finalize',
+    contractFunction: 'questFinalize',
+    requirements: ['Quest was committed.', 'The pseudo-random block is available.', 'Finalize before the 256 block blockhash expiry window closes.'],
+    uiLabel: 'Open now',
+  },
+] as const;
+
+const BARRACKS_RAID_STATUS_GUIDE = [
+  { code: 0, label: 'OK', meaning: 'Raid preview/action can proceed if wallet and gas checks also pass.' },
+  { code: 1, label: 'SAME_LAND', meaning: 'Attacker and defender land IDs are the same.' },
+  { code: 2, label: 'ATTACKER_BARRACKS_REQUIRED', meaning: 'The attacker land needs a Barracks.' },
+  { code: 3, label: 'DEFENDER_BARRACKS_REQUIRED', meaning: 'The defender land needs a Barracks.' },
+  { code: 4, label: 'SELF_ATTACK_BLOCKED', meaning: 'Both lands are owned by the same wallet.' },
+  { code: 5, label: 'ATTACKER_COOLDOWN', meaning: 'The attacker land is still on raid cooldown.' },
+  { code: 6, label: 'DEFENDER_COOLDOWN', meaning: 'The defender land is still on defense cooldown.' },
+  { code: 7, label: 'INSUFFICIENT_TROOPS', meaning: 'No troops were sent or the attacker lacks the requested troops.' },
+  { code: 8, label: 'NO_RAIDABLE_PRODUCTION', meaning: 'The defender has no raidable production to loot.' },
+  { code: 9, label: 'BARRACKS_DISABLED', meaning: 'Barracks are not initialized or are disabled.' },
+] as const;
+
+const MARKETPLACE_BLOCKER_GUIDE = [
+  { blocker: 'market place doesnt exist', meaning: 'The selected land does not have a Marketplace building.' },
+  { blocker: 'marketplace is not active', meaning: 'Marketplace actions are disabled by contract config.' },
+  { blocker: 'Order is not active', meaning: 'The order was already taken or cancelled.' },
+  { blocker: 'msg.sender cant be same as order.seller', meaning: 'A seller cannot take their own order.' },
+  { blocker: 'Insufficient balance / allowance', meaning: 'The wallet needs enough SEED or LEAF and an active allowance for the marketplace action.' },
+] as const;
+
+const ARCADE_BLOCKER_GUIDE = [
+  { blocker: 'Not the owner of nft', meaning: 'Only the plant owner can play with that plant.' },
+  { blocker: 'Cool down time has not passed yet', meaning: 'Normal Box or star Box cooldown is still active.' },
+  { blocker: 'Plant is dead', meaning: 'Arcade actions require a living plant.' },
+  { blocker: 'Need one star', meaning: 'The star Box play requires at least one star and spends one star.' },
+] as const;
 function buildCombatActivityQuery(direction: 'all' | 'incoming' | 'outgoing') {
   const plantWhere = direction === 'incoming'
     ? 'attacker_not_in: $plantIds, OR: [{ winner_in: $plantIds }, { loser_in: $plantIds }]'
@@ -295,7 +449,24 @@ function getTargetAddress(input: string | undefined, fallback: string): `0x${str
   if (!isAddress(candidate)) {
     throw new Error('Invalid wallet address.');
   }
-  return getAddress(candidate);
+  const target = getAddress(candidate);
+  if (isKnownCustodyWalletAddress(target)) {
+    throw new Error('Custody and internal wallet data is not exposed by Neural Seed.');
+  }
+  return target;
+}
+
+function redactCustodyAddress(address: string | null | undefined) {
+  if (!address || !isKnownCustodyWalletAddress(address)) {
+    return { redacted: false, value: address || null };
+  }
+
+  return { redacted: true, value: null };
+}
+
+function publicAddressField(address: string | null | undefined) {
+  const redacted = redactCustodyAddress(address);
+  return redacted.value;
 }
 
 function formatToken(raw: bigint | number | string | undefined, decimals = 18): string {
@@ -569,7 +740,8 @@ function normalizePlant(plant: Plant) {
     lastAttackUsed: plant.lastAttackUsed,
     level: plant.level,
     name: plant.name || `Plant #${plant.id}`,
-    owner: plant.owner,
+    owner: publicAddressField(plant.owner),
+    ownerRedacted: redactCustodyAddress(plant.owner).redacted,
     protected: fence.hasActiveFence,
     rewardsEth: plant.rewards / 1e18,
     scorePts: plant.score / 1e12,
@@ -685,6 +857,7 @@ function summarizeAttackPlant(plant: ReturnType<typeof normalizePlant>) {
     level: plant.level,
     name: plant.name,
     owner: plant.owner,
+    ownerRedacted: plant.ownerRedacted,
     scorePts: plant.scorePts,
     status: plant.status,
     statusLabel: plant.statusLabel,
@@ -1164,7 +1337,8 @@ function normalizeLand(land: Land, details?: {
     experiencePoints: formatToken(land.experiencePoints),
     id: land.tokenId.toString(),
     name: land.name || `Land #${land.tokenId.toString()}`,
-    owner: land.owner,
+    owner: publicAddressField(land.owner),
+    ownerRedacted: redactCustodyAddress(land.owner).redacted,
     quests: details?.quests || [],
     storedLifetimeSeconds: formatSeconds(land.accumulatedPlantLifetime),
     storedLifetimeHours: toNumber(land.accumulatedPlantLifetime) / 3600,
@@ -1559,6 +1733,21 @@ async function readLandsForInput(
   return getLandsByOwner(address, readClient);
 }
 
+async function readLandOwnerSafe(readClient: PixotchiReadClient, landId: number): Promise<string | null> {
+  if (landId <= 0) return null;
+  try {
+    const owner = await readClient.readContract({
+      address: LAND_CONTRACT_ADDRESS,
+      abi: landAbi as UntypedValue,
+      functionName: 'ownerOf',
+      args: [BigInt(landId)],
+    });
+    return typeof owner === 'string' && isAddress(owner) ? getAddress(owner) : null;
+  } catch {
+    return null;
+  }
+}
+
 type MarketplaceOrder = {
   amount: bigint;
   amountAsk: bigint;
@@ -1711,6 +1900,248 @@ function buildMissionTaskRows(mission: UntypedValue) {
   };
 }
 
+function getTaskProofGuideEntries(taskIds?: string[]) {
+  const allowed = new Set((taskIds || []).filter((id) => id in TASK_PROOF_GUIDE));
+  return Object.entries(TASK_PROOF_GUIDE)
+    .filter(([id]) => allowed.size === 0 || allowed.has(id))
+    .map(([id, guide]) => ({
+      id,
+      ...guide,
+    }));
+}
+
+function withTaskProofGuide<T extends { id: string }>(task: T) {
+  return {
+    ...task,
+    proofGuide: TASK_PROOF_GUIDE[task.id] || null,
+  };
+}
+
+function buildPublicAppUrl(path = ''): string {
+  try {
+    return new URL(path || '/', CLIENT_ENV.APP_URL).toString();
+  } catch {
+    return `https://mini.pixotchi.tech${path.startsWith('/') ? path : `/${path}`}`;
+  }
+}
+
+function normalizeLandCoordinateRead(result: UntypedValue): { occupied: boolean; x: number; y: number } {
+  return {
+    occupied: Boolean(result?.occupied ?? result?.[2]),
+    x: Number(result?.x ?? result?.[0] ?? 0),
+    y: Number(result?.y ?? result?.[1] ?? 0),
+  };
+}
+
+function normalizeLandBoundariesRead(result: UntypedValue): { maxX: number; maxY: number; minX: number; minY: number } {
+  return {
+    maxX: Number(result?.maxX ?? result?.[1] ?? 0),
+    maxY: Number(result?.maxY ?? result?.[3] ?? 0),
+    minX: Number(result?.minX ?? result?.[0] ?? 0),
+    minY: Number(result?.minY ?? result?.[2] ?? 0),
+  };
+}
+
+async function readLandCoordinatesSafe(readClient: PixotchiReadClient, landId: number) {
+  try {
+    const result = await readClient.readContract({
+      address: LAND_CONTRACT_ADDRESS,
+      abi: landAbi as UntypedValue,
+      functionName: 'landGetCoordinates',
+      args: [BigInt(landId)],
+    });
+    return normalizeLandCoordinateRead(result);
+  } catch {
+    return null;
+  }
+}
+
+async function readLandTokenIdByCoordinatesSafe(readClient: PixotchiReadClient, x: number, y: number): Promise<number | null> {
+  try {
+    const result = await readClient.readContract({
+      address: LAND_CONTRACT_ADDRESS,
+      abi: landAbi as UntypedValue,
+      functionName: 'landGetTokenIdByCoordinates',
+      args: [BigInt(x), BigInt(y)],
+    });
+    const tokenId = Number(result ?? 0);
+    return Number.isFinite(tokenId) && tokenId > 0 ? tokenId : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readLandBoundariesSafe(readClient: PixotchiReadClient) {
+  try {
+    const result = await readClient.readContract({
+      address: LAND_CONTRACT_ADDRESS,
+      abi: landAbi as UntypedValue,
+      functionName: 'landGetBoundaries',
+      args: [],
+    });
+    return normalizeLandBoundariesRead(result);
+  } catch {
+    return null;
+  }
+}
+
+function getCardinalNeighborCoordinates(coordinate: { x: number; y: number }) {
+  return [
+    { coordinate: { x: coordinate.x, y: coordinate.y + 1 }, direction: 'north' },
+    { coordinate: { x: coordinate.x + 1, y: coordinate.y }, direction: 'east' },
+    { coordinate: { x: coordinate.x, y: coordinate.y - 1 }, direction: 'south' },
+    { coordinate: { x: coordinate.x - 1, y: coordinate.y }, direction: 'west' },
+  ];
+}
+
+function coordinateInsideBoundaries(
+  coordinate: { x: number; y: number } | null,
+  boundaries: { maxX: number; maxY: number; minX: number; minY: number } | null,
+) {
+  if (!coordinate || !boundaries) return null;
+  return coordinate.x >= boundaries.minX
+    && coordinate.x <= boundaries.maxX
+    && coordinate.y >= boundaries.minY
+    && coordinate.y <= boundaries.maxY;
+}
+
+async function getPlantNameChangeCostState(readClient: PixotchiReadClient) {
+  const fallbackRaw = parseUnits(String(DEFAULT_PLANT_NAME_CHANGE_COST_SEED), 18);
+  const liveRaw = await getPlantNameChangePrice(readClient);
+  const amountRaw = liveRaw ?? fallbackRaw;
+
+  return {
+    amountDisplay: `${formatToken(amountRaw)} SEED`,
+    amountRaw,
+    source: liveRaw == null
+      ? 'fallback_ui_default_no_public_base_getter'
+      : 'live_solana_twin_adapter_getNameChangePriceInSeed',
+    usedFallback: liveRaw == null,
+  };
+}
+
+function classifyGameError(errorText: string, actionHint?: string) {
+  const normalized = `${errorText} ${actionHint || ''}`.toLowerCase();
+  const matches: Array<{
+    category: string;
+    confidence: 'high' | 'medium' | 'low';
+    likelyCause: string;
+    suggestedChecks: string[];
+    relatedTools: string[];
+  }> = [];
+
+  const add = (
+    category: string,
+    confidence: 'high' | 'medium' | 'low',
+    likelyCause: string,
+    suggestedChecks: string[],
+    relatedTools: string[],
+  ) => matches.push({ category, confidence, likelyCause, suggestedChecks, relatedTools });
+
+  if (/user rejected|request rejected|denied|cancel/.test(normalized)) {
+    add('wallet_rejected', 'high', 'The wallet confirmation was rejected or cancelled.', ['Retry only when ready and confirm in the wallet UI.'], []);
+  }
+  if (/wallet client unavailable|wallet not connected|connect wallet|provider/.test(normalized)) {
+    add('wallet_not_connected', 'high', 'The app could not access an active wallet connection.', ['Reconnect from Header Profile.', 'Refresh the app if the wallet connector is stale.'], ['get_wallet_capabilities']);
+  }
+  if (/insufficient|not enough|balance|funds/.test(normalized)) {
+    add('insufficient_balance', 'high', 'The wallet likely lacks the token or ETH needed for the selected action.', ['Check the token shown by the action panel.', 'Check ETH for gas or ETH-mode quotes.', 'Refresh balances before retrying.'], ['get_wallet_token_balances', 'get_game_prices']);
+  }
+  if (/allowance|approve|approval/.test(normalized)) {
+    add('allowance_or_approval', 'medium', 'The action may need a fresh allowance for a known Pixotchi spender.', ['Check the action panel for an Approve step.', 'Refresh known allowances before retrying.'], ['get_known_allowances']);
+  }
+  if (/name length must be between 2 and 10|name must be at least 3 characters|name must be at most 10 characters|invalid name/.test(normalized)) {
+    add('asset_name_bytes', 'high', 'The name does not satisfy the onchain UTF-8 byte rule.', ['Plant names must be 2-10 UTF-8 bytes.', 'Land names must be 3-10 UTF-8 bytes.', 'Emoji and accented letters can use more than 1 byte. Use the rename dialog byte counter.'], ['get_name_change_readiness']);
+  }
+  if (/can't hurt yourself|self attack/.test(normalized)) {
+    add('plant_attack_self', 'high', 'A plant cannot attack itself.', ['Pick a different living target plant.'], ['get_attack_targets']);
+  }
+  if (/your plant is dead|attacker dead/.test(normalized)) {
+    add('plant_attacker_dead', 'high', 'The selected attacker plant is dead.', ['Choose a living plant as the attacker.', 'Use revive guidance if the plant can be revived.'], ['get_plant_care_audit', 'get_game_prices']);
+  }
+  if (/plant dead|target dead/.test(normalized)) {
+    add('plant_target_dead', 'high', 'Plant attacks only target living plants; dead plants use the separate kill/star flow.', ['For attacks, choose a living target.', 'For stars, use the dead-plant kill flow.'], ['get_attack_targets', 'get_killable_plants']);
+  }
+  if (/one attack every 30 mins/.test(normalized)) {
+    add('plant_attacker_cooldown', 'high', 'The attacking plant is still on its 30 minute attack cooldown.', ['Wait for the attacker cooldown timer, then refresh attack targets.'], ['get_attack_targets']);
+  }
+  if (/can be attacked once every hour/.test(normalized)) {
+    add('plant_target_cooldown', 'high', 'The target plant was attacked recently and is protected by its 1 hour target cooldown.', ['Pick another eligible target or wait until the target cooldown ends.'], ['get_attack_targets']);
+  }
+  if (/only attack plants above your level/.test(normalized)) {
+    add('plant_attack_level_rule', 'high', 'The attacker must be lower level than the target.', ['Pick a target above the attacker level.', 'Refresh attack targets instead of using leaderboard rank alone.'], ['get_attack_targets']);
+  }
+  if (/protected by a fence|fence active/.test(normalized)) {
+    add('plant_or_shop_fence', 'high', 'A fence/shield is blocking this action or the selected plant already has an active fence.', ['For attacks, choose an unfenced target.', 'For shop purchases, wait for the current fence to expire before buying another fence.'], ['get_attack_targets', 'get_plant_care_audit']);
+  }
+  if (/kill function is not active/.test(normalized)) {
+    add('kill_disabled', 'high', 'Dead-plant killing is disabled by the live game config.', ['Check app status and the dead ranking flow before retrying.'], ['get_app_status', 'get_killable_plants']);
+  }
+  if (/the plant has to be dead to claim its points/.test(normalized)) {
+    add('kill_target_alive', 'high', 'The kill/star flow only works on plants that are already dead.', ['Use attack for living-vs-living PTS combat.', 'Use killable plants for dead targets.'], ['get_killable_plants']);
+  }
+  if (/1 kill per hour|kill cooldown active/.test(normalized)) {
+    add('kill_wallet_cooldown', 'high', 'This wallet is on the dead-plant kill cooldown.', ['Wait until the wallet kill cooldown ends, then refresh killable plants.'], ['get_killable_plants']);
+  }
+  if (/need one star/.test(normalized)) {
+    add('arcade_star_required', 'high', 'The star arcade play requires at least one plant star.', ['Use normal Box play if available.', 'Earn a star through the dead-plant kill flow, then retry the star play.'], ['get_arcade_status', 'get_killable_plants']);
+  }
+  if (/cool down time has not passed yet/.test(normalized)) {
+    add('arcade_cooldown', 'high', 'This arcade play is still on cooldown.', ['Check the Box game cooldown timer for the selected plant.', 'Use another ready plant if available.'], ['get_arcade_status']);
+  }
+  if (/not the owner of nft|not owner|not approved/.test(normalized)) {
+    add('ownership', 'high', 'The connected wallet does not own the selected plant or land for this action.', ['Switch to the owner wallet.', 'Check Wallet Profile assets and the selected asset ID.'], ['get_wallet_game_assets', 'get_name_change_readiness']);
+  }
+  if (/market place doesnt exist/.test(normalized)) {
+    add('marketplace_building_required', 'high', 'The selected land needs a Marketplace building before using marketplace actions.', ['Open the land Town buildings and build/upgrade the Marketplace if available.'], ['get_marketplace_orders', 'get_lands']);
+  }
+  if (/marketplace is not active/.test(normalized)) {
+    add('marketplace_disabled', 'high', 'The marketplace feature is currently inactive.', ['Check app status and the Marketplace panel before retrying.'], ['get_app_status', 'get_marketplace_orders']);
+  }
+  if (/msg\.sender cant be same as order\.seller/.test(normalized)) {
+    add('marketplace_own_order', 'high', 'A seller cannot take their own marketplace order.', ['Pick another active order or cancel your own order from the Marketplace panel.'], ['get_marketplace_orders']);
+  }
+  if (/insufficient balance to buy|insufficient allowance to buy|tx buytoken|tx selltoken|refund transfer failed/.test(normalized)) {
+    add('marketplace_payment_blocker', 'high', 'The marketplace token balance, allowance, or exchange transfer path is blocking the order.', ['Refresh SEED/LEAF balances and allowances.', 'Check whether the order is still active before retrying.'], ['get_wallet_token_balances', 'get_known_allowances', 'get_marketplace_orders']);
+  }
+  if (/farmer slot is too high|farmer is on cooldown|quest already in progress|no quest found|quest not yet ended|quest already committed|quest has not been committed|too early to finalize/.test(normalized)) {
+    add('quest_phase_blocker', 'high', 'The Farmer House quest is in a different phase than the attempted action expects.', ['Use Start only on an empty ready slot.', 'Use Return/Commit after the quest duration ends.', 'Use Open/Finalize after the pseudo-random block is ready and before the 256 block expiry.'], ['get_quest_readiness']);
+  }
+  if (/barracksdisabled|barracks disabled|barracksrequired|barracks required|selfattackblocked|barracksattackcooldownactive|barracksdefensecooldownactive|invalidtroopamount|invalidtrooptype|insufficienttroops|trainingqueueactive|notroopsready|noraidableproduction|barrackspaymentinsufficient/.test(normalized)) {
+    add('barracks_raid_blocker', 'high', 'A Barracks raid or training precondition failed.', ['Check whether both lands have Barracks.', 'Check troop counts, training queue, raid cooldowns, and raidable production.', 'Use raid preview/status before sending troops.'], ['get_land_raid_targets', 'get_lands']);
+  }
+  if (/revert|execution reverted|call exception|denied by contract/.test(normalized)) {
+    add('contract_reverted', 'medium', 'The contract rejected the action because a live requirement was not met.', ['Refresh the exact game panel.', 'Check cooldowns, ownership, balances, feature flags, and target availability.', 'Use a tx hash if one exists.'], ['get_transaction_status', 'get_app_status']);
+  }
+  if (/cooldown|too soon|wait|timer/.test(normalized)) {
+    add('cooldown', 'high', 'The selected action is probably blocked by a live cooldown or timer.', ['Check the panel timer.', 'Wait until the UI shows the action as available.'], ['get_plant_care_audit', 'get_arcade_status', 'get_land_raid_targets']);
+  }
+  if (/owner|ownership|not owner|only owner/.test(normalized)) {
+    add('ownership', 'medium', 'The connected wallet may not own the selected plant or land.', ['Check Wallet Profile assets.', 'Confirm the selected wallet/address is the owner.'], ['get_wallet_game_assets', 'get_name_change_readiness']);
+  }
+  if (/disabled|paused|unavailable|feature|maintenance/.test(normalized)) {
+    add('feature_disabled', 'medium', 'The feature may be disabled, paused, or temporarily unavailable.', ['Check the Status page and feature flags.', 'Use the exact panel once it is enabled again.'], ['get_app_status']);
+  }
+  if (/wallet_sendcalls|sendcalls|atomic|bundle|method not found|unsupported method|-32601/.test(normalized)) {
+    add('unsupported_wallet_method', 'high', 'The wallet likely does not support atomic bundled transactions for this multi-step action.', ['Use Base App or a smart wallet if the UI offers one.', 'Try the non-bundled approve/action path if available.'], ['get_wallet_capabilities']);
+  }
+  if (/paymaster|sponsor|sponsored|gasless/.test(normalized)) {
+    add('sponsored_gas', 'medium', 'Sponsored gas or paymaster support may be unavailable for this wallet/action.', ['Check app status.', 'Retry with normal gas if the UI offers it.', 'Use a supported smart wallet.'], ['get_wallet_capabilities', 'get_app_status']);
+  }
+  if (/solana|twin|bridge|wsol/.test(normalized)) {
+    add('solana_or_twin', 'medium', 'The action may require Base gameplay support or a ready Solana Twin/bridge setup.', ['Check bridge/Twin readiness.', 'Switch to Base wallet flows for unsupported gameplay actions.'], ['get_bridge_status', 'get_wallet_capabilities']);
+  }
+  if (/timeout|not confirmed|pending/.test(normalized)) {
+    add('confirmation_timeout', 'medium', 'The wallet or app timed out while waiting for confirmation.', ['Check the tx hash if available.', 'Avoid retrying until you know whether the transaction landed.'], ['get_transaction_status']);
+  }
+
+  if (matches.length === 0) {
+    add('general_troubleshooting', 'low', 'The error text does not match a known Pixotchi-specific pattern.', ['Copy only the visible error text.', 'Check the exact app panel, status, balances, allowances, and wallet support.', 'Provide a tx hash if a transaction was created.'], ['get_app_status', 'get_wallet_capabilities', 'get_transaction_status']);
+  }
+
+  return matches;
+}
+
 async function readErc20Allowance(
   readClient: PixotchiReadClient,
   tokenAddress: `0x${string}`,
@@ -1725,7 +2156,7 @@ async function readErc20Allowance(
   }) as Promise<bigint>;
 }
 
-function sameAddress(a: string | undefined, b: string | undefined): boolean {
+function sameAddress(a: string | null | undefined, b: string | null | undefined): boolean {
   return Boolean(a && b && isAddress(a) && isAddress(b) && getAddress(a).toLowerCase() === getAddress(b).toLowerCase());
 }
 
@@ -2218,6 +2649,138 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_support_links: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Return official public Pixotchi support/navigation links and in-app support surfaces: app, status, feedback, tutorial, X, Telegram, and Farcaster. Use for docs/support/status/community link questions.',
+      inputSchema: z.object({
+        includeSocials: z.boolean().default(true),
+      }),
+      execute: async ({ includeSocials }) => withToolResult(
+        'get_support_links',
+        'Bundled public Pixotchi support and About-tab navigation guide',
+        {
+          cache: 'Bundled public app URLs and known About-tab actions.',
+          includeBlock: false,
+          limitations: [
+            'Feedback and Tutorial are in-app About-tab actions, not private support inbox reads.',
+            'Neural Seed cannot read admin feedback, private support tickets, internal dashboards, or private team channels.',
+          ],
+        },
+        async () => ({
+          appUrl: buildPublicAppUrl('/'),
+          links: [
+            { id: 'app', label: 'Pixotchi Mini', type: 'public_url', url: buildPublicAppUrl('/') },
+            { id: 'status', label: 'Pixotchi Status', type: 'public_url', url: 'https://status.pixotchi.tech' },
+            ...(includeSocials
+              ? [
+                { id: 'x', label: 'Pixotchi on X', type: 'community_url', url: 'https://x.com/pixotchi' },
+                { id: 'telegram', label: 'Pixotchi Telegram', type: 'community_url', url: 'https://t.me/pixotchi' },
+                { id: 'farcaster', label: 'Pixotchi Farcaster', type: 'community_url', url: 'https://farcaster.xyz/pixotchi.eth' },
+              ]
+              : []),
+          ],
+          inAppActions: [
+            { id: 'about', label: 'About tab', routeHint: 'Open About from the main tab bar.' },
+            { id: 'tutorial', label: 'Tutorial', routeHint: 'Open About -> Tutorial.' },
+            { id: 'feedback', label: 'Feedback', routeHint: 'Open About -> Feedback. Requires connected wallet.' },
+            { id: 'documentation', label: 'Documentation', routeHint: 'Use About/official community links when a dedicated docs button is visible.' },
+          ],
+          safety: {
+            privateSupportDataReadable: false,
+            statusSourceOfTruth: 'Pixotchi Status and visible app panels',
+          },
+        }),
+        readClient,
+      ),
+    }),
+
+    get_task_proof_guide: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Explain how Pixotchi daily task/Rocks proof is tracked for each task and what to check when progress did not count yet. Use with get_daily_task_plan for personalized mission state.',
+      inputSchema: z.object({
+        taskId: z.string().trim().max(64).optional(),
+      }),
+      execute: async ({ taskId }) => withToolResult(
+        'get_task_proof_guide',
+        'Bundled Pixotchi daily task proof guide',
+        {
+          cache: 'Bundled task proof guide; current completion state requires get_daily_task_plan.',
+          includeBlock: false,
+          limitations: [
+            'This guide cannot mark tasks complete or inspect admin-only mission storage.',
+            'Use get_daily_task_plan for current personalized task state.',
+          ],
+        },
+        async () => {
+          const selected = taskId && TASK_PROOF_GUIDE[taskId] ? [taskId] : undefined;
+          return {
+            guide: getTaskProofGuideEntries(selected),
+            knownTaskIds: Object.keys(TASK_PROOF_GUIDE),
+            proofIndexingNotes: [
+              'Transaction-backed tasks usually need a confirmed in-app transaction hash.',
+              'Smart-wallet/bundled transactions can be accepted by compatibility fallbacks even when validation is delayed.',
+              'Social tasks are UI-tracked and may require reopening the Tasks dialog.',
+              'Daily tasks reset by UTC day.',
+            ],
+            requestedTaskId: taskId || null,
+            taskFound: taskId ? Boolean(TASK_PROOF_GUIDE[taskId]) : null,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    explain_game_error: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Classify visible Pixotchi wallet/UI error text or disabled-button wording into safe troubleshooting guidance. Never use this to build calldata or retry transactions.',
+      inputSchema: z.object({
+        actionHint: z.string().trim().max(120).optional(),
+        errorText: z.string().trim().max(600).default(''),
+        txHash: z.string().trim().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
+      }),
+      execute: async ({ actionHint, errorText, txHash }) => withToolResult(
+        'explain_game_error',
+        'Bundled Pixotchi transaction and disabled-action troubleshooting guide',
+        {
+          cache: 'Static error-pattern guide; combine with live tools for balances, allowances, status, and tx receipts.',
+          includeBlock: false,
+          limitations: [
+            'Error classification is best-effort from visible text only.',
+            'Never paste private keys, seed phrases, sessions, cookies, raw signatures, or hidden wallet data.',
+            'Neural Seed cannot retry, sign, approve, or prepare transactions.',
+          ],
+        },
+        async () => ({
+          actionHint: actionHint || null,
+          contractBlockerGuides: {
+            arcade: ARCADE_BLOCKER_GUIDE,
+            barracksRaidStatusCodes: BARRACKS_RAID_STATUS_GUIDE,
+            marketplace: MARKETPLACE_BLOCKER_GUIDE,
+            questPhases: QUEST_PHASE_GUIDE,
+            renameByteRules: {
+              land: ASSET_NAME_RULES.land,
+              plant: ASSET_NAME_RULES.plant,
+            },
+          },
+          matches: classifyGameError(errorText || '', actionHint),
+          recommendedLiveChecks: [
+            ...(txHash ? ['get_transaction_status'] : []),
+            'get_app_status',
+            'get_wallet_capabilities',
+            'get_known_allowances',
+          ],
+          safeNextSteps: [
+            'Refresh the exact panel that failed.',
+            'Check live balances, allowances, cooldowns, ownership, and feature flags.',
+            'If a tx hash exists, check whether it already confirmed before retrying.',
+            'Retry only through the visible app UI after the blocker is resolved.',
+          ],
+          txHash: txHash || null,
+        }),
+        readClient,
+      ),
+    }),
+
     get_token_info: tool({
       ...READ_TOOL_DEFAULTS,
       description: 'Read app-approved SEED, LEAF, and PIXOTCHI token utility, tokenomics, contract addresses, and caveats from the same knowledge source used by Swap -> Info. Use for token info, tokenomics, utility, contract address, LEAF marketplace, PIXOTCHI creator coin, SEED burn/tax/reward questions. Never use this for financial advice.',
@@ -2275,7 +2838,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_wallet_token_balances: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read public known-token balances for a wallet on Base. Only checks ETH, SEED, LEAF, PIXOTCHI, JESSE, and USDC; never arbitrary tokens.',
+      description: 'Read public known-token balances for a non-custody wallet on Base. Only checks ETH, SEED, LEAF, PIXOTCHI, JESSE, and USDC; never arbitrary tokens or custody/team/internal wallets.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         includeZeroBalances: z.boolean().default(true),
@@ -2320,7 +2883,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_wallet_game_assets: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read public Pixotchi game assets for a wallet: plant NFTs, land NFTs, counts, current ownership, and urgent plant care state.',
+      description: 'Read public Pixotchi game assets for a non-custody wallet: plant NFTs, land NFTs, counts, current ownership, and urgent plant care state.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         landLimit: z.number().int().min(1).max(50).default(25),
@@ -2359,7 +2922,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               },
               id: land.tokenId.toString(),
               name: land.name || `Land #${land.tokenId.toString()}`,
-              owner: land.owner,
+              owner: publicAddressField(land.owner),
+              ownerRedacted: redactCustodyAddress(land.owner).redacted,
               storedLifetimeSeconds: formatSeconds(land.accumulatedPlantLifetime),
               storedLifetimeHours: toNumber(land.accumulatedPlantLifetime) / 3600,
               storedPts: formatPts(land.accumulatedPlantPoints),
@@ -2379,9 +2943,337 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_wallet_capabilities: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Read safe wallet capability hints for Pixotchi gameplay: EOA vs contract wallet bytecode, public paymaster flag, ETH-mode/bundled-action guidance, and Solana/Twin context when available.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        solanaAddress: SOLANA_ADDRESS_INPUT,
+      }),
+      execute: async ({ address, solanaAddress }) => withToolResult(
+        'get_wallet_capabilities',
+        `Base wallet bytecode read and public Pixotchi feature flags via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Capability detection is advisory; the active wallet connector and visible transaction UI are the source of truth.',
+            'This tool never signs messages, prepares bundled calls, or checks private wallet internals.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const bytecode = await readClient.getBytecode({ address: target }).catch(() => null);
+          const isContractWallet = Boolean(bytecode && bytecode !== '0x');
+          const sourceSolana = solanaAddress || context.sourceAddress || null;
+
+          return {
+            address: target,
+            base: {
+              chainId: 8453,
+              hasContractBytecode: isContractWallet,
+              inferredWalletMode: isContractWallet ? 'contract_or_smart_wallet' : 'externally_owned_account_or_not_yet_delegated',
+            },
+            gameplayCapabilities: {
+              atomicBundlesLikelySupported: isContractWallet,
+              ethModeUsuallyAvailable: isContractWallet,
+              normalApproveThenActionPath: true,
+              sponsoredGasPossible: CLIENT_ENV.PAYMASTER_ENABLED && isContractWallet,
+              solanaGameplayActionsSupportedDirectly: false,
+            },
+            featureFlags: {
+              paymasterEnabled: CLIENT_ENV.PAYMASTER_ENABLED,
+              solanaEnabled: isSolanaEnabled(),
+            },
+            solana: {
+              sourceAddress: sourceSolana,
+              bridgeStatusToolRecommended: Boolean(sourceSolana && SOLANA_ADDRESS_INPUT.safeParse(sourceSolana).success),
+              note: sourceSolana
+                ? 'Use get_bridge_status for Twin readiness; many gameplay actions still require the Base-side wallet/Twin flow.'
+                : 'No Solana source address was provided in this chat context.',
+            },
+            uiGuidance: [
+              isContractWallet
+                ? 'Smart-wallet style flows may show sponsored badges, ETH-mode quotes, or bundled approve+action buttons.'
+                : 'EOA flows may need separate approve and action transactions, and some atomic bundle buttons may be unavailable.',
+              'For unsupported wallet_sendCalls or bundle errors, use Base App/a smart wallet or the non-bundled path when the UI offers one.',
+              'Neural Seed can explain the path, but only the visible wallet UI can build and confirm transactions.',
+            ],
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_name_change_readiness: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Check owner/readiness guidance for renaming Pixotchi plants and lands. Plant names cost 350 SEED and land names are owner-only sponsored/free. Read-only; never renames.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        assetId: z.number().int().min(0).max(1000000).optional(),
+        assetType: z.enum(['auto', 'plant', 'land']).default('auto'),
+        proposedName: z.string().trim().max(32).optional(),
+      }),
+      execute: async ({ address, assetId, assetType, proposedName }) => withToolResult(
+        'get_name_change_readiness',
+        `Pixotchi plant/land ownership reads and SEED balance via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Server-side AI cannot see the current client ETH-mode toggle; the UI must quote ETH-mode name changes when available.',
+            'Readiness is advisory. The rename dialog and wallet confirmation are the final source of truth.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const [plants, lands, seedBalance, plantNameCost] = await Promise.all([
+            readPlantsForAddress(target, readClient),
+            getLandsByOwner(target, readClient),
+            getTokenBalance(target, readClient),
+            getPlantNameChangeCostState(readClient),
+          ]);
+          const seedCostRaw = plantNameCost.amountRaw;
+          const plantProposed = proposedName == null
+            ? null
+            : getAssetNameValidation('plant', proposedName);
+          const landProposed = proposedName == null
+            ? null
+            : getAssetNameValidation('land', proposedName);
+          const proposed = proposedName == null
+            ? null
+            : {
+              land: landProposed,
+              plant: plantProposed,
+              raw: proposedName,
+              trimmed: proposedName.trim(),
+            };
+          const wantedPlant = assetType === 'plant' || assetType === 'auto';
+          const wantedLand = assetType === 'land' || assetType === 'auto';
+          const requestedAssets: UntypedValue[] = [];
+
+          if (wantedPlant) {
+            const ownedPlant = assetId == null ? plants[0] : plants.find((plant) => Number(plant.id) === assetId);
+            const publicPlant = !ownedPlant && assetId != null
+              ? (await getPlantsInfoExtended([assetId], readClient).catch(() => []))[0]
+              : null;
+            const plant = ownedPlant || publicPlant;
+            if (plant || assetId == null || assetType === 'plant') {
+              const normalized = plant ? normalizePlant(plant) : null;
+              const currentName = normalized?.name || '';
+              const sameName = plantProposed ? plantProposed.trimmed === currentName.trim() : null;
+              requestedAssets.push({
+                assetType: 'plant',
+                canAfford: seedBalance >= seedCostRaw,
+                canSubmit: Boolean(plant && sameAddress(plant.owner, target) && plantProposed?.validFormat && !sameName && seedBalance >= seedCostRaw),
+                cost: {
+                  amountDisplay: plantNameCost.amountDisplay,
+                  amountRaw: seedCostRaw.toString(),
+                  ethModeNote: 'Smart-wallet ETH mode may show an ETH quote in the client UI.',
+                  source: plantNameCost.source,
+                },
+                currentName,
+                id: assetId == null ? normalized?.id || null : String(assetId),
+                ownedByAddress: Boolean(plant && sameAddress(plant.owner, target)),
+                owner: normalized?.owner || null,
+                ownerRedacted: normalized?.ownerRedacted || false,
+                sameName,
+                statusLabel: normalized?.statusLabel || null,
+              });
+            }
+          }
+
+          if (wantedLand) {
+            const ownedLand = assetId == null ? lands[0] : lands.find((land) => Number(land.tokenId) === assetId);
+            const publicLand = !ownedLand && assetId != null
+              ? (await getLandsByIds([BigInt(assetId)], { readClient }).catch(() => []))[0]
+              : null;
+            const land = ownedLand || publicLand;
+            if (land || assetId == null || assetType === 'land') {
+              const currentName = land?.name || (assetId == null ? '' : `Land #${assetId}`);
+              const sameName = landProposed ? landProposed.trimmed === currentName.trim() : null;
+              requestedAssets.push({
+                assetType: 'land',
+                canAfford: true,
+                canSubmit: Boolean(land && sameAddress(land.owner, target) && landProposed?.validFormat && !sameName),
+                coordinates: land ? { x: Number(land.coordinateX), y: Number(land.coordinateY) } : null,
+                cost: {
+                  amountDisplay: 'Free / sponsored owner action',
+                  amountRaw: '0',
+                },
+                currentName,
+                id: assetId == null ? land?.tokenId?.toString?.() || null : String(assetId),
+                ownedByAddress: Boolean(land && sameAddress(land.owner, target)),
+                owner: publicAddressField(land?.owner),
+                ownerRedacted: redactCustodyAddress(land?.owner).redacted,
+                sameName,
+              });
+            }
+          }
+
+          return {
+            address: target,
+            ambiguousAutoLookup: assetType === 'auto' && assetId != null && requestedAssets.length > 1,
+            proposedName: proposed,
+            requestedAssets,
+            rules: {
+              landRename: {
+                costDisplay: 'Free / sponsored owner action',
+                maxBytes: ASSET_NAME_RULES.land.maxBytes,
+                minBytes: ASSET_NAME_RULES.land.minBytes,
+                ownerOnly: true,
+                validation: 'Contract checks UTF-8 bytes, not visible characters. Emoji and accented letters can use multiple bytes.',
+                where: 'Farm -> Lands -> edit land name',
+              },
+              plantRename: {
+                costDisplay: plantNameCost.amountDisplay,
+                costSource: plantNameCost.source,
+                maxBytes: ASSET_NAME_RULES.plant.maxBytes,
+                minBytes: ASSET_NAME_RULES.plant.minBytes,
+                ownerOnly: true,
+                validation: 'Contract checks UTF-8 bytes, not visible characters. Emoji and accented letters can use multiple bytes.',
+                where: 'Farm -> Plants -> edit plant name',
+              },
+            },
+            seedBalanceDisplay: `${compactTokenAmount(formatToken(seedBalance))} SEED`,
+          };
+        },
+        readClient,
+      ),
+    }),
+
+    get_land_map_context: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Resolve Pixotchi land map context: token ID to coordinates, coordinates to token ID, neighbor land IDs, public owner, and basic land details. Use for map/coordinate/neighbor questions.',
+      inputSchema: z.object({
+        address: ADDRESS_INPUT,
+        coordinateX: z.number().int().min(-COORDINATE_INPUT_LIMIT).max(COORDINATE_INPUT_LIMIT).optional(),
+        coordinateY: z.number().int().min(-COORDINATE_INPUT_LIMIT).max(COORDINATE_INPUT_LIMIT).optional(),
+        includeNeighbors: z.boolean().default(true),
+        includeOwner: z.boolean().default(true),
+        landId: z.number().int().min(0).max(1000000).optional(),
+      }),
+      execute: async ({ address, coordinateX, coordinateY, includeNeighbors, includeOwner, landId }) => withToolResult(
+        'get_land_map_context',
+        `Pixotchi Land contract coordinate reads via ${aiRpcSource}`,
+        {
+          confidence: 'medium',
+          includeBlock: true,
+          limitations: [
+            'Coordinates come from landGetCoordinates and landGetTokenIdByCoordinates, not local frontend math.',
+            'Coordinate (0,0) maps to no normal player plot because token ID 0 is reserved/special and was not assigned as a production land.',
+            'Ownership/building data depends on live land reads.',
+          ],
+        },
+        async () => {
+          const target = getTargetAddress(address, context.userAddress);
+          const ownedLands = landId == null && coordinateX == null && coordinateY == null
+            ? await getLandsByOwner(target, readClient).catch(() => [])
+            : [];
+          const hasCoordinate = coordinateX != null && coordinateY != null;
+          const requestedLandId = hasCoordinate ? null : landId ?? Number(ownedLands[0]?.tokenId ?? 1);
+          const [totalSupplyRaw, maxSupplyRaw, boundaries] = await Promise.all([
+            readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'totalSupply', args: [] }).catch(() => null),
+            readClient.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'maxSupply', args: [] }).catch(() => null),
+            readLandBoundariesSafe(readClient),
+          ]);
+          const totalSupply = totalSupplyRaw == null ? null : Number(totalSupplyRaw);
+          const maxSupply = maxSupplyRaw == null ? null : Number(maxSupplyRaw);
+
+          let coordinate: { x: number; y: number } | null = hasCoordinate
+            ? { x: coordinateX!, y: coordinateY! }
+            : null;
+          let coordinateOccupied: boolean | null = null;
+          let resolvedLandId: number | null = null;
+          let coordinateSource: string;
+
+          if (hasCoordinate && coordinate) {
+            resolvedLandId = await readLandTokenIdByCoordinatesSafe(readClient, coordinate.x, coordinate.y);
+            coordinateOccupied = resolvedLandId !== null;
+            coordinateSource = 'landGetTokenIdByCoordinates';
+          } else if (requestedLandId != null) {
+            resolvedLandId = requestedLandId;
+            const coordinateRead = await readLandCoordinatesSafe(readClient, requestedLandId);
+            coordinate = coordinateRead ? { x: coordinateRead.x, y: coordinateRead.y } : null;
+            coordinateOccupied = coordinateRead?.occupied ?? null;
+            coordinateSource = 'landGetCoordinates';
+          } else {
+            coordinateSource = 'none';
+          }
+
+          const neighborCoordinates = includeNeighbors && coordinate
+            ? getCardinalNeighborCoordinates(coordinate)
+            : [];
+          const neighborIds = await Promise.all(neighborCoordinates.map(async (entry) => ({
+            ...entry,
+            landId: await readLandTokenIdByCoordinatesSafe(readClient, entry.coordinate.x, entry.coordinate.y),
+          })));
+          const idsToRead = [resolvedLandId, ...neighborIds.map((entry) => entry.landId)]
+            .filter((id): id is number => typeof id === 'number' && id > 0)
+            .filter((id, index, ids) => ids.indexOf(id) === index);
+          const landsById = new Map<string, Land>();
+          for (const land of await getLandsByIds(idsToRead.map((id) => BigInt(id)), { readClient }).catch(() => [])) {
+            landsById.set(land.tokenId.toString(), land);
+          }
+          const ownerById = new Map<number, string | null>();
+          if (includeOwner) {
+            await Promise.all(idsToRead.map(async (id) => {
+              ownerById.set(id, await readLandOwnerSafe(readClient, id));
+            }));
+          }
+          const formatMapSlot = (id: number | null, coord: { x: number; y: number } | null, direction?: string, occupied?: boolean | null) => {
+            const land = id == null ? null : landsById.get(String(id));
+            const owner = id == null ? null : ownerById.get(id) ?? land?.owner ?? null;
+            return {
+              coordinates: coord,
+              direction,
+              existsInLandRead: Boolean(land),
+              inContractBoundaries: coordinateInsideBoundaries(coord, boundaries),
+              isMintedBySupply: totalSupply == null || id == null ? null : id > 0 && id < totalSupply,
+              isNormalPlayerPlot: Boolean(id && id > 0 && occupied !== false),
+              land: land
+                ? {
+                  experiencePoints: formatToken(land.experiencePoints),
+                  name: land.name || `Land #${land.tokenId.toString()}`,
+                  storedLifetimeHours: toNumber(land.accumulatedPlantLifetime) / 3600,
+                  storedPts: formatPts(land.accumulatedPlantPoints),
+                }
+                : null,
+              landId: id,
+              occupied: occupied ?? (id != null ? true : false),
+              owner,
+              ownerKnown: Boolean(owner),
+            };
+          };
+
+          return {
+            addressContext: target,
+            bounds: boundaries,
+            coordinateSource,
+            input: {
+              coordinateProvided: hasCoordinate,
+              coordinateX: coordinateX ?? null,
+              coordinateY: coordinateY ?? null,
+              landId: landId ?? null,
+              usedFirstOwnedLandFallback: !hasCoordinate && landId == null && ownedLands.length > 0,
+            },
+            maxSupply,
+            neighbors: neighborIds.map((entry) => formatMapSlot(entry.landId, entry.coordinate, entry.direction, entry.landId != null)),
+            selected: formatMapSlot(resolvedLandId, coordinate, undefined, coordinateOccupied),
+            totalSupply,
+            ui: {
+              mapPanel: 'Farm -> Lands -> Map',
+              note: 'Tap a plot in the map UI for visual context; Neural Seed can resolve IDs, coordinates, neighbors, and public owner state.',
+            },
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_wallet_game_activity: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read recent public Pixotchi wallet activity from the indexer first, with a bounded Base RPC known-contract Transfer fallback for mints and transfers. Use rpcFallbackMode "always" for explicit mint/transfer history questions.',
+      description: 'Read recent public Pixotchi activity for a non-custody wallet from the indexer first, with a bounded Base RPC known-contract Transfer fallback for mints and transfers. Use rpcFallbackMode "always" for explicit mint/transfer history questions.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         includeIndexed: z.boolean().default(true),
@@ -2863,6 +3755,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
                 priceTokenAddress: price.priceTokenAddress,
                 priceTokenSymbol: price.priceTokenSymbol,
                 remainingSupply: availableSupply,
+                strainInitialTODSeconds: strain.strainInitialTOD,
+                strainInitialTODHours: strain.strainInitialTOD / 3600,
                 totalMinted: strain.totalMinted,
                 totalSupply: strain.totalSupply,
                 ...seedOnlyFields,
@@ -3053,6 +3947,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
                 name: strain.name,
                 priceDisplay: price.priceDisplay,
                 remainingSupply,
+                strainInitialTODSeconds: strain.strainInitialTOD,
+                strainInitialTODHours: strain.strainInitialTOD / 3600,
                 totalMinted: strain.totalMinted,
               };
             })
@@ -3186,7 +4082,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_quest_readiness: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read Farmer House quest readiness for owned or selected lands: Farmer House level, quest slot statuses, timers, rewards-pool pause state, and next in-app actions. Use for quests, Farmer House, "can I send a quest", or daily quest readiness.',
+      description: 'Read Farmer House quest readiness for owned or selected lands: Farmer House level, quest slot statuses, timers, safe quest availability state, and next in-app actions. Use for quests, Farmer House, "can I send a quest", or daily quest readiness.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         landIds: z.array(z.number().int().min(0)).max(50).optional(),
@@ -3194,7 +4090,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address, landIds, limit }) => withToolResult(
         'get_quest_readiness',
-        `Base contract reads for Farmer House quest slots and rewards-pool balance via ${aiRpcSource}`,
+        `Base contract reads for Farmer House quest slots and safe quest availability via ${aiRpcSource}`,
         {
           confidence: 'medium',
           includeBlock: true,
@@ -3202,6 +4098,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             `Scans at most ${AI_QUEST_READINESS_MAX_LANDS} lands per request unless narrowed by land IDs.`,
             'Quest slot state can change after every block; refresh the Farmer House UI before signing.',
             'Neural Seed cannot start, return, or finalize quests.',
+            'Quest/rewards custody wallet addresses, balances, thresholds, refills, and transfer details are intentionally redacted.',
           ],
         },
         async () => {
@@ -3242,7 +4139,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               name: land.name || `Land #${land.tokenId.toString()}`,
               nextActions: [
                 farmerHouseLevel <= 0 ? 'Build Farmer House from the Town buildings panel to unlock quests.' : null,
-                rewardsPoolLow && availableSlots > 0 ? 'Wait for the Farmer House rewards wallet refill before starting new quests.' : null,
+                rewardsPoolLow && availableSlots > 0 ? 'Quest starts are temporarily unavailable in the Farmer House UI; refresh the panel and try again later.' : null,
                 actionableSlots > 0 ? 'Open Farmer House and use Return now or Open now on ready slots.' : null,
                 !rewardsPoolLow && availableSlots > 0 ? 'Open Farmer House and start an Easy, Med, or Hard quest from an available slot.' : null,
               ].filter(Boolean),
@@ -3279,11 +4176,11 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             landFilterApplied: Boolean(landIds?.length),
             lands: questLands,
             ownedLandCount: landIds?.length ? undefined : allLands.length,
+            phaseGuide: QUEST_PHASE_GUIDE,
+            resetRule: 'After commit, finalize/open before pseudoRndBlock + 256 blocks or the contract resets the quest without loot.',
             rewardsPool: {
-              low: rewardsPoolLow,
-              minimumSeedBalanceDisplay: `${formatToken(MIN_QUEST_REWARDS_SEED_BALANCE)} SEED`,
-              wallet: QUEST_REWARDS_WALLET,
-              walletBalanceDisplay: `${formatToken(rewardsBalance)} SEED`,
+              availableForNewQuests: !rewardsPoolLow,
+              fundingDetails: createCustodyRedaction('farmer_house_rewards_availability'),
             },
             scannedLandCount: scannedLands.length,
             totals,
@@ -3333,7 +4230,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
                 experiencePoints: formatToken(land.experiencePoints),
                 landId: land.landId,
                 name: land.name || `Land #${land.landId}`,
-                owner: land.owner,
+                owner: publicAddressField(land.owner),
+                ownerRedacted: redactCustodyAddress(land.owner).redacted,
                 rank: index + 1,
               }));
           }
@@ -3687,7 +4585,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
                 },
                 id: land.tokenId.toString(),
                 name: land.name || `Land #${land.tokenId.toString()}`,
-                owner: land.owner,
+                owner: publicAddressField(land.owner),
+                ownerRedacted: redactCustodyAddress(land.owner).redacted,
                 storedLifetimeHours: toNumber(land.accumulatedPlantLifetime) / 3600,
                 storedPts: formatPts(land.accumulatedPlantPoints),
               })),
@@ -3731,6 +4630,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               'The attacking land must be past its attack cooldown.',
               'Defender eligibility comes from the Barracks contract, not from leaderboard guesses.',
             ],
+            statusCodeGuide: BARRACKS_RAID_STATUS_GUIDE,
             truncated: readyAttackers.length > limit || selectedLands.length < allLands.length,
           };
         },
@@ -4209,6 +5109,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               'sellToken=0 orders offer SEED for LEAF (bids).',
               'Marketplace actions require an owned land in the UI.',
             ],
+            blockerGuide: MARKETPLACE_BLOCKER_GUIDE,
             userCanUseMarketplaceUi: ownedLands.length > 0,
             userOwnedLandCount: ownedLands.length,
             truncated: (activeRaw || []).length > activeOrders.length || myOrders.length > limit,
@@ -4330,6 +5231,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               blackjackEnabled: CLIENT_ENV.BLACKJACK_ENABLED,
               casinoEnabled: CLIENT_ENV.CASINO_ENABLED,
               gamificationDisabled: CLIENT_ENV.GAMIFICATION_DISABLED,
+              notificationProvider: getNotificationProviderLabel(SERVER_ENV.NOTIFICATION_PROVIDER),
               paymasterEnabled: CLIENT_ENV.PAYMASTER_ENABLED,
               solanaEnabled: isSolanaEnabled(),
               swapDisabled: CLIENT_ENV.SWAP_MODULE_DISABLED,
@@ -4356,9 +5258,69 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ),
     }),
 
+    get_notification_readiness: tool({
+      ...READ_TOOL_DEFAULTS,
+      description: 'Read public Pixotchi notification readiness for plant-care reminders: provider label, status service entry, reminder thresholds, and recent plant-care run stats. Never exposes admin campaign data.',
+      inputSchema: z.object({
+        forceRefreshStatus: z.boolean().default(false),
+      }),
+      execute: async ({ forceRefreshStatus }) => withToolResult(
+        'get_notification_readiness',
+        'Pixotchi notification provider status and plant-care reminder stats',
+        {
+          cache: 'Status snapshot is cached unless force refresh is requested; plant-care run stats come from notification storage.',
+          confidence: 'medium',
+          includeBlock: false,
+          limitations: [
+            'This tool does not send notifications, list campaign audiences, or expose admin campaign data.',
+            'User opt-in can depend on the host app/provider and may not be visible to Neural Seed for every wallet.',
+          ],
+        },
+        async () => {
+          const provider = SERVER_ENV.NOTIFICATION_PROVIDER;
+          const [status, plantCareStats] = await Promise.all([
+            getCachedStatusSnapshot(forceRefreshStatus),
+            getPlantCareStats(provider).catch(() => null),
+          ]);
+          const notificationService = status.services.find((service) => service.id === 'notifications') || null;
+
+          return {
+            provider: {
+              configuredForServer: provider,
+              label: getNotificationProviderLabel(provider),
+            },
+            plantCareReminders: {
+              lastRun: plantCareStats?.lastRun || null,
+              recentRuns: (plantCareStats?.recent || []).slice(0, 5),
+              sentCount: plantCareStats?.sentCount ?? 0,
+              thresholdHours: PLANT_CARE_THRESHOLD_SECONDS / 3600,
+              throttleHours: PLANT_CARE_THROTTLE_SECONDS / 3600,
+              totalRuns: plantCareStats?.totalRuns ?? 0,
+            },
+            readinessChecklist: [
+              'The player must be in a supported host context and have notifications enabled/saved for the app.',
+              `Plant-care reminders target plants under about ${PLANT_CARE_THRESHOLD_SECONDS / 3600} hours of TOD and are throttled per user/plant.`,
+              'Provider outages, disabled notifications, or recently sent reminders can prevent another reminder from arriving immediately.',
+              'The Status page is the source of truth for service health.',
+            ],
+            status: {
+              generatedAt: status.generatedAt,
+              notificationService,
+              overall: status.overall,
+            },
+            ui: {
+              statusUrl: 'https://status.pixotchi.tech',
+              where: 'Mini app/Base App notification prompt and Status page',
+            },
+          };
+        },
+        readClient,
+      ),
+    }),
+
     get_daily_task_plan: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read today’s Rocks/Farmer Tasks progress and combine it with live wallet state to suggest the most practical next incomplete tasks. Use for "what should I do next", "finish my daily", "Rocks", or onboarding task guidance.',
+      description: 'Read today’s Rocks/Farmer Tasks progress and combine it with live wallet state plus proof guidance to suggest next incomplete tasks. Use for "what should I do next", "finish my daily", "Rocks", task proof, or onboarding task guidance.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         suggestionLimit: z.number().int().min(1).max(10).default(5),
@@ -4455,6 +5417,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           const incompleteWithReadiness = taskRows.incomplete.map((task) => ({
             ...task,
             ...(readiness[task.id] || { ready: false, reason: 'No readiness data available.', suggestedPanel: task.where }),
+            proofGuide: TASK_PROOF_GUIDE[task.id] || null,
           }));
 
           return {
@@ -4471,6 +5434,12 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               warehouseLifetimeHours,
               warehousePts,
             },
+            proofTroubleshooting: [
+              'Transaction-backed tasks can need confirmation plus mission-proof indexing before Rocks updates.',
+              'Smart-wallet/bundled transactions can still be tracked even when strict proof validation lags.',
+              'Social tasks are UI-tracked; reopen Tasks after completing the visible chat/profile/follow action.',
+              'Daily tasks reset by UTC day.',
+            ],
             suggestedNext: incompleteWithReadiness
               .sort((a, b) => Number(b.ready) - Number(a.ready))
               .slice(0, suggestionLimit),
@@ -4479,7 +5448,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               incomplete: taskRows.incomplete.length,
               total: taskRows.rows.length,
             },
-            tasks: taskRows.rows,
+            taskProofGuide: getTaskProofGuideEntries(taskRows.incomplete.map((task) => task.id)),
+            tasks: taskRows.rows.map(withTaskProofGuide),
             streak,
             truncated: lands.length > productionScanLands.length,
           };
@@ -4896,6 +5866,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
           return {
             address: plantIds?.length ? undefined : target,
+            blockerGuide: ARCADE_BLOCKER_GUIDE,
             count: plants.length,
             plants,
             rewardTable,
@@ -4949,7 +5920,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_staking: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read authenticated or public wallet staking status: staked SEED, claimable rewards, total staked, reward ratio, time unit, and current allowance state. Read-only.',
+      description: 'Read authenticated or public non-custody wallet staking status: staked SEED, claimable rewards, total staked, reward ratio, time unit, and current allowance state. Read-only.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
       }),

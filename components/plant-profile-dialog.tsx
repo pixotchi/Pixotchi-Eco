@@ -16,7 +16,7 @@ import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
 import { fetchEfpStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
-import { FollowButton, fetchFollowState, useTransactions } from 'ethereum-identity-kit';
+import { FollowButton, fetchFollowState, fetchProfileLists, useTransactions } from 'ethereum-identity-kit';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { WalletAvatar } from '@/components/ui/wallet-avatar';
@@ -130,6 +130,21 @@ export default function PlantProfileDialog({
         probes.push(primaryListForProbe);
       }
 
+      if (fresh) {
+        try {
+          const freshLists = await fetchProfileLists(connectedAddress, true);
+          const freshPrimaryList = freshLists?.primary_list ?? undefined;
+          if (freshPrimaryList !== undefined && !probes.includes(freshPrimaryList)) {
+            probes.push(freshPrimaryList);
+          }
+          for (const listId of freshLists?.lists ?? []) {
+            if (listId !== undefined && !probes.includes(listId)) {
+              probes.push(listId);
+            }
+          }
+        } catch { }
+      }
+
       for (const listProbe of probes) {
         try {
           const status = await fetchFollowState({
@@ -212,7 +227,7 @@ export default function PlantProfileDialog({
       // If already following, this action is likely Unfollow/Block/Mute. Do not count mission.
       if (wasFollowingBeforeClick) return;
 
-      await verifyFollowAndTrackMission(lookupAddress, { attempts: 24, delayMs: 1500, token });
+      await verifyFollowAndTrackMission(lookupAddress, { attempts: 80, delayMs: 1500, token });
     };
 
     void run();
@@ -238,7 +253,7 @@ export default function PlantProfileDialog({
       // Tx close fallback: verify follow state and award mission when follow succeeded.
       if (canFollowOwner) {
         const lookupAddress = followTxTargetRef.current ?? ownerAddress.toLowerCase();
-        void verifyFollowAndTrackMission(lookupAddress, { attempts: 18, delayMs: 1500 });
+        void verifyFollowAndTrackMission(lookupAddress, { attempts: 60, delayMs: 1500 });
       }
 
       followTxTargetRef.current = null;
