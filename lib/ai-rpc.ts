@@ -59,10 +59,7 @@ export function getAIRpcEndpoints(): string[] {
 }
 
 export function getAIRpcSourceLabel(): string {
-  const hasPrimary = Boolean(normalizeRpcUrl(process.env.AI_BASE_RPC_URL || process.env.AI_RPC_URL));
-  return hasPrimary
-    ? 'AI RPC primary endpoint with Base public fallback'
-    : 'AI RPC Base public fallback';
+  return 'read-only Base onchain data';
 }
 
 export function getAIReadClient(): PixotchiReadClient {

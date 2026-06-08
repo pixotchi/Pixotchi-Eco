@@ -61,7 +61,7 @@ const BLACKJACK_WARNING_ACTION_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border 
 const BLACKJACK_SPECIAL_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
 const BLACKJACK_SPECIAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
 const BLACKJACK_NEUTRAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/15 bg-white/10 text-white/90 hover:bg-white/15`;
-const BLACKJACK_STICKY_ACTIONS_CLASS = "surface-footer-divider dialog-footer-surface sticky bottom-0 z-10 -mx-3 mt-auto space-y-3 overflow-visible border-white/15 bg-black bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.96)_42%,rgba(0,0,0,1)_100%)] px-3 pb-[max(0.875rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 text-white backdrop-blur-md sm:-mx-4 sm:px-4";
+const BLACKJACK_STICKY_ACTIONS_CLASS = "surface-footer-divider dialog-footer-surface sticky bottom-0 z-10 -mx-3 mt-auto space-y-3 overflow-visible border-white/15 bg-black bg-[linear-gradient(180deg,rgb(0,0,0)_0%,rgb(0,0,0)_42%,rgb(0,0,0)_100%)] px-3 pb-[max(0.875rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 text-white sm:-mx-4 sm:px-4";
 
 /**
  * Simplified UI phase model for server-signed randomness flow
@@ -1293,7 +1293,7 @@ export default function BlackjackDialog({
                     size="iconCompact"
                     onClick={handleClose}
                     aria-label="Close Blackjack dialog"
-                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 backdrop-blur-md sm:right-3 sm:top-3"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 sm:right-3 sm:top-3"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
                 </Button>

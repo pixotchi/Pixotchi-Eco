@@ -147,7 +147,7 @@ export function LandMapModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-card/95 bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
+        className="max-w-[440px] h-[85vh] p-0 overflow-hidden bg-card bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
         hideCloseButton
       >
         <DialogTitle className="sr-only">World Map</DialogTitle>
@@ -157,7 +157,7 @@ export function LandMapModal({
         
         {/* Header overlay */}
         <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
-          <div className="pointer-events-auto rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+          <div className="pointer-events-auto rounded-[var(--radius-control)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-hairline)]">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Compass className="w-4 h-4 text-primary" />
               World Map
@@ -229,7 +229,7 @@ export function LandMapModal({
         {/* Wilderness Info Tooltip */}
         {tappedWilderness && (
             <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                <div className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-raised)] backdrop-blur-md">
+                <div className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-raised)]">
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
@@ -272,7 +272,7 @@ export function LandMapModal({
         {/* Neighbor Info Tooltip / Sheet */}
         {tappedLandId && (
             <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-raised)] backdrop-blur-md">
+                <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-raised)]">
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
@@ -362,7 +362,7 @@ export function LandMapModal({
 
         {/* Controls overlay */}
         <div className="absolute bottom-6 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] backdrop-blur-md">
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-[var(--radius-control)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
             <Button 
               variant="ghost" 
               size="icon" 
@@ -388,7 +388,7 @@ export function LandMapModal({
             size="icon"
             onClick={handleCenterOnUser} 
             aria-label="Center map on selected land"
-            className="pointer-events-auto bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] backdrop-blur-md"
+            className="pointer-events-auto bg-card bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]"
           >
             <Image src="/icons/location.svg" alt="Center" width={20} height={20} className="w-5 h-5" />
           </Button>
@@ -397,7 +397,7 @@ export function LandMapModal({
         {/* Legend overlay (hidden if showing neighbor info) */}
         {!tappedLandId && (
             <div className="absolute bottom-6 left-4 z-10 pointer-events-none">
-            <div className="pointer-events-auto flex flex-col gap-1.5 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+            <div className="pointer-events-auto flex flex-col gap-1.5 rounded-[var(--radius-control)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]">
                 <div className="flex items-center gap-2 text-[10px]">
                 <div className="w-3 h-3 bg-primary rounded-[2px] border border-primary/50"></div>
                 <span>Your Land</span>

@@ -23,6 +23,7 @@ export function getCustodyWalletAddressSet(): Set<string> {
   return new Set([
     ...DEFAULT_CUSTODY_WALLET_ADDRESSES.map((address) => getAddress(address).toLowerCase()),
     ...parseAddressList(process.env.AI_CUSTODY_WALLET_ADDRESSES).map((address) => address.toLowerCase()),
+    ...parseAddressList(process.env.VERIFY_CLAIM_AGENT_ADDRESS).map((address) => address.toLowerCase()),
   ]);
 }
 

@@ -762,7 +762,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     size="iconCompact"
                     onClick={() => handleClose(false)}
                     aria-label="Close Roulette dialog"
-                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 backdrop-blur-md sm:right-3 sm:top-3"
+                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 sm:right-3 sm:top-3"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -1020,7 +1020,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     </div>
 
                 </div>
-                <DialogFooter sticky className="block space-y-2 !-bottom-3 !-mx-3 !-mb-3 mt-auto border-white/15 bg-black bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.96)_42%,rgba(0,0,0,1)_100%)] px-3 pt-3 text-white backdrop-blur-md sm:!-bottom-4 sm:!-mx-4 sm:!-mb-4 sm:px-4 md:!-bottom-6 md:!-mx-6 md:!-mb-6 md:px-6">
+                <DialogFooter sticky className="block space-y-2 !-bottom-3 !-mx-3 !-mb-3 mt-auto border-white/15 bg-black bg-[linear-gradient(180deg,rgb(0,0,0)_0%,rgb(0,0,0)_42%,rgb(0,0,0)_100%)] px-3 pt-3 text-white sm:!-bottom-4 sm:!-mx-4 sm:!-mb-4 sm:px-4 md:!-bottom-6 md:!-mx-6 md:!-mb-6 md:px-6">
                     {!pendingGame && config && !config.enabled ? (
                         <Button className="w-full" disabled variant="secondary">
                             Roulette disabled

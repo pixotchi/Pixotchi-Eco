@@ -202,7 +202,7 @@
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(210 58% 86% / 0.92), hsl(210 54% 81% / 0.76));
     --gradient-content-well: radial-gradient(circle at 50% -12%, hsl(210 54% 84% / 0.36) 0%, hsl(210 55% 78% / 0) 34%), linear-gradient(180deg, hsl(210 55% 78%) 0%, hsl(210 52% 80%) 44%, hsl(210 48% 85%) 100%);
-    --gradient-dialog: linear-gradient(180deg, hsl(210 50% 88% / 0.98) 0%, hsl(210 48% 86% / 0.94) 52%, hsl(210 46% 82% / 0.88) 100%);
+    --gradient-dialog: linear-gradient(180deg, hsl(210 50% 88%) 0%, hsl(210 48% 86%) 52%, hsl(210 46% 82%) 100%);
     --gradient-surface: linear-gradient(180deg, hsl(210 50% 87% / 0.98) 0%, hsl(210 48% 85% / 0.92) 56%, hsl(210 46% 82% / 0.78) 100%);
     --gradient-surface-strong: linear-gradient(180deg, hsl(210 50% 88% / 0.98) 0%, hsl(210 46% 82% / 0.92) 100%);
     --gradient-panel: linear-gradient(180deg, hsl(210 46% 82% / 0.9) 0%, hsl(210 48% 85% / 0.76) 100%);
@@ -414,7 +414,7 @@
   .blue,
   .violet {
     --gradient-control-surface: linear-gradient(180deg, hsl(var(--card) / 0.96) 0%, hsl(var(--card) / 0.88) 50%, hsl(var(--secondary) / 0.62) 100%);
-    --gradient-dialog: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 44%, hsl(var(--background))) 0%, color-mix(in hsl, hsl(var(--card)) 48%, hsl(var(--secondary))) 54%, hsl(var(--secondary) / 0.86) 100%);
+    --gradient-dialog: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 44%, hsl(var(--background))) 0%, color-mix(in hsl, hsl(var(--card)) 48%, hsl(var(--secondary))) 54%, hsl(var(--secondary)) 100%);
     --gradient-surface: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 38%, hsl(var(--background))) 0%, color-mix(in hsl, hsl(var(--card)) 40%, hsl(var(--secondary))) 52%, hsl(var(--secondary) / 0.82) 100%);
     --gradient-surface-strong: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 42%, hsl(var(--background))) 0%, color-mix(in hsl, hsl(var(--card)) 34%, hsl(var(--secondary))) 100%);
     --gradient-panel: linear-gradient(180deg, color-mix(in hsl, hsl(var(--secondary)) 82%, hsl(var(--background))) 0%, hsl(var(--muted) / 0.8) 100%);
@@ -487,7 +487,7 @@
     --gradient-control-surface: linear-gradient(180deg, hsl(216 32% 43% / 0.98) 0%, hsl(216 31% 39% / 0.94) 54%, hsl(216 30% 34% / 0.88) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(216 30% 33% / 0.94), hsl(216 28% 28% / 0.82));
     --gradient-content-well: radial-gradient(circle at 50% -12%, hsl(204 92% 40% / 0.24) 0%, hsl(216 30% 25% / 0) 34%), linear-gradient(180deg, hsl(216 30% 25%) 0%, hsl(216 29% 27%) 44%, hsl(216 30% 29%) 100%);
-    --gradient-dialog: linear-gradient(180deg, hsl(216 30% 33% / 0.98) 0%, hsl(216 30% 31% / 0.96) 52%, hsl(216 28% 28% / 0.88) 100%);
+    --gradient-dialog: linear-gradient(180deg, hsl(216 30% 33%) 0%, hsl(216 30% 31%) 52%, hsl(216 28% 28%) 100%);
     --gradient-surface: linear-gradient(180deg, hsl(216 30% 32% / 0.98) 0%, hsl(216 29% 30% / 0.94) 56%, hsl(216 28% 28% / 0.72) 100%);
     --gradient-surface-strong: linear-gradient(180deg, hsl(216 31% 34% / 0.98) 0%, hsl(216 30% 29% / 0.9) 100%);
     --gradient-panel: linear-gradient(180deg, hsl(216 28% 28% / 0.88) 0%, hsl(216 26% 29% / 0.76) 100%);
@@ -764,21 +764,19 @@
   }
 
   .dialog-header-surface {
-    background-color: hsl(var(--popover) / 0.95);
+    background-color: hsl(var(--popover));
     background-image:
       linear-gradient(
         180deg,
         color-mix(in hsl, hsl(var(--popover)) 82%, hsl(var(--chromatic-layer-highlight))) 0%,
-        hsl(var(--popover) / 0.96) 42%,
+        hsl(var(--popover)) 42%,
         color-mix(in hsl, hsl(var(--popover)) 84%, hsl(var(--secondary))) 100%
       );
     background-clip: padding-box;
-    -webkit-backdrop-filter: blur(var(--blur-surface));
-    backdrop-filter: blur(var(--blur-surface));
   }
 
   .dialog-footer-surface {
-    background-color: hsl(var(--popover) / 0.95);
+    background-color: hsl(var(--popover));
     background-image: var(--gradient-dialog);
     background-clip: padding-box;
   }
@@ -960,7 +958,7 @@
   .blue :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
   .violet :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface) {
     background-color: hsl(var(--chromatic-layer-surface)) !important;
-    background-image: linear-gradient(180deg, hsl(var(--chromatic-layer-highlight) / 0.96) 0%, hsl(var(--chromatic-layer-surface) / 0.94) 100%) !important;
+    background-image: linear-gradient(180deg, hsl(var(--chromatic-layer-highlight)) 0%, hsl(var(--chromatic-layer-surface)) 100%) !important;
     border-color: hsl(var(--border-strong) / 0.34);
     box-shadow: var(--surface-highlight), var(--shadow-raised);
   }

@@ -163,7 +163,7 @@ const TEXT_MUTED = "text-[var(--ock-compat-foreground-muted)]";
 const TEXT_INVERSE = "text-primary-foreground";
 const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
 const TEXT_ERROR = "text-[var(--ock-compat-error)]";
-const BG_SURFACE = "chat-white-surface bg-card/95 bg-[image:var(--gradient-surface)] backdrop-blur-[var(--blur-surface)]";
+const BG_SURFACE = "chat-white-surface bg-card bg-[image:var(--gradient-surface)]";
 const TOAST_SHADOW = "shadow-[var(--shadow-hairline)]";
 const unsupportedSendCallsKeys = new Set<string>();
 

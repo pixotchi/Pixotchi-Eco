@@ -14,13 +14,11 @@ import {
   blackjackGetConfig,
   blackjackGetGameSnapshot,
   blackjackGetGameToken,
-  blackjackGetStats,
   blackjackGetTokenConfig,
   blackjackIsAvailable,
   casinoGetActiveBetV2,
   casinoGetBuildingConfig,
   casinoGetConfig,
-  casinoGetStats,
   casinoGetSupportedTokens,
   casinoGetTokenConfig,
   CREATOR_TOKEN_ADDRESS,
@@ -77,13 +75,12 @@ import { CLIENT_ENV, SERVER_ENV } from './env-config';
 import { ASSET_NAME_RULES, DEFAULT_PLANT_NAME_CHANGE_COST_SEED, getAssetNameValidation } from './asset-name-rules';
 import { PLANT_CARE_THRESHOLD_SECONDS, PLANT_CARE_THROTTLE_SECONDS } from './notifications/constants';
 import { getNotificationProviderLabel } from './notifications/provider';
-import { getPlantCareStats } from './notifications/storage';
 import { redis } from './redis';
 import { getCachedStatusSnapshot } from './status-checks';
-import { getBridgeConfig, getPixotchiSolanaConfig, isSolanaEnabled, validateSolanaConfig } from './solana-constants';
+import { getBridgeConfig, getPixotchiSolanaConfig, isSolanaEnabled } from './solana-constants';
 import { getTwinAddressInfo, isTwinSetup } from './solana-twin';
 import { getFenceStatus } from './utils';
-import { VERIFY_CLAIM_LEAF_BONUS_LABEL, VERIFY_CLAIM_SEED_BONUS_AMOUNT, VERIFY_CLAIM_SEED_BONUS_LABEL } from './verify-claim-config';
+import { VERIFY_CLAIM_LEAF_BONUS_LABEL } from './verify-claim-config';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import type { PixotchiReadClient } from './contracts';
 import type { ActivityEvent, BarracksLandStateV2, BarracksRaidPreviewV2, BarracksRaidReportV2, BuildingData, Land, NormalizedOnchainActivity, Plant } from './types';
@@ -467,6 +464,29 @@ function redactCustodyAddress(address: string | null | undefined) {
 function publicAddressField(address: string | null | undefined) {
   const redacted = redactCustodyAddress(address);
   return redacted.value;
+}
+
+function playerFacingStatusService(service: UntypedValue) {
+  const display: Record<string, { id: string; label: string }> = {
+    app: { id: 'app', label: 'App' },
+    'base-mainnet': { id: 'base_network', label: 'Base Network' },
+    indexer: { id: 'activity_indexing', label: 'Activity Indexing' },
+    miniapp: { id: 'mini_app', label: 'Mini App' },
+    notifications: { id: 'notifications', label: 'Notifications' },
+    redis: { id: 'app_data', label: 'App Data' },
+    rpc: { id: 'onchain_reads', label: 'Onchain Reads' },
+    'stake-app': { id: 'staking_app', label: 'Staking App' },
+  };
+  const mapped = display[String(service?.id || '')] || {
+    id: 'service',
+    label: 'Service',
+  };
+
+  return {
+    id: mapped.id,
+    label: mapped.label,
+    status: service?.status || 'unknown',
+  };
 }
 
 function formatToken(raw: bigint | number | string | undefined, decimals = 18): string {
@@ -1478,7 +1498,7 @@ function normalizeLifecycleMint(event: UntypedValue) {
     plantId: String(event.nftId ?? ''),
     strain: event.strain !== undefined ? String(event.strain) : undefined,
     to: event.to ? String(event.to) : undefined,
-    source: 'Ponder indexer Mint events',
+    source: 'Activity indexer Mint events',
     txHash: event.transactionHash ? String(event.transactionHash) : extractTxHash(String(event.id || '')),
   };
 }
@@ -1500,7 +1520,7 @@ function normalizeLifecycleKilled(event: UntypedValue) {
     rewardDisplay,
     rewardPolicy: 'Killed.reward is the contract-recorded ETH reward amount for the dead plant owner.',
     rewardRaw,
-    source: 'Ponder indexer Killed events',
+    source: 'Activity indexer Killed events',
     txHash: event.transactionHash ? String(event.transactionHash) : extractTxHash(String(event.id || '')),
     winnerName: event.winnerName ? String(event.winnerName) : undefined,
   };
@@ -1835,19 +1855,6 @@ function normalizeCasinoActiveBet(activeBet: UntypedValue) {
   };
 }
 
-function normalizeCasinoStats(stats: UntypedValue, tokenAddress?: string) {
-  if (!stats) {
-    return null;
-  }
-
-  const symbol = getAIPriceTokenSymbol(tokenAddress);
-  return {
-    gamesPlayed: String(stats.gamesPlayed ?? '0'),
-    totalWageredDisplay: `${formatKnownTokenAmount(stats.totalWagered, tokenAddress)} ${symbol}`,
-    totalWonDisplay: `${formatKnownTokenAmount(stats.totalWon, tokenAddress)} ${symbol}`,
-  };
-}
-
 function normalizeBlackjackSnapshot(snapshot: UntypedValue, tokenAddress?: string) {
   if (!snapshot) {
     return null;
@@ -2173,7 +2180,7 @@ function normalizeIndexedActivity(event: ActivityEvent): NormalizedOnchainActivi
   const base = {
     blockNumber: data.blockHeight ? String(data.blockHeight) : undefined,
     confidence: 'high' as const,
-    source: 'Ponder indexer',
+    source: 'Activity indexer',
     timestamp: data.timestamp ? String(data.timestamp) : undefined,
     txHash: extractTxHash(data.id),
   };
@@ -2363,7 +2370,7 @@ function normalizePlantCombatEvent(event: UntypedValue, ownedPlantIds: Set<strin
     kind: 'plant_attack',
     outcomeForUser,
     scoresWonPts: formatPtsNumber(event.scoresWon),
-    source: 'Ponder indexer plant Attack events',
+    source: 'Activity indexer plant Attack events',
     system: 'plants',
     target: {
       id: targetId,
@@ -2407,7 +2414,7 @@ function normalizeLandCombatEvent(event: UntypedValue, ownedLandIds: Set<string>
     kind: 'land_raid',
     outcomeForUser,
     raidId: String(event.raidId || ''),
-    source: 'Ponder indexer BarracksRaidEvent events',
+    source: 'Activity indexer Barracks raid events',
     system: 'lands_barracks',
   };
 }
@@ -3283,12 +3290,12 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address, includeIndexed, includeOnchainFallback, limit, rpcFallbackMode }) => withToolResult(
         'get_wallet_game_activity',
-        `Ponder indexer plus bounded Base RPC known-contract logs via ${aiRpcSource}`,
+        `Activity indexer plus bounded Base known-contract logs via ${aiRpcSource}`,
         {
-          cache: 'Indexer user activity is cached briefly; RPC fallback is live and block-range bounded.',
+          cache: 'Recent user activity is cached briefly; fallback onchain reads are live and block-range bounded.',
           confidence: 'medium',
           includeBlock: true,
-          limitations: ['Indexer user activity focuses on recent game events.', `RPC fallback checks known Pixotchi contracts only and is capped to the most recent ${AI_WALLET_ACTIVITY_BLOCK_RANGE} blocks.`, 'Older history may require the Activity tab, indexer, or a block explorer.'],
+          limitations: ['Recent activity focuses on game events.', `Fallback onchain reads check known Pixotchi contracts only and are capped to the most recent ${AI_WALLET_ACTIVITY_BLOCK_RANGE} blocks.`, 'Older history may require the Activity tab or a block explorer.'],
         },
         async () => {
           const target = getTargetAddress(address, context.userAddress);
@@ -3542,14 +3549,14 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address, direction, includeLandRaids, includePlantAttacks, limit, timeframeHours }) => withToolResult(
         'get_combat_activity',
-        'Ponder indexer time-ranged plant Attack and land BarracksRaidEvent history',
+        'Activity indexer time-ranged plant Attack and land raid history',
         {
-          cache: 'Indexer-backed public combat events; current wallet ownership maps events to the player.',
+          cache: 'Public combat events; current wallet ownership maps events to the player.',
           confidence: 'medium',
           includeBlock: true,
           limitations: [
             'Plant attacks and land raids are separate combat systems with different mechanics.',
-            'Time-ranged history is based on indexed events and current owned plant/land IDs.',
+            'Time-ranged history is based on public activity events and current owned plant/land IDs.',
             'Assets transferred away before the query may not be attributable to the current wallet.',
             `Maximum timeframe is ${AI_COMBAT_ACTIVITY_MAX_HOURS} hours unless configured higher.`,
           ],
@@ -3684,7 +3691,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address, limit, scope }) => withToolResult(
         'get_activity',
-        scope === 'global' ? 'Ponder indexer global activity' : 'Ponder indexer user activity',
+        scope === 'global' ? 'Public global activity feed' : 'Public user activity feed',
         { cache: scope === 'global' ? '3 seconds' : '5 seconds', includeBlock: false },
         async () => {
           const activities = scope === 'global'
@@ -4200,8 +4207,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ boards, limit }) => withToolResult(
         'get_leaderboards',
-        `Base contract reads and Redis leaderboard stores via ${aiRpcSource}`,
-        { cache: 'Stake leaderboard may be cached by its service; gamification leaderboards are Redis-backed.', includeBlock: true },
+        `Base contract reads and app leaderboard stores via ${aiRpcSource}`,
+        { cache: 'Stake leaderboard may be cached by its service; gamification leaderboards are app-backed.', includeBlock: true },
         async () => {
           const output: Record<string, UntypedValue> = {};
 
@@ -4807,7 +4814,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_casino_status: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read Casino/Roulette and Blackjack status for owned or selected lands: feature flags, supported betting tokens, bet limits, active roulette bets, blackjack snapshots, and casino-built lands. Use for casino, roulette, blackjack, stuck game, or wager availability questions.',
+      description: 'Read Casino/Roulette and Blackjack player-facing status for owned or selected lands: feature flags, supported betting tokens, bet limits, active roulette bets, blackjack snapshots, and casino-built lands. Never exposes aggregate casino performance stats.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         includeBlackjack: z.boolean().default(true),
@@ -4825,6 +4832,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             `Scans at most ${AI_CASINO_STATUS_MAX_LANDS} lands unless specific land IDs are supplied.`,
             'Roulette/Blackjack reads are current onchain snapshots; the game UI must refresh again before any transaction.',
             'Neural Seed cannot place bets, reveal games, hit/stand, or build transaction payloads.',
+            'Aggregate casino stats such as total games, wagered amount, won amount, or performance metrics are intentionally redacted.',
           ],
         },
         async () => {
@@ -4855,13 +4863,11 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             token,
           })));
           const lands = await Promise.all(casinoLands.slice(0, limit).map(async (land) => {
-            const [activeBet, rouletteStats, blackjackAvailable, blackjackToken, blackjackSnapshot, blackjackStats] = await Promise.all([
+            const [activeBet, blackjackAvailable, blackjackToken, blackjackSnapshot] = await Promise.all([
               includeRoulette ? casinoGetActiveBetV2(land.tokenId) : Promise.resolve(null),
-              includeRoulette ? casinoGetStats(land.tokenId) : Promise.resolve(null),
               includeBlackjack ? blackjackIsAvailable(land.tokenId) : Promise.resolve(null),
               includeBlackjack ? blackjackGetGameToken(land.tokenId) : Promise.resolve(null),
               includeBlackjack ? blackjackGetGameSnapshot(land.tokenId) : Promise.resolve(null),
-              includeBlackjack ? blackjackGetStats(land.tokenId) : Promise.resolve(null),
             ]);
             const blackjackBetToken = blackjackToken || blackjackConfig?.bettingToken;
             return {
@@ -4871,7 +4877,6 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
                   gameToken: blackjackBetToken,
                   gameTokenSymbol: getAIPriceTokenSymbol(blackjackBetToken || undefined),
                   snapshot: normalizeBlackjackSnapshot(blackjackSnapshot, blackjackBetToken || undefined),
-                  stats: normalizeCasinoStats(blackjackStats, blackjackBetToken || undefined),
                 }
                 : null,
               coordinates: {
@@ -4883,7 +4888,6 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               roulette: includeRoulette
                 ? {
                   activeBet: normalizeCasinoActiveBet(activeBet),
-                  stats: normalizeCasinoStats(rouletteStats, activeBet?.bettingToken || casinoConfig?.bettingToken),
                 }
                 : null,
             };
@@ -4945,6 +4949,10 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               blackjackEnabledInApp: CLIENT_ENV.BLACKJACK_ENABLED,
               casinoEnabledInApp: CLIENT_ENV.CASINO_ENABLED,
             },
+            aggregateStats: {
+              redacted: true,
+              reason: 'Aggregate casino games-played, wagered, won, and performance metrics are not exposed by Neural Seed.',
+            },
             landFilterApplied: Boolean(landIds?.length),
             lands,
             ownedLandCount: landIds?.length ? undefined : allLands.length,
@@ -4959,7 +4967,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_blackjack_action_state: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read current Blackjack action availability for casino lands: active snapshot, action hand, and hit/stand/double/split/surrender/insurance flags. Use for "can I hit", "can I stand", "what blackjack actions are available", or stuck blackjack games. Read-only; never advises gambling strategy or executes actions.',
+      description: 'Read current Blackjack action availability for casino lands: active snapshot, action hand, and hit/stand/double/split/surrender/insurance flags. Use for "can I hit", "can I stand", "what blackjack actions are available", or stuck blackjack games. Read-only; never advises gambling strategy, executes actions, or exposes aggregate casino stats.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         handIndex: z.number().int().min(0).max(1).optional(),
@@ -4976,6 +4984,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             `Scans at most ${AI_BLACKJACK_ACTION_MAX_LANDS} lands unless specific land IDs are supplied.`,
             'This reports available button states only. It is not gambling, odds, or strategy advice.',
             'Neural Seed cannot hit, stand, double, split, surrender, place bets, or build transaction payloads.',
+            'Aggregate Blackjack/casino stats such as total games, wagered amount, won amount, or performance metrics are intentionally redacted.',
           ],
         },
         async () => {
@@ -4986,11 +4995,10 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           const buildingMap = new Map(buildingResults.map((entry) => [entry.landId.toString(), entry]));
           const casinoLands = scannedLands.filter((land) => hasBuiltTownBuilding(buildingMap.get(land.tokenId.toString()), 6));
           const lands = await Promise.all(casinoLands.slice(0, limit).map(async (land) => {
-            const [available, token, snapshot, stats] = await Promise.all([
+            const [available, token, snapshot] = await Promise.all([
               blackjackIsAvailable(land.tokenId),
               blackjackGetGameToken(land.tokenId),
               blackjackGetGameSnapshot(land.tokenId),
-              blackjackGetStats(land.tokenId).catch(() => null),
             ]);
             const normalizedSnapshot = normalizeBlackjackSnapshot(snapshot, token || undefined);
             const selectedHandIndex = handIndex ?? normalizedSnapshot?.actionHandIndex ?? 0;
@@ -5023,7 +5031,6 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               name: land.name || `Land #${land.tokenId.toString()}`,
               selectedHandIndex,
               snapshot: normalizedSnapshot,
-              stats: normalizeCasinoStats(stats, token || undefined),
               ui: {
                 actionLabels,
                 nextStep: normalizedSnapshot?.isActive
@@ -5044,6 +5051,10 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             summary: {
               activeGames: lands.filter((land) => land.snapshot?.isActive).length,
               landsWithAvailableActions: lands.filter((land) => land.ui.actionLabels.length > 0).length,
+            },
+            aggregateStats: {
+              redacted: true,
+              reason: 'Aggregate Blackjack/casino games-played, wagered, won, and performance metrics are not exposed by Neural Seed.',
             },
             truncated: allLands.length > scannedLands.length || casinoLands.length > lands.length,
           };
@@ -5127,14 +5138,15 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address }) => withToolResult(
         'get_claim_eligibility',
-        'Redis-backed public airdrop status and Base Verify claim status, plus Base balance checks for public bonus availability',
+        'App claim status records and Base Verify claim status',
         {
-          cache: 'Current Redis claim state; bonus funding check is live when configured.',
+          cache: 'Current app claim state.',
           confidence: 'medium',
           includeBlock: true,
           limitations: [
             'Only returns the requested wallet’s claim status; it never lists other eligible wallets or admin airdrop data.',
             'The AI cannot verify social accounts, sign messages, submit claims, or expose claim/admin internals.',
+            'Bonus funding wallet balances and availability are internal funding data and are intentionally redacted.',
           ],
         },
         async () => {
@@ -5146,18 +5158,6 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           ]);
           const airdrop = safeJsonParse(airdropRaw);
           const verifyClaim = safeJsonParse(verifyRaw);
-          const seedBonusEnabled = CLIENT_ENV.VERIFY_CLAIM_SEED_BONUS_ENABLED;
-          const agentAddress = process.env.VERIFY_CLAIM_AGENT_ADDRESS || '';
-          let seedBonusAvailable = false;
-
-          if (seedBonusEnabled && agentAddress && isAddress(agentAddress)) {
-            try {
-              const seedBalance = await getTokenBalanceForToken(getAddress(agentAddress), PIXOTCHI_TOKEN_ADDRESS, readClient);
-              seedBonusAvailable = seedBalance >= parseUnits(VERIFY_CLAIM_SEED_BONUS_AMOUNT, 18);
-            } catch {
-              seedBonusAvailable = false;
-            }
-          }
 
           return {
             address: target,
@@ -5186,7 +5186,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             verifyFreePlant: {
               bonuses: {
                 leaf: CLIENT_ENV.VERIFY_CLAIM_LEAF_BONUS_ENABLED ? VERIFY_CLAIM_LEAF_BONUS_LABEL : null,
-                seed: seedBonusAvailable ? VERIFY_CLAIM_SEED_BONUS_LABEL : null,
+                seed: CLIENT_ENV.VERIFY_CLAIM_SEED_BONUS_ENABLED ? 'Check the visible claim UI for current SEED bonus availability.' : null,
+                seedFundingDetails: createCustodyRedaction('verify_claim_seed_bonus_funding'),
               },
               claimed: Boolean(verifyClaim),
               claimData: verifyClaim
@@ -5207,51 +5208,43 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_app_status: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read app/module health and public feature flags: app, RPC, indexer, database, notifications, Base status, casino, blackjack, barracks, swaps, verify, Solana bridge, and status staleness. Use when users ask if something is down or disabled.',
+      description: 'Read player-facing app/module health and public feature availability. Use when users ask if something is down or disabled. Never exposes service latency, endpoint diagnostics, missing config names, or backend health internals.',
       inputSchema: z.object({
         forceRefresh: z.boolean().default(false),
       }),
       execute: async ({ forceRefresh }) => withToolResult(
         'get_app_status',
-        'Pixotchi status checks, public app feature flags, and Solana bridge config validation',
+        'Pixotchi player-facing status checks and public feature availability',
         {
           cache: forceRefresh ? 'Forced refresh requested' : 'Cached status snapshot when available',
           confidence: 'medium',
           includeBlock: false,
-          limitations: ['Status checks are operational diagnostics, not a guarantee that a future transaction will succeed.'],
+          limitations: [
+            'Status is player-facing and omits backend endpoints, latency, missing config names, provider internals, and operational diagnostics.',
+            'Status checks are not a guarantee that a future transaction will succeed.',
+          ],
         },
         async () => {
           const status = await getCachedStatusSnapshot(forceRefresh);
-          const solanaValidation = validateSolanaConfig();
           return {
-            featureFlags: {
-              barracksEnabled: CLIENT_ENV.BARRACKS_ENABLED,
-              barracksPreviewEnabled: CLIENT_ENV.BARRACKS_PREVIEW_ENABLED,
-              barracksV2Enabled: CLIENT_ENV.BARRACKS_V2_ENABLED,
-              blackjackEnabled: CLIENT_ENV.BLACKJACK_ENABLED,
-              casinoEnabled: CLIENT_ENV.CASINO_ENABLED,
-              gamificationDisabled: CLIENT_ENV.GAMIFICATION_DISABLED,
-              notificationProvider: getNotificationProviderLabel(SERVER_ENV.NOTIFICATION_PROVIDER),
-              paymasterEnabled: CLIENT_ENV.PAYMASTER_ENABLED,
-              solanaEnabled: isSolanaEnabled(),
-              swapDisabled: CLIENT_ENV.SWAP_MODULE_DISABLED,
-              swapDisabledMessage: CLIENT_ENV.SWAP_MODULE_DISABLED ? CLIENT_ENV.SWAP_MODULE_DISABLED_MESSAGE : null,
-              verifyClaimEnabled: CLIENT_ENV.VERIFY_CLAIM_ENABLED,
+            features: {
+              barracks: CLIENT_ENV.BARRACKS_ENABLED ? 'enabled' : 'disabled',
+              blackjack: CLIENT_ENV.BLACKJACK_ENABLED ? 'enabled' : 'disabled',
+              casino: CLIENT_ENV.CASINO_ENABLED ? 'enabled' : 'disabled',
+              tasks: CLIENT_ENV.GAMIFICATION_DISABLED ? 'disabled' : 'enabled',
+              solanaBridge: isSolanaEnabled() ? 'enabled' : 'disabled',
+              swap: CLIENT_ENV.SWAP_MODULE_DISABLED ? 'disabled' : 'enabled',
+              verifyFreePlant: CLIENT_ENV.VERIFY_CLAIM_ENABLED ? 'enabled' : 'disabled',
             },
             overall: status.overall,
-            services: status.services.map((service) => ({
-              details: service.details,
-              id: service.id,
-              label: service.label,
-              latencyMs: service.latencyMs,
-              status: service.status,
-            })),
-            solanaBridgeConfig: {
-              enabled: isSolanaEnabled(),
-              missingPublicConfig: solanaValidation.missing,
-              validPublicConfig: solanaValidation.valid,
+            services: status.services.map(playerFacingStatusService),
+            operationalDiagnostics: {
+              redacted: true,
+              reason: 'Backend diagnostics, latency, endpoint health, provider internals, and missing config names are internal operational data.',
             },
-            statusGeneratedAt: status.generatedAt,
+            ui: {
+              statusUrl: 'https://status.pixotchi.tech',
+            },
           };
         },
         readClient,
@@ -5260,42 +5253,39 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_notification_readiness: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read public Pixotchi notification readiness for plant-care reminders: provider label, status service entry, reminder thresholds, and recent plant-care run stats. Never exposes admin campaign data.',
+      description: 'Read public Pixotchi notification readiness for plant-care reminders: provider label, status service entry, reminder threshold, and throttle window. Never exposes admin campaign data or operational delivery stats.',
       inputSchema: z.object({
         forceRefreshStatus: z.boolean().default(false),
       }),
       execute: async ({ forceRefreshStatus }) => withToolResult(
         'get_notification_readiness',
-        'Pixotchi notification provider status and plant-care reminder stats',
+        'Pixotchi notification provider status and plant-care reminder rules',
         {
-          cache: 'Status snapshot is cached unless force refresh is requested; plant-care run stats come from notification storage.',
+          cache: 'Status snapshot is cached unless force refresh is requested.',
           confidence: 'medium',
           includeBlock: false,
           limitations: [
             'This tool does not send notifications, list campaign audiences, or expose admin campaign data.',
+            'Notification delivery totals, run history, campaign metrics, and audience counts are intentionally redacted.',
             'User opt-in can depend on the host app/provider and may not be visible to Neural Seed for every wallet.',
           ],
         },
         async () => {
           const provider = SERVER_ENV.NOTIFICATION_PROVIDER;
-          const [status, plantCareStats] = await Promise.all([
-            getCachedStatusSnapshot(forceRefreshStatus),
-            getPlantCareStats(provider).catch(() => null),
-          ]);
+          const status = await getCachedStatusSnapshot(forceRefreshStatus);
           const notificationService = status.services.find((service) => service.id === 'notifications') || null;
 
           return {
             provider: {
-              configuredForServer: provider,
               label: getNotificationProviderLabel(provider),
             },
             plantCareReminders: {
-              lastRun: plantCareStats?.lastRun || null,
-              recentRuns: (plantCareStats?.recent || []).slice(0, 5),
-              sentCount: plantCareStats?.sentCount ?? 0,
+              operationalStats: {
+                redacted: true,
+                reason: 'Notification delivery totals, run history, campaign metrics, and audience counts are internal operational data.',
+              },
               thresholdHours: PLANT_CARE_THRESHOLD_SECONDS / 3600,
               throttleHours: PLANT_CARE_THROTTLE_SECONDS / 3600,
-              totalRuns: plantCareStats?.totalRuns ?? 0,
             },
             readinessChecklist: [
               'The player must be in a supported host context and have notifications enabled/saved for the app.',
@@ -5304,8 +5294,11 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               'The Status page is the source of truth for service health.',
             ],
             status: {
-              generatedAt: status.generatedAt,
-              notificationService,
+              notificationService: notificationService
+                ? {
+                  ...playerFacingStatusService(notificationService),
+                }
+                : null,
               overall: status.overall,
             },
             ui: {
@@ -5327,9 +5320,9 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address, suggestionLimit }) => withToolResult(
         'get_daily_task_plan',
-        `Redis gamification state plus Base wallet/land/plant reads via ${aiRpcSource}`,
+        `App task progress plus Base wallet/land/plant reads via ${aiRpcSource}`,
         {
-          cache: 'Mission progress is Redis-backed; readiness is live onchain where possible.',
+          cache: 'Mission progress is app-backed; readiness is live onchain where possible.',
           confidence: 'medium',
           includeBlock: true,
           limitations: [
@@ -5538,7 +5531,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
 
     get_bridge_status: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read public Solana bridge/Twin status: enabled config, predicted Twin address, Twin deployment, wSOL/SEED balances, and adapter setup. Use for Solana bridge onboarding or "is my twin ready" questions. Never builds bridge transactions or uses debug endpoints.',
+      description: 'Read player-facing Solana bridge/Twin status: enabled state, predicted Twin readiness, and optional user Twin balances. Use for Solana bridge onboarding or "is my twin ready" questions. Never exposes bridge config internals, builds bridge transactions, or uses debug endpoints.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         includeTwinBalances: z.boolean().default(true),
@@ -5546,13 +5539,14 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       }),
       execute: async ({ address, includeTwinBalances, solanaAddress }) => withToolResult(
         'get_bridge_status',
-        `Public Solana bridge config and Base Twin reads via ${aiRpcSource}`,
+        `Solana bridge/Twin player-facing status via ${aiRpcSource}`,
         {
           confidence: 'medium',
           includeBlock: true,
           limitations: [
             'Bridge status is read-only. The AI cannot prepare bridge transactions, retry relays, sign Solana messages, or call bridge debug/admin endpoints.',
             'Solana wallet details are only checked when the authenticated session or prompt provides a Solana public address.',
+            'Bridge program/config addresses, missing config names, and adapter diagnostics are internal and intentionally redacted.',
           ],
         },
         async () => {
@@ -5560,7 +5554,6 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           const sourceSolana = solanaAddress || context.sourceAddress || null;
           const bridgeConfig = getBridgeConfig();
           const pixotchiConfig = getPixotchiSolanaConfig();
-          const validation = validateSolanaConfig();
           let twin: UntypedValue = null;
 
           if (sourceSolana && SOLANA_ADDRESS_INPUT.safeParse(sourceSolana).success) {
@@ -5581,16 +5574,13 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           return {
             baseAddress: baseTarget,
             bridge: {
-              baseBridge: bridgeConfig.base.bridge,
               baseChainId: bridgeConfig.base.chainId,
-              baseWrappedSOL: bridgeConfig.base.wrappedSOL,
               enabled: isSolanaEnabled(),
               estimatedBridgeTimeMs: 30000,
-              missingPublicConfig: validation.missing,
-              solanaBridgeProgram: bridgeConfig.solana.bridgeProgram,
-              solanaExplorer: bridgeConfig.solana.blockExplorer,
-              twinAdapter: pixotchiConfig.twinAdapter || null,
-              validPublicConfig: validation.valid,
+              operationalConfig: {
+                redacted: true,
+                reason: 'Bridge program addresses, adapter addresses, missing config names, and setup diagnostics are not exposed by Neural Seed.',
+              },
             },
             twin,
             ui: {
@@ -5609,8 +5599,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       inputSchema: z.object({}),
       execute: async () => withToolResult(
         'get_missions',
-        'Redis gamification storage',
-        { cache: 'Current Redis state', includeBlock: false },
+        'App gamification storage',
+        { cache: 'Current app mission state', includeBlock: false },
         async () => ({
           mission: await getMissionDay(context.userAddress),
           missionScore: await getMissionScore(context.userAddress),

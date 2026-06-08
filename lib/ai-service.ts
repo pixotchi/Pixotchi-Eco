@@ -854,6 +854,7 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
 
   if (toolName === 'get_casino_status') {
     return {
+      aggregateStats: data?.aggregateStats,
       configs: data?.configs,
       featureFlags: data?.featureFlags,
       lands: (data?.lands || []).slice(0, 8).map((land: UntypedValue) => ({
@@ -871,6 +872,7 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
 
   if (toolName === 'get_blackjack_action_state') {
     return {
+      aggregateStats: data?.aggregateStats,
       casinoLandCountInScan: data?.casinoLandCountInScan,
       handIndexRequested: data?.handIndexRequested,
       lands: (data?.lands || []).slice(0, 8).map((land: UntypedValue) => ({
@@ -922,22 +924,20 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
 
   if (toolName === 'get_app_status') {
     return {
-      featureFlags: data?.featureFlags,
+      features: data?.features,
+      operationalDiagnostics: data?.operationalDiagnostics,
       overall: data?.overall,
       services: (data?.services || []).slice(0, 12),
-      solanaBridgeConfig: data?.solanaBridgeConfig,
-      statusGeneratedAt: data?.statusGeneratedAt,
+      ui: data?.ui,
     };
   }
 
   if (toolName === 'get_notification_readiness') {
     return {
       plantCareReminders: {
-        lastRun: data?.plantCareReminders?.lastRun,
-        sentCount: data?.plantCareReminders?.sentCount,
+        operationalStats: data?.plantCareReminders?.operationalStats,
         thresholdHours: data?.plantCareReminders?.thresholdHours,
         throttleHours: data?.plantCareReminders?.throttleHours,
-        totalRuns: data?.plantCareReminders?.totalRuns,
       },
       provider: data?.provider,
       readinessChecklist: data?.readinessChecklist,

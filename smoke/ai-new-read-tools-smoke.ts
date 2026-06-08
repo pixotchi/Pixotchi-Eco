@@ -97,6 +97,11 @@ async function main() {
   }), 'get_casino_status');
   assert(typeof casino.scannedLandCount === 'number', 'Casino status missing scanned land count.');
   assert(casino.configs, 'Casino status missing config block.');
+  assert(casino.aggregateStats?.redacted === true, 'Casino status did not redact aggregate stats.');
+  const casinoJson = JSON.stringify(casino).toLowerCase();
+  for (const forbidden of ['gamesplayed', 'totalwagered', 'totalwon', 'total wagered', 'total won']) {
+    assert(!casinoJson.includes(forbidden), `Casino status exposed aggregate stat field: ${forbidden}`);
+  }
 
   const blackjackActions = getToolData(await (tools.get_blackjack_action_state as UntypedValue).execute({
     address,
@@ -104,6 +109,11 @@ async function main() {
   }), 'get_blackjack_action_state');
   assert(typeof blackjackActions.scannedLandCount === 'number', 'Blackjack action state missing scanned land count.');
   assert(blackjackActions.summary, 'Blackjack action state missing summary.');
+  assert(blackjackActions.aggregateStats?.redacted === true, 'Blackjack action state did not redact aggregate stats.');
+  const blackjackJson = JSON.stringify(blackjackActions).toLowerCase();
+  for (const forbidden of ['gamesplayed', 'totalwagered', 'totalwon', 'total wagered', 'total won']) {
+    assert(!blackjackJson.includes(forbidden), `Blackjack action state exposed aggregate stat field: ${forbidden}`);
+  }
 
   const marketplace = getToolData(await (tools.get_marketplace_orders as UntypedValue).execute({
     address,
@@ -173,12 +183,22 @@ async function main() {
   }), 'get_claim_eligibility');
   assert(typeof claims.airdrop?.eligible === 'boolean', 'Claim eligibility missing airdrop flag.');
   assert(typeof claims.verifyFreePlant?.enabled === 'boolean', 'Claim eligibility missing verify flag.');
+  assert(claims.verifyFreePlant?.bonuses?.seedFundingDetails?.redacted === true, 'Claim eligibility did not redact SEED bonus funding details.');
+  const claimsJson = JSON.stringify(claims).toLowerCase();
+  for (const forbidden of ['agentaddress', 'seedbalance', 'wallet balance', 'funding wallet']) {
+    assert(!claimsJson.includes(forbidden), `Claim eligibility exposed bonus funding detail: ${forbidden}`);
+  }
 
   const appStatus = getToolData(await (tools.get_app_status as UntypedValue).execute({
     forceRefresh: false,
   }), 'get_app_status');
   assert(appStatus.overall, 'App status missing overall status.');
   assert(Array.isArray(appStatus.services), 'App status missing services.');
+  assert(appStatus.operationalDiagnostics?.redacted === true, 'App status did not redact operational diagnostics.');
+  const appStatusJson = JSON.stringify(appStatus).toLowerCase();
+  for (const forbidden of ['latencyms', 'details', 'statusgeneratedat', 'solanabridgeconfig', 'missingpublicconfig', 'validpublicconfig', 'redis', 'database']) {
+    assert(!appStatusJson.includes(forbidden), `App status exposed operational field: ${forbidden}`);
+  }
 
   const walletCapabilities = getToolData(await (tools.get_wallet_capabilities as UntypedValue).execute({
     address,
@@ -217,6 +237,11 @@ async function main() {
   }), 'get_notification_readiness');
   assert(notificationReadiness.provider?.label, 'Notification readiness missing provider label.');
   assert(notificationReadiness.plantCareReminders?.thresholdHours === 12, 'Notification readiness missing plant-care threshold.');
+  assert(notificationReadiness.plantCareReminders?.operationalStats?.redacted === true, 'Notification readiness did not redact operational stats.');
+  const notificationJson = JSON.stringify(notificationReadiness).toLowerCase();
+  for (const forbidden of ['sentcount', 'totalruns', 'recentruns', 'lastrun', 'generatedat', 'latencyms', 'details', 'total reminders sent']) {
+    assert(!notificationJson.includes(forbidden), `Notification readiness exposed operational stat field: ${forbidden}`);
+  }
 
   const supportLinks = getToolData(await (tools.get_support_links as UntypedValue).execute({
     includeSocials: true,
@@ -229,6 +254,11 @@ async function main() {
     includeTwinBalances: false,
   }), 'get_bridge_status');
   assert(bridge.bridge?.baseChainId === 8453, 'Bridge status missing Base chain id.');
+  assert(bridge.bridge?.operationalConfig?.redacted === true, 'Bridge status did not redact operational config.');
+  const bridgeJson = JSON.stringify(bridge).toLowerCase();
+  for (const forbidden of ['missingpublicconfig', 'validpublicconfig', 'twinadapter', 'solanabridgeprogram', 'basewrappedsol', 'basebridge']) {
+    assert(!bridgeJson.includes(forbidden), `Bridge status exposed config diagnostic field: ${forbidden}`);
+  }
 
   console.log(JSON.stringify({
     address,

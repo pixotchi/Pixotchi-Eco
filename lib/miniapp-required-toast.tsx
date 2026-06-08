@@ -18,7 +18,7 @@ export function showMiniAppRequiredToast(input?: {
 
   toast.custom(
     (t) => (
-      <div className="pointer-events-auto w-full max-w-md rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.38)] bg-card/95 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-raised)] backdrop-blur-[var(--blur-surface)]">
+      <div className="pointer-events-auto w-full max-w-md rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.38)] bg-card bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-raised)]">
         <div className="space-y-3">
           <div className="space-y-1">
             <p className="text-sm font-semibold text-foreground">{title}</p>
