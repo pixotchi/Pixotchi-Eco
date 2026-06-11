@@ -184,9 +184,11 @@ export default function LeaderboardTab() {
   const [attackDialogOpen, setAttackDialogOpen] = useState(false);
   const [targetPlant, setTargetPlant] = useState<LeaderboardPlant | null>(null);
   const [selectedAttackerId, setSelectedAttackerId] = useState<number | null>(null);
+  const [attackMenuPortalContainer, setAttackMenuPortalContainer] = useState<HTMLElement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingHash, setPendingHash] = useState<string | null>(null);
   const [killDialogOpen, setKillDialogOpen] = useState(false);
+  const [killMenuPortalContainer, setKillMenuPortalContainer] = useState<HTMLElement | null>(null);
   const [reviveDialogOpen, setReviveDialogOpen] = useState(false);
   const [selectedKillerId, setSelectedKillerId] = useState<number | null>(null);
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
@@ -225,6 +227,12 @@ export default function LeaderboardTab() {
   });
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
+  const handleAttackDialogFrameRef = useCallback((node: HTMLDivElement | null) => {
+    setAttackMenuPortalContainer(node);
+  }, []);
+  const handleKillDialogFrameRef = useCallback((node: HTMLDivElement | null) => {
+    setKillMenuPortalContainer(node);
+  }, []);
 
   // Kill cooldown state (1 kill per hour per wallet)
   const [killCooldown, setKillCooldown] = useState<{ canKill: boolean; remainingSeconds: number }>({ canKill: true, remainingSeconds: 0 });
@@ -1515,7 +1523,7 @@ export default function LeaderboardTab() {
 
       {/* Attack dialog */}
       <Dialog open={attackDialogOpen} onOpenChange={setAttackDialogOpen}>
-        <DialogContent mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+        <DialogContent ref={handleAttackDialogFrameRef} mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
           <DialogHeader className="pb-1">
             <DialogTitle className="leading-tight">Attack plant</DialogTitle>
             <DialogDescription className="leading-relaxed">
@@ -1618,6 +1626,7 @@ export default function LeaderboardTab() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
+                    portalContainer={attackMenuPortalContainer ?? undefined}
                     side="top"
                     align="start"
                     sideOffset={8}
@@ -1754,7 +1763,7 @@ export default function LeaderboardTab() {
 
       {/* Kill dialog */}
       <Dialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
-        <DialogContent mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
+        <DialogContent ref={handleKillDialogFrameRef} mobileMode="center" surface="soft" className="max-w-md w-[min(94vw,28rem)]">
           <DialogHeader className="pb-1">
             <DialogTitle className="leading-tight">Kill a plant</DialogTitle>
             <DialogDescription className="leading-relaxed">
@@ -1830,6 +1839,7 @@ export default function LeaderboardTab() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
+                    portalContainer={killMenuPortalContainer ?? undefined}
                     side="top"
                     align="start"
                     sideOffset={8}
