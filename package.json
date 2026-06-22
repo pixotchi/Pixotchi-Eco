@@ -1,6 +1,6 @@
 {
   "name": "pixotchi-app",
-  "version": "1.8.06",
+  "version": "1.8.08",
   "private": true,
   "engines": {
     "node": "24.x"
