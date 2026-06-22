@@ -174,8 +174,16 @@ const AI_ARCADE_STATUS_MAX_PLANTS = Number.parseInt(process.env.AI_ARCADE_STATUS
 const AI_QUEST_READINESS_MAX_LANDS = Number.parseInt(process.env.AI_QUEST_READINESS_MAX_LANDS || '', 10) || 60;
 const AI_LAND_RAID_REPORT_MAX_LANDS = Number.parseInt(process.env.AI_LAND_RAID_REPORT_MAX_LANDS || '', 10) || 60;
 const AI_BLACKJACK_ACTION_MAX_LANDS = Number.parseInt(process.env.AI_BLACKJACK_ACTION_MAX_LANDS || '', 10) || 40;
-const QUEST_REWARDS_WALLET = getAddress('0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB');
+const DEFAULT_QUEST_REWARDS_WALLET = '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB';
+function getQuestRewardsWallet(primaryEnvName: string): `0x${string}` {
+  const primary = process.env[primaryEnvName];
+  const fallback = process.env.NEXT_PUBLIC_QUEST_REWARDS_WALLET;
+  return getAddress(isAddress(primary || '') ? primary! : isAddress(fallback || '') ? fallback! : DEFAULT_QUEST_REWARDS_WALLET);
+}
+const QUEST_SEED_REWARDS_WALLET = getQuestRewardsWallet('NEXT_PUBLIC_QUEST_SEED_REWARDS_WALLET');
+const QUEST_LEAF_REWARDS_WALLET = getQuestRewardsWallet('NEXT_PUBLIC_QUEST_LEAF_REWARDS_WALLET');
 const MIN_QUEST_REWARDS_SEED_BALANCE = parseUnits('300', 18);
+const MIN_QUEST_REWARDS_LEAF_BALANCE = parseUnits('492750', 18);
 const QUEST_BLOCK_SECONDS = 2;
 const COORDINATE_INPUT_LIMIT = 1_000_000;
 
@@ -4113,13 +4121,27 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
           const allLands = await readLandsForInput(target, landIds, readClient);
           const scannedLands = allLands.slice(0, Math.min(allLands.length, AI_QUEST_READINESS_MAX_LANDS));
           const displayLimit = Math.min(limit, scannedLands.length);
-          const [currentBlock, rewardsBalance, buildingResults] = await Promise.all([
+          const [
+            currentBlock,
+            seedRewardsBalance,
+            seedRewardsAllowance,
+            leafRewardsBalance,
+            leafRewardsAllowance,
+            buildingResults,
+          ] = await Promise.all([
             readClient.getBlockNumber(),
-            getTokenBalanceForToken(QUEST_REWARDS_WALLET, PIXOTCHI_TOKEN_ADDRESS, readClient).catch(() => BigInt(0)),
+            getTokenBalanceForToken(QUEST_SEED_REWARDS_WALLET, PIXOTCHI_TOKEN_ADDRESS, readClient).catch(() => BigInt(0)),
+            readErc20Allowance(readClient, PIXOTCHI_TOKEN_ADDRESS, QUEST_SEED_REWARDS_WALLET, LAND_CONTRACT_ADDRESS).catch(() => BigInt(0)),
+            getTokenBalanceForToken(QUEST_LEAF_REWARDS_WALLET, LEAF_CONTRACT_ADDRESS, readClient).catch(() => BigInt(0)),
+            readErc20Allowance(readClient, LEAF_CONTRACT_ADDRESS, QUEST_LEAF_REWARDS_WALLET, LAND_CONTRACT_ADDRESS).catch(() => BigInt(0)),
             getLandBuildingsBatch(scannedLands.map((land) => land.tokenId), { readClient }),
           ]);
           const buildingMap = new Map(buildingResults.map((entry) => [entry.landId.toString(), entry]));
-          const rewardsPoolLow = rewardsBalance < MIN_QUEST_REWARDS_SEED_BALANCE;
+          const rewardsPoolUnavailable =
+            seedRewardsBalance < MIN_QUEST_REWARDS_SEED_BALANCE ||
+            seedRewardsAllowance < MIN_QUEST_REWARDS_SEED_BALANCE ||
+            leafRewardsBalance < MIN_QUEST_REWARDS_LEAF_BALANCE ||
+            leafRewardsAllowance < MIN_QUEST_REWARDS_LEAF_BALANCE;
           const questLands = await Promise.all(scannedLands.slice(0, displayLimit).map(async (land) => {
             const buildings = buildingMap.get(land.tokenId.toString());
             const farmerHouseLevel = getBuiltTownBuildingLevel(buildings, 7);
@@ -4146,9 +4168,10 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
               name: land.name || `Land #${land.tokenId.toString()}`,
               nextActions: [
                 farmerHouseLevel <= 0 ? 'Build Farmer House from the Town buildings panel to unlock quests.' : null,
-                rewardsPoolLow && availableSlots > 0 ? 'Quest starts are temporarily unavailable in the Farmer House UI; refresh the panel and try again later.' : null,
-                actionableSlots > 0 ? 'Open Farmer House and use Return now or Open now on ready slots.' : null,
-                !rewardsPoolLow && availableSlots > 0 ? 'Open Farmer House and start an Easy, Med, or Hard quest from an available slot.' : null,
+                rewardsPoolUnavailable && availableSlots > 0 ? 'Quest starts are temporarily unavailable in the Farmer House UI; refresh the panel and try again later.' : null,
+                rewardsPoolUnavailable && actionableSlots > 0 ? 'Open Farmer House and use Return now on ready-to-commit slots; opening loot bags is paused until rewards are ready.' : null,
+                !rewardsPoolUnavailable && actionableSlots > 0 ? 'Open Farmer House and use Return now or Open now on ready slots.' : null,
+                !rewardsPoolUnavailable && availableSlots > 0 ? 'Open Farmer House and start an Easy, Med, or Hard quest from an available slot.' : null,
               ].filter(Boolean),
               slots: normalizedSlots,
               summary: {
@@ -4186,7 +4209,8 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
             phaseGuide: QUEST_PHASE_GUIDE,
             resetRule: 'After commit, finalize/open before pseudoRndBlock + 256 blocks or the contract resets the quest without loot.',
             rewardsPool: {
-              availableForNewQuests: !rewardsPoolLow,
+              availableForNewQuests: !rewardsPoolUnavailable,
+              availableForLootBags: !rewardsPoolUnavailable,
               fundingDetails: createCustodyRedaction('farmer_house_rewards_availability'),
             },
             scannedLandCount: scannedLands.length,
