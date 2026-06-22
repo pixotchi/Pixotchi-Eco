@@ -463,7 +463,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    questFinalizedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { player: $playerAddress }) {
+    questFinalizedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
       items {
         __typename
         id
