@@ -22,6 +22,9 @@ function parseAddressList(value: string | undefined): `0x${string}`[] {
 export function getCustodyWalletAddressSet(): Set<string> {
   return new Set([
     ...DEFAULT_CUSTODY_WALLET_ADDRESSES.map((address) => getAddress(address).toLowerCase()),
+    ...parseAddressList(process.env.NEXT_PUBLIC_QUEST_REWARDS_WALLET).map((address) => address.toLowerCase()),
+    ...parseAddressList(process.env.NEXT_PUBLIC_QUEST_SEED_REWARDS_WALLET).map((address) => address.toLowerCase()),
+    ...parseAddressList(process.env.NEXT_PUBLIC_QUEST_LEAF_REWARDS_WALLET).map((address) => address.toLowerCase()),
     ...parseAddressList(process.env.AI_CUSTODY_WALLET_ADDRESSES).map((address) => address.toLowerCase()),
     ...parseAddressList(process.env.VERIFY_CLAIM_AGENT_ADDRESS).map((address) => address.toLowerCase()),
   ]);
