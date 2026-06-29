@@ -41,11 +41,14 @@ async function main() {
   loadEnvFile('.env.local');
   loadEnvFile('.env');
 
-  const { createReadOnlyAITools } = await import('../lib/ai-read-tools');
+  const { createReadOnlyAITools, executeReadOnlyAITool } = await import('../lib/ai-read-tools');
   const address = process.env.AI_NEW_TOOLS_SMOKE_ADDRESS || DEFAULT_WHALE_ADDRESS;
-  const tools = createReadOnlyAITools({ userAddress: address });
+  const tools = createReadOnlyAITools();
+  const toolContext = { userAddress: address };
+  const runTool = (toolName: string, input: UntypedValue = {}) =>
+    executeReadOnlyAITool(tools, toolName, input, toolContext);
 
-  const production = getToolData(await (tools.get_land_production_audit as UntypedValue).execute({
+  const production = getToolData(await runTool('get_land_production_audit', {
     address,
     includePerBuilding: false,
     limit: 5,
@@ -53,7 +56,7 @@ async function main() {
   assert(production.auditedLandCount > 0, 'Production audit did not scan any lands for the whale wallet.');
   assert(production.totals?.buildingProduction, 'Production audit missing totals.');
 
-  const raids = getToolData(await (tools.get_land_raid_targets as UntypedValue).execute({
+  const raids = getToolData(await runTool('get_land_raid_targets', {
     address,
     includePreviews: false,
     limit: 5,
@@ -62,14 +65,14 @@ async function main() {
   assert(typeof raids.ownedLandCount === 'number' && raids.ownedLandCount > 0, 'Land raid targets missing owned land count.');
   assert(Array.isArray(raids.results), 'Land raid targets missing result array.');
 
-  const raidReports = getToolData(await (tools.get_land_raid_reports as UntypedValue).execute({
+  const raidReports = getToolData(await runTool('get_land_raid_reports', {
     address,
     limit: 5,
   }), 'get_land_raid_reports');
   assert(typeof raidReports.scannedLandCount === 'number', 'Land raid reports missing scanned land count.');
   assert(typeof raidReports.summary?.totalReports === 'number', 'Land raid reports missing summary.');
 
-  const questReadiness = getToolData(await (tools.get_quest_readiness as UntypedValue).execute({
+  const questReadiness = getToolData(await runTool('get_quest_readiness', {
     address,
     limit: 5,
   }), 'get_quest_readiness');
@@ -81,7 +84,7 @@ async function main() {
   assert(!questReadinessJson.includes('walletbalancedisplay'), 'Quest readiness exposed rewards wallet balance display.');
   assert(!questReadinessJson.includes('minimumseedbalancedisplay'), 'Quest readiness exposed rewards wallet balance threshold.');
 
-  const custodyBalanceResult = await (tools.get_wallet_token_balances as UntypedValue).execute({
+  const custodyBalanceResult = await runTool('get_wallet_token_balances', {
     address: QUEST_REWARDS_WALLET,
     includeZeroBalances: true,
   });
@@ -89,7 +92,7 @@ async function main() {
   assert(/custody/i.test(custodyBalanceResult?.error || ''), 'Known custody wallet balance read did not return a custody redaction error.');
   assert(!JSON.stringify(custodyBalanceResult).toLowerCase().includes(QUEST_REWARDS_WALLET.toLowerCase()), 'Custody wallet balance error exposed the blocked address.');
 
-  const casino = getToolData(await (tools.get_casino_status as UntypedValue).execute({
+  const casino = getToolData(await runTool('get_casino_status', {
     address,
     includeBlackjack: true,
     includeRoulette: true,
@@ -103,7 +106,7 @@ async function main() {
     assert(!casinoJson.includes(forbidden), `Casino status exposed aggregate stat field: ${forbidden}`);
   }
 
-  const blackjackActions = getToolData(await (tools.get_blackjack_action_state as UntypedValue).execute({
+  const blackjackActions = getToolData(await runTool('get_blackjack_action_state', {
     address,
     limit: 5,
   }), 'get_blackjack_action_state');
@@ -115,7 +118,7 @@ async function main() {
     assert(!blackjackJson.includes(forbidden), `Blackjack action state exposed aggregate stat field: ${forbidden}`);
   }
 
-  const marketplace = getToolData(await (tools.get_marketplace_orders as UntypedValue).execute({
+  const marketplace = getToolData(await runTool('get_marketplace_orders', {
     address,
     includeInactive: false,
     includeMyOrders: true,
@@ -125,7 +128,7 @@ async function main() {
   assert(Array.isArray(marketplace.orderBook?.asks), 'Marketplace orders missing asks.');
   assert(Array.isArray(marketplace.orderBook?.bids), 'Marketplace orders missing bids.');
 
-  const daily = getToolData(await (tools.get_daily_task_plan as UntypedValue).execute({
+  const daily = getToolData(await runTool('get_daily_task_plan', {
     address,
     suggestionLimit: 5,
   }), 'get_daily_task_plan');
@@ -133,20 +136,20 @@ async function main() {
   assert(Array.isArray(daily.suggestedNext), 'Daily task plan missing suggestions.');
   assert(Array.isArray(daily.taskProofGuide), 'Daily task plan missing proof guide.');
 
-  const taskProofGuide = getToolData(await (tools.get_task_proof_guide as UntypedValue).execute({
+  const taskProofGuide = getToolData(await runTool('get_task_proof_guide', {
     taskId: 's4_collect_star',
   }), 'get_task_proof_guide');
   assert(taskProofGuide.taskFound === true, 'Task proof guide did not find s4_collect_star.');
   assert(taskProofGuide.guide?.[0]?.proofType === 'transaction', 'Task proof guide missing proof type.');
 
-  const allowances = getToolData(await (tools.get_known_allowances as UntypedValue).execute({
+  const allowances = getToolData(await runTool('get_known_allowances', {
     address,
     includeZeroAllowances: false,
   }), 'get_known_allowances');
   assert(allowances.knownOnly === true, 'Known allowances must be known-only.');
   assert(typeof allowances.tokenCount === 'number' && allowances.tokenCount >= 6, 'Known allowances missing token coverage.');
 
-  const mintAvailability = getToolData(await (tools.get_mint_availability as UntypedValue).execute({
+  const mintAvailability = getToolData(await runTool('get_mint_availability', {
     address,
     includeLand: true,
     includePlants: true,
@@ -154,7 +157,7 @@ async function main() {
   assert(Array.isArray(mintAvailability.plantStrains), 'Mint availability missing plant strains.');
   assert(mintAvailability.summary, 'Mint availability missing summary.');
 
-  const careAudit = getToolData(await (tools.get_plant_care_audit as UntypedValue).execute({
+  const careAudit = getToolData(await runTool('get_plant_care_audit', {
     address,
     includePrices: true,
     limit: 5,
@@ -162,7 +165,7 @@ async function main() {
   assert(typeof careAudit.plantSummary?.totalPlants === 'number', 'Plant care audit missing plant summary.');
   assert(careAudit.careOptions, 'Plant care audit missing care options.');
 
-  const lifecycleAudit = getToolData(await (tools.get_plant_lifecycle_audit as UntypedValue).execute({
+  const lifecycleAudit = getToolData(await runTool('get_plant_lifecycle_audit', {
     address,
     includeRecentTransferFallback: true,
     limit: 10,
@@ -171,14 +174,14 @@ async function main() {
   assert(Array.isArray(lifecycleAudit.explanations), 'Plant lifecycle audit missing explanations.');
   assert(lifecycleAudit.rewardRules?.automaticOnKillBurn === true, 'Plant lifecycle audit missing burn reward rule.');
 
-  const arcadeStatus = getToolData(await (tools.get_arcade_status as UntypedValue).execute({
+  const arcadeStatus = getToolData(await runTool('get_arcade_status', {
     address,
     limit: 5,
   }), 'get_arcade_status');
   assert(Array.isArray(arcadeStatus.rewardTable), 'Arcade status missing reward table.');
   assert(arcadeStatus.summary, 'Arcade status missing summary.');
 
-  const claims = getToolData(await (tools.get_claim_eligibility as UntypedValue).execute({
+  const claims = getToolData(await runTool('get_claim_eligibility', {
     address,
   }), 'get_claim_eligibility');
   assert(typeof claims.airdrop?.eligible === 'boolean', 'Claim eligibility missing airdrop flag.');
@@ -189,7 +192,7 @@ async function main() {
     assert(!claimsJson.includes(forbidden), `Claim eligibility exposed bonus funding detail: ${forbidden}`);
   }
 
-  const appStatus = getToolData(await (tools.get_app_status as UntypedValue).execute({
+  const appStatus = getToolData(await runTool('get_app_status', {
     forceRefresh: false,
   }), 'get_app_status');
   assert(appStatus.overall, 'App status missing overall status.');
@@ -200,13 +203,13 @@ async function main() {
     assert(!appStatusJson.includes(forbidden), `App status exposed operational field: ${forbidden}`);
   }
 
-  const walletCapabilities = getToolData(await (tools.get_wallet_capabilities as UntypedValue).execute({
+  const walletCapabilities = getToolData(await runTool('get_wallet_capabilities', {
     address,
   }), 'get_wallet_capabilities');
   assert(walletCapabilities.base?.chainId === 8453, 'Wallet capabilities missing Base chain id.');
   assert(walletCapabilities.gameplayCapabilities, 'Wallet capabilities missing gameplay guidance.');
 
-  const nameReadiness = getToolData(await (tools.get_name_change_readiness as UntypedValue).execute({
+  const nameReadiness = getToolData(await runTool('get_name_change_readiness', {
     address,
     proposedName: 'Sprout',
   }), 'get_name_change_readiness');
@@ -215,7 +218,7 @@ async function main() {
   assert(nameReadiness.rules?.landRename?.minBytes === 3 && nameReadiness.rules?.landRename?.maxBytes === 10, 'Name readiness missing land byte rules.');
   assert(nameReadiness.rules?.landRename, 'Name readiness missing land rename rule.');
 
-  const mapContext = getToolData(await (tools.get_land_map_context as UntypedValue).execute({
+  const mapContext = getToolData(await runTool('get_land_map_context', {
     coordinateX: 0,
     coordinateY: 0,
     includeNeighbors: true,
@@ -224,7 +227,7 @@ async function main() {
   assert(mapContext.coordinateSource === 'landGetTokenIdByCoordinates', 'Land map context should use contract reverse coordinate lookup.');
   assert(Array.isArray(mapContext.neighbors) && mapContext.neighbors.length === 4, 'Land map context missing four neighbors.');
 
-  const errorGuide = getToolData(await (tools.explain_game_error as UntypedValue).execute({
+  const errorGuide = getToolData(await runTool('explain_game_error', {
     actionHint: 'Plant rename',
     errorText: 'Transaction reverted due to insufficient balance',
   }), 'explain_game_error');
@@ -232,7 +235,7 @@ async function main() {
   assert(errorGuide.contractBlockerGuides?.barracksRaidStatusCodes?.length === 10, 'Error guide missing Barracks status code guide.');
   assert(errorGuide.contractBlockerGuides?.renameByteRules?.plant?.maxBytes === 10, 'Error guide missing rename byte rules.');
 
-  const notificationReadiness = getToolData(await (tools.get_notification_readiness as UntypedValue).execute({
+  const notificationReadiness = getToolData(await runTool('get_notification_readiness', {
     forceRefreshStatus: false,
   }), 'get_notification_readiness');
   assert(notificationReadiness.provider?.label, 'Notification readiness missing provider label.');
@@ -243,13 +246,13 @@ async function main() {
     assert(!notificationJson.includes(forbidden), `Notification readiness exposed operational stat field: ${forbidden}`);
   }
 
-  const supportLinks = getToolData(await (tools.get_support_links as UntypedValue).execute({
+  const supportLinks = getToolData(await runTool('get_support_links', {
     includeSocials: true,
   }), 'get_support_links');
   assert(supportLinks.links?.some((link: UntypedValue) => link.id === 'telegram'), 'Support links missing Telegram.');
   assert(supportLinks.links?.some((link: UntypedValue) => link.id === 'status'), 'Support links missing status.');
 
-  const bridge = getToolData(await (tools.get_bridge_status as UntypedValue).execute({
+  const bridge = getToolData(await runTool('get_bridge_status', {
     address,
     includeTwinBalances: false,
   }), 'get_bridge_status');

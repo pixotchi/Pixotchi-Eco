@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { generateText, stepCountIs, tool } from 'ai';
+import { createGoogle } from '@ai-sdk/google';
+import { generateText, isStepCount, tool } from 'ai';
 import { z } from 'zod';
 
 const DEFAULT_TEST_ADDRESS = '0x000000000000000000000000000000000000dEaD';
@@ -60,7 +60,7 @@ console.warn = (...args) => {
   originalWarn(...args);
 };
 
-const google = createGoogleGenerativeAI({
+const google = createGoogle({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
@@ -147,14 +147,14 @@ const readSeedBalance = tool({
 
 const result = await generateText({
   model: google(modelName),
-  system: 'You are testing a read-only Pixotchi AI integration. Call the tool, then summarize the result in one sentence.',
+  instructions: 'You are testing a read-only Pixotchi AI integration. Call the tool, then summarize the result in one sentence.',
   messages: [
     {
       role: 'user',
       content: `Read the test wallet SEED balance for ${testAddress}.`,
     },
   ],
-  stopWhen: stepCountIs(3),
+  stopWhen: isStepCount(3),
   tools: {
     read_seed_balance: readSeedBalance,
   },
@@ -162,8 +162,14 @@ const result = await generateText({
 
 const stepToolCalls = (result.steps || []).flatMap((step) => step.toolCalls || []);
 const stepToolResults = (result.steps || []).flatMap((step) => step.toolResults || []);
+const toolCalls = Array.isArray(result.toolCalls) && result.toolCalls.length > 0
+  ? result.toolCalls
+  : stepToolCalls;
+const toolResults = Array.isArray(result.toolResults) && result.toolResults.length > 0
+  ? result.toolResults
+  : stepToolResults;
 
-if (stepToolResults.length === 0 && (result.toolResults || []).length === 0) {
+if (toolResults.length === 0) {
   console.error('Gemini smoke test did not produce a read-only tool result.');
   process.exit(1);
 }
@@ -177,14 +183,8 @@ console.log(JSON.stringify({
   model: modelName,
   ok: true,
   text: result.text,
-  toolCalls: [
-    ...(result.toolCalls || []),
-    ...stepToolCalls,
-  ].map((call) => call.toolName),
-  toolResults: [
-    ...(result.toolResults || []),
-    ...stepToolResults,
-  ].map((toolResult) => ({
+  toolCalls: toolCalls.map((call) => call.toolName),
+  toolResults: toolResults.map((toolResult) => ({
     output: toolResult.output,
     toolName: toolResult.toolName,
   })),

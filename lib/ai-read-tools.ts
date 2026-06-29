@@ -85,10 +85,12 @@ import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import type { PixotchiReadClient } from './contracts';
 import type { ActivityEvent, BarracksLandStateV2, BarracksRaidPreviewV2, BarracksRaidReportV2, BuildingData, Land, NormalizedOnchainActivity, Plant } from './types';
 
-type ReadOnlyToolContext = {
-  sourceAddress?: string | null;
-  userAddress: string;
-};
+export const READ_ONLY_AI_TOOL_CONTEXT_SCHEMA = z.object({
+  sourceAddress: z.string().trim().min(1).max(128).nullable().optional(),
+  userAddress: z.string().trim().regex(/^0x[a-fA-F0-9]{40}$/),
+});
+
+export type ReadOnlyAIToolContext = z.infer<typeof READ_ONLY_AI_TOOL_CONTEXT_SCHEMA>;
 
 type ToolFreshness = {
   blockNumber?: string;
@@ -129,6 +131,7 @@ const TOOL_RESULT_OUTPUT_SCHEMA = z.object({
 });
 
 const READ_TOOL_DEFAULTS = {
+  contextSchema: READ_ONLY_AI_TOOL_CONTEXT_SCHEMA,
   outputSchema: TOOL_RESULT_OUTPUT_SCHEMA,
   strict: true,
 } as const;
@@ -2631,7 +2634,41 @@ function summarizeKnownReceiptLogs(logs: readonly UntypedValue[]): NormalizedOnc
   return output;
 }
 
-export function createReadOnlyAITools(context: ReadOnlyToolContext) {
+function normalizeReadOnlyAIToolContext(context: ReadOnlyAIToolContext): ReadOnlyAIToolContext {
+  return READ_ONLY_AI_TOOL_CONTEXT_SCHEMA.parse(context);
+}
+
+export function createReadOnlyAIToolsContext<TTools extends Record<string, unknown>>(
+  context: ReadOnlyAIToolContext,
+  tools: TTools,
+): { [TOOL_NAME in keyof TTools]: ReadOnlyAIToolContext } {
+  const validatedContext = normalizeReadOnlyAIToolContext(context);
+  return Object.fromEntries(
+    Object.keys(tools).map((toolName) => [toolName, validatedContext]),
+  ) as { [TOOL_NAME in keyof TTools]: ReadOnlyAIToolContext };
+}
+
+export async function executeReadOnlyAITool(
+  tools: Record<string, UntypedValue>,
+  toolName: string,
+  input: UntypedValue,
+  context: ReadOnlyAIToolContext,
+  abortSignal?: AbortSignal,
+) {
+  const selectedTool = tools?.[toolName];
+  if (typeof selectedTool?.execute !== 'function') {
+    throw new Error(`Read-only AI tool ${toolName} is not executable.`);
+  }
+
+  return selectedTool.execute(input, {
+    abortSignal,
+    context: normalizeReadOnlyAIToolContext(context),
+    messages: [],
+    toolCallId: `direct-${toolName}`,
+  });
+}
+
+export function createReadOnlyAITools() {
   const readClient = getAIReadClient();
   const aiRpcSource = getAIRpcSourceLabel();
 
@@ -2858,7 +2895,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         address: ADDRESS_INPUT,
         includeZeroBalances: z.boolean().default(true),
       }),
-      execute: async ({ address, includeZeroBalances }) => withToolResult(
+      execute: async ({ address, includeZeroBalances }, { context }) => withToolResult(
         'get_wallet_token_balances',
         `Base balance and ERC-20 balanceOf reads for known Pixotchi tokens via ${aiRpcSource}`,
         {
@@ -2904,7 +2941,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         landLimit: z.number().int().min(1).max(50).default(25),
         plantLimit: z.number().int().min(1).max(50).default(25),
       }),
-      execute: async ({ address, landLimit, plantLimit }) => withToolResult(
+      execute: async ({ address, landLimit, plantLimit }, { context }) => withToolResult(
         'get_wallet_game_assets',
         `Base contract reads for Pixotchi plant and land ownership via ${aiRpcSource}`,
         {
@@ -2965,7 +3002,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         address: ADDRESS_INPUT,
         solanaAddress: SOLANA_ADDRESS_INPUT,
       }),
-      execute: async ({ address, solanaAddress }) => withToolResult(
+      execute: async ({ address, solanaAddress }, { context }) => withToolResult(
         'get_wallet_capabilities',
         `Base wallet bytecode read and public Pixotchi feature flags via ${aiRpcSource}`,
         {
@@ -3029,7 +3066,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         assetType: z.enum(['auto', 'plant', 'land']).default('auto'),
         proposedName: z.string().trim().max(32).optional(),
       }),
-      execute: async ({ address, assetId, assetType, proposedName }) => withToolResult(
+      execute: async ({ address, assetId, assetType, proposedName }, { context }) => withToolResult(
         'get_name_change_readiness',
         `Pixotchi plant/land ownership reads and SEED balance via ${aiRpcSource}`,
         {
@@ -3168,7 +3205,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         includeOwner: z.boolean().default(true),
         landId: z.number().int().min(0).max(1000000).optional(),
       }),
-      execute: async ({ address, coordinateX, coordinateY, includeNeighbors, includeOwner, landId }) => withToolResult(
+      execute: async ({ address, coordinateX, coordinateY, includeNeighbors, includeOwner, landId }, { context }) => withToolResult(
         'get_land_map_context',
         `Pixotchi Land contract coordinate reads via ${aiRpcSource}`,
         {
@@ -3296,7 +3333,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         limit: z.number().int().min(1).max(50).default(12),
         rpcFallbackMode: z.enum(['auto', 'always', 'off']).default('auto'),
       }),
-      execute: async ({ address, includeIndexed, includeOnchainFallback, limit, rpcFallbackMode }) => withToolResult(
+      execute: async ({ address, includeIndexed, includeOnchainFallback, limit, rpcFallbackMode }, { context }) => withToolResult(
         'get_wallet_game_activity',
         `Activity indexer plus bounded Base known-contract logs via ${aiRpcSource}`,
         {
@@ -3377,7 +3414,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         plantIds: z.array(z.number().int().min(0)).max(20).optional(),
         txHash: TX_HASH_INPUT.optional(),
       }),
-      execute: async ({ address, includeRecentTransferFallback, limit, plantId, plantIds, txHash }) => withToolResult(
+      execute: async ({ address, includeRecentTransferFallback, limit, plantId, plantIds, txHash }, { context }) => withToolResult(
         'get_plant_lifecycle_audit',
         `Pixotchi plant ownership, wallet-indexed plant lifecycle events, indexed Mint/Killed events, and bounded Base RPC logs via ${aiRpcSource}`,
         {
@@ -3555,7 +3592,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         limit: z.number().int().min(1).max(100).default(100),
         timeframeHours: z.number().int().min(1).max(AI_COMBAT_ACTIVITY_MAX_HOURS).default(24),
       }),
-      execute: async ({ address, direction, includeLandRaids, includePlantAttacks, limit, timeframeHours }) => withToolResult(
+      execute: async ({ address, direction, includeLandRaids, includePlantAttacks, limit, timeframeHours }, { context }) => withToolResult(
         'get_combat_activity',
         'Activity indexer time-ranged plant Attack and land raid history',
         {
@@ -3697,7 +3734,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         limit: z.number().int().min(1).max(20).default(10),
         scope: z.enum(['mine', 'global']).default('mine'),
       }),
-      execute: async ({ address, limit, scope }) => withToolResult(
+      execute: async ({ address, limit, scope }, { context }) => withToolResult(
         'get_activity',
         scope === 'global' ? 'Public global activity feed' : 'Public user activity feed',
         { cache: scope === 'global' ? '3 seconds' : '5 seconds', includeBlock: false },
@@ -3873,7 +3910,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         includeLand: z.boolean().default(true),
         includePlants: z.boolean().default(true),
       }),
-      execute: async ({ address, includeLand, includePlants }) => withToolResult(
+      execute: async ({ address, includeLand, includePlants }, { context }) => withToolResult(
         'get_mint_availability',
         `Base contract reads for Pixotchi mint prices, supply, balances, and allowances via ${aiRpcSource}`,
         {
@@ -4038,7 +4075,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         landIds: z.array(z.number().int().min(0)).max(20).optional(),
         limit: z.number().int().min(1).max(25).default(10),
       }),
-      execute: async ({ address, includeBuildings, includeQuests, landIds, limit }) => withToolResult(
+      execute: async ({ address, includeBuildings, includeQuests, landIds, limit }, { context }) => withToolResult(
         'get_lands',
         `Base contract reads for Pixotchi Land and land modules via ${aiRpcSource}`,
         { includeBlock: true },
@@ -4103,7 +4140,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         landIds: z.array(z.number().int().min(0)).max(50).optional(),
         limit: z.number().int().min(1).max(50).default(20),
       }),
-      execute: async ({ address, landIds, limit }) => withToolResult(
+      execute: async ({ address, landIds, limit }, { context }) => withToolResult(
         'get_quest_readiness',
         `Base contract reads for Farmer House quest slots and safe quest availability via ${aiRpcSource}`,
         {
@@ -4292,7 +4329,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         limit: z.number().int().min(1).max(20).default(10),
         scanLimit: z.number().int().min(20).max(500).default(200),
       }),
-      execute: async ({ address, limit, scanLimit }) => withToolResult(
+      execute: async ({ address, limit, scanLimit }, { context }) => withToolResult(
         'get_attack_targets',
         `Base contract reads for owned Pixotchi plants and public plant leaderboard via ${aiRpcSource}`,
         {
@@ -4416,7 +4453,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         limit: z.number().int().min(1).max(20).default(10),
         scanLimit: z.number().int().min(20).max(500).default(500),
       }),
-      execute: async ({ address, limit, scanLimit }) => withToolResult(
+      execute: async ({ address, limit, scanLimit }, { context }) => withToolResult(
         'get_killable_plants',
         `Base contract reads for owned Pixotchi plants, dead leaderboard targets, and wallet kill cooldown via ${aiRpcSource}`,
         {
@@ -4518,7 +4555,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         previewTargetLimit: z.number().int().min(0).max(10).default(3),
         swordsmenToSend: z.number().int().min(0).max(100000).optional(),
       }),
-      execute: async ({ address, attackerLandIds, includePreviews, limit, phalanxToSend, previewTargetLimit, swordsmenToSend }) => withToolResult(
+      execute: async ({ address, attackerLandIds, includePreviews, limit, phalanxToSend, previewTargetLimit, swordsmenToSend }, { context }) => withToolResult(
         'get_land_raid_targets',
         `Base contract reads for Land Barracks V2 via ${aiRpcSource}`,
         {
@@ -4677,7 +4714,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         landIds: z.array(z.number().int().min(0)).max(50).optional(),
         limit: z.number().int().min(1).max(50).default(20),
       }),
-      execute: async ({ address, landIds, limit }) => withToolResult(
+      execute: async ({ address, landIds, limit }, { context }) => withToolResult(
         'get_land_raid_reports',
         `Base contract reads for latest Barracks incoming/outgoing raid reports via ${aiRpcSource}`,
         {
@@ -4765,7 +4802,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         landIds: z.array(z.number().int().min(0)).max(100).optional(),
         limit: z.number().int().min(1).max(50).default(20),
       }),
-      execute: async ({ address, includePerBuilding, landIds, limit }) => withToolResult(
+      execute: async ({ address, includePerBuilding, landIds, limit }, { context }) => withToolResult(
         'get_land_production_audit',
         `Base contract reads for Land warehouse and building production via ${aiRpcSource}`,
         {
@@ -4846,7 +4883,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         landIds: z.array(z.number().int().min(0)).max(20).optional(),
         limit: z.number().int().min(1).max(20).default(10),
       }),
-      execute: async ({ address, includeBlackjack, includeRoulette, landIds, limit }) => withToolResult(
+      execute: async ({ address, includeBlackjack, includeRoulette, landIds, limit }, { context }) => withToolResult(
         'get_casino_status',
         `Base contract reads for Land Casino and Blackjack modules via ${aiRpcSource}`,
         {
@@ -4998,7 +5035,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         landIds: z.array(z.number().int().min(0)).max(30).optional(),
         limit: z.number().int().min(1).max(30).default(10),
       }),
-      execute: async ({ address, handIndex, landIds, limit }) => withToolResult(
+      execute: async ({ address, handIndex, landIds, limit }, { context }) => withToolResult(
         'get_blackjack_action_state',
         `Base contract reads for Casino building and Blackjack action state via ${aiRpcSource}`,
         {
@@ -5096,7 +5133,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         includeMyOrders: z.boolean().default(true),
         limit: z.number().int().min(1).max(50).default(20),
       }),
-      execute: async ({ address, includeInactive, includeMyOrders, limit }) => withToolResult(
+      execute: async ({ address, includeInactive, includeMyOrders, limit }, { context }) => withToolResult(
         'get_marketplace_orders',
         `Base contract reads for Land marketplace order book via ${aiRpcSource}`,
         {
@@ -5160,7 +5197,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       inputSchema: z.object({
         address: ADDRESS_INPUT,
       }),
-      execute: async ({ address }) => withToolResult(
+      execute: async ({ address }, { context }) => withToolResult(
         'get_claim_eligibility',
         'App claim status records and Base Verify claim status',
         {
@@ -5342,7 +5379,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         address: ADDRESS_INPUT,
         suggestionLimit: z.number().int().min(1).max(10).default(5),
       }),
-      execute: async ({ address, suggestionLimit }) => withToolResult(
+      execute: async ({ address, suggestionLimit }, { context }) => withToolResult(
         'get_daily_task_plan',
         `App task progress plus Base wallet/land/plant reads via ${aiRpcSource}`,
         {
@@ -5482,7 +5519,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         address: ADDRESS_INPUT,
         includeZeroAllowances: z.boolean().default(false),
       }),
-      execute: async ({ address, includeZeroAllowances }) => withToolResult(
+      execute: async ({ address, includeZeroAllowances }, { context }) => withToolResult(
         'get_known_allowances',
         `Base ERC-20 allowance reads for known Pixotchi tokens and spenders via ${aiRpcSource}`,
         {
@@ -5561,7 +5598,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         includeTwinBalances: z.boolean().default(true),
         solanaAddress: SOLANA_ADDRESS_INPUT,
       }),
-      execute: async ({ address, includeTwinBalances, solanaAddress }) => withToolResult(
+      execute: async ({ address, includeTwinBalances, solanaAddress }, { context }) => withToolResult(
         'get_bridge_status',
         `Solana bridge/Twin player-facing status via ${aiRpcSource}`,
         {
@@ -5621,7 +5658,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ...READ_TOOL_DEFAULTS,
       description: 'Read the authenticated user mission day, mission score, and streak data from gamification storage.',
       inputSchema: z.object({}),
-      execute: async () => withToolResult(
+      execute: async (_input, { context }) => withToolResult(
         'get_missions',
         'App gamification storage',
         { cache: 'Current app mission state', includeBlock: false },
@@ -5638,7 +5675,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       ...READ_TOOL_DEFAULTS,
       description: 'Read the authenticated user wallet overview: plants, lands, balances, urgent plant care, and high-level totals. Use this first for broad personalized questions.',
       inputSchema: z.object({}),
-      execute: async () => withToolResult(
+      execute: async (_input, { context }) => withToolResult(
         'get_player_overview',
         `Base contract reads for owned Pixotchi plants, lands, and token balances via ${aiRpcSource}`,
         { includeBlock: true },
@@ -5687,7 +5724,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         includePrices: z.boolean().default(true),
         limit: z.number().int().min(1).max(50).default(20),
       }),
-      execute: async ({ address, includePrices, limit }) => withToolResult(
+      execute: async ({ address, includePrices, limit }, { context }) => withToolResult(
         'get_plant_care_audit',
         `Base contract reads for Pixotchi plants, care prices, balances, and land warehouse resources via ${aiRpcSource}`,
         {
@@ -5823,7 +5860,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         limit: z.number().int().min(1).max(30).default(10),
         plantIds: z.array(z.number().int().min(0)).max(30).optional(),
       }),
-      execute: async ({ address, limit, plantIds }) => withToolResult(
+      execute: async ({ address, limit, plantIds }, { context }) => withToolResult(
         'get_arcade_status',
         `Base contract reads for Pixotchi Arcade Box and SpinLeaf cooldowns via ${aiRpcSource}`,
         {
@@ -5905,7 +5942,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         limit: z.number().int().min(1).max(50).default(20),
         plantIds: z.array(z.number().int().min(0)).max(50).optional(),
       }),
-      execute: async ({ address, limit, plantIds }) => withToolResult(
+      execute: async ({ address, limit, plantIds }, { context }) => withToolResult(
         'get_plants',
         `Base contract reads for Pixotchi NFT plant state via ${aiRpcSource}`,
         { includeBlock: true },
@@ -5938,7 +5975,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
       inputSchema: z.object({
         address: ADDRESS_INPUT,
       }),
-      execute: async ({ address }) => withToolResult(
+      execute: async ({ address }, { context }) => withToolResult(
         'get_staking',
         `Base contract reads for Pixotchi staking contract via ${aiRpcSource}`,
         { includeBlock: true },
@@ -5977,7 +6014,7 @@ export function createReadOnlyAITools(context: ReadOnlyToolContext) {
         buyToken: USER_SWAP_TOKEN_ENUM,
         sellToken: USER_SWAP_TOKEN_ENUM,
       }),
-      execute: async ({ amount, buyToken, sellToken }) => withToolResult(
+      execute: async ({ amount, buyToken, sellToken }, { context }) => withToolResult(
         'get_swap_quote',
         `Kyber/Base swap quote service and read-only routing helpers via ${aiRpcSource}`,
         { cache: 'Quote is time-sensitive; the swap UI must fetch a fresh quote before any action.', includeBlock: true },

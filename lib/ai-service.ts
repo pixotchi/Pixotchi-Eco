@@ -1,21 +1,28 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogle } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   gateway,
   generateText,
-  stepCountIs,
+  isStepCount,
   streamText,
+  toUIMessageStream,
   type FinishReason,
   type GatewayModelId,
+  type TextStreamPart,
   type UIMessage,
 } from 'ai';
 import { nanoid } from 'nanoid';
 import { getCurrentAIProvider,getCurrentModelConfig,validateAIConfig } from './ai-config';
 import { generateConversationTitle, READ_ONLY_AGENT_SYSTEM_PROMPT } from './ai-context';
-import { createReadOnlyAITools } from './ai-read-tools';
+import {
+  createReadOnlyAITools,
+  createReadOnlyAIToolsContext,
+  executeReadOnlyAITool,
+  type ReadOnlyAIToolContext,
+} from './ai-read-tools';
 import { classifyAIUserMessage } from './ai-safety';
 import { formatDisplayName } from './chat-service';
 import { redis,redisScanKeysRaw } from './redis';
@@ -44,6 +51,8 @@ const AI_AUTO_CONTINUE_ON_LENGTH = parseBoolean(process.env.AI_AUTO_CONTINUE_ON_
 const AI_TOOL_CONTEXT_MAX_CHARS = parsePositiveInteger(process.env.AI_TOOL_CONTEXT_MAX_CHARS, 12_000);
 const AI_TOOL_CONTEXT_MAX_CHARS_PER_TOOL = parsePositiveInteger(process.env.AI_TOOL_CONTEXT_MAX_CHARS_PER_TOOL, 2_800);
 const AI_GOOGLE_THINKING_LEVEL = normalizeGoogleThinkingLevel(process.env.AI_GOOGLE_THINKING_LEVEL);
+const AI_GOOGLE_THINKING_BUDGET_CONFIGURED = process.env.AI_GOOGLE_THINKING_BUDGET !== undefined &&
+  process.env.AI_GOOGLE_THINKING_BUDGET.trim() !== '';
 const AI_GOOGLE_THINKING_BUDGET = parseNonNegativeInteger(process.env.AI_GOOGLE_THINKING_BUDGET, 0);
 const TRACE_SECRET_KEY_PATTERN = /(api|auth|bearer|cookie|jwt|key|mnemonic|password|private|secret|session|signature|token)/i;
 const TOOL_TRACE_MAX_DEPTH = 4;
@@ -115,6 +124,9 @@ export type PixotchiAIMessageMetadata = {
 
 export type PixotchiAIUIMessage = UIMessage<PixotchiAIMessageMetadata>;
 
+type ReadOnlyAITools = ReturnType<typeof createReadOnlyAITools>;
+type ReadOnlyAIToolsContextMap = { [TOOL_NAME in keyof ReadOnlyAITools]: ReadOnlyAIToolContext };
+
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -158,6 +170,8 @@ function normalizeGoogleThinkingLevel(value: string | undefined): 'minimal' | 'l
   return 'high';
 }
 
+type AIReasoningLevel = 'provider-default' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
 // Provider instances
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -167,7 +181,7 @@ const anthropic = createAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const google = createGoogleGenerativeAI({
+const google = createGoogle({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
@@ -226,18 +240,9 @@ function getGoogleProviderOptions(model: string, provider: string): UntypedValue
     model,
     ...getCurrentModelConfig().fallbackModels,
   ];
-  const hasGemini3 = models.some((entry) => /(?:^|\/)gemini-3/i.test(entry));
   const hasGemini25 = models.some((entry) => /(?:^|\/)gemini-2\.5/i.test(entry));
 
-  if (hasGemini3) {
-    return {
-      thinkingConfig: {
-        thinkingLevel: AI_GOOGLE_THINKING_LEVEL,
-      },
-    };
-  }
-
-  if (hasGemini25) {
+  if (hasGemini25 && AI_GOOGLE_THINKING_BUDGET_CONFIGURED) {
     return {
       thinkingConfig: {
         thinkingBudget: AI_GOOGLE_THINKING_BUDGET,
@@ -262,10 +267,42 @@ function isGemini3ModelConfigured(): boolean {
   return models.some((entry) => /(?:^|\/)gemini-3/i.test(entry));
 }
 
+function getConfiguredModelIds(): string[] {
+  const config = getCurrentModelConfig();
+  return [
+    config.model,
+    ...config.fallbackModels,
+  ];
+}
+
+function usesExplicitGoogleThinkingBudget(): boolean {
+  if (!AI_GOOGLE_THINKING_BUDGET_CONFIGURED) {
+    return false;
+  }
+
+  return getConfiguredModelIds().some((entry) => /(?:^|\/)gemini-2\.5/i.test(entry));
+}
+
+function isReasoningModelConfigured(): boolean {
+  if (usesExplicitGoogleThinkingBudget()) {
+    return false;
+  }
+
+  return getConfiguredModelIds().some((entry) =>
+    /(?:^|\/)(?:gemini-(?:2\.5|3)|gpt-5|o[0-9]|claude-(?:opus|sonnet|haiku)-4)/i.test(entry),
+  );
+}
+
 function getModelRequestSettings() {
-  return isGemini3ModelConfigured()
+  const settings: { reasoning?: AIReasoningLevel; temperature?: number } = isGemini3ModelConfigured()
     ? {}
     : { temperature: AI_TEMPERATURE };
+
+  if (isReasoningModelConfigured()) {
+    settings.reasoning = AI_GOOGLE_THINKING_LEVEL;
+  }
+
+  return settings;
 }
 
 const TOOL_PROMPT_PRIORITY = [
@@ -1104,11 +1141,16 @@ function compactJson(value: UntypedValue, maxLength: number): string {
   return capString(JSON.stringify(value), maxLength);
 }
 
+function getRawToolResults(result: UntypedValue): UntypedValue[] {
+  if (Array.isArray(result?.toolResults) && result.toolResults.length > 0) {
+    return result.toolResults;
+  }
+
+  return (result?.steps || []).flatMap((step: UntypedValue) => step.toolResults || []);
+}
+
 function extractAIToolOutputSummaries(result: UntypedValue): UntypedValue[] {
-  const rawToolResults: UntypedValue[] = [
-    ...((result.steps || []).flatMap((step: UntypedValue) => step.toolResults || [])),
-    ...(result.toolResults || []),
-  ];
+  const rawToolResults = getRawToolResults(result);
 
   return rawToolResults.map((toolResult) => {
     const output = toolResult.output ?? toolResult.result;
@@ -1226,10 +1268,7 @@ function normalizeToolTrace(toolResult: UntypedValue): AIToolCallTrace | null {
 }
 
 export function extractAIToolTraces(result: UntypedValue): AIToolCallTrace[] {
-  const rawToolResults: UntypedValue[] = [
-    ...((result.steps || []).flatMap((step: UntypedValue) => step.toolResults || [])),
-    ...(result.toolResults || []),
-  ];
+  const rawToolResults = getRawToolResults(result);
   const seen = new Set<string>();
   const traces: AIToolCallTrace[] = [];
 
@@ -1932,9 +1971,11 @@ function mergeToolCallTraces(traces: AIToolCallTrace[]): AIToolCallTrace[] {
 }
 
 async function buildDeterministicToolContext(options: {
+  abortSignal?: AbortSignal;
   address: string;
   currentMessage: string;
-  tools: UntypedValue;
+  toolContext: ReadOnlyAIToolContext;
+  tools: ReadOnlyAITools;
 }): Promise<DeterministicToolContext> {
   const requests = getDeterministicToolRequests(options.currentMessage, options.address);
   if (requests.length === 0) {
@@ -1946,13 +1987,14 @@ async function buildDeterministicToolContext(options: {
 
   const rawResults: UntypedValue[] = [];
   for (const request of requests) {
-    const selectedTool = options.tools?.[request.toolName];
-    if (typeof selectedTool?.execute !== 'function') {
-      continue;
-    }
-
     try {
-      const output = await selectedTool.execute(request.input);
+      const output = await executeReadOnlyAITool(
+        options.tools,
+        request.toolName,
+        request.input,
+        options.toolContext,
+        options.abortSignal,
+      );
       rawResults.push({
         input: request.input,
         output,
@@ -2001,7 +2043,8 @@ async function buildGemini3SingleRoundToolContext(options: {
   historyMessages: AIChatMessage[];
   modelConfig: ReturnType<typeof getCurrentModelConfig>;
   requestBudget: AIRequestBudget;
-  tools: UntypedValue;
+  tools: ReadOnlyAITools;
+  toolsContext: ReadOnlyAIToolsContextMap;
 }) {
   const planningResult = await generateText({
     abortSignal: options.abortSignal,
@@ -2009,16 +2052,18 @@ async function buildGemini3SingleRoundToolContext(options: {
     messages: buildPlainModelMessages(options.historyMessages, options.currentMessage),
     model: getSDKModel(),
     providerOptions: getAIProviderOptions(options.address),
-    stopWhen: stepCountIs(1),
-    system: `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\n${options.requestBudget.responseInstruction}\n\nFor this tool-planning pass, call every needed read-only tool in a single round. Do not make sequential follow-up tool calls. Do not answer the user unless no tool is needed.`,
+    stopWhen: isStepCount(1),
+    instructions: `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\n${options.requestBudget.responseInstruction}\n\nFor this tool-planning pass, call every needed read-only tool in a single round. Do not make sequential follow-up tool calls. Do not answer the user unless no tool is needed.`,
     timeout: {
       stepMs: AI_STEP_TIMEOUT_MS,
       totalMs: AI_REQUEST_TIMEOUT_MS,
     },
     tools: options.tools,
+    toolsContext: options.toolsContext,
+    ...getModelRequestSettings(),
   });
 
-  const usage = planningResult.totalUsage || planningResult.usage;
+  const usage = planningResult.usage;
   const toolContextText = buildToolContextText(planningResult);
   const toolCalls = extractAIToolTraces(planningResult);
 
@@ -2053,7 +2098,7 @@ function getOutputTokenCount(usage: UntypedValue): number {
 }
 
 function getReasoningTokenCount(usage: UntypedValue): number {
-  return Number(usage?.reasoningTokens || usage?.outputTokenDetails?.reasoningTokens || usage?.raw?.thoughtsTokenCount || 0) || 0;
+  return Number(usage?.outputTokenDetails?.reasoningTokens || usage?.raw?.thoughtsTokenCount || 0) || 0;
 }
 
 function applyFinishReasonNotice(text: string, finishReason: string | undefined): string {
@@ -2127,15 +2172,15 @@ async function generateLengthContinuation(options: {
     }),
     model: getSDKModel(),
     providerOptions: getAIProviderOptions(options.address),
-    stopWhen: stepCountIs(1),
-    system: buildResponseSystemPrompt(options.requestBudget),
+    stopWhen: isStepCount(1),
+    instructions: buildResponseSystemPrompt(options.requestBudget),
     timeout: {
       stepMs: AI_STEP_TIMEOUT_MS,
       totalMs: AI_REQUEST_TIMEOUT_MS,
     },
     ...getModelRequestSettings(),
   });
-  const usage = result.totalUsage || result.usage;
+  const usage = result.usage;
 
   return {
     finishReason: result.finishReason,
@@ -2315,7 +2360,12 @@ export async function streamAIMessage(
   });
 
   const responseMessageId = nanoid();
-  const tools = createReadOnlyAITools({ sourceAddress: options.sourceAddress, userAddress: address });
+  const tools = createReadOnlyAITools();
+  const readOnlyToolContext: ReadOnlyAIToolContext = {
+    sourceAddress: options.sourceAddress ?? null,
+    userAddress: address,
+  };
+  const toolsContext = createReadOnlyAIToolsContext(readOnlyToolContext, tools);
   let finishReason: string | undefined;
   let finalFinishReason: string | undefined;
   let outputTokens = 0;
@@ -2323,7 +2373,7 @@ export async function streamAIMessage(
   let tokensUsed = 0;
   let toolCalls: AIToolCallTrace[] = [];
   let generationMessages = buildPlainModelMessages(historyMessages, message);
-  let generationTools: UntypedValue = tools;
+  let generationTools: ReadOnlyAITools | undefined = tools;
   let preflightOutputTokens = 0;
   let preflightReasoningTokens = 0;
   let preflightTokensUsed = 0;
@@ -2333,8 +2383,10 @@ export async function streamAIMessage(
   let recoveredFromLength = false;
   let toolContextText = '';
   const deterministicToolContext = await buildDeterministicToolContext({
+    abortSignal: options.abortSignal,
     address,
     currentMessage: message,
+    toolContext: readOnlyToolContext,
     tools,
   });
 
@@ -2358,6 +2410,7 @@ export async function streamAIMessage(
       modelConfig,
       requestBudget,
       tools,
+      toolsContext,
     });
 
     generationMessages = planning.messages;
@@ -2378,13 +2431,13 @@ export async function streamAIMessage(
     }
   }
 
-  const result = streamText({
+  const streamTextOptions = {
     abortSignal: options.abortSignal,
     maxOutputTokens: requestBudget.maxOutputTokens,
     messages: generationMessages,
     model: getSDKModel(),
-    onFinish: (event) => {
-      const usage = event.totalUsage || event.usage;
+    onEnd: (event: UntypedValue) => {
+      const usage = event.usage;
       finishReason = event.finishReason;
       finalFinishReason = event.finishReason;
       tokensUsed = preflightTokensUsed + getTokenCount(usage);
@@ -2406,15 +2459,21 @@ export async function streamAIMessage(
       }
     },
     providerOptions: getAIProviderOptions(address),
-    stopWhen: stepCountIs(8),
-    system: buildResponseSystemPrompt(requestBudget),
+    stopWhen: isStepCount(8),
+    instructions: buildResponseSystemPrompt(requestBudget),
     timeout: {
       stepMs: AI_STEP_TIMEOUT_MS,
       totalMs: AI_REQUEST_TIMEOUT_MS,
     },
-    ...(generationTools ? { tools: generationTools } : {}),
     ...getModelRequestSettings(),
-  });
+  };
+  const result = generationTools
+    ? streamText({
+      ...streamTextOptions,
+      tools: generationTools,
+      toolsContext,
+    })
+    : streamText(streamTextOptions);
 
   const stream = createUIMessageStream<PixotchiAIUIMessage>({
     originalMessages: options.originalMessages,
@@ -2431,7 +2490,8 @@ export async function streamAIMessage(
         type: 'start',
       });
 
-      for await (const chunk of result.toUIMessageStream<PixotchiAIUIMessage>({
+      for await (const chunk of toUIMessageStream<ReadOnlyAITools, PixotchiAIUIMessage>({
+        stream: result.stream as ReadableStream<TextStreamPart<ReadOnlyAITools>>,
         sendFinish: false,
         sendReasoning: false,
         sendStart: false,
@@ -2528,7 +2588,7 @@ export async function streamAIMessage(
       });
       return normalizeAIProviderError(error);
     },
-    onFinish: async ({ isAborted, responseMessage }) => {
+    onEnd: async ({ isAborted, responseMessage }) => {
       if (isAborted) {
         console.warn('AI stream aborted before completion:', {
           address: address.slice(0, 6) + '...',
@@ -2640,17 +2700,24 @@ export async function sendAIMessage(address: string, message: string, options: S
       model: modelConfig.model,
     });
 
-    const tools = createReadOnlyAITools({ sourceAddress: options.sourceAddress, userAddress: address });
+    const tools = createReadOnlyAITools();
+    const readOnlyToolContext: ReadOnlyAIToolContext = {
+      sourceAddress: options.sourceAddress ?? null,
+      userAddress: address,
+    };
+    const toolsContext = createReadOnlyAIToolsContext(readOnlyToolContext, tools);
     let generationMessages = buildPlainModelMessages(historyMessages, message);
-    let generationTools: UntypedValue = tools;
+    let generationTools: ReadOnlyAITools | undefined = tools;
     let preflightOutputTokens = 0;
     let preflightReasoningTokens = 0;
     let preflightTokensUsed = 0;
     let preflightToolContextText = '';
     let preflightToolCalls: AIToolCallTrace[] = [];
     const deterministicToolContext = await buildDeterministicToolContext({
+      abortSignal: options.abortSignal,
       address,
       currentMessage: message,
+      toolContext: readOnlyToolContext,
       tools,
     });
 
@@ -2674,6 +2741,7 @@ export async function sendAIMessage(address: string, message: string, options: S
         modelConfig,
         requestBudget,
         tools,
+        toolsContext,
       });
 
       generationMessages = planning.messages;
@@ -2695,23 +2763,29 @@ export async function sendAIMessage(address: string, message: string, options: S
     }
 
     // Use Vercel AI SDK generateText with messages array
-    const result = await generateText({
+    const generateTextOptions = {
       abortSignal: options.abortSignal,
       maxOutputTokens: requestBudget.maxOutputTokens,
       model: getSDKModel(),
       messages: generationMessages,
       providerOptions: getAIProviderOptions(address),
-      stopWhen: stepCountIs(8),
-      system: buildResponseSystemPrompt(requestBudget),
+      stopWhen: isStepCount(8),
+      instructions: buildResponseSystemPrompt(requestBudget),
       timeout: {
         stepMs: AI_STEP_TIMEOUT_MS,
         totalMs: AI_REQUEST_TIMEOUT_MS,
       },
-      ...(generationTools ? { tools: generationTools } : {}),
       ...getModelRequestSettings(),
-    });
+    };
+    const result = await (generationTools
+      ? generateText({
+        ...generateTextOptions,
+        tools: generationTools,
+        toolsContext,
+      })
+      : generateText(generateTextOptions));
 
-    const usage = result.totalUsage || result.usage;
+    const usage = result.usage;
     let response = result.text;
     let finalFinishReason = result.finishReason;
     let tokensUsed = preflightTokensUsed + getTokenCount(usage);
@@ -2878,7 +2952,7 @@ export async function trackAIUsage(
       totalMessages += usage.messages || 0;
       inputTokens += usage.inputTokens || 0;
       outputTokens += usage.outputTokens || 0;
-      reasoningTokens += usage.reasoningTokens || 0;
+      reasoningTokens += usage.reasoningTokens || usage.outputTokenDetails?.reasoningTokens || 0;
       continuations += usage.continuations || 0;
       lengthFinishes += usage.lengthFinishes || 0;
       recoveredFromLengthCount += usage.recoveredFromLengthCount || 0;
@@ -3018,7 +3092,7 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
             continuationCount += usage.continuations || 0;
             lengthFinishCount += usage.lengthFinishes || usage.finishReasons?.length || 0;
             recoveredFromLengthCount += usage.recoveredFromLengthCount || 0;
-            reasoningTokens += usage.reasoningTokens || 0;
+            reasoningTokens += usage.reasoningTokens || usage.outputTokenDetails?.reasoningTokens || 0;
           }
         }
       }

@@ -237,7 +237,10 @@ async function main() {
   }
 
   const testAddress = process.env.AI_READONLY_TEST_ADDRESS || DEFAULT_TEST_ADDRESS;
-  const tools = toolsImport.createReadOnlyAITools({ userAddress: testAddress });
+  const tools = toolsImport.createReadOnlyAITools();
+  const toolContext = { userAddress: testAddress };
+  const runTool = (toolName: string, input: UntypedValue = {}) =>
+    toolsImport.executeReadOnlyAITool(tools, toolName, input, toolContext);
   for (const toolName of REQUIRED_READ_TOOLS) {
     assert(tools[toolName], `Missing read-only AI tool: ${toolName}.`);
   }
@@ -270,7 +273,7 @@ async function main() {
   assert(actionGuideImport.KNOWLEDGE_TOPICS.bridge_solana.cannotDo.some((entry: string) => /adapter\/program addresses/i.test(entry)), 'Bridge topic is missing config diagnostics redaction guidance.');
   assert(actionGuideImport.KNOWLEDGE_TOPICS.verify_airdrop.cannotDo.some((entry: string) => /bonus funding/i.test(entry)), 'Verify/airdrop topic is missing bonus funding redaction guidance.');
 
-  const guideResult = await (tools.get_game_action_guide as UntypedValue).execute({
+  const guideResult = await runTool('get_game_action_guide', {
     includeSafetyNotes: true,
     limit: 4,
     query: 'last plant mint transaction',
@@ -278,7 +281,7 @@ async function main() {
   const guideData = getToolData(guideResult, 'get_game_action_guide');
   assert(guideData.actions.some((entry: UntypedValue) => entry.id === 'activity'), 'Action guide tool did not retrieve activity for last mint query.');
 
-  const priceResult = await (tools.get_game_prices as UntypedValue).execute({
+  const priceResult = await runTool('get_game_prices', {
     fenceDays: 1,
     includeGardenItems: true,
     includeShopItems: true,
@@ -288,7 +291,7 @@ async function main() {
   assert(tyj?.priceDisplay === '500 JESSE', `TYJ priceDisplay should be 500 JESSE, got ${tyj?.priceDisplay}.`);
   assert(tyj?.mintPriceSeed == null, 'TYJ must not expose mintPriceSeed because it is paid in JESSE.');
 
-  const balanceResult = await (tools.get_wallet_token_balances as UntypedValue).execute({
+  const balanceResult = await runTool('get_wallet_token_balances', {
     address: testAddress,
     includeZeroBalances: true,
   });
@@ -298,7 +301,7 @@ async function main() {
     assert(balanceSymbols.includes(symbol), `Wallet balance tool missing ${symbol}.`);
   }
 
-  const assetResult = await (tools.get_wallet_game_assets as UntypedValue).execute({
+  const assetResult = await runTool('get_wallet_game_assets', {
     address: testAddress,
     landLimit: 5,
     plantLimit: 5,
@@ -307,7 +310,7 @@ async function main() {
   assert(typeof assetData.plantSummary?.totalPlants === 'number', 'Wallet assets missing plant summary.');
   assert(typeof assetData.landSummary?.totalLands === 'number', 'Wallet assets missing land summary.');
 
-  const activityResult = await (tools.get_wallet_game_activity as UntypedValue).execute({
+  const activityResult = await runTool('get_wallet_game_activity', {
     address: testAddress,
     includeIndexed: true,
     includeOnchainFallback: true,
@@ -318,14 +321,14 @@ async function main() {
   assert(activityData.rpcBlockRange == null || typeof activityData.rpcBlockRange.fromBlock === 'string', 'Wallet activity missing RPC range metadata.');
 
   const fakeHash = `0x${'1'.repeat(64)}`;
-  const txResult = await (tools.get_transaction_status as UntypedValue).execute({ txHash: fakeHash });
+  const txResult = await runTool('get_transaction_status', { txHash: fakeHash });
   const txData = getToolData(txResult, 'get_transaction_status');
   assert(['not_found', 'pending_or_unconfirmed', 'success', 'reverted'].includes(txData.status), `Unexpected transaction status: ${txData.status}.`);
   const txJson = JSON.stringify(txData);
   assert(!/"input"\s*:/.test(txJson), 'Transaction status exposed an input field.');
   assert(!/"calldata"\s*:/.test(txJson), 'Transaction status exposed a calldata field.');
 
-  const productionResult = await (tools.get_land_production_audit as UntypedValue).execute({
+  const productionResult = await runTool('get_land_production_audit', {
     address: testAddress,
     includePerBuilding: false,
     limit: 3,
@@ -334,7 +337,7 @@ async function main() {
   assert(typeof productionData.auditedLandCount === 'number', 'Production audit missing audited land count.');
   assert(productionData.totals?.buildingProduction, 'Production audit missing building production totals.');
 
-  const raidResult = await (tools.get_land_raid_targets as UntypedValue).execute({
+  const raidResult = await runTool('get_land_raid_targets', {
     address: testAddress,
     includePreviews: false,
     limit: 3,
@@ -344,7 +347,7 @@ async function main() {
   assert(typeof raidData.readyAttackerCount === 'number', 'Land raid target tool missing ready attacker count.');
   assert(Array.isArray(raidData.results), 'Land raid target tool missing results array.');
 
-  const claimResult = await (tools.get_claim_eligibility as UntypedValue).execute({
+  const claimResult = await runTool('get_claim_eligibility', {
     address: testAddress,
   });
   const claimData = getToolData(claimResult, 'get_claim_eligibility');
@@ -356,7 +359,7 @@ async function main() {
     assert(!claimJson.includes(forbidden), `Claim eligibility exposed funding detail: ${forbidden}`);
   }
 
-  const bridgeResult = await (tools.get_bridge_status as UntypedValue).execute({
+  const bridgeResult = await runTool('get_bridge_status', {
     address: testAddress,
     includeTwinBalances: false,
   });

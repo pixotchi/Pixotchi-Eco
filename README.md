@@ -4,7 +4,7 @@
 
 ## Pixotchi Ecosystem
 
-Pixotchi is a P2E onchain game. Grow a playful onchain garden on Base. Mint and care for NFT plants and lands, complete daily missions, climb leaderboards, chat with the community, and earn in‑game rewards. Runs on the web and as a Farcaster/Base Mini App.
+Pixotchi is a P2E onchain game. Grow a playful onchain garden on Base. Mint and care for NFT plants and lands, complete daily missions, climb leaderboards, chat with the community, and earn in‑game rewards. Runs on the web and as a Farcaster/Base-compatible Mini App.
 
 <!-- Badges -->
 
@@ -48,7 +48,7 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 - **Minting** – Mint plants and lands with SEED or strain‑specific tokens.
 - **Daily Missions** – Complete tasks to earn points and climb the leaderboard when the gamification season is enabled.
 - **Spin & Box Games** – Mini‑games for bonus rewards and time extensions.
-- **Staking & LP** – Stake SEED to earn LEAF rewards; SEED/ETH liquidity is tracked via BaseSwap.
+- **Staking & market data** – Stake SEED to earn LEAF rewards; SEED/ETH pair data is surfaced from BaseSwap/DexScreener.
 - **Leaderboards** – Compete for top rankings and ETH prizes.
 - **Shop & Upgrades** – Buy items to boost your plants and buildings.
 - **Secret Garden** – Hidden arcade area with special activities.
@@ -69,15 +69,27 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 
 Built on Base and designed to be fast, simple, and fun.
 
+## Codebase overview
+- **Framework**: Next.js App Router, React, TypeScript, Tailwind CSS, Wagmi/Viem, Privy, Base Account, Farcaster Mini App SDK, and optional Solana bridge support.
+- **Main app shell**: `app/(game)/page.tsx` renders the authenticated game shell, wallet/profile controls, chat button, status bar, broadcast messages, and the six main tabs: Farm, Mint, Activity, Ranking, Swap, and About.
+- **Providers**: `app/providers.tsx` wires theme, Privy, Wagmi routing, Farcaster host detection, smart wallet mode, paymaster state, balances, Solana wallet support, tutorial UI, chat, and global app UI.
+- **Gameplay UI**: `components/tabs/` contains the tab surfaces. `plants-view.tsx` handles plant care, items, rewards, revive, and arcade entry. `lands-view.tsx` handles land ownership, village/town buildings, production, quests, marketplace, casino, barracks, and batch claims.
+- **Onchain access**: `lib/contracts.ts`, `lib/base-rpc.ts`, and `public/abi/` centralize contract addresses, ABIs, read clients, transaction builders, and retry/fallback behavior for Base.
+- **Server routes**: `app/api/` contains app APIs for activity, chat, AI, notifications, admin, status checks, claims/airdrops, swaps, Solana bridge diagnostics, and game-specific helpers.
+- **Stateful services**: Redis/KV-backed services live under `lib/*-service.ts` and support chat history, AI conversations/rate limits, gamification, notifications, airdrops, broadcasts, claim records, and cached status snapshots.
+- **AI assistant**: Neural Seed is implemented through `lib/ai-service.ts`, `lib/ai-read-tools.ts`, `lib/ai-context.ts`, and the chat components. It is intentionally read-only and routes gameplay questions to safe read tools.
+- **Verification scripts**: `npm run typecheck`, `npm run lint`, and the smoke scripts in `smoke/` cover production hardening, casino behavior, and AI read-tool behavior.
+
 ## Local development
 1. Install dependencies: `npm install`
 2. Copy the example environment: `cp .env.example .env.local`
-3. Configure at least `NEXT_PUBLIC_URL`, Base RPC endpoints, one Redis/KV provider, and `ADMIN_TOKEN`.
-4. Add production-like integrations as needed: `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `NEXT_PUBLIC_CDP_CLIENT_API_KEY`, notification provider keys, and AI provider keys.
-5. Run locally: `npm run dev`
-6. Verify before shipping: `npm run typecheck` and `npm run lint`
+3. Configure at least `NEXT_PUBLIC_URL` and `NEXT_PUBLIC_RPC_NODE` for core local reads. Add unique RPC backups if available.
+4. Add Redis/KV plus `ADMIN_TOKEN` when testing chat, admin, broadcasts, gamification, airdrops, claim records, notifications, or other stateful flows.
+5. Add production-like integrations as needed: `NEXT_PUBLIC_PONDER_API_URL` or `INDEXER_UPSTREAM_URL`, `INDEXER_SHARED_SECRET`, `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `NEXT_PUBLIC_CDP_CLIENT_API_KEY`, notification provider keys, and AI provider keys.
+6. Run locally: `npm run dev`
+7. Verify before shipping: `npm run typecheck` and `npm run lint`
 
-Production deployments fail fast unless the required public URL, at least one unique Base RPC endpoint, indexer config, CDP client key, and Privy client/server keys are present. RPC endpoints may come from any mix of vendors, including a single vendor.
+Production deployments fail fast unless the required public URL, at least one unique Base RPC endpoint, indexer config and shared secret, CDP client key, and Privy client/server keys are present. RPC endpoints may come from any mix of vendors, including a single vendor. Redis/KV and admin credentials are not part of the global production boot gate, but the features that persist app state require them.
 
 ## Configuration notes
 - Feature flags control major surfaces: gamification, casino/blackjack, barracks, swap module, Base Verify claims, and Solana support.
