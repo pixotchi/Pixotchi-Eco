@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogle } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { READ_ONLY_AGENT_SYSTEM_PROMPT } from '../lib/ai-context';
 
@@ -108,13 +108,16 @@ async function main() {
     throw new Error('GOOGLE_GENERATIVE_AI_API_KEY is required for lifecycle smoke answers.');
   }
 
-  const { createReadOnlyAITools } = await import('../lib/ai-read-tools');
+  const { createReadOnlyAITools, executeReadOnlyAITool } = await import('../lib/ai-read-tools');
   const addresses = await getHighAssetAddresses();
   const audits: UntypedValue[] = [];
 
   for (const address of addresses) {
-    const tools = createReadOnlyAITools({ userAddress: address });
-    const audit = getToolData(await (tools.get_plant_lifecycle_audit as UntypedValue).execute({
+    const tools = createReadOnlyAITools();
+    const toolContext = { userAddress: address };
+    const runTool = (toolName: string, input: UntypedValue = {}) =>
+      executeReadOnlyAITool(tools, toolName, input, toolContext);
+    const audit = getToolData(await runTool('get_plant_lifecycle_audit', {
       address,
       includeRecentTransferFallback: true,
       limit: 12,
@@ -127,7 +130,7 @@ async function main() {
   }
   assert(audits.some((audit) => audit.indexedWalletLifecycle?.burnedOrKilledPlants?.length > 0), 'Lifecycle smoke did not find any wallet-indexed burned/killed plant evidence.');
 
-  const model = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })(
+  const model = createGoogle({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })(
     process.env.AI_SMOKE_MODEL || 'gemini-3.5-flash',
   );
   const auditContext = JSON.stringify(audits, null, 2);
@@ -165,7 +168,7 @@ async function main() {
         },
       ],
       model,
-      system: READ_ONLY_AGENT_SYSTEM_PROMPT,
+      instructions: READ_ONLY_AGENT_SYSTEM_PROMPT,
     });
     answers[scenario.name] = {
       finishReason: result.finishReason,

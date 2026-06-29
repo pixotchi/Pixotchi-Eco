@@ -167,8 +167,11 @@ async function main() {
   const safetyImport = await import('../lib/ai-safety');
   const toolsImport = await import('../lib/ai-read-tools');
 
-  const tools = toolsImport.createReadOnlyAITools({ userAddress: testAddress });
-  const priceResult = await (tools.get_game_prices as UntypedValue).execute({
+  const tools = toolsImport.createReadOnlyAITools();
+  const toolContext = { userAddress: testAddress };
+  const runTool = (toolName: string, input: UntypedValue = {}) =>
+    toolsImport.executeReadOnlyAITool(tools, toolName, input, toolContext);
+  const priceResult = await runTool('get_game_prices', {
     fenceDays: 1,
     includeGardenItems: true,
     includeShopItems: true,

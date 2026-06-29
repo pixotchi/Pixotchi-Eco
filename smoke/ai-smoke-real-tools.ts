@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogle } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
-import { generateText, gateway, stepCountIs, type GatewayModelId } from 'ai';
+import { generateText, gateway, isStepCount, type GatewayModelId } from 'ai';
 import { READ_ONLY_AGENT_SYSTEM_PROMPT } from '../lib/ai-context';
-import { createReadOnlyAITools } from '../lib/ai-read-tools';
+import { createReadOnlyAITools, createReadOnlyAIToolsContext, executeReadOnlyAITool } from '../lib/ai-read-tools';
 import { classifyAIUserMessage } from '../lib/ai-safety';
 
 const DEFAULT_TEST_ADDRESS = '0x000000000000000000000000000000000000dEaD';
@@ -38,7 +38,7 @@ function createModel(provider: string, modelName: string) {
     if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       throw new Error('GOOGLE_GENERATIVE_AI_API_KEY is required for Google smoke tests.');
     }
-    return createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })(modelName);
+    return createGoogle({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })(modelName);
   }
 
   if (provider === 'openai') {
@@ -69,17 +69,17 @@ function assert(condition: unknown, message: string) {
 }
 
 function extractToolNames(result: UntypedValue): string[] {
-  return [
-    ...(result.toolCalls || []),
-    ...((result.steps || []).flatMap((step: UntypedValue) => step.toolCalls || [])),
-  ].map((call: UntypedValue) => call.toolName);
+  const calls = Array.isArray(result.toolCalls) && result.toolCalls.length > 0
+    ? result.toolCalls
+    : ((result.steps || []).flatMap((step: UntypedValue) => step.toolCalls || []));
+  return calls.map((call: UntypedValue) => call.toolName);
 }
 
 function extractToolOutputs(result: UntypedValue) {
-  return [
-    ...(result.toolResults || []),
-    ...((result.steps || []).flatMap((step: UntypedValue) => step.toolResults || [])),
-  ].map((toolResult: UntypedValue) => ({
+  const toolResults = Array.isArray(result.toolResults) && result.toolResults.length > 0
+    ? result.toolResults
+    : ((result.steps || []).flatMap((step: UntypedValue) => step.toolResults || []));
+  return toolResults.map((toolResult: UntypedValue) => ({
     output: toolResult.output ?? toolResult.result,
     toolName: toolResult.toolName,
   }));
@@ -113,9 +113,13 @@ console.warn = (...args: unknown[]) => {
 
 async function main() {
 const testAddress = process.env.AI_READONLY_TEST_ADDRESS || DEFAULT_TEST_ADDRESS;
-const tools = createReadOnlyAITools({ userAddress: testAddress });
+const tools = createReadOnlyAITools();
+const toolContext = { userAddress: testAddress };
+const toolsContext = createReadOnlyAIToolsContext(toolContext, tools);
+const runTool = (toolName: string, input: UntypedValue = {}) =>
+  executeReadOnlyAITool(tools, toolName, input, toolContext);
 
-const priceResult = await (tools.get_game_prices as UntypedValue).execute({
+const priceResult = await runTool('get_game_prices', {
   fenceDays: 1,
   includeGardenItems: true,
   includeShopItems: true,
@@ -135,7 +139,7 @@ const deterministicToolOutputs = [
     toolName: 'get_game_prices',
   },
   {
-    output: await (tools.get_mint_availability as UntypedValue).execute({
+    output: await runTool('get_mint_availability', {
       address: testAddress,
       includeLand: true,
       includePlants: true,
@@ -143,7 +147,7 @@ const deterministicToolOutputs = [
     toolName: 'get_mint_availability',
   },
   {
-    output: await (tools.get_game_action_guide as UntypedValue).execute({
+    output: await runTool('get_game_action_guide', {
       includeSafetyNotes: true,
       limit: 8,
       query: 'minting onboarding live prices',
@@ -184,9 +188,10 @@ if (shouldUseSingleRoundGeminiTools(provider, modelName)) {
       },
     ],
     model,
-    stopWhen: stepCountIs(1),
-    system: `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\nFor this tool-planning pass, call every needed read-only tool in a single round. Do not make sequential follow-up tool calls. Do not answer the user unless no tool is needed.`,
+    stopWhen: isStepCount(1),
+    instructions: `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\nFor this tool-planning pass, call every needed read-only tool in a single round. Do not make sequential follow-up tool calls. Do not answer the user unless no tool is needed.`,
     tools,
+    toolsContext,
   });
   const toolOutputs = [
     ...deterministicToolOutputs,
@@ -214,7 +219,7 @@ if (shouldUseSingleRoundGeminiTools(provider, modelName)) {
       },
     ],
     model,
-    system: READ_ONLY_AGENT_SYSTEM_PROMPT,
+    instructions: READ_ONLY_AGENT_SYSTEM_PROMPT,
   });
 } else {
   onboardingResult = await generateText({
@@ -234,9 +239,10 @@ if (shouldUseSingleRoundGeminiTools(provider, modelName)) {
     },
     ],
     model,
-    stopWhen: stepCountIs(8),
-    system: READ_ONLY_AGENT_SYSTEM_PROMPT,
+    stopWhen: isStepCount(8),
+    instructions: READ_ONLY_AGENT_SYSTEM_PROMPT,
     tools,
+    toolsContext,
   });
   toolNames = [
     ...deterministicToolOutputs.map((entry) => entry.toolName),
