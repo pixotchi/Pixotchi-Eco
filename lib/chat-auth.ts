@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { isErc6492Signature, recoverMessageAddress } from 'viem';
+import { hashMessage, isErc6492Signature, recoverMessageAddress } from 'viem';
 import { base } from 'viem/chains';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
 import { InvalidAuthTokenError, PrivyClient } from '@privy-io/node';
@@ -84,6 +84,7 @@ const BASE_SIWE_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const BASE_SIWE_MAX_ISSUED_AT_AGE_MS =
   BASE_AUTH_NONCE_TTL_SECONDS * 1000 + BASE_SIWE_MAX_CLOCK_SKEW_MS;
 const BASE_AUTH_DEBUG_LOGS_ENABLED = process.env.BASE_AUTH_DEBUG_LOGS_ENABLED === 'true';
+const ERC1271_MAGIC_VALUE = '0x1626ba7e';
 const FARCASTER_AUTH_ADDRESS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 const FARCASTER_VERIFIED_ADDRESSES_CACHE_TTL_SECONDS = 60 * 10;
 const BASE_NONCE_CONSUME_SCRIPT = `
@@ -93,6 +94,18 @@ if redis.call("EXISTS", KEYS[1]) == 1 then
 end
 return 0
 `;
+const ERC1271_ABI = [
+  {
+    inputs: [
+      { name: 'hash', type: 'bytes32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    name: 'isValidSignature',
+    outputs: [{ name: 'magicValue', type: 'bytes4' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
 
 const basePublicClient = getBaseReadClient();
 let privyServerClientCache:
@@ -619,6 +632,31 @@ async function recoverBaseAuthMessageAddress(
   }
 }
 
+async function verifyBaseMessageWithDirectErc1271(
+  payload: BaseChatAuthPayload,
+): Promise<boolean> {
+  if (
+    !isValidEthereumAddressFormat(payload.address) ||
+    !payload.message ||
+    !getBaseSignatureShape(payload.signature).looksHex
+  ) {
+    return false;
+  }
+
+  try {
+    const result = await basePublicClient.readContract({
+      address: payload.address as `0x${string}`,
+      abi: ERC1271_ABI,
+      args: [hashMessage(payload.message), payload.signature],
+      functionName: 'isValidSignature',
+    });
+
+    return typeof result === 'string' && result.toLowerCase() === ERC1271_MAGIC_VALUE;
+  } catch {
+    return false;
+  }
+}
+
 async function logBaseAuthFailureDiagnostic(
   request: NextRequest,
   payload: BaseChatAuthPayload,
@@ -636,9 +674,11 @@ async function logBaseAuthFailureDiagnostic(
     ? normalizeAddress(payload.address)
     : null;
   const recoveredAddress = await recoverBaseAuthMessageAddress(payload);
+  const directErc1271Valid = await verifyBaseMessageWithDirectErc1271(payload);
   const nowMs = Date.now();
 
   console.warn('[chat-auth] Base auth failure diagnostic:', {
+    directErc1271Valid,
     errorMessage: error instanceof Error ? error.message : String(error),
     errorName: error instanceof Error ? error.name : typeof error,
     errorStatus: error instanceof ChatAuthError ? error.status : null,
@@ -671,6 +711,34 @@ async function logBaseAuthFailureDiagnostic(
           }
         })()
       : null,
+    userAgent: request.headers.get('user-agent')?.slice(0, 240) ?? null,
+  });
+}
+
+function logBaseAuthDirectErc1271SuccessDiagnostic(
+  request: NextRequest,
+  payload: BaseChatAuthPayload,
+  siweMessage: ParsedBaseSiweMessage,
+): void {
+  if (!BASE_AUTH_DEBUG_LOGS_ENABLED) {
+    return;
+  }
+
+  console.warn('[chat-auth] Base auth direct ERC-1271 fallback accepted:', {
+    host: request.headers.get('host'),
+    origin: request.headers.get('origin'),
+    payloadAddress: normalizeAddress(payload.address),
+    secFetchSite: request.headers.get('sec-fetch-site'),
+    signatureShape: getBaseSignatureShape(payload.signature),
+    siweChainId: siweMessage.chainId,
+    siweDomain: siweMessage.domain,
+    siweUriOrigin: (() => {
+      try {
+        return normalizeOrigin(new URL(siweMessage.uri).origin);
+      } catch {
+        return null;
+      }
+    })(),
     userAgent: request.headers.get('user-agent')?.slice(0, 240) ?? null,
   });
 }
@@ -1212,8 +1280,16 @@ export async function verifyBaseChatIdentity(
       signature: payload.signature,
     });
 
-    if (!isValid) {
+    const directErc1271Valid = isValid
+      ? false
+      : await verifyBaseMessageWithDirectErc1271(payload);
+
+    if (!isValid && !directErc1271Valid) {
       throw new ChatAuthError('Invalid Base authentication signature.', 401);
+    }
+
+    if (directErc1271Valid) {
+      logBaseAuthDirectErc1271SuccessDiagnostic(request, payload, siweMessage);
     }
 
     const nonceConsumed = await consumeBaseAuthNonce(siweMessage.nonce);
