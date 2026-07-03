@@ -48,6 +48,31 @@ const AUTH_CACHE_PREFIXES = [
   "coinbase",
 ];
 
+const BASE_PERSONAL_SIGN_TIMEOUT_MS = 12_000;
+const BASE_APP_SIGNING_UNAVAILABLE_MESSAGE =
+  "This Base app wallet profile could not sign in. Open in your system browser, use a different Base app profile/device, or reset the Base app wallet session.";
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 function getPrivyLoginErrorMessage(error: string) {
   switch (error) {
     case "exited_auth_flow":
@@ -448,26 +473,6 @@ export function useAppAuthController() {
     });
   }, []);
 
-  const summarizeBaseAuthPayload = useCallback(
-    (payload: { address?: string; message?: string; signature?: string } | null) => {
-      const signature = typeof payload?.signature === "string" ? payload.signature : "";
-      const looksHex = /^0x[0-9a-fA-F]*$/.test(signature);
-
-      return {
-        address: typeof payload?.address === "string" ? payload.address.toLowerCase() : null,
-        messageLength: typeof payload?.message === "string" ? payload.message.length : null,
-        messageLineCount:
-          typeof payload?.message === "string" && payload.message.length > 0
-            ? payload.message.replace(/\r\n/g, "\n").split("\n").length
-            : null,
-        signatureByteLength: looksHex ? Math.max(0, (signature.length - 2) / 2) : null,
-        signatureLength: signature.length,
-        signatureLooksHex: looksHex,
-      };
-    },
-    [],
-  );
-
   const logBaseClientDiagnostic = useCallback(
     async (stage: string, details: Record<string, UntypedValue>) => {
       try {
@@ -540,10 +545,14 @@ export function useAppAuthController() {
       });
 
       const checksummedAddress = getAddress(params.baseAddress);
-      const signature = await params.provider.request({
-        method: "personal_sign",
-        params: [stringToHex(message), checksummedAddress],
-      });
+      const signature = await withTimeout(
+        params.provider.request({
+          method: "personal_sign",
+          params: [stringToHex(message), checksummedAddress],
+        }),
+        BASE_PERSONAL_SIGN_TIMEOUT_MS,
+        BASE_APP_SIGNING_UNAVAILABLE_MESSAGE,
+      );
 
       if (typeof signature !== "string") {
         throw new Error("Coinbase Wallet did not return a valid signature.");
@@ -838,36 +847,12 @@ export function useAppAuthController() {
           throw error;
         }
 
-        void logBaseClientDiagnostic("server-signature-rejected", {
-          connectorId: baseConnector?.id ?? null,
-          connectorName: baseConnector?.name ?? null,
-          message: getErrorMessage(error, "Base SIWE capability signature rejected."),
-          normalizedAddress: payload.address,
-          payloadSource: "signInWithEthereum",
-          payloadSummary: summarizeBaseAuthPayload(payload),
-        });
-
         const provider = await getBaseProvider();
         if (!provider?.request) {
           throw error;
         }
 
         try {
-          void logBaseClientDiagnostic("same-provider-fallback-selected", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            message: "Base SIWE capability returned a signature rejected by server verification.",
-            normalizedAddress: payload.address,
-            payloadSummary: summarizeBaseAuthPayload(payload),
-          });
-
-          void logBaseClientDiagnostic("personal-sign-fallback-request", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            normalizedAddress: payload.address,
-            payloadSummary: summarizeBaseAuthPayload(payload),
-          });
-
           const fallbackPayload = await createPersonalSignBasePayload({
             baseAddress: payload.address,
             ...(domain ? { domain } : {}),
@@ -877,28 +862,7 @@ export function useAppAuthController() {
             ...(uri ? { uri } : {}),
           });
 
-          void logBaseClientDiagnostic("personal-sign-fallback-payload-created", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            fallbackPayloadSummary: summarizeBaseAuthPayload(fallbackPayload),
-            normalizedAddress: fallbackPayload.address,
-          });
-
-          void logBaseClientDiagnostic("personal-sign-fallback-submit", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            fallbackPayloadSummary: summarizeBaseAuthPayload(fallbackPayload),
-            normalizedAddress: fallbackPayload.address,
-          });
-
           await submitBasePayload(fallbackPayload);
-
-          void logBaseClientDiagnostic("personal-sign-fallback-success", {
-            connectorId: baseConnector?.id ?? null,
-            connectorName: baseConnector?.name ?? null,
-            fallbackPayloadSummary: summarizeBaseAuthPayload(fallbackPayload),
-            normalizedAddress: fallbackPayload.address,
-          });
         } catch (fallbackError) {
           void logBaseClientDiagnostic("same-provider-fallback-error", {
             connectorId: baseConnector?.id ?? null,
@@ -906,7 +870,6 @@ export function useAppAuthController() {
             errorCode: getErrorCode(fallbackError),
             message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
             normalizedAddress: payload.address,
-            payloadSummary: summarizeBaseAuthPayload(payload),
           });
           throw fallbackError;
         }
@@ -925,7 +888,6 @@ export function useAppAuthController() {
       persistBaseAuthenticatedAddress,
       shouldUseLegacyBaseFallback,
       summarizeBaseAccounts,
-      summarizeBaseAuthPayload,
     ],
   );
 
