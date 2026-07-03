@@ -373,6 +373,12 @@ export function useAppAuthController() {
     [getErrorMessage],
   );
 
+  const isInvalidBaseAuthenticationSignatureError = useCallback(
+    (error: UntypedValue): boolean =>
+      getErrorMessage(error, "").toLowerCase().includes("invalid base authentication signature"),
+    [getErrorMessage],
+  );
+
   const shouldUseLegacyBaseFallback = useCallback(
     (error: UntypedValue): boolean =>
       isUnsupportedBaseMethodError(error) || isInvalidBaseSiweMessageError(error),
@@ -599,7 +605,47 @@ export function useAppAuthController() {
         message: string;
         signature: `0x${string}`;
       } | null = null;
+      let baseProvider:
+        | {
+            request: (request: {
+              method: string;
+              params?: UntypedValue[];
+            }) => Promise<UntypedValue>;
+          }
+        | null = null;
       let withCapabilitiesError: UntypedValue = null;
+
+      const getBaseProvider = async () => {
+        if (!baseProvider) {
+          baseProvider =
+            typeof baseConnector?.getProvider === "function"
+              ? await baseConnector.getProvider()
+              : baseConnector?.provider;
+        }
+
+        return baseProvider;
+      };
+
+      const submitBasePayload = async (nextPayload: {
+        address: string;
+        message: string;
+        signature: `0x${string}`;
+      }) => {
+        await sessionStorageManager.setPendingBaseChatAuth(nextPayload);
+        try {
+          await createBasePublicChatSession(nextPayload);
+        } catch (error) {
+          await sessionStorageManager.clearPendingBaseChatAuth().catch((storageError) => {
+            console.warn(
+              "Failed to clear pending Base auth after rejected payload:",
+              storageError,
+            );
+          });
+          throw error;
+        }
+        await sessionStorageManager.clearPendingBaseChatAuth();
+        await persistBaseAuthenticatedAddress(nextPayload.address);
+      };
 
       try {
         const connectResult = await connectAsync({
@@ -642,10 +688,7 @@ export function useAppAuthController() {
 
       if (!payload) {
         let baseAddress = normalizedAddress;
-        const provider =
-          typeof baseConnector?.getProvider === "function"
-            ? await baseConnector.getProvider()
-            : baseConnector?.provider;
+        const provider = await getBaseProvider();
 
         if (!provider?.request) {
           throw new Error("Base provider unavailable.");
@@ -768,10 +811,47 @@ export function useAppAuthController() {
         throw new Error("Base authentication was not completed.");
       }
 
-      await sessionStorageManager.setPendingBaseChatAuth(payload);
-      await createBasePublicChatSession(payload);
-      await sessionStorageManager.clearPendingBaseChatAuth();
-      await persistBaseAuthenticatedAddress(payload.address);
+      try {
+        await submitBasePayload(payload);
+      } catch (error) {
+        if (!isInvalidBaseAuthenticationSignatureError(error)) {
+          throw error;
+        }
+
+        const provider = await getBaseProvider();
+        if (!provider?.request) {
+          throw error;
+        }
+
+        try {
+          void logBaseClientDiagnostic("same-provider-fallback-selected", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            message: "Base SIWE capability returned a signature rejected by server verification.",
+            normalizedAddress: payload.address,
+          });
+
+          const fallbackPayload = await createPersonalSignBasePayload({
+            baseAddress: payload.address,
+            ...(domain ? { domain } : {}),
+            issuedAt,
+            nonce,
+            provider,
+            ...(uri ? { uri } : {}),
+          });
+
+          await submitBasePayload(fallbackPayload);
+        } catch (fallbackError) {
+          void logBaseClientDiagnostic("same-provider-fallback-error", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            errorCode: getErrorCode(fallbackError),
+            message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
+            normalizedAddress: payload.address,
+          });
+          throw fallbackError;
+        }
+      }
     },
     [
       connectAsync,
@@ -780,6 +860,7 @@ export function useAppAuthController() {
       getErrorMessage,
       getPrimaryAccountAddress,
       isAlreadyConnectedError,
+      isInvalidBaseAuthenticationSignatureError,
       logBaseClientDiagnostic,
       normalizedAddress,
       persistBaseAuthenticatedAddress,
