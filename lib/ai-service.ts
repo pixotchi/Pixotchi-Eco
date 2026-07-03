@@ -1921,8 +1921,8 @@ function getDeterministicToolRequests(currentMessage: string, userAddress: strin
 
   if (/\b(blackjack|hit|stand|double|split|surrender|insurance)\b/i.test(currentMessage)) {
     addDeterministicToolRequest(requests, { input: { ...addressInput, limit: 8 }, toolName: 'get_blackjack_action_state' });
-  } else if (/\b(casino|roulette|wager|bet)\b/i.test(currentMessage)) {
-    addDeterministicToolRequest(requests, { input: { ...addressInput, includeBlackjack: true, includeRoulette: true, limit: 8 }, toolName: 'get_casino_status' });
+  } else if (/\b(casino|roulette|baccarat|wager|bet)\b/i.test(currentMessage)) {
+    addDeterministicToolRequest(requests, { input: { ...addressInput, includeBaccarat: true, includeBlackjack: true, includeRoulette: true, limit: 8 }, toolName: 'get_casino_status' });
   }
 
   return requests.slice(0, 6);

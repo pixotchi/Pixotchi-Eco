@@ -293,6 +293,23 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
+    baccaratRoundResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+      items {
+        __typename
+        id
+        timestamp
+        landId
+        player
+        betType
+        outcome
+        won
+        playerTotal
+        bankerTotal
+        payout
+        bettingToken
+        blockHeight
+      }
+    }
   }
 `;
 
@@ -527,6 +544,23 @@ const GET_MY_ACTIVITY_QUERY = `
           blockHeight
         }
       }
+      baccaratRoundResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { player: $playerAddress }) {
+        items {
+          __typename
+          id
+          timestamp
+          landId
+          player
+          betType
+          outcome
+          won
+          playerTotal
+          bankerTotal
+          payout
+          bettingToken
+          blockHeight
+        }
+      }
   }
 `;
 
@@ -656,6 +690,7 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
       ...(data.casinoBuiltEvents?.items || []),
       ...(data.rouletteSpinResultEvents?.items || []),
       ...(data.blackjackResultEvents?.items || []),
+      ...(data.baccaratRoundResultEvents?.items || []),
       ...barracksEvents,
     ];
 
@@ -732,6 +767,7 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
       ...(data.casinoBuiltEvents?.items || []),
       ...(data.rouletteSpinResultEvents?.items || []),
       ...(data.blackjackResultEvents?.items || []),
+      ...(data.baccaratRoundResultEvents?.items || []),
       ...barracksEvents,
     ];
 

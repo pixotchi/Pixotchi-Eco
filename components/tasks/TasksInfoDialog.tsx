@@ -150,7 +150,7 @@ export default function TasksInfoDialog() {
         { done: missionDay?.s3?.applyResources, label: "Apply resources or production to a plant" },
         { done: missionDay?.s3?.sendQuest, label: "Send a farmer on a quest" },
         { done: missionDay?.s3?.claimProduction, label: "Claim production from any building" },
-        { done: missionDay?.s3?.playCasinoGame, label: "Play roulette or blackjack" },
+        { done: missionDay?.s3?.playCasinoGame, label: "Play roulette, blackjack, or baccarat" },
       ],
     },
     {

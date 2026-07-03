@@ -1,6 +1,7 @@
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits } from "viem";
+import { parseCasinoAmountInput } from "./casino-amount-input";
 
-type CasinoGame = "roulette" | "blackjack";
+type CasinoGame = "roulette" | "blackjack" | "baccarat";
 
 type BetPreferenceParams = {
   game: CasinoGame;
@@ -30,7 +31,7 @@ export const loadBetPreference = ({
     const stored = localStorage.getItem(getBetPreferenceKey(game, token))?.trim();
     if (!stored) return fallback;
 
-    const storedWei = parseUnits(stored, decimals);
+    const storedWei = parseCasinoAmountInput(stored, decimals);
     if (storedWei <= BigInt(0)) return fallback;
     if (storedWei < minBet) return fallback;
     if (storedWei > maxBet) return formatUnits(maxBet, decimals);
@@ -53,7 +54,7 @@ export const storeBetPreference = (
     const normalizedAmount = amount.trim();
     if (!normalizedAmount) return;
 
-    const amountWei = parseUnits(normalizedAmount, decimals);
+    const amountWei = parseCasinoAmountInput(normalizedAmount, decimals);
     if (amountWei <= BigInt(0)) return;
 
     localStorage.setItem(getBetPreferenceKey(game, token), normalizedAmount);

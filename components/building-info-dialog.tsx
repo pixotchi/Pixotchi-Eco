@@ -59,6 +59,23 @@ const blackjackInfo = {
   }
 };
 
+// Baccarat game info
+const baccaratInfo = {
+  description: "Play Punto Banco Baccarat with Player, Banker, and Tie bets. Place a bet, wait one block, then reveal the round.",
+  features: [
+    "Classic casino Baccarat with no player decisions after betting",
+    "Block reveal mechanism matching Roulette",
+    "Player and Banker bets push on Tie",
+    "Banker wins pay with standard 5% commission"
+  ],
+  payouts: {
+    "Player": "1:1 (2x return)",
+    "Banker": "0.95:1 profit (1.95x return)",
+    "Tie": "8:1 profit (9x return)",
+    "Player/Banker on Tie": "Bet returned"
+  }
+};
+
 const buildingInfo = {
   // Village Buildings (Production-Focused)
   "village-0": { // Solar Panels
@@ -154,7 +171,7 @@ const buildingInfo = {
   "town-6": { // Casino
     name: "Casino",
     isCasino: true, // Flag to show game toggle
-    description: "Play Roulette or Blackjack with provably fair onchain randomness!"
+    description: "Play Roulette, Blackjack, or Baccarat with provably fair onchain randomness!"
   },
   "town-8": { // Barracks
     name: "Barracks",
@@ -397,7 +414,7 @@ export default function BuildingInfoDialog({
   buildingId,
   buildingType
 }: BuildingInfoDialogProps) {
-  const [selectedGame, setSelectedGame] = useState<'roulette' | 'blackjack'>('roulette');
+  const [selectedGame, setSelectedGame] = useState<'roulette' | 'blackjack' | 'baccarat'>('roulette');
 
   const key = `${buildingType}-${buildingId}` as keyof typeof buildingInfo;
   const info = buildingInfo[key];
@@ -427,8 +444,12 @@ export default function BuildingInfoDialog({
   };
 
   // Get current game info based on toggle
-  const currentGameInfo = selectedGame === 'roulette' ? rouletteInfo : blackjackInfo;
-  const currentGameIcon = selectedGame === 'roulette' ? '🎰' : '♦️';
+  const currentGameInfo = selectedGame === 'roulette'
+    ? rouletteInfo
+    : selectedGame === 'blackjack'
+      ? blackjackInfo
+      : baccaratInfo;
+  const currentGameIcon = selectedGame === 'roulette' ? '🎰' : selectedGame === 'blackjack' ? '♦️' : '♣';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -448,7 +469,7 @@ export default function BuildingInfoDialog({
                 <div className="flex justify-center">
                   <ToggleGroup
                     value={selectedGame}
-                    onValueChange={(v) => setSelectedGame(v as 'roulette' | 'blackjack')}
+                    onValueChange={(v) => setSelectedGame(v as 'roulette' | 'blackjack' | 'baccarat')}
                     options={[
                       {
                         value: 'roulette',
@@ -467,6 +488,16 @@ export default function BuildingInfoDialog({
                           <span className="inline-flex items-center gap-1.5">
                             <span aria-hidden="true">♦️</span>
                             Blackjack
+                          </span>
+                        ),
+                      },
+                      {
+                        value: 'baccarat',
+                        ariaLabel: 'Baccarat info',
+                        label: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span aria-hidden="true">♣</span>
+                            Baccarat
                           </span>
                         ),
                       },
@@ -537,6 +568,21 @@ export default function BuildingInfoDialog({
                       </InfoRows>
                     </InfoSection>
                   </>
+                )}
+
+                {selectedGame === 'baccarat' && (
+                  <InfoSection title="Payouts">
+                    <InfoRows>
+                      {Object.entries(baccaratInfo.payouts).map(([result, payout]) => (
+                        <InfoRow
+                          key={result}
+                          label={result}
+                          value={payout}
+                          valueClassName="text-[hsl(var(--success-strong))]"
+                        />
+                      ))}
+                    </InfoRows>
+                  </InfoSection>
                 )}
               </>
             )}

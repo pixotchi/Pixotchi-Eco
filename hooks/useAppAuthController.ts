@@ -48,6 +48,31 @@ const AUTH_CACHE_PREFIXES = [
   "coinbase",
 ];
 
+const BASE_PERSONAL_SIGN_TIMEOUT_MS = 12_000;
+const BASE_APP_SIGNING_UNAVAILABLE_MESSAGE =
+  "This Base app wallet profile could not sign in. Open in your system browser, use a different Base app profile/device, or reset the Base app wallet session.";
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 function getPrivyLoginErrorMessage(error: string) {
   switch (error) {
     case "exited_auth_flow":
@@ -373,6 +398,12 @@ export function useAppAuthController() {
     [getErrorMessage],
   );
 
+  const isInvalidBaseAuthenticationSignatureError = useCallback(
+    (error: UntypedValue): boolean =>
+      getErrorMessage(error, "").toLowerCase().includes("invalid base authentication signature"),
+    [getErrorMessage],
+  );
+
   const shouldUseLegacyBaseFallback = useCallback(
     (error: UntypedValue): boolean =>
       isUnsupportedBaseMethodError(error) || isInvalidBaseSiweMessageError(error),
@@ -514,10 +545,14 @@ export function useAppAuthController() {
       });
 
       const checksummedAddress = getAddress(params.baseAddress);
-      const signature = await params.provider.request({
-        method: "personal_sign",
-        params: [stringToHex(message), checksummedAddress],
-      });
+      const signature = await withTimeout(
+        params.provider.request({
+          method: "personal_sign",
+          params: [stringToHex(message), checksummedAddress],
+        }),
+        BASE_PERSONAL_SIGN_TIMEOUT_MS,
+        BASE_APP_SIGNING_UNAVAILABLE_MESSAGE,
+      );
 
       if (typeof signature !== "string") {
         throw new Error("Coinbase Wallet did not return a valid signature.");
@@ -599,7 +634,47 @@ export function useAppAuthController() {
         message: string;
         signature: `0x${string}`;
       } | null = null;
+      let baseProvider:
+        | {
+            request: (request: {
+              method: string;
+              params?: UntypedValue[];
+            }) => Promise<UntypedValue>;
+          }
+        | null = null;
       let withCapabilitiesError: UntypedValue = null;
+
+      const getBaseProvider = async () => {
+        if (!baseProvider) {
+          baseProvider =
+            typeof baseConnector?.getProvider === "function"
+              ? await baseConnector.getProvider()
+              : baseConnector?.provider;
+        }
+
+        return baseProvider;
+      };
+
+      const submitBasePayload = async (nextPayload: {
+        address: string;
+        message: string;
+        signature: `0x${string}`;
+      }) => {
+        await sessionStorageManager.setPendingBaseChatAuth(nextPayload);
+        try {
+          await createBasePublicChatSession(nextPayload);
+        } catch (error) {
+          await sessionStorageManager.clearPendingBaseChatAuth().catch((storageError) => {
+            console.warn(
+              "Failed to clear pending Base auth after rejected payload:",
+              storageError,
+            );
+          });
+          throw error;
+        }
+        await sessionStorageManager.clearPendingBaseChatAuth();
+        await persistBaseAuthenticatedAddress(nextPayload.address);
+      };
 
       try {
         const connectResult = await connectAsync({
@@ -642,10 +717,7 @@ export function useAppAuthController() {
 
       if (!payload) {
         let baseAddress = normalizedAddress;
-        const provider =
-          typeof baseConnector?.getProvider === "function"
-            ? await baseConnector.getProvider()
-            : baseConnector?.provider;
+        const provider = await getBaseProvider();
 
         if (!provider?.request) {
           throw new Error("Base provider unavailable.");
@@ -768,10 +840,40 @@ export function useAppAuthController() {
         throw new Error("Base authentication was not completed.");
       }
 
-      await sessionStorageManager.setPendingBaseChatAuth(payload);
-      await createBasePublicChatSession(payload);
-      await sessionStorageManager.clearPendingBaseChatAuth();
-      await persistBaseAuthenticatedAddress(payload.address);
+      try {
+        await submitBasePayload(payload);
+      } catch (error) {
+        if (!isInvalidBaseAuthenticationSignatureError(error)) {
+          throw error;
+        }
+
+        const provider = await getBaseProvider();
+        if (!provider?.request) {
+          throw error;
+        }
+
+        try {
+          const fallbackPayload = await createPersonalSignBasePayload({
+            baseAddress: payload.address,
+            ...(domain ? { domain } : {}),
+            issuedAt,
+            nonce,
+            provider,
+            ...(uri ? { uri } : {}),
+          });
+
+          await submitBasePayload(fallbackPayload);
+        } catch (fallbackError) {
+          void logBaseClientDiagnostic("same-provider-fallback-error", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            errorCode: getErrorCode(fallbackError),
+            message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
+            normalizedAddress: payload.address,
+          });
+          throw fallbackError;
+        }
+      }
     },
     [
       connectAsync,
@@ -780,6 +882,7 @@ export function useAppAuthController() {
       getErrorMessage,
       getPrimaryAccountAddress,
       isAlreadyConnectedError,
+      isInvalidBaseAuthenticationSignatureError,
       logBaseClientDiagnostic,
       normalizedAddress,
       persistBaseAuthenticatedAddress,

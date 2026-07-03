@@ -3,7 +3,7 @@
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { ITEM_ICONS } from '@/lib/constants';
 import {
-ActivityEvent,AttackEvent,BarracksBuiltEvent,
+ActivityEvent,AttackEvent,BaccaratRoundResultEvent,BarracksBuiltEvent,
 BarracksRaidEvent,BlackjackResultEvent,BundledItemConsumedEvent,CasinoBuiltEvent,KilledEvent,LandMintedEvent,
 LandNameChangedEvent,LandTransferEvent,MintEvent,PlayedEvent,QuestFinalizedEvent,QuestStartedEvent,RouletteSpinResultEvent,ShopItemPurchasedEvent,TownSpeedUpWithSeedEvent,TownUpgradedWithLeafEvent,VillageProductionClaimedEvent,VillageSpeedUpWithSeedEvent,VillageUpgradedWithLeafEvent
 } from '@/lib/types';
@@ -128,6 +128,8 @@ const EventIcon = React.memo(({
         return { iconSrc: "/icons/casino.svg", altText: "Roulette Win" };
       case 'BlackjackResultEvent':
         return { iconSrc: "/icons/casino.svg", altText: "Blackjack" };
+      case 'BaccaratRoundResultEvent':
+        return { iconSrc: "/icons/casino.svg", altText: "Baccarat" };
       default:
         return { iconSrc: null, altText: "Unknown Event" };
     }
@@ -540,6 +542,29 @@ export const BlackjackResultEventRenderer = ({ event, userAddress }: { event: Bl
         <LandName landId={event.landId} isYou={!!isYou} /> played <span className="font-bold">Blackjack</span>
         {won ? (
           <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
+        ) : (
+          <> and lost.</>
+        )}
+      </p>
+    </EventWrapper>
+  );
+};
+
+export const BaccaratRoundResultEventRenderer = ({ event, userAddress }: { event: BaccaratRoundResultEvent, userAddress?: string | null }) => {
+  const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
+  const { symbol: tokenSymbol, decimals: tokenDecimals } = useTokenMetadata(event.bettingToken as `0x${string}`);
+  const payoutFormatted = formatTokenAmount(BigInt(event.payout), tokenDecimals);
+  const displaySymbol = tokenSymbol || 'TOKEN';
+  const pushed = !event.won && BigInt(event.payout) > BigInt(0);
+
+  return (
+    <EventWrapper event={event}>
+      <p className="text-sm">
+        <LandName landId={event.landId} isYou={!!isYou} /> played <span className="font-bold">Baccarat</span>
+        {event.won ? (
+          <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
+        ) : pushed ? (
+          <> and pushed.</>
         ) : (
           <> and lost.</>
         )}

@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
+import { hashMessage, hashTypedData, isErc6492Signature, recoverMessageAddress } from 'viem';
 import { base } from 'viem/chains';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
 import { InvalidAuthTokenError, PrivyClient } from '@privy-io/node';
@@ -82,6 +83,8 @@ const BASE_AUTH_NONCE_TTL_SECONDS = 60 * 10;
 const BASE_SIWE_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const BASE_SIWE_MAX_ISSUED_AT_AGE_MS =
   BASE_AUTH_NONCE_TTL_SECONDS * 1000 + BASE_SIWE_MAX_CLOCK_SKEW_MS;
+const BASE_AUTH_DEBUG_LOGS_ENABLED = process.env.BASE_AUTH_DEBUG_LOGS_ENABLED === 'true';
+const ERC1271_MAGIC_VALUE = '0x1626ba7e';
 const FARCASTER_AUTH_ADDRESS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 const FARCASTER_VERIFIED_ADDRESSES_CACHE_TTL_SECONDS = 60 * 10;
 const BASE_NONCE_CONSUME_SCRIPT = `
@@ -91,6 +94,18 @@ if redis.call("EXISTS", KEYS[1]) == 1 then
 end
 return 0
 `;
+const ERC1271_ABI = [
+  {
+    inputs: [
+      { name: 'hash', type: 'bytes32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    name: 'isValidSignature',
+    outputs: [{ name: 'magicValue', type: 'bytes4' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
 
 const basePublicClient = getBaseReadClient();
 let privyServerClientCache:
@@ -563,6 +578,224 @@ function validateBaseSiweTemporalClaims(siweMessage: ParsedBaseSiweMessage): voi
   if (siweMessage.expirationTime && nowMs - BASE_SIWE_MAX_CLOCK_SKEW_MS > siweMessage.expirationTime.getTime()) {
     throw new ChatAuthError('SIWE message has expired.', 400);
   }
+}
+
+function getBaseSignatureShape(signature: string | null | undefined): {
+  byteLength: number | null;
+  isErc6492: boolean | null;
+  length: number;
+  looksHex: boolean;
+} {
+  const value = typeof signature === 'string' ? signature.trim() : '';
+  const looksHex = /^0x[0-9a-fA-F]*$/.test(value);
+
+  if (!looksHex) {
+    return {
+      byteLength: null,
+      isErc6492: null,
+      length: value.length,
+      looksHex: false,
+    };
+  }
+
+  let isErc6492: boolean | null = null;
+  try {
+    isErc6492 = isErc6492Signature(value as `0x${string}`);
+  } catch {
+    isErc6492 = null;
+  }
+
+  return {
+    byteLength: Math.max(0, (value.length - 2) / 2),
+    isErc6492,
+    length: value.length,
+    looksHex: true,
+  };
+}
+
+async function recoverBaseAuthMessageAddress(
+  payload: BaseChatAuthPayload,
+): Promise<string | null> {
+  const signatureShape = getBaseSignatureShape(payload.signature);
+  if (!signatureShape.looksHex || signatureShape.byteLength !== 65 || !payload.message) {
+    return null;
+  }
+
+  try {
+    const recoveredAddress = await recoverMessageAddress({
+      message: payload.message,
+      signature: payload.signature,
+    });
+    return normalizeAddress(recoveredAddress);
+  } catch {
+    return null;
+  }
+}
+
+function getCoinbaseSmartWalletReplaySafeHash(payload: BaseChatAuthPayload): `0x${string}` {
+  return hashTypedData({
+    domain: {
+      chainId: base.id,
+      name: 'Coinbase Smart Wallet',
+      verifyingContract: payload.address as `0x${string}`,
+      version: '1',
+    },
+    types: {
+      CoinbaseSmartWalletMessage: [
+        {
+          name: 'hash',
+          type: 'bytes32',
+        },
+      ],
+    },
+    primaryType: 'CoinbaseSmartWalletMessage',
+    message: {
+      hash: hashMessage(payload.message),
+    },
+  });
+}
+
+async function verifyBaseErc1271Hash(
+  payload: BaseChatAuthPayload,
+  hash: `0x${string}`,
+): Promise<boolean> {
+  try {
+    const result = await basePublicClient.readContract({
+      address: payload.address as `0x${string}`,
+      abi: ERC1271_ABI,
+      args: [hash, payload.signature],
+      functionName: 'isValidSignature',
+    });
+
+    return typeof result === 'string' && result.toLowerCase() === ERC1271_MAGIC_VALUE;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyBaseMessageWithDirectErc1271(
+  payload: BaseChatAuthPayload,
+): Promise<{
+  plainValid: boolean;
+  replaySafeValid: boolean;
+  valid: boolean;
+}> {
+  if (
+    !isValidEthereumAddressFormat(payload.address) ||
+    !payload.message ||
+    !getBaseSignatureShape(payload.signature).looksHex
+  ) {
+    return {
+      plainValid: false,
+      replaySafeValid: false,
+      valid: false,
+    };
+  }
+
+  const plainValid = await verifyBaseErc1271Hash(payload, hashMessage(payload.message));
+  const replaySafeValid = plainValid
+    ? false
+    : await verifyBaseErc1271Hash(payload, getCoinbaseSmartWalletReplaySafeHash(payload));
+
+  return {
+    plainValid,
+    replaySafeValid,
+    valid: plainValid || replaySafeValid,
+  };
+}
+
+async function logBaseAuthFailureDiagnostic(
+  request: NextRequest,
+  payload: BaseChatAuthPayload,
+  siweMessage: ParsedBaseSiweMessage | null,
+  error: unknown,
+): Promise<void> {
+  if (!BASE_AUTH_DEBUG_LOGS_ENABLED) {
+    return;
+  }
+
+  const expectedUrls = getExpectedBaseUrls(request);
+  const expectedDomains = getExpectedBaseDomains(expectedUrls);
+  const signatureShape = getBaseSignatureShape(payload.signature);
+  const normalizedPayloadAddress = isValidEthereumAddressFormat(payload.address)
+    ? normalizeAddress(payload.address)
+    : null;
+  const recoveredAddress = await recoverBaseAuthMessageAddress(payload);
+  const directErc1271 = await verifyBaseMessageWithDirectErc1271(payload);
+  const nowMs = Date.now();
+
+  console.warn('[chat-auth] Base auth failure diagnostic:', {
+    directErc1271PlainValid: directErc1271.plainValid,
+    directErc1271ReplaySafeValid: directErc1271.replaySafeValid,
+    directErc1271Valid: directErc1271.valid,
+    errorMessage: error instanceof Error ? error.message : String(error),
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorStatus: error instanceof ChatAuthError ? error.status : null,
+    expectedDomains: Array.from(expectedDomains),
+    expectedOrigins: expectedUrls.map((url) => normalizeOrigin(url.origin)),
+    forwardedHost: request.headers.get('x-forwarded-host'),
+    forwardedProto: request.headers.get('x-forwarded-proto'),
+    host: request.headers.get('host'),
+    messageLength: typeof payload.message === 'string' ? payload.message.length : 0,
+    messageLineCount:
+      typeof payload.message === 'string' && payload.message.length > 0
+        ? payload.message.replace(/\r\n/g, '\n').split('\n').length
+        : 0,
+    origin: request.headers.get('origin'),
+    payloadAddress: normalizedPayloadAddress,
+    recoveredAddress,
+    secFetchSite: request.headers.get('sec-fetch-site'),
+    signatureShape,
+    siweAddress: siweMessage ? normalizeAddress(siweMessage.address) : null,
+    siweChainId: siweMessage?.chainId ?? null,
+    siweDomain: siweMessage?.domain ?? null,
+    siweIssuedAtAgeMs: siweMessage ? nowMs - siweMessage.issuedAt.getTime() : null,
+    siweNoncePresent: Boolean(siweMessage?.nonce),
+    siweUriOrigin: siweMessage
+      ? (() => {
+          try {
+            return normalizeOrigin(new URL(siweMessage.uri).origin);
+          } catch {
+            return null;
+          }
+        })()
+      : null,
+    userAgent: request.headers.get('user-agent')?.slice(0, 240) ?? null,
+  });
+}
+
+function logBaseAuthDirectErc1271SuccessDiagnostic(
+  request: NextRequest,
+  payload: BaseChatAuthPayload,
+  siweMessage: ParsedBaseSiweMessage,
+  directErc1271: {
+    plainValid: boolean;
+    replaySafeValid: boolean;
+  },
+): void {
+  if (!BASE_AUTH_DEBUG_LOGS_ENABLED) {
+    return;
+  }
+
+  console.warn('[chat-auth] Base auth direct ERC-1271 fallback accepted:', {
+    directErc1271PlainValid: directErc1271.plainValid,
+    directErc1271ReplaySafeValid: directErc1271.replaySafeValid,
+    host: request.headers.get('host'),
+    origin: request.headers.get('origin'),
+    payloadAddress: normalizeAddress(payload.address),
+    secFetchSite: request.headers.get('sec-fetch-site'),
+    signatureShape: getBaseSignatureShape(payload.signature),
+    siweChainId: siweMessage.chainId,
+    siweDomain: siweMessage.domain,
+    siweUriOrigin: (() => {
+      try {
+        return normalizeOrigin(new URL(siweMessage.uri).origin);
+      } catch {
+        return null;
+      }
+    })(),
+    userAgent: request.headers.get('user-agent')?.slice(0, 240) ?? null,
+  });
 }
 
 function getConfiguredBaseUrl(request: NextRequest): URL {
@@ -1048,69 +1281,88 @@ export async function verifyBaseChatIdentity(
   request: NextRequest,
   payload: BaseChatAuthPayload,
 ): Promise<ChatIdentity> {
-  if (!payload.address || !payload.message || !payload.signature) {
-    throw new ChatAuthError('Address, message, and signature are required.', 400);
-  }
+  let siweMessage: ParsedBaseSiweMessage | null = null;
 
-  if (!isValidEthereumAddressFormat(payload.address)) {
-    throw new ChatAuthError('Invalid wallet address format.', 400);
-  }
-
-  const siweMessage = parseBaseSiweMessage(payload.message);
-  validateBaseSiweTemporalClaims(siweMessage);
-
-  const expectedUrls = getExpectedBaseUrls(request);
-  const expectedDomains = getExpectedBaseDomains(expectedUrls);
-  const expectedOrigins = new Set(expectedUrls.map((url) => normalizeOrigin(url.origin)));
-  const normalizedAddress = normalizeAddress(payload.address);
-
-  if (normalizeAddress(siweMessage.address) !== normalizedAddress) {
-    throw new ChatAuthError('SIWE address does not match the connected wallet.', 400);
-  }
-
-  if (!expectedDomains.has(normalizeSiweDomain(siweMessage.domain))) {
-    throw new ChatAuthError('Unexpected SIWE domain.', 400);
-  }
-
-  if (Number(siweMessage.chainId) !== base.id) {
-    throw new ChatAuthError('SIWE signature must target Base mainnet.', 400);
-  }
-
-  if (siweMessage.uri) {
-    try {
-      if (!expectedOrigins.has(normalizeOrigin(new URL(siweMessage.uri).origin))) {
-        throw new ChatAuthError('Unexpected SIWE origin.', 400);
-      }
-    } catch (error) {
-      if (error instanceof ChatAuthError) {
-        throw error;
-      }
-      throw new ChatAuthError('Invalid SIWE origin.', 400);
+  try {
+    if (!payload.address || !payload.message || !payload.signature) {
+      throw new ChatAuthError('Address, message, and signature are required.', 400);
     }
+
+    if (!isValidEthereumAddressFormat(payload.address)) {
+      throw new ChatAuthError('Invalid wallet address format.', 400);
+    }
+
+    siweMessage = parseBaseSiweMessage(payload.message);
+    validateBaseSiweTemporalClaims(siweMessage);
+
+    const expectedUrls = getExpectedBaseUrls(request);
+    const expectedDomains = getExpectedBaseDomains(expectedUrls);
+    const expectedOrigins = new Set(expectedUrls.map((url) => normalizeOrigin(url.origin)));
+    const normalizedAddress = normalizeAddress(payload.address);
+
+    if (normalizeAddress(siweMessage.address) !== normalizedAddress) {
+      throw new ChatAuthError('SIWE address does not match the connected wallet.', 400);
+    }
+
+    if (!expectedDomains.has(normalizeSiweDomain(siweMessage.domain))) {
+      throw new ChatAuthError('Unexpected SIWE domain.', 400);
+    }
+
+    if (Number(siweMessage.chainId) !== base.id) {
+      throw new ChatAuthError('SIWE signature must target Base mainnet.', 400);
+    }
+
+    if (siweMessage.uri) {
+      try {
+        if (!expectedOrigins.has(normalizeOrigin(new URL(siweMessage.uri).origin))) {
+          throw new ChatAuthError('Unexpected SIWE origin.', 400);
+        }
+      } catch (error) {
+        if (error instanceof ChatAuthError) {
+          throw error;
+        }
+        throw new ChatAuthError('Invalid SIWE origin.', 400);
+      }
+    }
+
+    if (!siweMessage.nonce) {
+      throw new ChatAuthError('SIWE nonce is missing.', 400);
+    }
+
+    const isValid = await basePublicClient.verifyMessage({
+      address: payload.address as `0x${string}`,
+      message: payload.message,
+      signature: payload.signature,
+    });
+
+    const directErc1271 = isValid
+      ? {
+          plainValid: false,
+          replaySafeValid: false,
+          valid: false,
+        }
+      : await verifyBaseMessageWithDirectErc1271(payload);
+
+    if (!isValid && !directErc1271.valid) {
+      throw new ChatAuthError('Invalid Base authentication signature.', 401);
+    }
+
+    if (directErc1271.valid) {
+      logBaseAuthDirectErc1271SuccessDiagnostic(request, payload, siweMessage, directErc1271);
+    }
+
+    const nonceConsumed = await consumeBaseAuthNonce(siweMessage.nonce);
+    if (!nonceConsumed) {
+      throw new ChatAuthError('Invalid or reused Base authentication nonce.', 400);
+    }
+
+    return {
+      address: normalizedAddress,
+      method: 'base-siwe',
+      provider: 'base',
+    };
+  } catch (error) {
+    await logBaseAuthFailureDiagnostic(request, payload, siweMessage, error);
+    throw error;
   }
-
-  if (!siweMessage.nonce) {
-    throw new ChatAuthError('SIWE nonce is missing.', 400);
-  }
-
-  const isValid = await basePublicClient.verifyMessage({
-    address: payload.address as `0x${string}`,
-    message: payload.message,
-    signature: payload.signature,
-  });
-
-  if (!isValid) {
-    throw new ChatAuthError('Invalid Base authentication signature.', 401);
-  }
-
-  const nonceConsumed = await consumeBaseAuthNonce(siweMessage.nonce);
-  if (!nonceConsumed) {
-    throw new ChatAuthError('Invalid or reused Base authentication nonce.', 400);
-  }
-
-  return {
-    address: normalizedAddress,
-    method: 'base-siwe',
-    provider: 'base',
-  };
 }

@@ -3629,6 +3629,190 @@ export const buildCasinoRevealCall = (landId: bigint) => ({
 // Re-export casino types and helpers
 export { CasinoBetType };
 
+// ============================================================================
+// BACCARAT FUNCTIONS
+// ============================================================================
+
+import { baccaratAbi,BaccaratBetType,BaccaratOutcome } from '@/public/abi/baccarat-abi';
+export { BaccaratBetType,BaccaratOutcome };
+
+export type BaccaratConfig = {
+  enabled: boolean;
+  bankerCommissionBps: number;
+  tiePayoutMultiplier: number;
+};
+
+export type BaccaratTokenConfig = {
+  supported: boolean;
+  minBet: bigint;
+  maxBet: bigint;
+  rewardPool: string;
+  enabled: boolean;
+};
+
+export type BaccaratActiveGame = {
+  isActive: boolean;
+  player: string;
+  betType: BaccaratBetType;
+  betAmount: bigint;
+  revealBlock: bigint;
+  canReveal: boolean;
+  isExpired: boolean;
+  bettingToken: string;
+};
+
+export type BaccaratStats = {
+  totalWagered: bigint;
+  totalWon: bigint;
+  gamesPlayed: bigint;
+};
+
+export const baccaratGetConfig = async (): Promise<BaccaratConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: baccaratAbi,
+        functionName: 'baccaratGetConfig',
+      });
+    }) as [boolean, number, number];
+    return {
+      enabled: result[0],
+      bankerCommissionBps: Number(result[1]),
+      tiePayoutMultiplier: Number(result[2]),
+    };
+  } catch (error) {
+    console.warn('Failed to get baccarat config:', error);
+    return null;
+  }
+};
+
+export const baccaratGetTokenConfig = async (token: string): Promise<BaccaratTokenConfig | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: baccaratAbi,
+        functionName: 'baccaratGetTokenConfig',
+        args: [token as `0x${string}`],
+      });
+    }) as [boolean, bigint, bigint, string, boolean];
+    return {
+      supported: result[0],
+      minBet: result[1],
+      maxBet: result[2],
+      rewardPool: result[3],
+      enabled: result[4],
+    };
+  } catch (error) {
+    console.warn('Failed to get baccarat token config:', error);
+    return null;
+  }
+};
+
+export const baccaratGetActiveGame = async (landId: bigint): Promise<BaccaratActiveGame | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: baccaratAbi,
+        functionName: 'baccaratGetActiveGame',
+        args: [landId],
+      });
+    }) as [boolean, string, number, bigint, bigint, boolean, boolean, string];
+    return {
+      isActive: result[0],
+      player: result[1],
+      betType: result[2] as BaccaratBetType,
+      betAmount: result[3],
+      revealBlock: result[4],
+      canReveal: result[5],
+      isExpired: result[6],
+      bettingToken: result[7],
+    };
+  } catch (error) {
+    console.warn('Failed to get baccarat active game:', error);
+    return null;
+  }
+};
+
+export const baccaratGetStats = async (landId: bigint): Promise<BaccaratStats | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: baccaratAbi,
+        functionName: 'baccaratGetStats',
+        args: [landId],
+      });
+    }) as [bigint, bigint, bigint];
+    return {
+      totalWagered: result[0],
+      totalWon: result[1],
+      gamesPlayed: result[2],
+    };
+  } catch (error) {
+    console.warn('Failed to get baccarat stats:', error);
+    return null;
+  }
+};
+
+export const baccaratGetStatsByToken = async (landId: bigint, token: string): Promise<BaccaratStats | null> => {
+  const readClient = getReadClient();
+  try {
+    const result = await retryWithBackoff(async () => {
+      return readClient.readContract({
+        address: LAND_CONTRACT_ADDRESS,
+        abi: baccaratAbi,
+        functionName: 'baccaratGetStatsByToken',
+        args: [landId, token as `0x${string}`],
+      });
+    }) as [bigint, bigint, bigint];
+    return {
+      totalWagered: result[0],
+      totalWon: result[1],
+      gamesPlayed: result[2],
+    };
+  } catch (error) {
+    console.warn('Failed to get baccarat token stats:', error);
+    return null;
+  }
+};
+
+export const buildBaccaratPlaceBetCall = (
+  landId: bigint,
+  betType: BaccaratBetType,
+  amount: bigint
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: baccaratAbi,
+  functionName: 'baccaratPlaceBet' as const,
+  args: [landId, betType, amount],
+});
+
+export const buildBaccaratPlaceBetWithTokenCall = (
+  landId: bigint,
+  token: string,
+  betType: BaccaratBetType,
+  amount: bigint
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: baccaratAbi,
+  functionName: 'baccaratPlaceBetWithToken' as const,
+  args: [landId, token as `0x${string}`, betType, amount],
+});
+
+export const buildBaccaratRevealCall = (landId: bigint) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: baccaratAbi,
+  functionName: 'baccaratReveal' as const,
+  args: [landId],
+});
+
 // Standard ERC20 ABI for token approval checks
 const erc20ApprovalAbi = [
   {

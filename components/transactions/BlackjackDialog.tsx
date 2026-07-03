@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { CardHand,calculateHandValue,getCardValue } from '@/components/ui/PlayingCard';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
+import { formatCasinoLimitForToken,getCasinoUiMaxBet,getCasinoUiMinBet,isPotentialCasinoAmountInput,parseCasinoAmountInput } from '@/lib/casino-amount-input';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
 import {
 BlackjackAction,
@@ -23,7 +24,6 @@ import { X } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { formatUnits,parseUnits } from 'viem';
 import { useAccount,useBalance } from 'wagmi';
 import ApproveTransaction from './approve-transaction';
 import BlackjackTransaction from './blackjack-transaction';
@@ -288,30 +288,33 @@ export default function BlackjackDialog({
     });
 
     const tokenSymbol = tokenSymbolRaw || 'TOKEN';
+    const uiMinBet = useMemo(() => (
+        config ? getCasinoUiMinBet(config.bettingToken, tokenDecimals, config.minBet) : BigInt(0)
+    ), [config, tokenDecimals]);
+    const uiMaxBet = useMemo(() => (
+        config ? getCasinoUiMaxBet(config.bettingToken, tokenDecimals, config.maxBet) : BigInt(0)
+    ), [config, tokenDecimals]);
     const formattedMinBet = useMemo(() => (
-        config ? formatTokenAmountRounded(config.minBet, tokenDecimals) : '0'
-    ), [config, tokenDecimals]);
+        config ? formatCasinoLimitForToken(uiMinBet, tokenDecimals, config.bettingToken, 'min') : '0'
+    ), [config, tokenDecimals, uiMinBet]);
     const formattedMaxBet = useMemo(() => (
-        config ? formatTokenAmountRounded(config.maxBet, tokenDecimals) : '0'
-    ), [config, tokenDecimals]);
+        config ? formatCasinoLimitForToken(uiMaxBet, tokenDecimals, config.bettingToken, 'max') : '0'
+    ), [config, tokenDecimals, uiMaxBet]);
     const tokenLogo = useMemo(() => getCasinoTokenImage(config?.bettingToken), [config?.bettingToken]);
     const betInputWidth = useMemo(() => {
         const visibleChars = Math.max(gameState.betAmountInput.length, formattedMinBet.length, 4);
         return `calc(${Math.min(visibleChars + 1, 20)}ch + 1.25rem)`;
     }, [gameState.betAmountInput, formattedMinBet]);
-    const balanceVal = balanceData
-        ? parseFloat(formatUnits(balanceData.value, balanceData.decimals))
-        : 0;
     const currentBalanceWei = balanceData?.value || BigInt(0);
     const requiredApprovalWei = useMemo(() => {
         if (!config) return BigInt(0);
         try {
-            const amount = parseUnits(gameState.betAmountInput || '0', tokenDecimals);
-            return amount > BigInt(0) ? amount : config.minBet;
+            const amount = parseCasinoAmountInput(gameState.betAmountInput || '0', tokenDecimals);
+            return amount > BigInt(0) ? amount : uiMinBet;
         } catch {
-            return config.minBet;
+            return uiMinBet;
         }
-    }, [config, gameState.betAmountInput, tokenDecimals]);
+    }, [config, gameState.betAmountInput, tokenDecimals, uiMinBet]);
     const hasApproval = allowanceWei >= requiredApprovalWei;
 
     // Derive UI phase from contract state (simplified for server randomness)
@@ -630,18 +633,23 @@ export default function BlackjackDialog({
             betAmountInput: loadBetPreference({
                 game: 'blackjack',
                 token: configBettingToken,
-                minBet: configMinBet,
-                maxBet: configMaxBet,
+                minBet: uiMinBet,
+                maxBet: uiMaxBet,
                 decimals: tokenDecimals,
                 fallback: formattedMinBet,
             }),
         }));
-    }, [configBettingToken, configMinBet, configMaxBet, gameState.contractPhase, open, formattedMinBet, tokenDecimals]);
+    }, [configBettingToken, configMinBet, configMaxBet, gameState.contractPhase, open, formattedMinBet, tokenDecimals, uiMaxBet, uiMinBet]);
 
     useEffect(() => {
         if (!configBettingToken) return;
         storeBetPreference('blackjack', configBettingToken, gameState.betAmountInput, tokenDecimals);
     }, [configBettingToken, gameState.betAmountInput, tokenDecimals]);
+
+    const handleBetAmountInputChange = useCallback((value: string) => {
+        if (!isPotentialCasinoAmountInput(value)) return;
+        setGameState(prev => ({ ...prev, betAmountInput: value }));
+    }, []);
 
     // Refresh game state on open
     useEffect(() => {
@@ -753,7 +761,7 @@ export default function BlackjackDialog({
                 const optimisticActions = deriveInitialPlayerActions(dealtCards);
                 let optimisticBetAmountWei = BigInt(0);
                 try {
-                    optimisticBetAmountWei = parseUnits(gameState.betAmountInput || '0', tokenDecimals);
+                    optimisticBetAmountWei = parseCasinoAmountInput(gameState.betAmountInput || '0', tokenDecimals);
                 } catch {
                     optimisticBetAmountWei = BigInt(0);
                 }
@@ -1019,7 +1027,7 @@ export default function BlackjackDialog({
     // Bet amount in wei
     const betAmountWei = useMemo(() => {
         try {
-            return parseUnits(gameState.betAmountInput || '0', tokenDecimals);
+            return parseCasinoAmountInput(gameState.betAmountInput || '0', tokenDecimals);
         } catch {
             return BigInt(0);
         }
@@ -1028,12 +1036,12 @@ export default function BlackjackDialog({
         if (!config) return 'Loading limits...';
         if (!config.enabled) return 'Blackjack disabled';
         if (betAmountWei <= BigInt(0)) return 'Enter bet amount';
-        if (betAmountWei < config.minBet) return `Min ${formattedMinBet} ${tokenSymbol}`;
-        if (betAmountWei > config.maxBet) return `Max ${formattedMaxBet} ${tokenSymbol}`;
+        if (betAmountWei < uiMinBet) return `Min ${formattedMinBet} ${tokenSymbol}`;
+        if (betAmountWei > uiMaxBet) return `Max ${formattedMaxBet} ${tokenSymbol}`;
         if (!balanceData) return 'Loading balance...';
         if (betAmountWei > currentBalanceWei) return 'Insufficient Balance';
         return null;
-    }, [balanceData, betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol]);
+    }, [balanceData, betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol, uiMaxBet, uiMinBet]);
 
     const currentActionHandIndex = gameState.hasSplit ? gameState.currentHandIndex : 0;
     const currentActionCards =
@@ -1222,12 +1230,11 @@ export default function BlackjackDialog({
 
     // Validate bet and start deal
     const handleDealClick = useCallback((): boolean => {
-        const amount = parseFloat(gameState.betAmountInput);
-        if (isNaN(amount) || amount <= 0) {
+        if (betAmountWei <= BigInt(0)) {
             setError('Please enter a valid bet amount');
             return false;
         }
-        if (amount > balanceVal) {
+        if (betAmountWei > currentBalanceWei) {
             setError('Insufficient balance');
             return false;
         }
@@ -1236,12 +1243,11 @@ export default function BlackjackDialog({
                 setError('Blackjack is currently disabled');
                 return false;
             }
-            const amountWei = parseUnits(gameState.betAmountInput, tokenDecimals);
-            if (amountWei < config.minBet) {
+            if (betAmountWei < uiMinBet) {
                 setError(`Minimum bet is ${formattedMinBet} ${tokenSymbol}`);
                 return false;
             }
-            if (amountWei > config.maxBet) {
+            if (betAmountWei > uiMaxBet) {
                 setError(`Maximum bet is ${formattedMaxBet} ${tokenSymbol}`);
                 return false;
             }
@@ -1249,7 +1255,7 @@ export default function BlackjackDialog({
         setError(null);
         setTxInProgress('deal');
         return true;
-    }, [gameState.betAmountInput, balanceVal, config, tokenSymbol, tokenDecimals, formattedMinBet, formattedMaxBet]);
+    }, [betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol, uiMaxBet, uiMinBet]);
 
     // Handle transaction errors (specifically for Action Locking security feature)
     const handleTransactionError = useCallback((error: string) => {
@@ -1398,11 +1404,12 @@ export default function BlackjackDialog({
                                         id={betAmountInputId}
                                         name="blackjack-bet-amount"
                                         type="text"
-                                        inputMode="decimal"
+                                        inputMode="text"
+                                        placeholder={formattedMinBet}
                                         aria-label={`Blackjack bet amount in ${tokenSymbol}`}
                                         value={gameState.betAmountInput}
-                                        onChange={(e) => setGameState(prev => ({ ...prev, betAmountInput: e.target.value }))}
-                                        className="min-w-[6.5rem] w-auto flex-none px-2 tabular-nums bg-white/10 border-white/20 text-white"
+                                        onChange={(e) => handleBetAmountInputChange(e.target.value)}
+                                        className="min-w-[6.5rem] w-auto flex-none px-2 tabular-nums bg-white/10 border-white/20 text-white caret-white selection:bg-white/20 selection:text-white focus:!border-white/45 focus:!bg-black/60 focus:!text-white focus:!outline-none focus-visible:!border-white/45 focus-visible:!bg-black/60 focus-visible:!text-white focus-visible:!ring-1 focus-visible:!ring-white/35 focus-visible:!ring-offset-0"
                                         min={formattedMinBet}
                                         step="any"
                                         disabled={txInProgress !== null}
