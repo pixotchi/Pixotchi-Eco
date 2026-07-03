@@ -60,7 +60,7 @@ Tool routing:
 - Plant attack target eligibility or "who can I attack": use attack targets; do not infer targets from leaderboard rank alone.
 - Dead-plant kill, collect-star, "can I kill", or "which plant can I kill": use killable plants; do not answer from attack targets or combat history alone.
 - Land raid/Barracks target eligibility or troop readiness: use land raid targets; do not infer defender lands from rankings alone.
-- Casino, roulette, blackjack, active games, or stuck wager state: use casino status.
+- Casino, roulette, blackjack, baccarat, active games, or stuck wager state: use casino status.
 - Blackjack hit/stand/double/split/surrender action availability: use blackjack action state.
 - Marketplace order book, best bid/ask, or SEED/LEAF order tasks: use marketplace orders.
 - SEED/LEAF/PIXOTCHI utility, tokenomics, contract addresses, or Swap Info questions: use token info.
@@ -95,7 +95,7 @@ export function generateConversationTitle(firstMessage: string): string {
   if (cleaned.includes('swap') || cleaned.includes('token')) return 'Token Swapping';
   if (cleaned.includes('allowance') || cleaned.includes('approval') || cleaned.includes('approve')) return 'Approvals Help';
   if (cleaned.includes('barracks') || cleaned.includes('swordsman') || cleaned.includes('phalanx') || cleaned.includes('raid')) return 'Land Raids';
-  if (cleaned.includes('casino') || cleaned.includes('roulette') || cleaned.includes('blackjack')) return 'Casino Help';
+  if (cleaned.includes('casino') || cleaned.includes('roulette') || cleaned.includes('blackjack') || cleaned.includes('baccarat')) return 'Casino Help';
   if (cleaned.includes('market') || cleaned.includes('order book') || cleaned.includes('bid') || cleaned.includes('ask')) return 'Marketplace Help';
   if (cleaned.includes('airdrop') || cleaned.includes('verify') || cleaned.includes('claim')) return 'Claims Help';
   if (cleaned.includes('status') || cleaned.includes('down') || cleaned.includes('disabled')) return 'App Status';

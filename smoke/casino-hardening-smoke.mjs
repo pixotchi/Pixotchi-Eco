@@ -7,6 +7,13 @@ import {
   rouletteRevealBlocksRemaining,
 } from '../lib/casino-hardening-rules.mjs';
 import { blackjackRandomnessLockMismatch } from '../lib/blackjack-randomness-lock.mjs';
+import {
+  BACCARAT_BET_TYPE,
+  BACCARAT_OUTCOME,
+  baccaratBankerShouldDraw,
+  baccaratCalculatePayoutWei,
+  baccaratHandTotal,
+} from '../lib/baccarat-rules.mjs';
 
 const baseLock = {
   actionNum: 255,
@@ -89,6 +96,48 @@ assert.equal(
   ),
   false,
   'Identical deal amount should reuse cached randomness, regardless of address casing.'
+);
+
+assert.equal(
+  baccaratHandTotal([0, 8]),
+  0,
+  'Baccarat totals must be modulo 10.'
+);
+
+assert.equal(
+  baccaratBankerShouldDraw(3, 8),
+  false,
+  'Banker total 3 must stand when player third-card value is 8.'
+);
+
+assert.equal(
+  baccaratBankerShouldDraw(6, 7),
+  true,
+  'Banker total 6 must draw on player third-card value 6 or 7.'
+);
+
+assert.deepEqual(
+  baccaratCalculatePayoutWei(BACCARAT_BET_TYPE.PLAYER, BACCARAT_OUTCOME.PLAYER, 100n),
+  { won: true, payoutWei: 200n },
+  'Player bet should return 2x on player win.'
+);
+
+assert.deepEqual(
+  baccaratCalculatePayoutWei(BACCARAT_BET_TYPE.BANKER, BACCARAT_OUTCOME.BANKER, 100n),
+  { won: true, payoutWei: 195n },
+  'Banker bet should return stake plus 95% profit.'
+);
+
+assert.deepEqual(
+  baccaratCalculatePayoutWei(BACCARAT_BET_TYPE.PLAYER, BACCARAT_OUTCOME.TIE, 100n),
+  { won: false, payoutWei: 100n },
+  'Player/Banker bets should push on tie.'
+);
+
+assert.deepEqual(
+  baccaratCalculatePayoutWei(BACCARAT_BET_TYPE.TIE, BACCARAT_OUTCOME.TIE, 100n),
+  { won: true, payoutWei: 900n },
+  'Tie bet should return stake plus 8:1 profit.'
 );
 
 console.log('Casino hardening smoke passed');

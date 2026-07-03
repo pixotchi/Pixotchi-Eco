@@ -92,7 +92,7 @@ const PRIVATE_DATA_PATTERNS = [
   /\b(admin database|admin panel|database dump|dump redis|redis keys|sql dump|all users? data)\b/i,
   /\b(notification|notifications|reminder|reminders|campaign|campaigns)\b.{0,80}\b(total sent|sent count|sent so far|how many sent|delivery count|delivery stats|audience size|audience count|campaign stats|run history|last run|recent runs)\b/i,
   /\b(how many|total|count|stats|statistics|metrics)\b.{0,80}\b(notification|notifications|reminder|reminders|campaign|campaigns)\b.{0,80}\b(sent|delivered|audience|runs?)\b/i,
-  /\b(casino|roulette|blackjack)\b.{0,80}\b(total wagered|total won|games played|aggregate stats|performance stats|house stats|volume)\b/i,
+  /\b(casino|roulette|blackjack|baccarat)\b.{0,80}\b(total wagered|total won|games played|aggregate stats|performance stats|house stats|volume)\b/i,
   /\b(verify|airdrop|claim|bonus|seed bonus)\b.{0,80}\b(funded|funding|wallet balance|available funds|how much.*left|agent wallet|bonus wallet)\b/i,
   /\b(status|health|rpc|database|indexer|notification|bridge|backend|service)\b.{0,80}\b(latency|endpoint|endpoints|details|diagnostics?|metrics|missing config|config names|provider internals|rpc cluster)\b/i,
   /\b(bridge|solana|twin)\b.{0,80}\b(adapter address|program address|missing config|config names|diagnostics?|internal setup)\b/i,

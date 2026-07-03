@@ -390,7 +390,7 @@ export type AsyncState<T> = {
 };
 
 // Types for Ponder Indexer
-export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent;
+export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent | BaccaratRoundResultEvent;
 
 export type GameKnowledgeTopic = {
   aliases: string[];
@@ -659,6 +659,22 @@ export type BlackjackResultEvent = {
   result: number; // GameResult enum value
   playerFinalValue: number;
   dealerFinalValue: number;
+  payout: string;
+  bettingToken: string;
+  blockHeight: string;
+};
+
+export type BaccaratRoundResultEvent = {
+  __typename: "BaccaratRoundResultEvent";
+  id: string;
+  timestamp: string;
+  landId: string;
+  player: string;
+  betType: number;
+  outcome: number;
+  won: boolean;
+  playerTotal: number;
+  bankerTotal: number;
   payout: string;
   bettingToken: string;
   blockHeight: string;

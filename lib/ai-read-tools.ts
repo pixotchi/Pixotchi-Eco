@@ -16,6 +16,9 @@ import {
   blackjackGetGameToken,
   blackjackGetTokenConfig,
   blackjackIsAvailable,
+  baccaratGetActiveGame,
+  baccaratGetConfig,
+  baccaratGetTokenConfig,
   casinoGetActiveBetV2,
   casinoGetBuildingConfig,
   casinoGetConfig,
@@ -259,7 +262,7 @@ const TASK_PROOF_GUIDE: Record<string, {
   s3_play_casino_game: {
     actionPanel: 'Farm -> Lands -> Casino',
     proofType: 'transaction',
-    whatCounts: 'Playing roulette or blackjack through the Casino building.',
+    whatCounts: 'Playing roulette, blackjack, or baccarat through the Casino building.',
     delayAdvice: 'The casino action needs to finish onchain before Rocks progress appears.',
   },
   s4_buy10_elements: {
@@ -1892,6 +1895,25 @@ function normalizeBlackjackSnapshot(snapshot: UntypedValue, tokenAddress?: strin
   };
 }
 
+function normalizeBaccaratActiveGame(activeGame: UntypedValue) {
+  if (!activeGame) {
+    return null;
+  }
+
+  const token = String(activeGame.bettingToken || PIXOTCHI_TOKEN_ADDRESS);
+  return {
+    betAmountDisplay: `${formatKnownTokenAmount(activeGame.betAmount, token)} ${getAIPriceTokenSymbol(token)}`,
+    betType: Number(activeGame.betType ?? 0),
+    bettingToken: token,
+    bettingTokenSymbol: getAIPriceTokenSymbol(token),
+    canReveal: Boolean(activeGame.canReveal),
+    isActive: Boolean(activeGame.isActive),
+    isExpired: Boolean(activeGame.isExpired),
+    player: activeGame.player,
+    revealBlock: String(activeGame.revealBlock ?? '0'),
+  };
+}
+
 function buildMissionTaskRows(mission: UntypedValue) {
   const rows = [
     { done: Boolean(mission?.s1?.makeSwap), id: 's1_make_swap', label: 'Make a SEED swap', section: 'General', where: 'Swap' },
@@ -1904,7 +1926,7 @@ function buildMissionTaskRows(mission: UntypedValue) {
     { done: Boolean(mission?.s3?.applyResources), id: 's3_apply_resources', label: 'Apply resources to a plant', section: 'Land', where: 'Land/Warehouse' },
     { done: Boolean(mission?.s3?.sendQuest), id: 's3_send_quest', label: 'Send a farmer on a quest', section: 'Land', where: 'Land Quests' },
     { done: Boolean(mission?.s3?.claimProduction), id: 's3_claim_production', label: 'Claim production from a building', section: 'Land', where: 'Land Buildings' },
-    { done: Boolean(mission?.s3?.playCasinoGame), id: 's3_play_casino_game', label: 'Play a casino game', section: 'Land', where: 'Casino/Blackjack' },
+    { done: Boolean(mission?.s3?.playCasinoGame), id: 's3_play_casino_game', label: 'Play a casino game', section: 'Land', where: 'Casino' },
     { done: Boolean(mission?.s4?.buy10), id: 's4_buy10_elements', label: `Buy at least 10 elements (${Number(mission?.s4?.buyElementsCount || 0)}/10)`, section: 'Plant', where: 'Plant Shop' },
     { done: Boolean(mission?.s4?.buyShield), id: 's4_buy_shield', label: 'Buy a shield/fence', section: 'Plant', where: 'Plant Shop/Fence' },
     { done: Boolean(mission?.s4?.collectStar), id: 's4_collect_star', label: 'Collect a star by killing an already-dead plant', section: 'Plant', where: 'Ranking/Dead' },
@@ -2248,6 +2270,8 @@ function normalizeIndexedActivity(event: ActivityEvent): NormalizedOnchainActivi
       return { ...base, assetType: 'land', kind: 'roulette_result', tokenId: String(data.landId ?? '') };
     case 'BlackjackResultEvent':
       return { ...base, assetType: 'land', kind: 'blackjack_result', tokenId: String(data.landId ?? '') };
+    case 'BaccaratRoundResultEvent':
+      return { ...base, assetType: 'land', kind: 'baccarat_result', tokenId: String(data.landId ?? '') };
     default:
       return { ...base, assetType: 'game', kind: event.__typename };
   }
@@ -4875,23 +4899,24 @@ export function createReadOnlyAITools() {
 
     get_casino_status: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read Casino/Roulette and Blackjack player-facing status for owned or selected lands: feature flags, supported betting tokens, bet limits, active roulette bets, blackjack snapshots, and casino-built lands. Never exposes aggregate casino performance stats.',
+      description: 'Read Casino/Roulette/Blackjack/Baccarat player-facing status for owned or selected lands: feature flags, supported betting tokens, bet limits, active roulette bets, blackjack snapshots, baccarat active rounds, and casino-built lands. Never exposes aggregate casino performance stats.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
+        includeBaccarat: z.boolean().default(true),
         includeBlackjack: z.boolean().default(true),
         includeRoulette: z.boolean().default(true),
         landIds: z.array(z.number().int().min(0)).max(20).optional(),
         limit: z.number().int().min(1).max(20).default(10),
       }),
-      execute: async ({ address, includeBlackjack, includeRoulette, landIds, limit }, { context }) => withToolResult(
+      execute: async ({ address, includeBaccarat, includeBlackjack, includeRoulette, landIds, limit }, { context }) => withToolResult(
         'get_casino_status',
-        `Base contract reads for Land Casino and Blackjack modules via ${aiRpcSource}`,
+        `Base contract reads for Land Casino modules via ${aiRpcSource}`,
         {
           confidence: 'medium',
           includeBlock: true,
           limitations: [
             `Scans at most ${AI_CASINO_STATUS_MAX_LANDS} lands unless specific land IDs are supplied.`,
-            'Roulette/Blackjack reads are current onchain snapshots; the game UI must refresh again before any transaction.',
+            'Roulette/Blackjack/Baccarat reads are current onchain snapshots; the game UI must refresh again before any transaction.',
             'Neural Seed cannot place bets, reveal games, hit/stand, or build transaction payloads.',
             'Aggregate casino stats such as total games, wagered amount, won amount, or performance metrics are intentionally redacted.',
           ],
@@ -4911,27 +4936,36 @@ export function createReadOnlyAITools() {
             casinoBuildingConfig,
             casinoConfig,
             casinoSupportedTokens,
+            baccaratConfig,
             blackjackConfig,
           ] = await Promise.all([
             casinoGetBuildingConfig(),
             includeRoulette ? casinoGetConfig() : Promise.resolve(null),
-            includeRoulette ? casinoGetSupportedTokens() : Promise.resolve([]),
+            (includeRoulette || includeBaccarat) ? casinoGetSupportedTokens() : Promise.resolve([]),
+            includeBaccarat ? baccaratGetConfig() : Promise.resolve(null),
             includeBlackjack ? blackjackGetConfig() : Promise.resolve(null),
           ]);
           const supportedTokenConfigs = await Promise.all((casinoSupportedTokens || []).slice(0, 8).map(async (token) => ({
+            baccarat: includeBaccarat ? await baccaratGetTokenConfig(token) : null,
             casino: includeRoulette ? await casinoGetTokenConfig(token) : null,
             blackjack: includeBlackjack ? await blackjackGetTokenConfig(token) : null,
             token,
           })));
           const lands = await Promise.all(casinoLands.slice(0, limit).map(async (land) => {
-            const [activeBet, blackjackAvailable, blackjackToken, blackjackSnapshot] = await Promise.all([
+            const [activeBet, blackjackAvailable, blackjackToken, blackjackSnapshot, baccaratActiveGame] = await Promise.all([
               includeRoulette ? casinoGetActiveBetV2(land.tokenId) : Promise.resolve(null),
               includeBlackjack ? blackjackIsAvailable(land.tokenId) : Promise.resolve(null),
               includeBlackjack ? blackjackGetGameToken(land.tokenId) : Promise.resolve(null),
               includeBlackjack ? blackjackGetGameSnapshot(land.tokenId) : Promise.resolve(null),
+              includeBaccarat ? baccaratGetActiveGame(land.tokenId) : Promise.resolve(null),
             ]);
             const blackjackBetToken = blackjackToken || blackjackConfig?.bettingToken;
             return {
+              baccarat: includeBaccarat
+                ? {
+                  activeGame: normalizeBaccaratActiveGame(baccaratActiveGame),
+                }
+                : null,
               blackjack: includeBlackjack
                 ? {
                   availability: blackjackAvailable,
@@ -4957,6 +4991,13 @@ export function createReadOnlyAITools() {
           return {
             address: target,
             configs: {
+              baccarat: baccaratConfig
+                ? {
+                  bankerCommissionBps: baccaratConfig.bankerCommissionBps,
+                  enabled: baccaratConfig.enabled,
+                  tiePayoutMultiplier: baccaratConfig.tiePayoutMultiplier,
+                }
+                : null,
               blackjack: blackjackConfig
                 ? {
                   bettingToken: blackjackConfig.bettingToken,
@@ -4983,7 +5024,15 @@ export function createReadOnlyAITools() {
                   minBetDisplay: `${formatKnownTokenAmount(casinoConfig.minBet, casinoConfig.bettingToken)} ${getAIPriceTokenSymbol(casinoConfig.bettingToken)}`,
                 }
                 : null,
-              supportedTokens: supportedTokenConfigs.map(({ blackjack, casino, token }) => ({
+              supportedTokens: supportedTokenConfigs.map(({ baccarat, blackjack, casino, token }) => ({
+                baccarat: baccarat
+                  ? {
+                    enabled: baccarat.enabled,
+                    maxBetDisplay: `${formatKnownTokenAmount(baccarat.maxBet, token)} ${getAIPriceTokenSymbol(token)}`,
+                    minBetDisplay: `${formatKnownTokenAmount(baccarat.minBet, token)} ${getAIPriceTokenSymbol(token)}`,
+                    supported: baccarat.supported,
+                  }
+                  : null,
                 blackjack: blackjack
                   ? {
                     enabled: blackjack.enabled,
@@ -5460,7 +5509,7 @@ export function createReadOnlyAITools() {
             s3_play_casino_game: {
               ready: CLIENT_ENV.CASINO_ENABLED && casinoLandsInScan > 0,
               reason: CLIENT_ENV.CASINO_ENABLED && casinoLandsInScan > 0 ? `${casinoLandsInScan} casino land(s) found in the scan.` : 'No built casino was found in the scanned lands, or casino is disabled.',
-              suggestedPanel: 'Casino/Blackjack',
+              suggestedPanel: 'Casino',
             },
             s3_send_quest: { ready: hasLand, reason: hasLand ? 'You own land for quest slots.' : 'Quest tasks require an owned land.', suggestedPanel: 'Land Quests' },
             s4_buy10_elements: { ready: hasPlant && hasSeed, reason: hasPlant && hasSeed ? 'You have plants and SEED for plant shop elements.' : 'Buying elements requires a plant and SEED.', suggestedPanel: 'Plant Shop' },

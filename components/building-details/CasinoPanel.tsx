@@ -11,6 +11,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, Loader2 } from "lucide-react";
 import {
+  baccaratGetActiveGame,
+  baccaratGetStatsByToken,
+  baccaratGetTokenConfig,
   blackjackGetGameSnapshot,
   blackjackGetGameToken,
   blackjackGetStatsByToken,
@@ -24,6 +27,7 @@ import {
   casinoIsBuilt,
   checkCasinoApproval,
   LAND_CONTRACT_ADDRESS,
+  type BaccaratTokenConfig,
   type BlackjackTokenConfig,
   type CasinoTokenConfig,
 } from "@/lib/contracts";
@@ -33,6 +37,7 @@ import ApproveTransaction from "@/components/transactions/approve-transaction";
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
 import CasinoDialog from "@/components/transactions/CasinoDialog";
 import BlackjackDialog from "@/components/transactions/BlackjackDialog";
+import BaccaratDialog from "@/components/transactions/BaccaratDialog";
 import { InlineBalanceNotice } from "@/components/ui/premium";
 import { toast } from "react-hot-toast";
 import { useWalletClient, useAccount, useBalance } from "wagmi";
@@ -55,7 +60,17 @@ type CasinoGameToken = {
   address: string;
   rouletteConfig: CasinoTokenConfig | null;
   blackjackConfig: BlackjackTokenConfig | null;
+  baccaratConfig: BaccaratTokenConfig | null;
 };
+
+const CASINO_GAME_BUTTON_BASE =
+  "w-full justify-center border px-3 text-sm shadow-[var(--shadow-hairline)] hover:shadow-[var(--shadow-control)]";
+const ROULETTE_BUTTON_CLASS =
+  `${CASINO_GAME_BUTTON_BASE} border-rose-300/45 bg-card/92 bg-[image:linear-gradient(180deg,rgba(255,255,255,0.42)_0%,rgba(251,113,133,0.12)_100%)] text-foreground hover:border-rose-300/65 hover:bg-rose-50/70 hover:text-foreground focus-visible:ring-rose-300/45 dark:hover:bg-rose-950/28`;
+const BLACKJACK_BUTTON_CLASS =
+  `${CASINO_GAME_BUTTON_BASE} border-emerald-300/45 bg-card/92 bg-[image:linear-gradient(180deg,rgba(255,255,255,0.42)_0%,rgba(52,211,153,0.12)_100%)] text-foreground hover:border-emerald-300/65 hover:bg-emerald-50/70 hover:text-foreground focus-visible:ring-emerald-300/45 dark:hover:bg-emerald-950/28`;
+const BACCARAT_BUTTON_CLASS =
+  `${CASINO_GAME_BUTTON_BASE} border-amber-300/50 bg-card/92 bg-[image:linear-gradient(180deg,rgba(255,255,255,0.42)_0%,rgba(245,158,11,0.13)_100%)] text-foreground hover:border-amber-300/70 hover:bg-amber-50/70 hover:text-foreground focus-visible:ring-amber-300/45 dark:hover:bg-amber-950/28`;
 
 function CasinoTokenLabel({
   tokenAddress,
@@ -107,11 +122,13 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
   const [activeBlackjackToken, setActiveBlackjackToken] = useState<string | null>(null);
   const [stats, setStats] = useState<TokenStatsRow | null>(null);
   const [bjStats, setBjStats] = useState<TokenStatsRow | null>(null);
+  const [baccaratStats, setBaccaratStats] = useState<TokenStatsRow | null>(null);
   const [allowanceWei, setAllowanceWei] = useState(BigInt(0));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [casinoOpen, setCasinoOpen] = useState(false);
   const [blackjackOpen, setBlackjackOpen] = useState(false);
+  const [baccaratOpen, setBaccaratOpen] = useState(false);
 
   const selectedTokenEntry = useMemo(
     () => supportedTokens.find((entry) => entry.address.toLowerCase() === selectedToken?.toLowerCase()) ?? null,
@@ -120,6 +137,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
   const selectedRouletteConfig = selectedTokenEntry?.rouletteConfig ?? null;
   const selectedBlackjackConfig = selectedTokenEntry?.blackjackConfig ?? null;
+  const selectedBaccaratConfig = selectedTokenEntry?.baccaratConfig ?? null;
   const activeRouletteEntry = useMemo(
     () => supportedTokens.find((entry) => entry.address.toLowerCase() === activeRouletteToken?.toLowerCase()) ?? null,
     [activeRouletteToken, supportedTokens]
@@ -128,8 +146,14 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     () => supportedTokens.find((entry) => entry.address.toLowerCase() === activeBlackjackToken?.toLowerCase()) ?? null,
     [activeBlackjackToken, supportedTokens]
   );
+  const [activeBaccaratToken, setActiveBaccaratToken] = useState<string | null>(null);
+  const activeBaccaratEntry = useMemo(
+    () => supportedTokens.find((entry) => entry.address.toLowerCase() === activeBaccaratToken?.toLowerCase()) ?? null,
+    [activeBaccaratToken, supportedTokens]
+  );
   const hasActiveRouletteGame = !!activeRouletteToken;
   const hasActiveBlackjackGame = !!activeBlackjackToken;
+  const hasActiveBaccaratGame = !!activeBaccaratToken;
 
   const { data: buildTokenBalance, refetch: refetchBuildTokenBalance } = useBalance({
     address,
@@ -157,18 +181,21 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
   } = useTokenMetadata(selectedToken);
   const { symbol: activeRouletteSymbol } = useTokenMetadata(activeRouletteToken);
   const { symbol: activeBlackjackSymbol } = useTokenMetadata(activeBlackjackToken);
+  const { symbol: activeBaccaratSymbol } = useTokenMetadata(activeBaccaratToken);
 
   const loadSelectedTokenStats = useCallback(async () => {
     if (!selectedToken || !isBuilt) {
       setStats(null);
       setBjStats(null);
+      setBaccaratStats(null);
       return;
     }
 
     try {
-      const [rouletteStats, blackjackStats] = await Promise.all([
+      const [rouletteStats, blackjackStats, baccaratStatsResult] = await Promise.all([
         casinoGetStatsByToken(landId, selectedToken),
         blackjackGetStatsByToken(landId, selectedToken),
+        baccaratGetStatsByToken(landId, selectedToken),
       ]);
 
       setStats(
@@ -190,10 +217,21 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             }
           : null
       );
+
+      setBaccaratStats(
+        baccaratStatsResult
+          ? {
+              wagered: baccaratStatsResult.totalWagered,
+              won: baccaratStatsResult.totalWon,
+              games: baccaratStatsResult.gamesPlayed,
+            }
+          : null
+      );
     } catch (err) {
       console.error("Failed to load casino token stats:", err);
       setStats(null);
       setBjStats(null);
+      setBaccaratStats(null);
     }
   }, [isBuilt, landId, selectedToken]);
 
@@ -202,12 +240,13 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
       setIsLoading(true);
       setError(null);
 
-      const [built, bConfig, tokenAddresses, activeRouletteBet, blackjackSnapshot] = await Promise.all([
+      const [built, bConfig, tokenAddresses, activeRouletteBet, blackjackSnapshot, activeBaccaratGame] = await Promise.all([
         casinoIsBuilt(landId),
         casinoGetBuildingConfig(),
         casinoGetSupportedTokens(),
         casinoGetActiveBetV2(landId),
         blackjackGetGameSnapshot(landId),
+        baccaratGetActiveGame(landId),
       ]);
 
       const blackjackToken = blackjackSnapshot?.isActive
@@ -217,6 +256,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
       setIsBuilt(built);
       setActiveRouletteToken(activeRouletteBet?.isActive ? activeRouletteBet.bettingToken : null);
       setActiveBlackjackToken(blackjackSnapshot?.isActive ? blackjackToken : null);
+      setActiveBaccaratToken(activeBaccaratGame?.isActive ? activeBaccaratGame.bettingToken : null);
 
       if (bConfig) {
         setBuildingConfig({ token: bConfig.buildingToken, cost: bConfig.buildingCost });
@@ -224,21 +264,23 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
 
       const tokenConfigs = await Promise.all(
         tokenAddresses.map(async (tokenAddress) => {
-          const [rouletteConfig, blackjackConfig] = await Promise.all([
+          const [rouletteConfig, blackjackConfig, baccaratConfig] = await Promise.all([
             casinoGetTokenConfig(tokenAddress),
             blackjackGetTokenConfig(tokenAddress),
+            baccaratGetTokenConfig(tokenAddress),
           ]);
 
           return {
             address: tokenAddress,
             rouletteConfig,
             blackjackConfig,
+            baccaratConfig,
           } satisfies CasinoGameToken;
         })
       );
 
       const selectableTokens = tokenConfigs.filter(
-        (entry) => entry.rouletteConfig?.supported || entry.blackjackConfig?.supported
+        (entry) => entry.rouletteConfig?.supported || entry.blackjackConfig?.supported || entry.baccaratConfig?.supported
       );
       setSupportedTokens(selectableTokens);
 
@@ -251,7 +293,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         }
 
         return selectableTokens.find(
-          (entry) => entry.rouletteConfig?.enabled || entry.blackjackConfig?.enabled
+          (entry) => entry.rouletteConfig?.enabled || entry.blackjackConfig?.enabled || entry.baccaratConfig?.enabled
         )?.address
           ?? selectableTokens[0]?.address
           ?? null;
@@ -304,7 +346,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     if (onSpinComplete) onSpinComplete();
   }, [loadCasinoState, loadSelectedTokenStats, onSpinComplete]);
 
-  const handleOpenCasinoGame = useCallback((game: "roulette" | "blackjack") => {
+  const handleOpenCasinoGame = useCallback((game: "roulette" | "blackjack" | "baccarat") => {
     if (!casinoPolicy.playable) {
       toast.error(casinoPolicy.message || "Casino is currently unavailable.");
       return;
@@ -315,7 +357,12 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
       return;
     }
 
-    setBlackjackOpen(true);
+    if (game === "blackjack") {
+      setBlackjackOpen(true);
+      return;
+    }
+
+    setBaccaratOpen(true);
   }, [casinoPolicy.message, casinoPolicy.playable]);
 
   const blackjackDisabledForToken =
@@ -324,6 +371,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     !selectedBlackjackConfig.enabled;
 
   const rouletteDisabledForToken = !selectedRouletteConfig?.supported || !selectedRouletteConfig.enabled;
+  const baccaratDisabledForToken = !selectedBaccaratConfig?.supported || !selectedBaccaratConfig.enabled;
   const rouletteButtonDisabled =
     casinoPolicy.playable &&
     !hasActiveRouletteGame &&
@@ -332,6 +380,10 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     casinoPolicy.playable &&
     !hasActiveBlackjackGame &&
     (!selectedToken || blackjackDisabledForToken);
+  const baccaratButtonDisabled =
+    casinoPolicy.playable &&
+    !hasActiveBaccaratGame &&
+    (!selectedToken || baccaratDisabledForToken);
 
   if (isLoading && isBuilt === null) {
     return (
@@ -420,7 +472,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
   return (
     <div className="text-center py-4 space-y-3">
       <div className="text-muted-foreground text-sm">
-        Roulette uses block reveal; Blackjack uses verified signed randomness.
+        Roulette and Baccarat use block reveal; Blackjack uses verified signed randomness.
         <div className="mt-2 text-xs text-primary font-medium bg-primary/10 p-2 rounded border border-primary/20 text-left">
           Active bets expire after 256 blocks (~10 mins). Expired bets are forfeited.
         </div>
@@ -485,12 +537,20 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
               <span>Won: {formatTokenAmount(bjStats.won, selectedTokenDecimals)}</span>
             </div>
           )}
+          {baccaratStats && (
+            <div className="flex flex-wrap justify-center gap-3">
+              <span>Baccarat</span>
+              <span>Games: {baccaratStats.games.toString()}</span>
+              <span>Wagered: {formatTokenAmount(baccaratStats.wagered, selectedTokenDecimals)}</span>
+              <span>Won: {formatTokenAmount(baccaratStats.won, selectedTokenDecimals)}</span>
+            </div>
+          )}
         </div>
       )}
 
       <div className="flex flex-col gap-2 pt-2">
         <Button
-          className="w-full justify-center px-3 text-sm"
+          className={ROULETTE_BUTTON_CLASS}
           onClick={() => handleOpenCasinoGame("roulette")}
           disabled={rouletteButtonDisabled}
           aria-label={hasActiveRouletteGame ? "Resume Roulette game" : "Play Roulette"}
@@ -500,8 +560,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         </Button>
         {casinoPolicy.blackjackEnabled && (
           <Button
-            variant="success"
-            className="w-full justify-center px-3 text-sm"
+            className={BLACKJACK_BUTTON_CLASS}
             onClick={() => handleOpenCasinoGame("blackjack")}
             disabled={blackjackButtonDisabled}
             aria-label={hasActiveBlackjackGame ? "Resume Blackjack game" : "Play Blackjack"}
@@ -510,6 +569,15 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             {hasActiveBlackjackGame ? "Resume Blackjack" : "Play Blackjack"}
           </Button>
         )}
+        <Button
+          className={BACCARAT_BUTTON_CLASS}
+          onClick={() => handleOpenCasinoGame("baccarat")}
+          disabled={baccaratButtonDisabled}
+          aria-label={hasActiveBaccaratGame ? "Resume Baccarat game" : "Play Baccarat"}
+          leadingIcon={<span className="text-base leading-none" aria-hidden="true">♣</span>}
+        >
+          {hasActiveBaccaratGame ? "Resume Baccarat" : "Play Baccarat"}
+        </Button>
       </div>
 
       {hasActiveRouletteGame && (
@@ -521,6 +589,12 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
       {hasActiveBlackjackGame && (
         <p className="text-xs text-muted-foreground">
           Active Blackjack game locked to {activeBlackjackSymbol || activeBlackjackEntry?.address.slice(0, 6)} until resolved.
+        </p>
+      )}
+
+      {hasActiveBaccaratGame && (
+        <p className="text-xs text-muted-foreground">
+          Active Baccarat round locked to {activeBaccaratSymbol || activeBaccaratEntry?.address.slice(0, 6)} until revealed.
         </p>
       )}
 
@@ -536,6 +610,12 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         </p>
       )}
 
+      {!hasActiveBaccaratGame && selectedToken && baccaratDisabledForToken && (
+        <p className="text-xs text-muted-foreground">
+          Baccarat is not enabled for the selected token.
+        </p>
+      )}
+
       <CasinoDialog
         open={casinoOpen}
         onOpenChange={setCasinoOpen}
@@ -547,6 +627,14 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
       <BlackjackDialog
         open={blackjackOpen}
         onOpenChange={setBlackjackOpen}
+        landId={landId}
+        onGameComplete={handleSpinComplete}
+        selectedToken={selectedToken}
+      />
+
+      <BaccaratDialog
+        open={baccaratOpen}
+        onOpenChange={setBaccaratOpen}
         landId={landId}
         onGameComplete={handleSpinComplete}
         selectedToken={selectedToken}

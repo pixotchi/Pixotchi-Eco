@@ -7,6 +7,7 @@ import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogTitle } from 
 import { Input } from '@/components/ui/input';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
+import { formatCasinoLimit,isPotentialCasinoAmountInput,parseCasinoAmountInput } from '@/lib/casino-amount-input';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
 import { dispatchPostTransactionRefresh,POST_TRANSACTION_REFRESH_DELAYS_MS } from '@/lib/transaction-refresh';
 import {
@@ -29,7 +30,6 @@ import { Loader2,Trash2,X } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { formatUnits,parseUnits } from 'viem';
 import { useAccount,useBalance,useBlockNumber } from 'wagmi';
 import ApproveTransaction from './approve-transaction';
 import CasinoTransaction from './casino-transaction';
@@ -122,10 +122,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
     const tokenSymbol = tokenSymbolRaw || 'TOKEN';
     const formattedMinBet = useMemo(() => (
-        config ? formatTokenAmountRounded(config.minBet, tokenDecimals) : '0'
+        config ? formatCasinoLimit(config.minBet, tokenDecimals) : '0'
     ), [config, tokenDecimals]);
     const formattedMaxBet = useMemo(() => (
-        config ? formatTokenAmountRounded(config.maxBet, tokenDecimals) : '0'
+        config ? formatCasinoLimit(config.maxBet, tokenDecimals) : '0'
     ), [config, tokenDecimals]);
     const tokenLogo = useMemo(() => getCasinoTokenImage(config?.bettingToken), [config?.bettingToken]);
     const betInputWidth = useMemo(() => {
@@ -156,16 +156,17 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         },
     });
 
-    const totalBetAmount = useMemo(() => {
-        return placedBets.reduce((sum, bet) => sum + parseFloat(bet.amount || '0'), 0);
-    }, [placedBets]);
     const totalBetWei = useMemo(() => {
         try {
-            return placedBets.reduce((sum, bet) => sum + parseUnits(bet.amount || '0', tokenDecimals), BigInt(0));
+            return placedBets.reduce((sum, bet) => sum + parseCasinoAmountInput(bet.amount || '0', tokenDecimals), BigInt(0));
         } catch {
             return BigInt(0);
         }
     }, [placedBets, tokenDecimals]);
+    const totalBetAmountDisplay = useMemo(
+        () => formatCasinoLimit(totalBetWei, tokenDecimals),
+        [tokenDecimals, totalBetWei]
+    );
     const requiredApprovalWei = useMemo(() => {
         if (!config) return BigInt(0);
         if (pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing') return BigInt(0);
@@ -175,26 +176,34 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     const hasApproval = allowanceWei >= requiredApprovalWei;
 
     // Calculate max win using the same zero handling as the contract.
-    const bestPossibleWin = useMemo(() => {
-        if (placedBets.length === 0) return 0;
+    const bestPossibleWinWei = useMemo(() => {
+        if (placedBets.length === 0) return BigInt(0);
 
-        let maxPayout = 0;
+        let maxPayout = BigInt(0);
         for (let num = 0; num <= 36; num++) {
-            let payoutForThisNumber = 0;
+            let payoutForThisNumber = BigInt(0);
             for (const bet of placedBets) {
-                const amount = parseFloat(bet.amount || '0');
+                let amount = BigInt(0);
+                try {
+                    amount = parseCasinoAmountInput(bet.amount || '0', tokenDecimals);
+                } catch {
+                    amount = BigInt(0);
+                }
                 if (rouletteBetWins(bet.type, bet.numbers, num)) {
-                    const multiplier = CASINO_PAYOUT_MULTIPLIERS[bet.type];
+                    const multiplier = BigInt(CASINO_PAYOUT_MULTIPLIERS[bet.type]);
                     payoutForThisNumber += amount + (amount * multiplier);
                 }
             }
             if (payoutForThisNumber > maxPayout) maxPayout = payoutForThisNumber;
         }
         return maxPayout;
-    }, [placedBets]);
+    }, [placedBets, tokenDecimals]);
+    const bestPossibleWinDisplay = useMemo(
+        () => formatCasinoLimit(bestPossibleWinWei, tokenDecimals),
+        [bestPossibleWinWei, tokenDecimals]
+    );
 
-    const balanceVal = balanceData ? parseFloat(formatUnits(balanceData.value, balanceData.decimals)) : 0;
-    const isInsufficientBalance = totalBetAmount > balanceVal;
+    const isInsufficientBalance = !!balanceData && totalBetWei > balanceData.value;
     const maxBets = config?.maxBetsPerGame || 2;
     const canAddMoreBets = placedBets.length < maxBets;
     const bettingLocked = pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing' || isSpinning;
@@ -349,6 +358,11 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         storeBetPreference('roulette', configBettingToken, currentBetAmount, tokenDecimals);
     }, [configBettingToken, currentBetAmount, tokenDecimals]);
 
+    const handleCurrentBetAmountChange = useCallback((value: string) => {
+        if (!isPotentialCasinoAmountInput(value)) return;
+        setCurrentBetAmount(value);
+    }, []);
+
     // Callback when wheel animation ends
     const handleWheelSpinEnd = useCallback(() => {
         setWheelSpinning(false);
@@ -372,7 +386,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         // Validate Min/Max Bet
         if (config) {
             try {
-                const amountVal = parseUnits(currentBetAmount, tokenDecimals);
+                const amountVal = parseCasinoAmountInput(currentBetAmount, tokenDecimals);
 
                 // Min check (per bet)
                 if (amountVal < config.minBet) {
@@ -381,12 +395,12 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 }
 
                 // Max check (Total Wager)
-                const currentTotal = placedBets.reduce((acc, b) => acc + parseUnits(b.amount, tokenDecimals), BigInt(0));
+                const currentTotal = placedBets.reduce((acc, b) => acc + parseCasinoAmountInput(b.amount, tokenDecimals), BigInt(0));
                 const projectedTotal = currentTotal + amountVal;
 
                 if (projectedTotal > config.maxBet) {
                     const remaining = config.maxBet - currentTotal;
-                    toast.error(`Total bet limit is ${formattedMaxBet} ${tokenSymbol}. You can add max ${formatTokenAmountRounded(remaining > BigInt(0) ? remaining : BigInt(0), tokenDecimals)} ${tokenSymbol}`);
+                    toast.error(`Total bet limit is ${formattedMaxBet} ${tokenSymbol}. You can add max ${formatCasinoLimit(remaining > BigInt(0) ? remaining : BigInt(0), tokenDecimals)} ${tokenSymbol}`);
                     return;
                 }
             } catch {
@@ -415,7 +429,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
     // Prepare bet data for CasinoTransaction
     const betTypes = useMemo(() => placedBets.map(b => b.type), [placedBets]);
     const betNumbersArray = useMemo(() => placedBets.map(b => b.numbers), [placedBets]);
-    const betAmounts = useMemo(() => placedBets.map(b => parseUnits(b.amount, tokenDecimals)), [placedBets, tokenDecimals]);
+    const betAmounts = useMemo(() => placedBets.map(b => parseCasinoAmountInput(b.amount, tokenDecimals)), [placedBets, tokenDecimals]);
 
     // Handle place bets completion
     const syncPlacedRouletteState = useCallback(async () => {
@@ -837,8 +851,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 )}
                                 {placedBets.length > 0 && (
                                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2 text-[11px]">
-                                        <span>Total <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmount.toFixed(2)}</strong></span>
-                                        <span className="text-right text-green-300">Max <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWin.toFixed(2)}</strong></span>
+                                        <span>Total <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmountDisplay}</strong></span>
+                                        <span className="text-right text-green-300">Max <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWinDisplay}</strong></span>
                                     </div>
                                 )}
                             </div>
@@ -909,9 +923,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                         <Input
                             id={betAmountInputId}
                             type="text"
-                            inputMode="decimal"
+                            inputMode="text"
+                            placeholder={formattedMinBet}
                             value={currentBetAmount}
-                            onChange={(e) => setCurrentBetAmount(e.target.value)}
+                            onChange={(e) => handleCurrentBetAmountChange(e.target.value)}
                             className="h-11 min-h-11 min-w-[5.5rem] w-auto flex-none px-3 text-sm tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50"
                             min={formattedMinBet}
                             step="any"
@@ -1055,7 +1070,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             betTypes={betTypes}
                             betNumbersArray={betNumbersArray}
                             betAmounts={betAmounts}
-                            buttonText={isSpinning ? 'Placing...' : `Spin (${totalBetAmount.toFixed(2)} ${tokenSymbol})`}
+                            buttonText={isSpinning ? 'Placing...' : `Spin (${totalBetAmountDisplay} ${tokenSymbol})`}
                             buttonClassName="w-full"
                             disabled={isSpinning || hasUnsupportedZeroCombo}
                             onStatusUpdate={handleStatusUpdate}
