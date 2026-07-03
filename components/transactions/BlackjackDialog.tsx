@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { CardHand,calculateHandValue,getCardValue } from '@/components/ui/PlayingCard';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
-import { formatCasinoLimit,isPotentialCasinoAmountInput,parseCasinoAmountInput } from '@/lib/casino-amount-input';
+import { formatCasinoLimitForToken,getCasinoUiMaxBet,getCasinoUiMinBet,isPotentialCasinoAmountInput,parseCasinoAmountInput } from '@/lib/casino-amount-input';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
 import {
 BlackjackAction,
@@ -288,12 +288,18 @@ export default function BlackjackDialog({
     });
 
     const tokenSymbol = tokenSymbolRaw || 'TOKEN';
+    const uiMinBet = useMemo(() => (
+        config ? getCasinoUiMinBet(config.bettingToken, tokenDecimals, config.minBet) : BigInt(0)
+    ), [config, tokenDecimals]);
+    const uiMaxBet = useMemo(() => (
+        config ? getCasinoUiMaxBet(config.bettingToken, tokenDecimals, config.maxBet) : BigInt(0)
+    ), [config, tokenDecimals]);
     const formattedMinBet = useMemo(() => (
-        config ? formatCasinoLimit(config.minBet, tokenDecimals) : '0'
-    ), [config, tokenDecimals]);
+        config ? formatCasinoLimitForToken(uiMinBet, tokenDecimals, config.bettingToken, 'min') : '0'
+    ), [config, tokenDecimals, uiMinBet]);
     const formattedMaxBet = useMemo(() => (
-        config ? formatCasinoLimit(config.maxBet, tokenDecimals) : '0'
-    ), [config, tokenDecimals]);
+        config ? formatCasinoLimitForToken(uiMaxBet, tokenDecimals, config.bettingToken, 'max') : '0'
+    ), [config, tokenDecimals, uiMaxBet]);
     const tokenLogo = useMemo(() => getCasinoTokenImage(config?.bettingToken), [config?.bettingToken]);
     const betInputWidth = useMemo(() => {
         const visibleChars = Math.max(gameState.betAmountInput.length, formattedMinBet.length, 4);
@@ -304,11 +310,11 @@ export default function BlackjackDialog({
         if (!config) return BigInt(0);
         try {
             const amount = parseCasinoAmountInput(gameState.betAmountInput || '0', tokenDecimals);
-            return amount > BigInt(0) ? amount : config.minBet;
+            return amount > BigInt(0) ? amount : uiMinBet;
         } catch {
-            return config.minBet;
+            return uiMinBet;
         }
-    }, [config, gameState.betAmountInput, tokenDecimals]);
+    }, [config, gameState.betAmountInput, tokenDecimals, uiMinBet]);
     const hasApproval = allowanceWei >= requiredApprovalWei;
 
     // Derive UI phase from contract state (simplified for server randomness)
@@ -627,13 +633,13 @@ export default function BlackjackDialog({
             betAmountInput: loadBetPreference({
                 game: 'blackjack',
                 token: configBettingToken,
-                minBet: configMinBet,
-                maxBet: configMaxBet,
+                minBet: uiMinBet,
+                maxBet: uiMaxBet,
                 decimals: tokenDecimals,
                 fallback: formattedMinBet,
             }),
         }));
-    }, [configBettingToken, configMinBet, configMaxBet, gameState.contractPhase, open, formattedMinBet, tokenDecimals]);
+    }, [configBettingToken, configMinBet, configMaxBet, gameState.contractPhase, open, formattedMinBet, tokenDecimals, uiMaxBet, uiMinBet]);
 
     useEffect(() => {
         if (!configBettingToken) return;
@@ -1030,12 +1036,12 @@ export default function BlackjackDialog({
         if (!config) return 'Loading limits...';
         if (!config.enabled) return 'Blackjack disabled';
         if (betAmountWei <= BigInt(0)) return 'Enter bet amount';
-        if (betAmountWei < config.minBet) return `Min ${formattedMinBet} ${tokenSymbol}`;
-        if (betAmountWei > config.maxBet) return `Max ${formattedMaxBet} ${tokenSymbol}`;
+        if (betAmountWei < uiMinBet) return `Min ${formattedMinBet} ${tokenSymbol}`;
+        if (betAmountWei > uiMaxBet) return `Max ${formattedMaxBet} ${tokenSymbol}`;
         if (!balanceData) return 'Loading balance...';
         if (betAmountWei > currentBalanceWei) return 'Insufficient Balance';
         return null;
-    }, [balanceData, betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol]);
+    }, [balanceData, betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol, uiMaxBet, uiMinBet]);
 
     const currentActionHandIndex = gameState.hasSplit ? gameState.currentHandIndex : 0;
     const currentActionCards =
@@ -1237,11 +1243,11 @@ export default function BlackjackDialog({
                 setError('Blackjack is currently disabled');
                 return false;
             }
-            if (betAmountWei < config.minBet) {
+            if (betAmountWei < uiMinBet) {
                 setError(`Minimum bet is ${formattedMinBet} ${tokenSymbol}`);
                 return false;
             }
-            if (betAmountWei > config.maxBet) {
+            if (betAmountWei > uiMaxBet) {
                 setError(`Maximum bet is ${formattedMaxBet} ${tokenSymbol}`);
                 return false;
             }
@@ -1249,7 +1255,7 @@ export default function BlackjackDialog({
         setError(null);
         setTxInProgress('deal');
         return true;
-    }, [betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol]);
+    }, [betAmountWei, config, currentBalanceWei, formattedMaxBet, formattedMinBet, tokenSymbol, uiMaxBet, uiMinBet]);
 
     // Handle transaction errors (specifically for Action Locking security feature)
     const handleTransactionError = useCallback((error: string) => {
@@ -1403,7 +1409,7 @@ export default function BlackjackDialog({
                                         aria-label={`Blackjack bet amount in ${tokenSymbol}`}
                                         value={gameState.betAmountInput}
                                         onChange={(e) => handleBetAmountInputChange(e.target.value)}
-                                        className="min-w-[6.5rem] w-auto flex-none px-2 tabular-nums bg-white/10 border-white/20 text-white"
+                                        className="min-w-[6.5rem] w-auto flex-none px-2 tabular-nums bg-white/10 border-white/20 text-white caret-white selection:bg-white/20 selection:text-white focus:!border-white/45 focus:!bg-black/60 focus:!text-white focus:!outline-none focus-visible:!border-white/45 focus-visible:!bg-black/60 focus-visible:!text-white focus-visible:!ring-1 focus-visible:!ring-white/35 focus-visible:!ring-offset-0"
                                         min={formattedMinBet}
                                         step="any"
                                         disabled={txInProgress !== null}

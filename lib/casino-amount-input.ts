@@ -6,7 +6,14 @@ const COMPACT_SUFFIX_DECIMALS: Record<string, number> = {
   b: 9,
 };
 
+const LEAF_TOKEN_ADDRESS = "0xe78ee52349d7b031e2a6633e07c037c3147db116";
+const LEAF_CASINO_UI_MIN_BET = parseUnits("100000", 18);
+const LEAF_CASINO_UI_MAX_BET = parseUnits("2999000", 18);
+
 const stripLeadingZeros = (value: string) => value.replace(/^0+(?=\d)/, "") || "0";
+
+const isLeafCasinoToken = (token: string | null | undefined, decimals: number): boolean =>
+  decimals === 18 && token?.toLowerCase() === LEAF_TOKEN_ADDRESS;
 
 export function isPotentialCasinoAmountInput(value: string): boolean {
   const compact = value.replace(/\s+/g, "");
@@ -53,6 +60,38 @@ export function parseCasinoAmountInput(value: string, decimals: number): bigint 
   const expanded = expandCasinoAmountInput(value);
   if (!expanded) throw new Error("Invalid casino amount");
   return parseUnits(expanded, decimals);
+}
+
+export function getCasinoUiMinBet(
+  token: string | null | undefined,
+  decimals: number,
+  contractMinBet: bigint
+): bigint {
+  if (!isLeafCasinoToken(token, decimals)) return contractMinBet;
+  return contractMinBet > LEAF_CASINO_UI_MIN_BET ? contractMinBet : LEAF_CASINO_UI_MIN_BET;
+}
+
+export function getCasinoUiMaxBet(
+  token: string | null | undefined,
+  decimals: number,
+  contractMaxBet: bigint
+): bigint {
+  if (!isLeafCasinoToken(token, decimals)) return contractMaxBet;
+  return contractMaxBet < LEAF_CASINO_UI_MAX_BET ? contractMaxBet : LEAF_CASINO_UI_MAX_BET;
+}
+
+export function formatCasinoLimitForToken(
+  amount: bigint,
+  decimals: number,
+  token: string | null | undefined,
+  kind?: "min" | "max"
+): string {
+  if (isLeafCasinoToken(token, decimals)) {
+    if (kind === "min" && amount === LEAF_CASINO_UI_MIN_BET) return "100K";
+    if (kind === "max" && amount === LEAF_CASINO_UI_MAX_BET) return "2.99M";
+  }
+
+  return formatCasinoLimit(amount, decimals);
 }
 
 export function formatCasinoLimit(amount: bigint, decimals: number): string {

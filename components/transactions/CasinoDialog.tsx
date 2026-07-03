@@ -7,7 +7,7 @@ import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogTitle } from 
 import { Input } from '@/components/ui/input';
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferences';
-import { formatCasinoLimit,isPotentialCasinoAmountInput,parseCasinoAmountInput } from '@/lib/casino-amount-input';
+import { formatCasinoLimit,formatCasinoLimitForToken,getCasinoUiMaxBet,getCasinoUiMinBet,isPotentialCasinoAmountInput,parseCasinoAmountInput } from '@/lib/casino-amount-input';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
 import { dispatchPostTransactionRefresh,POST_TRANSACTION_REFRESH_DELAYS_MS } from '@/lib/transaction-refresh';
 import {
@@ -121,12 +121,18 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
     const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
     const tokenSymbol = tokenSymbolRaw || 'TOKEN';
+    const uiMinBet = useMemo(() => (
+        config ? getCasinoUiMinBet(config.bettingToken, tokenDecimals, config.minBet) : BigInt(0)
+    ), [config, tokenDecimals]);
+    const uiMaxBet = useMemo(() => (
+        config ? getCasinoUiMaxBet(config.bettingToken, tokenDecimals, config.maxBet) : BigInt(0)
+    ), [config, tokenDecimals]);
     const formattedMinBet = useMemo(() => (
-        config ? formatCasinoLimit(config.minBet, tokenDecimals) : '0'
-    ), [config, tokenDecimals]);
+        config ? formatCasinoLimitForToken(uiMinBet, tokenDecimals, config.bettingToken, 'min') : '0'
+    ), [config, tokenDecimals, uiMinBet]);
     const formattedMaxBet = useMemo(() => (
-        config ? formatCasinoLimit(config.maxBet, tokenDecimals) : '0'
-    ), [config, tokenDecimals]);
+        config ? formatCasinoLimitForToken(uiMaxBet, tokenDecimals, config.bettingToken, 'max') : '0'
+    ), [config, tokenDecimals, uiMaxBet]);
     const tokenLogo = useMemo(() => getCasinoTokenImage(config?.bettingToken), [config?.bettingToken]);
     const betInputWidth = useMemo(() => {
         const visibleChars = Math.max(currentBetAmount.length, formattedMinBet.length, 4);
@@ -171,8 +177,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         if (!config) return BigInt(0);
         if (pendingGame || spinPhase === 'waiting' || spinPhase === 'revealing') return BigInt(0);
         if (totalBetWei > BigInt(0)) return totalBetWei;
-        return config.minBet;
-    }, [config, pendingGame, spinPhase, totalBetWei]);
+        return uiMinBet;
+    }, [config, pendingGame, spinPhase, totalBetWei, uiMinBet]);
     const hasApproval = allowanceWei >= requiredApprovalWei;
 
     // Calculate max win using the same zero handling as the contract.
@@ -346,12 +352,12 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         setCurrentBetAmount(loadBetPreference({
             game: 'roulette',
             token: configBettingToken,
-            minBet: configMinBet,
-            maxBet: configMaxBet,
+            minBet: uiMinBet,
+            maxBet: uiMaxBet,
             decimals: tokenDecimals,
             fallback: formattedMinBet,
         }));
-    }, [configBettingToken, configMinBet, configMaxBet, open, pendingGame, tokenDecimals, formattedMinBet]);
+    }, [configBettingToken, configMinBet, configMaxBet, open, pendingGame, tokenDecimals, formattedMinBet, uiMaxBet, uiMinBet]);
 
     useEffect(() => {
         if (!configBettingToken) return;
@@ -389,7 +395,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 const amountVal = parseCasinoAmountInput(currentBetAmount, tokenDecimals);
 
                 // Min check (per bet)
-                if (amountVal < config.minBet) {
+                if (amountVal < uiMinBet) {
                     toast.error(`Minimum bet is ${formattedMinBet} ${tokenSymbol}`);
                     return;
                 }
@@ -398,8 +404,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 const currentTotal = placedBets.reduce((acc, b) => acc + parseCasinoAmountInput(b.amount, tokenDecimals), BigInt(0));
                 const projectedTotal = currentTotal + amountVal;
 
-                if (projectedTotal > config.maxBet) {
-                    const remaining = config.maxBet - currentTotal;
+                if (projectedTotal > uiMaxBet) {
+                    const remaining = uiMaxBet - currentTotal;
                     toast.error(`Total bet limit is ${formattedMaxBet} ${tokenSymbol}. You can add max ${formatCasinoLimit(remaining > BigInt(0) ? remaining : BigInt(0), tokenDecimals)} ${tokenSymbol}`);
                     return;
                 }
@@ -417,7 +423,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         setError(null);
         setPlacedBets(prev => [...prev, newBet]);
         toast.success(`Added ${label} bet`);
-    }, [bettingLocked, canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet]);
+    }, [bettingLocked, canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet, uiMaxBet, uiMinBet]);
 
     const removeBet = useCallback((id: string) => { setPlacedBets(prev => prev.filter(b => b.id !== id)); }, []);
     const clearBets = useCallback(() => { setPlacedBets([]); }, []);
@@ -927,7 +933,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                             placeholder={formattedMinBet}
                             value={currentBetAmount}
                             onChange={(e) => handleCurrentBetAmountChange(e.target.value)}
-                            className="h-11 min-h-11 min-w-[5.5rem] w-auto flex-none px-3 text-sm tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50"
+                            className="h-11 min-h-11 min-w-[5.5rem] w-auto flex-none px-3 text-sm tabular-nums bg-black/40 border-white/20 text-white placeholder:text-white/50 caret-white selection:bg-white/20 selection:text-white focus:!border-white/45 focus:!bg-black/70 focus:!text-white focus:!outline-none focus-visible:!border-white/45 focus-visible:!bg-black/70 focus-visible:!text-white focus-visible:!ring-1 focus-visible:!ring-white/35 focus-visible:!ring-offset-0"
                             min={formattedMinBet}
                             step="any"
                             disabled={bettingLocked}

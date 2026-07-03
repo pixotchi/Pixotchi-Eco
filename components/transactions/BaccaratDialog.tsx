@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import PlayingCard from "@/components/ui/PlayingCard";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { loadBetPreference, storeBetPreference } from "@/lib/casino-bet-preferences";
-import { formatCasinoLimit, isPotentialCasinoAmountInput, parseCasinoAmountInput } from "@/lib/casino-amount-input";
+import { formatCasinoLimitForToken, getCasinoUiMaxBet, getCasinoUiMinBet, isPotentialCasinoAmountInput, parseCasinoAmountInput } from "@/lib/casino-amount-input";
 import { getClientCasinoPolicy } from "@/lib/casino-client";
 import { rouletteCanReveal, rouletteRevealBlocksRemaining } from "@/lib/casino-hardening-rules.mjs";
 import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } from "@/lib/transaction-refresh";
@@ -197,13 +197,21 @@ export default function BaccaratDialog({
   const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(effectiveToken);
   const tokenSymbol = tokenSymbolRaw || "TOKEN";
   const tokenLogo = useMemo(() => getCasinoTokenImage(effectiveToken), [effectiveToken]);
+  const uiMinBet = useMemo(
+    () => tokenConfig ? getCasinoUiMinBet(effectiveToken, tokenDecimals, tokenConfig.minBet) : BigInt(0),
+    [effectiveToken, tokenConfig, tokenDecimals]
+  );
+  const uiMaxBet = useMemo(
+    () => tokenConfig ? getCasinoUiMaxBet(effectiveToken, tokenDecimals, tokenConfig.maxBet) : BigInt(0),
+    [effectiveToken, tokenConfig, tokenDecimals]
+  );
   const formattedMinBet = useMemo(
-    () => tokenConfig ? formatCasinoLimit(tokenConfig.minBet, tokenDecimals) : "0",
-    [tokenConfig, tokenDecimals]
+    () => tokenConfig ? formatCasinoLimitForToken(uiMinBet, tokenDecimals, effectiveToken, "min") : "0",
+    [effectiveToken, tokenConfig, tokenDecimals, uiMinBet]
   );
   const formattedMaxBet = useMemo(
-    () => tokenConfig ? formatCasinoLimit(tokenConfig.maxBet, tokenDecimals) : "0",
-    [tokenConfig, tokenDecimals]
+    () => tokenConfig ? formatCasinoLimitForToken(uiMaxBet, tokenDecimals, effectiveToken, "max") : "0",
+    [effectiveToken, tokenConfig, tokenDecimals, uiMaxBet]
   );
   const betInputWidth = useMemo(() => {
     const visibleChars = Math.max(betAmount.length, formattedMinBet.length, 4);
@@ -249,8 +257,8 @@ export default function BaccaratDialog({
   const displayedBalanceDecimals = balanceData?.decimals ?? tokenDecimals;
   const hasBalance = !address || !tokenConfig || balanceWei >= betWei;
   const hasApproval = allowanceWei >= betWei;
-  const amountBelowMin = !!tokenConfig && betWei > BigInt(0) && betWei < tokenConfig.minBet;
-  const amountAboveMax = !!tokenConfig && betWei > tokenConfig.maxBet;
+  const amountBelowMin = !!tokenConfig && betWei > BigInt(0) && betWei < uiMinBet;
+  const amountAboveMax = !!tokenConfig && betWei > uiMaxBet;
   const tokenDisabled = !tokenConfig?.supported || !tokenConfig.enabled;
   const hasPendingGame = !!activeGame?.isActive && !hasResolvedRound;
   const bettingLocked = walletTxPending || hasPendingGame || phase === "waiting" || phase === "revealing";
@@ -262,8 +270,8 @@ export default function BaccaratDialog({
     !!tokenConfig &&
     tokenConfig.supported &&
     tokenConfig.enabled &&
-    betWei >= tokenConfig.minBet &&
-    betWei <= tokenConfig.maxBet &&
+    betWei >= uiMinBet &&
+    betWei <= uiMaxBet &&
     hasBalance &&
     hasApproval &&
     !bettingLocked;
@@ -359,12 +367,12 @@ export default function BaccaratDialog({
     setBetAmount(loadBetPreference({
       game: "baccarat",
       token: effectiveToken,
-      minBet: tokenConfig.minBet,
-      maxBet: tokenConfig.maxBet,
+      minBet: uiMinBet,
+      maxBet: uiMaxBet,
       decimals: tokenDecimals,
       fallback: formattedMinBet,
     }));
-  }, [activeGame?.isActive, effectiveToken, formattedMinBet, open, tokenConfig, tokenDecimals]);
+  }, [activeGame?.isActive, effectiveToken, formattedMinBet, open, tokenConfig, tokenDecimals, uiMaxBet, uiMinBet]);
 
   useEffect(() => {
     if (!open || !hasPendingGame || walletTxPending) return;
@@ -630,7 +638,7 @@ export default function BaccaratDialog({
                             value={betAmount}
                             disabled={bettingLocked}
                             onChange={(event) => handleBetAmountChange(event.target.value)}
-                            className="h-11 min-w-[4.5rem] border-white/20 bg-black/55 text-center text-white placeholder:text-white/45"
+                            className="h-11 min-w-[4.5rem] border-white/20 bg-black/55 text-center text-white placeholder:text-white/45 caret-white selection:bg-white/20 selection:text-white focus:!border-white/45 focus:!bg-black/70 focus:!text-white focus:!outline-none focus-visible:!border-white/45 focus-visible:!bg-black/70 focus-visible:!text-white focus-visible:!ring-1 focus-visible:!ring-white/35 focus-visible:!ring-offset-0"
                             style={{ width: betInputWidth }}
                             aria-label="Baccarat bet amount"
                           />
