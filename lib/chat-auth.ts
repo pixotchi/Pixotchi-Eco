@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { hashMessage, isErc6492Signature, recoverMessageAddress } from 'viem';
+import { hashMessage, hashTypedData, isErc6492Signature, recoverMessageAddress } from 'viem';
 import { base } from 'viem/chains';
 import { createClient as createFarcasterQuickAuthClient } from '@farcaster/quick-auth';
 import { InvalidAuthTokenError, PrivyClient } from '@privy-io/node';
@@ -632,22 +632,38 @@ async function recoverBaseAuthMessageAddress(
   }
 }
 
-async function verifyBaseMessageWithDirectErc1271(
-  payload: BaseChatAuthPayload,
-): Promise<boolean> {
-  if (
-    !isValidEthereumAddressFormat(payload.address) ||
-    !payload.message ||
-    !getBaseSignatureShape(payload.signature).looksHex
-  ) {
-    return false;
-  }
+function getCoinbaseSmartWalletReplaySafeHash(payload: BaseChatAuthPayload): `0x${string}` {
+  return hashTypedData({
+    domain: {
+      chainId: base.id,
+      name: 'Coinbase Smart Wallet',
+      verifyingContract: payload.address as `0x${string}`,
+      version: '1',
+    },
+    types: {
+      CoinbaseSmartWalletMessage: [
+        {
+          name: 'hash',
+          type: 'bytes32',
+        },
+      ],
+    },
+    primaryType: 'CoinbaseSmartWalletMessage',
+    message: {
+      hash: hashMessage(payload.message),
+    },
+  });
+}
 
+async function verifyBaseErc1271Hash(
+  payload: BaseChatAuthPayload,
+  hash: `0x${string}`,
+): Promise<boolean> {
   try {
     const result = await basePublicClient.readContract({
       address: payload.address as `0x${string}`,
       abi: ERC1271_ABI,
-      args: [hashMessage(payload.message), payload.signature],
+      args: [hash, payload.signature],
       functionName: 'isValidSignature',
     });
 
@@ -655,6 +671,37 @@ async function verifyBaseMessageWithDirectErc1271(
   } catch {
     return false;
   }
+}
+
+async function verifyBaseMessageWithDirectErc1271(
+  payload: BaseChatAuthPayload,
+): Promise<{
+  plainValid: boolean;
+  replaySafeValid: boolean;
+  valid: boolean;
+}> {
+  if (
+    !isValidEthereumAddressFormat(payload.address) ||
+    !payload.message ||
+    !getBaseSignatureShape(payload.signature).looksHex
+  ) {
+    return {
+      plainValid: false,
+      replaySafeValid: false,
+      valid: false,
+    };
+  }
+
+  const plainValid = await verifyBaseErc1271Hash(payload, hashMessage(payload.message));
+  const replaySafeValid = plainValid
+    ? false
+    : await verifyBaseErc1271Hash(payload, getCoinbaseSmartWalletReplaySafeHash(payload));
+
+  return {
+    plainValid,
+    replaySafeValid,
+    valid: plainValid || replaySafeValid,
+  };
 }
 
 async function logBaseAuthFailureDiagnostic(
@@ -674,11 +721,13 @@ async function logBaseAuthFailureDiagnostic(
     ? normalizeAddress(payload.address)
     : null;
   const recoveredAddress = await recoverBaseAuthMessageAddress(payload);
-  const directErc1271Valid = await verifyBaseMessageWithDirectErc1271(payload);
+  const directErc1271 = await verifyBaseMessageWithDirectErc1271(payload);
   const nowMs = Date.now();
 
   console.warn('[chat-auth] Base auth failure diagnostic:', {
-    directErc1271Valid,
+    directErc1271PlainValid: directErc1271.plainValid,
+    directErc1271ReplaySafeValid: directErc1271.replaySafeValid,
+    directErc1271Valid: directErc1271.valid,
     errorMessage: error instanceof Error ? error.message : String(error),
     errorName: error instanceof Error ? error.name : typeof error,
     errorStatus: error instanceof ChatAuthError ? error.status : null,
@@ -719,12 +768,18 @@ function logBaseAuthDirectErc1271SuccessDiagnostic(
   request: NextRequest,
   payload: BaseChatAuthPayload,
   siweMessage: ParsedBaseSiweMessage,
+  directErc1271: {
+    plainValid: boolean;
+    replaySafeValid: boolean;
+  },
 ): void {
   if (!BASE_AUTH_DEBUG_LOGS_ENABLED) {
     return;
   }
 
   console.warn('[chat-auth] Base auth direct ERC-1271 fallback accepted:', {
+    directErc1271PlainValid: directErc1271.plainValid,
+    directErc1271ReplaySafeValid: directErc1271.replaySafeValid,
     host: request.headers.get('host'),
     origin: request.headers.get('origin'),
     payloadAddress: normalizeAddress(payload.address),
@@ -1280,16 +1335,20 @@ export async function verifyBaseChatIdentity(
       signature: payload.signature,
     });
 
-    const directErc1271Valid = isValid
-      ? false
+    const directErc1271 = isValid
+      ? {
+          plainValid: false,
+          replaySafeValid: false,
+          valid: false,
+        }
       : await verifyBaseMessageWithDirectErc1271(payload);
 
-    if (!isValid && !directErc1271Valid) {
+    if (!isValid && !directErc1271.valid) {
       throw new ChatAuthError('Invalid Base authentication signature.', 401);
     }
 
-    if (directErc1271Valid) {
-      logBaseAuthDirectErc1271SuccessDiagnostic(request, payload, siweMessage);
+    if (directErc1271.valid) {
+      logBaseAuthDirectErc1271SuccessDiagnostic(request, payload, siweMessage, directErc1271);
     }
 
     const nonceConsumed = await consumeBaseAuthNonce(siweMessage.nonce);
