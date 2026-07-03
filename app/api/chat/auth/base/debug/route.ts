@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,16 +7,38 @@ const DIAGNOSTIC_FIELD_LIMIT = 500;
 const DIAGNOSTIC_ARRAY_LIMIT = 12;
 const DIAGNOSTIC_OBJECT_KEY_LIMIT = 20;
 const ALLOWED_DIAGNOSTIC_FIELDS = new Set([
+  'baseConnectorId',
   'connectorId',
   'connectorName',
   'errorCode',
+  'fallbackPayloadSummary',
+  'legacyConnectorId',
   'message',
   'normalizedAddress',
+  'payloadSource',
+  'payloadSummary',
+  'providerFlags',
+  'reason',
   'resultAccountSummary',
   'resultKeys',
+  'retry',
   'stage',
   'surface',
 ]);
+
+function isSameOriginDiagnosticRequest(request: NextRequest): boolean {
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (!origin || !host) {
+    return false;
+  }
+
+  try {
+    return new URL(origin).host.toLowerCase() === host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
 
 async function getDiagnosticsGateResponse(request: NextRequest): Promise<NextResponse | null> {
   if (process.env.NODE_ENV !== 'production') {
@@ -35,7 +56,19 @@ async function getDiagnosticsGateResponse(request: NextRequest): Promise<NextRes
     );
   }
 
-  return requireAdmin(request);
+  if (!isSameOriginDiagnosticRequest(request)) {
+    return NextResponse.json(
+      { ok: false },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store',
+        },
+        status: 403,
+      },
+    );
+  }
+
+  return null;
 }
 
 function sanitizeDiagnosticValue(value: UntypedValue, depth: number = 0): UntypedValue {

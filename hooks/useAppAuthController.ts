@@ -448,6 +448,26 @@ export function useAppAuthController() {
     });
   }, []);
 
+  const summarizeBaseAuthPayload = useCallback(
+    (payload: { address?: string; message?: string; signature?: string } | null) => {
+      const signature = typeof payload?.signature === "string" ? payload.signature : "";
+      const looksHex = /^0x[0-9a-fA-F]*$/.test(signature);
+
+      return {
+        address: typeof payload?.address === "string" ? payload.address.toLowerCase() : null,
+        messageLength: typeof payload?.message === "string" ? payload.message.length : null,
+        messageLineCount:
+          typeof payload?.message === "string" && payload.message.length > 0
+            ? payload.message.replace(/\r\n/g, "\n").split("\n").length
+            : null,
+        signatureByteLength: looksHex ? Math.max(0, (signature.length - 2) / 2) : null,
+        signatureLength: signature.length,
+        signatureLooksHex: looksHex,
+      };
+    },
+    [],
+  );
+
   const logBaseClientDiagnostic = useCallback(
     async (stage: string, details: Record<string, UntypedValue>) => {
       try {
@@ -818,6 +838,15 @@ export function useAppAuthController() {
           throw error;
         }
 
+        void logBaseClientDiagnostic("server-signature-rejected", {
+          connectorId: baseConnector?.id ?? null,
+          connectorName: baseConnector?.name ?? null,
+          message: getErrorMessage(error, "Base SIWE capability signature rejected."),
+          normalizedAddress: payload.address,
+          payloadSource: "signInWithEthereum",
+          payloadSummary: summarizeBaseAuthPayload(payload),
+        });
+
         const provider = await getBaseProvider();
         if (!provider?.request) {
           throw error;
@@ -829,6 +858,14 @@ export function useAppAuthController() {
             connectorName: baseConnector?.name ?? null,
             message: "Base SIWE capability returned a signature rejected by server verification.",
             normalizedAddress: payload.address,
+            payloadSummary: summarizeBaseAuthPayload(payload),
+          });
+
+          void logBaseClientDiagnostic("personal-sign-fallback-request", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            normalizedAddress: payload.address,
+            payloadSummary: summarizeBaseAuthPayload(payload),
           });
 
           const fallbackPayload = await createPersonalSignBasePayload({
@@ -840,7 +877,28 @@ export function useAppAuthController() {
             ...(uri ? { uri } : {}),
           });
 
+          void logBaseClientDiagnostic("personal-sign-fallback-payload-created", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            fallbackPayloadSummary: summarizeBaseAuthPayload(fallbackPayload),
+            normalizedAddress: fallbackPayload.address,
+          });
+
+          void logBaseClientDiagnostic("personal-sign-fallback-submit", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            fallbackPayloadSummary: summarizeBaseAuthPayload(fallbackPayload),
+            normalizedAddress: fallbackPayload.address,
+          });
+
           await submitBasePayload(fallbackPayload);
+
+          void logBaseClientDiagnostic("personal-sign-fallback-success", {
+            connectorId: baseConnector?.id ?? null,
+            connectorName: baseConnector?.name ?? null,
+            fallbackPayloadSummary: summarizeBaseAuthPayload(fallbackPayload),
+            normalizedAddress: fallbackPayload.address,
+          });
         } catch (fallbackError) {
           void logBaseClientDiagnostic("same-provider-fallback-error", {
             connectorId: baseConnector?.id ?? null,
@@ -848,6 +906,7 @@ export function useAppAuthController() {
             errorCode: getErrorCode(fallbackError),
             message: getErrorMessage(fallbackError, "Base personal_sign fallback failed."),
             normalizedAddress: payload.address,
+            payloadSummary: summarizeBaseAuthPayload(payload),
           });
           throw fallbackError;
         }
@@ -866,6 +925,7 @@ export function useAppAuthController() {
       persistBaseAuthenticatedAddress,
       shouldUseLegacyBaseFallback,
       summarizeBaseAccounts,
+      summarizeBaseAuthPayload,
     ],
   );
 
