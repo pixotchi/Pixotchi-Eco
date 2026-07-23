@@ -17,7 +17,7 @@ exports/
 pixotchi-onchain/
 tools/
 v22/
-
+output/
 # Environment variables
 .env
 .env.local

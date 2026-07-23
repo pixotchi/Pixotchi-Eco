@@ -106,7 +106,7 @@ export default function SlideshowModal() {
         useSafeAreaInset={false}
         overlayClassName="bg-black/50 backdrop-blur-[var(--blur-overlay)]"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
-        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--border-strong)/0.42)] p-0 shadow-[var(--shadow-modal)]"
+        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--border-strong)/0.42)] p-0 sm:p-0 shadow-[var(--shadow-modal)]"
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
